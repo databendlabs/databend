@@ -24,6 +24,7 @@ pub struct TableStatsGenerator {
     prev_stats_meta: Option<AdditionalStatsMeta>,
     prev_stats_location: Option<String>,
     row_count: u64,
+    unstats_rows: u64,
     hll: BlockHLL,
 }
 
@@ -32,12 +33,14 @@ impl TableStatsGenerator {
         prev_stats_meta: Option<AdditionalStatsMeta>,
         prev_stats_location: Option<String>,
         row_count: u64,
+        unstats_rows: u64,
         hll: BlockHLL,
     ) -> Self {
         Self {
             prev_stats_meta,
             prev_stats_location,
             row_count,
+            unstats_rows,
             hll,
         }
     }
@@ -55,6 +58,7 @@ impl TableStatsGenerator {
         Some(AdditionalStatsMeta {
             hll,
             row_count: self.row_count,
+            unstats_rows: self.unstats_rows,
             ..Default::default()
         })
     }

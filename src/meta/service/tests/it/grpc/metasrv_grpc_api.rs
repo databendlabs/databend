@@ -20,6 +20,7 @@ use databend_common_base::base::Stoppable;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use log::debug;
@@ -53,7 +54,7 @@ async fn test_restart() -> anyhow::Result<()> {
         let res = res?;
         assert_eq!(
             UpsertKVReply::new(None, Some(SeqV::new(1, b("bar")))),
-            res,
+            res.without_proposed_at(),
             "upsert kv"
         );
     }
@@ -63,7 +64,11 @@ async fn test_restart() -> anyhow::Result<()> {
         let res = client.get_kv("foo").await;
         debug!("get kv res: {:?}", res);
         let res = res?;
-        assert_eq!(Some(SeqV::new(1, b("bar"))), res, "get kv");
+        assert_eq!(
+            Some(SeqV::new(1, b("bar"))),
+            res.without_proposed_at(),
+            "get kv"
+        );
     }
 
     info!("--- stop metasrv");
@@ -89,7 +94,11 @@ async fn test_restart() -> anyhow::Result<()> {
         let res = client.get_kv("foo").await;
         debug!("get kv res: {:?}", res);
         let res = res?;
-        assert_eq!(Some(SeqV::new(1, b("bar"))), res, "get kv");
+        assert_eq!(
+            Some(SeqV::new(1, b("bar"))),
+            res.without_proposed_at(),
+            "get kv"
+        );
     }
 
     Ok(())
@@ -179,7 +188,7 @@ async fn test_join() -> anyhow::Result<()> {
             let res = res?;
             assert_eq!(
                 UpsertKVReply::new(None, Some(SeqV::new(1 + i as u64, b(&k)))),
-                res,
+                res.without_proposed_at(),
                 "upsert kv to node {}",
                 i
             );
@@ -247,7 +256,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let res = res?;
         assert_eq!(
             UpsertKVReply::new(None, Some(SeqV::new(1, b(&k)))),
-            res,
+            res.without_proposed_at(),
             "upsert kv to cluster",
         );
     }

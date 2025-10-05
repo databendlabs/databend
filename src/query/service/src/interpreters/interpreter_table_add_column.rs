@@ -111,6 +111,12 @@ impl Interpreter for AddTableColumnInterpreter {
                 &self.plan.field.name, &self.plan.table
             )));
         }
+        if self.plan.is_autoincrement && num_rows > 0 {
+            return Err(ErrorCode::AlterTableError(format!(
+                "Cannot add column '{}' with `AUTOINCREMENT` to non-empty table '{}'",
+                &self.plan.field.name, &self.plan.table
+            )));
+        }
         if field.default_expr().is_some() {
             let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
         }

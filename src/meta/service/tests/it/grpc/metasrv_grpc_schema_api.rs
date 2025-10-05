@@ -17,6 +17,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_common_meta_api::AutoIncrementApiTestSuite;
 use databend_common_meta_api::SchemaApiTestSuite;
 use test_harness::test;
 
@@ -31,6 +32,7 @@ async fn test_meta_grpc_client_single() -> anyhow::Result<()> {
     };
 
     SchemaApiTestSuite::test_single_node(builder.clone()).await?;
+    AutoIncrementApiTestSuite::test_single_node(builder).await?;
 
     Ok(())
 }

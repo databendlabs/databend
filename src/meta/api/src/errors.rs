@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::ErrorCode;
+use databend_common_meta_app::principal::AutoIncrementKey;
 
 /// Table logic error, unrelated to the backend service providing Table management, or dependent component.
 #[derive(Clone, Debug, thiserror::Error)]
@@ -34,6 +35,24 @@ impl From<TableError> for ErrorCode {
         match value {
             TableError::AlterTableError { .. } => ErrorCode::AlterTableError(s),
             TableError::UnknownTableId { .. } => ErrorCode::UnknownTableId(s),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum AutoIncrementError {
+    #[error("OutOfAutoIncrementRange: `{key}` while `{context}`")]
+    OutOfAutoIncrementRange {
+        key: AutoIncrementKey,
+        context: String,
+    },
+}
+
+impl From<AutoIncrementError> for ErrorCode {
+    fn from(value: AutoIncrementError) -> Self {
+        let s = value.to_string();
+        match value {
+            AutoIncrementError::OutOfAutoIncrementRange { .. } => ErrorCode::AutoIncrementError(s),
         }
     }
 }

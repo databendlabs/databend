@@ -53,7 +53,7 @@ impl FuseTableColumnStatisticsProvider {
                     null_count: stat.null_count,
                     in_memory_size: stat.in_memory_size,
                 };
-                (column_id, stat.get_useful_stat(row_count))
+                (column_id, stat.get_useful_stat(row_count, stats_row_count))
             })
             .collect();
         Self {

@@ -129,7 +129,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
         hashtable
     }
 
-    pub fn insert(&mut self, key: K, entry_ptr: *mut RawEntry<K>) {
+    pub fn insert(&self, key: K, entry_ptr: *mut RawEntry<K>) {
         let hash = key.hash();
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
@@ -291,6 +291,9 @@ where
         let mut valids = None;
         if let Some(bitmap) = bitmap {
             if bitmap.null_count() == bitmap.len() {
+                hashes.iter_mut().for_each(|hash| {
+                    *hash = 0;
+                });
                 return 0;
             } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
@@ -307,7 +310,11 @@ where
                                 *hash = remove_header_tag(header);
                                 unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
                                 count += 1;
+                            } else {
+                                *hash = 0;
                             }
+                        } else {
+                            *hash = 0;
                         }
                     },
                 );
@@ -319,6 +326,8 @@ where
                         *hash = remove_header_tag(header);
                         unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
                         count += 1;
+                    } else {
+                        *hash = 0;
                     }
                 });
             }

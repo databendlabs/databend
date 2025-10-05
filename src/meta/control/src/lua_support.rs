@@ -21,6 +21,7 @@ use databend_common_base::base::BuildInfoRef;
 use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::UpsertKV;
 use mlua::Lua;
@@ -60,7 +61,7 @@ impl UserData for LuaGrpcClient {
             "upsert",
             |lua, this, (key, value): (String, String)| async move {
                 let upsert = UpsertKV::update(key, value.as_bytes());
-                match this.client.request(upsert).await {
+                match this.client.upsert_kv(upsert).await {
                     Ok(result) => match lua.to_value(&result) {
                         Ok(lua_value) => Ok((Some(lua_value), None::<String>)),
                         Err(e) => Ok((None::<Value>, Some(format!("Lua conversion error: {}", e)))),

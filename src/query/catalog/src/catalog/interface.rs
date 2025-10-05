@@ -54,6 +54,8 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -75,6 +77,7 @@ use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -86,6 +89,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -348,6 +353,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;
 
+    async fn swap_table(&self, req: SwapTableReq) -> Result<SwapTableReply>;
+
     // Check a db.table is exists or not.
     #[async_backtrace::framed]
     async fn exists_table(&self, tenant: &Tenant, db_name: &str, table_name: &str) -> Result<bool> {
@@ -480,6 +487,18 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply>;
 
+    async fn list_table_copied_file_info(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_id: u64,
+    ) -> Result<ListTableCopiedFileReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_table_copied_file_info' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
     async fn truncate_table(
         &self,
         table_info: &TableInfo,
@@ -563,6 +582,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<GetSequenceNextValueReply>;
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;
+
+    async fn get_autoincrement_next_value(
+        &self,
+        req: GetAutoIncrementNextValueReq,
+    ) -> Result<GetAutoIncrementNextValueReply>;
 
     fn set_session_state(&self, _state: SessionState) -> Arc<dyn Catalog> {
         unimplemented!()

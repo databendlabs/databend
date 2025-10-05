@@ -845,6 +845,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_auto_analyze", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables automatically analyze after write, 0 for disable, 1 for enable",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables scanning aggregating index data while querying.",
@@ -1473,6 +1480,14 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_experimental_new_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables the experimental new join implement",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+
             ]);
 
             Ok(Arc::new(DefaultSettings {

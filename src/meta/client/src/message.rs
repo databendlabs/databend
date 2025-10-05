@@ -19,7 +19,6 @@ use databend_common_base::base::tokio::sync::oneshot::Sender;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
-use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::ExportedChunk;
@@ -31,7 +30,6 @@ use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::UpsertKV;
 use fastrace::Span;
 use tonic::codegen::BoxStream;
 
@@ -85,9 +83,6 @@ pub enum Request {
     /// List KVs by key prefix, returning a stream.
     StreamList(Streamed<ListKVReq>),
 
-    /// Update or insert KV
-    Upsert(UpsertKV),
-
     /// Run a transaction on remote
     Txn(TxnRequest),
 
@@ -129,7 +124,6 @@ impl Request {
         match self {
             Request::StreamMGet(_) => "StreamMGet",
             Request::StreamList(_) => "StreamList",
-            Request::Upsert(_) => "Upsert",
             Request::Txn(_) => "Txn",
             Request::Watch(_) => "Watch",
             Request::WatchWithInitialization(_) => "WatchWithInitialization",
@@ -148,8 +142,7 @@ impl Request {
 pub enum Response {
     StreamMGet(Result<BoxStream<StreamItem>, MetaError>),
     StreamList(Result<BoxStream<StreamItem>, MetaError>),
-    Upsert(Result<UpsertKVReply, MetaError>),
-    Txn(Result<TxnReply, MetaError>),
+    Txn(Result<TxnReply, MetaClientError>),
     Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaClientError>),
     WatchWithInitialization(Result<tonic::codec::Streaming<WatchResponse>, MetaClientError>),
     Export(Result<tonic::codec::Streaming<ExportedChunk>, MetaClientError>),
@@ -168,9 +161,6 @@ impl fmt::Debug for Response {
             }
             Response::StreamList(x) => {
                 write!(f, "StreamList({:?})", x.as_ref().map(|_s| "<stream>"))
-            }
-            Response::Upsert(x) => {
-                write!(f, "Upsert({:?})", x)
             }
             Response::Txn(x) => {
                 write!(f, "Txn({:?})", x)
@@ -216,7 +206,6 @@ impl Response {
         let e = match self {
             Response::StreamMGet(res) => to_err(res),
             Response::StreamList(res) => to_err(res),
-            Response::Upsert(res) => to_err(res),
             Response::Txn(res) => to_err(res),
             Response::Watch(res) => to_err(res),
             Response::WatchWithInitialization(res) => to_err(res),

@@ -1,0 +1,53 @@
+statement ok
+CREATE or replace DATABASE swap_test_db;
+
+statement ok
+USE swap_test_db;
+
+statement ok
+CREATE TABLE table_a (id INT, name STRING);
+
+statement ok
+CREATE TABLE table_b (id INT, description STRING, c3 STRING);
+
+statement ok
+INSERT INTO table_a VALUES (1, 'Alice'), (2, 'Bob');
+
+statement ok
+INSERT INTO table_b VALUES (10, 'Test description 1', 'x'), (20, 'Test description 2', 'y');
+
+query TT
+SELECT * FROM table_a ORDER BY id;
+----
+1 Alice
+2 Bob
+
+query TTT
+SELECT * FROM table_b ORDER BY id;
+----
+10 Test description 1 x
+20 Test description 2 y
+
+statement ok
+ALTER TABLE table_a SWAP WITH table_b;
+
+query TTT
+SELECT * FROM table_a ORDER BY id;
+----
+10 Test description 1 x
+20 Test description 2 y
+
+query TT
+SELECT * FROM table_b ORDER BY id;
+----
+1 Alice
+2 Bob
+
+statement ok
+DROP TABLE table_a;
+
+statement ok
+DROP TABLE table_b;
+
+statement ok
+DROP DATABASE swap_test_db;

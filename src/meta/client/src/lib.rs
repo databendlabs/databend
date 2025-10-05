@@ -152,6 +152,15 @@ use semver::Version;
 /// - 2025-07-04: since 1.2.770
 ///   🖥 server: add `PutSequential`.
 ///
+/// - 2025-09-27: since 1.2.821
+///   👥 client: require 1.2.764(yanked), use 1.2.768, for `FetchAddU64`
+///
+/// - 2025-09-30: since 1.2.823
+///   🖥 server: store raft-log proposing time `proposed_at_ms` in `KVMeta`.
+///
+/// - 2025-09-27: since TODO: update when merged
+///   👥 client: require 1.2.770, remove calling RPC kv_api
+///
 /// Server feature set:
 /// ```yaml
 /// server_features:
@@ -168,7 +177,7 @@ use semver::Version;
 // Version: v1.2.257-nightly-188426e3e6-simd(1.75.0-nightly-2023-12-17T22:09:06.675156000Z)
 // ```
 // Skip 1.2.258 use the next 1.2.259
-pub static MIN_METASRV_SEMVER: Version = Version::new(1, 2, 677);
+pub static MIN_METASRV_SEMVER: Version = Version::new(1, 2, 770);
 
 pub fn to_digit_ver(v: &Version) -> u64 {
     v.major * 1_000_000 + v.minor * 1_000 + v.patch

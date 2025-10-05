@@ -33,7 +33,7 @@ impl kvapi::KVApi for ClientHandle {
 
     #[fastrace::trace]
     async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
-        let reply = self.request(act).await?;
+        let reply = self.upsert_via_txn(act).await?;
         Ok(reply)
     }
 

@@ -1671,17 +1671,50 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let create_role = map_res(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
+            CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
         },
-        |(_, opt_or_replace, _, opt_if_not_exists, role_name)| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+        |(_, _, opt_if_not_exists, role_name, opt_comment)| {
+            let create_option = parse_create_option(false, opt_if_not_exists.is_some())?;
             Ok(Statement::CreateRole {
                 create_option,
                 role_name,
+                comment: opt_comment.map(|(_, _, comment)| comment),
             })
         },
     );
+    let alter_role = map(
+        rule! {
+            ALTER ~ ROLE ~ ( IF ~ ^EXISTS )? ~ ^#ident
+             ~ #alter_role_action
+        },
+        |(_, _, opt_if_exists, name, action)| {
+            let stmt = AlterRoleStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+                action,
+            };
+            Statement::AlterRole(stmt)
+        },
+    );
+    pub fn alter_role_action(i: Input) -> IResult<AlterRoleAction> {
+        let set_comment = map(
+            rule! {
+               SET ~ COMMENT ~ ^"=" ~ ^#literal_string
+            },
+            |(_, _, _, comment)| AlterRoleAction::Comment(Some(comment)),
+        );
+        let unset_comment = map(
+            rule! {
+               UNSET ~ COMMENT
+            },
+            |(_, _)| AlterRoleAction::Comment(None),
+        );
+
+        rule!(
+            #set_comment
+            | #unset_comment
+        )(i)
+    }
     let drop_role = map(
         rule! {
             DROP ~ ROLE ~ ( IF ~ ^EXISTS )? ~ #role_name
@@ -2666,7 +2699,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
             | #drop_user : "`DROP USER [IF EXISTS] '<username>'`"
             | #show_roles : "`SHOW ROLES`"
-            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
+            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`"
+            | #alter_role : "`ALTER ROLE [IF EXISTS] <role_name> SET COMMENT = '<string_literal>' | UNSET COMMENT`"
             | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
             | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
@@ -3253,12 +3287,32 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         VirtualExpr(Box<Expr>),
         StoredExpr(Box<Expr>),
         CheckExpr(Box<Expr>),
+        AutoIncrement {
+            start: u64,
+            step: i64,
+            is_ordered: bool,
+        },
     }
 
     let nullable = alt((
         value(ColumnConstraint::Nullable(true), rule! { NULL }),
         value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
     ));
+    let identity_parmas = alt((
+        map(
+            rule! {
+                "(" ~ ^#literal_u64 ~ ^"," ~ ^#literal_i64 ~ ^")"
+            },
+            |(_, start, _, step, _)| (start, step),
+        ),
+        map(
+            rule! {
+                START ~ ^#literal_u64 ~ ^INCREMENT ~ ^#literal_i64
+            },
+            |(_, start, _, step)| (start, step),
+        ),
+    ));
+
     let expr = alt((
         map(
             rule! {
@@ -3283,6 +3337,25 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 CHECK ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")"
             },
             |(_, _, expr, _)| ColumnConstraint::CheckExpr(Box::new(expr)),
+        ),
+        map(
+            rule! {
+                (AUTOINCREMENT | IDENTITY)
+                ~ #identity_parmas?
+                ~ (ORDER | NOORDER)?
+            },
+            |(_, params, order_token)| {
+                let (start, step) = params.unwrap_or((0, 1));
+                let is_ordered = order_token
+                    .map(|token| token.text().eq_ignore_ascii_case("order"))
+                    .unwrap_or(true);
+
+                ColumnConstraint::AutoIncrement {
+                    start,
+                    step,
+                    is_ordered,
+                }
+            },
         ),
     ));
 
@@ -3331,6 +3404,14 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 }
             }
             ColumnConstraint::DefaultExpr(default_expr) => {
+                if matches!(def.expr, Some(ColumnExpr::AutoIncrement { .. })) {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other(
+                            "DEFAULT and AUTO INCREMENT cannot exist at the same time",
+                        ),
+                    )));
+                }
                 def.expr = Some(ColumnExpr::Default(default_expr))
             }
             ColumnConstraint::VirtualExpr(virtual_expr) => {
@@ -3340,6 +3421,23 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 def.expr = Some(ColumnExpr::Stored(stored_expr))
             }
             ColumnConstraint::CheckExpr(check) => def.check = Some(*check),
+            ColumnConstraint::AutoIncrement {
+                start,
+                step,
+                is_ordered,
+            } => {
+                if matches!(def.expr, Some(ColumnExpr::Default(_))) {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
+                    )));
+                }
+                def.expr = Some(ColumnExpr::AutoIncrement {
+                    start,
+                    step,
+                    is_ordered,
+                })
+            }
         }
     }
 
@@ -4205,6 +4303,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
     );
+    let swap_with = map(
+        rule! {
+           SWAP ~ WITH ~ #ident
+        },
+        |(_, _, target_table)| AlterTableAction::SwapWith { target_table },
+    );
     let rename_column = map(
         rule! {
             RENAME ~ COLUMN? ~ #ident ~ TO ~ #ident
@@ -4353,6 +4457,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #drop_table_cluster_key
         | #drop_constraint
         | #rename_table
+        | #swap_with
         | #rename_column
         | #modify_table_comment
         | #add_column

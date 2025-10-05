@@ -439,6 +439,9 @@ pub enum AlterTableAction {
     RenameTable {
         new_table: Identifier,
     },
+    SwapWith {
+        target_table: Identifier,
+    },
     AddColumn {
         column: ColumnDefinition,
         option: AddColumnOption,
@@ -507,6 +510,9 @@ impl Display for AlterTableAction {
 
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")?;
+            }
+            AlterTableAction::SwapWith { target_table } => {
+                write!(f, "SWAP WITH {target_table}")?;
             }
             AlterTableAction::ModifyTableComment { new_comment } => {
                 write!(f, "COMMENT={}", QuotedString(new_comment, '\''))?;
@@ -938,6 +944,11 @@ pub enum ColumnExpr {
     Default(Box<Expr>),
     Virtual(Box<Expr>),
     Stored(Box<Expr>),
+    AutoIncrement {
+        start: u64,
+        step: i64,
+        is_ordered: bool,
+    },
 }
 
 impl Display for ColumnExpr {
@@ -951,6 +962,18 @@ impl Display for ColumnExpr {
             }
             ColumnExpr::Stored(expr) => {
                 write!(f, " AS ({expr}) STORED")?;
+            }
+            ColumnExpr::AutoIncrement {
+                start,
+                step,
+                is_ordered,
+            } => {
+                write!(f, " AUTOINCREMENT ({}, {}) ", start, step)?;
+                if *is_ordered {
+                    write!(f, "ORDER")?;
+                } else {
+                    write!(f, "NOORDER")?;
+                }
             }
         }
         Ok(())

@@ -45,16 +45,16 @@ impl Interval {
         }
     }
 
+    pub fn to_duration(&self) -> Duration {
+        Duration::from_millis(self.millis)
+    }
+
     pub fn from_millis(millis: u64) -> Self {
         Self::from_duration(Duration::from_millis(millis))
     }
 
     pub fn from_secs(secs: u64) -> Self {
         Self::from_duration(Duration::from_secs(secs))
-    }
-
-    pub fn to_duration(&self) -> Duration {
-        Duration::from_millis(self.millis)
     }
 
     pub fn millis(&self) -> u64 {
@@ -226,7 +226,7 @@ mod tests {
     }
 
     #[test]
-    fn test_adaptable_timestamp_to_duration() {
+    fn test_flexible_timestamp_to_duration() {
         assert_eq!(
             flexible_timestamp_to_duration(100_000_000_001),
             Duration::from_millis(100_000_000_001)

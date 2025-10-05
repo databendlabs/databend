@@ -28,8 +28,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::FieldIndex;
-use databend_common_expression::TableField;
+use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_types::MatchSeq;
@@ -45,134 +44,11 @@ use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
-use crate::tenant::ToTenant;
 
-/// Globally unique identifier of a version of TableMeta.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq, Default)]
-pub struct TableIdent {
-    /// Globally unique id to identify a table.
-    pub table_id: u64,
+mod ident;
+mod ops;
 
-    /// seq AKA version of this table snapshot.
-    ///
-    /// Any change to a table causes the seq to increment, e.g. insert or delete rows, update schema etc.
-    /// But renaming a table should not affect the seq, since the table itself does not change.
-    /// The tuple (table_id, seq) identifies a unique and consistent table snapshot.
-    ///
-    /// A seq is not guaranteed to be consecutive.
-    pub seq: u64,
-}
-
-impl TableIdent {
-    pub fn new(table_id: u64, seq: u64) -> Self {
-        TableIdent { table_id, seq }
-    }
-}
-
-impl Display for TableIdent {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "table_id:{}, ver:{}", self.table_id, self.seq)
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct TableNameIdent {
-    pub tenant: Tenant,
-    pub db_name: String,
-    pub table_name: String,
-}
-
-impl TableNameIdent {
-    pub fn new(
-        tenant: impl ToTenant,
-        db_name: impl ToString,
-        table_name: impl ToString,
-    ) -> TableNameIdent {
-        TableNameIdent {
-            tenant: tenant.to_tenant(),
-            db_name: db_name.to_string(),
-            table_name: table_name.to_string(),
-        }
-    }
-
-    pub fn tenant(&self) -> &Tenant {
-        &self.tenant
-    }
-
-    pub fn table_name(&self) -> String {
-        self.table_name.clone()
-    }
-
-    pub fn db_name_ident(&self) -> DatabaseNameIdent {
-        DatabaseNameIdent::new(&self.tenant, &self.db_name)
-    }
-}
-
-impl Display for TableNameIdent {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "'{}'.'{}'.'{}'",
-            self.tenant.tenant_name(),
-            self.db_name,
-            self.table_name
-        )
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct DBIdTableName {
-    pub db_id: u64,
-    pub table_name: String,
-}
-
-impl DBIdTableName {
-    pub fn new(db_id: u64, table_name: impl ToString) -> Self {
-        DBIdTableName {
-            db_id,
-            table_name: table_name.to_string(),
-        }
-    }
-    pub fn display(&self) -> impl Display {
-        format!("{}.'{}'", self.db_id, self.table_name)
-    }
-}
-
-impl Display for DBIdTableName {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}.'{}'", self.db_id, self.table_name)
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct TableId {
-    pub table_id: u64,
-}
-
-impl TableId {
-    pub fn new(table_id: u64) -> Self {
-        TableId { table_id }
-    }
-}
-
-impl Display for TableId {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "TableId{{{}}}", self.table_id)
-    }
-}
-
-/// The meta-service key for storing table id history ever used by a table name
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct TableIdHistoryIdent {
-    pub database_id: u64,
-    pub table_name: String,
-}
-
-impl Display for TableIdHistoryIdent {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}.'{}'", self.database_id, self.table_name)
-    }
-}
+pub use ident::*;
 
 // serde is required by [`TableInfo`]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -297,9 +173,28 @@ pub struct TableMeta {
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
     // One table only has an unique row access policy
+    // should be discard
     pub row_access_policy: Option<String>,
+    // One table only has an unique row access policy
+    // store policy id and which column apply row access policy
+    pub row_access_policy_columns_ids: Option<RowAccessPolicyColumnMap>,
     pub indexes: BTreeMap<String, TableIndex>,
     pub constraints: BTreeMap<String, Constraint>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct RowAccessPolicyColumnMap {
+    pub policy_id: u64,
+    pub columns_ids: Vec<ColumnId>,
+}
+
+impl RowAccessPolicyColumnMap {
+    pub fn new(policy_id: u64, field_indexes: Vec<ColumnId>) -> Self {
+        Self {
+            policy_id,
+            columns_ids: field_indexes,
+        }
+    }
 }
 
 #[derive(
@@ -332,67 +227,6 @@ pub struct TableIndex {
     pub version: String,
     // index options specify the index configs, like tokenizer.
     pub options: BTreeMap<String, String>,
-}
-
-impl TableMeta {
-    pub fn add_column(
-        &mut self,
-        field: &TableField,
-        comment: &str,
-        index: FieldIndex,
-    ) -> Result<()> {
-        self.fill_field_comments();
-
-        let mut new_schema = self.schema.as_ref().to_owned();
-        new_schema.add_column(field, index)?;
-        self.schema = Arc::new(new_schema);
-        self.field_comments.insert(index, comment.to_owned());
-        Ok(())
-    }
-
-    pub fn drop_column(&mut self, column: &str) -> Result<()> {
-        self.fill_field_comments();
-
-        let mut new_schema = self.schema.as_ref().to_owned();
-        let index = new_schema.drop_column(column)?;
-        self.field_comments.remove(index);
-        self.schema = Arc::new(new_schema);
-        Ok(())
-    }
-
-    /// To fix the field comments panic.
-    pub fn fill_field_comments(&mut self) {
-        let num_fields = self.schema.num_fields();
-        // If the field comments is confused, fill it with empty string.
-        if self.field_comments.len() < num_fields {
-            self.field_comments = vec!["".to_string(); num_fields];
-        }
-    }
-
-    pub fn add_constraint(
-        &mut self,
-        constraint_name: String,
-        constraint: Constraint,
-    ) -> Result<()> {
-        if self.constraints.contains_key(&constraint_name) {
-            return Err(ErrorCode::AlterTableError(format!(
-                "constraint {} already exists",
-                constraint_name
-            )));
-        }
-        self.constraints.insert(constraint_name, constraint);
-        Ok(())
-    }
-
-    pub fn drop_constraint(&mut self, constraint_name: &str) -> Result<()> {
-        if self.constraints.remove(constraint_name).is_none() {
-            return Err(ErrorCode::AlterTableError(format!(
-                "constraint {} not exists",
-                constraint_name
-            )));
-        };
-        Ok(())
-    }
 }
 
 impl TableInfo {
@@ -517,6 +351,7 @@ impl Default for TableMeta {
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
             row_access_policy: None,
+            row_access_policy_columns_ids: None,
             indexes: BTreeMap::new(),
             constraints: BTreeMap::new(),
         }
@@ -816,6 +651,21 @@ impl RenameTableReq {
     }
 }
 
+impl Display for SwapTableReq {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "swap_table:{}/{}-{}<==>{}/{}-{}",
+            self.origin_table.tenant.tenant_name(),
+            self.origin_table.db_name,
+            self.origin_table.table_name,
+            self.origin_table.tenant.tenant_name(),
+            self.origin_table.db_name,
+            self.target_table_name
+        )
+    }
+}
+
 impl Display for RenameTableReq {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
@@ -834,6 +684,23 @@ impl Display for RenameTableReq {
 pub struct RenameTableReply {
     pub table_id: u64,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SwapTableReq {
+    pub if_exists: bool,
+    pub origin_table: TableNameIdent,
+    pub target_table_name: String,
+}
+
+impl SwapTableReq {
+    pub fn tenant(&self) -> &Tenant {
+        &self.origin_table.tenant
+    }
+}
+
+// Keep this structure for future compatibility, even if currently empty.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SwapTableReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReq {
@@ -942,16 +809,15 @@ pub struct SetTableColumnMaskPolicyReply {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SetTableRowAccessPolicyAction {
     // new policy name
-    Set(String),
+    Set(u64, Vec<ColumnId>),
     // old policy name
-    Unset(String),
+    Unset(u64),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableRowAccessPolicyReq {
     pub tenant: Tenant,
     pub table_id: u64,
-    pub policy_id: u64,
     pub action: SetTableRowAccessPolicyAction,
 }
 
@@ -1234,6 +1100,8 @@ pub struct GetTableCopiedFileReq {
 pub struct GetTableCopiedFileReply {
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
 }
+
+pub type ListTableCopiedFileReply = GetTableCopiedFileReply;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableCopiedFileReq {

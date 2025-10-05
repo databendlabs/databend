@@ -90,7 +90,7 @@ CREATE or replace TABLE default.test(a int not null, b int not null, c int not n
 query T
 select table_option, is_external from system.tables where name='test' and database='default'
 ----
- BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native' 0
+BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='native' 0
 
 statement ok
 select * from system.malloc_stats;

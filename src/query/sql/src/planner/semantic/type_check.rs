@@ -6056,7 +6056,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
+    pub fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
     where F: Fn(&Expr) -> Result<Option<Expr>> {
         #[derive(VisitorMut)]
         #[visitor(Expr(enter))]

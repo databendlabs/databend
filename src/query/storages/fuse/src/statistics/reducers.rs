@@ -14,7 +14,9 @@
 
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
@@ -23,13 +25,16 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+
+const VIRTUAL_COLUMN_JSONB_TYPE: u8 = 0;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
 ) -> StatisticsOfColumns {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
-    // to   : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
+    // to   : `HashMap<ColumnId, Vec<&ColumnStatistics>
     let col_to_stats_lit = stats_of_columns.iter().fold(HashMap::new(), |acc, item| {
         item.borrow().iter().fold(
             acc,
@@ -40,8 +45,8 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
         )
     });
 
-    // Reduce the `Vec<&ColumnStatistics` into ColumnStatistics`, i.e.:
-    // from : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
+    // Reduce the `Vec<&ColumnStatistics>` into ColumnStatistics`, i.e.:
+    // from : `HashMap<ColumnId, Vec<&ColumnStatistics>>`
     // to   : `type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>`
     let len = col_to_stats_lit.len();
     col_to_stats_lit
@@ -84,6 +89,111 @@ pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> Col
         .into_iter()
         .try_fold(0, |acc, ndv| ndv.map(|v| acc + v));
     ColumnStatistics::new(min, max, null_count, in_memory_size, distinct_of_values)
+}
+
+// Generate virtual column statistics from virtual column meta.
+// The virtual column must have same data type and is not Jsonb,
+// because scalars with different types can not compare.
+pub fn generate_virtual_column_statistics<T: Borrow<HashMap<ColumnId, VirtualColumnMeta>>>(
+    stats_of_virtual_columns: &[T],
+) -> StatisticsOfColumns {
+    // Combine statistics of a column into `Vec`, that is:
+    // from : `&[HashMap<ColumnId, VirtualColumnMeta>]`
+    // to   : `HashMap<ColumnId, Vec<(data_type, &ColumnStatistics)>>`
+    let col_to_stats_lit = stats_of_virtual_columns
+        .iter()
+        .fold(HashMap::new(), |acc, item| {
+            item.borrow().iter().fold(
+                acc,
+                |mut acc: HashMap<ColumnId, Vec<(u8, ColumnStatistics)>>, (col_id, col_meta)| {
+                    if let Some(col_stats) = &col_meta.column_stat {
+                        acc.entry(*col_id)
+                            .or_default()
+                            .push((col_meta.data_type, col_stats.clone()));
+                    }
+                    acc
+                },
+            )
+        });
+
+    // Reduce the `Vec<(data_type, &ColumnStatistics)>` into ColumnStatistics`, i.e.:
+    // from : `HashMap<ColumnId, Vec<(data_type, &ColumnStatistics)>>`
+    // to   : `type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>`
+    let len = col_to_stats_lit.len();
+    col_to_stats_lit.iter().fold(
+        HashMap::with_capacity(len),
+        |mut acc, (id, types_and_stats)| {
+            let data_type_set = types_and_stats
+                .iter()
+                .map(|(ty, _)| *ty)
+                .collect::<HashSet<_>>();
+            // only collect stats if all block has same type and the type is not Jsonb
+            if data_type_set.len() == 1 && !data_type_set.contains(&VIRTUAL_COLUMN_JSONB_TYPE) {
+                let stats = types_and_stats
+                    .iter()
+                    .map(|(_, stat)| stat.clone())
+                    .collect::<Vec<_>>();
+                let col_stats = reduce_column_statistics(&stats);
+                acc.insert(*id, col_stats);
+            }
+            acc
+        },
+    )
+}
+
+// Reduce statistics from multiple virtual columns into a single summary statistic.
+// When statistics is None, it indicates that this block did not generate any virtual columns.
+// In this case, we do not generate a summary statistic, because missing statistics from
+// some blocks would introduce errors into the summary statistic.
+pub fn reduce_virtual_column_statistics<T: Borrow<Option<StatisticsOfColumns>>>(
+    stats_of_columns: &[T],
+) -> Option<StatisticsOfColumns> {
+    for stat in stats_of_columns {
+        if stat.borrow().is_none() {
+            return None;
+        }
+    }
+
+    let col_to_stats_lit = stats_of_columns.iter().fold(HashMap::new(), |acc, item| {
+        item.borrow().as_ref().unwrap().iter().fold(
+            acc,
+            |mut acc: HashMap<ColumnId, Vec<&ColumnStatistics>>, (col_id, col_stats)| {
+                acc.entry(*col_id).or_default().push(col_stats);
+                acc
+            },
+        )
+    });
+
+    let len = col_to_stats_lit.len();
+    let reduced_stats_of_columns =
+        col_to_stats_lit
+            .iter()
+            .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
+                // Check that all non-null min and max Scalars have the same type.
+                let mut type_set = HashSet::new();
+                for s in stats.iter() {
+                    let min = s.min();
+                    let min_type = min.as_ref().infer_data_type();
+                    if !matches!(min_type, DataType::Null) {
+                        type_set.insert(min_type);
+                    }
+                    let max = s.max();
+                    let max_type = max.as_ref().infer_data_type();
+                    if !matches!(max_type, DataType::Null) {
+                        type_set.insert(max_type);
+                    }
+                    if type_set.len() > 1 {
+                        break;
+                    }
+                }
+
+                if type_set.len() <= 1 {
+                    let col_stats = reduce_column_statistics(stats);
+                    acc.insert(*id, col_stats);
+                }
+                acc
+            });
+    Some(reduced_stats_of_columns)
 }
 
 pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
@@ -158,9 +268,12 @@ pub fn merge_statistics_mut(
     l.additional_stats_meta = None;
     if l.row_count == 0 {
         l.col_stats = r.col_stats.clone();
+        l.virtual_col_stats = r.virtual_col_stats.clone();
         l.cluster_stats = r.cluster_stats.clone();
     } else {
         l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
+        l.virtual_col_stats =
+            reduce_virtual_column_statistics(&[&l.virtual_col_stats, &r.virtual_col_stats]);
         l.cluster_stats = reduce_cluster_statistics(
             &[&l.cluster_stats, &r.cluster_stats],
             default_cluster_key_id,
@@ -268,6 +381,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     let len = block_metas.len();
     let mut col_stats = Vec::with_capacity(len);
     let mut cluster_stats = Vec::with_capacity(len);
+    let mut virtual_col_stats = Vec::with_capacity(len);
 
     block_metas.iter().for_each(|b| {
         let b = b.borrow();
@@ -294,6 +408,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
             index_size += virtual_block_meta.virtual_column_size;
             virtual_column_size += virtual_block_meta.virtual_column_size;
             virtual_block_count += 1;
+            virtual_col_stats.push(&virtual_block_meta.virtual_column_metas);
         }
         if thresholds.check_perfect_block(
             b.row_count as usize,
@@ -309,6 +424,12 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
 
     let merged_col_stats = reduce_block_statistics(&col_stats);
     let merged_cluster_stats = reduce_cluster_statistics(&cluster_stats, default_cluster_key_id);
+    let merged_virtual_col_stats = if block_count > 0 && virtual_block_count == block_count {
+        let virtual_col_stats = generate_virtual_column_statistics(&virtual_col_stats);
+        Some(virtual_col_stats)
+    } else {
+        None
+    };
     let merged_virtual_block_count = Option::from(virtual_block_count).filter(|&x| x > 0);
 
     let bloom_index_size = Option::from(bloom_index_size).filter(|&x| x > 0);
@@ -330,6 +451,7 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         vector_index_size,
         virtual_column_size,
         col_stats: merged_col_stats,
+        virtual_col_stats: merged_virtual_col_stats,
         cluster_stats: merged_cluster_stats,
         virtual_block_count: merged_virtual_block_count,
         additional_stats_meta: None,

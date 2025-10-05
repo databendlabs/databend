@@ -5,7 +5,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a.b (c integer not null 1, b float(10))
-  | ------                               ^ unexpected `1`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `COMMENT`, or `,`
+  | ------                               ^ unexpected `1`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `AUTOINCREMENT`, `IDENTITY`, `COMMENT`, or `,`
   | |                                     
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -27,7 +27,7 @@ error:
   --> SQL:1:24
   |
 1 | create table a (c float(10))
-  | ------                 ^ unexpected `(`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `COMMENT`, or `,`
+  | ------                 ^ unexpected `(`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `AUTOINCREMENT`, `IDENTITY`, `COMMENT`, or `,`
   | |                       
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -303,7 +303,7 @@ error:
   --> SQL:1:19
   |
 1 | create role 'test'@'%';
-  |                   ^ unexpected `@`, expecting `FORMAT` or `;`
+  |                   ^ unexpected `@`, expecting `COMMENT`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -327,7 +327,7 @@ error:
   | |           |
   | |           ' or " or \f or \b are not allowed in role name
   | |           while parsing <role_name>
-  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`
 
 
 ---------- Input ----------
@@ -341,7 +341,7 @@ error:
   | |           |
   | |           ' or " or \f or \b are not allowed in role name
   | |           while parsing <role_name>
-  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`
 
 
 ---------- Input ----------
@@ -355,7 +355,7 @@ error:
   | |           |
   | |           ' or " or \f or \b are not allowed in role name
   | |           while parsing <role_name>
-  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`
 
 
 ---------- Input ----------
@@ -369,7 +369,7 @@ error:
   | |           |
   | |           ' or " or \f or \b are not allowed in role name
   | |           while parsing <role_name>
-  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`
 
 
 ---------- Input ----------
@@ -744,11 +744,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -775,11 +776,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -794,11 +796,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -813,11 +816,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -832,11 +836,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -851,11 +856,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -870,11 +876,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -889,11 +896,12 @@ error:
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 
@@ -911,11 +919,12 @@ error:
 1 | COPY INTO mytable
   | ---- while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 2 |                 FROM @my_stage
 3 |                 FILE_FORMAT = (
@@ -1267,11 +1276,12 @@ error:
   | |                                                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
-                FROM { internalStage | externalStage | externalLocation | ( <query> ) }
+                FROM { @<stage_name>[/<path>]
+                    | '<uri>'
+                    | ( select <expr>, [ <expr> ...] from {@<stage_name>[/<path>]( <args> ) | '<uri>'} ) }
                 [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
 
 

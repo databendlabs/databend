@@ -25,6 +25,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_app_error::KVAppError;
 use databend_common_meta_api::name_id_value_api::NameIdValueApiCompat;
+use databend_common_meta_api::AutoIncrementApi;
 use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
@@ -72,6 +73,8 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
@@ -95,6 +98,7 @@ use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -106,6 +110,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -686,6 +692,14 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn swap_table(&self, req: SwapTableReq) -> Result<SwapTableReply> {
+        let db = self
+            .get_database(&req.origin_table.tenant, &req.origin_table.db_name)
+            .await?;
+        db.swap_table(req).await
+    }
+
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         tenant: &Tenant,
@@ -767,6 +781,17 @@ impl Catalog for MutableCatalog {
     ) -> Result<GetTableCopiedFileReply> {
         let db = self.get_database(tenant, db_name).await?;
         db.get_table_copied_file_info(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_table_copied_file_info(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_id: u64,
+    ) -> Result<ListTableCopiedFileReply> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.list_table_copied_file_info(table_id).await
     }
 
     #[async_backtrace::framed]
@@ -926,6 +951,15 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
         let res = self.ctx.meta.rename_dictionary(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_autoincrement_next_value(
+        &self,
+        req: GetAutoIncrementNextValueReq,
+    ) -> Result<GetAutoIncrementNextValueReply> {
+        let res = self.ctx.meta.get_auto_increment_next_value(req).await??;
         Ok(res)
     }
 }

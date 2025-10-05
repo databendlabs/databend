@@ -14579,8 +14579,8 @@ dependencies = [
 
 [[package]]
 name = "state-machine-api"
-version = "0.3.1"
-source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.3.1#ac9af6a417e7bb7eb712a0ec6df661f3470aa432"
+version = "0.3.4"
+source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.3.4#d5bfbe8dc459ba7a68eaa1526cacffcf4c9f1982"
 dependencies = [
  "async-trait",
  "display-more",

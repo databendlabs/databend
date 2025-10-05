@@ -30,4 +30,6 @@ Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not hav
 0
 === FIX ISSUE 18056 ===
 db1	t	id1
+=== FIX: ISSUE 18797 ===
+sysdb	sysdb_tt
 ======

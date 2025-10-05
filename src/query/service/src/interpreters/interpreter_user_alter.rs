@@ -53,9 +53,9 @@ impl Interpreter for AlterUserInterpreter {
 
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
-        if plan.auth_info.is_some() || plan.user_option.is_some() {
+        if plan.change_auth || plan.change_user_option {
             UserApiProvider::instance()
-                .update_user(&tenant, plan.user, plan.auth_info, plan.user_option)
+                .alter_user(&tenant, &plan.user_info, plan.seq)
                 .await?;
         }
 

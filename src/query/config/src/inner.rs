@@ -575,11 +575,11 @@ pub struct CacheConfig {
     /// Note that a segment may contain multiple block metadata entries.
     pub segment_block_metas_count: u64,
 
-    /// Max number of cached table segment
+    /// Max number of cached table statistics
     pub table_meta_statistic_count: u64,
 
-    /// Max number of cached segment statistics
-    pub segment_statistics_count: u64,
+    /// Max bytes of cached segment statistics
+    pub segment_statistics_bytes: u64,
 
     /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
     pub enable_table_index_bloom: bool,
@@ -749,7 +749,7 @@ impl Default for CacheConfig {
             block_meta_count: 0,
             segment_block_metas_count: 0,
             table_meta_statistic_count: 256,
-            segment_statistics_count: 0,
+            segment_statistics_bytes: 1073741824,
             enable_table_index_bloom: true,
             table_bloom_index_meta_count: 3000,
             table_bloom_index_filter_count: 0,

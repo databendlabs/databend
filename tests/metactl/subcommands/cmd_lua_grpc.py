@@ -65,14 +65,19 @@ end
     output = result.stdout.strip()
     print("output:", output)
 
+    # Normalize output by removing proposed_at_ms field
+    import re
+    normalized_output = re.sub(r',"meta"=\{"proposed_at_ms"=\d+\}', '', output)
+    print("normalized:", normalized_output)
+
     expected_output = """Upsert result:\t{"result"={"data"="test_value","seq"=1}}
 Get result:\t{"data"="test_value","seq"=1}
 Get null result:\tNULL"""
     print("expect:", expected_output)
 
-    # Check if entire output matches expected value
-    assert output == expected_output, (
-        f"Expected:\n{expected_output}\n\nActual:\n{output}"
+    # Check if normalized output matches expected value
+    assert normalized_output == expected_output, (
+        f"Expected:\n{expected_output}\n\nActual:\n{normalized_output}"
     )
 
     print("✓ Lua gRPC client test passed")

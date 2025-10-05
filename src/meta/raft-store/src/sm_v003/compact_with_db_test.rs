@@ -115,15 +115,15 @@ async fn test_leveled_query_with_expire_index() -> anyhow::Result<()> {
         //
         (
             user_key("a"),
-            SeqMarked::new_normal(4, (Some(KVMeta::new_expires_at(15)), b("a1")))
+            SeqMarked::new_normal(4, (Some(KVMeta::new(Some(15), Some(0))), b("a1")))
         ),
         (
             user_key("b"),
-            SeqMarked::new_normal(2, (Some(KVMeta::new_expires_at(5)), b("b0")))
+            SeqMarked::new_normal(2, (Some(KVMeta::new(Some(5), Some(0))), b("b0")))
         ),
         (
             user_key("c"),
-            SeqMarked::new_normal(3, (Some(KVMeta::new_expires_at(20)), b("c0")))
+            SeqMarked::new_normal(3, (Some(KVMeta::new(Some(20), Some(0))), b("c0")))
         ),
     ]);
 
@@ -238,15 +238,15 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         //
         (
             user_key("a"),
-            SeqMarked::new_normal(4, (Some(KVMeta::new_expires_at(15)), b("a1")))
+            SeqMarked::new_normal(4, (Some(KVMeta::new(Some(15), Some(0))), b("a1")))
         ),
         (
             user_key("b"),
-            SeqMarked::new_normal(2, (Some(KVMeta::new_expires_at(5)), b("b0")))
+            SeqMarked::new_normal(2, (Some(KVMeta::new(Some(5), Some(0))), b("b0")))
         ),
         (
             user_key("c"),
-            SeqMarked::new_normal(3, (Some(KVMeta::new_expires_at(20)), b("c0")))
+            SeqMarked::new_normal(3, (Some(KVMeta::new(Some(20), Some(0))), b("c0")))
         ),
     ]);
 

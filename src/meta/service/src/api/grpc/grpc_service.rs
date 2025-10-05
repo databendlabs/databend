@@ -14,7 +14,6 @@
 
 use std::io;
 use std::pin::Pin;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::time::Instant;
@@ -37,6 +36,8 @@ use databend_common_meta_types::protobuf::Empty;
 use databend_common_meta_types::protobuf::ExportedChunk;
 use databend_common_meta_types::protobuf::HandshakeRequest;
 use databend_common_meta_types::protobuf::HandshakeResponse;
+use databend_common_meta_types::protobuf::KeysCount;
+use databend_common_meta_types::protobuf::KeysLayoutRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -71,7 +72,6 @@ use tonic::Status;
 use tonic::Streaming;
 use watcher::watch_stream::WatchStreamSender;
 
-use crate::api::grpc::OnCompleteStream;
 use crate::meta_node::meta_handle::MetaHandle;
 use crate::meta_service::watcher::DispatcherHandle;
 use crate::meta_service::watcher::WatchTypes;
@@ -81,6 +81,36 @@ use crate::metrics::InFlightWrite;
 use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
 use crate::version::MIN_METACLI_SEMVER;
+
+/// Metrics collector that logs when dropped
+struct MetricsCollector {
+    count: u64,
+    start: Instant,
+    req_str: String,
+}
+
+impl MetricsCollector {
+    fn new(req_str: String) -> Self {
+        Self {
+            count: 0,
+            start: Instant::now(),
+            req_str,
+        }
+    }
+}
+
+impl Drop for MetricsCollector {
+    fn drop(&mut self) {
+        let total = self.start.elapsed();
+        let total_items = self.count;
+        let items_per_ms = total_items / (total.as_millis() as u64 + 1);
+        let latency = total / (total_items.max(1) as u32);
+        info!(
+            "StreamElapsed: total: {:?}; items: {}, items/ms: {}, item_latency: {:?}; {}",
+            total, total_items, items_per_ms, latency, self.req_str
+        );
+    }
+}
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
@@ -316,34 +346,16 @@ impl MetaService for MetaServiceImpl {
 
         ThreadTracker::tracking_future(async move {
             let guard = InFlightRead::guard();
-            let start = Instant::now();
             let (endpoint, strm) = self.handle_kv_read_v1(req).in_span(root).await?;
 
-            // Counter to track total items sent
-            let count = Arc::new(AtomicU64::new(0));
-            let count2 = count.clone();
+            // MetricsCollector logs metrics when dropped
+            let mut collector = MetricsCollector::new(req_str);
 
-            let strm = strm
-                .map(move |x| {
-                    let _g = &guard; // hold the guard until the stream is done.
-                    x
-                })
-                .map(move |item| {
-                    network_metrics::incr_stream_sent_item(req_typ);
-                    count2.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    item
-                });
-
-            // Log the total time and item count when the stream is finished.
-            let strm = OnCompleteStream::new(strm, move || {
-                let total = start.elapsed();
-                let total_items = count.load(std::sync::atomic::Ordering::Relaxed);
-                let items_per_ms = total_items / (total.as_millis() as u64 + 1);
-                let latency = total / (total_items.max(1) as u32);
-                info!(
-                    "StreamElapsed: total: {:?}; items: {}, items/ms: {}, item_latency: {:?}; {}",
-                    total, total_items, items_per_ms, latency, req_str
-                );
+            let strm = strm.map(move |item| {
+                let _g = &guard; // hold the guard until the stream is done.
+                network_metrics::incr_stream_sent_item(req_typ);
+                collector.count += 1;
+                item
             });
 
             let strm = strm.boxed();
@@ -442,6 +454,31 @@ impl MetaService for MetaServiceImpl {
             .try_chunks(chunk_size)
             .map_ok(|chunk: Vec<String>| ExportedChunk { data: chunk })
             .map_err(|e: TryChunksError<_, io::Error>| Status::internal(e.1.to_string()));
+
+        Ok(Response::new(Box::pin(s)))
+    }
+
+    type SnapshotKeysLayoutStream =
+        Pin<Box<dyn Stream<Item = Result<KeysCount, Status>> + Send + 'static>>;
+
+    async fn snapshot_keys_layout(
+        &self,
+        request: Request<KeysLayoutRequest>,
+    ) -> Result<Response<Self::SnapshotKeysLayoutStream>, Status> {
+        let guard = InFlightRead::guard();
+
+        let layout_request = request.into_inner();
+
+        let meta_handle = self.try_get_meta_handle()?;
+
+        let strm = meta_handle
+            .handle_snapshot_keys_layout(layout_request)
+            .await??;
+
+        let s = strm.map(move |x| {
+            let _g = &guard; // hold the guard until the stream is done.
+            x.map_err(|e| Status::internal(e.to_string()))
+        });
 
         Ok(Response::new(Box::pin(s)))
     }
