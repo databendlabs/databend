@@ -72,23 +72,27 @@ impl ProbeStream for EmptyProbeStream {
 }
 
 pub struct AllUnmatchedProbeStream {
-    idx: usize,
-    size: usize,
+    idx: u64,
+    size: u64,
 }
 
 impl AllUnmatchedProbeStream {
     pub fn create(size: usize) -> Box<dyn ProbeStream> {
-        Box::new(AllUnmatchedProbeStream { idx: 0, size })
+        Box::new(AllUnmatchedProbeStream {
+            idx: 0,
+            size: size as u64,
+        })
     }
 }
 
 impl ProbeStream for AllUnmatchedProbeStream {
-    fn advance(&mut self, _rows: &mut ProbedRows, max_rows: usize) -> Result<()> {
+    fn advance(&mut self, rows: &mut ProbedRows, max_rows: usize) -> Result<()> {
         if self.idx >= self.size {
             return Ok(());
         }
 
-        let unmatched_rows = std::cmp::min(self.size - self.idx, max_rows);
+        let unmatched_rows = std::cmp::min(self.size - self.idx, max_rows as u64);
+        rows.unmatched.extend(self.idx..self.idx + unmatched_rows);
         self.idx += unmatched_rows;
         Ok(())
     }

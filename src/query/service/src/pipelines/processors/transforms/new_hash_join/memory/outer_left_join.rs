@@ -170,7 +170,6 @@ struct OuterLeftHashJoinStream<'a, const CONJUNCT: bool> {
     probe_keys_stream: Box<dyn ProbeStream + 'a>,
     probed_rows: &'a mut ProbedRows,
     conjunct_unmatched: Vec<u8>,
-    conjunct_unmatched_num_rows: usize,
     unmatched_rows: Vec<u64>,
     filter_executor: Option<&'a mut FilterExecutor>,
 }
@@ -237,7 +236,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
                 true => None,
                 false => {
                     let row_ptrs = self.probed_rows.matched_build.as_slice();
-                    let build_block1 = DataBlock::take_column_vec(
+                    let build_block = DataBlock::take_column_vec(
                         self.join_state.columns.as_slice(),
                         self.join_state.column_types.as_slice(),
                         row_ptrs,
@@ -245,7 +244,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
                     );
 
                     let true_validity = Bitmap::new_constant(true, row_ptrs.len());
-                    let entries = build_block1
+                    let entries = build_block
                         .columns()
                         .iter()
                         .map(|c| wrap_true_validity(c, row_ptrs.len(), &true_validity));
@@ -262,10 +261,9 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
 
             if CONJUNCT && let Some(filter_executor) = self.filter_executor.as_mut() {
                 let result_count = filter_executor.select(&result_block)?;
-                let origin_rows = result_block.num_rows();
 
-                if result_count == origin_rows {
-                    return Ok(Some(result_block));
+                if result_count == 0 {
+                    continue;
                 }
 
                 let true_sel = filter_executor.true_selection();
@@ -273,7 +271,6 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
                 for idx in true_sel.iter().take(result_count) {
                     let row_id = self.probed_rows.matched_probe[*idx as usize] as usize;
                     self.conjunct_unmatched[row_id] = 1;
-                    self.conjunct_unmatched_num_rows -= 1;
                 }
 
                 let origin_rows = result_block.num_rows();
@@ -314,7 +311,6 @@ impl<'a, const CONJUNCT: bool> OuterLeftHashJoinStream<'a, CONJUNCT> {
             filter_executor,
             unmatched_rows,
             conjunct_unmatched: pending_unmatched,
-            conjunct_unmatched_num_rows: num_rows,
         })
     }
 }
