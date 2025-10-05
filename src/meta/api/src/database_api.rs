@@ -62,7 +62,6 @@ use crate::database_util::drop_database_meta;
 use crate::database_util::get_db_or_err;
 use crate::db_has_to_exist;
 use crate::error_util::db_has_to_not_exist;
-use crate::error_util::unknown_database_error;
 use crate::fetch_id;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
@@ -680,11 +679,16 @@ where
         &self,
         name_key: &DatabaseNameIdent,
         msg: impl Display + std::fmt::Debug + Send,
-    ) -> Result<Result<SeqV<DatabaseId>, AppError>, MetaError> {
+    ) -> Result<Result<SeqV<DatabaseId>, UnknownDatabase>, MetaError> {
         let seq_db_id = self.get_pb(name_key).await?;
         let result = seq_db_id
             .map(|s| s.map(|x| x.into_inner()))
-            .ok_or_else(|| unknown_database_error(name_key, msg));
+            .ok_or_else(|| {
+                UnknownDatabase::new(
+                    name_key.database_name(),
+                    format!("{}: {}", msg, name_key.display()),
+                )
+            });
         Ok(result)
     }
 }

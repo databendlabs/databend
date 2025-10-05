@@ -218,7 +218,7 @@ where
         let seq_db_id = self
             .get_db_id_or_err(&tenant_dbname, "create_table")
             .await?
-            .map_err(KVAppError::from)?;
+            .map_err(|e| KVAppError::AppError(AppError::UnknownDatabase(e)))?;
 
         // fixed
         let key_dbid = seq_db_id.data;
