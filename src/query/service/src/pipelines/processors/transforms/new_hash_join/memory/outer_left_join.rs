@@ -25,6 +25,7 @@ use databend_common_expression::types::NullableColumn;
 use databend_common_expression::with_join_hash_method;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::Scalar;
@@ -141,78 +142,75 @@ impl Join for OuterLeftHashJoin {
             )),
         })?;
 
-        Ok(OuterLeftHashJoinStream::create(
-            probe_block,
-            self.basic_state.clone(),
-            probe_stream,
-            self.desc.clone(),
-            &mut self.performance_context.probe_result,
-        ))
+        match self.performance_context.filter_executor.as_mut() {
+            None => Ok(OuterLeftHashJoinStream::<false>::create(
+                probe_block,
+                self.basic_state.clone(),
+                probe_stream,
+                self.desc.clone(),
+                &mut self.performance_context.probe_result,
+                None,
+            )),
+            Some(filter_executor) => Ok(OuterLeftHashJoinStream::<true>::create(
+                probe_block,
+                self.basic_state.clone(),
+                probe_stream,
+                self.desc.clone(),
+                &mut self.performance_context.probe_result,
+                Some(filter_executor),
+            )),
+        }
     }
 }
 
-struct OuterLeftHashJoinStream<'a> {
+struct OuterLeftHashJoinStream<'a, const CONJUNCT: bool> {
     desc: Arc<HashJoinDesc>,
     probe_data_block: DataBlock,
     join_state: Arc<BasicHashJoinState>,
     probe_keys_stream: Box<dyn ProbeStream + 'a>,
     probed_rows: &'a mut ProbedRows,
-    unmatched_rows: Vec<u64>,
+    pending_unmatched: Vec<u8>,
+    pending_unmatched_num_rows: usize,
+    filter_executor: Option<&'a mut FilterExecutor>,
 }
 
-unsafe impl<'a> Send for OuterLeftHashJoinStream<'a> {}
-unsafe impl<'a> Sync for OuterLeftHashJoinStream<'a> {}
+unsafe impl<'a, const CONJUNCT: bool> Send for OuterLeftHashJoinStream<'a, CONJUNCT> {}
+unsafe impl<'a, const CONJUNCT: bool> Sync for OuterLeftHashJoinStream<'a, CONJUNCT> {}
 
-impl<'a> OuterLeftHashJoinStream<'a> {
-    pub fn create(
-        probe_data_block: DataBlock,
-        join_state: Arc<BasicHashJoinState>,
-        probe_keys_stream: Box<dyn ProbeStream + 'a>,
-        desc: Arc<HashJoinDesc>,
-        probed_rows: &'a mut ProbedRows,
-    ) -> Box<dyn JoinStream + 'a> {
-        Box::new(OuterLeftHashJoinStream {
-            desc,
-            join_state,
-            probed_rows,
-            probe_data_block,
-            probe_keys_stream,
-            unmatched_rows: vec![],
-        })
-    }
-}
-
-impl<'a> JoinStream for OuterLeftHashJoinStream<'a> {
+impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUNCT> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         loop {
             self.probed_rows.clear();
             let max_rows = self.probed_rows.matched_probe.capacity();
             self.probe_keys_stream.advance(self.probed_rows, max_rows)?;
 
-            if !self.probed_rows.unmatched.is_empty() {
-                self.unmatched_rows
-                    .extend_from_slice(&self.probed_rows.unmatched);
-            }
-
             if self.probed_rows.is_empty() {
-                if self.unmatched_rows.is_empty() {
+                if self.pending_unmatched.is_empty() {
                     return Ok(None);
                 }
 
-                let unmatched = std::mem::take(&mut self.unmatched_rows);
+                let unmatched = std::mem::take(&mut self.pending_unmatched);
+
+                let unmatched_row_id = unmatched
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(_, matched)| *matched == 0)
+                    .map(|(row_id, _)| row_id as u64)
+                    .collect::<Vec<_>>();
+
                 let probe_block = match self.probe_data_block.num_columns() {
                     0 => None,
-                    _ => Some(DataBlock::take(&self.probe_data_block, &unmatched)?),
+                    _ => Some(DataBlock::take(&self.probe_data_block, &unmatched_row_id)?),
                 };
 
                 let types = &self.join_state.column_types;
-                let build_block = null_build_block(types, unmatched.len());
+                let build_block = null_build_block(types, unmatched_row_id.len());
 
                 return Ok(Some(final_result_block(
                     &self.desc,
                     probe_block,
                     build_block,
-                    unmatched.len(),
+                    unmatched_row_id.len(),
                 )));
             }
 
@@ -248,13 +246,64 @@ impl<'a> JoinStream for OuterLeftHashJoinStream<'a> {
                 }
             };
 
-            return Ok(Some(final_result_block(
+            let mut result_block = final_result_block(
                 &self.desc,
                 probe_block,
                 build_block,
                 self.probed_rows.matched_build.len(),
-            )));
+            );
+
+            if CONJUNCT && let Some(filter_executor) = self.filter_executor.as_mut() {
+                let result_count = filter_executor.select(&result_block)?;
+                let origin_rows = result_block.num_rows();
+
+                if result_count == origin_rows {
+                    return Ok(Some(result_block));
+                }
+
+                let true_sel = filter_executor.true_selection();
+
+                for idx in 0..result_count {
+                    let idx = true_sel[idx] as usize;
+                    let row_id = self.probed_rows.matched_probe[idx] as usize;
+                    self.pending_unmatched[row_id] = 1;
+                    self.pending_unmatched_num_rows -= 1;
+                }
+
+                let origin_rows = result_block.num_rows();
+                result_block = filter_executor.take(result_block, origin_rows, result_count)?;
+            }
+
+            return Ok(Some(result_block));
         }
+    }
+}
+
+impl<'a, const CONJUNCT: bool> OuterLeftHashJoinStream<'a, CONJUNCT> {
+    pub fn create(
+        probe_data_block: DataBlock,
+        join_state: Arc<BasicHashJoinState>,
+        probe_keys_stream: Box<dyn ProbeStream + 'a>,
+        desc: Arc<HashJoinDesc>,
+        probed_rows: &'a mut ProbedRows,
+        filter_executor: Option<&'a mut FilterExecutor>,
+    ) -> Box<dyn JoinStream + 'a> {
+        let num_rows = probe_data_block.num_rows();
+        let pending_unmatched = match CONJUNCT {
+            true => vec![0; num_rows],
+            false => Vec::new(),
+        };
+
+        Box::new(OuterLeftHashJoinStream::<'a, CONJUNCT> {
+            desc,
+            join_state,
+            probed_rows,
+            probe_data_block,
+            probe_keys_stream,
+            filter_executor,
+            pending_unmatched,
+            pending_unmatched_num_rows: num_rows,
+        })
     }
 }
 
