@@ -215,7 +215,10 @@ where
         }
 
         // fixed: does not change in every loop.
-        let seq_db_id = self.get_db_id_or_err(&tenant_dbname, "create_table").await?.map_err(KVAppError::from)?;
+        let seq_db_id = self
+            .get_db_id_or_err(&tenant_dbname, "create_table")
+            .await?
+            .map_err(KVAppError::from)?;
 
         // fixed
         let key_dbid = seq_db_id.data;
