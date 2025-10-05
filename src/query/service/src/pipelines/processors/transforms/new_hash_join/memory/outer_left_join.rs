@@ -263,9 +263,8 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterLeftHashJoinStream<'a, CONJUN
 
                 let true_sel = filter_executor.true_selection();
 
-                for idx in 0..result_count {
-                    let idx = true_sel[idx] as usize;
-                    let row_id = self.probed_rows.matched_probe[idx] as usize;
+                for idx in true_sel.iter().take(result_count) {
+                    let row_id = self.probed_rows.matched_probe[*idx as usize] as usize;
                     self.pending_unmatched[row_id] = 1;
                     self.pending_unmatched_num_rows -= 1;
                 }
