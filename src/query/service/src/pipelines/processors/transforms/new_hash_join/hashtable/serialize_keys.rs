@@ -302,6 +302,7 @@ pub struct EarlyFilteringProbeStream<'a, const MATCHED: bool> {
     selections: &'a [u32],
     unmatched_selection: &'a [u32],
     matched_num_rows: usize,
+    returned_unmatched: bool,
 }
 
 impl<'a, const MATCHED: bool> EarlyFilteringProbeStream<'a, MATCHED> {
@@ -319,13 +320,15 @@ impl<'a, const MATCHED: bool> EarlyFilteringProbeStream<'a, MATCHED> {
             idx: 0,
             probe_entry_ptr: 0,
             matched_num_rows: 0,
+            returned_unmatched: false,
         })
     }
 }
 
 impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATCHED> {
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
-        if !MATCHED {
+        if !MATCHED && !self.returned_unmatched {
+            self.returned_unmatched = true;
             res.unmatched
                 .extend(self.unmatched_selection.iter().map(|x| *x as u64));
         }

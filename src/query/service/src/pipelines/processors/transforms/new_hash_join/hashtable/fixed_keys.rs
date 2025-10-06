@@ -266,6 +266,7 @@ struct EarlyFilteringProbeStream<'a, Key: FixedKey + HashtableKeyable, const MAT
     selections: &'a [u32],
     unmatched_selection: &'a [u32],
     matched_num_rows: usize,
+    returned_unmatched: bool,
 }
 
 impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool>
@@ -285,6 +286,7 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool>
             idx: 0,
             probe_entry_ptr: 0,
             matched_num_rows: 0,
+            returned_unmatched: false,
         })
     }
 }
@@ -293,7 +295,8 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool> ProbeStream
     for EarlyFilteringProbeStream<'a, Key, MATCHED>
 {
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
-        if !MATCHED {
+        if !MATCHED && !self.returned_unmatched {
+            self.returned_unmatched = true;
             res.unmatched
                 .extend(self.unmatched_selection.iter().map(|x| *x as u64));
         }
