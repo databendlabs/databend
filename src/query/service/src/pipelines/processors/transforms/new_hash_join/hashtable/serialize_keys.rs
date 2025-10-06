@@ -263,6 +263,7 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
                             let row_ptr = raw_entry.row_ptr;
                             res.matched_probe.push(self.key_idx as u64);
                             res.matched_build.push(row_ptr);
+                            self.matched_num_rows += 1;
 
                             if res.matched_probe.len() == max_rows {
                                 self.probe_entry_ptr = raw_entry.next;
@@ -375,6 +376,7 @@ impl<'a, const MATCHED: bool> ProbeStream for EarlyFilteringProbeStream<'a, MATC
                             let row_ptr = raw_entry.row_ptr;
                             res.matched_probe.push(key_idx as u64);
                             res.matched_build.push(row_ptr);
+                            self.matched_num_rows += 1;
 
                             if res.matched_probe.len() == max_rows {
                                 self.probe_entry_ptr = raw_entry.next;
