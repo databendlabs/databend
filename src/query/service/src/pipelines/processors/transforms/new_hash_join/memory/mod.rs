@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod memory_inner_join;
-mod memory_state;
+mod basic;
+mod basic_state;
+mod inner_join;
+pub mod outer_left_join;
 
-pub use memory_inner_join::MemoryInnerJoin;
-pub use memory_state::HashJoinMemoryState;
+pub use basic_state::BasicHashJoinState;
+pub use inner_join::InnerHashJoin;

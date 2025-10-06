@@ -29,12 +29,11 @@ use tokio::sync::Barrier;
 
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
-use crate::pipelines::processors::transforms::new_hash_join::runtime_filter::PlanRuntimeFilterDesc;
+use crate::pipelines::processors::transforms::new_hash_join::runtime_filter::RuntimeFiltersDesc;
 
 pub struct TransformHashJoin {
     build_port: Arc<InputPort>,
     probe_port: Arc<InputPort>,
-
     joined_port: Arc<OutputPort>,
 
     stage: Stage,
@@ -42,8 +41,7 @@ pub struct TransformHashJoin {
     joined_data: Option<DataBlock>,
     stage_sync_barrier: Arc<Barrier>,
     projection: ColumnSet,
-    initialize: bool,
-    rf_desc: Arc<PlanRuntimeFilterDesc>,
+    rf_desc: Arc<RuntimeFiltersDesc>,
 }
 
 impl TransformHashJoin {
@@ -54,22 +52,21 @@ impl TransformHashJoin {
         join: Box<dyn Join>,
         stage_sync_barrier: Arc<Barrier>,
         projection: ColumnSet,
-        rf_desc: Arc<PlanRuntimeFilterDesc>,
+        rf_desc: Arc<RuntimeFiltersDesc>,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(TransformHashJoin {
             build_port,
             probe_port,
             joined_port,
             join,
-            joined_data: None,
-            stage_sync_barrier,
+            rf_desc,
             projection,
-            initialize: false,
+            stage_sync_barrier,
+            joined_data: None,
             stage: Stage::Build(BuildState {
                 finished: false,
                 build_data: None,
             }),
-            rf_desc,
         }))
     }
 }
@@ -112,24 +109,15 @@ impl Processor for TransformHashJoin {
         }
 
         match &mut self.stage {
-            Stage::Build(state) => match state.event(&self.build_port)? {
-                Event::NeedData if !self.initialize => {
-                    self.initialize = true;
-                    // self.probe_port.set_need_data();
-                    Ok(Event::NeedData)
-                }
-                other => Ok(other),
-            },
+            Stage::Build(state) => state.event(&self.build_port),
             Stage::BuildFinal(state) => state.event(),
             Stage::Probe(state) => state.event(&self.probe_port),
             Stage::ProbeFinal(state) => state.event(&self.joined_port),
-            Stage::Finished => {
-                self.joined_port.finish();
-                Ok(Event::Finished)
-            }
+            Stage::Finished => Ok(Event::Finished),
         }
     }
 
+    #[allow(clippy::missing_transmute_annotations)]
     fn process(&mut self) -> Result<()> {
         match &mut self.stage {
             Stage::Finished => Ok(()),
@@ -155,7 +143,8 @@ impl Processor for TransformHashJoin {
             Stage::Probe(state) => {
                 if let Some(probe_data) = state.input_data.take() {
                     let stream = self.join.probe_block(probe_data)?;
-                    state.stream = Some(stream);
+                    // This is safe because both join and stream are properties of the struct.
+                    state.stream = Some(unsafe { std::mem::transmute(stream) });
                 }
 
                 if let Some(mut stream) = state.stream.take() {
@@ -170,7 +159,9 @@ impl Processor for TransformHashJoin {
             Stage::ProbeFinal(state) => {
                 if !state.initialized {
                     state.initialized = true;
-                    state.stream = Some(self.join.final_probe()?);
+                    let final_stream = self.join.final_probe()?;
+                    // This is safe because both join and stream are properties of the struct.
+                    state.stream = Some(unsafe { std::mem::transmute(final_stream) });
                 }
 
                 if let Some(mut stream) = state.stream.take() {
@@ -189,18 +180,18 @@ impl Processor for TransformHashJoin {
         let wait_res = self.stage_sync_barrier.wait().await;
 
         self.stage = match self.stage {
-            Stage::Build(_) => Stage::BuildFinal(BuildFinalState::new()),
-            Stage::BuildFinal(_) => {
+            Stage::Build(_) => {
                 if wait_res.is_leader() {
-                    let packet = self.join.build_runtime_filter()?;
+                    let packet = self.join.build_runtime_filter(&self.rf_desc)?;
 
                     self.rf_desc.globalization(packet).await?;
                 }
 
                 let _wait_res = self.stage_sync_barrier.wait().await;
 
-                Stage::Probe(ProbeState::new())
+                Stage::BuildFinal(BuildFinalState::new())
             }
+            Stage::BuildFinal(_) => Stage::Probe(ProbeState::new()),
             Stage::Probe(_) => Stage::ProbeFinal(ProbeFinalState::new()),
             Stage::ProbeFinal(_) => Stage::Finished,
             Stage::Finished => Stage::Finished,

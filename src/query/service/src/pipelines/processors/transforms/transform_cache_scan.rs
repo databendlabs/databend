@@ -23,7 +23,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 
-use crate::pipelines::processors::transforms::HashJoinMemoryState;
+use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
@@ -110,14 +110,14 @@ impl HashJoinCacheState {
 #[derive(Clone)]
 pub struct NewHashJoinCacheState {
     idx: usize,
-    memory_state: Arc<HashJoinMemoryState>,
+    memory_state: Arc<BasicHashJoinState>,
     column_indexes: Vec<usize>,
 }
 
 impl NewHashJoinCacheState {
     pub fn new(
         column_indexes: Vec<usize>,
-        memory_state: Arc<HashJoinMemoryState>,
+        memory_state: Arc<BasicHashJoinState>,
     ) -> NewHashJoinCacheState {
         NewHashJoinCacheState {
             idx: 0,
