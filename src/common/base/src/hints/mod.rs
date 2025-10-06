@@ -14,6 +14,13 @@
 
 #[inline]
 pub fn assume(condition: bool) {
+    #[cfg(debug_assertions)]
+    {
+        if !condition {
+            panic!("assume condition must be true");
+        }
+    }
+
     if !condition {
         unsafe { std::hint::unreachable_unchecked() }
     }
