@@ -70,6 +70,7 @@ use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -135,7 +136,6 @@ use crate::list_u64_value;
 use crate::schema_api::build_upsert_table_deduplicated_label;
 use crate::schema_api::construct_drop_table_txn_operations;
 use crate::schema_api::get_db_by_id_or_err;
-use crate::schema_api::get_db_id_or_err;
 use crate::schema_api::get_history_table_metas;
 use crate::schema_api::handle_undrop_table;
 use crate::serialize_struct;
@@ -215,7 +215,10 @@ where
         }
 
         // fixed: does not change in every loop.
-        let seq_db_id = get_db_id_or_err(self, &tenant_dbname, "create_table").await?;
+        let seq_db_id = self
+            .get_database_id_or_err(&tenant_dbname, "create_table")
+            .await?
+            .map_err(|e| KVAppError::AppError(AppError::UnknownDatabase(e)))?;
 
         // fixed
         let key_dbid = seq_db_id.data;
@@ -1745,6 +1748,24 @@ where
         Ok(GetTableCopiedFileReply {
             file_info: file_infos,
         })
+    }
+
+    async fn list_table_copied_file_info(
+        &self,
+        table_id: u64,
+    ) -> Result<ListTableCopiedFileReply, MetaError> {
+        let key = TableCopiedFileNameIdent {
+            table_id,
+            file: "".to_string(),
+        };
+
+        let res = self.list_pb_vec(&DirName::new(key)).await?;
+        let mut file_info = BTreeMap::new();
+        for (name_key, seqv) in res {
+            file_info.insert(name_key.file, seqv.data);
+        }
+
+        Ok(ListTableCopiedFileReply { file_info })
     }
 
     #[logcall::logcall]

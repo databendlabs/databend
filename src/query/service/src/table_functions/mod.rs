@@ -14,6 +14,7 @@
 
 mod async_crash_me;
 mod cloud;
+mod copy_history;
 mod fuse_vacuum2;
 mod infer_schema;
 mod inspect_parquet;
@@ -31,6 +32,7 @@ mod table_function;
 mod table_function_factory;
 mod temporary_tables_table;
 
+pub use copy_history::CopyHistoryTable;
 pub use numbers::generate_numbers_parts;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;

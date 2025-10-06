@@ -48,6 +48,7 @@ use databend_common_meta_control::export_from_grpc;
 use databend_common_meta_control::import;
 use databend_common_meta_control::keys_layout_from_grpc;
 use databend_common_meta_control::lua_support;
+use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::UpsertKV;
@@ -230,7 +231,7 @@ impl App {
 
         let upsert = UpsertKV::update(args.key.clone(), args.value.as_bytes());
 
-        let res = client.request(upsert).await?;
+        let res = client.upsert_kv(upsert).await?;
         println!(
             "upsert-result: {}: {:?} -> {:?}",
             res.ident.display(),

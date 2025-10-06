@@ -98,6 +98,7 @@ use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListSequencesReply;
 use databend_common_meta_app::schema::ListSequencesReq;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -780,6 +781,17 @@ impl Catalog for MutableCatalog {
     ) -> Result<GetTableCopiedFileReply> {
         let db = self.get_database(tenant, db_name).await?;
         db.get_table_copied_file_info(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_table_copied_file_info(
+        &self,
+        tenant: &Tenant,
+        db_name: &str,
+        table_id: u64,
+    ) -> Result<ListTableCopiedFileReply> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.list_table_copied_file_info(table_id).await
     }
 
     #[async_backtrace::framed]

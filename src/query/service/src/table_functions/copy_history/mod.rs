@@ -12,4 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod grpc_service;
+pub mod copy_history_table;
+
+pub use copy_history_table::CopyHistoryTable;

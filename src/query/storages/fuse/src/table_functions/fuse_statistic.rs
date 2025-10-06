@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
@@ -156,15 +157,18 @@ impl<'a> FuseStatisticImpl<'a> {
         };
         let histograms = table_statistics.as_ref().map(|v| &v.histograms);
 
-        let mut col_names = vec![];
-        let mut col_ndvs = vec![];
-        let mut col_null_count = vec![];
-        let mut col_avg_size = vec![];
-        let mut col_his = vec![];
-        for (i, stats) in summary.col_stats.iter() {
+        let mut col_names = Vec::with_capacity(summary.col_stats.len());
+        let mut col_ndvs = Vec::with_capacity(summary.col_stats.len());
+        let mut col_null_count = Vec::with_capacity(summary.col_stats.len());
+        let mut col_avg_size = Vec::with_capacity(summary.col_stats.len());
+        let mut col_his = Vec::with_capacity(summary.col_stats.len());
+
+        // convert to BTreeMap to keep the order of column ids
+        let col_stats = summary.col_stats.iter().collect::<BTreeMap<_, _>>();
+        for (i, stats) in col_stats.iter() {
             // Get column name by column id
-            let table_filed = self.table.table_info.meta.schema.field_of_column_id(*i)?;
-            col_names.push(table_filed.name.clone());
+            let table_field = self.table.table_info.meta.schema.field_of_column_id(**i)?;
+            col_names.push(table_field.name.clone());
             col_ndvs.push(
                 column_distinct_values
                     .as_ref()
@@ -193,6 +197,41 @@ impl<'a> FuseStatisticImpl<'a> {
                 }
                 col_his.push(his_infos.join(", "));
             } else {
+                col_his.push("".to_string());
+            }
+        }
+
+        // add virtual column statistics
+        if let (Some(virtual_col_stats), Some(virtual_schema)) = (
+            &summary.virtual_col_stats,
+            &self.table.table_info.meta.virtual_schema,
+        ) {
+            // convert to BTreeMap to keep the order of column ids
+            let virtual_col_stats = virtual_col_stats.iter().collect::<BTreeMap<_, _>>();
+            for (i, stats) in virtual_col_stats.iter() {
+                // Get virtual column name by column id
+                let Ok(virtual_field) = virtual_schema.field_of_column_id(**i) else {
+                    continue;
+                };
+                let Ok(source_field) = self
+                    .table
+                    .table_info
+                    .meta
+                    .schema
+                    .field_of_column_id(virtual_field.source_column_id)
+                else {
+                    continue;
+                };
+                let col_name = format!("{}{}", source_field.name, virtual_field.name);
+                col_names.push(col_name);
+                col_ndvs.push(stats.distinct_of_values);
+                col_null_count.push(stats.null_count);
+                col_avg_size.push(
+                    stats
+                        .in_memory_size
+                        .checked_div(summary.row_count)
+                        .unwrap_or(0),
+                );
                 col_his.push("".to_string());
             }
         }

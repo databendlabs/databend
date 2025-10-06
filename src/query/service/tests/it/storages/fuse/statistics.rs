@@ -61,6 +61,7 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use opendal::Operator;
 use rand::Rng;
 
@@ -213,7 +214,7 @@ fn test_reduce_block_statistics_in_memory_size() -> Result<()> {
     let r = reducers::reduce_block_statistics(&[col_stats_left, col_stats_right]);
     assert_eq!(num_of_cols, r.len());
     // there should be 100 columns in the result
-    for idx in 1..=100 {
+    for idx in 1..=num_of_cols as u32 {
         let col_stats = r.get(&idx);
         assert!(col_stats.is_some());
         let col_stats = col_stats.unwrap();
@@ -222,6 +223,207 @@ fn test_reduce_block_statistics_in_memory_size() -> Result<()> {
         // for each column, the reduced value of null_count should be 1 + 1
         assert_eq!(col_stats.null_count, 2);
     }
+    Ok(())
+}
+
+#[test]
+fn test_generate_virtual_column_statistics_in_memory_size() -> Result<()> {
+    let iter = |mut idx, data_type: DataType, has_null: bool| {
+        std::iter::from_fn(move || {
+            idx += 1;
+            let (min, max, null_count) = if has_null {
+                match data_type {
+                    DataType::Number(NumberDataType::UInt64) => (
+                        Scalar::Null,
+                        Scalar::Number(NumberScalar::UInt64(idx as u64 + 10)),
+                        1,
+                    ),
+                    DataType::String => (Scalar::Null, Scalar::String(format!("{}", idx + 10)), 1),
+                    _ => unreachable!(),
+                }
+            } else {
+                match data_type {
+                    DataType::Number(NumberDataType::UInt64) => (
+                        Scalar::Number(NumberScalar::UInt64(idx as u64)),
+                        Scalar::Number(NumberScalar::UInt64(idx as u64 + 10)),
+                        0,
+                    ),
+                    DataType::String => (
+                        Scalar::String(format!("{}", idx)),
+                        Scalar::String(format!("{}", idx + 10)),
+                        0,
+                    ),
+                    _ => unreachable!(),
+                }
+            };
+            // the type code of virtual column statistics
+            let data_type_code = match data_type {
+                DataType::Number(NumberDataType::UInt64) => 2,
+                DataType::String => 5,
+                _ => unreachable!(),
+            };
+
+            let col_stats = ColumnStatistics::new(min, max, null_count, 10, Some(5));
+            let virtual_col_meta = VirtualColumnMeta {
+                offset: 0,
+                len: 100,
+                num_values: 10,
+                data_type: data_type_code,
+                column_stat: Some(col_stats),
+            };
+            Some((idx, virtual_col_meta))
+        })
+    };
+
+    let tests = vec![
+        // combine two virtual column statistics with same data type
+        (DataType::String, DataType::String, true),
+        (
+            DataType::Number(NumberDataType::UInt64),
+            DataType::Number(NumberDataType::UInt64),
+            false,
+        ),
+        // combine two virtual column statistics with different data type
+        (
+            DataType::String,
+            DataType::Number(NumberDataType::UInt64),
+            true,
+        ),
+        (
+            DataType::String,
+            DataType::Number(NumberDataType::UInt64),
+            false,
+        ),
+    ];
+
+    let num_of_cols = 100;
+    for (left_type, right_type, has_null) in tests {
+        let left_virtual_col_meta =
+            HashMap::from_iter(iter(0, left_type.clone(), has_null).take(num_of_cols));
+        let right_virtual_col_meta =
+            HashMap::from_iter(iter(0, right_type.clone(), has_null).take(num_of_cols));
+        let r = reducers::generate_virtual_column_statistics(&[
+            left_virtual_col_meta,
+            right_virtual_col_meta,
+        ]);
+        // if types are different, do not generate virtual column statistics
+        if left_type != right_type {
+            assert_eq!(0, r.len());
+            continue;
+        }
+        assert_eq!(num_of_cols, r.len());
+        for idx in 1..=num_of_cols as u32 {
+            let col_stats = r.get(&idx);
+            assert!(col_stats.is_some());
+            let col_stats = col_stats.unwrap();
+            assert_eq!(col_stats.in_memory_size, 20);
+            if has_null {
+                assert_eq!(col_stats.null_count, 2);
+            } else {
+                assert_eq!(col_stats.null_count, 0);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_reduce_virtual_column_statistics_in_memory_size() -> Result<()> {
+    let iter = |mut idx, data_type: DataType, has_null: bool| {
+        std::iter::from_fn(move || {
+            idx += 1;
+            let (min, max, null_count) = if has_null {
+                match data_type {
+                    DataType::Number(NumberDataType::UInt64) => (
+                        Scalar::Null,
+                        Scalar::Number(NumberScalar::UInt64(idx as u64 + 10)),
+                        1,
+                    ),
+                    DataType::String => (Scalar::Null, Scalar::String(format!("{}", idx + 10)), 1),
+                    _ => unreachable!(),
+                }
+            } else {
+                match data_type {
+                    DataType::Number(NumberDataType::UInt64) => (
+                        Scalar::Number(NumberScalar::UInt64(idx as u64)),
+                        Scalar::Number(NumberScalar::UInt64(idx as u64 + 10)),
+                        0,
+                    ),
+                    DataType::String => (
+                        Scalar::String(format!("{}", idx)),
+                        Scalar::String(format!("{}", idx + 10)),
+                        0,
+                    ),
+                    _ => unreachable!(),
+                }
+            };
+            Some((
+                idx,
+                ColumnStatistics::new(min, max, null_count, 10, Some(5)),
+            ))
+        })
+    };
+
+    let tests = vec![
+        // combine two virtual column statistics with same data type
+        (DataType::String, DataType::String, true),
+        (
+            DataType::Number(NumberDataType::UInt64),
+            DataType::Number(NumberDataType::UInt64),
+            false,
+        ),
+        // combine two virtual column statistics with different data type
+        (
+            DataType::String,
+            DataType::Number(NumberDataType::UInt64),
+            true,
+        ),
+        (
+            DataType::String,
+            DataType::Number(NumberDataType::UInt64),
+            false,
+        ),
+    ];
+
+    let num_of_cols = 100;
+    for (left_type, right_type, has_null) in tests {
+        let left_virtual_col_stats =
+            HashMap::from_iter(iter(0, left_type.clone(), has_null).take(num_of_cols));
+        let right_virtual_col_stats =
+            HashMap::from_iter(iter(0, right_type.clone(), has_null).take(num_of_cols));
+        let r = reducers::reduce_virtual_column_statistics(&[
+            Some(left_virtual_col_stats),
+            Some(right_virtual_col_stats),
+        ]);
+        assert!(r.is_some());
+        let r = r.unwrap();
+        // if virtual column statistics types are different, the result is empty.
+        if left_type != right_type {
+            assert_eq!(0, r.len());
+            continue;
+        }
+        assert_eq!(num_of_cols, r.len());
+        // there should be 100 columns in the result
+        for idx in 1..=num_of_cols as u32 {
+            let col_stats = r.get(&idx);
+            assert!(col_stats.is_some());
+            let col_stats = col_stats.unwrap();
+            assert_eq!(col_stats.in_memory_size, 20);
+            if has_null {
+                assert_eq!(col_stats.null_count, 2);
+            } else {
+                assert_eq!(col_stats.null_count, 0);
+            }
+        }
+    }
+
+    // if any virtual column statistics is None, the result is None.
+    let left_virtual_col_stats =
+        HashMap::from_iter(iter(0, DataType::String, true).take(num_of_cols));
+    let r = reducers::reduce_virtual_column_statistics(&[Some(left_virtual_col_stats), None]);
+    assert!(r.is_none());
+
     Ok(())
 }
 

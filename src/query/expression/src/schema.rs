@@ -229,6 +229,19 @@ impl VirtualDataSchema {
         self.fields.push(field);
         Ok(column_id)
     }
+
+    pub fn field_of_column_id(&self, column_id: ColumnId) -> Result<&VirtualDataField> {
+        for field in &self.fields {
+            if field.column_id == column_id {
+                return Ok(field);
+            }
+        }
+        let valid_column_ids = self.fields.iter().map(|f| f.column_id).collect::<Vec<_>>();
+        Err(ErrorCode::BadArguments(format!(
+            "Unable to get virtual column_id {}. Valid column_ids: {:?}",
+            column_id, valid_column_ids
+        )))
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, FrozenAPI)]
