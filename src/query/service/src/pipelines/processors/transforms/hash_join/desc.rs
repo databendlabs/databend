@@ -32,6 +32,7 @@ use parking_lot::RwLock;
 use crate::physical_plans::HashJoin;
 use crate::physical_plans::PhysicalRuntimeFilter;
 use crate::physical_plans::PhysicalRuntimeFilters;
+use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sql::plans::JoinType;
 
 pub const MARKER_KIND_TRUE: u8 = 0;
@@ -174,7 +175,20 @@ impl HashJoinDesc {
 
     pub fn build_key(&self, block: &DataBlock, ctx: &FunctionContext) -> Result<Vec<BlockEntry>> {
         let build_keys = &self.build_keys;
-        let evaluator = Evaluator::new(block, ctx, &BUILTIN_FUNCTIONS);
+        let mut _nullable_chunk = None;
+        let evaluator = match self.join_type {
+            JoinType::Left => {
+                let validity = Bitmap::new_constant(true, block.num_rows());
+                let nullable_columns = block
+                    .columns()
+                    .iter()
+                    .map(|c| wrap_true_validity(c, block.num_rows(), &validity))
+                    .collect::<Vec<_>>();
+                _nullable_chunk = Some(DataBlock::new(nullable_columns, block.num_rows()));
+                Evaluator::new(_nullable_chunk.as_ref().unwrap(), ctx, &BUILTIN_FUNCTIONS)
+            }
+            _ => Evaluator::new(block, ctx, &BUILTIN_FUNCTIONS),
+        };
         build_keys
             .iter()
             .map(|expr| {
