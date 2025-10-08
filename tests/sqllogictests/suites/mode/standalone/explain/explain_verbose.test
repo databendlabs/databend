@@ -75,7 +75,7 @@ query T
 explain(verbose, logical, optimized) select * from t, t t1, t t2, t t3, t t4
 where t.a = 1 and t1.a = 1 and t2.a = 1 and t3.a = 1 and t4.a = 1
 ----
-Join(Cross(false))
+Join(Cross)
 ├── build keys: []
 ├── probe keys: []
 ├── other filters: []
@@ -95,7 +95,7 @@ Join(Cross(false))
 │   ├── testdb.t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   ├── testdb.t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   └── testdb.t.b (#9): { min: 1, max: 1000, ndv: 1, null count: 0 }
-├── Join(Cross(false))
+├── Join(Cross)
 │   ├── build keys: []
 │   ├── probe keys: []
 │   ├── other filters: []
@@ -113,7 +113,7 @@ Join(Cross(false))
 │   │   ├── testdb.t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   │   ├── testdb.t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   │   └── testdb.t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   ├── Join(Cross(false))
+│   ├── Join(Cross)
 │   │   ├── build keys: []
 │   │   ├── probe keys: []
 │   │   ├── other filters: []
@@ -129,7 +129,7 @@ Join(Cross(false))
 │   │   │   ├── testdb.t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   │   │   ├── testdb.t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
 │   │   │   └── testdb.t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   │   ├── Join(Cross(false))
+│   │   ├── Join(Cross)
 │   │   │   ├── build keys: []
 │   │   │   ├── probe keys: []
 │   │   │   ├── other filters: []
@@ -307,7 +307,7 @@ EvalScalar
             ├── cardinality: 0.000
             ├── precise cardinality: N/A
             ├── statistics
-            └── Join(Cross(false))
+            └── Join(Cross)
                 ├── build keys: []
                 ├── probe keys: []
                 ├── other filters: []

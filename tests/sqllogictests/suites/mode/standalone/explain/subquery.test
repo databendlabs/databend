@@ -613,7 +613,7 @@ explain optimized select i, exists(select * from t where i > 10) from t;
 ----
 EvalScalar
 ├── scalars: [t.i (#0) AS (#0), exists_scalar (#4) AS (#2)]
-└── Join(Cross(false))
+└── Join(Cross)
     ├── build keys: []
     ├── probe keys: []
     ├── other filters: []
@@ -647,7 +647,7 @@ explain decorrelated select i, exists(select * from t where i > 10) from t;
 ----
 EvalScalar
 ├── scalars: [t.i (#0) AS (#0), exists_scalar (#4) AS (#2)]
-└── Join(Cross(false))
+└── Join(Cross)
     ├── build keys: []
     ├── probe keys: []
     ├── other filters: []

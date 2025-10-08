@@ -129,7 +129,7 @@ EvalScalar
 ├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t2.a (#2) AS (#2), t2.b (#3) AS (#3)]
 └── Filter
     ├── filters: [or(and(eq(t1.a (#0), t2.a (#2)), gt(t1.a (#0), 3)), eq(t1.a (#0), t2.a (#2)))]
-    └── Join(Cross(false))
+    └── Join(Cross)
         ├── build keys: []
         ├── probe keys: []
         ├── other filters: []
@@ -149,7 +149,7 @@ explain raw select * from t1 inner join t2 on t1.a = t2.a and t1.b = t2.b and t1
 ----
 EvalScalar
 ├── scalars: [t1.a (#0) AS (#0), t1.b (#1) AS (#1), t2.a (#2) AS (#2), t2.b (#3) AS (#3)]
-└── Join(Inner(false))
+└── Join(Inner)
     ├── build keys: [t2.a (#2), t2.b (#3)]
     ├── probe keys: [t1.a (#0), t1.b (#1)]
     ├── other filters: []
@@ -1109,7 +1109,7 @@ EXPLAIN optimized SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AN
 Sort
 ├── sort keys: [default.t1.i (#0) ASC NULLS LAST, default.t1.j (#1) ASC NULLS LAST]
 ├── limit: [NONE]
-└── Join(Left(false))
+└── Join(Left)
     ├── build keys: [t2.k (#2)]
     ├── probe keys: [t1.i (#0)]
     ├── other filters: []

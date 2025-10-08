@@ -18,11 +18,11 @@ Limit
                         ├── Exchange(Hash): keys: [dt.d_year (#6)]
                         └── EvalScalar
                             ├── scalars: [dt.d_year (#6) AS (#6), store_sales.ss_ext_sales_price (#43) AS (#43), item.i_brand_id (#58) AS (#58), item.i_brand (#59) AS (#59), dt.d_date_sk (#0) AS (#74), store_sales.ss_sold_date_sk (#28) AS (#75), store_sales.ss_item_sk (#30) AS (#76), item.i_item_sk (#51) AS (#77), item.i_manufact_id (#64) AS (#78), dt.d_moy (#8) AS (#79)]
-                            └── Join(Inner(false))
+                            └── Join(Inner)
                                 ├── build keys: [dt.d_date_sk (#0)]
                                 ├── probe keys: [store_sales.ss_sold_date_sk (#28)]
                                 ├── other filters: []
-                                ├── Join(Inner(false))
+                                ├── Join(Inner)
                                 │   ├── build keys: [item.i_item_sk (#51)]
                                 │   ├── probe keys: [store_sales.ss_item_sk (#30)]
                                 │   ├── other filters: []

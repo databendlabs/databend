@@ -13,11 +13,11 @@ Limit
                 ├── scalars: [dt.d_year (#6) AS (#6), store_sales.ss_ext_sales_price (#43) AS (#43), item.i_brand_id (#58) AS (#58), item.i_brand (#59) AS (#59)]
                 └── Filter
                     ├── filters: [eq(dt.d_date_sk (#0), store_sales.ss_sold_date_sk (#28)), eq(store_sales.ss_item_sk (#30), item.i_item_sk (#51)), eq(item.i_manufact_id (#64), 128), eq(dt.d_moy (#8), 11)]
-                    └── Join(Cross(false))
+                    └── Join(Cross)
                         ├── build keys: []
                         ├── probe keys: []
                         ├── other filters: []
-                        ├── Join(Cross(false))
+                        ├── Join(Cross)
                         │   ├── build keys: []
                         │   ├── probe keys: []
                         │   ├── other filters: []

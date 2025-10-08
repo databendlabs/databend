@@ -239,17 +239,26 @@ impl BasicHashJoin {
 
     fn build_hash_table(&self, keys: DataBlock, chunk_idx: usize) -> Result<()> {
         let mut arena = Vec::with_capacity(0);
+        let is_overwrite = self.desc.join_type.is_any_join();
 
         match self.state.hash_table.deref() {
             HashJoinHashTable::Null => (),
-            HashJoinHashTable::Serializer(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::SingleBinary(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU8(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU16(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU32(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU64(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU128(v) => v.insert(keys, chunk_idx, &mut arena)?,
-            HashJoinHashTable::KeysU256(v) => v.insert(keys, chunk_idx, &mut arena)?,
+            HashJoinHashTable::Serializer(v) => {
+                v.insert(keys, chunk_idx, &mut arena, is_overwrite)?
+            }
+            HashJoinHashTable::SingleBinary(v) => {
+                v.insert(keys, chunk_idx, &mut arena, is_overwrite)?
+            }
+            HashJoinHashTable::KeysU8(v) => v.insert(keys, chunk_idx, &mut arena, is_overwrite)?,
+            HashJoinHashTable::KeysU16(v) => v.insert(keys, chunk_idx, &mut arena, is_overwrite)?,
+            HashJoinHashTable::KeysU32(v) => v.insert(keys, chunk_idx, &mut arena, is_overwrite)?,
+            HashJoinHashTable::KeysU64(v) => v.insert(keys, chunk_idx, &mut arena, is_overwrite)?,
+            HashJoinHashTable::KeysU128(v) => {
+                v.insert(keys, chunk_idx, &mut arena, is_overwrite)?
+            }
+            HashJoinHashTable::KeysU256(v) => {
+                v.insert(keys, chunk_idx, &mut arena, is_overwrite)?
+            }
         };
 
         if arena.capacity() != 0 {
