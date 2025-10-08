@@ -21,7 +21,7 @@ INSERT INTO t2 VALUES
 (4, 'z1'),
 (NULL, 'n2');
 
-query IT
+query IT rowsort
 SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2 USING(id);
 ----
 1 a1 x2
