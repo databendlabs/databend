@@ -629,7 +629,7 @@ impl HashJoinBuildState {
         };
         let overwrite = matches!(
             self.hash_join_state.hash_join_desc.join_type,
-            JoinType::Inner | JoinType::InnerAny | JoinType::Left | JoinType::LeftAny
+            JoinType::InnerAny | JoinType::LeftAny
         );
 
         keys_entries
