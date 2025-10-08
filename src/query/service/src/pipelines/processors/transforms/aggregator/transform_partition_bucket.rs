@@ -42,7 +42,7 @@ struct InputPortState {
     bucket: isize,
     max_partition_count: usize,
 }
-pub struct NewTransformPartitionBucket {
+pub struct TransformPartitionBucket {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
     params: Arc<AggregatorParams>,
@@ -56,7 +56,7 @@ pub struct NewTransformPartitionBucket {
     max_partition_count: usize,
 }
 
-impl NewTransformPartitionBucket {
+impl TransformPartitionBucket {
     pub fn create(input_nums: usize, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut inputs = Vec::with_capacity(input_nums);
 
@@ -68,7 +68,7 @@ impl NewTransformPartitionBucket {
             });
         }
 
-        Ok(NewTransformPartitionBucket {
+        Ok(TransformPartitionBucket {
             params,
             inputs,
             working_bucket: 0,
@@ -440,7 +440,7 @@ impl NewTransformPartitionBucket {
 }
 
 #[async_trait::async_trait]
-impl Processor for NewTransformPartitionBucket {
+impl Processor for TransformPartitionBucket {
     fn name(&self) -> String {
         String::from("TransformPartitionBucket")
     }
