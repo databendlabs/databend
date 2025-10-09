@@ -52,8 +52,14 @@ pub fn build_partition_bucket(
     if experiment_aggregate_final {
         // Use new work-stealing spill reader + final aggregate
         let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
-        // TODO: partition_count should come from settings
-        let partition_count = after_worker;
+
+        let normalized = std::cmp::max(1, after_worker);
+        let mut partition_count = normalized.next_power_of_two();
+        const MAX_PARTITION_COUNT: usize = 128;
+        if partition_count > MAX_PARTITION_COUNT {
+            partition_count = MAX_PARTITION_COUNT;
+        }
+
         let shared_state = SharedRestoreState::new(partition_count);
 
         pipeline.add_transform(|input, output| {
@@ -61,7 +67,15 @@ pub fn build_partition_bucket(
             let semaphore = semaphore.clone();
             let params = params.clone();
             let shared_state = shared_state.clone();
-            NewTransformAggregateFinal::create(input, output, operator, semaphore, params, shared_state, partition_count)
+            NewTransformAggregateFinal::create(
+                input,
+                output,
+                operator,
+                semaphore,
+                params,
+                shared_state,
+                partition_count,
+            )
         })?;
         pipeline.try_resize(after_worker)?;
     } else {

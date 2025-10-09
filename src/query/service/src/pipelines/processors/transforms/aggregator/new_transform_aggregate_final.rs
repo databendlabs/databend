@@ -20,20 +20,27 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use bumpalo::Bump;
 use concurrent_queue::ConcurrentQueue;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
+use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::HashTableConfig;
+use databend_common_expression::PartitionedPayload;
+use databend_common_expression::PayloadFlushState;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
@@ -70,6 +77,9 @@ pub struct SharedRestoreState {
 
     // Restore phase finished flag
     restore_finished: AtomicBool,
+
+    // Next partition to be assigned for aggregation (phase 2)
+    next_partition: AtomicUsize,
 }
 
 impl SharedRestoreState {
@@ -88,6 +98,7 @@ impl SharedRestoreState {
             completed_tasks: AtomicUsize::new(0),
             input_finished: AtomicBool::new(false),
             restore_finished: AtomicBool::new(false),
+            next_partition: AtomicUsize::new(0),
         })
     }
 }
@@ -99,6 +110,7 @@ enum LocalState {
     Reading(BucketSpilledPayload),
     Deserializing(BucketSpilledPayload, Vec<u8>),
     Aggregating(usize), // partition_id
+    OutputReady(DataBlock),
 }
 
 // NewTransformAggregateFinal is an experimental final aggregate processor
@@ -119,6 +131,9 @@ pub struct NewTransformAggregateFinal {
 
     // Local state
     state: LocalState,
+
+    // Flush state for final aggregation
+    flush_state: PayloadFlushState,
 }
 
 impl NewTransformAggregateFinal {
@@ -130,8 +145,8 @@ impl NewTransformAggregateFinal {
         params: Arc<AggregatorParams>,
         shared_state: Arc<SharedRestoreState>,
         partition_count: usize,
-    ) -> Result<Box<dyn Processor>> {
-        Ok(Box::new(NewTransformAggregateFinal {
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(NewTransformAggregateFinal {
             input,
             output,
             operator,
@@ -140,7 +155,8 @@ impl NewTransformAggregateFinal {
             shared_state,
             partition_count,
             state: LocalState::Idle,
-        }))
+            flush_state: PayloadFlushState::default(),
+        })))
     }
 
     fn try_get_work(&mut self) -> Result<Event> {
@@ -193,10 +209,9 @@ impl NewTransformAggregateFinal {
                         self.shared_state.total_tasks.fetch_add(1, Ordering::SeqCst);
 
                         // Push to work queue
-                        self.shared_state
-                            .work_queue
-                            .push(payload)
-                            .map_err(|_| ErrorCode::Internal("Failed to push task to work queue"))?;
+                        self.shared_state.work_queue.push(payload).map_err(|_| {
+                            ErrorCode::Internal("Failed to push task to work queue")
+                        })?;
 
                         if self.input.is_finished() {
                             self.shared_state
@@ -213,9 +228,45 @@ impl NewTransformAggregateFinal {
                 }
             }
 
+            if self.input.is_finished() {
+                self.shared_state
+                    .input_finished
+                    .store(true, Ordering::SeqCst);
+            }
+
             if self.input.is_finished() && self.shared_state.input_finished.load(Ordering::SeqCst) {
-                self.output.finish();
-                return Ok(Event::Finished);
+                // Phase 1 (restore) finished, check if we can start phase 2 (aggregate)
+                if !self.shared_state.restore_finished.load(Ordering::SeqCst) {
+                    let total = self.shared_state.total_tasks.load(Ordering::SeqCst);
+                    let completed = self.shared_state.completed_tasks.load(Ordering::SeqCst);
+
+                    if completed == total {
+                        self.shared_state
+                            .restore_finished
+                            .store(true, Ordering::SeqCst);
+                    } else {
+                        return Ok(Event::NeedData);
+                    }
+                }
+
+                if self.shared_state.restore_finished.load(Ordering::SeqCst) {
+                    // Try to get a partition to aggregate
+                    let partition_id = self
+                        .shared_state
+                        .next_partition
+                        .fetch_add(1, Ordering::SeqCst);
+
+                    if partition_id < self.partition_count {
+                        self.state = LocalState::Aggregating(partition_id);
+                        return Ok(Event::Sync);
+                    }
+
+                    // All partitions have been assigned
+                    self.output.finish();
+                    return Ok(Event::Finished);
+                }
+
+                return Ok(Event::NeedData);
             }
 
             self.input.set_need_data();
@@ -261,6 +312,9 @@ impl NewTransformAggregateFinal {
                         .map_err(|_| ErrorCode::Internal("Failed to push task to work queue"))?;
                 }
                 other => {
+                    // Directly processed tasks should also be tracked
+                    self.shared_state.total_tasks.fetch_add(1, Ordering::SeqCst);
+
                     // Non-spilled data: directly repartition and push to aggregate queues
                     self.repartition_and_push(other)?;
                 }
@@ -271,7 +325,11 @@ impl NewTransformAggregateFinal {
         Ok(())
     }
 
-    fn process_deserializing(&mut self, payload: BucketSpilledPayload, data: Vec<u8>) -> Result<()> {
+    fn process_deserializing(
+        &mut self,
+        payload: BucketSpilledPayload,
+        data: Vec<u8>,
+    ) -> Result<()> {
         // Deserialize the data
         let deserialized = Self::deserialize(payload, data);
 
@@ -287,26 +345,168 @@ impl NewTransformAggregateFinal {
         Ok(())
     }
 
-    fn repartition_and_push(&mut self, _meta: AggregateMeta) -> Result<()> {
-        // TODO: Repartition the meta into self.partition_count partitions
-        // and push to corresponding aggregate_queues
+    fn repartition_and_push(&mut self, meta: AggregateMeta) -> Result<()> {
+        let mut flush_state = PayloadFlushState::default();
+
+        // Convert to PartitionedPayload
+        let single_partition_payload = match meta {
+            AggregateMeta::Serialized(payload) => {
+                // Convert serialized payload to PartitionedPayload with partition_count=1
+                payload.convert_to_partitioned_payload(
+                    self.params.group_data_types.clone(),
+                    self.params.aggregate_functions.clone(),
+                    self.params.num_states(),
+                    0, // radix_bits=0 => partition_count=1
+                    Arc::new(Bump::new()),
+                )?
+            }
+            AggregateMeta::AggregatePayload(agg_payload) => {
+                // Wrap single payload into PartitionedPayload with partition_count=1
+                let mut payload = agg_payload.payload;
+                let arena = payload.arena.clone();
+                let mut partitioned = PartitionedPayload::new(
+                    self.params.group_data_types.clone(),
+                    self.params.aggregate_functions.clone(),
+                    1,
+                    vec![arena],
+                );
+                partitioned.combine_single(payload, &mut flush_state, None);
+                partitioned
+            }
+            AggregateMeta::AggregateSpilling(partitioned_payload) => {
+                // Already a PartitionedPayload
+                partitioned_payload
+            }
+            _ => {
+                return Err(ErrorCode::Internal(
+                    "Unexpected meta type for repartitioning",
+                ));
+            }
+        };
+
+        // Repartition to self.partition_count
+        let repartitioned =
+            single_partition_payload.repartition(self.partition_count, &mut flush_state);
+
+        // Push each partition to corresponding aggregate queue
+        for (partition_id, payload) in repartitioned.payloads.into_iter().enumerate() {
+            if payload.len() == 0 {
+                continue; // Skip empty partitions
+            }
+
+            let meta = AggregateMeta::AggregatePayload(AggregatePayload {
+                bucket: partition_id as isize,
+                payload,
+                max_partition_count: self.partition_count,
+            });
+
+            self.shared_state.aggregate_queues[partition_id]
+                .push(meta)
+                .map_err(|_| ErrorCode::Internal("Failed to push to aggregate queue"))?;
+        }
 
         // Increment completed tasks
-        let completed = self.shared_state.completed_tasks.fetch_add(1, Ordering::SeqCst) + 1;
+        let completed = self
+            .shared_state
+            .completed_tasks
+            .fetch_add(1, Ordering::SeqCst)
+            + 1;
         let total = self.shared_state.total_tasks.load(Ordering::SeqCst);
 
         // Check if all restore tasks are completed
         if completed == total && self.shared_state.input_finished.load(Ordering::SeqCst) {
-            self.shared_state.restore_finished.store(true, Ordering::SeqCst);
+            self.shared_state
+                .restore_finished
+                .store(true, Ordering::SeqCst);
         }
 
-        todo!("Repartitioning logic not implemented yet")
+        Ok(())
     }
 
-    fn process_aggregating(&mut self, _partition_id: usize) -> Result<()> {
-        // TODO: Aggregate data from aggregate_queues[partition_id]
-        // This is now exclusive to each processor (orthogonal partitions)
-        todo!("Aggregation logic not implemented yet")
+    fn process_aggregating(&mut self, partition_id: usize) -> Result<()> {
+        // Collect all data from the partition queue
+        let mut agg_hashtable: Option<AggregateHashTable> = None;
+
+        // Pop all items from aggregate_queues[partition_id]
+        while let Ok(meta) = self.shared_state.aggregate_queues[partition_id].pop() {
+            match meta {
+                AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
+                    Some(ht) => {
+                        let payload = payload.convert_to_partitioned_payload(
+                            self.params.group_data_types.clone(),
+                            self.params.aggregate_functions.clone(),
+                            self.params.num_states(),
+                            0,
+                            Arc::new(Bump::new()),
+                        )?;
+                        ht.combine_payloads(&payload, &mut self.flush_state)?;
+                    }
+                    None => {
+                        agg_hashtable = Some(payload.convert_to_aggregate_table(
+                            self.params.group_data_types.clone(),
+                            self.params.aggregate_functions.clone(),
+                            self.params.num_states(),
+                            0,
+                            Arc::new(Bump::new()),
+                            true,
+                        )?);
+                    }
+                },
+                AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
+                    Some(ht) => {
+                        ht.combine_payload(&payload.payload, &mut self.flush_state)?;
+                    }
+                    None => {
+                        let capacity =
+                            AggregateHashTable::get_capacity_for_count(payload.payload.len());
+                        let mut hashtable = AggregateHashTable::new_with_capacity(
+                            self.params.group_data_types.clone(),
+                            self.params.aggregate_functions.clone(),
+                            HashTableConfig::default().with_initial_radix_bits(0),
+                            capacity,
+                            Arc::new(Bump::new()),
+                        );
+                        hashtable.combine_payload(&payload.payload, &mut self.flush_state)?;
+                        agg_hashtable = Some(hashtable);
+                    }
+                },
+                _ => {
+                    return Err(ErrorCode::Internal(
+                        "Unexpected meta type in aggregate queue",
+                    ));
+                }
+            }
+        }
+
+        // Generate output block
+        let output_block = if let Some(mut ht) = agg_hashtable {
+            let mut blocks = vec![];
+            self.flush_state.clear();
+
+            loop {
+                if ht.merge_result(&mut self.flush_state)? {
+                    let mut entries = self.flush_state.take_aggregate_results();
+                    let group_columns = self.flush_state.take_group_columns();
+                    entries.extend_from_slice(&group_columns);
+                    let num_rows = entries[0].len();
+                    blocks.push(DataBlock::new(entries, num_rows));
+                } else {
+                    break;
+                }
+            }
+
+            if blocks.is_empty() {
+                self.params.empty_result_block()
+            } else {
+                DataBlock::concat(&blocks)?
+            }
+        } else {
+            self.params.empty_result_block()
+        };
+
+        // Set state to OutputReady
+        self.state = LocalState::OutputReady(output_block);
+        Ok(())
     }
 }
 
@@ -326,12 +526,27 @@ impl Processor for NewTransformAggregateFinal {
             return Ok(Event::Finished);
         }
 
-        // Priority 1: Async reading
+        // Priority 1: Output ready
+        if matches!(&self.state, LocalState::OutputReady(_)) {
+            if !self.output.can_push() {
+                return Ok(Event::NeedConsume);
+            }
+
+            if let LocalState::OutputReady(data_block) =
+                std::mem::replace(&mut self.state, LocalState::Idle)
+            {
+                self.output.push_data(Ok(data_block));
+            }
+
+            return Ok(Event::NeedData);
+        }
+
+        // Priority 2: Async reading
         if matches!(&self.state, LocalState::Reading(_)) {
             return Ok(Event::Async);
         }
 
-        // Priority 2: Sync processing (dispatching, deserializing, aggregating)
+        // Priority 3: Sync processing (dispatching, deserializing, aggregating)
         if matches!(
             &self.state,
             LocalState::DispatchingTasks(_)
@@ -341,7 +556,7 @@ impl Processor for NewTransformAggregateFinal {
             return Ok(Event::Sync);
         }
 
-        // Priority 3: Try to get work
+        // Priority 4: Try to get work
         if matches!(&self.state, LocalState::Idle) {
             return self.try_get_work();
         }
@@ -355,16 +570,12 @@ impl Processor for NewTransformAggregateFinal {
                 self.process_dispatching_tasks(partitioned_meta)
             }
 
-            LocalState::Deserializing(payload, data) => {
-                self.process_deserializing(payload, data)
-            }
+            LocalState::Deserializing(payload, data) => self.process_deserializing(payload, data),
 
-            LocalState::Aggregating(partition_id) => {
-                self.process_aggregating(partition_id)
-            }
+            LocalState::Aggregating(partition_id) => self.process_aggregating(partition_id),
 
-            LocalState::Idle | LocalState::Reading(_) => {
-                // Nothing to do
+            LocalState::Idle | LocalState::Reading(_) | LocalState::OutputReady(_) => {
+                // Nothing to do (OutputReady is handled in event())
                 Ok(())
             }
         }
