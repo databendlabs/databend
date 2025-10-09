@@ -280,9 +280,7 @@ impl UnionFileWriter {
                 let dma = local.buf.as_mut().unwrap();
 
                 let file = local.file.take().unwrap();
-                let file_size = file.length() + dma.size();
-                dma.flush_and_close(file)?;
-
+                let file_size = dma.flush_and_close(file)?;
                 local.path.set_size(file_size).unwrap();
 
                 Ok(UnionFile {
@@ -368,9 +366,7 @@ impl io::Write for UnionFileWriter {
             ..
         }) = &mut self.local
         {
-            // warning: not completely flushed, data may be lost
-            dma.flush_full_buffer(file)?;
-            return Ok(());
+            return dma.flush(file);
         }
 
         self.remote_writer.as_mut().unwrap().flush()

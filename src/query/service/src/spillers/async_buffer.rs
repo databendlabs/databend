@@ -87,7 +87,6 @@ pub struct BufferPool {
 }
 
 impl BufferPool {
-    #[allow(dead_code)]
     pub fn create(executor: Arc<Runtime>, memory: usize, workers: usize) -> Arc<BufferPool> {
         let (working_tx, working_rx) = async_channel::unbounded();
         let (buffers_tx, buffers_rx) = async_channel::unbounded();
@@ -155,7 +154,6 @@ impl BufferPool {
         }
     }
 
-    #[allow(dead_code)]
     pub fn buffer_write(self: &Arc<BufferPool>, writer: Writer) -> BufferWriter {
         BufferWriter::new(writer, self.clone())
     }
@@ -233,7 +231,6 @@ impl BufferWriter {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn close(mut self) -> std::io::Result<Metadata> {
         self.flush()?;
 
