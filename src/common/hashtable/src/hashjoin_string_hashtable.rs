@@ -67,7 +67,7 @@ impl<A: Allocator + Clone + Default + 'static> HashJoinStringHashTable<A> {
         hashtable
     }
 
-    pub fn insert(&self, key: &[u8], entry_ptr: *mut StringRawEntry, overwrite: bool) {
+    pub fn insert(&self, key: &[u8], entry_ptr: *mut StringRawEntry, skip_duplicates: bool) {
         let hash = hash_join_fast_string_hash(key);
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
@@ -75,7 +75,10 @@ impl<A: Allocator + Clone + Default + 'static> HashJoinStringHashTable<A> {
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            if overwrite && self.next_contains(key, remove_header_tag(old_header)) {
+            if skip_duplicates
+                && early_filtering(old_header, hash)
+                && self.next_contains(key, remove_header_tag(old_header))
+            {
                 return;
             }
             let res = unsafe {

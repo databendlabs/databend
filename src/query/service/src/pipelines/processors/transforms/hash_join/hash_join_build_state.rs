@@ -343,7 +343,7 @@ impl HashJoinBuildState {
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
 
         macro_rules! insert_key {
-            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty, $overwrite: expr, ) => {{
+            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty, $skip_duplicates: expr, ) => {{
                 let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
@@ -378,7 +378,7 @@ impl HashJoinBuildState {
                                     next: 0,
                                 }
                             }
-                            $table.insert(*key, raw_entry_ptr, $overwrite);
+                            $table.insert(*key, raw_entry_ptr, $skip_duplicates);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -398,7 +398,7 @@ impl HashJoinBuildState {
                                     next: 0,
                                 }
                             }
-                            $table.insert(*key, raw_entry_ptr, $overwrite);
+                            $table.insert(*key, raw_entry_ptr, $skip_duplicates);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -409,7 +409,7 @@ impl HashJoinBuildState {
         }
 
         macro_rules! insert_binary_key {
-            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $overwrite: expr, ) => {{
+            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $skip_duplicates: expr, ) => {{
                 let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
@@ -469,7 +469,7 @@ impl HashJoinBuildState {
                                 string_local_space_ptr = string_local_space_ptr.add(key.len());
                             }
 
-                            $table.insert(key, raw_entry_ptr, $overwrite);
+                            $table.insert(key, raw_entry_ptr, $skip_duplicates);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -502,7 +502,7 @@ impl HashJoinBuildState {
                                 string_local_space_ptr = string_local_space_ptr.add(key.len());
                             }
 
-                            $table.insert(key, raw_entry_ptr, $overwrite);
+                            $table.insert(key, raw_entry_ptr, $skip_duplicates);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -627,7 +627,7 @@ impl HashJoinBuildState {
             }
             _ => {}
         };
-        let overwrite = matches!(
+        let skip_duplicates = matches!(
             self.hash_join_state.hash_join_desc.join_type,
             JoinType::InnerAny | JoinType::LeftAny
         );
@@ -641,28 +641,28 @@ impl HashJoinBuildState {
 
         match hashtable {
             HashJoinHashTable::Serializer(table) => insert_binary_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, overwrite,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, skip_duplicates,
             },
             HashJoinHashTable::SingleBinary(table) => insert_binary_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, overwrite,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, skip_duplicates,
             },
             HashJoinHashTable::KeysU8(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8, overwrite,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8, skip_duplicates,
             },
             HashJoinHashTable::KeysU16(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16, overwrite,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16, skip_duplicates,
             },
             HashJoinHashTable::KeysU32(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32, overwrite,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32, skip_duplicates,
             },
             HashJoinHashTable::KeysU64(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64, overwrite,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64, skip_duplicates,
             },
             HashJoinHashTable::KeysU128(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128, overwrite,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128, skip_duplicates,
             },
             HashJoinHashTable::KeysU256(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256, overwrite,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256, skip_duplicates,
             },
             HashJoinHashTable::Null => {
                 return Err(ErrorCode::AbortedQuery(

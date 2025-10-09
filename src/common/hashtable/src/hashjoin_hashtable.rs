@@ -133,7 +133,7 @@ impl<K: Keyable, A: Allocator + Clone + Default + 'static> HashJoinHashTable<K, 
         hashtable
     }
 
-    pub fn insert(&self, key: K, entry_ptr: *mut RawEntry<K>, overwrite: bool) {
+    pub fn insert(&self, key: K, entry_ptr: *mut RawEntry<K>, skip_duplicates: bool) {
         let hash = key.hash();
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
@@ -141,7 +141,10 @@ impl<K: Keyable, A: Allocator + Clone + Default + 'static> HashJoinHashTable<K, 
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            if overwrite && self.next_contains(&key, remove_header_tag(old_header)) {
+            if skip_duplicates
+                && early_filtering(old_header, hash)
+                && self.next_contains(&key, remove_header_tag(old_header))
+            {
                 return;
             }
             let res = unsafe {

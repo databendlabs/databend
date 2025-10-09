@@ -27,6 +27,7 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
+use databend_common_sql::plans::JoinType;
 use ethnum::U256;
 
 use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
@@ -239,25 +240,33 @@ impl BasicHashJoin {
 
     fn build_hash_table(&self, keys: DataBlock, chunk_idx: usize) -> Result<()> {
         let mut arena = Vec::with_capacity(0);
-        let is_overwrite = self.desc.join_type.is_any_join();
+        let skip_duplicates = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny);
 
         match self.state.hash_table.deref() {
             HashJoinHashTable::Null => (),
             HashJoinHashTable::Serializer(v) => {
-                v.insert(keys, chunk_idx, &mut arena, is_overwrite)?
+                v.insert(keys, chunk_idx, &mut arena, skip_duplicates)?
             }
             HashJoinHashTable::SingleBinary(v) => {
-                v.insert(keys, chunk_idx, &mut arena, is_overwrite)?
+                v.insert(keys, chunk_idx, &mut arena, skip_duplicates)?
             }
-            HashJoinHashTable::KeysU8(v) => v.insert(keys, chunk_idx, &mut arena, is_overwrite)?,
-            HashJoinHashTable::KeysU16(v) => v.insert(keys, chunk_idx, &mut arena, is_overwrite)?,
-            HashJoinHashTable::KeysU32(v) => v.insert(keys, chunk_idx, &mut arena, is_overwrite)?,
-            HashJoinHashTable::KeysU64(v) => v.insert(keys, chunk_idx, &mut arena, is_overwrite)?,
+            HashJoinHashTable::KeysU8(v) => {
+                v.insert(keys, chunk_idx, &mut arena, skip_duplicates)?
+            }
+            HashJoinHashTable::KeysU16(v) => {
+                v.insert(keys, chunk_idx, &mut arena, skip_duplicates)?
+            }
+            HashJoinHashTable::KeysU32(v) => {
+                v.insert(keys, chunk_idx, &mut arena, skip_duplicates)?
+            }
+            HashJoinHashTable::KeysU64(v) => {
+                v.insert(keys, chunk_idx, &mut arena, skip_duplicates)?
+            }
             HashJoinHashTable::KeysU128(v) => {
-                v.insert(keys, chunk_idx, &mut arena, is_overwrite)?
+                v.insert(keys, chunk_idx, &mut arena, skip_duplicates)?
             }
             HashJoinHashTable::KeysU256(v) => {
-                v.insert(keys, chunk_idx, &mut arena, is_overwrite)?
+                v.insert(keys, chunk_idx, &mut arena, skip_duplicates)?
             }
         };
 

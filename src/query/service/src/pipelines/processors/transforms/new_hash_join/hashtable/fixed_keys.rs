@@ -46,7 +46,7 @@ impl<T: HashtableKeyable + FixedKey> FixedKeyHashJoinHashTable<T> {
         keys: DataBlock,
         chunk: usize,
         arena: &mut Vec<u8>,
-        overwrite: bool,
+        skip_duplicates: bool,
     ) -> Result<()> {
         let num_rows = keys.num_rows();
         let keys = ProjectedBlock::from(keys.columns());
@@ -75,7 +75,7 @@ impl<T: HashtableKeyable + FixedKey> FixedKeyHashJoinHashTable<T> {
                 }
             }
 
-            self.hash_table.insert(*key, raw_entry_ptr, overwrite);
+            self.hash_table.insert(*key, raw_entry_ptr, skip_duplicates);
             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
         }
 
