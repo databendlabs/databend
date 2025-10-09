@@ -50,9 +50,9 @@ pub fn build_partition_bucket(
     let operator = DataOperator::instance().spill_operator();
 
     if experiment_aggregate_final {
-        // Use new work-stealing spill reader + final aggregate
         let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
 
+        // PartitionedPayload only accept power of two partitions
         let normalized = std::cmp::max(1, after_worker);
         let mut partition_count = normalized.next_power_of_two();
         const MAX_PARTITION_COUNT: usize = 128;
@@ -62,6 +62,7 @@ pub fn build_partition_bucket(
 
         let shared_state = SharedRestoreState::new(partition_count);
 
+        pipeline.try_resize(normalized)?;
         pipeline.add_transform(|input, output| {
             let operator = operator.clone();
             let semaphore = semaphore.clone();

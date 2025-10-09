@@ -66,6 +66,15 @@ pub struct SharedRestoreState {
     // Each processor will work on different partitions (orthogonal)
     aggregate_queues: Vec<ConcurrentQueue<AggregateMeta>>,
 
+    // Whether a partition has pending aggregates waiting to be processed
+    partition_ready: Vec<AtomicBool>,
+
+    // Queue of partitions that have pending aggregates
+    partition_ready_queue: ConcurrentQueue<usize>,
+
+    // Number of partitions currently scheduled for aggregation
+    pending_partitions: AtomicUsize,
+
     // Total number of spilled tasks expected
     total_tasks: AtomicUsize,
 
@@ -77,9 +86,6 @@ pub struct SharedRestoreState {
 
     // Restore phase finished flag
     restore_finished: AtomicBool,
-
-    // Next partition to be assigned for aggregation (phase 2)
-    next_partition: AtomicUsize,
 }
 
 impl SharedRestoreState {
@@ -94,12 +100,32 @@ impl SharedRestoreState {
             work_queue: ConcurrentQueue::unbounded(),
             active_tasks: AtomicUsize::new(0),
             aggregate_queues,
+            partition_ready: (0..partition_count)
+                .map(|_| AtomicBool::new(false))
+                .collect(),
+            partition_ready_queue: ConcurrentQueue::unbounded(),
+            pending_partitions: AtomicUsize::new(0),
             total_tasks: AtomicUsize::new(0),
             completed_tasks: AtomicUsize::new(0),
             input_finished: AtomicBool::new(false),
             restore_finished: AtomicBool::new(false),
-            next_partition: AtomicUsize::new(0),
         })
+    }
+
+    pub fn schedule_partition(&self, partition_id: usize) -> Result<()> {
+        if !self.partition_ready[partition_id].swap(true, Ordering::SeqCst) {
+            self.pending_partitions.fetch_add(1, Ordering::SeqCst);
+            self.partition_ready_queue
+                .push(partition_id)
+                .map_err(|_| ErrorCode::Internal("Failed to schedule partition"))?;
+        }
+        Ok(())
+    }
+
+    pub fn mark_partition_done(&self, partition_id: usize) {
+        if self.partition_ready[partition_id].swap(false, Ordering::SeqCst) {
+            self.pending_partitions.fetch_sub(1, Ordering::SeqCst);
+        }
     }
 }
 
@@ -250,20 +276,20 @@ impl NewTransformAggregateFinal {
                 }
 
                 if self.shared_state.restore_finished.load(Ordering::SeqCst) {
-                    // Try to get a partition to aggregate
-                    let partition_id = self
-                        .shared_state
-                        .next_partition
-                        .fetch_add(1, Ordering::SeqCst);
+                    match self.shared_state.partition_ready_queue.pop() {
+                        Ok(partition_id) => {
+                            self.state = LocalState::Aggregating(partition_id);
+                            return Ok(Event::Sync);
+                        }
+                        Err(_) => {
+                            if self.shared_state.pending_partitions.load(Ordering::SeqCst) == 0 {
+                                self.output.finish();
+                                return Ok(Event::Finished);
+                            }
 
-                    if partition_id < self.partition_count {
-                        self.state = LocalState::Aggregating(partition_id);
-                        return Ok(Event::Sync);
+                            return Ok(Event::NeedData);
+                        }
                     }
-
-                    // All partitions have been assigned
-                    self.output.finish();
-                    return Ok(Event::Finished);
                 }
 
                 return Ok(Event::NeedData);
@@ -403,6 +429,8 @@ impl NewTransformAggregateFinal {
             self.shared_state.aggregate_queues[partition_id]
                 .push(meta)
                 .map_err(|_| ErrorCode::Internal("Failed to push to aggregate queue"))?;
+
+            self.shared_state.schedule_partition(partition_id)?;
         }
 
         // Increment completed tasks
@@ -503,6 +531,11 @@ impl NewTransformAggregateFinal {
         } else {
             self.params.empty_result_block()
         };
+
+        self.shared_state.mark_partition_done(partition_id);
+        if !self.shared_state.aggregate_queues[partition_id].is_empty() {
+            self.shared_state.schedule_partition(partition_id)?;
+        }
 
         // Set state to OutputReady
         self.state = LocalState::OutputReady(output_block);

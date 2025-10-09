@@ -434,7 +434,6 @@ impl TransformPartitionBucket {
                 }
             }
         }
-
         DataBlock::empty_with_meta(AggregateMeta::create_partitioned(bucket, data))
     }
 }
