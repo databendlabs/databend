@@ -45,6 +45,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::vacuum_retention_ident::VacuumRetentionIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
@@ -484,13 +485,13 @@ pub async fn handle_undrop_table(
             .as_ref()
             .unwrap_or(&seq_table_meta.data.updated_on);
 
-        let retention = kv_api
-            .get_vacuum_timestamp(tenant_dbname_tbname.tenant())
-            .await?;
+        // Read vacuum timestamp with seq for concurrent safety
+        let vacuum_ident = VacuumRetentionIdent::new_global(tenant_dbname_tbname.tenant().clone());
+        let seq_vacuum_retention = kv_api.get_pb(&vacuum_ident).await?;
 
-        // Only check retention guard if vacuum timestamp has been set
-        if let Some(retention_watermark) = retention {
-            let retention_time = retention_watermark.time;
+        // Early retention guard check for fast failure
+        if let Some(ref sr) = seq_vacuum_retention {
+            let retention_time = sr.data.time;
 
             if drop_marker <= retention_time {
                 return Err(KVAppError::AppError(AppError::UndropTableRetentionGuard(
@@ -507,6 +508,9 @@ pub async fn handle_undrop_table(
             // reset drop on time
             seq_table_meta.drop_on = None;
 
+            // Prepare conditions for concurrent safety
+            let vacuum_seq = seq_vacuum_retention.as_ref().map(|sr| sr.seq).unwrap_or(0);
+
             let txn = TxnRequest::new(
                 vec![
                     // db has not to change, i.e., no new table is created.
@@ -516,6 +520,10 @@ pub async fn handle_undrop_table(
                     txn_cond_eq_seq(&dbid_tbname, dbid_tbname_seq),
                     // table is not changed
                     txn_cond_eq_seq(&tbid, seq_table_meta.seq),
+                    // Concurrent safety: vacuum timestamp seq must not change during undrop
+                    // - If vacuum_retention exists: seq must remain the same (no update by vacuum)
+                    // - If vacuum_retention is None: seq must remain 0 (no creation by vacuum)
+                    txn_cond_eq_seq(&vacuum_ident, vacuum_seq),
                 ],
                 vec![
                     // Changing a table in a db has to update the seq of db_meta,
