@@ -148,17 +148,6 @@ where
         let old_retention = transition.prev.map(|v| v.data);
         Ok(old_retention)
     }
-
-    /// Get the current vacuum retention timestamp for a tenant.
-    #[fastrace::trace]
-    async fn get_vacuum_timestamp(
-        &self,
-        tenant: &Tenant,
-    ) -> Result<Option<VacuumWatermark>, KVAppError> {
-        let ident = VacuumRetentionIdent::new_global(tenant.clone());
-        let seq_value = self.get_pb(&ident).await?;
-        Ok(seq_value.map(|v| v.data))
-    }
 }
 
 #[async_trait::async_trait]

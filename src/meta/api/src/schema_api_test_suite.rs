@@ -56,6 +56,7 @@ use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::vacuum_retention_ident::VacuumRetentionIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -1513,8 +1514,9 @@ impl SchemaApiTestSuite {
         assert_eq!(old_retention.unwrap().time, first); // Should return PREVIOUS value (first)
 
         // Verify current stored value
-        let stored = mt.get_vacuum_timestamp(&tenant).await?;
-        assert_eq!(stored.unwrap().time, later);
+        let vacuum_ident = VacuumRetentionIdent::new_global(tenant.clone());
+        let stored = mt.get_pb(&vacuum_ident).await?;
+        assert_eq!(stored.unwrap().data.time, later);
 
         // Test undrop retention guard behavior
         {
