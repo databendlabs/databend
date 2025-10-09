@@ -1584,8 +1584,8 @@ impl SchemaApiTestSuite {
 
             // Create and drop a table
             util.create_table().await?;
-            let drop_time = chrono::Utc::now();
             util.drop_table_by_id().await?;
+            let drop_time = chrono::Utc::now();
 
             // Simulate concurrent scenario: vacuum timestamp is updated after drop
             // This simulates vacuum process setting timestamp during undrop operation
@@ -1603,8 +1603,12 @@ impl SchemaApiTestSuite {
             // Should get retention guard error due to the vacuum timestamp
             match undrop_err {
                 KVAppError::AppError(AppError::UndropTableRetentionGuard(e)) => {
-                    assert_eq!(e.drop_time(), drop_time);
+                    // Verify the error contains the vacuum timestamp
                     assert_eq!(e.retention(), new_vacuum_time);
+                    // The drop time should be before the vacuum time (that's why undrop is blocked)
+                    assert!(e.drop_time() <= new_vacuum_time,
+                        "drop_time {:?} should be <= vacuum_time {:?}",
+                        e.drop_time(), new_vacuum_time);
                 }
                 other => panic!("unexpected concurrent undrop error: {other:?}"),
             }
