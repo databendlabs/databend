@@ -140,12 +140,18 @@ impl Interpreter for VacuumDropTablesInterpreter {
         if self.plan.option.dry_run.is_none() {
             let tenant = ctx.get_tenant();
             let meta_api = UserApiProvider::instance().get_meta_store_client();
-            if let Err(e) = meta_api
+
+            // CRITICAL: Must succeed in setting vacuum timestamp before proceeding
+            // If this fails, vacuum operation should not proceed to prevent data loss
+            meta_api
                 .fetch_set_vacuum_timestamp(&tenant, retention_time)
                 .await
-            {
-                info!("Failed to set vacuum timestamp: {:?}", e);
-            }
+                .map_err(|e| {
+                    ErrorCode::MetaStorageError(format!(
+                        "Failed to set vacuum timestamp before vacuum operation: {}. Vacuum aborted to prevent data inconsistency.",
+                        e
+                    ))
+                })?;
         }
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         info!(
