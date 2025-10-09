@@ -110,16 +110,16 @@ where
 
     /// Fetch and conditionally set the vacuum retention timestamp.
     ///
-    /// This method implements the monotonic timestamp update semantics from the design:
+    /// This method implements the monotonic timestamp update semantics:
     /// - Only updates the timestamp if the new value is greater than the current one
-    /// - Returns the OLD timestamp value as per the design specification
+    /// - Returns the OLD timestamp value
     /// - Ensures atomicity using compare-and-swap operations
     #[fastrace::trace]
     async fn fetch_set_vacuum_timestamp(
         &self,
         tenant: &Tenant,
         new_timestamp: DateTime<Utc>,
-    ) -> Result<VacuumWatermark, KVAppError> {
+    ) -> Result<Option<VacuumWatermark>, KVAppError> {
         let ident = VacuumRetentionIdent::new_global(tenant.clone());
 
         // Use crud_upsert_with for atomic compare-and-swap semantics
@@ -136,15 +136,12 @@ where
                     Ok(None)
                 }
             })
-            .await?;
+            .await?
+            // Safe to unwrap: type of business logic error is `Infallible`
+            .unwrap();
 
-        // Extract the old value to return (as per design specification)
-        let old_retention = transition
-            .expect("crud_upsert_with must return some result")
-            .prev
-            .map(|v| v.data)
-            .unwrap_or_default();
-
+        // Extract the old value to return
+        let old_retention = transition.prev.map(|v| v.data);
         Ok(old_retention)
     }
 
