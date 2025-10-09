@@ -422,11 +422,10 @@ impl SpillWriter {
 
         let is_local = file_writer.has_opening_local();
         let start = std::time::Instant::now();
-        let write_bytes = blocks.iter().map(DataBlock::memory_size).sum();
 
         let row_group_meta = file_writer.spill(blocks)?;
 
-        record_write_profile(is_local, &start, write_bytes);
+        record_write_profile(is_local, &start, row_group_meta.compressed_size() as _);
 
         let ordinal = row_group_meta.ordinal().unwrap();
         Ok(ordinal as _)
