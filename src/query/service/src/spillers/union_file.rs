@@ -549,19 +549,23 @@ where
 
 #[cfg(test)]
 mod tests {
+    use databend_common_base::base::GlobalUniqName;
     use databend_common_base::runtime::GlobalIORuntime;
+    use databend_common_catalog::table_context::TableContext;
+    use databend_common_config::SpillConfig;
     use databend_common_exception::Result;
     use databend_common_expression::types::array::ArrayColumnBuilder;
     use databend_common_expression::types::number::Int32Type;
     use databend_common_expression::types::ArgType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::StringType;
-    use databend_common_expression::types::UInt64Type;
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
     use databend_common_storage::DataOperator;
+    use databend_storages_common_cache::TempDirManager;
     use parquet::file::properties::WriterProperties;
     use parquet::file::properties::WriterPropertiesPtr;
+    use tempfile::TempDir;
 
     use super::*;
     use crate::spillers::async_buffer::BufferPool;
@@ -569,57 +573,117 @@ mod tests {
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_xxx() -> Result<()> {
-        let config = ConfigBuilder::create().off_log().build();
+    async fn test_union_file_writer_without_local() -> Result<()> {
+        let spill_dir = TempDir::new().expect("create spill temp dir");
+        let mut config = ConfigBuilder::create().off_log().build();
+        config.spill = SpillConfig::new_for_test(
+            spill_dir.path().to_string_lossy().into_owned(),
+            0.01,
+            1 << 30,
+        );
+
         let fixture = TestFixture::setup_with_config(&config).await?;
-        let _ctx = fixture.new_query_ctx().await?;
+        let ctx = fixture.new_query_ctx().await?;
 
-        let props = WriterProperties::default().into();
-
-        let block = DataBlock::new_from_columns(vec![
-            UInt64Type::from_data(vec![7, 8, 9]),
-            StringType::from_data(vec!["c", "d", "e"]),
-        ]);
-
-        let data_schema = block.infer_schema();
         let executor = GlobalIORuntime::instance();
         let memory = 1024 * 1024 * 100;
 
         let pool = BufferPool::create(executor, memory, 3);
         let op = DataOperator::instance().operator();
 
-        let path = "path";
-        let writer = op.writer(path).await?;
+        let remote_path = format!(
+            "{}/{}",
+            ctx.query_id_spill_prefix(),
+            GlobalUniqName::unique()
+        );
+        let writer = op.writer(&remote_path).await?;
         let remote = pool.buffer_write(writer);
 
-        // let dir = todo!();
-        // let path = todo!();
+        let mut writer = UnionFileWriter::without_local(remote_path.clone(), remote);
+        let mut expected = b"hello union writer".to_vec();
+        writer.write_all(&expected)?;
+        let extra = b" write bytes";
+        writer.write_all(extra)?;
+        expected.extend_from_slice(extra);
+        writer.flush()?;
 
-        // let file = SyncDmaFile::create(path, true)?;
-        // let align = todo!();
-        // let buf = DmaWriteBuf::new(align, 4 * 1024 * 1024);
+        let file = writer.finish()?;
+        assert!(file.local_path.is_none());
+        assert_eq!(file.remote_offset, Some(0));
+        assert_eq!(file.remote_size, expected.len() as u64);
 
-        let file = UnionFileWriter::without_local(path.to_string(), remote);
-        let mut file_writer = FileWriter::new(props, &data_schema, file)?;
+        let reader = op.reader(&file.remote_path).await?;
+        let buffer = reader.read(0..file.remote_size).await?;
+        assert_eq!(buffer.to_vec(), expected);
 
-        let mut row_groups = vec![];
-        let row_group = file_writer.spill(vec![block])?;
-        row_groups.push((*row_group).clone());
+        Ok(())
+    }
 
-        let (metadata, file) = file_writer.finish()?;
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_union_file_writer_with_local() -> Result<()> {
+        let spill_dir = TempDir::new().expect("create spill temp dir");
+        let mut config = ConfigBuilder::create().off_log().build();
+        config.spill = SpillConfig::new_for_test(
+            spill_dir.path().to_string_lossy().into_owned(),
+            0.01,
+            1 << 30,
+        );
 
-        let input = FileReader {
-            meta: metadata.into(),
-            local: None,
-            remote_reader: op.reader(&file.remote_path).await?,
-            remote_offset: None,
-        };
+        let fixture = TestFixture::setup_with_config(&config).await?;
+        let ctx = fixture.new_query_ctx().await?;
 
-        let builder = ArrowReaderBuilder::new(input).await?;
-        let stream = builder.with_batch_size(usize::MAX).build()?;
+        let executor = GlobalIORuntime::instance();
+        let memory = 1024 * 1024 * 100;
 
-        let blocks = load_blocks_from_stream(&data_schema, stream).await?;
-        println!("{:?}", blocks);
+        let pool = BufferPool::create(executor, memory, 3);
+        let op = DataOperator::instance().operator();
+
+        let remote_path = format!(
+            "{}/{}",
+            ctx.query_id_spill_prefix(),
+            GlobalUniqName::unique()
+        );
+        let writer = op.writer(&remote_path).await?;
+        let remote = pool.buffer_write(writer);
+
+        let query_id = ctx.get_id();
+        let temp_dir = TempDirManager::instance()
+            .get_disk_spill_dir(memory, &query_id)
+            .expect("local spill directory should be available");
+        let temp_path = temp_dir
+            .new_file_with_size(0)?
+            .expect("spill temp file should be allocated");
+
+        let dio = false;
+        let file = SyncDmaFile::create(&temp_path, dio)?;
+        let buf = DmaWriteBuf::new(temp_dir.block_alignment(), 4 * 1024 * 1024);
+
+        let mut union_writer = UnionFileWriter::new(
+            temp_dir.clone(),
+            temp_path,
+            file,
+            buf,
+            remote_path.clone(),
+            remote,
+        );
+
+        assert!(union_writer.has_opening_local());
+
+        let mut expected = b"bytes on disk".to_vec();
+        union_writer.write_all(&expected)?;
+        let extra = b" via union writer";
+        union_writer.write_all(extra)?;
+        expected.extend_from_slice(extra);
+        union_writer.flush()?;
+
+        let file = union_writer.finish()?;
+
+        let local_path = file.local_path.clone().expect("local path should exist");
+        assert!(file.remote_offset.is_none());
+        assert_eq!(file.remote_size, 0);
+
+        let local_bytes = std::fs::read(local_path.as_ref())?;
+        assert_eq!(local_bytes, expected);
 
         Ok(())
     }
