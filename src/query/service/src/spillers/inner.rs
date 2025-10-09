@@ -170,7 +170,7 @@ impl<A: SpillAdapter> SpillerInner<A> {
         let location = self.write_encodes(data_size, buf).await?;
 
         // Record statistics.
-        record_write_profile(&location, &instant, data_size);
+        record_write_profile(location.is_local(), &instant, data_size);
         let layout = columns_layout.pop().unwrap();
         Ok((location, layout, data_size))
     }
@@ -273,27 +273,21 @@ impl<A: SpillAdapter> SpillerInner<A> {
     }
 }
 
-pub(super) fn record_write_profile(location: &Location, start: &Instant, write_bytes: usize) {
-    match location {
-        Location::Remote(_) => {
-            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteBytes,
-                write_bytes,
-            );
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteTime,
-                start.elapsed().as_millis() as usize,
-            );
-        }
-        Location::Local(_) => {
-            Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteBytes, write_bytes);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::LocalSpillWriteTime,
-                start.elapsed().as_millis() as usize,
-            );
-        }
+pub(super) fn record_write_profile(is_local: bool, start: &Instant, write_bytes: usize) {
+    if !is_local {
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, write_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RemoteSpillWriteTime,
+            start.elapsed().as_millis() as usize,
+        );
+    } else {
+        Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteBytes, write_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::LocalSpillWriteTime,
+            start.elapsed().as_millis() as usize,
+        );
     }
 }
 

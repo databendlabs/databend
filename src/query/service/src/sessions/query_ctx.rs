@@ -411,26 +411,20 @@ impl QueryContext {
         self.shared.clear_tables_cache()
     }
 
-    pub fn add_spill_file(
-        &self,
-        location: spillers::Location,
-        layout: spillers::Layout,
-        data_size: usize,
-    ) {
-        if matches!(location, spillers::Location::Remote(_)) {
-            let current_id = self.get_cluster().local_id();
-            let mut w = self.shared.cluster_spill_progress.write();
-            let p = SpillProgress::new(1, data_size);
-            w.entry(current_id)
-                .and_modify(|stats| {
-                    stats.incr(&p);
-                })
-                .or_insert(p);
-        }
-        {
-            let mut w = self.shared.spilled_files.write();
-            w.insert(location, layout);
-        }
+    pub fn incr_spill_progress(&self, file_nums: usize, data_size: usize) {
+        let current_id = self.get_cluster().local_id();
+        let mut w = self.shared.cluster_spill_progress.write();
+        let p = SpillProgress::new(file_nums, data_size);
+        w.entry(current_id)
+            .and_modify(|stats| {
+                stats.incr(&p);
+            })
+            .or_insert(p);
+    }
+
+    pub fn add_spill_file(&self, location: spillers::Location, layout: spillers::Layout) {
+        let mut w = self.shared.spilled_files.write();
+        w.insert(location, layout);
     }
 
     pub fn set_cluster_spill_progress(&self, source_target: &str, stats: SpillProgress) {

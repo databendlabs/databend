@@ -61,7 +61,11 @@ impl SpillAdapter for PartitionAdapter {
             .write()
             .unwrap()
             .insert(location.clone(), layout.clone());
-        self.ctx.as_ref().add_spill_file(location, layout, size);
+
+        if location.is_remote() {
+            self.ctx.as_ref().incr_spill_progress(1, size);
+        }
+        self.ctx.as_ref().add_spill_file(location, layout);
     }
 
     fn get_spill_layout(&self, location: &Location) -> Option<Layout> {
@@ -229,7 +233,7 @@ impl Spiller {
         let instant = Instant::now();
         let location = self.write_encodes(write_bytes, buf).await?;
         // Record statistics.
-        record_write_profile(&location, &instant, write_bytes);
+        record_write_profile(location.is_local(), &instant, write_bytes);
 
         self.adapter
             .add_spill_file(location.clone(), layout, write_bytes);
@@ -352,13 +356,6 @@ impl Spiller {
     }
 
     pub fn new_spill_writer(&self, schema: Arc<DataSchema>) -> Result<SpillWriter> {
-        if !self.use_parquet {
-            return Err(ErrorCode::Internal(
-                "window spill requires Parquet spill format, please set `set global spilling_file_format='parquet'`"
-                    .to_string(),
-            ));
-        }
-
         let runtime = GlobalIORuntime::instance();
         let buffer_pool = BufferPool::create(
             runtime,
@@ -423,7 +420,14 @@ impl SpillWriter {
             return Err(ErrorCode::Internal("SpillWriter should open first"));
         };
 
+        let is_local = file_writer.has_opening_local();
+        let start = std::time::Instant::now();
+        let write_bytes = blocks.iter().map(DataBlock::memory_size).sum();
+
         let row_group_meta = file_writer.spill(blocks)?;
+
+        record_write_profile(is_local, &start, write_bytes);
+
         let ordinal = row_group_meta.ordinal().unwrap();
         Ok(ordinal as _)
     }
@@ -450,26 +454,28 @@ impl SpillWriter {
         };
 
         let (metadata, union_file) = file_writer.finish()?;
-        let remote_path = union_file.remote_path().to_string();
-        let parquet_metadata = Arc::new(metadata);
 
-        let total_size = parquet_metadata
-            .row_groups()
-            .iter()
-            .map(|rg| rg.compressed_size().max(0) as usize)
-            .sum();
+        if let Some(path) = &union_file.local_path {
+            self.spiller.adapter.add_spill_file(
+                Location::Local(path.clone()),
+                Layout::Parquet,
+                path.size(),
+            );
+        }
 
         self.spiller.adapter.add_spill_file(
-            Location::Remote(remote_path),
+            Location::Remote(union_file.remote_path.clone()),
             Layout::Parquet,
-            total_size,
+            union_file
+                .remote_size
+                .saturating_sub(union_file.remote_offset.unwrap_or_default()) as _,
         );
 
         Ok(SpillReader {
             spiller: self.spiller,
             schema: self.schema,
-            parquet_metadata,
-            union_file: Some(union_file),
+            parquet_metadata: Arc::new(metadata),
+            union_file,
             dio: self.dio,
         })
     }
@@ -479,7 +485,7 @@ pub struct SpillReader {
     spiller: Spiller,
     schema: Arc<DataSchema>,
     parquet_metadata: Arc<ParquetMetaData>,
-    union_file: Option<UnionFile>,
+    union_file: UnionFile,
     dio: bool,
 }
 
@@ -489,13 +495,9 @@ impl SpillReader {
             return Ok(Vec::new());
         }
 
-        let union_file = self.union_file.take().ok_or_else(|| {
-            ErrorCode::Internal("window spill reader already consumed".to_string())
-        })?;
-
         self.spiller
             .load_row_groups(
-                union_file,
+                self.union_file.clone(),
                 self.parquet_metadata.clone(),
                 &self.schema,
                 ordinals,
@@ -507,7 +509,10 @@ impl SpillReader {
 
 impl SpillAdapter for Arc<QueryContext> {
     fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
-        self.as_ref().add_spill_file(location, layout, size);
+        if matches!(location, Location::Remote(_)) {
+            self.incr_spill_progress(1, size);
+        }
+        self.as_ref().add_spill_file(location, layout);
     }
 
     fn get_spill_layout(&self, location: &Location) -> Option<Layout> {
@@ -523,7 +528,10 @@ pub struct SortAdapter {
 impl SpillAdapter for SortAdapter {
     fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
         match location {
-            Location::Remote(_) => self.ctx.as_ref().add_spill_file(location, layout, size),
+            Location::Remote(_) => {
+                self.ctx.as_ref().incr_spill_progress(1, size);
+                self.ctx.as_ref().add_spill_file(location, layout);
+            }
             Location::Local(temp_path) => {
                 self.local_files.write().unwrap().insert(temp_path, layout);
             }

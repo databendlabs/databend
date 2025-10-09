@@ -216,6 +216,10 @@ impl FileWriter<UnionFileWriter> {
         let row_groups = row_groups.into_iter().map(Arc::unwrap_or_clone).collect();
         Ok((ParquetMetaData::new(metadata, row_groups), file))
     }
+
+    pub fn has_opening_local(&self) -> bool {
+        self.writer.inner().has_opening_local()
+    }
 }
 
 struct LocalDst {
@@ -264,7 +268,7 @@ impl UnionFileWriter {
     }
 
     fn finish(&mut self) -> io::Result<UnionFile> {
-        self.remote_writer.take().unwrap().close()?;
+        let remote_size = self.remote_writer.take().unwrap().close()?.content_length();
         match self.local.take() {
             Some(
                 mut local @ LocalDst {
@@ -285,19 +289,29 @@ impl UnionFileWriter {
                     local_path: Some(local.path),
                     remote_path: std::mem::take(&mut self.remote),
                     remote_offset: None,
+                    remote_size,
                 })
             }
             Some(LocalDst { path, .. }) => Ok(UnionFile {
                 local_path: Some(path),
                 remote_path: std::mem::take(&mut self.remote),
                 remote_offset: Some(self.remote_offset),
+                remote_size,
             }),
             None => Ok(UnionFile {
                 local_path: None,
                 remote_path: std::mem::take(&mut self.remote),
                 remote_offset: Some(0),
+                remote_size,
             }),
         }
+    }
+
+    pub fn has_opening_local(&self) -> bool {
+        self.local
+            .as_ref()
+            .map(|local| local.file.is_some())
+            .unwrap_or(false)
     }
 }
 
@@ -363,17 +377,12 @@ impl io::Write for UnionFileWriter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnionFile {
-    local_path: Option<TempPath>,
-    remote_path: String,
-    remote_offset: Option<u64>,
-}
-
-impl UnionFile {
-    pub fn remote_path(&self) -> &str {
-        &self.remote_path
-    }
+    pub local_path: Option<TempPath>,
+    pub remote_path: String,
+    pub remote_offset: Option<u64>,
+    pub remote_size: u64,
 }
 
 pub(super) struct FileReader {
@@ -482,6 +491,7 @@ impl<A: SpillAdapter> SpillerInner<A> {
             local_path,
             remote_path,
             remote_offset,
+            ..
         }: UnionFile,
         meta: Arc<ParquetMetaData>,
         schema: &DataSchema,
