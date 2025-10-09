@@ -26,7 +26,7 @@ use crate::MIN_READER_VER;
 use crate::VER;
 
 impl FromToProto for mt::VacuumWatermark {
-    type PB = pb::VacuumRetention;
+    type PB = pb::VacuumWatermark;
 
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -43,13 +43,10 @@ impl FromToProto for mt::VacuumWatermark {
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let p = pb::VacuumRetention {
+        let p = pb::VacuumWatermark {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             time: self.time.to_pb()?,
-            updated_by: String::new(),
-            updated_at: String::new(),
-            version: 0,
         };
         Ok(p)
     }
