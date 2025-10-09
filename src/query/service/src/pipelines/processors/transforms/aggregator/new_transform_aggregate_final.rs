@@ -51,7 +51,6 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 // Metadata structure extracted from TransformPartitionBucket output
 #[derive(Debug)]
 struct PartitionedMeta {
-    bucket: isize,
     data: Vec<AggregateMeta>,
 }
 
@@ -223,7 +222,7 @@ impl NewTransformAggregateFinal {
                     Some(AggregateMeta::Partitioned { bucket, data }) => {
                         // Normal case: Partitioned meta
                         let mut ready_queue = self.shared_state.ready_queue.lock().unwrap();
-                        ready_queue.push_back(PartitionedMeta { bucket, data });
+                        ready_queue.push_back(PartitionedMeta { data });
                         drop(ready_queue);
 
                         if self.input.is_finished() {
@@ -327,7 +326,7 @@ impl NewTransformAggregateFinal {
 
     fn process_dispatching_tasks(&mut self, partitioned_meta: PartitionedMeta) -> Result<()> {
         // Dispatch tasks to work queue
-        let PartitionedMeta { data, .. } = partitioned_meta;
+        let PartitionedMeta { data } = partitioned_meta;
 
         for item in data {
             match item {
@@ -392,7 +391,7 @@ impl NewTransformAggregateFinal {
             }
             AggregateMeta::AggregatePayload(agg_payload) => {
                 // Wrap single payload into PartitionedPayload with partition_count=1
-                let mut payload = agg_payload.payload;
+                let payload = agg_payload.payload;
                 let arena = payload.arena.clone();
                 let mut partitioned = PartitionedPayload::new(
                     self.params.group_data_types.clone(),
