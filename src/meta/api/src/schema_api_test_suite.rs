@@ -1505,15 +1505,11 @@ impl SchemaApiTestSuite {
         assert_eq!(old_retention, None);
 
         // Attempt to set earlier timestamp should return current value (first) unchanged
-        let old_retention = mt
-            .fetch_set_vacuum_timestamp(&tenant, earlier)
-            .await?;
+        let old_retention = mt.fetch_set_vacuum_timestamp(&tenant, earlier).await?;
         assert_eq!(old_retention.unwrap().time, first); // Should return the PREVIOUS value
 
         // Set later timestamp should work and return previous value (first)
-        let old_retention = mt
-            .fetch_set_vacuum_timestamp(&tenant, later)
-            .await?;
+        let old_retention = mt.fetch_set_vacuum_timestamp(&tenant, later).await?;
         assert_eq!(old_retention.unwrap().time, first); // Should return PREVIOUS value (first)
 
         // Verify current stored value
@@ -1575,7 +1571,7 @@ impl SchemaApiTestSuite {
                 tenant_name,
                 "db_concurrent",
                 "tbl_concurrent",
-                "FUSE",  // engine
+                "FUSE", // engine
             );
             let tenant = util.tenant().clone();
 
@@ -1590,7 +1586,9 @@ impl SchemaApiTestSuite {
             // Simulate concurrent scenario: vacuum timestamp is updated after drop
             // This simulates vacuum process setting timestamp during undrop operation
             let new_vacuum_time = drop_time + chrono::Duration::seconds(1);
-            let _old_retention = mt.fetch_set_vacuum_timestamp(&tenant, new_vacuum_time).await?;
+            let _old_retention = mt
+                .fetch_set_vacuum_timestamp(&tenant, new_vacuum_time)
+                .await?;
 
             // Now undrop should fail due to vacuum timestamp protection
             let undrop_err = mt
@@ -1606,9 +1604,12 @@ impl SchemaApiTestSuite {
                     // Verify the error contains the vacuum timestamp
                     assert_eq!(e.retention(), new_vacuum_time);
                     // The drop time should be before the vacuum time (that's why undrop is blocked)
-                    assert!(e.drop_time() <= new_vacuum_time,
+                    assert!(
+                        e.drop_time() <= new_vacuum_time,
                         "drop_time {:?} should be <= vacuum_time {:?}",
-                        e.drop_time(), new_vacuum_time);
+                        e.drop_time(),
+                        new_vacuum_time
+                    );
                 }
                 other => panic!("unexpected concurrent undrop error: {other:?}"),
             }
