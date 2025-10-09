@@ -19,9 +19,12 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Instant;
 
 use bumpalo::Bump;
 use concurrent_queue::ConcurrentQueue;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
@@ -36,6 +39,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use log::info;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
@@ -619,12 +623,26 @@ impl Processor for NewTransformAggregateFinal {
         if let LocalState::Reading(payload) = std::mem::replace(&mut self.state, LocalState::Idle) {
             // Async read data
             let _guard = self.semaphore.acquire().await;
+            let instant = Instant::now();
             let data = self
                 .operator
                 .read_with(&payload.location)
                 .range(payload.data_range.clone())
                 .await?
                 .to_vec();
+
+            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
+            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, data.len());
+            Profile::record_usize_profile(
+                ProfileStatisticsName::RemoteSpillReadTime,
+                instant.elapsed().as_millis() as usize,
+            );
+
+            info!(
+                "Read aggregate spill {} successfully, elapsed: {:?}",
+                &payload.location,
+                instant.elapsed()
+            );
 
             // Set state to deserializing (will be processed in process())
             self.state = LocalState::Deserializing(payload, data);
