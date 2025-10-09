@@ -24,14 +24,14 @@ INSERT INTO t2 VALUES
 query IT rowsort
 SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2 USING(id);
 ----
-1 a1 x2
+1 a1 x1
 3 c1 y1
 
 query IT rowsort
 SELECT t1.id, t1.val1, t2.val2 FROM t1 LEFT ANY JOIN t2 USING(id);
 ----
-1 a1 x2
-1 a2 x2
+1 a1 x1
+1 a2 x1
 2 b1 NULL
 3 c1 y1
 5 e1 NULL
@@ -46,5 +46,129 @@ SELECT t1.id, t1.val1, t2.val2 FROM t1 RIGHT ANY JOIN t2 ON t1.id = t2.id;
 NULL NULL n2
 NULL NULL z1
 
+query IT rowsort
+SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2 ON t1.id = t2.id AND t2.val2 = 'x1';
+----
+1 a1 x1
+
+query IT rowsort
+SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2 USING(id) WHERE t1.id IS NULL OR t2.id IS NULL;
+----
+
 statement error 1065
 SELECT t1.id, t1.val1, t2.val2 FROM t1 INNER ANY JOIN t2;
+
+# test join on string
+statement ok
+CREATE OR REPLACE TABLE t1_str (id String, val1 String);
+
+statement ok
+CREATE OR REPLACE TABLE t2_str (id String, val2 String);
+
+statement ok
+INSERT INTO t1_str VALUES
+(1, 'a1'),
+(1, 'a2'),
+(2, 'b1'),
+(3, 'c1'),
+(5, 'e1'),
+(NULL, 'n1');
+
+statement ok
+INSERT INTO t2_str VALUES
+(1, 'x1'),
+(1, 'x2'),
+(3, 'y1'),
+(4, 'z1'),
+(NULL, 'n2');
+
+query IT rowsort
+SELECT t1_str.id, t1_str.val1, t2_str.val2 FROM t1_str INNER ANY JOIN t2_str USING(id);
+----
+1 a1 x1
+3 c1 y1
+
+query IT rowsort
+SELECT t1_str.id, t1_str.val1, t2_str.val2 FROM t1_str LEFT ANY JOIN t2_str USING(id);
+----
+1 a1 x1
+1 a2 x1
+2 b1 NULL
+3 c1 y1
+5 e1 NULL
+NULL n1 NULL
+
+query IT rowsort
+SELECT t1_str.id, t1_str.val1, t2_str.val2 FROM t1_str RIGHT ANY JOIN t2_str ON t1_str.id = t2_str.id;
+----
+1 a1 x1
+1 a1 x2
+3 c1 y1
+NULL NULL n2
+NULL NULL z1
+
+statement error 1065
+SELECT t1_str.id, t1_str.val1, t2_str.val2 FROM t1_str INNER ANY JOIN t2_str;
+
+# Repeat on both sides
+
+statement ok
+CREATE OR REPLACE TABLE t3 (id Int32, val1 String);
+
+statement ok
+CREATE OR REPLACE TABLE t4 (id Int32, val2 String);
+
+statement ok
+INSERT INTO t3 VALUES
+(1, 'a1'),
+(1, 'a2'),
+(1, 'a3');
+
+statement ok
+INSERT INTO t4 VALUES
+(1, 'x1'),
+(1, 'x2');
+
+query IT rowsort
+SELECT t3.id, t3.val1, t4.val2 FROM t3 INNER ANY JOIN t4 USING(id);
+----
+1 a1 x1
+
+# Empty Data
+
+statement ok
+CREATE OR REPLACE TABLE empty (id Int32, val String);
+
+query IT rowsort
+SELECT * FROM t1 INNER ANY JOIN empty USING(id);
+----
+
+query IT rowsort
+SELECT * FROM empty LEFT ANY JOIN t1 USING(id);
+----
+
+# DISTINCT & ANY JOIN
+
+statement ok
+CREATE OR REPLACE TABLE t5 (a Int32, b Int32, val1 String);
+
+statement ok
+CREATE OR REPLACE TABLE t6 (a Int32, b Int32, val2 String);
+
+statement ok
+INSERT INTO t5 VALUES
+(1, 10, 'a1'),
+(1, 11, 'a2'),
+(2, 10, 'b1');
+
+statement ok
+INSERT INTO t6 VALUES
+(1, 10, 'x1'),
+(2, 10, 'x2'),
+(2, 11, 'x3');
+
+query IT rowsort
+SELECT t5.a, t5.b, t5.val1, t6.val2 FROM t5 INNER ANY JOIN t6 USING(a, b);
+----
+1 10 a1 x1
+2 10 b1 x2

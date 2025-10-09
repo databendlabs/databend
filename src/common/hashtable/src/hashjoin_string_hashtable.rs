@@ -50,7 +50,7 @@ unsafe impl<A: Allocator + Clone + Send> Send for HashJoinStringHashTable<A> {}
 
 unsafe impl<A: Allocator + Clone + Sync> Sync for HashJoinStringHashTable<A> {}
 
-impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
+impl<A: Allocator + Clone + Default + 'static> HashJoinStringHashTable<A> {
     pub fn with_build_row_num(row_num: usize) -> Self {
         let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
@@ -75,15 +75,13 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            let header = if overwrite {
-                new_header
-            } else {
-                combine_header(new_header, old_header)
-            };
+            if overwrite && self.next_contains(&key, remove_header_tag(old_header)) {
+                return;
+            }
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
                     old_header,
-                    header,
+                    combine_header(new_header, old_header),
                     Ordering::SeqCst,
                     Ordering::SeqCst,
                 )
@@ -94,9 +92,6 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
             };
         }
         self.count.fetch_add(1, Ordering::Relaxed);
-        if overwrite {
-            return;
-        }
         unsafe { (*entry_ptr).next = remove_header_tag(old_header) };
     }
 }
