@@ -75,7 +75,7 @@ impl<A: Allocator + Clone + Default + 'static> HashJoinStringHashTable<A> {
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            if overwrite && self.next_contains(&key, remove_header_tag(old_header)) {
+            if overwrite && self.next_contains(key, remove_header_tag(old_header)) {
                 return;
             }
             let res = unsafe {
