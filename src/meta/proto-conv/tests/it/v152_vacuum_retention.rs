@@ -31,14 +31,14 @@ use crate::common;
 
 #[test]
 fn test_decode_v152_vacuum_retention() -> anyhow::Result<()> {
-    // Serialized VacuumWatermark with timestamp 0 (epoch time)
+    // Serialized VacuumWatermark with timestamp 1702603569 (2023-12-15 01:26:09 UTC)
     let vacuum_retention_v152 = vec![
-        10, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85,
+        10, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32, 48, 49, 58, 50, 54, 58, 48, 57, 32, 85,
         84, 67, 160, 6, 152, 1, 168, 6, 24,
     ];
 
     let want = || mt::VacuumWatermark {
-        time: DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+        time: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(), // 2023-12-15 01:26:09 UTC
     };
 
     common::test_pb_from_to(func_name!(), want())?;
