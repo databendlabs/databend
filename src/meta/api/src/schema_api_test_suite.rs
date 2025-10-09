@@ -1579,6 +1579,9 @@ impl SchemaApiTestSuite {
             );
             let tenant = util.tenant().clone();
 
+            // Create database first
+            util.create_db().await?;
+
             // Create and drop a table
             util.create_table().await?;
             let drop_time = chrono::Utc::now();
