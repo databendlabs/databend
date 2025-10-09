@@ -60,7 +60,6 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use seq_marked::SeqValue;
 
 use crate::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
@@ -125,10 +124,15 @@ where
         // Use crud_upsert_with for atomic compare-and-swap semantics
         let transition = self
             .crud_upsert_with::<Infallible>(&ident, |current: Option<SeqV<VacuumWatermark>>| {
-                let current_retention = current.into_value().unwrap_or_default();
+                let current_retention: Option<VacuumWatermark> = current.map(|v| v.data);
 
-                // Only update if new timestamp is greater (monotonic property)
-                if new_timestamp > current_retention.time {
+                // Check if we should update based on monotonic property
+                let should_update = match current_retention {
+                    None => true, // Never set before, always update
+                    Some(existing) => new_timestamp > existing.time, // Only update if new timestamp is greater
+                };
+
+                if should_update {
                     let new_retention = VacuumWatermark::new(new_timestamp);
                     Ok(Some(new_retention))
                 } else {
@@ -147,10 +151,10 @@ where
 
     /// Get the current vacuum retention timestamp for a tenant.
     #[fastrace::trace]
-    async fn get_vacuum_timestamp(&self, tenant: &Tenant) -> Result<VacuumWatermark, KVAppError> {
+    async fn get_vacuum_timestamp(&self, tenant: &Tenant) -> Result<Option<VacuumWatermark>, KVAppError> {
         let ident = VacuumRetentionIdent::new_global(tenant.clone());
         let seq_value = self.get_pb(&ident).await?;
-        Ok(seq_value.map(|v| v.data).unwrap_or_default())
+        Ok(seq_value.map(|v| v.data))
     }
 }
 

@@ -487,16 +487,20 @@ pub async fn handle_undrop_table(
         let retention = kv_api
             .get_vacuum_timestamp(tenant_dbname_tbname.tenant())
             .await?;
-        let retention_time = retention.time;
 
-        if drop_marker <= retention_time {
-            return Err(KVAppError::AppError(AppError::UndropTableRetentionGuard(
-                UndropTableRetentionGuard::new(
-                    &tenant_dbname_tbname.table_name,
-                    drop_marker,
-                    retention_time,
-                ),
-            )));
+        // Only check retention guard if vacuum timestamp has been set
+        if let Some(retention_watermark) = retention {
+            let retention_time = retention_watermark.time;
+
+            if drop_marker <= retention_time {
+                return Err(KVAppError::AppError(AppError::UndropTableRetentionGuard(
+                    UndropTableRetentionGuard::new(
+                        &tenant_dbname_tbname.table_name,
+                        drop_marker,
+                        retention_time,
+                    ),
+                )));
+            }
         }
 
         {

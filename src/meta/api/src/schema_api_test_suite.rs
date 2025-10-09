@@ -1501,26 +1501,24 @@ impl SchemaApiTestSuite {
 
         // Test fetch_set_vacuum_timestamp with correct return semantics
         let old_retention = mt.fetch_set_vacuum_timestamp(&tenant, first).await?;
-        // Should return default (epoch) as old value
-        assert_eq!(old_retention, None,);
+        // Should return None as old value since never set before
+        assert_eq!(old_retention, None);
 
         // Attempt to set earlier timestamp should return current value (first) unchanged
         let old_retention = mt
             .fetch_set_vacuum_timestamp(&tenant, earlier)
-            .await?
-            .unwrap();
-        assert_eq!(old_retention.time, first); // Should return the PREVIOUS value
+            .await?;
+        assert_eq!(old_retention.unwrap().time, first); // Should return the PREVIOUS value
 
         // Set later timestamp should work and return previous value (first)
         let old_retention = mt
             .fetch_set_vacuum_timestamp(&tenant, later)
-            .await?
-            .unwrap();
-        assert_eq!(old_retention.time, first); // Should return PREVIOUS value (first)
+            .await?;
+        assert_eq!(old_retention.unwrap().time, first); // Should return PREVIOUS value (first)
 
         // Verify current stored value
         let stored = mt.get_vacuum_timestamp(&tenant).await?;
-        assert_eq!(stored.time, later);
+        assert_eq!(stored.unwrap().time, later);
 
         // Test undrop retention guard behavior
         {
