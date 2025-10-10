@@ -25,13 +25,15 @@
 "creat" = "creat"
 "crate" = "crate"
 
+[default.extend-identifiers]
+abd = "abd"
+
 [files]
 extend-exclude = [
     "**/Cargo.toml",
     "scripts/benchmark/",
     "benchmark/",
     "tests/",
-    "src/meta",
     # masked secrets
     "src/query/config/src/mask.rs",
     # Forked from upstream
