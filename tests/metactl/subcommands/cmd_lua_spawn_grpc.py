@@ -69,7 +69,8 @@ print("Done")
 
     # Normalize output by removing proposed_at_ms field
     import re
-    normalized_output = re.sub(r',"meta"=\{"proposed_at_ms"=\d+\}', '', output)
+
+    normalized_output = re.sub(r',"meta"=\{"proposed_at_ms"=\d+\}', "", output)
 
     expected_phrases = [
         "Task 1: Upserted k1",

@@ -42,10 +42,7 @@ print(pandas_df)
 
 # Create a chart
 fig = pandas_df.plot(
-    x="category",
-    y="count", 
-    kind="bar", 
-    title="Number Distribution by Category"
+    x="category", y="count", kind="bar", title="Number Distribution by Category"
 ).get_figure()
 fig.savefig("numbers_chart.png")
 
