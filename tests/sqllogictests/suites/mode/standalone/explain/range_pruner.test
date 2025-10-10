@@ -28,6 +28,11 @@ EvalScalar
 
 
 query T
+explain select 1 from range_t where c > 'efg' and c = 'efg'
+----
+EmptyResultScan
+
+query T
 explain select 1 from range_t where i > 20
 ----
 EvalScalar

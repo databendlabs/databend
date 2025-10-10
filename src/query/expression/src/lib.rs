@@ -49,6 +49,7 @@ mod block;
 
 pub mod aggregate;
 pub mod converts;
+mod constant_folder;
 mod evaluator;
 mod expression;
 pub mod filter;
@@ -74,6 +75,7 @@ pub use crate::aggregate::*;
 pub use crate::block::BlockMetaInfo;
 pub use crate::block::BlockMetaInfoPtr;
 pub use crate::block::*;
+pub use crate::constant_folder::*;
 pub use crate::evaluator::*;
 pub use crate::expression::*;
 pub use crate::filter::*;
