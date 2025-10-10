@@ -1097,6 +1097,7 @@ fn test_statement_error() {
         r#"GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';"#,
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)"#,
         r#"CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';"#,
+        // typos:ignore-next-line
         r#"CREATE FUNCTION my_agg (INT) STATE { s STRIN } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"drop table :a"#,
         r#"drop table IDENTIFIER(a)"#,

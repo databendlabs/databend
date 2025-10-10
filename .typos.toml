@@ -12,6 +12,7 @@ extend-ignore-re = [
 # Preserved for NdJson
 Nd = "Nd"
 typ = "typ"
+aranges = "aranges"
 
 [default.extend-identifiers]
 

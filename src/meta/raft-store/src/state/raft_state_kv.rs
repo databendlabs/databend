@@ -31,6 +31,7 @@ pub enum RaftStateKey {
     /// The node id.
     Id,
 
+    // typos:ignore-next-line
     /// Hard state of the raft log, including `current_term` and `voted_vor`.
     HardState,
 

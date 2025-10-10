@@ -246,7 +246,7 @@ mod tests {
             Some("Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?".to_string())
         );
         assert_eq!(
-            suggest_correction("vacum drop table"),
+            suggest_correction("vacum drop table"), // typos:disable-line
             Some("Did you mean `VACUUM DROP TABLE`?".to_string())
         );
         assert_eq!(
