@@ -55,10 +55,11 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::pipelines::processors::transforms::HashJoinMemoryState;
+use crate::pipelines::processors::transforms::memory::outer_left_join::OuterLeftHashJoin;
+use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
-use crate::pipelines::processors::transforms::MemoryInnerJoin;
-use crate::pipelines::processors::transforms::PlanRuntimeFilterDesc;
+use crate::pipelines::processors::transforms::InnerHashJoin;
+use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
@@ -261,7 +262,7 @@ impl IPhysicalPlan for HashJoin {
         let (enable_optimization, _) = builder.merge_into_get_optimization_flag(self);
 
         if desc.single_to_inner.is_none()
-            && self.join_type == JoinType::Inner
+            && (self.join_type == JoinType::Inner || self.join_type == JoinType::Left)
             && experimental_new_join
             && !enable_optimization
         {
@@ -394,8 +395,10 @@ impl HashJoin {
         builder: &mut PipelineBuilder,
         desc: Arc<HashJoinDesc>,
     ) -> Result<()> {
-        let state = Arc::new(HashJoinMemoryState::create());
-        let rf_desc = PlanRuntimeFilterDesc::create(&builder.ctx, self);
+        let state = Arc::new(BasicHashJoinState::create());
+        // We must build the runtime filter before constructing the child nodes,
+        // as we will inject some runtime filter information into the context for the child nodes to use.
+        let rf_desc = RuntimeFiltersDesc::create(&builder.ctx, self)?;
 
         if let Some((build_cache_index, _)) = self.build_side_cache_info {
             builder.hash_join_states.insert(
@@ -438,7 +441,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                self.create_join(builder, desc.clone(), state.clone())?,
+                self.create_join(&self.join_type, builder, desc.clone(), state.clone())?,
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
@@ -464,9 +467,10 @@ impl HashJoin {
 
     fn create_join(
         &self,
+        join_type: &JoinType,
         builder: &mut PipelineBuilder,
         desc: Arc<HashJoinDesc>,
-        state: Arc<HashJoinMemoryState>,
+        state: Arc<BasicHashJoinState>,
     ) -> Result<Box<dyn crate::pipelines::processors::transforms::Join>> {
         let hash_key_types = self
             .build_keys
@@ -484,16 +488,23 @@ impl HashJoin {
 
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
 
-        Ok(Box::new(MemoryInnerJoin::create(
-            &builder.ctx,
-            builder.func_ctx.clone(),
-            method,
-            desc,
-            self.build_projections.clone(),
-            self.probe_projections.clone(),
-            self.probe_to_build.clone(),
-            state,
-        )?))
+        Ok(match join_type {
+            JoinType::Inner => Box::new(InnerHashJoin::create(
+                &builder.ctx,
+                builder.func_ctx.clone(),
+                method,
+                desc,
+                state,
+            )?),
+            JoinType::Left => Box::new(OuterLeftHashJoin::create(
+                &builder.ctx,
+                builder.func_ctx.clone(),
+                method,
+                desc,
+                state,
+            )?),
+            _ => unreachable!(),
+        })
     }
 }
 
@@ -541,7 +552,11 @@ impl PhysicalPlanBuilder {
         build_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
-            JoinType::Left | JoinType::LeftSingle | JoinType::LeftAsof | JoinType::Full => {
+            JoinType::Left
+            | JoinType::LeftAny
+            | JoinType::LeftSingle
+            | JoinType::LeftAsof
+            | JoinType::Full => {
                 let build_schema = build_side.output_schema()?;
                 // Wrap nullable type for columns in build side
                 let build_schema = DataSchemaRefExt::create(
@@ -794,7 +809,7 @@ impl PhysicalPlanBuilder {
             let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
 
             // Handle inner join column optimization
-            if join.join_type == JoinType::Inner {
+            if matches!(join.join_type, JoinType::Inner | JoinType::InnerAny) {
                 self.handle_inner_join_column_optimization(
                     left_condition,
                     right_condition,
@@ -1023,9 +1038,12 @@ impl PhysicalPlanBuilder {
         let merged_fields = match join.join_type {
             JoinType::Cross
             | JoinType::Inner
+            | JoinType::InnerAny
             | JoinType::Left
+            | JoinType::LeftAny
             | JoinType::LeftSingle
             | JoinType::Right
+            | JoinType::RightAny
             | JoinType::RightSingle
             | JoinType::Full => {
                 let mut result = probe_fields.clone();

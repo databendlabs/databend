@@ -78,7 +78,9 @@ def test_keys_layout_from_grpc():
     )
 
     # Compare output line by line
-    for i, (actual_line, expected_line) in enumerate(zip(data_lines, expected_prefixes)):
+    for i, (actual_line, expected_line) in enumerate(
+        zip(data_lines, expected_prefixes)
+    ):
         assert actual_line == expected_line, (
             f"Line {i} mismatch:\nActual: '{actual_line}'\nExpected: '{expected_line}'"
         )
@@ -87,7 +89,9 @@ def test_keys_layout_from_grpc():
 
     # Test keys-layout with depth=1 (only top-level prefixes)
     print("\n--- Testing keys-layout with depth=1 ---")
-    result_depth1 = run_command([metactl_bin, "keys-layout", "--grpc-api-address", grpc_addr, "--depth", "1"])
+    result_depth1 = run_command(
+        [metactl_bin, "keys-layout", "--grpc-api-address", grpc_addr, "--depth", "1"]
+    )
 
     depth1_data = result_depth1.strip().split("\n")
 
@@ -113,7 +117,9 @@ def test_keys_layout_from_grpc():
 
     # Test keys-layout with depth=2 (up to 1 slash deep)
     print("\n--- Testing keys-layout with depth=2 ---")
-    result_depth2 = run_command([metactl_bin, "keys-layout", "--grpc-api-address", grpc_addr, "--depth", "2"])
+    result_depth2 = run_command(
+        [metactl_bin, "keys-layout", "--grpc-api-address", grpc_addr, "--depth", "2"]
+    )
 
     depth2_data = result_depth2.strip().split("\n")
 

@@ -85,6 +85,14 @@ impl HashJoinProbeState {
                 if match_count == 0 {
                     continue;
                 }
+                if ProbeState::check_used(
+                    &mut probe_state.used_once,
+                    max_block_size,
+                    build_indexes_ptr,
+                    matched_idx,
+                ) {
+                    continue;
+                }
 
                 // Fill `probe_indexes`.
                 for _ in 0..match_count {
@@ -115,6 +123,14 @@ impl HashJoinProbeState {
                 let (match_count, next_ptr) =
                     hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
+                    continue;
+                }
+                if ProbeState::check_used(
+                    &mut probe_state.used_once,
+                    max_block_size,
+                    build_indexes_ptr,
+                    matched_idx,
+                ) {
                     continue;
                 }
 

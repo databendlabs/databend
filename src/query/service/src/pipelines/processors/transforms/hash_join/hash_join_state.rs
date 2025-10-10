@@ -24,32 +24,23 @@ use databend_common_base::base::tokio::sync::watch;
 use databend_common_base::base::tokio::sync::watch::Receiver;
 use databend_common_base::base::tokio::sync::watch::Sender;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FixedKey;
-use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
-use databend_common_expression::KeyAccessor;
-use databend_common_expression::KeysState;
-use databend_common_expression::ProjectedBlock;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::HashtableKeyable;
-use databend_common_hashtable::RawEntry;
 use databend_common_hashtable::RowPtr;
-use databend_common_hashtable::StringRawEntry;
-use databend_common_hashtable::STRING_EARLY_SIZE;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use ethnum::U256;
@@ -63,37 +54,46 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 use crate::sql::IndexType;
 
-pub struct SerializerHashJoinHashTable {
-    probed_rows: AtomicUsize,
-    matched_probe_rows: AtomicUsize,
-    pub(crate) hash_table: BinaryHashJoinHashMap,
+pub type SkipDuplicatesSerializerHashJoinHashTable = SerializerHashJoinHashTable<true>;
+pub type SkipDuplicatesSingleBinaryHashJoinHashTable = SingleBinaryHashJoinHashTable<true>;
+pub type SkipDuplicatesFixedKeyHashJoinHashTable<T> = FixedKeyHashJoinHashTable<T, true>;
+
+pub struct SerializerHashJoinHashTable<const SKIP_DUPLICATES: bool = false> {
+    pub(crate) hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
-pub struct SingleBinaryHashJoinHashTable {
-    probed_rows: AtomicUsize,
-    matched_probe_rows: AtomicUsize,
-    pub(crate) hash_table: BinaryHashJoinHashMap,
+pub struct SingleBinaryHashJoinHashTable<const SKIP_DUPLICATES: bool = false> {
+    pub(crate) hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
     pub(crate) hash_method: HashMethodSingleBinary,
 }
 
-pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable + FixedKey> {
-    probed_rows: AtomicUsize,
-    matched_probe_rows: AtomicUsize,
-    pub(crate) hash_table: HashJoinHashMap<T>,
+pub struct FixedKeyHashJoinHashTable<
+    T: HashtableKeyable + FixedKey,
+    const SKIP_DUPLICATES: bool = false,
+> {
+    pub(crate) hash_table: HashJoinHashMap<T, SKIP_DUPLICATES>,
     pub(crate) hash_method: HashMethodFixedKeys<T>,
 }
 
 pub enum HashJoinHashTable {
     Null,
     Serializer(SerializerHashJoinHashTable),
+    SkipDuplicatesSerializer(SkipDuplicatesSerializerHashJoinHashTable),
     SingleBinary(SingleBinaryHashJoinHashTable),
+    SkipDuplicatesSingleBinary(SkipDuplicatesSingleBinaryHashJoinHashTable),
     KeysU8(FixedKeyHashJoinHashTable<u8>),
+    SkipDuplicatesKeysU8(SkipDuplicatesFixedKeyHashJoinHashTable<u8>),
     KeysU16(FixedKeyHashJoinHashTable<u16>),
+    SkipDuplicatesKeysU16(SkipDuplicatesFixedKeyHashJoinHashTable<u16>),
     KeysU32(FixedKeyHashJoinHashTable<u32>),
+    SkipDuplicatesKeysU32(SkipDuplicatesFixedKeyHashJoinHashTable<u32>),
     KeysU64(FixedKeyHashJoinHashTable<u64>),
+    SkipDuplicatesKeysU64(SkipDuplicatesFixedKeyHashJoinHashTable<u64>),
     KeysU128(FixedKeyHashJoinHashTable<u128>),
+    SkipDuplicatesKeysU128(SkipDuplicatesFixedKeyHashJoinHashTable<u128>),
     KeysU256(FixedKeyHashJoinHashTable<U256>),
+    SkipDuplicatesKeysU256(SkipDuplicatesFixedKeyHashJoinHashTable<U256>),
 }
 
 /// Define some shared states for hash join build and probe.
@@ -164,7 +164,7 @@ impl HashJoinState {
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+            JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle | JoinType::Full
         ) {
             build_schema = build_schema_wrap_nullable(&build_schema);
         };
@@ -244,6 +244,7 @@ impl HashJoinState {
             self.hash_join_desc.join_type,
             JoinType::Full
                 | JoinType::Right
+                | JoinType::RightAny
                 | JoinType::RightSingle
                 | JoinType::RightSemi
                 | JoinType::RightAnti
@@ -346,590 +347,31 @@ impl HashJoinState {
     }
 }
 
-impl<T: HashtableKeyable + FixedKey> FixedKeyHashJoinHashTable<T> {
-    pub fn new(hash_table: HashJoinHashMap<T>, hash_method: HashMethodFixedKeys<T>) -> Self {
-        FixedKeyHashJoinHashTable::<T> {
-            hash_table,
-            hash_method,
-            probed_rows: Default::default(),
-            matched_probe_rows: Default::default(),
+impl HashJoinHashTable {
+    pub fn len(&self) -> usize {
+        match self {
+            HashJoinHashTable::Null => 0,
+            HashJoinHashTable::Serializer(table) => table.hash_table.len(),
+            HashJoinHashTable::SingleBinary(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU8(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU16(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU32(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU64(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU128(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU256(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesSerializer(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesSingleBinary(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU8(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU16(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU32(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU64(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU128(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU256(table) => table.hash_table.len(),
         }
     }
 
-    pub fn insert(&self, keys: DataBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
-        let num_rows = keys.num_rows();
-        let keys = ProjectedBlock::from(keys.columns());
-        let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
-        let build_keys_iter = self.hash_method.build_keys_iter(&keys_state)?;
-
-        let entry_size = std::mem::size_of::<RawEntry<T>>();
-        arena.reserve(num_rows * entry_size);
-
-        let mut raw_entry_ptr =
-            unsafe { std::mem::transmute::<*mut u8, *mut RawEntry<T>>(arena.as_mut_ptr()) };
-
-        for (row_index, key) in build_keys_iter.enumerate() {
-            let row_ptr = RowPtr {
-                chunk_index: chunk as u32,
-                row_index: row_index as u32,
-            };
-
-            // # Safety
-            // The memory address of `raw_entry_ptr` is valid.
-            unsafe {
-                *raw_entry_ptr = RawEntry {
-                    row_ptr,
-                    key: *key,
-                    next: 0,
-                }
-            }
-
-            self.hash_table.insert(*key, raw_entry_ptr);
-            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
-        }
-
-        Ok(())
-    }
-
-    pub fn probe_keys(
-        &self,
-        keys: DataBlock,
-        valids: Option<Bitmap>,
-    ) -> Result<Box<dyn ProbeStream>> {
-        let num_rows = keys.num_rows();
-        let hash_method = &self.hash_method;
-        let mut hashes = Vec::with_capacity(num_rows);
-
-        let keys = ProjectedBlock::from(keys.columns());
-        let keys_state = hash_method.build_keys_state(keys, num_rows)?;
-        hash_method.build_keys_hashes(&keys_state, &mut hashes);
-        let keys = hash_method.build_keys_accessor(keys_state.clone())?;
-
-        let enable_early_filtering = match self.probed_rows.load(Ordering::Relaxed) {
-            0 => false,
-            probed_rows => {
-                let matched_probe_rows = self.matched_probe_rows.load(Ordering::Relaxed) as f64;
-                matched_probe_rows / (probed_rows as f64) < 0.8
-            }
-        };
-
-        self.probed_rows.fetch_add(
-            match &valids {
-                None => num_rows,
-                Some(valids) => valids.len() - valids.null_count(),
-            },
-            Ordering::Relaxed,
-        );
-
-        match enable_early_filtering {
-            true => {
-                let mut selection = vec![0; num_rows];
-
-                match self.hash_table.early_filtering_matched_probe(
-                    &mut hashes,
-                    valids,
-                    &mut selection,
-                ) {
-                    0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-                    _ => Ok(FixedKeysProbeStream::create(hashes, keys)),
-                }
-            }
-            false => match self.hash_table.probe(&mut hashes, valids) {
-                0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-                _ => Ok(FixedKeysProbeStream::create(hashes, keys)),
-            },
-        }
-    }
-}
-
-impl SerializerHashJoinHashTable {
-    pub fn new(
-        hash_table: BinaryHashJoinHashMap,
-        hash_method: HashMethodSerializer,
-    ) -> SerializerHashJoinHashTable {
-        SerializerHashJoinHashTable {
-            hash_table,
-            hash_method,
-            probed_rows: AtomicUsize::new(0),
-            matched_probe_rows: AtomicUsize::new(0),
-        }
-    }
-
-    pub fn insert(&self, keys: DataBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
-        let num_rows = keys.num_rows();
-        let keys = ProjectedBlock::from(keys.columns());
-        let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
-        let build_keys_iter = self.hash_method.build_keys_iter(&keys_state)?;
-
-        let space_size = match &keys_state {
-            // safe to unwrap(): offset.len() >= 1.
-            KeysState::Column(Column::Bitmap(col)) => col.data().len(),
-            KeysState::Column(Column::Binary(col)) => col.data().len(),
-            KeysState::Column(Column::Variant(col)) => col.data().len(),
-            KeysState::Column(Column::String(col)) => col.total_bytes_len(),
-            _ => unreachable!(),
-        };
-
-        static ENTRY_SIZE: usize = std::mem::size_of::<StringRawEntry>();
-        arena.reserve(num_rows * ENTRY_SIZE + space_size);
-
-        let (mut raw_entry_ptr, mut string_local_space_ptr) = unsafe {
-            (
-                std::mem::transmute::<*mut u8, *mut StringRawEntry>(arena.as_mut_ptr()),
-                arena.as_mut_ptr().add(num_rows * ENTRY_SIZE),
-            )
-        };
-
-        for (row_index, key) in build_keys_iter.enumerate() {
-            let row_ptr = RowPtr {
-                chunk_index: chunk as u32,
-                row_index: row_index as u32,
-            };
-
-            // # Safety
-            // The memory address of `raw_entry_ptr` is valid.
-            // string_offset + key.len() <= space_size.
-            unsafe {
-                (*raw_entry_ptr).row_ptr = row_ptr;
-                (*raw_entry_ptr).length = key.len() as u32;
-                (*raw_entry_ptr).next = 0;
-                (*raw_entry_ptr).key = string_local_space_ptr;
-                // The size of `early` is 4.
-                std::ptr::copy_nonoverlapping(
-                    key.as_ptr(),
-                    (*raw_entry_ptr).early.as_mut_ptr(),
-                    std::cmp::min(STRING_EARLY_SIZE, key.len()),
-                );
-                std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
-                string_local_space_ptr = string_local_space_ptr.add(key.len());
-            }
-
-            self.hash_table.insert(key, raw_entry_ptr);
-            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
-        }
-
-        Ok(())
-    }
-
-    pub fn probe_keys(
-        &self,
-        keys: DataBlock,
-        valids: Option<Bitmap>,
-    ) -> Result<Box<dyn ProbeStream>> {
-        let num_rows = keys.num_rows();
-        let hash_method = &self.hash_method;
-        let mut hashes = Vec::with_capacity(num_rows);
-
-        let keys = ProjectedBlock::from(keys.columns());
-        let keys_state = hash_method.build_keys_state(keys, num_rows)?;
-        hash_method.build_keys_hashes(&keys_state, &mut hashes);
-        let keys = hash_method.build_keys_accessor(keys_state.clone())?;
-
-        let enable_early_filtering = match self.probed_rows.load(Ordering::Relaxed) {
-            0 => false,
-            probed_rows => {
-                let matched_probe_rows = self.matched_probe_rows.load(Ordering::Relaxed) as f64;
-                matched_probe_rows / (probed_rows as f64) < 0.8
-            }
-        };
-
-        self.probed_rows.fetch_add(
-            match &valids {
-                None => keys.len(),
-                Some(valids) => valids.len() - valids.null_count(),
-            },
-            Ordering::Relaxed,
-        );
-
-        match enable_early_filtering {
-            true => {
-                let mut selection = vec![0; keys.len()];
-
-                match self.hash_table.early_filtering_matched_probe(
-                    &mut hashes,
-                    valids,
-                    &mut selection,
-                ) {
-                    0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-                    _ => Ok(BinaryKeyProbeStream::create(hashes, keys)),
-                }
-            }
-            false => match self.hash_table.probe(&mut hashes, valids) {
-                0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-                _ => Ok(BinaryKeyProbeStream::create(hashes, keys)),
-            },
-        }
-    }
-}
-
-impl SingleBinaryHashJoinHashTable {
-    pub fn new(
-        hash_table: BinaryHashJoinHashMap,
-        hash_method: HashMethodSingleBinary,
-    ) -> SingleBinaryHashJoinHashTable {
-        SingleBinaryHashJoinHashTable {
-            hash_table,
-            hash_method,
-            probed_rows: AtomicUsize::new(0),
-            matched_probe_rows: AtomicUsize::new(0),
-        }
-    }
-
-    pub fn insert(&self, keys: DataBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
-        let num_rows = keys.num_rows();
-        let keys = ProjectedBlock::from(keys.columns());
-        let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
-        let build_keys_iter = self.hash_method.build_keys_iter(&keys_state)?;
-
-        let space_size = match &keys_state {
-            // safe to unwrap(): offset.len() >= 1.
-            KeysState::Column(Column::Bitmap(col)) => col.data().len(),
-            KeysState::Column(Column::Binary(col)) => col.data().len(),
-            KeysState::Column(Column::Variant(col)) => col.data().len(),
-            KeysState::Column(Column::String(col)) => col.total_bytes_len(),
-            _ => unreachable!(),
-        };
-
-        static ENTRY_SIZE: usize = std::mem::size_of::<StringRawEntry>();
-        arena.reserve(num_rows * ENTRY_SIZE + space_size);
-
-        let (mut raw_entry_ptr, mut string_local_space_ptr) = unsafe {
-            (
-                std::mem::transmute::<*mut u8, *mut StringRawEntry>(arena.as_mut_ptr()),
-                arena.as_mut_ptr().add(num_rows * ENTRY_SIZE),
-            )
-        };
-
-        for (row_index, key) in build_keys_iter.enumerate() {
-            let row_ptr = RowPtr {
-                chunk_index: chunk as u32,
-                row_index: row_index as u32,
-            };
-
-            // # Safety
-            // The memory address of `raw_entry_ptr` is valid.
-            // string_offset + key.len() <= space_size.
-            unsafe {
-                (*raw_entry_ptr).row_ptr = row_ptr;
-                (*raw_entry_ptr).length = key.len() as u32;
-                (*raw_entry_ptr).next = 0;
-                (*raw_entry_ptr).key = string_local_space_ptr;
-                // The size of `early` is 4.
-                std::ptr::copy_nonoverlapping(
-                    key.as_ptr(),
-                    (*raw_entry_ptr).early.as_mut_ptr(),
-                    std::cmp::min(STRING_EARLY_SIZE, key.len()),
-                );
-                std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
-                string_local_space_ptr = string_local_space_ptr.add(key.len());
-            }
-
-            self.hash_table.insert(key, raw_entry_ptr);
-            raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
-        }
-
-        Ok(())
-    }
-
-    pub fn probe_keys(
-        &self,
-        keys: DataBlock,
-        valids: Option<Bitmap>,
-    ) -> Result<Box<dyn ProbeStream>> {
-        let num_rows = keys.num_rows();
-        let hash_method = &self.hash_method;
-        let mut hashes = Vec::with_capacity(num_rows);
-
-        let keys = ProjectedBlock::from(keys.columns());
-        let keys_state = hash_method.build_keys_state(keys, num_rows)?;
-        hash_method.build_keys_hashes(&keys_state, &mut hashes);
-        let keys = hash_method.build_keys_accessor(keys_state.clone())?;
-
-        let enable_early_filtering = match self.probed_rows.load(Ordering::Relaxed) {
-            0 => false,
-            probed_rows => {
-                let matched_probe_rows = self.matched_probe_rows.load(Ordering::Relaxed) as f64;
-                matched_probe_rows / (probed_rows as f64) < 0.8
-            }
-        };
-
-        self.probed_rows.fetch_add(
-            match &valids {
-                None => keys.len(),
-                Some(valids) => valids.len() - valids.null_count(),
-            },
-            Ordering::Relaxed,
-        );
-
-        match enable_early_filtering {
-            true => {
-                let mut selection = vec![0; keys.len()];
-
-                match self.hash_table.early_filtering_matched_probe(
-                    &mut hashes,
-                    valids,
-                    &mut selection,
-                ) {
-                    0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-                    _ => Ok(BinaryKeyProbeStream::create(hashes, keys)),
-                }
-            }
-            false => match self.hash_table.probe(&mut hashes, valids) {
-                0 => Ok(AllUnmatchedProbeStream::create(hashes.len())),
-                _ => Ok(BinaryKeyProbeStream::create(hashes, keys)),
-            },
-        }
-    }
-}
-
-pub struct ProbeKeysResult {
-    pub unmatched: Vec<usize>,
-    pub matched_probe: Vec<u64>,
-    pub matched_build: Vec<RowPtr>,
-}
-
-impl ProbeKeysResult {
-    pub fn empty() -> ProbeKeysResult {
-        ProbeKeysResult::new(vec![], vec![], vec![])
-    }
-
-    pub fn new(
-        unmatched: Vec<usize>,
-        matched_probe: Vec<u64>,
-        matched_build: Vec<RowPtr>,
-    ) -> ProbeKeysResult {
-        assert_eq!(matched_build.len(), matched_probe.len());
-
-        ProbeKeysResult {
-            unmatched,
-            matched_probe,
-            matched_build,
-        }
-    }
-
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
-        self.matched_build.is_empty() && self.unmatched.is_empty()
-    }
-
-    pub fn is_all_unmatched(&self) -> bool {
-        self.matched_build.is_empty() && !self.unmatched.is_empty()
-    }
-
-    pub fn all_unmatched(unmatched: Vec<usize>) -> ProbeKeysResult {
-        ProbeKeysResult::new(unmatched, vec![], vec![])
-    }
-}
-
-pub trait ProbeStream {
-    fn next(&mut self, max_rows: usize) -> Result<ProbeKeysResult>;
-}
-
-pub struct AllUnmatchedProbeStream {
-    idx: usize,
-    size: usize,
-}
-
-impl AllUnmatchedProbeStream {
-    pub fn create(size: usize) -> Box<dyn ProbeStream> {
-        Box::new(AllUnmatchedProbeStream { idx: 0, size })
-    }
-}
-
-impl ProbeStream for AllUnmatchedProbeStream {
-    fn next(&mut self, max_rows: usize) -> Result<ProbeKeysResult> {
-        if self.idx >= self.size {
-            return Ok(ProbeKeysResult::empty());
-        }
-
-        let res = std::cmp::min(self.size - self.idx, max_rows);
-        let res = (self.idx..self.idx + res).collect::<Vec<_>>();
-        self.idx += res.len();
-        Ok(ProbeKeysResult::all_unmatched(res))
-    }
-}
-
-pub struct FixedKeysProbeStream<Key: FixedKey + HashtableKeyable> {
-    key_idx: usize,
-    pointers: Vec<u64>,
-    keys: Box<(dyn KeyAccessor<Key = Key>)>,
-    probe_entry_ptr: u64,
-}
-
-impl<Key: FixedKey + HashtableKeyable> FixedKeysProbeStream<Key> {
-    pub fn create(
-        pointers: Vec<u64>,
-        keys: Box<dyn KeyAccessor<Key = Key>>,
-    ) -> Box<dyn ProbeStream> {
-        Box::new(FixedKeysProbeStream {
-            keys,
-            pointers,
-            key_idx: 0,
-            probe_entry_ptr: 0,
-        })
-    }
-}
-
-impl<Key: FixedKey + HashtableKeyable> ProbeStream for FixedKeysProbeStream<Key> {
-    fn next(&mut self, max_rows: usize) -> Result<ProbeKeysResult> {
-        unsafe {
-            let mut matched_build = Vec::with_capacity(max_rows);
-            let mut matched_probe = Vec::with_capacity(max_rows);
-            let mut unmatched = Vec::with_capacity(max_rows);
-
-            while self.key_idx < self.keys.len() {
-                std::hint::assert_unchecked(unmatched.len() <= unmatched.capacity());
-                std::hint::assert_unchecked(matched_probe.len() == matched_build.len());
-                std::hint::assert_unchecked(matched_build.len() <= matched_build.capacity());
-                std::hint::assert_unchecked(matched_probe.len() <= matched_probe.capacity());
-
-                if matched_probe.len() == max_rows {
-                    break;
-                }
-
-                if self.probe_entry_ptr == 0 {
-                    self.probe_entry_ptr = *self.pointers.get_unchecked(self.key_idx);
-
-                    if self.probe_entry_ptr == 0 {
-                        unmatched.push(self.key_idx);
-                        self.key_idx += 1;
-                        continue;
-                    }
-                }
-
-                let key = self.keys.key_unchecked(self.key_idx);
-
-                while self.probe_entry_ptr != 0 {
-                    let raw_entry = &*(self.probe_entry_ptr as *mut RawEntry<Key>);
-
-                    if key == &raw_entry.key {
-                        let row_ptr = raw_entry.row_ptr;
-                        matched_probe.push(self.key_idx as u64);
-                        matched_build.push(row_ptr);
-
-                        if matched_probe.len() == max_rows {
-                            self.probe_entry_ptr = raw_entry.next;
-
-                            if self.probe_entry_ptr == 0 {
-                                self.key_idx += 1;
-                            }
-
-                            return Ok(ProbeKeysResult::new(
-                                unmatched,
-                                matched_probe,
-                                matched_build,
-                            ));
-                        }
-                    }
-
-                    self.probe_entry_ptr = raw_entry.next;
-                }
-
-                self.key_idx += 1;
-            }
-
-            Ok(ProbeKeysResult::new(
-                unmatched,
-                matched_probe,
-                matched_build,
-            ))
-        }
-    }
-}
-
-struct BinaryKeyProbeStream {
-    key_idx: usize,
-    pointers: Vec<u64>,
-    keys: Box<(dyn KeyAccessor<Key = [u8]>)>,
-    probe_entry_ptr: u64,
-}
-
-impl BinaryKeyProbeStream {
-    pub fn create(
-        pointers: Vec<u64>,
-        keys: Box<dyn KeyAccessor<Key = [u8]>>,
-    ) -> Box<dyn ProbeStream> {
-        Box::new(BinaryKeyProbeStream {
-            keys,
-            pointers,
-            key_idx: 0,
-            probe_entry_ptr: 0,
-        })
-    }
-}
-
-impl ProbeStream for BinaryKeyProbeStream {
-    fn next(&mut self, max_rows: usize) -> Result<ProbeKeysResult> {
-        unsafe {
-            let mut matched_build = Vec::with_capacity(max_rows);
-            let mut matched_probe = Vec::with_capacity(max_rows);
-            let mut unmatched = Vec::with_capacity(max_rows);
-
-            while self.key_idx < self.keys.len() {
-                std::hint::assert_unchecked(unmatched.len() <= unmatched.capacity());
-                std::hint::assert_unchecked(matched_probe.len() == matched_build.len());
-                std::hint::assert_unchecked(matched_build.len() <= matched_build.capacity());
-                std::hint::assert_unchecked(matched_probe.len() <= matched_probe.capacity());
-
-                if matched_probe.len() == max_rows {
-                    break;
-                }
-
-                if self.probe_entry_ptr == 0 {
-                    self.probe_entry_ptr = *self.pointers.get_unchecked(self.key_idx);
-
-                    if self.probe_entry_ptr == 0 {
-                        unmatched.push(self.key_idx);
-                        self.key_idx += 1;
-                        continue;
-                    }
-                }
-
-                let key = self.keys.key_unchecked(self.key_idx);
-
-                while self.probe_entry_ptr != 0 {
-                    let raw_entry = &*(self.probe_entry_ptr as *mut StringRawEntry);
-                    // Compare `early` and the length of the string, the size of `early` is 4.
-                    let min_len = std::cmp::min(STRING_EARLY_SIZE, key.len());
-
-                    if raw_entry.length as usize == key.len()
-                        && key[0..min_len] == raw_entry.early[0..min_len]
-                    {
-                        let key_ref = std::slice::from_raw_parts(
-                            raw_entry.key as *const u8,
-                            raw_entry.length as usize,
-                        );
-                        if key == key_ref {
-                            let row_ptr = raw_entry.row_ptr;
-                            matched_probe.push(self.key_idx as u64);
-                            matched_build.push(row_ptr);
-
-                            if matched_probe.len() == max_rows {
-                                self.probe_entry_ptr = raw_entry.next;
-
-                                if self.probe_entry_ptr == 0 {
-                                    self.key_idx += 1;
-                                }
-
-                                return Ok(ProbeKeysResult::new(
-                                    unmatched,
-                                    matched_probe,
-                                    matched_build,
-                                ));
-                            }
-                        }
-                    }
-
-                    self.probe_entry_ptr = raw_entry.next;
-                }
-
-                self.key_idx += 1;
-            }
-
-            Ok(ProbeKeysResult::new(
-                unmatched,
-                matched_probe,
-                matched_build,
-            ))
-        }
+        self.len() == 0
     }
 }

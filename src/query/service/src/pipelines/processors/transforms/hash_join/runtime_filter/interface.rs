@@ -18,9 +18,9 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_storages_fuse::TableContext;
 
-use super::builder::build_runtime_filter_packet;
 use super::convert::build_runtime_filter_infos;
 use super::global::get_global_runtime_filter_packet;
+use crate::pipelines::processors::transforms::build_runtime_filter_packet;
 use crate::pipelines::processors::HashJoinBuildState;
 
 pub async fn build_and_push_down_runtime_filter(

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::JoinPredicate;
 use databend_common_sql::optimizer::ir::RelExpr;
@@ -40,6 +41,11 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
     );
 
+    if join.equi_conditions.is_empty() && join.join_type.is_any_join() {
+        return Err(ErrorCode::SemanticError(
+            "ANY JOIN only supports equality-based hash joins",
+        ));
+    }
     if !join.equi_conditions.is_empty() && !check_asof {
         // Contain equi condition, use hash join
         return Ok(PhysicalJoinType::Hash);

@@ -140,8 +140,11 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
             RelOperator::Join(join) => {
                 let join_type = match join.join_type {
                     JoinType::Inner => "Inner",
+                    JoinType::InnerAny => "InnerAny",
                     JoinType::Left => "Left",
+                    JoinType::LeftAny => "LeftAny",
                     JoinType::Right => "Right",
+                    JoinType::RightAny => "RightAny",
                     JoinType::Full => "Full",
                     JoinType::Cross => "Cross",
                     JoinType::LeftSemi => "LeftSemi",
@@ -288,7 +291,7 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
     println!("Actual after pattern:\n{}", normalized_after);
 
     // Special handling for RIGHT JOIN which might be converted to INNER JOIN
-    if test_case.join_type == JoinType::Right {
+    if matches!(test_case.join_type, JoinType::Right) {
         // Check if filter was pushed down correctly even if join type changed
         let expected_filter_pushed =
             normalized_after_expected.contains("Filter") && normalized_after.contains("Filter");
