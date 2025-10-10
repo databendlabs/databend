@@ -15,7 +15,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 
-/// Monotonic timestamp marking when vacuum cleanup started for a tenant.
+/// Monotonic timestamp marker indicating when vacuum cleanup started for a tenant.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VacuumWatermark {
     pub time: DateTime<Utc>,
@@ -24,13 +24,5 @@ pub struct VacuumWatermark {
 impl VacuumWatermark {
     pub fn new(time: DateTime<Utc>) -> Self {
         Self { time }
-    }
-}
-
-impl Default for VacuumWatermark {
-    fn default() -> Self {
-        Self {
-            time: DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
-        }
     }
 }
