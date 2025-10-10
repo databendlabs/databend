@@ -8,7 +8,6 @@ import sys
 
 
 def tcp_ping(port, timeout):
-
     now = time.time()
 
     while time.time() - now < timeout:
