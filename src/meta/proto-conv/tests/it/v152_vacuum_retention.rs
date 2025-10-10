@@ -38,7 +38,7 @@ fn test_decode_v152_vacuum_retention() -> anyhow::Result<()> {
     ];
 
     let want = || mt::VacuumWatermark {
-        time: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(), // 2023-12-15 01:26:09 UTC
+        time: "2023-12-15T01:26:09Z".parse::<DateTime<Utc>>().unwrap(),
     };
 
     common::test_pb_from_to(func_name!(), want())?;
