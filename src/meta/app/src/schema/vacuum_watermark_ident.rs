@@ -34,7 +34,7 @@ mod kvapi_impl {
     pub struct VacuumWatermarkRsc;
 
     impl TenantResource for VacuumWatermarkRsc {
-        const PREFIX: &'static str = "__fd_vacuum_retention_ts";
+        const PREFIX: &'static str = "__fd_vacuum_watermark_ts";
         const HAS_TENANT: bool = true;
         type ValueType = VacuumWatermark;
     }
@@ -61,7 +61,7 @@ mod tests {
         let ident = VacuumWatermarkIdent::new_global(tenant);
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_vacuum_retention_ts/dummy");
+        assert_eq!(key, "__fd_vacuum_watermark_ts/dummy");
 
         assert_eq!(ident, VacuumWatermarkIdent::from_str_key(&key).unwrap());
     }
