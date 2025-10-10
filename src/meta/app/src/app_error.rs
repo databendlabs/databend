@@ -264,7 +264,7 @@ impl UndropTableHasNoHistory {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("Cannot undrop table '{table_name}': table was dropped before vacuum cleanup started")]
+#[error("Cannot undrop table '{table_name}': table was dropped before vacuum started")]
 pub struct UndropTableRetentionGuard {
     table_name: String,
     drop_time: DateTime<Utc>,
@@ -1499,8 +1499,10 @@ impl AppErrorMessage for UndropTableWithNoDropTime {
 impl AppErrorMessage for UndropTableRetentionGuard {
     fn message(&self) -> String {
         format!(
-            "Cannot undrop table '{}': table was dropped before vacuum cleanup started at {}",
-            self.table_name, self.retention
+            "Cannot undrop table '{}': table was dropped at {} before vacuum started at {}. Data may have been cleaned up.",
+            self.table_name,
+            self.drop_time.format("%Y-%m-%d %H:%M:%S UTC"),
+            self.retention.format("%Y-%m-%d %H:%M:%S UTC")
         )
     }
 }
