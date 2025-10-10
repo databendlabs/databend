@@ -803,7 +803,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             if let Some(constraint) = self.extract_range_constraint(arg) {
                 column_constraints
                     .entry(constraint.column_id.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(constraint);
             }
         }
@@ -829,51 +829,48 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
     /// Extract range constraint from a comparison expression
     fn extract_range_constraint(&self, expr: &Expr<Index>) -> Option<RangeConstraint<Index>> {
-        match expr {
-            Expr::FunctionCall(FunctionCall { function, args, .. }) => {
-                if args.len() != 2 {
-                    return None;
-                }
-
-                let op = function.signature.name.as_str();
-                if !matches!(op, "gt" | "gte" | "lt" | "lte" | "eq" | "noteq") {
-                    return None;
-                }
-
-                // Try both orders: column op constant and constant op column
-                if let (Some(column_ref), Some(constant)) =
-                    (args[0].as_column_ref(), args[1].as_constant())
-                {
-                    return Some(RangeConstraint {
-                        column_id: column_ref.id.clone(),
-                        data_type: column_ref.data_type.clone(),
-                        operator: op.to_string(),
-                        constant: constant.scalar.clone(),
-                        is_flipped: false,
-                    });
-                } else if let (Some(constant), Some(column_ref)) =
-                    (args[0].as_constant(), args[1].as_column_ref())
-                {
-                    // Flip the operator for constant op column
-                    let flipped_op = match op {
-                        "gt" => "lt",
-                        "gte" => "lte",
-                        "lt" => "gt",
-                        "lte" => "gte",
-                        "eq" => "eq",
-                        "noteq" => "noteq",
-                        _ => return None,
-                    };
-                    return Some(RangeConstraint {
-                        column_id: column_ref.id.clone(),
-                        data_type: column_ref.data_type.clone(),
-                        operator: flipped_op.to_string(),
-                        constant: constant.scalar.clone(),
-                        is_flipped: true,
-                    });
-                }
+        if let Expr::FunctionCall(FunctionCall { function, args, .. }) = expr {
+            if args.len() != 2 {
+                return None;
             }
-            _ => {}
+
+            let op = function.signature.name.as_str();
+            if !matches!(op, "gt" | "gte" | "lt" | "lte" | "eq" | "noteq") {
+                return None;
+            }
+
+            // Try both orders: column op constant and constant op column
+            if let (Some(column_ref), Some(constant)) =
+                (args[0].as_column_ref(), args[1].as_constant())
+            {
+                return Some(RangeConstraint {
+                    column_id: column_ref.id.clone(),
+                    data_type: column_ref.data_type.clone(),
+                    operator: op.to_string(),
+                    constant: constant.scalar.clone(),
+                    is_flipped: false,
+                });
+            } else if let (Some(constant), Some(column_ref)) =
+                (args[0].as_constant(), args[1].as_column_ref())
+            {
+                // Flip the operator for constant op column
+                let flipped_op = match op {
+                    "gt" => "lt",
+                    "gte" => "lte",
+                    "lt" => "gt",
+                    "lte" => "gte",
+                    "eq" => "eq",
+                    "noteq" => "noteq",
+                    _ => return None,
+                };
+                return Some(RangeConstraint {
+                    column_id: column_ref.id.clone(),
+                    data_type: column_ref.data_type.clone(),
+                    operator: flipped_op.to_string(),
+                    constant: constant.scalar.clone(),
+                    is_flipped: true,
+                });
+            }
         }
         None
     }
@@ -894,18 +891,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         // or x > a AND x <= b where a >= b
         // or x >= a AND x <= b where a > b
         match (c1.operator.as_str(), c2.operator.as_str()) {
-            ("gt", "lt") | ("lt", "gt") => {
-                c1.constant >= c2.constant
-            }
-            ("gt", "lte") | ("lte", "gt") => {
-                c1.constant >= c2.constant
-            }
-            ("gte", "lt") | ("lt", "gte") => {
-                c1.constant >= c2.constant
-            }
-            ("gte", "lte") | ("lte", "gte") => {
-                c1.constant > c2.constant
-            }
+            ("gt", "lt") | ("lt", "gt") => c1.constant >= c2.constant,
+            ("gt", "lte") | ("lte", "gt") => c1.constant >= c2.constant,
+            ("gte", "lt") | ("lt", "gte") => c1.constant >= c2.constant,
+            ("gte", "lte") | ("lte", "gte") => c1.constant > c2.constant,
             ("eq", "gt") | ("gt", "eq") => {
                 // x = a AND x > b where a <= b
                 c1.constant <= c2.constant

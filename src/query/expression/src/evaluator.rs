@@ -2054,7 +2054,6 @@ impl<'a> Evaluator<'a> {
     }
 }
 
-
 struct CheckStrictValue;
 
 impl ValueVisitor for CheckStrictValue {
