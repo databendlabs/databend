@@ -242,7 +242,7 @@ mod tests {
     fn test_typo_corrections() {
         // Typo corrections - may return multiple suggestions if scores are close
         assert_eq!(
-            suggest_correction("show tabl"),
+            suggest_correction("show tabl"), // typos:disable-line
             Some("Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?".to_string())
         );
         assert_eq!(
@@ -316,7 +316,7 @@ mod tests {
     fn test_edit_distance() {
         assert_eq!(edit_distance("show", "show"), 0);
         assert_eq!(edit_distance("tempare", "temporary"), 3);
-        assert_eq!(edit_distance("tabl", "tables"), 2);
+        assert_eq!(edit_distance("tabl", "tables"), 2); // typos:disable-line
     }
 
     #[test]

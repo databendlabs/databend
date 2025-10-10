@@ -1,5 +1,12 @@
 # If there are words that you think should not be treated as typo.
 # Please list here along with a comment.
+
+[default]
+extend-ignore-re = [
+    "(?Rm)^.*(#|//)\\s*typos:disable-line$",
+    "(#|//)\\s*typos:ignore-next-line\\n.*",
+]
+
 [default.extend-words]
 # Preserved for NdJson
 Nd = "Nd"
@@ -17,20 +24,9 @@ between_dows = "between_dows"
 
 into_flate2 = "into_flate2"
 
-# Intentional typos used in SQL error suggestion test cases
-tabl = "tabl"
-
-[default]
-extend-ignore-identifiers-re = ["^*{6}"]
-
 [files]
 extend-exclude = [
     "**/Cargo.toml",
     "benchmark/",
     "tests/",
 ]
-
-[type.utils]
-extend-glob = ["utils.rs"]
-# test
-extend-identifiers = {abd = "abd"}
