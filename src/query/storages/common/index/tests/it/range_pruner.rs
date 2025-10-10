@@ -62,6 +62,10 @@ fn test_range_index() -> Result<()> {
     run_text(file, "a >= 2 and a <= 2", domains);
     run_text(file, "a >= 1 and a < 3", domains);
     run_text(file, "a > 1 and a <= 2", domains);
+    run_text(file, "a > 2 and a = 2", domains);
+    run_text(file, "a < 5 and a = 2", domains);
+    run_text(file, "a = 2 and a < 5", domains);
+    run_text(file, "a > 1 and a = 2", domains);
 
     // test complex expressions with multiple columns
     run_text(file, "a > 2 and a < 1 and b = 1", domains);
@@ -156,6 +160,28 @@ fn test_range_index_dates() -> Result<()> {
         vec![TableField::new("ts", TableDataType::Timestamp)],
     );
 
+    Ok(())
+}
+
+#[test]
+fn test_range_index_strings() -> Result<()> {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("test_range_index_strings.txt").unwrap();
+
+    // String scalar helper
+    fn string_scalar(s: &str) -> Scalar {
+        Scalar::String(s.to_string())
+    }
+
+    // Test date ranges
+    let string_domains = &[("s", string_scalar("aaefg"), string_scalar("zzefg"))];
+    run_text_with_schema(file, "s > 'efg' and s = 'efg'", string_domains, vec![
+        TableField::new("s", TableDataType::String),
+    ]);
+
+    run_text_with_schema(file, "s > 'aaefg' and s < 'zzefg'", string_domains, vec![
+        TableField::new("s", TableDataType::String),
+    ]);
     Ok(())
 }
 

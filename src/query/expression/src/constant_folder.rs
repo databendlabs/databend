@@ -895,32 +895,56 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         // or x > a AND x <= b where a >= b
         // or x >= a AND x <= b where a > b
         match (c1.operator.as_str(), c2.operator.as_str()) {
-            ("gt", "lt") | ("lt", "gt") => c1.constant >= c2.constant,
-            ("gt", "lte") | ("lte", "gt") => c1.constant >= c2.constant,
-            ("gte", "lt") | ("lt", "gte") => c1.constant >= c2.constant,
-            ("gte", "lte") | ("lte", "gte") => c1.constant > c2.constant,
-            ("eq", "gt") | ("gt", "eq") => {
+            ("gt", "lt") => c1.constant >= c2.constant,
+            ("lt", "gt") => c2.constant >= c1.constant,
+            ("gt", "lte") => c1.constant >= c2.constant,
+            ("lte", "gt") => c2.constant >= c1.constant,
+            ("gte", "lt") => c1.constant >= c2.constant,
+            ("lt", "gte") => c2.constant >= c1.constant,
+            ("gte", "lte") => c1.constant > c2.constant,
+            ("lte", "gte") => c2.constant > c1.constant,
+            ("eq", "gt") => {
                 // x = a AND x > b where a <= b
                 c1.constant <= c2.constant
             }
-            ("eq", "gte") | ("gte", "eq") => {
+            ("gt", "eq") => {
+                // x > a AND x = b where b <= a (互斥)
+                c2.constant <= c1.constant
+            }
+            ("eq", "gte") => {
                 // x = a AND x >= b where a < b
                 c1.constant < c2.constant
             }
-            ("eq", "lt") | ("lt", "eq") => {
+            ("gte", "eq") => {
+                // x >= a AND x = b where b < a
+                c2.constant < c1.constant
+            }
+            ("eq", "lt") => {
                 // x = a AND x < b where a >= b
                 c1.constant >= c2.constant
             }
-            ("eq", "lte") | ("lte", "eq") => {
+            ("lt", "eq") => {
+                // x < a AND x = b where b >= a
+                c2.constant >= c1.constant
+            }
+            ("eq", "lte") => {
                 // x = a AND x <= b where a > b
                 c1.constant > c2.constant
+            }
+            ("lte", "eq") => {
+                // x <= a AND x = b where b > a
+                c2.constant > c1.constant
             }
             ("eq", "eq") => {
                 // x = a AND x = b where a != b
                 c1.constant != c2.constant
             }
-            ("eq", "noteq") | ("noteq", "eq") => {
+            ("eq", "noteq") => {
                 // x = a AND x != b where a == b
+                c1.constant == c2.constant
+            }
+            ("noteq", "eq") => {
+                // x != a AND x = b where a == b
                 c1.constant == c2.constant
             }
             _ => false,
