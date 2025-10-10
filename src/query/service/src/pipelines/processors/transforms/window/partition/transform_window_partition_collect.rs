@@ -40,6 +40,7 @@ use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
+use crate::spillers::WindowSpiller;
 
 enum WindowBuffer {
     V1(WindowPartitionBuffer),
@@ -49,14 +50,15 @@ enum WindowBuffer {
 impl WindowBuffer {
     fn new(
         is_v2: bool,
-        spiller: Spiller,
+        partition_spiller: Spiller,
+        writer_spiller: WindowSpiller,
         num_partitions: usize,
         sort_block_size: usize,
         memory_settings: MemorySettings,
     ) -> Result<Self> {
         if is_v2 {
             let inner = WindowPartitionBufferV2::new(
-                spiller,
+                writer_spiller,
                 num_partitions,
                 sort_block_size,
                 memory_settings,
@@ -64,7 +66,7 @@ impl WindowBuffer {
             Ok(Self::V2(inner))
         } else {
             let inner = WindowPartitionBuffer::new(
-                spiller,
+                partition_spiller,
                 num_partitions,
                 sort_block_size,
                 memory_settings,
@@ -179,15 +181,18 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
             use_parquet: settings.get_spilling_file_format()?.is_parquet(),
         };
 
-        // Create an inner `Spiller` to spill data.
+        // Create spillers for window operator.
         let operator = DataOperator::instance().spill_operator();
-        let spiller = Spiller::create(ctx, operator, spill_config)?;
+        let partition_spiller =
+            Spiller::create(ctx.clone(), operator.clone(), spill_config.clone())?;
+        let window_spiller = WindowSpiller::create(ctx, operator, spill_config)?;
 
         // Create the window partition buffer.
         let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
         let buffer = WindowBuffer::new(
             true,
-            spiller,
+            partition_spiller,
+            window_spiller,
             partitions.len(),
             sort_block_size,
             memory_settings,

@@ -22,7 +22,7 @@ use databend_common_pipeline_transforms::MemorySettings;
 use super::concat_data_blocks;
 use crate::spillers::SpillReader;
 use crate::spillers::SpillWriter;
-use crate::spillers::Spiller;
+use crate::spillers::WindowSpiller;
 
 #[async_trait::async_trait]
 pub trait Reader: Send {
@@ -46,7 +46,7 @@ pub trait Builder: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl Builder for Spiller {
+impl Builder for WindowSpiller {
     type Writer = SpillWriter;
 
     async fn create(&self, schema: Arc<DataSchema>) -> Result<SpillWriter> {
@@ -181,7 +181,7 @@ where
     }
 }
 
-pub(super) type WindowPartitionBufferV2 = PartitionBuffer<Spiller>;
+pub(super) type WindowPartitionBufferV2 = PartitionBuffer<WindowSpiller>;
 
 pub(super) struct PartitionBuffer<B>
 where B: Builder
@@ -196,9 +196,11 @@ where B: Builder
     next_to_restore_partition_id: isize,
 }
 
-impl PartitionBuffer<Spiller> {
+impl<B> PartitionBuffer<B>
+where B: Builder
+{
     pub fn new(
-        spiller: Spiller,
+        spiller: B,
         num_partitions: usize,
         sort_block_size: usize,
         memory_settings: MemorySettings,

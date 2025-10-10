@@ -277,7 +277,7 @@ impl Spiller {
         };
 
         // Record statistics.
-        record_read_profile(location, &instant, data.len());
+        record_read_profile(location.is_local(), &instant, data.len());
 
         // Deserialize partitioned data block.
         let mut partitioned_data = Vec::with_capacity(partitions.len());
@@ -311,7 +311,7 @@ impl Spiller {
             Location::Remote(loc) => self.operator.read_with(loc).range(data_range).await?,
         };
 
-        record_read_profile(location, &instant, data.len());
+        record_read_profile(location.is_local(), &instant, data.len());
 
         deserialize_block(layout, data)
     }
@@ -354,20 +354,55 @@ impl Spiller {
             .cloned()
             .collect()
     }
+}
 
-    pub fn new_spill_writer(&self, schema: Arc<DataSchema>) -> Result<SpillWriter> {
+#[derive(Clone)]
+pub struct WindowWriterAdapter {
+    ctx: Arc<QueryContext>,
+    buffer_pool: Arc<BufferPool>,
+    chunk_size: usize,
+}
+
+impl WindowWriterAdapter {
+    fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
+        if location.is_remote() {
+            self.ctx.as_ref().incr_spill_progress(1, size);
+            self.ctx
+                .as_ref()
+                .add_spill_file(location.clone(), layout.clone());
+        }
+    }
+}
+
+pub type WindowSpiller = SpillerInner<WindowWriterAdapter>;
+
+impl WindowSpiller {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        operator: Operator,
+        config: SpillerConfig,
+    ) -> Result<Self> {
         let runtime = GlobalIORuntime::instance();
         let buffer_pool = BufferPool::create(
             runtime,
             WINDOW_SPILL_BUFFER_MEMORY_BYTES,
             WINDOW_SPILL_BUFFER_WORKERS,
         );
+        Self::new(
+            WindowWriterAdapter {
+                ctx,
+                buffer_pool,
+                chunk_size: WINDOW_SPILL_CHUNK_SIZE,
+            },
+            operator,
+            config,
+        )
+    }
 
+    pub fn new_spill_writer(&self, schema: Arc<DataSchema>) -> Result<SpillWriter> {
         Ok(SpillWriter {
             spiller: self.clone(),
-            buffer_pool,
-            dio: self.temp_dir.is_some(),
-            chunk_size: WINDOW_SPILL_CHUNK_SIZE,
+            chunk_size: self.adapter.chunk_size,
             schema,
             file_writer: None,
         })
@@ -389,9 +424,7 @@ const WINDOW_SPILL_BUFFER_WORKERS: usize = 2;
 const WINDOW_SPILL_CHUNK_SIZE: usize = 8 * 1024 * 1024;
 
 pub struct SpillWriter {
-    spiller: Spiller,
-    buffer_pool: Arc<BufferPool>,
-    dio: bool,
+    spiller: WindowSpiller,
     chunk_size: usize,
     schema: Arc<DataSchema>,
     file_writer: Option<FileWriter<UnionFileWriter>>,
@@ -405,7 +438,11 @@ impl SpillWriter {
 
         let writer = self
             .spiller
-            .new_file_writer(&self.schema, &self.buffer_pool, self.dio, self.chunk_size)
+            .new_file_writer(
+                &self.schema,
+                &self.spiller.adapter.buffer_pool,
+                self.chunk_size,
+            )
             .await?;
         self.file_writer = Some(writer);
         Ok(())
@@ -475,17 +512,15 @@ impl SpillWriter {
             schema: self.schema,
             parquet_metadata: Arc::new(metadata),
             union_file,
-            dio: self.dio,
         })
     }
 }
 
 pub struct SpillReader {
-    spiller: Spiller,
+    spiller: WindowSpiller,
     schema: Arc<DataSchema>,
     parquet_metadata: Arc<ParquetMetaData>,
     union_file: UnionFile,
-    dio: bool,
 }
 
 impl SpillReader {
@@ -500,7 +535,6 @@ impl SpillReader {
                 self.parquet_metadata.clone(),
                 &self.schema,
                 ordinals,
-                self.dio,
             )
             .await
     }
@@ -613,9 +647,7 @@ impl LiteSpiller {
                 Location::Local(_) => None,
             })
             .collect();
-        let op = self.0.local_operator.as_ref().unwrap_or(&self.0.operator);
-
-        op.delete_iter(files).await?;
+        self.0.operator.delete_iter(files).await?;
         Ok(())
     }
 }

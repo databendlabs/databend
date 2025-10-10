@@ -53,7 +53,6 @@ use parquet::schema::types::SchemaDescriptor;
 
 use super::async_buffer::BufferPool;
 use super::async_buffer::BufferWriter;
-use super::SpillAdapter;
 use super::SpillerInner;
 
 pub struct RowGroupEncoder {
@@ -445,15 +444,14 @@ impl AsyncFileReader for FileReader {
     }
 }
 
-impl<A: SpillAdapter> SpillerInner<A> {
+impl<A> SpillerInner<A> {
     pub(super) async fn new_file_writer(
         &self,
         schema: &DataSchema,
         pool: &Arc<BufferPool>,
-        dio: bool,
         chunk: usize,
     ) -> Result<FileWriter<UnionFileWriter>> {
-        let op = self.local_operator.as_ref().unwrap_or(&self.operator);
+        let op = &self.operator;
 
         let remote_location = self.create_unique_location();
         let remote_writer = op.writer(&remote_location).await?;
@@ -461,7 +459,7 @@ impl<A: SpillAdapter> SpillerInner<A> {
 
         let union = if let Some(disk) = &self.temp_dir {
             if let Some(path) = disk.new_file_with_size(0)? {
-                let file = SyncDmaFile::create(&path, dio)?;
+                let file = SyncDmaFile::create(&path, true)?;
                 let align = disk.block_alignment();
                 let buf = DmaWriteBuf::new(align, chunk);
                 UnionFileWriter::new(disk.clone(), path, file, buf, remote_location, remote)
@@ -487,15 +485,14 @@ impl<A: SpillAdapter> SpillerInner<A> {
         meta: Arc<ParquetMetaData>,
         schema: &DataSchema,
         row_groups: Vec<usize>,
-        dio: bool,
     ) -> Result<Vec<DataBlock>> {
-        let op = self.local_operator.as_ref().unwrap_or(&self.operator);
+        let op = &self.operator;
 
         let input = FileReader {
             meta,
             local: if let Some(path) = local_path {
                 let alignment = Some(self.temp_dir.as_ref().unwrap().block_alignment());
-                let file = AsyncDmaFile::open(&path, dio, alignment).await?;
+                let file = AsyncDmaFile::open(&path, true, alignment).await?;
                 Some((path, file))
             } else {
                 None
