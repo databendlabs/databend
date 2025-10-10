@@ -27,7 +27,7 @@ impl VacuumWatermarkIdent {
 mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::vacuum_retention::VacuumWatermark;
+    use crate::schema::vacuum_watermark::VacuumWatermark;
     use crate::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
     use crate::tenant_key::resource::TenantResource;
 

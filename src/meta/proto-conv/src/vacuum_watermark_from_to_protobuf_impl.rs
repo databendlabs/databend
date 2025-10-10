@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Conversion between protobuf VacuumRetention and meta struct.
+//! Conversion between protobuf VacuumWatermark and meta struct.
 
 use chrono::DateTime;
 use chrono::Utc;
