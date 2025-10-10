@@ -60,10 +60,10 @@ fn process_candidate_expressions(
 
     for (path, expr) in candidates {
         let cte_ref_columns = expr.derive_relational_prop()?.output_columns.clone();
-        let column_mapping = cte_def_columns
+        let column_mapping = cte_ref_columns
             .iter()
             .copied()
-            .zip(cte_ref_columns.iter().copied())
+            .zip(cte_def_columns.iter().copied())
             .collect::<HashMap<_, _>>();
         let cte_ref = MaterializedCTERef {
             cte_name: cte_name.clone(),

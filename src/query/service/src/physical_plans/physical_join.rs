@@ -144,28 +144,10 @@ impl PhysicalPlanBuilder {
                 others_required.insert(*column);
             }
         }
-
-        // Include columns referenced in left conditions and right conditions.
-        let left_required: ColumnSet = join
-            .equi_conditions
-            .iter()
-            .fold(required.clone(), |acc, v| {
-                acc.union(&v.left.used_columns()).cloned().collect()
-            })
-            .union(&others_required)
-            .cloned()
-            .collect();
-        let right_required: ColumnSet = join
-            .equi_conditions
-            .iter()
-            .fold(required.clone(), |acc, v| {
-                acc.union(&v.right.used_columns()).cloned().collect()
-            })
-            .union(&others_required)
-            .cloned()
-            .collect();
-        let left_required = left_required.union(&others_required).cloned().collect();
-        let right_required = right_required.union(&others_required).cloned().collect();
+        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
+        debug_assert_eq!(child_required.len(), s_expr.arity());
+        let left_required = child_required.remove(0);
+        let right_required = child_required.remove(0);
 
         // 2. Build physical plan.
         // Choose physical join type by join conditions

@@ -323,7 +323,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         window: &databend_common_sql::plans::Window,
-        mut required: ColumnSet,
+        required: ColumnSet,
         _stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. DO NOT Prune unused Columns cause window may not in required, eg:
@@ -334,21 +334,12 @@ impl PhysicalPlanBuilder {
 
         // The scalar items in window function is not replaced yet.
         // The will be replaced in physical plan builder.
-        window.arguments.iter().for_each(|item| {
-            required.extend(item.scalar.used_columns());
-            required.insert(item.index);
-        });
-        window.partition_by.iter().for_each(|item| {
-            required.extend(item.scalar.used_columns());
-            required.insert(item.index);
-        });
-        window.order_by.iter().for_each(|item| {
-            required.extend(item.order_by_item.scalar.used_columns());
-            required.insert(item.order_by_item.index);
-        });
+        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
+        debug_assert_eq!(child_required.len(), s_expr.arity());
+        let child_required = child_required.remove(0);
 
         // 2. Build physical plan.
-        let input = self.build(s_expr.child(0)?, required).await?;
+        let input = self.build(s_expr.child(0)?, child_required).await?;
         let mut w = window.clone();
 
         let input_schema = input.output_schema()?;

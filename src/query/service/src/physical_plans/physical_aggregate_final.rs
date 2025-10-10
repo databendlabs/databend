@@ -208,23 +208,20 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         agg: &Aggregate,
-        mut required: ColumnSet,
+        required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let mut used = vec![];
         for item in &agg.aggregate_functions {
             if required.contains(&item.index) {
-                required.extend(item.scalar.used_columns());
                 used.push(item.clone());
             }
         }
 
-        agg.group_items.iter().for_each(|i| {
-            // If the group item comes from a complex expression, we only include the final
-            // column index here. The used columns will be included in its EvalScalar child.
-            required.insert(i.index);
-        });
+        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
+        debug_assert_eq!(child_required.len(), s_expr.arity());
+        let child_required = child_required.remove(0);
 
         // single key without aggregation
         if agg.group_items.is_empty() && used.is_empty() {
@@ -245,7 +242,7 @@ impl PhysicalPlanBuilder {
         };
 
         // 2. Build physical plan.
-        let input = self.build(s_expr.child(0)?, required).await?;
+        let input = self.build(s_expr.child(0)?, child_required).await?;
         let input_schema = input.output_schema()?;
         let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
 

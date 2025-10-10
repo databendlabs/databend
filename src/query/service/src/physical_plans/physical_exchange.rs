@@ -97,17 +97,15 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         exchange: &databend_common_sql::plans::Exchange,
-        mut required: ColumnSet,
+        required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        if let databend_common_sql::plans::Exchange::Hash(exprs) = exchange {
-            for expr in exprs {
-                required.extend(expr.used_columns());
-            }
-        }
+        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
+        debug_assert_eq!(child_required.len(), s_expr.arity());
+        let child_required = child_required.remove(0);
 
         // 2. Build physical plan.
-        let input = self.build(s_expr.child(0)?, required).await?;
+        let input = self.build(s_expr.child(0)?, child_required).await?;
         let input_schema = input.output_schema()?;
         let mut keys = vec![];
         let mut allow_adjust_parallelism = true;

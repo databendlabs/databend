@@ -117,7 +117,10 @@ impl PhysicalPlanBuilder {
         scan: &databend_common_sql::plans::ExpressionScan,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        let input = self.build(s_expr.child(0)?, required).await?;
+        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
+        debug_assert_eq!(child_required.len(), s_expr.arity());
+        let child_required = child_required.remove(0);
+        let input = self.build(s_expr.child(0)?, child_required).await?;
         let input_schema = input.output_schema()?;
 
         let values = scan

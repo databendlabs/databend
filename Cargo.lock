@@ -5089,7 +5089,6 @@ dependencies = [
  "logcall",
  "map-api",
  "maplit",
- "pin-project",
  "poem",
  "pretty_assertions",
  "prometheus-client 0.22.3",
