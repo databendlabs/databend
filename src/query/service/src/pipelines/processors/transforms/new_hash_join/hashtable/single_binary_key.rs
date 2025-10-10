@@ -33,24 +33,18 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::serializ
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::SingleBinaryHashJoinHashTable;
 
-impl SingleBinaryHashJoinHashTable {
+impl<const SKIP_DUPLICATES: bool> SingleBinaryHashJoinHashTable<SKIP_DUPLICATES> {
     pub fn new(
         hash_table: BinaryHashJoinHashMap,
         hash_method: HashMethodSingleBinary,
-    ) -> SingleBinaryHashJoinHashTable {
+    ) -> SingleBinaryHashJoinHashTable<SKIP_DUPLICATES> {
         SingleBinaryHashJoinHashTable {
             hash_table,
             hash_method,
         }
     }
 
-    pub fn insert(
-        &self,
-        keys: DataBlock,
-        chunk: usize,
-        arena: &mut Vec<u8>,
-        overwrite: bool,
-    ) -> Result<()> {
+    pub fn insert(&self, keys: DataBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
         let num_rows = keys.num_rows();
         let keys = ProjectedBlock::from(keys.columns());
         let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
@@ -99,7 +93,7 @@ impl SingleBinaryHashJoinHashTable {
                 string_local_space_ptr = string_local_space_ptr.add(key.len());
             }
 
-            self.hash_table.insert(key, raw_entry_ptr, overwrite);
+            self.hash_table.insert(key, raw_entry_ptr);
             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
         }
 

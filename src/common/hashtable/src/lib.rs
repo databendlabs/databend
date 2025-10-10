@@ -111,8 +111,10 @@ pub use hashjoin_string_hashtable::StringRawEntry;
 pub use hashjoin_string_hashtable::STRING_EARLY_SIZE;
 pub use keys_ref::KeysRef;
 pub use partitioned_hashtable::hash2bucket;
-pub type HashJoinHashMap<K> = hashjoin_hashtable::HashJoinHashTable<K>;
-pub type BinaryHashJoinHashMap = hashjoin_string_hashtable::HashJoinStringHashTable;
+pub type HashJoinHashMap<K, const SKIP_DUPLICATES: bool = false> =
+    hashjoin_hashtable::HashJoinHashTable<K, SKIP_DUPLICATES>;
+pub type BinaryHashJoinHashMap<const SKIP_DUPLICATES: bool = false> =
+    hashjoin_string_hashtable::HashJoinStringHashTable<SKIP_DUPLICATES>;
 pub use traits::HashJoinHashtableLike;
 pub use utils::fast_memcmp;
 pub use utils::Interval;

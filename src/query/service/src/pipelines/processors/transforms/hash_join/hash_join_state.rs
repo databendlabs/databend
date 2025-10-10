@@ -54,17 +54,24 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 use crate::sql::IndexType;
 
-pub struct SerializerHashJoinHashTable {
+pub type SkipDuplicatesSerializerHashJoinHashTable = SerializerHashJoinHashTable<true>;
+pub type SkipDuplicatesSingleBinaryHashJoinHashTable = SingleBinaryHashJoinHashTable<true>;
+pub type SkipDuplicatesFixedKeyHashJoinHashTable<T> = FixedKeyHashJoinHashTable<T, true>;
+
+pub struct SerializerHashJoinHashTable<const SKIP_DUPLICATES: bool = false> {
     pub(crate) hash_table: BinaryHashJoinHashMap,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
-pub struct SingleBinaryHashJoinHashTable {
+pub struct SingleBinaryHashJoinHashTable<const SKIP_DUPLICATES: bool = false> {
     pub(crate) hash_table: BinaryHashJoinHashMap,
     pub(crate) hash_method: HashMethodSingleBinary,
 }
 
-pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable + FixedKey> {
+pub struct FixedKeyHashJoinHashTable<
+    T: HashtableKeyable + FixedKey,
+    const SKIP_DUPLICATES: bool = false,
+> {
     pub(crate) hash_table: HashJoinHashMap<T>,
     pub(crate) hash_method: HashMethodFixedKeys<T>,
 }
@@ -72,13 +79,21 @@ pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable + FixedKey> {
 pub enum HashJoinHashTable {
     Null,
     Serializer(SerializerHashJoinHashTable),
+    SkipDuplicatesSerializer(SkipDuplicatesSerializerHashJoinHashTable),
     SingleBinary(SingleBinaryHashJoinHashTable),
+    SkipDuplicatesSingleBinary(SkipDuplicatesSingleBinaryHashJoinHashTable),
     KeysU8(FixedKeyHashJoinHashTable<u8>),
+    SkipDuplicatesKeysU8(SkipDuplicatesFixedKeyHashJoinHashTable<u8>),
     KeysU16(FixedKeyHashJoinHashTable<u16>),
+    SkipDuplicatesKeysU16(SkipDuplicatesFixedKeyHashJoinHashTable<u16>),
     KeysU32(FixedKeyHashJoinHashTable<u32>),
+    SkipDuplicatesKeysU32(SkipDuplicatesFixedKeyHashJoinHashTable<u32>),
     KeysU64(FixedKeyHashJoinHashTable<u64>),
+    SkipDuplicatesKeysU64(SkipDuplicatesFixedKeyHashJoinHashTable<u64>),
     KeysU128(FixedKeyHashJoinHashTable<u128>),
+    SkipDuplicatesKeysU128(SkipDuplicatesFixedKeyHashJoinHashTable<u128>),
     KeysU256(FixedKeyHashJoinHashTable<U256>),
+    SkipDuplicatesKeysU256(SkipDuplicatesFixedKeyHashJoinHashTable<U256>),
 }
 
 /// Define some shared states for hash join build and probe.
@@ -344,6 +359,14 @@ impl HashJoinHashTable {
             HashJoinHashTable::KeysU64(table) => table.hash_table.len(),
             HashJoinHashTable::KeysU128(table) => table.hash_table.len(),
             HashJoinHashTable::KeysU256(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesSerializer(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesSingleBinary(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU8(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU16(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU32(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU64(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU128(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU256(table) => table.hash_table.len(),
         }
     }
 

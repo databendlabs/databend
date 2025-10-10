@@ -39,18 +39,29 @@ pub struct StringRawEntry {
     pub next: u64,
 }
 
-pub struct HashJoinStringHashTable<A: Allocator + Clone = DefaultAllocator> {
+pub struct HashJoinStringHashTable<
+    const SKIP_DUPLICATES: bool = false,
+    A: Allocator + Clone = DefaultAllocator,
+> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
     pub(crate) count: AtomicUsize,
 }
 
-unsafe impl<A: Allocator + Clone + Send> Send for HashJoinStringHashTable<A> {}
+unsafe impl<A: Allocator + Clone + Send, const SKIP_DUPLICATES: bool> Send
+    for HashJoinStringHashTable<SKIP_DUPLICATES, A>
+{
+}
 
-unsafe impl<A: Allocator + Clone + Sync> Sync for HashJoinStringHashTable<A> {}
+unsafe impl<A: Allocator + Clone + Sync, const SKIP_DUPLICATES: bool> Sync
+    for HashJoinStringHashTable<SKIP_DUPLICATES, A>
+{
+}
 
-impl<A: Allocator + Clone + Default + 'static> HashJoinStringHashTable<A> {
+impl<A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES: bool>
+    HashJoinStringHashTable<SKIP_DUPLICATES, A>
+{
     pub fn with_build_row_num(row_num: usize) -> Self {
         let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
@@ -67,7 +78,7 @@ impl<A: Allocator + Clone + Default + 'static> HashJoinStringHashTable<A> {
         hashtable
     }
 
-    pub fn insert(&self, key: &[u8], entry_ptr: *mut StringRawEntry, skip_duplicates: bool) {
+    pub fn insert(&self, key: &[u8], entry_ptr: *mut StringRawEntry) {
         let hash = hash_join_fast_string_hash(key);
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
@@ -75,7 +86,7 @@ impl<A: Allocator + Clone + Default + 'static> HashJoinStringHashTable<A> {
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            if skip_duplicates
+            if SKIP_DUPLICATES
                 && early_filtering(old_header, hash)
                 && self.next_contains(key, remove_header_tag(old_header))
             {
@@ -99,7 +110,8 @@ impl<A: Allocator + Clone + Default + 'static> HashJoinStringHashTable<A> {
     }
 }
 
-impl<A> HashJoinHashtableLike for HashJoinStringHashTable<A>
+impl<A, const SKIP_DUPLICATES: bool> HashJoinHashtableLike
+    for HashJoinStringHashTable<SKIP_DUPLICATES, A>
 where A: Allocator + Clone + 'static
 {
     type Key = [u8];

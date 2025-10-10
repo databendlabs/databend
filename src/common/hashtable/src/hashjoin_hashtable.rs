@@ -103,7 +103,11 @@ pub fn hash_bits() -> u32 {
     }
 }
 
-pub struct HashJoinHashTable<K: Keyable, A: Allocator + Clone = DefaultAllocator> {
+pub struct HashJoinHashTable<
+    K: Keyable,
+    const SKIP_DUPLICATES: bool = false,
+    A: Allocator + Clone = DefaultAllocator,
+> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
@@ -111,11 +115,19 @@ pub struct HashJoinHashTable<K: Keyable, A: Allocator + Clone = DefaultAllocator
     pub(crate) count: AtomicUsize,
 }
 
-unsafe impl<K: Keyable + Send, A: Allocator + Clone + Send> Send for HashJoinHashTable<K, A> {}
+unsafe impl<K: Keyable + Send, A: Allocator + Clone + Send, const SKIP_DUPLICATES: bool> Send
+    for HashJoinHashTable<K, SKIP_DUPLICATES, A>
+{
+}
 
-unsafe impl<K: Keyable + Sync, A: Allocator + Clone + Sync> Sync for HashJoinHashTable<K, A> {}
+unsafe impl<K: Keyable + Sync, A: Allocator + Clone + Sync, const SKIP_DUPLICATES: bool> Sync
+    for HashJoinHashTable<K, SKIP_DUPLICATES, A>
+{
+}
 
-impl<K: Keyable, A: Allocator + Clone + Default + 'static> HashJoinHashTable<K, A> {
+impl<K: Keyable, A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES: bool>
+    HashJoinHashTable<K, SKIP_DUPLICATES, A>
+{
     pub fn with_build_row_num(row_num: usize) -> Self {
         let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
@@ -133,7 +145,7 @@ impl<K: Keyable, A: Allocator + Clone + Default + 'static> HashJoinHashTable<K, 
         hashtable
     }
 
-    pub fn insert(&self, key: K, entry_ptr: *mut RawEntry<K>, skip_duplicates: bool) {
+    pub fn insert(&self, key: K, entry_ptr: *mut RawEntry<K>) {
         let hash = key.hash();
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
@@ -141,7 +153,7 @@ impl<K: Keyable, A: Allocator + Clone + Default + 'static> HashJoinHashTable<K, 
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
-            if skip_duplicates
+            if SKIP_DUPLICATES
                 && early_filtering(old_header, hash)
                 && self.next_contains(&key, remove_header_tag(old_header))
             {
@@ -165,7 +177,8 @@ impl<K: Keyable, A: Allocator + Clone + Default + 'static> HashJoinHashTable<K, 
     }
 }
 
-impl<K, A> HashJoinHashtableLike for HashJoinHashTable<K, A>
+impl<K, A, const SKIP_DUPLICATES: bool> HashJoinHashtableLike
+    for HashJoinHashTable<K, SKIP_DUPLICATES, A>
 where
     K: Keyable,
     A: Allocator + Clone + 'static,

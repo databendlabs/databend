@@ -67,6 +67,9 @@ use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTab
 use crate::pipelines::processors::transforms::hash_join::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHashTable;
+use crate::pipelines::processors::transforms::SkipDuplicatesFixedKeyHashJoinHashTable;
+use crate::pipelines::processors::transforms::SkipDuplicatesSerializerHashJoinHashTable;
+use crate::pipelines::processors::transforms::SkipDuplicatesSingleBinaryHashJoinHashTable;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
@@ -250,66 +253,142 @@ impl HashJoinBuildState {
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
             }
+            let skip_duplicates = matches!(
+                self.hash_join_state.hash_join_desc.join_type,
+                JoinType::InnerAny | JoinType::LeftAny
+            );
 
             // Divide the finalize phase into multiple tasks.
             self.generate_finalize_task()?;
 
             // Create a fixed size hash table.
-            let (hash_join_hash_table, entry_size) = match self.method.clone() {
-                HashMethodKind::Serializer(_) => (
+            let (hash_join_hash_table, entry_size) = match (self.method.clone(), skip_duplicates) {
+                (HashMethodKind::Serializer(_), false) => (
                     HashJoinHashTable::Serializer(SerializerHashJoinHashTable::new(
                         BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
                         HashMethodSerializer::default(),
                     )),
                     std::mem::size_of::<StringRawEntry>(),
                 ),
-                HashMethodKind::SingleBinary(_) => (
+                (HashMethodKind::Serializer(_), true) => (
+                    HashJoinHashTable::SkipDuplicatesSerializer(
+                        SkipDuplicatesSerializerHashJoinHashTable::new(
+                            BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                            HashMethodSerializer::default(),
+                        ),
+                    ),
+                    std::mem::size_of::<StringRawEntry>(),
+                ),
+                (HashMethodKind::SingleBinary(_), false) => (
                     HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable::new(
                         BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
                         HashMethodSingleBinary::default(),
                     )),
                     std::mem::size_of::<StringRawEntry>(),
                 ),
-                HashMethodKind::KeysU8(hash_method) => (
+                (HashMethodKind::SingleBinary(_), true) => (
+                    HashJoinHashTable::SkipDuplicatesSingleBinary(
+                        SkipDuplicatesSingleBinaryHashJoinHashTable::new(
+                            BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                            HashMethodSingleBinary::default(),
+                        ),
+                    ),
+                    std::mem::size_of::<StringRawEntry>(),
+                ),
+                (HashMethodKind::KeysU8(hash_method), false) => (
                     HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable::new(
                         HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
                         hash_method,
                     )),
                     std::mem::size_of::<RawEntry<u8>>(),
                 ),
-                HashMethodKind::KeysU16(hash_method) => (
+                (HashMethodKind::KeysU8(hash_method), true) => (
+                    HashJoinHashTable::SkipDuplicatesKeysU8(
+                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                            HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
+                            hash_method,
+                        ),
+                    ),
+                    std::mem::size_of::<RawEntry<u8>>(),
+                ),
+                (HashMethodKind::KeysU16(hash_method), false) => (
                     HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable::new(
                         HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
                         hash_method,
                     )),
                     std::mem::size_of::<RawEntry<u16>>(),
                 ),
-                HashMethodKind::KeysU32(hash_method) => (
+                (HashMethodKind::KeysU16(hash_method), true) => (
+                    HashJoinHashTable::SkipDuplicatesKeysU16(
+                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                            HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
+                            hash_method,
+                        ),
+                    ),
+                    std::mem::size_of::<RawEntry<u16>>(),
+                ),
+                (HashMethodKind::KeysU32(hash_method), false) => (
                     HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable::new(
                         HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
                         hash_method,
                     )),
                     std::mem::size_of::<RawEntry<u32>>(),
                 ),
-                HashMethodKind::KeysU64(hash_method) => (
+                (HashMethodKind::KeysU32(hash_method), true) => (
+                    HashJoinHashTable::SkipDuplicatesKeysU32(
+                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                            HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
+                            hash_method,
+                        ),
+                    ),
+                    std::mem::size_of::<RawEntry<u32>>(),
+                ),
+                (HashMethodKind::KeysU64(hash_method), false) => (
                     HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable::new(
                         HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
                         hash_method,
                     )),
                     std::mem::size_of::<RawEntry<u64>>(),
                 ),
-                HashMethodKind::KeysU128(hash_method) => (
+                (HashMethodKind::KeysU64(hash_method), true) => (
+                    HashJoinHashTable::SkipDuplicatesKeysU64(
+                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                            HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
+                            hash_method,
+                        ),
+                    ),
+                    std::mem::size_of::<RawEntry<u64>>(),
+                ),
+                (HashMethodKind::KeysU128(hash_method), false) => (
                     HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable::new(
                         HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
                         hash_method,
                     )),
                     std::mem::size_of::<RawEntry<u128>>(),
                 ),
-                HashMethodKind::KeysU256(hash_method) => (
+                (HashMethodKind::KeysU128(hash_method), true) => (
+                    HashJoinHashTable::SkipDuplicatesKeysU128(
+                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                            HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
+                            hash_method,
+                        ),
+                    ),
+                    std::mem::size_of::<RawEntry<u128>>(),
+                ),
+                (HashMethodKind::KeysU256(hash_method), false) => (
                     HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable::new(
                         HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
                         hash_method,
                     )),
+                    std::mem::size_of::<RawEntry<U256>>(),
+                ),
+                (HashMethodKind::KeysU256(hash_method), true) => (
+                    HashJoinHashTable::SkipDuplicatesKeysU256(
+                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                            HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
+                            hash_method,
+                        ),
+                    ),
                     std::mem::size_of::<RawEntry<U256>>(),
                 ),
             };
@@ -343,7 +422,7 @@ impl HashJoinBuildState {
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
 
         macro_rules! insert_key {
-            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty, $skip_duplicates: expr, ) => {{
+            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty, ) => {{
                 let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
@@ -378,7 +457,7 @@ impl HashJoinBuildState {
                                     next: 0,
                                 }
                             }
-                            $table.insert(*key, raw_entry_ptr, $skip_duplicates);
+                            $table.insert(*key, raw_entry_ptr);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -398,7 +477,7 @@ impl HashJoinBuildState {
                                     next: 0,
                                 }
                             }
-                            $table.insert(*key, raw_entry_ptr, $skip_duplicates);
+                            $table.insert(*key, raw_entry_ptr);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -409,7 +488,7 @@ impl HashJoinBuildState {
         }
 
         macro_rules! insert_binary_key {
-            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $skip_duplicates: expr, ) => {{
+            ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
                 let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
@@ -469,7 +548,7 @@ impl HashJoinBuildState {
                                 string_local_space_ptr = string_local_space_ptr.add(key.len());
                             }
 
-                            $table.insert(key, raw_entry_ptr, $skip_duplicates);
+                            $table.insert(key, raw_entry_ptr);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -502,7 +581,7 @@ impl HashJoinBuildState {
                                 string_local_space_ptr = string_local_space_ptr.add(key.len());
                             }
 
-                            $table.insert(key, raw_entry_ptr, $skip_duplicates);
+                            $table.insert(key, raw_entry_ptr);
                             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                         }
                     }
@@ -627,10 +706,6 @@ impl HashJoinBuildState {
             }
             _ => {}
         };
-        let skip_duplicates = matches!(
-            self.hash_join_state.hash_join_desc.join_type,
-            JoinType::InnerAny | JoinType::LeftAny
-        );
 
         keys_entries
             .iter_mut()
@@ -641,34 +716,58 @@ impl HashJoinBuildState {
 
         match hashtable {
             HashJoinHashTable::Serializer(table) => insert_binary_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, skip_duplicates,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
             HashJoinHashTable::SingleBinary(table) => insert_binary_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, skip_duplicates,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
             },
             HashJoinHashTable::KeysU8(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8, skip_duplicates,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8,
             },
             HashJoinHashTable::KeysU16(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16, skip_duplicates,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16,
             },
             HashJoinHashTable::KeysU32(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32, skip_duplicates,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32,
             },
             HashJoinHashTable::KeysU64(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64, skip_duplicates,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64,
             },
             HashJoinHashTable::KeysU128(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128, skip_duplicates,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128,
             },
             HashJoinHashTable::KeysU256(table) => insert_key! {
-              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256, skip_duplicates,
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256,
             },
             HashJoinHashTable::Null => {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the hash table is uninitialized.",
                 ));
             }
+            HashJoinHashTable::SkipDuplicatesSerializer(table) => insert_binary_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
+            },
+            HashJoinHashTable::SkipDuplicatesSingleBinary(table) => insert_binary_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces,
+            },
+            HashJoinHashTable::SkipDuplicatesKeysU8(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u8,
+            },
+            HashJoinHashTable::SkipDuplicatesKeysU16(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u16,
+            },
+            HashJoinHashTable::SkipDuplicatesKeysU32(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u32,
+            },
+            HashJoinHashTable::SkipDuplicatesKeysU64(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u64,
+            },
+            HashJoinHashTable::SkipDuplicatesKeysU128(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, u128,
+            },
+            HashJoinHashTable::SkipDuplicatesKeysU256(table) => insert_key! {
+              &mut table.hash_table, &table.hash_method, chunk, build_keys, valids, chunk_index as u32, entry_size, &mut local_raw_entry_spaces, U256,
+            },
         }
 
         {

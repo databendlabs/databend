@@ -33,21 +33,17 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::P
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 
-impl<T: HashtableKeyable + FixedKey> FixedKeyHashJoinHashTable<T> {
+impl<T: HashtableKeyable + FixedKey, const SKIP_DUPLICATES: bool>
+    FixedKeyHashJoinHashTable<T, SKIP_DUPLICATES>
+{
     pub fn new(hash_table: HashJoinHashMap<T>, hash_method: HashMethodFixedKeys<T>) -> Self {
-        FixedKeyHashJoinHashTable::<T> {
+        FixedKeyHashJoinHashTable::<T, SKIP_DUPLICATES> {
             hash_table,
             hash_method,
         }
     }
 
-    pub fn insert(
-        &self,
-        keys: DataBlock,
-        chunk: usize,
-        arena: &mut Vec<u8>,
-        skip_duplicates: bool,
-    ) -> Result<()> {
+    pub fn insert(&self, keys: DataBlock, chunk: usize, arena: &mut Vec<u8>) -> Result<()> {
         let num_rows = keys.num_rows();
         let keys = ProjectedBlock::from(keys.columns());
         let keys_state = self.hash_method.build_keys_state(keys, num_rows)?;
@@ -75,7 +71,7 @@ impl<T: HashtableKeyable + FixedKey> FixedKeyHashJoinHashTable<T> {
                 }
             }
 
-            self.hash_table.insert(*key, raw_entry_ptr, skip_duplicates);
+            self.hash_table.insert(*key, raw_entry_ptr);
             raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
         }
 
