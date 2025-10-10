@@ -283,8 +283,12 @@ impl<F: AsFd> DmaFile<F> {
         }
     }
 
-    fn truncate(&self, length: usize) -> io::Result<()> {
+    fn truncate(&mut self, length: usize) -> io::Result<()> {
         rustix::fs::ftruncate(&self.fd, length as u64).map_err(io::Error::from)
+    }
+
+    pub fn fsync(&mut self) -> io::Result<()> {
+        rustix::fs::fsync(&self.fd).map_err(io::Error::from)
     }
 
     pub fn size(&self) -> io::Result<usize> {
@@ -1009,6 +1013,7 @@ mod tests {
         {
             buf.write_all(b"1")?;
             buf.flush(&mut file)?;
+            file.fsync()?;
 
             assert_eq!(file.written, 1);
 
@@ -1024,6 +1029,7 @@ mod tests {
             buf.write_all(b"2")?;
             buf.write_all(b"3")?;
             buf.flush(&mut file)?;
+            file.fsync()?;
 
             assert_eq!(file.written, 3);
 
@@ -1045,6 +1051,7 @@ mod tests {
 
             buf.write_all(&data)?;
             buf.flush(&mut file)?;
+            file.fsync()?;
 
             assert_eq!(file.written, 3 + data.len());
 
