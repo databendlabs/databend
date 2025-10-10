@@ -38,6 +38,7 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
+use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::RowPtr;
 use databend_common_sql::plans::JoinType;
@@ -53,31 +54,46 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 use crate::sql::IndexType;
 
-pub struct SerializerHashJoinHashTable {
-    pub(crate) hash_table: BinaryHashJoinHashMap,
+pub type SkipDuplicatesSerializerHashJoinHashTable = SerializerHashJoinHashTable<true>;
+pub type SkipDuplicatesSingleBinaryHashJoinHashTable = SingleBinaryHashJoinHashTable<true>;
+pub type SkipDuplicatesFixedKeyHashJoinHashTable<T> = FixedKeyHashJoinHashTable<T, true>;
+
+pub struct SerializerHashJoinHashTable<const SKIP_DUPLICATES: bool = false> {
+    pub(crate) hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
-pub struct SingleBinaryHashJoinHashTable {
-    pub(crate) hash_table: BinaryHashJoinHashMap,
+pub struct SingleBinaryHashJoinHashTable<const SKIP_DUPLICATES: bool = false> {
+    pub(crate) hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
     pub(crate) hash_method: HashMethodSingleBinary,
 }
 
-pub struct FixedKeyHashJoinHashTable<T: HashtableKeyable + FixedKey> {
-    pub(crate) hash_table: HashJoinHashMap<T>,
+pub struct FixedKeyHashJoinHashTable<
+    T: HashtableKeyable + FixedKey,
+    const SKIP_DUPLICATES: bool = false,
+> {
+    pub(crate) hash_table: HashJoinHashMap<T, SKIP_DUPLICATES>,
     pub(crate) hash_method: HashMethodFixedKeys<T>,
 }
 
 pub enum HashJoinHashTable {
     Null,
     Serializer(SerializerHashJoinHashTable),
+    SkipDuplicatesSerializer(SkipDuplicatesSerializerHashJoinHashTable),
     SingleBinary(SingleBinaryHashJoinHashTable),
+    SkipDuplicatesSingleBinary(SkipDuplicatesSingleBinaryHashJoinHashTable),
     KeysU8(FixedKeyHashJoinHashTable<u8>),
+    SkipDuplicatesKeysU8(SkipDuplicatesFixedKeyHashJoinHashTable<u8>),
     KeysU16(FixedKeyHashJoinHashTable<u16>),
+    SkipDuplicatesKeysU16(SkipDuplicatesFixedKeyHashJoinHashTable<u16>),
     KeysU32(FixedKeyHashJoinHashTable<u32>),
+    SkipDuplicatesKeysU32(SkipDuplicatesFixedKeyHashJoinHashTable<u32>),
     KeysU64(FixedKeyHashJoinHashTable<u64>),
+    SkipDuplicatesKeysU64(SkipDuplicatesFixedKeyHashJoinHashTable<u64>),
     KeysU128(FixedKeyHashJoinHashTable<u128>),
+    SkipDuplicatesKeysU128(SkipDuplicatesFixedKeyHashJoinHashTable<u128>),
     KeysU256(FixedKeyHashJoinHashTable<U256>),
+    SkipDuplicatesKeysU256(SkipDuplicatesFixedKeyHashJoinHashTable<U256>),
 }
 
 /// Define some shared states for hash join build and probe.
@@ -148,7 +164,7 @@ impl HashJoinState {
     ) -> Result<Arc<HashJoinState>> {
         if matches!(
             hash_join_desc.join_type,
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full
+            JoinType::Left | JoinType::LeftAny | JoinType::LeftSingle | JoinType::Full
         ) {
             build_schema = build_schema_wrap_nullable(&build_schema);
         };
@@ -228,6 +244,7 @@ impl HashJoinState {
             self.hash_join_desc.join_type,
             JoinType::Full
                 | JoinType::Right
+                | JoinType::RightAny
                 | JoinType::RightSingle
                 | JoinType::RightSemi
                 | JoinType::RightAnti
@@ -327,5 +344,34 @@ impl HashJoinState {
         } else {
             Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
         }
+    }
+}
+
+impl HashJoinHashTable {
+    pub fn len(&self) -> usize {
+        match self {
+            HashJoinHashTable::Null => 0,
+            HashJoinHashTable::Serializer(table) => table.hash_table.len(),
+            HashJoinHashTable::SingleBinary(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU8(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU16(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU32(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU64(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU128(table) => table.hash_table.len(),
+            HashJoinHashTable::KeysU256(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesSerializer(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesSingleBinary(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU8(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU16(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU32(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU64(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU128(table) => table.hash_table.len(),
+            HashJoinHashTable::SkipDuplicatesKeysU256(table) => table.hash_table.len(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }

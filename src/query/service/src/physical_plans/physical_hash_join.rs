@@ -552,7 +552,11 @@ impl PhysicalPlanBuilder {
         build_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
-            JoinType::Left | JoinType::LeftSingle | JoinType::LeftAsof | JoinType::Full => {
+            JoinType::Left
+            | JoinType::LeftAny
+            | JoinType::LeftSingle
+            | JoinType::LeftAsof
+            | JoinType::Full => {
                 let build_schema = build_side.output_schema()?;
                 // Wrap nullable type for columns in build side
                 let build_schema = DataSchemaRefExt::create(
@@ -805,7 +809,7 @@ impl PhysicalPlanBuilder {
             let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
 
             // Handle inner join column optimization
-            if join.join_type == JoinType::Inner {
+            if matches!(join.join_type, JoinType::Inner | JoinType::InnerAny) {
                 self.handle_inner_join_column_optimization(
                     left_condition,
                     right_condition,
@@ -1034,9 +1038,12 @@ impl PhysicalPlanBuilder {
         let merged_fields = match join.join_type {
             JoinType::Cross
             | JoinType::Inner
+            | JoinType::InnerAny
             | JoinType::Left
+            | JoinType::LeftAny
             | JoinType::LeftSingle
             | JoinType::Right
+            | JoinType::RightAny
             | JoinType::RightSingle
             | JoinType::Full => {
                 let mut result = probe_fields.clone();

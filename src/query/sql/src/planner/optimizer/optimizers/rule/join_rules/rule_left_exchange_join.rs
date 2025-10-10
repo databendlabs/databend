@@ -112,7 +112,7 @@ impl Rule for RuleLeftExchangeJoin {
         // Check if original sexpr contains cross join.
         // We will reject the results contain cross join if there is no cross join in original sexpr.
         let contains_cross_join =
-            join1.join_type == JoinType::Cross || join2.join_type == JoinType::Cross;
+            matches!(join1.join_type, JoinType::Cross) || join2.join_type == JoinType::Cross;
 
         let predicates = [get_join_predicates(&join1)?, get_join_predicates(&join2)?].concat();
 
