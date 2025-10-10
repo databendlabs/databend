@@ -36,7 +36,7 @@ use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
 
 impl<const SKIP_DUPLICATES: bool> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
     pub fn new(
-        hash_table: BinaryHashJoinHashMap,
+        hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
         hash_method: HashMethodSerializer,
     ) -> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
         SerializerHashJoinHashTable {

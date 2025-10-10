@@ -227,7 +227,7 @@ impl BasicHashJoin {
                 (HashMethodKind::KeysU8(hash_method), true) => {
                     HashJoinHashTable::SkipDuplicatesKeysU8(
                         SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
+                            HashJoinHashMap::<u8, true>::with_build_row_num(build_num_rows),
                             hash_method,
                         ),
                     )
@@ -241,7 +241,7 @@ impl BasicHashJoin {
                 (HashMethodKind::KeysU16(hash_method), true) => {
                     HashJoinHashTable::SkipDuplicatesKeysU16(
                         SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
+                            HashJoinHashMap::<u16, true>::with_build_row_num(build_num_rows),
                             hash_method,
                         ),
                     )
@@ -255,7 +255,7 @@ impl BasicHashJoin {
                 (HashMethodKind::KeysU32(hash_method), true) => {
                     HashJoinHashTable::SkipDuplicatesKeysU32(
                         SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
+                            HashJoinHashMap::<u32, true>::with_build_row_num(build_num_rows),
                             hash_method,
                         ),
                     )
@@ -269,7 +269,7 @@ impl BasicHashJoin {
                 (HashMethodKind::KeysU64(hash_method), true) => {
                     HashJoinHashTable::SkipDuplicatesKeysU64(
                         SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
+                            HashJoinHashMap::<u64, true>::with_build_row_num(build_num_rows),
                             hash_method,
                         ),
                     )
@@ -283,7 +283,7 @@ impl BasicHashJoin {
                 (HashMethodKind::KeysU128(hash_method), true) => {
                     HashJoinHashTable::SkipDuplicatesKeysU128(
                         SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
+                            HashJoinHashMap::<u128, true>::with_build_row_num(build_num_rows),
                             hash_method,
                         ),
                     )
@@ -297,7 +297,7 @@ impl BasicHashJoin {
                 (HashMethodKind::KeysU256(hash_method), true) => {
                     HashJoinHashTable::SkipDuplicatesKeysU256(
                         SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
+                            HashJoinHashMap::<U256, true>::with_build_row_num(build_num_rows),
                             hash_method,
                         ),
                     )

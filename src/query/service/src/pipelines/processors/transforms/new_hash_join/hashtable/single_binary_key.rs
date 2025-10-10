@@ -35,7 +35,7 @@ use crate::pipelines::processors::transforms::SingleBinaryHashJoinHashTable;
 
 impl<const SKIP_DUPLICATES: bool> SingleBinaryHashJoinHashTable<SKIP_DUPLICATES> {
     pub fn new(
-        hash_table: BinaryHashJoinHashMap,
+        hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
         hash_method: HashMethodSingleBinary,
     ) -> SingleBinaryHashJoinHashTable<SKIP_DUPLICATES> {
         SingleBinaryHashJoinHashTable {

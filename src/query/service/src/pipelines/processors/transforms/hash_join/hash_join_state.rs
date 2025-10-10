@@ -59,12 +59,12 @@ pub type SkipDuplicatesSingleBinaryHashJoinHashTable = SingleBinaryHashJoinHashT
 pub type SkipDuplicatesFixedKeyHashJoinHashTable<T> = FixedKeyHashJoinHashTable<T, true>;
 
 pub struct SerializerHashJoinHashTable<const SKIP_DUPLICATES: bool = false> {
-    pub(crate) hash_table: BinaryHashJoinHashMap,
+    pub(crate) hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
     pub(crate) hash_method: HashMethodSerializer,
 }
 
 pub struct SingleBinaryHashJoinHashTable<const SKIP_DUPLICATES: bool = false> {
-    pub(crate) hash_table: BinaryHashJoinHashMap,
+    pub(crate) hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
     pub(crate) hash_method: HashMethodSingleBinary,
 }
 
@@ -72,7 +72,7 @@ pub struct FixedKeyHashJoinHashTable<
     T: HashtableKeyable + FixedKey,
     const SKIP_DUPLICATES: bool = false,
 > {
-    pub(crate) hash_table: HashJoinHashMap<T>,
+    pub(crate) hash_table: HashJoinHashMap<T, SKIP_DUPLICATES>,
     pub(crate) hash_method: HashMethodFixedKeys<T>,
 }
 

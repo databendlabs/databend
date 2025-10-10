@@ -36,7 +36,10 @@ use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 impl<T: HashtableKeyable + FixedKey, const SKIP_DUPLICATES: bool>
     FixedKeyHashJoinHashTable<T, SKIP_DUPLICATES>
 {
-    pub fn new(hash_table: HashJoinHashMap<T>, hash_method: HashMethodFixedKeys<T>) -> Self {
+    pub fn new(
+        hash_table: HashJoinHashMap<T, SKIP_DUPLICATES>,
+        hash_method: HashMethodFixedKeys<T>,
+    ) -> Self {
         FixedKeyHashJoinHashTable::<T, SKIP_DUPLICATES> {
             hash_table,
             hash_method,
