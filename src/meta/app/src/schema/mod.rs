@@ -48,7 +48,7 @@ mod table;
 pub mod table_lock_ident;
 pub mod table_niv;
 mod vacuum_retention;
-pub mod vacuum_retention_ident;
+pub mod vacuum_watermark_ident;
 
 pub use auto_increment::GetAutoIncrementNextValueReply;
 pub use auto_increment::GetAutoIncrementNextValueReq;
@@ -157,3 +157,4 @@ pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
 pub use table_lock_ident::TableLockIdent;
 pub use vacuum_retention::VacuumWatermark;
+pub use vacuum_watermark_ident::VacuumWatermarkIdent;

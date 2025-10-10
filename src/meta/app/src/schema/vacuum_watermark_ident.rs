@@ -14,11 +14,11 @@
 
 use crate::tenant_key::ident::TIdent;
 
-pub type VacuumRetentionIdent = TIdent<VacuumRetentionRsc, ()>;
+pub type VacuumWatermarkIdent = TIdent<VacuumWatermarkRsc, ()>;
 
-pub use kvapi_impl::VacuumRetentionRsc;
+pub use kvapi_impl::VacuumWatermarkRsc;
 
-impl VacuumRetentionIdent {
+impl VacuumWatermarkIdent {
     pub fn new_global(tenant: impl crate::tenant::ToTenant) -> Self {
         TIdent::new_generic(tenant, ())
     }
@@ -28,19 +28,19 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::vacuum_retention::VacuumWatermark;
-    use crate::schema::vacuum_retention_ident::VacuumRetentionIdent;
+    use crate::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
     use crate::tenant_key::resource::TenantResource;
 
-    pub struct VacuumRetentionRsc;
+    pub struct VacuumWatermarkRsc;
 
-    impl TenantResource for VacuumRetentionRsc {
+    impl TenantResource for VacuumWatermarkRsc {
         const PREFIX: &'static str = "__fd_vacuum_retention_ts";
         const HAS_TENANT: bool = true;
         type ValueType = VacuumWatermark;
     }
 
     impl kvapi::Value for VacuumWatermark {
-        type KeyType = VacuumRetentionIdent;
+        type KeyType = VacuumWatermarkIdent;
 
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
@@ -52,17 +52,17 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::VacuumRetentionIdent;
+    use super::VacuumWatermarkIdent;
     use crate::tenant::Tenant;
 
     #[test]
     fn test_ident() {
         let tenant = Tenant::new_literal("dummy");
-        let ident = VacuumRetentionIdent::new_global(tenant);
+        let ident = VacuumWatermarkIdent::new_global(tenant);
 
         let key = ident.to_string_key();
         assert_eq!(key, "__fd_vacuum_retention_ts/dummy");
 
-        assert_eq!(ident, VacuumRetentionIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, VacuumWatermarkIdent::from_str_key(&key).unwrap());
     }
 }

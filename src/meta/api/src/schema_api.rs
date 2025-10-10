@@ -31,7 +31,7 @@ use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedInde
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
 use databend_common_meta_app::schema::marked_deleted_table_index_ident::MarkedDeletedTableIndexIdIdent;
-use databend_common_meta_app::schema::vacuum_retention_ident::VacuumRetentionIdent;
+use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
@@ -486,7 +486,7 @@ pub async fn handle_undrop_table(
             .unwrap_or(&seq_table_meta.data.updated_on);
 
         // Read vacuum timestamp with seq for concurrent safety
-        let vacuum_ident = VacuumRetentionIdent::new_global(tenant_dbname_tbname.tenant().clone());
+        let vacuum_ident = VacuumWatermarkIdent::new_global(tenant_dbname_tbname.tenant().clone());
         let seq_vacuum_retention = kv_api.get_pb(&vacuum_ident).await?;
 
         // Early retention guard check for fast failure

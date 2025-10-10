@@ -28,7 +28,7 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
-use databend_common_meta_app::schema::vacuum_retention_ident::VacuumRetentionIdent;
+use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
@@ -119,7 +119,7 @@ where
         tenant: &Tenant,
         new_timestamp: DateTime<Utc>,
     ) -> Result<Option<VacuumWatermark>, KVAppError> {
-        let ident = VacuumRetentionIdent::new_global(tenant.clone());
+        let ident = VacuumWatermarkIdent::new_global(tenant.clone());
 
         // Use crud_upsert_with for atomic compare-and-swap semantics
         let transition = self
