@@ -397,17 +397,21 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     .unwrap_or_default();
 
                 // Check for mutually exclusive ranges in AND function
-                if function.signature.name == "and" && args_expr.len() >= 2 {
+                if function.signature.name == "and"
+                    && args_expr.len() >= 2
+                    && args_expr
+                        .iter()
+                        .all(|arg| !arg.data_type().is_nullable_or_null())
+                {
                     if let Some(is_mutually_exclusive) =
                         self.check_mutually_exclusive_ranges(&args_expr)
                     {
                         if is_mutually_exclusive {
-                            let return_type = expr.data_type();
                             return (
                                 Expr::Constant(Constant {
                                     span: *span,
                                     scalar: Scalar::Boolean(false),
-                                    data_type: return_type.clone(),
+                                    data_type: DataType::Boolean,
                                 }),
                                 None,
                             );
