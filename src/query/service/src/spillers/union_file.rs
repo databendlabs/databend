@@ -229,6 +229,17 @@ struct LocalDst {
     buf: Option<DmaWriteBuf>,
 }
 
+impl LocalDst {
+    fn close(&mut self) -> io::Result<usize> {
+        let file = self.file.take().unwrap();
+        let mut dma = self.buf.take().unwrap();
+        let file_size = dma.flush_and_close(file)?;
+
+        self.path.set_size(file_size).unwrap();
+        Ok(file_size)
+    }
+}
+
 pub struct UnionFileWriter {
     local: Option<LocalDst>,
     remote: String,
@@ -258,7 +269,7 @@ impl UnionFileWriter {
         }
     }
 
-    fn without_local(remote: String, remote_writer: BufferWriter) -> Self {
+    fn remote_only(remote: String, remote_writer: BufferWriter) -> Self {
         UnionFileWriter {
             local: None,
             remote,
@@ -315,7 +326,7 @@ impl UnionFileWriter {
 
 impl io::Write for UnionFileWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let (dma_buf, offset) = if let Some(
+        if let Some(
             local @ LocalDst {
                 file: Some(_),
                 buf: Some(_),
@@ -332,30 +343,14 @@ impl io::Write for UnionFileWriter {
             if local.dir.grow_size(&mut local.path, buf.len(), false)? {
                 dma.write(buf)?;
                 let file = local.file.as_mut().unwrap();
-                dma.flush_full_buffer(file)?;
+                dma.flush_if_full(file)?;
                 local.path.set_size(file.length()).unwrap();
                 return Ok(n);
             }
 
-            let mut file = local.file.take().unwrap();
-            dma.flush_full_buffer(&mut file)?;
-
-            let file_size = file.length();
-            local.path.set_size(file_size).unwrap();
-            drop(file);
-
-            (local.buf.take().unwrap().into_data(), file_size)
-        } else {
-            (vec![], 0)
+            self.remote_offset = local.close()? as _;
         };
 
-        if offset != 0 {
-            self.remote_offset = offset as _;
-        }
-
-        for buf in dma_buf {
-            self.remote_writer.as_mut().unwrap().write(&buf)?;
-        }
         self.remote_writer.as_mut().unwrap().write(buf)
     }
 
@@ -471,10 +466,10 @@ impl<A: SpillAdapter> SpillerInner<A> {
                 let buf = DmaWriteBuf::new(align, chunk);
                 UnionFileWriter::new(disk.clone(), path, file, buf, remote_location, remote)
             } else {
-                UnionFileWriter::without_local(remote_location, remote)
+                UnionFileWriter::remote_only(remote_location, remote)
             }
         } else {
-            UnionFileWriter::without_local(remote_location, remote)
+            UnionFileWriter::remote_only(remote_location, remote)
         };
 
         let props = WriterProperties::default().into();
@@ -599,7 +594,7 @@ mod tests {
         let writer = op.writer(&remote_path).await?;
         let remote = pool.buffer_write(writer);
 
-        let mut writer = UnionFileWriter::without_local(remote_path.clone(), remote);
+        let mut writer = UnionFileWriter::remote_only(remote_path.clone(), remote);
         let mut expected = b"hello union writer".to_vec();
         writer.write_all(&expected)?;
         let extra = b" write bytes";

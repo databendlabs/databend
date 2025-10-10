@@ -577,7 +577,7 @@ impl DmaWriteBuf {
             .push(Vec::with_capacity_in(self.chunk, self.allocator));
     }
 
-    pub fn flush_full_buffer(&mut self, file: &mut SyncDmaFile) -> io::Result<usize> {
+    pub fn flush_if_full(&mut self, file: &mut SyncDmaFile) -> io::Result<usize> {
         debug_assert_eq!(self.allocator.0, file.alignment);
 
         if self.size() < self.chunk {
