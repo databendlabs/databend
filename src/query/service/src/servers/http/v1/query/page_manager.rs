@@ -97,11 +97,11 @@ impl PageManager {
                     );
                 }
 
-                self.total_rows += num_row;
                 let page = Page {
                     data: Arc::new(serializer),
                 };
                 if num_row > 0 {
+                    self.total_rows += num_row;
                     self.total_pages += 1;
                     self.last_page = Some(page.clone());
                 }
@@ -111,10 +111,9 @@ impl PageManager {
                 // when end is set to true, client should recv a response with next_url = final_url
                 // but the response may be lost and client will retry,
                 // we simply return an empty page.
-                let page = Page {
+                Ok(Page {
                     data: Arc::new(BlocksSerializer::empty()),
-                };
-                Ok(page)
+                })
             }
         } else if page_no + 1 == next_no {
             // later, there may be other ways to ack and drop the last page except collect_new_page.
@@ -136,14 +135,12 @@ impl PageManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn detach(&mut self) {
+    pub async fn close(&mut self) {
         log::info!(
             target: "result-set-spill",
             "[RESULT-SET-SPILL] Query completed total_pages={}, total_rows={}",
             self.total_pages, self.total_rows
         );
-
-        self.last_page = None;
         if let Some(spiller) = self.receiver.close() {
             let start_time = std::time::Instant::now();
             match spiller.cleanup().await {
@@ -163,5 +160,6 @@ impl PageManager {
                 }
             }
         };
+        self.last_page = None;
     }
 }

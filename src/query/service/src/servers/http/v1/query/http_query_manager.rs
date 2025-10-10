@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::VecDeque;
+use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -34,83 +34,71 @@ use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::servers::http::v1::query::http_query::ExpireResult;
+use crate::servers::http::v1::query::http_query::ClientStateClosed;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::ServerInfo;
+use crate::servers::http::v1::query::http_query::TimeoutResult;
 
 #[derive(Clone, Debug, Copy, Eq, PartialEq)]
-pub enum StopReason {
-    Timeout,
+pub enum CloseReason {
+    Finalized,
     Canceled,
-    Finished,
+    TimedOut,
 }
 
-impl Display for StopReason {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}", format!("{self:?}").to_lowercase())
-    }
-}
-
-pub struct LimitedQueue<T> {
-    deque: VecDeque<T>,
-    max_size: usize,
-}
-
-impl<T> LimitedQueue<T> {
-    fn new(max_size: usize) -> Self {
-        LimitedQueue {
-            deque: VecDeque::new(),
-            max_size,
-        }
-    }
-
-    fn push(&mut self, item: T) -> Option<T> {
-        self.deque.push_back(item);
-        if self.deque.len() > self.max_size {
-            self.deque.pop_front()
-        } else {
-            None
+impl Display for CloseReason {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            CloseReason::Finalized => write!(f, "finalized"),
+            CloseReason::Canceled => write!(f, "canceled"),
+            CloseReason::TimedOut => write!(f, "timed out"),
         }
     }
 }
+
 #[derive(Default)]
 struct Queries {
-    #[allow(clippy::type_complexity)]
-    queries: HashMap<String, Arc<HttpQuery>>,
+    active: HashMap<String, Arc<HttpQuery>>,
     num_active_queries: u64,
     last_query_end_at: Option<u64>,
 }
 
 impl Queries {
     pub(crate) fn get(&self, query_id: &str) -> Option<Arc<HttpQuery>> {
-        self.queries.get(query_id).cloned()
+        self.active.get(query_id).cloned()
     }
 
     pub(crate) fn insert(&mut self, query: Arc<HttpQuery>) {
         self.num_active_queries += 1;
-        self.queries.insert(query.id.clone(), query);
+        self.active.insert(query.id.clone(), query);
     }
 
     pub(crate) fn remove(&mut self, query_id: &str) -> Option<Arc<HttpQuery>> {
-        self.queries.remove(query_id)
+        self.active.remove(query_id)
     }
 
-    pub(crate) fn stop(
+    pub(crate) fn close(
         &mut self,
         query_id: &str,
-        reason: StopReason,
+        reason: CloseReason,
         now: u64,
-    ) -> (Option<Arc<HttpQuery>>, bool) {
-        let q = self.queries.get(query_id).cloned();
+        client_session_id: &Option<String>,
+        check_client_session_id: bool,
+    ) -> poem::error::Result<(Option<Arc<HttpQuery>>, Option<ClientStateClosed>)> {
+        let q = self.active.get(query_id).cloned();
         if let Some(q) = q {
-            let stop_first_run = q.mark_stopped(reason);
-            if stop_first_run {
+            if check_client_session_id {
+                q.check_client_session_id(client_session_id)?;
+            }
+            let closed_state = q.mark_closed(reason);
+            if let Some(st) = closed_state {
                 self.last_query_end_at = Some(now);
                 self.num_active_queries = self.num_active_queries.saturating_sub(1);
+                log::info!("[HTTP-QUERY] Query {query_id} closed: {st:?}");
             }
-            return (Some(q), stop_first_run);
+            return Ok((Some(q), closed_state));
         }
-        (None, false)
+        Ok((None, None))
     }
 
     pub(crate) fn status(&self) -> (u64, Option<u64>) {
@@ -122,7 +110,6 @@ pub struct HttpQueryManager {
     pub(crate) start_instant: Instant,
     pub(crate) server_info: ServerInfo,
     queries: RwLock<Queries>,
-    removed_queries: Mutex<LimitedQueue<String>>,
     #[allow(clippy::type_complexity)]
     pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, JoinHandle<()>)>>>,
 }
@@ -137,7 +124,6 @@ impl HttpQueryManager {
                 start_time: chrono::Local::now().to_rfc3339_opts(SecondsFormat::Millis, false),
             },
             queries: Default::default(),
-            removed_queries: Mutex::new(LimitedQueue::new(1000)),
             txn_managers: Arc::new(Mutex::new(HashMap::new())),
         }));
 
@@ -163,7 +149,6 @@ impl HttpQueryManager {
 
         let self_clone = self.clone();
         let query_id_clone = query.id.clone();
-        let query_result_timeout_secs = query.result_timeout_secs;
 
         // downgrade to weak reference
         // it may cannot destroy with final or kill when we hold ref of Arc<HttpQuery>
@@ -175,62 +160,53 @@ impl HttpQueryManager {
                     None => {
                         break;
                     }
-                    Some(query) => query.check_expire().await,
+                    Some(query) => query.check_timeout().await,
                 };
 
                 match expire_res {
-                    ExpireResult::Expired => {
-                        let msg = format!(
-                            "[HTTP-QUERY] Query {} timed out after {} seconds",
-                            &query_id_clone, query_result_timeout_secs
-                        );
+                    TimeoutResult::TimedOut => {
                         _ = self_clone
-                            .stop_query(
-                                &query_id_clone,
-                                &None,
-                                StopReason::Timeout,
-                                ErrorCode::AbortedQuery(&msg),
-                            )
+                            .close_query(&query_id_clone, CloseReason::TimedOut, &None, false)
                             .await
                             .ok();
-                        break;
                     }
-                    ExpireResult::Sleep(t) => {
+                    TimeoutResult::Sleep(t) => {
                         sleep(t).await;
                     }
-                    ExpireResult::Stopped => {
+                    TimeoutResult::Remove => {
+                        let mut queries = self_clone.queries.write();
+                        queries.remove(&query_id_clone);
+                        log::info!("[HTTP-QUERY] Query {query_id_clone} removed");
                         break;
                     }
                 }
             }
         });
-
         query
     }
 
     #[async_backtrace::framed]
-    pub(crate) async fn stop_query(
+    pub(crate) async fn close_query(
         self: &Arc<Self>,
         query_id: &str,
+        reason: CloseReason,
         client_session_id: &Option<String>,
-        reason: StopReason,
-        error: ErrorCode,
+        check_client_session_id: bool,
     ) -> poem::error::Result<Option<Arc<HttpQuery>>> {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
-        let (query, stop_first_run) = self.queries.write().stop(query_id, reason, now);
+        let (query, closed_state) = self.queries.write().close(
+            query_id,
+            reason,
+            now,
+            client_session_id,
+            check_client_session_id,
+        )?;
         if let Some(q) = &query {
-            if reason != StopReason::Timeout {
-                q.check_client_session_id(client_session_id)?;
-            }
-            if stop_first_run {
-                q.kill(error).await;
-                let mut queue = self.removed_queries.lock();
-                if let Some(to_evict) = queue.push(q.id.to_string()) {
-                    self.queries.write().remove(&to_evict);
-                };
+            if let Some(st) = closed_state {
+                q.kill(st.error_code(q.result_timeout_secs)).await;
             }
         }
         Ok(query)
@@ -289,18 +265,18 @@ impl HttpQueryManager {
     }
 
     pub(crate) fn on_heartbeat(&self, query_ids: Vec<String>) -> Vec<String> {
-        let mut failed = vec![];
+        let mut to_stop = vec![];
         for query_id in query_ids {
-            if !self
+            let stop_heartbeat = self
                 .queries
                 .read()
                 .get(&query_id)
                 .map(|q| q.on_heartbeat())
-                .unwrap_or(false)
-            {
-                failed.push(query_id);
+                .unwrap_or(true);
+            if stop_heartbeat {
+                to_stop.push(query_id);
             }
         }
-        failed
+        to_stop
     }
 }
