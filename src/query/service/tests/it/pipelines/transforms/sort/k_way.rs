@@ -71,7 +71,7 @@ async fn run_fuzz(ctx: Arc<QueryContext>, rng: &mut ThreadRng, with_limit: bool)
 
     // println!("\nwith_limit {with_limit}");
     // for (input, blocks) in data.iter().enumerate() {
-    //     println!("intput {input}");
+    //     println!("input {input}");
     //     for b in blocks {
     //         println!("{:?}", b.columns()[0].value);
     //     }

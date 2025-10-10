@@ -2,40 +2,35 @@
 # Please list here along with a comment.
 [default.extend-words]
 # Preserved for NdJson
-"Nd" = "Nd"
-# Microsoft K8s Server
-"AKS" = "AKS"
-# Wrong cases
-"ba" = "ba"
-"ue" = "ue"
-"INOUT" = "INOUT"
-"ser" = "ser"
-"Ser" = "Ser"
-"flate" = "flate"
-"Tke" = "Tke"
-"typ" = "typ"
-"dows" = "dows"
-# created_ons & updated_ons
-"ons" = "ons"
-
-# Intentional typos used in SQL error suggestion test cases
-"tabl" = "tabl"
-"optmize" = "optmize" 
-"vacum" = "vacum"
-"creat" = "creat"
-"crate" = "crate"
+Nd = "Nd"
 
 [default.extend-identifiers]
-abd = "abd"
+
+# Wrong cases
+typ = "typ"
+Tke = "Tke"
+ba = "ba"
+
+# sql function name: diff_dows, between_dows
+diff_dows = "diff_dows"
+between_dows = "between_dows"
+
+into_flate2 = "into_flate2"
+
+# Intentional typos used in SQL error suggestion test cases
+tabl = "tabl"
+
+[default]
+extend-ignore-identifiers-re = ["^*{6}"]
 
 [files]
 extend-exclude = [
     "**/Cargo.toml",
-    "scripts/benchmark/",
     "benchmark/",
     "tests/",
-    # masked secrets
-    "src/query/config/src/mask.rs",
-    # Forked from upstream
-    "src/common/parquet2"
 ]
+
+[type.utils]
+extend-glob = ["utils.rs"]
+# test
+extend-identifiers = {abd = "abd"}
