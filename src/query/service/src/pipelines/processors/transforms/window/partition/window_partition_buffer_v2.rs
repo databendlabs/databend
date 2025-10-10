@@ -107,10 +107,10 @@ where
 {
     fn default() -> Self {
         Self {
-            state: PartitionSpillState::Empty,
-            spilled_ordinals: Vec::new(),
-            buffered_blocks: Vec::new(),
-            buffered_size: 0,
+            state: Default::default(),
+            spilled_ordinals: Default::default(),
+            buffered_blocks: Default::default(),
+            buffered_size: Default::default(),
         }
     }
 }
