@@ -24,7 +24,6 @@ use std::time::Instant;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -357,13 +356,13 @@ impl Spiller {
 }
 
 #[derive(Clone)]
-pub struct WindowWriterAdapter {
+pub struct BackpressureAdapter {
     ctx: Arc<QueryContext>,
     buffer_pool: Arc<BufferPool>,
     chunk_size: usize,
 }
 
-impl WindowWriterAdapter {
+impl BackpressureAdapter {
     fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
         if location.is_remote() {
             self.ctx.as_ref().incr_spill_progress(1, size);
@@ -374,25 +373,21 @@ impl WindowWriterAdapter {
     }
 }
 
-pub type WindowSpiller = SpillerInner<WindowWriterAdapter>;
+pub type BackpressureSpiller = SpillerInner<BackpressureAdapter>;
 
-impl WindowSpiller {
+impl BackpressureSpiller {
     pub fn create(
         ctx: Arc<QueryContext>,
         operator: Operator,
         config: SpillerConfig,
+        buffer_pool: Arc<BufferPool>,
+        chunk_size: usize,
     ) -> Result<Self> {
-        let runtime = GlobalIORuntime::instance();
-        let buffer_pool = BufferPool::create(
-            runtime,
-            WINDOW_SPILL_BUFFER_MEMORY_BYTES,
-            WINDOW_SPILL_BUFFER_WORKERS,
-        );
         Self::new(
-            WindowWriterAdapter {
+            BackpressureAdapter {
                 ctx,
                 buffer_pool,
-                chunk_size: WINDOW_SPILL_CHUNK_SIZE,
+                chunk_size,
             },
             operator,
             config,
@@ -419,12 +414,8 @@ pub struct Chunk {
     pub layout: Layout,
 }
 
-const WINDOW_SPILL_BUFFER_MEMORY_BYTES: usize = 64 * 1024 * 1024;
-const WINDOW_SPILL_BUFFER_WORKERS: usize = 2;
-const WINDOW_SPILL_CHUNK_SIZE: usize = 8 * 1024 * 1024;
-
 pub struct SpillWriter {
-    spiller: WindowSpiller,
+    spiller: BackpressureSpiller,
     chunk_size: usize,
     schema: Arc<DataSchema>,
     file_writer: Option<FileWriter<UnionFileWriter>>,
@@ -517,7 +508,7 @@ impl SpillWriter {
 }
 
 pub struct SpillReader {
-    spiller: WindowSpiller,
+    spiller: BackpressureSpiller,
     schema: Arc<DataSchema>,
     parquet_metadata: Arc<ParquetMetaData>,
     union_file: UnionFile,

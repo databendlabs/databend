@@ -181,6 +181,7 @@ impl IPhysicalPlan for WindowPartition {
                     num_partitions,
                     window_spill_settings.clone(),
                     disk_spill.clone(),
+                    true,
                     strategy,
                 )?,
             )))

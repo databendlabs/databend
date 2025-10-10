@@ -24,6 +24,7 @@ mod test_memory;
 mod union_file;
 
 pub use adapter::*;
+pub use async_buffer::BufferPool;
 pub use block_writer::*;
 pub use databend_common_pipeline_transforms::traits::Location;
 pub use inner::*;

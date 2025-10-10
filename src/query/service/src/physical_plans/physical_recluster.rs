@@ -350,6 +350,7 @@ impl IPhysicalPlan for HilbertPartition {
                     self.num_partitions,
                     window_spill_settings.clone(),
                     disk_spill.clone(),
+                    false,
                     CompactStrategy::new(self.rows_per_block, max_bytes_per_block),
                 )?,
             )))

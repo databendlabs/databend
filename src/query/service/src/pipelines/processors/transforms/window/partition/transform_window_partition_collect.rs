@@ -20,6 +20,7 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -30,17 +31,19 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
+use either::Either;
 
 use super::window_partition_buffer_v2::WindowPartitionBufferV2;
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
 use crate::pipelines::processors::transforms::DataProcessorStrategy;
 use crate::sessions::QueryContext;
+use crate::spillers::BackpressureSpiller;
+use crate::spillers::BufferPool;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
-use crate::spillers::WindowSpiller;
 
 enum WindowBuffer {
     V1(WindowPartitionBuffer),
@@ -49,29 +52,30 @@ enum WindowBuffer {
 
 impl WindowBuffer {
     fn new(
-        is_v2: bool,
-        partition_spiller: Spiller,
-        writer_spiller: WindowSpiller,
+        spiller: Either<Spiller, BackpressureSpiller>,
         num_partitions: usize,
         sort_block_size: usize,
         memory_settings: MemorySettings,
     ) -> Result<Self> {
-        if is_v2 {
-            let inner = WindowPartitionBufferV2::new(
-                writer_spiller,
-                num_partitions,
-                sort_block_size,
-                memory_settings,
-            )?;
-            Ok(Self::V2(inner))
-        } else {
-            let inner = WindowPartitionBuffer::new(
-                partition_spiller,
-                num_partitions,
-                sort_block_size,
-                memory_settings,
-            )?;
-            Ok(Self::V1(inner))
+        match spiller {
+            Either::Left(spiller) => {
+                let inner = WindowPartitionBuffer::new(
+                    spiller,
+                    num_partitions,
+                    sort_block_size,
+                    memory_settings,
+                )?;
+                Ok(Self::V1(inner))
+            }
+            Either::Right(spiller) => {
+                let inner = WindowPartitionBufferV2::new(
+                    spiller,
+                    num_partitions,
+                    sort_block_size,
+                    memory_settings,
+                )?;
+                Ok(Self::V2(inner))
+            }
         }
     }
 
@@ -150,6 +154,7 @@ pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
 }
 
 impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
@@ -160,6 +165,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
         num_partitions: usize,
         memory_settings: MemorySettings,
         disk_spill: Option<SpillerDiskConfig>,
+        enable_backpressure_spiller: bool,
         strategy: S,
     ) -> Result<Self> {
         // Calculate the partition ids collected by the processor.
@@ -183,20 +189,24 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
 
         // Create spillers for window operator.
         let operator = DataOperator::instance().spill_operator();
-        let partition_spiller =
-            Spiller::create(ctx.clone(), operator.clone(), spill_config.clone())?;
-        let window_spiller = WindowSpiller::create(ctx, operator, spill_config)?;
+        let spiller = if !enable_backpressure_spiller {
+            Either::Left(Spiller::create(ctx, operator, spill_config)?)
+        } else {
+            let runtime = GlobalIORuntime::instance();
+            let buffer_pool = BufferPool::create(runtime, 128 * 1024 * 1024, 3);
+            Either::Right(BackpressureSpiller::create(
+                ctx,
+                operator,
+                spill_config,
+                buffer_pool,
+                8 * 1024 * 1024,
+            )?)
+        };
 
         // Create the window partition buffer.
         let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
-        let buffer = WindowBuffer::new(
-            true,
-            partition_spiller,
-            window_spiller,
-            partitions.len(),
-            sort_block_size,
-            memory_settings,
-        )?;
+        let buffer =
+            WindowBuffer::new(spiller, partitions.len(), sort_block_size, memory_settings)?;
 
         Ok(Self {
             input,
