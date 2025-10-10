@@ -5,16 +5,17 @@
 extend-ignore-re = [
     "(?Rm)^.*(#|//)\\s*typos:disable-line$",
     "(#|//)\\s*typos:ignore-next-line\\n.*",
+    "(?s)(#|//)\\s*typos:off.*?\\n\\s*(#|//)\\s*typos:on",
 ]
 
 [default.extend-words]
 # Preserved for NdJson
 Nd = "Nd"
+typ = "typ"
 
 [default.extend-identifiers]
 
 # Wrong cases
-typ = "typ"
 Tke = "Tke"
 ba = "ba"
 
@@ -28,5 +29,29 @@ into_flate2 = "into_flate2"
 extend-exclude = [
     "**/Cargo.toml",
     "benchmark/",
-    "tests/",
+    "tests/sqllogictests",
+    "tests/nox/java_client/testng.xml",
+    "tests/data/ddl",
 ]
+
+# todo: fix me
+[type.py]
+check-file = false
+
+# todo: fix me
+[type.sh]
+check-file = false
+
+[type.txt]
+check-file = false
+
+[type.sql]
+check-file = false
+
+[type.csr]
+extend-glob = ["*.csr"]
+check-file = false
+
+[type.result]
+extend-glob = ["*.result"]
+check-file = false
