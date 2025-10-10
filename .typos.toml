@@ -25,6 +25,10 @@
 "creat" = "creat"
 "crate" = "crate"
 
+[default.extend-identifiers]
+## External
+WRONLY = "WRONLY"
+
 [files]
 extend-exclude = [
     "**/Cargo.toml",
