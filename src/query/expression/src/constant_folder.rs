@@ -908,7 +908,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 c1.constant <= c2.constant
             }
             ("gt", "eq") => {
-                // x > a AND x = b where b <= a (互斥)
+                // x > a AND x = b where b <= a
                 c2.constant <= c1.constant
             }
             ("eq", "gte") => {
