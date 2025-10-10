@@ -70,6 +70,10 @@ text      : a < 2 and a >= 2
 expr      : and<Boolean, Boolean>(lt<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)), gte<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)))
 keep      : false
 
+text      : a = 5 and a != 5
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 5_i32), noteq<Int32, Int32>(a, CAST<UInt8>(5_u8 AS Int32)))
+keep      : false
+
 text      : to_string(a) = '4'
 expr      : eq<String, String>(CAST<Int32>(a AS String), "4")
 keep      : false

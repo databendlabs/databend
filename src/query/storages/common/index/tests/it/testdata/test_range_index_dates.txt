@@ -20,5 +20,5 @@ keep      : false
 
 text      : ts = '2019-05-01 12:00:00' and ts != '2019-05-01 12:00:00'
 expr      : and<Boolean, Boolean>(eq<Timestamp, Timestamp>(ts, CAST<String>("2019-05-01 12:00:00" AS Timestamp)), noteq<Timestamp, Timestamp>(ts, CAST<String>("2019-05-01 12:00:00" AS Timestamp)))
-keep      : true
+keep      : false
 

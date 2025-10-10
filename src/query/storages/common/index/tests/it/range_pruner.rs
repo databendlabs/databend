@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -51,7 +51,6 @@ fn test_range_index() -> Result<()> {
     run_text(file, "a = 2 and a < 1", domains);
     run_text(file, "a < 2 and a > 2", domains);
 
-    // test not keep - more mutual exclusion cases
     run_text(file, "a >= 3 and a < 2", domains);
     run_text(file, "a <= 1 and a > 3", domains);
     run_text(file, "a = 5 and a = 7", domains);
@@ -71,6 +70,7 @@ fn test_range_index() -> Result<()> {
     // test edge cases
     run_text(file, "a > 2 and a <= 2", domains);
     run_text(file, "a < 2 and a >= 2", domains);
+    run_text(file, "a = 5 and a != 5", domains);
 
     run_text(file, "to_string(a) = '4'", domains);
     run_text(file, "to_string(a) = 'a'", domains);
@@ -108,21 +108,21 @@ fn test_range_index_dates() -> Result<()> {
         file,
         "dt > '2019-05-01' and dt < '2019-04-30'",
         date_domains,
-        vec![TableField::new("dt", TableDataType::Date)]
+        vec![TableField::new("dt", TableDataType::Date)],
     );
 
     run_text_with_schema(
         file,
         "dt = '2019-05-01' and dt < '2019-04-30'",
         date_domains,
-        vec![TableField::new("dt", TableDataType::Date)]
+        vec![TableField::new("dt", TableDataType::Date)],
     );
 
     run_text_with_schema(
         file,
         "dt >= '2019-05-02' and dt <= '2019-05-01'",
         date_domains,
-        vec![TableField::new("dt", TableDataType::Date)]
+        vec![TableField::new("dt", TableDataType::Date)],
     );
 
     // Non-mutual exclusion cases
@@ -130,26 +130,30 @@ fn test_range_index_dates() -> Result<()> {
         file,
         "dt >= '2019-04-28' and dt <= '2019-05-03'",
         date_domains,
-        vec![TableField::new("dt", TableDataType::Date)]
+        vec![TableField::new("dt", TableDataType::Date)],
     );
 
     // Test timestamp ranges
     let ts_domains = &[
-        ("ts", timestamp_scalar(1556668800000000), timestamp_scalar(1556755200000000)), // 2019-05-01 to 2019-05-02
+        (
+            "ts",
+            timestamp_scalar(1556668800000000),
+            timestamp_scalar(1556755200000000),
+        ), // 2019-05-01 to 2019-05-02
     ];
 
     run_text_with_schema(
         file,
         "ts > '2019-05-01 12:00:00' and ts < '2019-05-01 06:00:00'",
         ts_domains,
-        vec![TableField::new("ts", TableDataType::Timestamp)]
+        vec![TableField::new("ts", TableDataType::Timestamp)],
     );
 
     run_text_with_schema(
         file,
         "ts = '2019-05-01 12:00:00' and ts != '2019-05-01 12:00:00'",
         ts_domains,
-        vec![TableField::new("ts", TableDataType::Timestamp)]
+        vec![TableField::new("ts", TableDataType::Timestamp)],
     );
 
     Ok(())
@@ -159,13 +163,14 @@ fn run_text_with_schema(
     file: &mut impl Write,
     text: &str,
     domains: &[(&str, Scalar, Scalar)],
-    fields: Vec<TableField>
+    fields: Vec<TableField>,
 ) {
     let func_ctx = FunctionContext::default();
     let schema = Arc::new(TableSchema::new(fields.clone()));
     let stats = create_stats(domains, &schema);
 
-    let columns: Vec<(&str, DataType)> = fields.iter()
+    let columns: Vec<(&str, DataType)> = fields
+        .iter()
         .map(|f| (f.name().as_str(), f.data_type().into()))
         .collect();
 

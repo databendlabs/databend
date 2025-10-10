@@ -836,7 +836,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 }
 
                 let op = function.signature.name.as_str();
-                if !matches!(op, "gt" | "gte" | "lt" | "lte" | "eq") {
+                if !matches!(op, "gt" | "gte" | "lt" | "lte" | "eq" | "noteq") {
                     return None;
                 }
 
@@ -861,6 +861,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         "lt" => "gt",
                         "lte" => "gte",
                         "eq" => "eq",
+                        "noteq" => "noteq",
                         _ => return None,
                     };
                     return Some(RangeConstraint {
@@ -924,6 +925,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             ("eq", "eq") => {
                 // x = a AND x = b where a != b
                 c1.constant != c2.constant
+            }
+            ("eq", "noteq") | ("noteq", "eq") => {
+                // x = a AND x != b where a == b
+                c1.constant == c2.constant
             }
             _ => false,
         }
