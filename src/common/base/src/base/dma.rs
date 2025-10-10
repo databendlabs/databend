@@ -200,7 +200,7 @@ pub struct DmaFile<F> {
     fd: F,
     alignment: Alignment,
     buf: Option<DmaBuffer>,
-    written: usize,
+    offset: usize,
 }
 
 impl<F: AsFd> DmaFile<F> {
@@ -235,9 +235,10 @@ impl<F: AsFd> DmaFile<F> {
     fn write_direct(&mut self) -> io::Result<usize> {
         let buf = self.buf.as_ref().unwrap().as_slice();
         let mut written = 0;
+        let offset = self.align_down(self.offset);
 
         while written < buf.len() {
-            match rustix::io::write(&self.fd, &buf[written..]) {
+            match rustix::io::pwrite(&self.fd, &buf[written..], (offset + written) as _) {
                 Ok(0) => {
                     return Err(io::Error::new(
                         io::ErrorKind::WriteZero,
@@ -246,6 +247,7 @@ impl<F: AsFd> DmaFile<F> {
                 }
                 Ok(n) => {
                     written += n;
+                    self.offset = offset + written
                 }
                 Err(err) => {
                     if err.kind() == io::ErrorKind::Interrupted {
@@ -255,15 +257,14 @@ impl<F: AsFd> DmaFile<F> {
                 }
             }
         }
-        self.inc_written(written);
         self.mut_buffer().clear();
         Ok(written)
     }
 
-    fn inc_written(&mut self, n: usize) {
+    fn inc_offset(&mut self, n: usize) {
         debug_assert!(n >= self.alignment.as_usize());
         debug_assert_eq!(n, self.alignment.align_down(n));
-        self.written = self.align_down(self.written) + n;
+        self.offset = self.align_down(self.offset) + n;
     }
 
     fn read_direct(&mut self, n: usize) -> io::Result<usize> {
@@ -296,7 +297,7 @@ impl<F: AsFd> DmaFile<F> {
     }
 
     pub fn length(&self) -> usize {
-        self.written
+        self.offset
     }
 }
 
@@ -367,7 +368,7 @@ impl AsyncDmaFile {
             fd: file,
             alignment,
             buf: None,
-            written: 0,
+            offset: 0,
         })
     }
 
@@ -403,7 +404,7 @@ impl AsyncDmaFile {
                     fd: unsafe { BorrowedFd::borrow_raw(fd) },
                     alignment,
                     buf: Some(buf),
-                    written: 0,
+                    offset: 0,
                 };
                 file.read_direct(remain).map(|n| (file.buf.unwrap(), n))
             })
@@ -434,9 +435,9 @@ impl SyncDmaFile {
 
     fn create_fd(path: impl rustix::path::Arg, dio: bool) -> io::Result<OwnedFd> {
         let flags = if cfg!(target_os = "linux") && dio {
-            OFlags::EXCL | OFlags::CREATE | OFlags::TRUNC | OFlags::RDWR | OFlags::DIRECT
+            OFlags::EXCL | OFlags::CREATE | OFlags::TRUNC | OFlags::WRONLY | OFlags::DIRECT
         } else {
-            OFlags::EXCL | OFlags::CREATE | OFlags::TRUNC | OFlags::RDWR
+            OFlags::EXCL | OFlags::CREATE | OFlags::TRUNC | OFlags::WRONLY
         };
 
         rustix::fs::open(path, flags, rustix::fs::Mode::from_raw_mode(0o666))
@@ -451,7 +452,7 @@ impl SyncDmaFile {
             fd,
             alignment,
             buf: None,
-            written: 0,
+            offset: 0,
         })
     }
 
@@ -509,7 +510,7 @@ impl DmaWriteBuf {
             fd: AsyncDmaFile::create_fd(path, dio).await?,
             alignment: self.allocator.0,
             buf: None,
-            written: 0,
+            offset: 0,
         };
 
         let file_length = self.size();
@@ -597,7 +598,7 @@ impl DmaWriteBuf {
         let len = data.len() * self.chunk;
 
         let mut io_slices: Vec<_> = data.iter().map(|buf| IoSlice::new(buf)).collect();
-        let written = writev_all(&file.fd, &mut io_slices)?;
+        let written = writev_all(&file.fd, &mut io_slices, file.align_down(file.offset))?;
 
         let last = self.data.pop();
         self.data.clear();
@@ -608,7 +609,7 @@ impl DmaWriteBuf {
             _ => (),
         }
 
-        file.inc_written(written);
+        file.inc_offset(written);
 
         if written != len {
             Err(io::Error::other("short write"))
@@ -631,7 +632,7 @@ impl DmaWriteBuf {
         let last = if let Some(mut last) = last {
             if self.data.is_empty() {
                 use std::cmp::Ordering::*;
-                match (file.written - file.align_down(file.written)).cmp(&last.len()) {
+                match (file.offset - file.align_down(file.offset)).cmp(&last.len()) {
                     Equal => return Ok(()),
                     Greater => unreachable!(),
                     Less => {}
@@ -653,21 +654,16 @@ impl DmaWriteBuf {
             .map(|buf| IoSlice::new(buf))
             .chain(last.as_ref().map(|last| IoSlice::new(&last.0)))
             .collect();
-        let written = writev_all(&file.fd, &mut slices[..])?;
+        let written = writev_all(&file.fd, &mut slices[..], file.align_down(file.offset))?;
         self.data.clear();
 
-        file.inc_written(written);
+        file.inc_offset(written);
 
         if let Some((last, len, pad)) = last {
-            file.written -= pad;
-            file.truncate(file.written)?;
+            file.offset -= pad;
+            file.truncate(file.offset)?;
 
             if !close {
-                rustix::fs::seek(
-                    &file.fd,
-                    rustix::fs::SeekFrom::Start(file.align_down(file.written) as _),
-                )
-                .map_err(io::Error::from)?;
                 self.write_all(&last[file.align_down(len)..(file.align_up(len) - pad)])?;
             }
         }
@@ -685,18 +681,21 @@ impl DmaWriteBuf {
     }
 }
 
-fn writev_all(fd: impl AsFd, mut slices: &mut [IoSlice<'_>]) -> io::Result<usize> {
+fn writev_all(fd: impl AsFd, mut slices: &mut [IoSlice<'_>], offset: usize) -> io::Result<usize> {
     let mut written = 0;
 
     while !slices.is_empty() {
-        let n = match rustix::io::writev(fd.as_fd(), slices) {
+        match rustix::io::pwritev(fd.as_fd(), slices, (offset + written) as _) {
             Ok(0) => {
                 return Err(io::Error::new(
                     io::ErrorKind::WriteZero,
                     "writev returned zero bytes",
                 ));
             }
-            Ok(n) => n,
+            Ok(n) => {
+                written += n;
+                IoSlice::advance_slices(&mut slices, n);
+            }
             Err(err) => {
                 if err.kind() == io::ErrorKind::Interrupted {
                     continue;
@@ -704,9 +703,6 @@ fn writev_all(fd: impl AsFd, mut slices: &mut [IoSlice<'_>]) -> io::Result<usize
                 return Err(err.into());
             }
         };
-
-        written += n;
-        IoSlice::advance_slices(&mut slices, n);
     }
 
     Ok(written)
@@ -1004,7 +1000,7 @@ mod tests {
 
     #[test]
     fn test_write() -> io::Result<()> {
-        let filename = "test_file";
+        let filename = "test_write_file";
         let _ = std::fs::remove_file(filename);
         let mut file = SyncDmaFile::create(filename, true)?;
 
@@ -1015,7 +1011,7 @@ mod tests {
             buf.flush(&mut file)?;
             file.fsync()?;
 
-            assert_eq!(file.written, 1);
+            assert_eq!(file.offset, 1);
 
             let mut got = Vec::new();
             let mut read = std::fs::File::open(filename)?;
@@ -1031,7 +1027,7 @@ mod tests {
             buf.flush(&mut file)?;
             file.fsync()?;
 
-            assert_eq!(file.written, 3);
+            assert_eq!(file.offset, 3);
 
             let mut got = Vec::new();
             let mut read = std::fs::File::open(filename)?;
@@ -1053,7 +1049,7 @@ mod tests {
             buf.flush(&mut file)?;
             file.fsync()?;
 
-            assert_eq!(file.written, 3 + data.len());
+            assert_eq!(file.offset, 3 + data.len());
 
             let mut got = Vec::new();
             let mut read = std::fs::File::open(filename)?;
@@ -1063,6 +1059,8 @@ mod tests {
             let want: Vec<_> = [&b"123"[..], &data].concat();
             assert_eq!(want.as_slice(), got.as_slice());
         }
+
+        let _ = std::fs::remove_file(filename);
 
         Ok(())
     }

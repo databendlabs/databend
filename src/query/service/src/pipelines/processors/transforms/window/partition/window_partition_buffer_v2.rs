@@ -134,22 +134,11 @@ where
     }
 
     fn fetch_blocks(&mut self, threshold: Option<usize>) -> Option<Vec<DataBlock>> {
-        match threshold {
-            None => {
-                if self.buffered_blocks.is_empty() {
-                    None
-                } else {
-                    Some(self.buffered_blocks.clone())
-                }
-            }
-            Some(threshold) => {
-                if self.buffered_size >= threshold {
-                    self.buffered_size = 0;
-                    Some(std::mem::take(&mut self.buffered_blocks))
-                } else {
-                    None
-                }
-            }
+        if self.buffered_size >= threshold.unwrap_or_default() {
+            self.buffered_size = 0;
+            Some(std::mem::take(&mut self.buffered_blocks))
+        } else {
+            None
         }
     }
 
@@ -189,7 +178,7 @@ where B: Builder
     spiller: B,
     partitions: Vec<PartitionSlot<B::Writer>>,
     memory_settings: MemorySettings,
-    min_spill_size: usize,
+    min_row_group_size: usize,
     num_partitions: usize,
     sort_block_size: usize,
     can_spill: bool,
@@ -212,7 +201,7 @@ where B: Builder
             spiller,
             partitions,
             memory_settings,
-            min_spill_size: 1024 * 1024,
+            min_row_group_size: 10 * 1024 * 1024,
             num_partitions,
             sort_block_size,
             can_spill: false,
@@ -238,7 +227,7 @@ where B: Builder
         }
         let partition = &mut self.partitions[partition_id];
         partition.add_block(data_block);
-        if !self.can_spill && partition.memory_size() >= self.min_spill_size {
+        if !self.can_spill && partition.memory_size() >= self.min_row_group_size {
             self.can_spill = true;
         }
     }
@@ -273,7 +262,7 @@ where B: Builder
         }
 
         if let Some((partition_id, size)) = preferred_partition
-            && size >= self.min_spill_size
+            && size >= self.min_row_group_size
         {
             let partition = &mut self.partitions[partition_id];
             let blocks = partition.fetch_blocks(None).unwrap();
