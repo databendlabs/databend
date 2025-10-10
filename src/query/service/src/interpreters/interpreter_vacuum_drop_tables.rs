@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
