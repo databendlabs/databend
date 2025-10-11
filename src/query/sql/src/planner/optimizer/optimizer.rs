@@ -38,6 +38,7 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use crate::optimizer::optimizers::CTEFilterPushdownOptimizer;
 use crate::optimizer::optimizers::CascadesOptimizer;
+use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::pipeline::OptimizerPipeline;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
@@ -261,28 +262,30 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
         ]))
-        // 10. Apply DPhyp algorithm for cost-based join reordering
+        // 10. Apply CSE optimization to reduce redundant computations
+        .add(CommonSubexpressionOptimizer::new(opt_ctx.clone()))
+        // 11. Apply DPhyp algorithm for cost-based join reordering
         .add(DPhpyOptimizer::new(opt_ctx.clone()))
-        // 11. After join reorder, Convert some single join to inner join.
+        // 12. After join reorder, Convert some single join to inner join.
         .add(SingleToInnerOptimizer::new())
-        // 12. Deduplicate join conditions.
+        // 13. Deduplicate join conditions.
         .add(DeduplicateJoinConditionOptimizer::new())
-        // 13. Apply join commutativity to further optimize join ordering
+        // 14. Apply join commutativity to further optimize join ordering
         .add_if(
             opt_ctx.get_enable_join_reorder(),
             RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice()),
         )
-        // 14. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
+        // 15. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
         .add(CascadesOptimizer::new(opt_ctx.clone())?)
-        // 15. Eliminate unnecessary scalar calculations to clean up the final plan
+        // 16. Eliminate unnecessary scalar calculations to clean up the final plan
         .add_if(
             !opt_ctx.get_planning_agg_index(),
             RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
         )
-        // 16. Clean up unused CTEs
+        // 17. Clean up unused CTEs
         .add(CleanupUnusedCTEOptimizer);
 
-    // 17. Execute the pipeline
+    // 18. Execute the pipeline
     let s_expr = pipeline.execute().await?;
 
     Ok(s_expr)

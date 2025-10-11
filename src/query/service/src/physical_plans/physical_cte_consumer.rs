@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -93,11 +94,23 @@ impl PhysicalPlanBuilder {
         cte_consumer: &databend_common_sql::plans::MaterializedCTERef,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
+        let def_to_ref = cte_consumer
+            .column_mapping
+            .iter()
+            .map(|(k, v)| (*v, *k))
+            .collect::<HashMap<_, _>>();
+        let cte_output_columns: Vec<_> = self
+            .cte_required_columns
+            .get(&cte_consumer.cte_name)
+            .unwrap()
+            .iter()
+            .map(|c| def_to_ref.get(c).unwrap())
+            .collect();
         let mut fields = Vec::new();
         let metadata = self.metadata.read();
 
-        for index in &cte_consumer.output_columns {
-            let column = metadata.column(*index);
+        for index in cte_output_columns.iter() {
+            let column = metadata.column(**index);
             let data_type = column.data_type();
             fields.push(DataField::new(&index.to_string(), data_type));
         }
