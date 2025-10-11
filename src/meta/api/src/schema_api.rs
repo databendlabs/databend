@@ -21,6 +21,7 @@ use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::UndropTableAlreadyExists;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
+use databend_common_meta_app::app_error::UndropTableRetentionGuard;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -29,6 +30,7 @@ use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedInde
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
 use databend_common_meta_app::schema::marked_deleted_table_index_ident::MarkedDeletedTableIndexIdIdent;
+use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
@@ -459,9 +461,38 @@ pub async fn handle_undrop_table(
             "undrop table"
         );
 
+        // Check vacuum retention guard before allowing undrop
+        let drop_marker = *seq_table_meta
+            .data
+            .drop_on
+            .as_ref()
+            .unwrap_or(&seq_table_meta.data.updated_on);
+
+        // Read vacuum timestamp with seq for concurrent safety
+        let vacuum_ident = VacuumWatermarkIdent::new_global(tenant_dbname_tbname.tenant().clone());
+        let seq_vacuum_retention = kv_api.get_pb(&vacuum_ident).await?;
+
+        // Early retention guard check for fast failure
+        if let Some(ref sr) = seq_vacuum_retention {
+            let retention_time = sr.data.time;
+
+            if drop_marker <= retention_time {
+                return Err(KVAppError::AppError(AppError::UndropTableRetentionGuard(
+                    UndropTableRetentionGuard::new(
+                        &tenant_dbname_tbname.table_name,
+                        drop_marker,
+                        retention_time,
+                    ),
+                )));
+            }
+        }
+
         {
             // reset drop on time
             seq_table_meta.drop_on = None;
+
+            // Prepare conditions for concurrent safety
+            let vacuum_seq = seq_vacuum_retention.as_ref().map(|sr| sr.seq).unwrap_or(0);
 
             let txn = TxnRequest::new(
                 vec![
@@ -472,6 +503,10 @@ pub async fn handle_undrop_table(
                     txn_cond_eq_seq(&dbid_tbname, dbid_tbname_seq),
                     // table is not changed
                     txn_cond_eq_seq(&tbid, seq_table_meta.seq),
+                    // Concurrent safety: vacuum timestamp seq must not change during undrop
+                    // - If vacuum_retention exists: seq must remain the same (no update by vacuum)
+                    // - If vacuum_retention is None: seq must remain 0 (no creation by vacuum)
+                    txn_cond_eq_seq(&vacuum_ident, vacuum_seq),
                 ],
                 vec![
                     // Changing a table in a db has to update the seq of db_meta,

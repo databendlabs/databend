@@ -14,6 +14,8 @@
 
 use std::fmt::Display;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_types::MatchSeq;
 
@@ -258,6 +260,36 @@ impl UndropTableHasNoHistory {
         Self {
             table_name: table_name.into(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("Cannot undrop table '{table_name}': table was dropped at {drop_time} before vacuum started at {retention}. Data may have been cleaned up.")]
+pub struct UndropTableRetentionGuard {
+    table_name: String,
+    drop_time: DateTime<Utc>,
+    retention: DateTime<Utc>,
+}
+
+impl UndropTableRetentionGuard {
+    pub fn new(
+        table_name: impl Into<String>,
+        drop_time: DateTime<Utc>,
+        retention: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            table_name: table_name.into(),
+            drop_time,
+            retention,
+        }
+    }
+
+    pub fn drop_time(&self) -> DateTime<Utc> {
+        self.drop_time
+    }
+
+    pub fn retention(&self) -> DateTime<Utc> {
+        self.retention
     }
 }
 
@@ -1009,6 +1041,9 @@ pub enum AppError {
     UndropTableHasNoHistory(#[from] UndropTableHasNoHistory),
 
     #[error(transparent)]
+    UndropTableRetentionGuard(#[from] UndropTableRetentionGuard),
+
+    #[error(transparent)]
     DatabaseAlreadyExists(#[from] DatabaseAlreadyExists),
 
     #[error(transparent)]
@@ -1461,6 +1496,11 @@ impl AppErrorMessage for UndropTableWithNoDropTime {
     }
 }
 
+impl AppErrorMessage for UndropTableRetentionGuard {
+    // Use default implementation that calls self.to_string()
+    // since there's no sensitive information to strip
+}
+
 impl AppErrorMessage for DropTableWithDropTime {
     fn message(&self) -> String {
         format!("Drop table '{}' with drop_on time", self.table_name)
@@ -1589,6 +1629,9 @@ impl From<AppError> for ErrorCode {
             AppError::UndropDbHasNoHistory(err) => ErrorCode::UndropDbHasNoHistory(err.message()),
             AppError::UndropTableWithNoDropTime(err) => {
                 ErrorCode::UndropTableWithNoDropTime(err.message())
+            }
+            AppError::UndropTableRetentionGuard(err) => {
+                ErrorCode::UndropTableRetentionGuard(err.message())
             }
             AppError::DropTableWithDropTime(err) => ErrorCode::DropTableWithDropTime(err.message()),
             AppError::DropDbWithDropTime(err) => ErrorCode::DropDbWithDropTime(err.message()),

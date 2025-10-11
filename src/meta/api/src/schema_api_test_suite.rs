@@ -56,6 +56,7 @@ use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -351,6 +352,7 @@ impl SchemaApiTestSuite {
         suite.gc_dropped_db_after_undrop(&b.build().await).await?;
         suite.catalog_create_get_list_drop(&b.build().await).await?;
         suite.table_least_visible_time(&b.build().await).await?;
+        suite.vacuum_retention_timestamp(&b.build().await).await?;
         suite
             .drop_table_without_tableid_to_name(&b.build().await)
             .await?;
@@ -1480,6 +1482,88 @@ impl SchemaApiTestSuite {
             assert_eq!(res.time, time_bigger);
             let res = mt.get_pb(&lvt_name_ident).await?;
             assert_eq!(res.unwrap().data.time, time_bigger);
+        }
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    async fn vacuum_retention_timestamp<MT: SchemaApi + kvapi::KVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "vacuum_retention_timestamp";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        // Test basic timestamp operations - monotonic property
+        let first = DateTime::<Utc>::from_timestamp(1_000, 0).unwrap();
+        let earlier = DateTime::<Utc>::from_timestamp(500, 0).unwrap();
+        let later = DateTime::<Utc>::from_timestamp(2_000, 0).unwrap();
+
+        // Test fetch_set_vacuum_timestamp with correct return semantics
+        let old_retention = mt.fetch_set_vacuum_timestamp(&tenant, first).await?;
+        // Should return None as old value since never set before
+        assert_eq!(old_retention, None);
+
+        // Attempt to set earlier timestamp should return current value (first) unchanged
+        let old_retention = mt.fetch_set_vacuum_timestamp(&tenant, earlier).await?;
+        assert_eq!(old_retention.unwrap().time, first); // Should return the PREVIOUS value
+
+        // Set later timestamp should work and return previous value (first)
+        let old_retention = mt.fetch_set_vacuum_timestamp(&tenant, later).await?;
+        assert_eq!(old_retention.unwrap().time, first); // Should return PREVIOUS value (first)
+
+        // Verify current stored value
+        let vacuum_ident = VacuumWatermarkIdent::new_global(tenant.clone());
+        let stored = mt.get_pb(&vacuum_ident).await?;
+        assert_eq!(stored.unwrap().data.time, later);
+
+        // Test undrop retention guard behavior
+        {
+            let mut util = Util::new(
+                mt,
+                tenant_name,
+                "db_retention_guard",
+                "tbl_retention_guard",
+                "FUSE",
+            );
+            util.create_db().await?;
+            let (table_id, _table_meta) = util.create_table().await?;
+            util.drop_table_by_id().await?;
+
+            let table_meta = mt
+                .get_pb(&TableId::new(table_id))
+                .await?
+                .expect("dropped table meta must exist");
+            let drop_time = table_meta
+                .data
+                .drop_on
+                .expect("dropped table should carry drop_on timestamp");
+
+            // Set retention timestamp after drop time to block undrop
+            let retention_candidate = drop_time + chrono::Duration::seconds(1);
+            let old_retention = mt
+                .fetch_set_vacuum_timestamp(&tenant, retention_candidate)
+                .await?
+                .unwrap();
+            // Should return the previous retention time (later)
+            assert_eq!(old_retention.time, later);
+
+            // Undrop should now fail due to retention guard
+            let undrop_err = mt
+                .undrop_table(UndropTableReq {
+                    name_ident: TableNameIdent::new(&tenant, util.db_name(), util.tbl_name()),
+                })
+                .await
+                .expect_err("undrop must fail once vacuum retention blocks it");
+
+            match undrop_err {
+                KVAppError::AppError(AppError::UndropTableRetentionGuard(e)) => {
+                    assert_eq!(e.drop_time(), drop_time);
+                    assert_eq!(e.retention(), retention_candidate);
+                }
+                other => panic!("unexpected undrop error: {other:?}"),
+            }
         }
 
         Ok(())
