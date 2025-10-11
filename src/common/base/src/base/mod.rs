@@ -31,13 +31,7 @@ mod uniq_id;
 mod watch_notify;
 
 pub use build_info::*;
-pub use dma::dma_buffer_to_bytes;
-pub use dma::dma_read_file;
-pub use dma::dma_read_file_range;
-pub use dma::dma_write_file_vectored;
-pub use dma::Alignment;
-pub use dma::DmaAllocator;
-pub use dma::DmaWriteBuf;
+pub use dma::*;
 pub use drop_callback::DropCallback;
 pub use net::get_free_tcp_port;
 pub use net::get_free_udp_port;

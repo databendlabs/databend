@@ -25,20 +25,27 @@ use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
+use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
 use opendal::Operator;
+use parquet::file::metadata::RowGroupMetaDataPtr;
 
+use super::async_buffer::BufferPool;
+use super::block_reader::BlocksReader;
+use super::block_writer::BlocksWriter;
 use super::inner::*;
 use super::serialize::*;
+use super::union_file::*;
 use super::Location;
 use crate::sessions::QueryContext;
-use crate::spillers::block_reader::BlocksReader;
-use crate::spillers::block_writer::BlocksWriter;
 
+#[derive(Clone)]
 pub struct PartitionAdapter {
     ctx: Arc<QueryContext>,
     // Stores the spilled files that controlled by current spiller
@@ -53,7 +60,11 @@ impl SpillAdapter for PartitionAdapter {
             .write()
             .unwrap()
             .insert(location.clone(), layout.clone());
-        self.ctx.as_ref().add_spill_file(location, layout, size);
+
+        if location.is_remote() {
+            self.ctx.as_ref().incr_spill_progress(1, size);
+        }
+        self.ctx.as_ref().add_spill_file(location, layout);
     }
 
     fn get_spill_layout(&self, location: &Location) -> Option<Layout> {
@@ -95,8 +106,8 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_partition(&mut self, procedure_id: &usize) -> Result<Vec<DataBlock>> {
-        if let Some(locs) = self.adapter.partition_location.get(procedure_id) {
+    pub async fn read_spilled_partition(&mut self, partition_id: &usize) -> Result<Vec<DataBlock>> {
+        if let Some(locs) = self.adapter.partition_location.get(partition_id) {
             let mut spilled_data = Vec::with_capacity(locs.len());
             for (loc, _data_size, _blocks_num) in locs.iter() {
                 let block = self.read_spilled_file(loc).await?;
@@ -221,7 +232,7 @@ impl Spiller {
         let instant = Instant::now();
         let location = self.write_encodes(write_bytes, buf).await?;
         // Record statistics.
-        record_write_profile(&location, &instant, write_bytes);
+        record_write_profile(location.is_local(), &instant, write_bytes);
 
         self.adapter
             .add_spill_file(location.clone(), layout, write_bytes);
@@ -265,7 +276,7 @@ impl Spiller {
         };
 
         // Record statistics.
-        record_read_profile(location, &instant, data.len());
+        record_read_profile(location.is_local(), &instant, data.len());
 
         // Deserialize partitioned data block.
         let mut partitioned_data = Vec::with_capacity(partitions.len());
@@ -299,7 +310,7 @@ impl Spiller {
             Location::Remote(loc) => self.operator.read_with(loc).range(data_range).await?,
         };
 
-        record_read_profile(location, &instant, data.len());
+        record_read_profile(location.is_local(), &instant, data.len());
 
         deserialize_block(layout, data)
     }
@@ -344,6 +355,55 @@ impl Spiller {
     }
 }
 
+#[derive(Clone)]
+pub struct BackpressureAdapter {
+    ctx: Arc<QueryContext>,
+    buffer_pool: Arc<BufferPool>,
+    chunk_size: usize,
+}
+
+impl BackpressureAdapter {
+    fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
+        if location.is_remote() {
+            self.ctx.as_ref().incr_spill_progress(1, size);
+            self.ctx
+                .as_ref()
+                .add_spill_file(location.clone(), layout.clone());
+        }
+    }
+}
+
+pub type BackpressureSpiller = SpillerInner<BackpressureAdapter>;
+
+impl BackpressureSpiller {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        operator: Operator,
+        config: SpillerConfig,
+        buffer_pool: Arc<BufferPool>,
+        chunk_size: usize,
+    ) -> Result<Self> {
+        Self::new(
+            BackpressureAdapter {
+                ctx,
+                buffer_pool,
+                chunk_size,
+            },
+            operator,
+            config,
+        )
+    }
+
+    pub fn new_spill_writer(&self, schema: Arc<DataSchema>) -> Result<SpillWriter> {
+        Ok(SpillWriter {
+            spiller: self.clone(),
+            chunk_size: self.adapter.chunk_size,
+            schema,
+            file_writer: None,
+        })
+    }
+}
+
 pub struct MergedPartition {
     pub location: Location,
     pub partitions: Vec<(usize, Chunk)>,
@@ -354,9 +414,129 @@ pub struct Chunk {
     pub layout: Layout,
 }
 
+pub struct SpillWriter {
+    spiller: BackpressureSpiller,
+    chunk_size: usize,
+    schema: Arc<DataSchema>,
+    file_writer: Option<FileWriter<UnionFileWriter>>,
+}
+
+impl SpillWriter {
+    pub async fn open(&mut self) -> Result<()> {
+        if self.file_writer.is_some() {
+            return Err(ErrorCode::Internal("SpillWriter already opened"));
+        }
+
+        let writer = self
+            .spiller
+            .new_file_writer(
+                &self.schema,
+                &self.spiller.adapter.buffer_pool,
+                self.chunk_size,
+            )
+            .await?;
+        self.file_writer = Some(writer);
+        Ok(())
+    }
+
+    pub fn is_opened(&self) -> bool {
+        self.file_writer.is_some()
+    }
+
+    pub fn add_row_group(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
+        let Some(file_writer) = self.file_writer.as_mut() else {
+            return Err(ErrorCode::Internal("SpillWriter should open first"));
+        };
+
+        let is_local = file_writer.has_opening_local();
+        let start = std::time::Instant::now();
+
+        let row_group_meta = file_writer.spill(blocks)?;
+
+        record_write_profile(is_local, &start, row_group_meta.compressed_size() as _);
+
+        let ordinal = row_group_meta.ordinal().unwrap();
+        Ok(ordinal as _)
+    }
+
+    pub fn new_row_group_encoder(&self) -> Option<RowGroupEncoder> {
+        self.file_writer.as_ref().map(|w| w.new_row_group())
+    }
+
+    pub fn add_row_group_encoded(
+        &mut self,
+        row_group: RowGroupEncoder,
+    ) -> Result<RowGroupMetaDataPtr> {
+        let Some(file_writer) = self.file_writer.as_mut() else {
+            return Err(ErrorCode::Internal("SpillWriter should open first"));
+        };
+        Ok(file_writer.flush_row_group(row_group)?)
+    }
+
+    pub fn close(self) -> Result<SpillReader> {
+        let Some(file_writer) = self.file_writer else {
+            return Err(ErrorCode::Internal(
+                "attempted to close window spill writer without data".to_string(),
+            ));
+        };
+
+        let (metadata, union_file) = file_writer.finish()?;
+
+        if let Some(path) = &union_file.local_path {
+            self.spiller.adapter.add_spill_file(
+                Location::Local(path.clone()),
+                Layout::Parquet,
+                path.size(),
+            );
+        }
+
+        self.spiller.adapter.add_spill_file(
+            Location::Remote(union_file.remote_path.clone()),
+            Layout::Parquet,
+            union_file
+                .remote_size
+                .saturating_sub(union_file.remote_offset.unwrap_or_default()) as _,
+        );
+
+        Ok(SpillReader {
+            spiller: self.spiller,
+            schema: self.schema,
+            parquet_metadata: Arc::new(metadata),
+            union_file,
+        })
+    }
+}
+
+pub struct SpillReader {
+    spiller: BackpressureSpiller,
+    schema: Arc<DataSchema>,
+    parquet_metadata: Arc<ParquetMetaData>,
+    union_file: UnionFile,
+}
+
+impl SpillReader {
+    pub async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>> {
+        if ordinals.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        self.spiller
+            .load_row_groups(
+                self.union_file.clone(),
+                self.parquet_metadata.clone(),
+                &self.schema,
+                ordinals,
+            )
+            .await
+    }
+}
+
 impl SpillAdapter for Arc<QueryContext> {
     fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
-        self.as_ref().add_spill_file(location, layout, size);
+        if matches!(location, Location::Remote(_)) {
+            self.incr_spill_progress(1, size);
+        }
+        self.as_ref().add_spill_file(location, layout);
     }
 
     fn get_spill_layout(&self, location: &Location) -> Option<Layout> {
@@ -372,7 +552,10 @@ pub struct SortAdapter {
 impl SpillAdapter for SortAdapter {
     fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
         match location {
-            Location::Remote(_) => self.ctx.as_ref().add_spill_file(location, layout, size),
+            Location::Remote(_) => {
+                self.ctx.as_ref().incr_spill_progress(1, size);
+                self.ctx.as_ref().add_spill_file(location, layout);
+            }
             Location::Local(temp_path) => {
                 self.local_files.write().unwrap().insert(temp_path, layout);
             }
@@ -455,9 +638,7 @@ impl LiteSpiller {
                 Location::Local(_) => None,
             })
             .collect();
-        let op = self.0.local_operator.as_ref().unwrap_or(&self.0.operator);
-
-        op.delete_iter(files).await?;
+        self.0.operator.delete_iter(files).await?;
         Ok(())
     }
 }

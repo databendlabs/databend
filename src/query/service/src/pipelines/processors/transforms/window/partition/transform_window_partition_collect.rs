@@ -20,6 +20,7 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -30,31 +31,105 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
+use either::Either;
 
+use super::window_partition_buffer_v2::WindowPartitionBufferV2;
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
 use crate::pipelines::processors::transforms::DataProcessorStrategy;
 use crate::sessions::QueryContext;
+use crate::spillers::BackpressureSpiller;
+use crate::spillers::BufferPool;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
+enum WindowBuffer {
+    V1(WindowPartitionBuffer),
+    V2(WindowPartitionBufferV2),
+}
+
+impl WindowBuffer {
+    fn new(
+        spiller: Either<Spiller, BackpressureSpiller>,
+        num_partitions: usize,
+        sort_block_size: usize,
+        memory_settings: MemorySettings,
+    ) -> Result<Self> {
+        match spiller {
+            Either::Left(spiller) => {
+                let inner = WindowPartitionBuffer::new(
+                    spiller,
+                    num_partitions,
+                    sort_block_size,
+                    memory_settings,
+                )?;
+                Ok(Self::V1(inner))
+            }
+            Either::Right(spiller) => {
+                let inner = WindowPartitionBufferV2::new(
+                    spiller,
+                    num_partitions,
+                    sort_block_size,
+                    memory_settings,
+                )?;
+                Ok(Self::V2(inner))
+            }
+        }
+    }
+
+    fn need_spill(&mut self) -> bool {
+        match self {
+            WindowBuffer::V1(inner) => inner.need_spill(),
+            WindowBuffer::V2(inner) => inner.need_spill(),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            WindowBuffer::V1(inner) => inner.is_empty(),
+            WindowBuffer::V2(inner) => inner.is_empty(),
+        }
+    }
+
+    fn add_data_block(&mut self, partition_id: usize, data_block: DataBlock) {
+        match self {
+            WindowBuffer::V1(inner) => inner.add_data_block(partition_id, data_block),
+            WindowBuffer::V2(inner) => inner.add_data_block(partition_id, data_block),
+        }
+    }
+
+    async fn spill(&mut self) -> Result<()> {
+        match self {
+            WindowBuffer::V1(inner) => inner.spill().await,
+            WindowBuffer::V2(inner) => inner.spill().await,
+        }
+    }
+
+    async fn restore(&mut self) -> Result<Vec<DataBlock>> {
+        match self {
+            WindowBuffer::V1(inner) => inner.restore().await,
+            WindowBuffer::V2(inner) => inner.restore().await,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
-pub enum Step {
+enum Step {
     Sync(SyncStep),
     Async(AsyncStep),
     Finish,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum SyncStep {
+enum SyncStep {
     Collect,
     Process,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum AsyncStep {
+enum AsyncStep {
     Spill,
     Restore,
 }
@@ -69,7 +144,7 @@ pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
     // The partition id is used to map the partition id to the new partition id.
     partition_id: Vec<usize>,
     // The buffer is used to control the memory usage of the window operator.
-    buffer: WindowPartitionBuffer,
+    buffer: WindowBuffer,
 
     strategy: S,
 
@@ -79,6 +154,7 @@ pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
 }
 
 impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
@@ -89,6 +165,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
         num_partitions: usize,
         memory_settings: MemorySettings,
         disk_spill: Option<SpillerDiskConfig>,
+        enable_backpressure_spiller: bool,
         strategy: S,
     ) -> Result<Self> {
         // Calculate the partition ids collected by the processor.
@@ -110,18 +187,26 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
             use_parquet: settings.get_spilling_file_format()?.is_parquet(),
         };
 
-        // Create an inner `Spiller` to spill data.
+        // Create spillers for window operator.
         let operator = DataOperator::instance().spill_operator();
-        let spiller = Spiller::create(ctx, operator, spill_config)?;
+        let spiller = if !enable_backpressure_spiller {
+            Either::Left(Spiller::create(ctx, operator, spill_config)?)
+        } else {
+            let runtime = GlobalIORuntime::instance();
+            let buffer_pool = BufferPool::create(runtime, 128 * 1024 * 1024, 3);
+            Either::Right(BackpressureSpiller::create(
+                ctx,
+                operator,
+                spill_config,
+                buffer_pool,
+                8 * 1024 * 1024,
+            )?)
+        };
 
         // Create the window partition buffer.
         let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
-        let buffer = WindowPartitionBuffer::new(
-            spiller,
-            partitions.len(),
-            sort_block_size,
-            memory_settings,
-        )?;
+        let buffer =
+            WindowBuffer::new(spiller, partitions.len(), sort_block_size, memory_settings)?;
 
         Ok(Self {
             input,
@@ -275,7 +360,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
     fn collect_data_block(
         data_block: DataBlock,
         partition_ids: &[usize],
-        buffer: &mut WindowPartitionBuffer,
+        buffer: &mut WindowBuffer,
     ) {
         if let Some(meta) = data_block
             .get_owned_meta()

@@ -22,6 +22,16 @@ pub enum Location {
     Local(TempPath),
 }
 
+impl Location {
+    pub fn is_local(&self) -> bool {
+        matches!(self, Location::Local(_))
+    }
+
+    pub fn is_remote(&self) -> bool {
+        matches!(self, Location::Remote(_))
+    }
+}
+
 #[async_trait::async_trait]
 pub trait DataBlockSpill: Clone + Send + Sync + 'static {
     async fn spill(&self, data_block: DataBlock) -> Result<Location> {
