@@ -244,7 +244,7 @@ impl TempDir {
         }))))
     }
 
-    pub fn grow_size(
+    pub fn try_grow_size(
         &self,
         path: &mut TempPath,
         grow: usize,
@@ -256,6 +256,10 @@ impl TempDir {
                 "can't set size after share"
             ));
         };
+        debug_assert_eq!(
+            self.dir_info.as_ref() as *const _,
+            self.dir_info.as_ref() as *const _
+        );
 
         if self.manager.global_limit < self.manager.group.lock().unwrap().size() + grow {
             return Ok(false);
@@ -273,6 +277,22 @@ impl TempDir {
         *dir_size += grow;
         path.size += grow;
 
+        Ok(true)
+    }
+
+    pub fn check_grow(&self, grow: usize, check_disk: bool) -> io::Result<bool> {
+        if self.manager.global_limit < self.manager.group.lock().unwrap().size() + grow {
+            return Ok(false);
+        }
+
+        if check_disk && self.manager.insufficient_disk(grow as u64)? {
+            return Ok(false);
+        }
+
+        let dir_size = *self.dir_info.size.lock().unwrap();
+        if self.dir_info.limit < dir_size + grow {
+            return Ok(false);
+        }
         Ok(true)
     }
 

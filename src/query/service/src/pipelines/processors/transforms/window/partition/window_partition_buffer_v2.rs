@@ -20,105 +20,117 @@ use databend_common_expression::DataSchema;
 use databend_common_pipeline_transforms::MemorySettings;
 
 use super::concat_data_blocks;
-use crate::spillers::BackpressureSpiller;
+use crate::spillers::AnyFileWriter;
+use crate::spillers::RowGroupEncoder;
 use crate::spillers::SpillReader;
 use crate::spillers::SpillWriter;
+use crate::spillers::WriterCreator;
 
 #[async_trait::async_trait]
 pub trait Reader: Send {
-    async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>>;
+    async fn restore(&mut self, row_groups: Vec<usize>) -> Result<Vec<DataBlock>>;
 }
 
 #[async_trait::async_trait]
 pub trait Writer: Send {
-    type Reader: Reader;
+    type R: Reader;
 
-    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize>;
+    fn need_new_file(&mut self, incoming_size: usize) -> Result<bool>;
 
-    async fn close(self) -> Result<Self::Reader>;
+    fn add_row_group_encoded(&mut self, row_group: RowGroupEncoder) -> Result<usize>;
+
+    fn close(self) -> Result<Self::R>;
 }
 
 #[async_trait::async_trait]
-pub trait Builder: Send + Sync {
-    type Writer: Writer;
+pub trait WriterFactory: Send {
+    type W: Writer;
 
-    async fn create(&self, schema: Arc<DataSchema>) -> Result<Self::Writer>;
+    async fn open(&mut self, local_file_size: Option<usize>) -> Result<Self::W>;
+
+    fn create_encoder(&self) -> RowGroupEncoder;
 }
 
 #[async_trait::async_trait]
-impl Builder for BackpressureSpiller {
-    type Writer = SpillWriter;
-
-    async fn create(&self, schema: Arc<DataSchema>) -> Result<SpillWriter> {
-        self.new_spill_writer(schema)
+impl Reader for SpillReader {
+    async fn restore(&mut self, row_groups: Vec<usize>) -> Result<Vec<DataBlock>> {
+        self.restore(row_groups).await
     }
 }
 
 #[async_trait::async_trait]
 impl Writer for SpillWriter {
-    type Reader = SpillReader;
+    type R = SpillReader;
 
-    async fn spill(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
-        if !self.is_opened() {
-            self.open().await?;
-        }
-        self.add_row_group(blocks)
+    fn need_new_file(&mut self, incoming_size: usize) -> Result<bool> {
+        Ok(match self.file_writer() {
+            AnyFileWriter::Local(file_writer) => !file_writer.check_grow(incoming_size, true)?,
+            _ => false,
+        })
     }
 
-    async fn close(self) -> Result<SpillReader> {
-        self.close()
+    fn add_row_group_encoded(&mut self, row_group: RowGroupEncoder) -> Result<usize> {
+        let meta = SpillWriter::add_encoded_row_group(self, row_group)?;
+        Ok(meta.ordinal().unwrap() as usize)
+    }
+
+    fn close(self) -> Result<SpillReader> {
+        SpillWriter::close(self)
     }
 }
 
 #[async_trait::async_trait]
-impl Reader for SpillReader {
-    async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>> {
-        self.restore(ordinals).await
+impl WriterFactory for WriterCreator {
+    type W = SpillWriter;
+
+    async fn open(&mut self, local_file_size: Option<usize>) -> Result<SpillWriter> {
+        WriterCreator::open(self, local_file_size).await
+    }
+
+    fn create_encoder(&self) -> RowGroupEncoder {
+        WriterCreator::new_encoder(self)
     }
 }
 
 #[derive(Default)]
 enum PartitionSpillState<W>
-where
-    W: Writer,
-    W::Reader: Reader,
+where W: Writer
 {
     #[default]
     Empty,
-    Writing(W),
-    Reading(W::Reader),
+    Writing {
+        writer: W,
+        row_groups: Vec<usize>,
+    },
+    Reading,
 }
 
-struct PartitionSlot<W>
-where
-    W: Writer,
-    W::Reader: Reader,
+type FactoryReader<F> = <<F as WriterFactory>::W as Writer>::R;
+
+struct PartitionSlot<F>
+where F: WriterFactory
 {
-    state: PartitionSpillState<W>,
-    spilled_ordinals: Vec<usize>,
+    state: PartitionSpillState<F::W>,
+    readers: Vec<(FactoryReader<F>, Vec<usize>)>,
     buffered_blocks: Vec<DataBlock>,
     buffered_size: usize,
 }
 
-impl<W> Default for PartitionSlot<W>
-where
-    W: Writer,
-    W::Reader: Reader,
+impl<F> Default for PartitionSlot<F>
+where F: WriterFactory
 {
     fn default() -> Self {
         Self {
             state: Default::default(),
-            spilled_ordinals: Default::default(),
+            readers: Default::default(),
             buffered_blocks: Default::default(),
             buffered_size: Default::default(),
         }
     }
 }
 
-impl<W> PartitionSlot<W>
-where
-    W: Writer,
-    W::Reader: Reader,
+impl<F> PartitionSlot<F>
+where F: WriterFactory
 {
     fn add_block(&mut self, block: DataBlock) {
         self.buffered_size += block.memory_size();
@@ -142,41 +154,83 @@ where
         }
     }
 
-    async fn writer_mut<'a, B>(&'a mut self, builder: &B, block: &DataBlock) -> Result<&'a mut W>
-    where B: Builder<Writer = W> {
+    async fn spill_blocks(&mut self, factory: &mut F, blocks: Vec<DataBlock>) -> Result<()> {
+        if blocks.is_empty() {
+            return Ok(());
+        }
+
+        let mut encoder = factory.create_encoder();
+        for block in blocks {
+            encoder.add(block)?;
+        }
+
         match &mut self.state {
-            state @ PartitionSpillState::Empty => {
-                let writer = builder.create(block.infer_schema().into()).await?;
-                let _ = std::mem::replace(state, PartitionSpillState::Writing(writer));
-                let PartitionSpillState::Writing(writer) = state else {
+            PartitionSpillState::Empty => {
+                const FILE_SIZE: usize = 10 * 1024 * 1024;
+                let mut writer = factory.open(Some(FILE_SIZE)).await?;
+                let ordinal = writer.add_row_group_encoded(encoder)?;
+                self.state = PartitionSpillState::Writing {
+                    writer,
+                    row_groups: vec![ordinal],
+                };
+                Ok(())
+            }
+            PartitionSpillState::Writing { writer, row_groups } => {
+                if !writer.need_new_file(encoder.memory_size())? {
+                    let ordinal = writer.add_row_group_encoded(encoder)?;
+                    row_groups.push(ordinal);
+
+                    if ordinal >= SpillWriter::MAX_ORDINAL {
+                        let PartitionSpillState::Writing { writer, row_groups } =
+                            std::mem::replace(&mut self.state, PartitionSpillState::Empty)
+                        else {
+                            unreachable!()
+                        };
+                        let reader = writer.close()?;
+                        self.readers.push((reader, row_groups));
+                    }
+
+                    return Ok(());
+                }
+
+                let PartitionSpillState::Writing { writer, row_groups } =
+                    std::mem::replace(&mut self.state, PartitionSpillState::Empty)
+                else {
                     unreachable!()
                 };
-                Ok(writer)
+                let reader = writer.close()?;
+                self.readers.push((reader, row_groups));
+
+                let mut writer = factory.open(None).await?;
+                let ordinal = writer.add_row_group_encoded(encoder)?;
+                self.state = PartitionSpillState::Writing {
+                    writer,
+                    row_groups: vec![ordinal],
+                };
+                Ok(())
             }
-            PartitionSpillState::Writing(writer) => Ok(writer),
-            PartitionSpillState::Reading(_) => unreachable!("partition already closed"),
+            PartitionSpillState::Reading => unreachable!("partition already closed"),
         }
     }
 
-    async fn close_writer(&mut self) -> Result<&mut W::Reader> {
-        let PartitionSpillState::Writing(writer) = std::mem::take(&mut self.state) else {
-            unreachable!()
-        };
-        self.state = PartitionSpillState::Reading(writer.close().await?);
-        let PartitionSpillState::Reading(reader) = &mut self.state else {
-            unreachable!()
-        };
-        Ok(reader)
+    fn take_readers(&mut self) -> Result<Vec<(FactoryReader<F>, Vec<usize>)>> {
+        if let PartitionSpillState::Writing { writer, row_groups } =
+            std::mem::replace(&mut self.state, PartitionSpillState::Reading)
+        {
+            self.readers.push((writer.close()?, row_groups));
+        }
+        Ok(std::mem::take(&mut self.readers))
     }
 }
 
-pub(super) type WindowPartitionBufferV2 = PartitionBuffer<BackpressureSpiller>;
+pub(super) type WindowPartitionBufferV2 = PartitionBuffer<WriterCreator>;
 
-pub(super) struct PartitionBuffer<B>
-where B: Builder
+pub(super) struct PartitionBuffer<F>
+where F: WriterFactory
 {
-    spiller: B,
-    partitions: Vec<PartitionSlot<B::Writer>>,
+    factory: Option<F>,
+    factory_builder: Arc<dyn Fn(DataSchema) -> F + Send + Sync + 'static>,
+    partitions: Vec<PartitionSlot<F>>,
     memory_settings: MemorySettings,
     min_row_group_size: usize,
     num_partitions: usize,
@@ -185,11 +239,11 @@ where B: Builder
     next_to_restore_partition_id: isize,
 }
 
-impl<B> PartitionBuffer<B>
-where B: Builder
+impl<F> PartitionBuffer<F>
+where F: WriterFactory
 {
     pub fn new(
-        spiller: B,
+        factory_builder: impl Fn(DataSchema) -> F + Send + Sync + 'static,
         num_partitions: usize,
         sort_block_size: usize,
         memory_settings: MemorySettings,
@@ -198,7 +252,8 @@ where B: Builder
             .map(|_| PartitionSlot::default())
             .collect();
         Ok(Self {
-            spiller,
+            factory: None,
+            factory_builder: Arc::new(factory_builder),
             partitions,
             memory_settings,
             min_row_group_size: 10 * 1024 * 1024,
@@ -208,11 +263,7 @@ where B: Builder
             next_to_restore_partition_id: -1,
         })
     }
-}
 
-impl<B> PartitionBuffer<B>
-where B: Builder
-{
     pub fn need_spill(&mut self) -> bool {
         self.can_spill && self.memory_settings.check_spill()
     }
@@ -225,6 +276,12 @@ where B: Builder
         if data_block.is_empty() {
             return;
         }
+
+        if self.factory.is_none() {
+            let facroty = (self.factory_builder)(data_block.infer_schema());
+            self.factory = Some(facroty)
+        }
+
         let partition = &mut self.partitions[partition_id];
         partition.add_block(data_block);
         if !self.can_spill && partition.memory_size() >= self.min_row_group_size {
@@ -243,11 +300,9 @@ where B: Builder
                 continue;
             }
             if let Some(blocks) = partition.fetch_blocks(Some(spill_unit_size)) {
-                let ordinal = {
-                    let writer = partition.writer_mut(&self.spiller, &blocks[0]).await?;
-                    writer.spill(blocks).await?
-                };
-                partition.spilled_ordinals.push(ordinal);
+                partition
+                    .spill_blocks(self.factory.as_mut().unwrap(), blocks)
+                    .await?;
                 return Ok(());
             }
 
@@ -266,11 +321,9 @@ where B: Builder
         {
             let partition = &mut self.partitions[partition_id];
             let blocks = partition.fetch_blocks(None).unwrap();
-            let ordinal = {
-                let writer = partition.writer_mut(&self.spiller, &blocks[0]).await?;
-                writer.spill(blocks).await?
-            };
-            partition.spilled_ordinals.push(ordinal);
+            partition
+                .spill_blocks(self.factory.as_mut().unwrap(), blocks)
+                .await?;
         } else {
             self.can_spill = false;
         }
@@ -283,13 +336,12 @@ where B: Builder
             let partition_id = self.next_to_restore_partition_id as usize;
             let partition = &mut self.partitions[partition_id];
 
-            let ordinals = std::mem::take(&mut partition.spilled_ordinals);
-            let mut result = if ordinals.is_empty() {
-                Vec::new()
-            } else {
-                let reader = partition.close_writer().await?;
-                reader.restore(ordinals).await?
-            };
+            let mut result = Vec::new();
+            for (mut reader, row_groups) in partition.take_readers()? {
+                debug_assert!(!row_groups.is_empty());
+                let mut blocks = reader.restore(row_groups).await?;
+                result.append(&mut blocks);
+            }
 
             if let Some(blocks) = partition.fetch_blocks(None) {
                 result.extend(concat_data_blocks(blocks, self.sort_block_size)?);

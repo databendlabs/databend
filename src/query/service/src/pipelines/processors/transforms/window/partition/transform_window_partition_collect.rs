@@ -69,7 +69,7 @@ impl WindowBuffer {
             }
             Either::Right(spiller) => {
                 let inner = WindowPartitionBufferV2::new(
-                    spiller,
+                    move |schema| spiller.new_writer_creater(Arc::new(schema)).unwrap(),
                     num_partitions,
                     sort_block_size,
                     memory_settings,

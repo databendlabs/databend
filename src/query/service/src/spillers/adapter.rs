@@ -25,7 +25,6 @@ use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -40,8 +39,8 @@ use super::async_buffer::BufferPool;
 use super::block_reader::BlocksReader;
 use super::block_writer::BlocksWriter;
 use super::inner::*;
+use super::row_group_encoder::*;
 use super::serialize::*;
-use super::union_file::*;
 use super::Location;
 use crate::sessions::QueryContext;
 
@@ -394,12 +393,13 @@ impl BackpressureSpiller {
         )
     }
 
-    pub fn new_spill_writer(&self, schema: Arc<DataSchema>) -> Result<SpillWriter> {
-        Ok(SpillWriter {
+    pub fn new_writer_creater(&self, schema: Arc<DataSchema>) -> Result<WriterCreator> {
+        let props = Properties::new(&schema)?;
+        Ok(WriterCreator {
             spiller: self.clone(),
             chunk_size: self.adapter.chunk_size,
             schema,
-            file_writer: None,
+            props,
         })
     }
 }
@@ -414,95 +414,112 @@ pub struct Chunk {
     pub layout: Layout,
 }
 
-pub struct SpillWriter {
+pub struct WriterCreator {
     spiller: BackpressureSpiller,
     chunk_size: usize,
     schema: Arc<DataSchema>,
-    file_writer: Option<FileWriter<UnionFileWriter>>,
+    props: Properties,
 }
 
-impl SpillWriter {
-    pub async fn open(&mut self) -> Result<()> {
-        if self.file_writer.is_some() {
-            return Err(ErrorCode::Internal("SpillWriter already opened"));
-        }
-
+impl WriterCreator {
+    pub async fn open(&mut self, local_file_size: Option<usize>) -> Result<SpillWriter> {
         let writer = self
             .spiller
             .new_file_writer(
-                &self.schema,
+                &self.props,
                 &self.spiller.adapter.buffer_pool,
                 self.chunk_size,
+                local_file_size,
             )
             .await?;
-        self.file_writer = Some(writer);
-        Ok(())
+
+        Ok(SpillWriter {
+            spiller: self.spiller.clone(),
+            schema: self.schema.clone(),
+            file_writer: writer,
+        })
     }
 
-    pub fn is_opened(&self) -> bool {
-        self.file_writer.is_some()
+    pub fn new_encoder(&self) -> RowGroupEncoder {
+        self.props.new_encoder()
+    }
+}
+
+pub struct SpillWriter {
+    spiller: BackpressureSpiller,
+    schema: Arc<DataSchema>,
+    file_writer: AnyFileWriter,
+}
+
+impl SpillWriter {
+    pub const MAX_ORDINAL: usize = 2 << 15;
+
+    pub fn file_writer(&self) -> &AnyFileWriter {
+        &self.file_writer
     }
 
     pub fn add_row_group(&mut self, blocks: Vec<DataBlock>) -> Result<usize> {
-        let Some(file_writer) = self.file_writer.as_mut() else {
-            return Err(ErrorCode::Internal("SpillWriter should open first"));
-        };
+        let mut encoder = self.new_row_group_encoder();
+        for block in blocks {
+            encoder.add(block)?;
+        }
 
-        let is_local = file_writer.has_opening_local();
-        let start = std::time::Instant::now();
-
-        let row_group_meta = file_writer.spill(blocks)?;
-
-        record_write_profile(is_local, &start, row_group_meta.compressed_size() as _);
-
-        let ordinal = row_group_meta.ordinal().unwrap();
-        Ok(ordinal as _)
+        let row_group_meta = self.add_encoded_row_group(encoder)?;
+        Ok(row_group_meta.ordinal().unwrap() as _)
     }
 
-    pub fn new_row_group_encoder(&self) -> Option<RowGroupEncoder> {
-        self.file_writer.as_ref().map(|w| w.new_row_group())
-    }
-
-    pub fn add_row_group_encoded(
+    pub fn add_encoded_row_group(
         &mut self,
         row_group: RowGroupEncoder,
     ) -> Result<RowGroupMetaDataPtr> {
-        let Some(file_writer) = self.file_writer.as_mut() else {
-            return Err(ErrorCode::Internal("SpillWriter should open first"));
-        };
-        Ok(file_writer.flush_row_group(row_group)?)
+        let start = std::time::Instant::now();
+
+        match &mut self.file_writer {
+            AnyFileWriter::Local(file_writer) => {
+                let row_group_meta = file_writer.flush_row_group(row_group)?;
+                record_write_profile(true, &start, row_group_meta.compressed_size() as _);
+                Ok(row_group_meta)
+            }
+            AnyFileWriter::Remote(_, file_writer) => {
+                let row_group_meta = file_writer.flush_row_group(row_group)?;
+                record_write_profile(false, &start, row_group_meta.compressed_size() as _);
+                Ok(row_group_meta)
+            }
+        }
+    }
+
+    pub fn new_row_group_encoder(&self) -> RowGroupEncoder {
+        self.file_writer.new_row_group()
     }
 
     pub fn close(self) -> Result<SpillReader> {
-        let Some(file_writer) = self.file_writer else {
-            return Err(ErrorCode::Internal(
-                "attempted to close window spill writer without data".to_string(),
-            ));
+        let (metadata, location) = match self.file_writer {
+            AnyFileWriter::Local(file_writer) => {
+                let (metadata, path) = file_writer.finish()?;
+                self.spiller.adapter.add_spill_file(
+                    Location::Local(path.clone()),
+                    Layout::Parquet,
+                    path.size(),
+                );
+                (metadata, Location::Local(path))
+            }
+            AnyFileWriter::Remote(path, file_writer) => {
+                let (metadata, size) = file_writer.finish()?;
+                let location = Location::Remote(path);
+
+                self.spiller
+                    .adapter
+                    .add_spill_file(location.clone(), Layout::Parquet, size);
+
+                (metadata, location)
+            }
         };
-
-        let (metadata, union_file) = file_writer.finish()?;
-
-        if let Some(path) = &union_file.local_path {
-            self.spiller.adapter.add_spill_file(
-                Location::Local(path.clone()),
-                Layout::Parquet,
-                path.size(),
-            );
-        }
-
-        self.spiller.adapter.add_spill_file(
-            Location::Remote(union_file.remote_path.clone()),
-            Layout::Parquet,
-            union_file
-                .remote_size
-                .saturating_sub(union_file.remote_offset.unwrap_or_default()) as _,
-        );
 
         Ok(SpillReader {
             spiller: self.spiller,
             schema: self.schema,
             parquet_metadata: Arc::new(metadata),
-            union_file,
+            location,
         })
     }
 }
@@ -511,23 +528,33 @@ pub struct SpillReader {
     spiller: BackpressureSpiller,
     schema: Arc<DataSchema>,
     parquet_metadata: Arc<ParquetMetaData>,
-    union_file: UnionFile,
+    location: Location,
 }
 
 impl SpillReader {
-    pub async fn restore(&mut self, ordinals: Vec<usize>) -> Result<Vec<DataBlock>> {
-        if ordinals.is_empty() {
+    pub async fn restore(&mut self, row_groups: Vec<usize>) -> Result<Vec<DataBlock>> {
+        if row_groups.is_empty() {
             return Ok(Vec::new());
         }
+        let start = std::time::Instant::now();
 
-        self.spiller
+        let blocks = self
+            .spiller
             .load_row_groups(
-                self.union_file.clone(),
+                &self.location,
                 self.parquet_metadata.clone(),
                 &self.schema,
-                ordinals,
+                row_groups,
             )
-            .await
+            .await?;
+
+        record_read_profile(
+            self.location.is_local(),
+            &start,
+            blocks.iter().map(DataBlock::memory_size).sum(),
+        );
+
+        Ok(blocks)
     }
 }
 

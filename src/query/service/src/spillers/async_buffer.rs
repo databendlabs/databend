@@ -261,6 +261,17 @@ impl BufferWriter {
             "Writer already closed",
         ))
     }
+
+    pub(super) fn finish(&mut self) -> std::io::Result<Metadata> {
+        std::mem::replace(self, Self {
+            writer: None,
+            current_bytes: None,
+            buffer_pool: self.buffer_pool.clone(),
+            pending_buffers: Default::default(),
+            pending_response: None,
+        })
+        .close()
+    }
 }
 
 impl io::Write for BufferWriter {
