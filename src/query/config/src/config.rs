@@ -2413,7 +2413,7 @@ pub struct FileLogConfig {
         value_name = "VALUE",
         default_value = "4294967296"
     )]
-    #[serde(rename = "max-size")]
+    #[serde(rename = "max_size")]
     pub file_max_size: usize,
 
     /// Deprecated fields, used for catching error, will be removed later.
