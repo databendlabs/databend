@@ -155,25 +155,13 @@ impl ModifyTableColumnInterpreter {
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
-                // if the field has different leaf column numbers, we need drop the old column
-                // and add a new one to generate new column id. otherwise, leaf column ids will conflict.
-                if old_field.data_type.num_leaf_columns() != field.data_type.num_leaf_columns() {
+                // If the field's data type has changed, we need to drop the old column
+                // and add a new one to regenerate its column ID. This ensures consistency
+                // between the schema definition and column identifiers.
+                if old_field.data_type != field.data_type {
                     let _ = new_schema.drop_column(&field.name);
                     let _ = new_schema.add_column(field, i);
-                } else {
-                    // new field don't have `column_id`, assign field directly will cause `column_id` lost.
-                    new_schema.fields[i].data_type = field.data_type.clone();
-                    // TODO: support set computed field.
-                    new_schema.fields[i].computed_expr = field.computed_expr.clone();
-                }
-                if let Some(default_expr) = &field.default_expr {
-                    let default_expr = default_expr.to_string();
-                    new_schema.fields[i].default_expr = Some(default_expr);
-                    let _ = default_expr_binder.get_scalar(&new_schema.fields[i])?;
-                } else {
-                    new_schema.fields[i].default_expr = None;
-                }
-                if old_field.data_type != field.data_type {
+
                     // Check if this column is referenced by computed columns.
                     let data_schema = DataSchema::from(&new_schema);
                     check_referenced_computed_columns(
@@ -181,6 +169,19 @@ impl ModifyTableColumnInterpreter {
                         Arc::new(data_schema),
                         &field.name,
                     )?;
+                } else {
+                    // new field don't have `column_id`, assign field directly will cause `column_id` lost.
+                    new_schema.fields[i].data_type = field.data_type.clone();
+                    // TODO: support set computed field.
+                    new_schema.fields[i].computed_expr = field.computed_expr.clone();
+                }
+
+                if let Some(default_expr) = &field.default_expr {
+                    let default_expr = default_expr.to_string();
+                    new_schema.fields[i].default_expr = Some(default_expr);
+                    let _ = default_expr_binder.get_scalar(&new_schema.fields[i])?;
+                } else {
+                    new_schema.fields[i].default_expr = None;
                 }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
@@ -254,6 +255,16 @@ impl ModifyTableColumnInterpreter {
         // check if schema has changed
         if schema == new_schema && !modify_comment {
             return Ok(PipelineBuildResult::create());
+        }
+
+        if fuse_table.change_tracking_enabled() {
+            // Modifying columns while change tracking is active may break
+            // the consistency between tracked changes and the current table schema,
+            // leading to incorrect or incomplete change records.
+            log::warn!(
+                "table {} has change tracking enabled, modifying columns should be avoided",
+                table_info.desc
+            );
         }
 
         let mut modified_field_indices = HashSet::new();
