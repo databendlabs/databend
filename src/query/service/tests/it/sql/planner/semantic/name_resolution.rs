@@ -21,6 +21,7 @@ use databend_query::sql::IdentifierNormalizer;
 use databend_query::sql::NameResolutionContext;
 use derive_visitor::DriveMut;
 
+// typos:off
 #[test]
 fn test_normalize_identifier_default() {
     let ctx = NameResolutionContext::default();
@@ -97,6 +98,7 @@ fn test_normalize_identifier_unquoted_case_sensitive() {
         );
     }
 }
+// typos:on
 
 #[test]
 fn test_normalize_identifiers_in_expr() {

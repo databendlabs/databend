@@ -216,7 +216,7 @@ mod tests {
         assert_eq!(want, serialized);
     }
 
-    /// Test serialze will all fields set.
+    /// Test serialize will all fields set.
     #[test]
     fn test_sys_data_serialize() {
         let sys_data = SysData {

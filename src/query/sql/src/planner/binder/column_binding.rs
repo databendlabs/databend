@@ -36,7 +36,7 @@ pub struct ColumnBinding {
     pub data_type: Box<DataType>,
 
     pub visibility: Visibility,
-    // Opitonal virtual expr, used by virtual computed column and variant virtual column,
+    // Optional virtual expr, used by virtual computed column and variant virtual column,
     // `virtual_expr` will be parsed and bind to a `ScalarExpr`.
     pub virtual_expr: Option<String>,
     // A flag indicates the column binding from srf or not

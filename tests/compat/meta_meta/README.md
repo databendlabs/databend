@@ -1,4 +1,4 @@
-# Test protocol compatability between latest and old databend-meta
+# Test protocol compatibility between latest and old databend-meta
 
 ## Prerequisites
 

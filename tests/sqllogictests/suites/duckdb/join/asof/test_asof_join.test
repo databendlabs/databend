@@ -1,5 +1,5 @@
 # name: test/sql/join/asof/test_asof_join.test
-# description: Test As-Of join useage
+# description: Test As-Of join usage
 # group: [asof]
 # Use doubles for readable infinities
 

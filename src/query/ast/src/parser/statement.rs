@@ -3298,7 +3298,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         value(ColumnConstraint::Nullable(true), rule! { NULL }),
         value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
     ));
-    let identity_parmas = alt((
+    let identity_params = alt((
         map(
             rule! {
                 "(" ~ ^#literal_u64 ~ ^"," ~ ^#literal_i64 ~ ^")"
@@ -3341,7 +3341,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         map(
             rule! {
                 (AUTOINCREMENT | IDENTITY)
-                ~ #identity_parmas?
+                ~ #identity_params?
                 ~ (ORDER | NOORDER)?
             },
             |(_, params, order_token)| {

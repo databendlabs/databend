@@ -386,6 +386,7 @@ fn test_gte(file: &mut impl Write) {
     run_ast(file, "lhs >= rhs", &table);
 }
 
+// typos:off
 fn test_like(file: &mut impl Write) {
     run_ast(file, "'1' like '2'", &[]);
     run_ast(file, "'hello\n' like 'h%'", &[]);
@@ -442,6 +443,7 @@ fn test_regexp(file: &mut impl Write) {
     run_ast(file, "lhs regexp rhs", &columns);
     run_ast(file, "lhs rlike rhs", &columns);
 }
+// typos:on
 
 fn test_decimal(file: &mut impl Write) {
     run_ast(file, "92233720368547758000000 > 5::decimal(38,37)", &[]);

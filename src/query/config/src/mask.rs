@@ -338,7 +338,7 @@ mod tests {
 
         let masked_config = config.mask_display();
         assert_eq!(masked_config.oss_access_key_id, "*************y_id");
-        assert_eq!(masked_config.oss_access_key_secret, "****************ecret");
+        assert_eq!(masked_config.oss_access_key_secret, "****************ecret"); // typos:disable-line
         assert_eq!(
             masked_config.oss_server_side_encryption_key_id,
             "**************************_key_id"

@@ -315,7 +315,7 @@ where SM: StateMachineApi<SysData> + 'static
         debug!("apply txn cmd {}: {}", self.cmd_ctx, req);
 
         // 1. Evaluate conditional operations one by one.
-        //    Once one of them is successful, execute the corresponding operations and retrun.
+        //    Once one of them is successful, execute the corresponding operations and return.
         //    Otherwise, try next.
         for (i, conditional) in req.operations.iter().enumerate() {
             let success = if let Some(predicate) = &conditional.predicate {

@@ -34,7 +34,7 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server() -> Result<()> {
-    // Set dafault crypto provider to use
+    // Set default crypto provider to use
     // See: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#using-the-per-process-default-cryptoprovider
     let _ = rustls::crypto::ring::default_provider().install_default();
 

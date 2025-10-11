@@ -336,7 +336,7 @@ async fn test_block_pruner() -> Result<()> {
             "Spill the beans".to_string(),
         ]),
         StringType::from_data(vec![
-            "Put a projet on hold".to_string(),
+            "Put a projet on hold".to_string(), // typos:disable-line
             "To spoil something".to_string(),
             "Saving money for later".to_string(),
             "Reliability is more important than speed".to_string(),

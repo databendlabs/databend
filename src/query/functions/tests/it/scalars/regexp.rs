@@ -266,6 +266,7 @@ fn test_glob(file: &mut impl Write) {
     run_ast(file, "glob('abc', '*bc')", &[]);
 }
 
+// typos:off
 fn test_regexp_like(file: &mut impl Write) {
     run_ast(file, "regexp_like('Michael!', '.*')", &[]);
     run_ast(file, "regexp_like('a', '^[a-d]')", &[]);
@@ -374,6 +375,7 @@ fn test_regexp_like(file: &mut impl Write) {
         match_type_join_error2_three_columns,
     );
 }
+// typos:on
 
 fn test_regexp_replace(file: &mut impl Write) {
     run_ast(file, "regexp_replace('a b c', 'b', 'X')", &[]);

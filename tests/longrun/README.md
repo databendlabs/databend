@@ -3,7 +3,7 @@
 ## Introduction
 Databend long run tests would test the data correctness and performance of Databend under concurrency and heavy load.
 For example:
-Test on concurrent large scale data ingestion, table maintainence(optimization, recluster and vacuum) and query.
+Test on concurrent large scale data ingestion, table maintenance(optimization, recluster and vacuum) and query.
 
 ## How to use it?
 ### Prerequisite

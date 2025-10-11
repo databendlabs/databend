@@ -32,7 +32,7 @@ where MT: FromToProto + PartialEq + Debug {
     prost::Message::encode(&p, &mut buf)?;
 
     let var_name = n.split("::").last().unwrap();
-    // The encoded data should be saved for compatability test.
+    // The encoded data should be saved for compatibility test.
     println!("// Encoded data of version {} of {}:", VER, n);
     println!("// It is generated with common::test_pb_from_to().");
     println!(

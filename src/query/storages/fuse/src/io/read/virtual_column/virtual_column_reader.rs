@@ -53,7 +53,7 @@ use opendal::Operator;
 // otherwise, extract them from the source columns.
 //
 // If all the virtual columns of the source column have been generated,
-// and this source colume does not need to be read, the source column
+// and this source column does not need to be read, the source column
 // can be ignored when reading.
 #[derive(Clone)]
 pub struct VirtualColumnReader {

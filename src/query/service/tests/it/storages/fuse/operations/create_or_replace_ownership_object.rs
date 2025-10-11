@@ -39,7 +39,7 @@ async fn test_fuse_db_table_create_replace_clean_ownership_key() -> Result<()> {
         })?
     };
 
-    // Extracts endpoints to comunicate with meta service
+    // Extracts endpoints to communicate with meta service
     let MetaStore::L(local) = &meta else {
         panic!("MetaStore should not be local");
     };

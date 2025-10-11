@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Supporting utilities for compatiblity test.
+# Supporting utilities for compatibility test.
 
 query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
 bend_repo_url="https://github.com/datafuselabs/databend"

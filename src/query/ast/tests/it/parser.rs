@@ -302,7 +302,7 @@ SELECT * from s;"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
         r#"ALTER TABLE t1 swap with t2;"#,
         r#"ALTER TABLE t refresh cache;"#,
-        r#"ALTER TABLE t COMMENT='t1-commnet';"#,
+        r#"ALTER TABLE t COMMENT='t1-commnet';"#, // typos:disable-line
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
         r#"ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;"#,
         r#"ALTER TABLE t ADD c int null;"#,
@@ -1049,7 +1049,7 @@ fn test_statement_error() {
         r#"GRANT select ON UDF a TO 'test-grant';"#,
         r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant';"#,
-        r#"COPY INTO mytable FROM 's3://bucket' CONECTION= ();"#,
+        r#"COPY INTO mytable FROM 's3://bucket' CONECTION= ();"#, // typos:disable-line
         r#"COPY INTO mytable FROM @mystage CONNECTION = ();"#,
         r#"CALL system$test"#,
         r#"CALL system$test(a"#,
@@ -1097,6 +1097,7 @@ fn test_statement_error() {
         r#"GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';"#,
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)"#,
         r#"CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';"#,
+        // typos:ignore-next-line
         r#"CREATE FUNCTION my_agg (INT) STATE { s STRIN } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"drop table :a"#,
         r#"drop table IDENTIFIER(a)"#,

@@ -171,7 +171,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     /// If secondary_roles is set, it must be ALL or NONE:
     /// 1. ALL: all the roles granted to the current user will have effects on validate_privilege,
     ///    `secondary_roles` will be set to None, which is default.
-    /// 2. NONE: only the current_role has effects on validate_privilge, `secondary_roles`
+    /// 2. NONE: only the current_role has effects on validate_privilege, `secondary_roles`
     ///    will be set to Some([]).
     /// 3. SpecifyRoles: Some([role1, role2, .. etc.]).
     #[async_backtrace::framed]

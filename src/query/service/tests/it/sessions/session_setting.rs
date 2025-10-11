@@ -55,12 +55,12 @@ async fn test_session_setting_override() -> Result<()> {
     // Settings.
     {
         let settings = session.get_settings();
-        let overrided = settings.get_parquet_fast_read_bytes()?;
+        let overridden = settings.get_parquet_fast_read_bytes()?;
         let expect = 1000000;
-        assert_eq!(overrided, expect);
-        let overrided = settings.get_max_storage_io_requests()?;
+        assert_eq!(overridden, expect);
+        let overridden = settings.get_max_storage_io_requests()?;
         let expect = 1000;
-        assert_eq!(overrided, expect);
+        assert_eq!(overridden, expect);
         settings.set_setting("max_storage_io_requests".to_string(), "300".to_string())?;
         let actual = settings.get_max_storage_io_requests()?;
         let expect = 300;

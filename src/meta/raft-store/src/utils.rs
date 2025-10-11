@@ -118,7 +118,7 @@ mod tests {
     #[test]
     fn test_prefix_right_bound_basic() {
         // Basic functionality test
-        assert_eq!(prefix_right_bound("abc"), Some(s("abd")));
+        assert_eq!(prefix_right_bound("abc"), Some(s("abd"))); // typos:disable-line
     }
 
     #[test]

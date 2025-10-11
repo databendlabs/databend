@@ -2369,7 +2369,7 @@ impl<'a> TypeChecker<'a> {
     /// multiple fields can have a optional per-field boosting that
     /// gives preferential weight to fields being searched in.
     /// For example: title^5, content^1.2
-    /// The scond argument is the query text without query syntax.
+    /// The second argument is the query text without query syntax.
     fn resolve_match_search_function(
         &mut self,
         span: Span,

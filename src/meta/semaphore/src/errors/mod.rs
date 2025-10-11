@@ -17,11 +17,11 @@ mod acquirer_closed;
 mod connection_closed;
 mod early_removed;
 mod either;
-mod processer_error;
+mod processor_error;
 
 pub use acquire_error::AcquireError;
 pub use acquirer_closed::AcquirerClosed;
 pub use connection_closed::ConnectionClosed;
 pub use early_removed::EarlyRemoved;
 pub use either::Either;
-pub use processer_error::ProcessorError;
+pub use processor_error::ProcessorError;

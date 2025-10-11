@@ -729,7 +729,7 @@ async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
     let v = meta.get_pb(&table_ownership_key).await?;
     assert!(v.is_none());
 
-    // 8. Chek that DbIdTableName mapping is cleaned up
+    // 8. Check that DbIdTableName mapping is cleaned up
     let (seq, _) = get_u64_value(&meta, &db_id_table_name).await?;
     assert_eq!(seq, 0);
 

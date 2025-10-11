@@ -440,7 +440,7 @@ impl MetaGrpcClient {
         resp_err: Option<&(dyn std::error::Error + 'static)>,
     ) {
         // TODO: this current endpoint is not stable, may be modified by other thread.
-        //       The caller should pasing the in use endpoint.
+        //       The caller should passing the in use endpoint.
         let current_endpoint = self.get_current_endpoint();
 
         let Some(endpoint) = current_endpoint else {

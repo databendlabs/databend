@@ -780,7 +780,7 @@ impl QueryVisitor {
             let idx = self.rng.gen_range(0..func.args.len());
             func.args.remove(idx);
         }
-        // try replace arguemnts with fuzzed arguments
+        // try replace arguments with fuzzed arguments
         if self.rng.gen_bool(0.05) {
             func.args = func.args.iter().map(|arg| self.fuzz_expr(arg)).collect();
         }

@@ -559,7 +559,7 @@ mod tests {
         ) -> Result<KVStream<Self::Error>, Self::Error> {
             let mut res = Vec::with_capacity(keys.len());
             for (i, key) in keys.iter().enumerate() {
-                // For tesing early return stream.
+                // For testing early return stream.
                 if let Some(early_return) = self.early_return {
                     if i >= early_return {
                         break;

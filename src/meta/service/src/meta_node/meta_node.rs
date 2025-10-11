@@ -183,7 +183,7 @@ impl MetaNode {
             max_in_snapshot_log_to_keep: config.max_applied_log_to_keep,
             snapshot_max_chunk_size: config.snapshot_chunk_size,
             // Allow Leader to reset replication if a follower clears its log.
-            // Usefull in a testing environment.
+            // Useful in a testing environment.
             allow_log_reversion: Some(true),
             ..Default::default()
         }

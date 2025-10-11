@@ -59,7 +59,7 @@ fn test_decode_v137_grant_object() -> anyhow::Result<()> {
                     mt::principal::GrantObject::Connection("c1".to_string()),
                     make_bitflags!(UserPrivilegeType::{AccessConnection}),
                 ),
-                // test new global privilege CreateConneciton, AccessConnection
+                // test new global privilege CreateConnection, AccessConnection
                 mt::principal::GrantEntry::new(
                     mt::principal::GrantObject::Global,
                     make_bitflags!(UserPrivilegeType::{Create | Select | Insert | Update | Delete | Drop | Alter | Super | CreateUser | DropUser | CreateRole | DropRole | Grant | CreateStage | Set | CreateDataMask | Ownership | Read | Write | CreateWarehouse | CreateConnection | AccessConnection }),

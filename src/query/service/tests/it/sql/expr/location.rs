@@ -386,7 +386,7 @@ async fn test_parse_uri_location() -> Result<()> {
                 "example.com".to_string(),
                 "/path/to/dir/".to_string(),
                 vec![
-                    ("https", "TrUE"),
+                    ("https", "TrUE"), // typos:disable-line
                     ("delegation", "databendthebest"),
                     ("disable_list_batch", "true"),
                     ("user_name", "test"),

@@ -34,7 +34,7 @@ use super::eliminate_cast::parse_expr;
 #[test]
 fn test_range_index() -> Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("test_range_indexs.txt").unwrap();
+    let file = &mut mint.new_goldenfile("test_range_indies.txt").unwrap();
 
     fn n(n: i32) -> Scalar {
         Scalar::Number(n.into())

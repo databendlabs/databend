@@ -137,7 +137,7 @@ pub struct TableStatistics {
     pub number_of_blocks: Option<u64>,
 }
 
-/// Iceberg table parition
+/// Iceberg table partition
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum TablePartition {
     Identity { columns: Vec<String> },

@@ -161,7 +161,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
         Ok::<(), ErrorCode>(())
     };
 
-    // b. thread2: optmize table
+    // b. thread2: optimize table
     let compact_handler = runtime.spawn(compact_task);
 
     query_handler.await.unwrap()?;
