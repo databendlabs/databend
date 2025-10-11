@@ -28,6 +28,11 @@ EvalScalar
 
 
 query T
+explain select 1 from range_t where i > 3 and i = 2
+----
+EmptyResultScan
+
+query T
 explain select 1 from range_t where i > 20
 ----
 EvalScalar

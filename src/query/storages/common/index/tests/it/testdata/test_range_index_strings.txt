@@ -1,0 +1,8 @@
+text      : s > 'efg' and s = 'efg'
+expr      : and<Boolean, Boolean>(gt<String, String>(s, "efg"), eq<String, String>(s, "efg"))
+keep      : false
+
+text      : s > 'aaefg' and s < 'zzefg'
+expr      : and<Boolean, Boolean>(gt<String, String>(s, "aaefg"), lt<String, String>(s, "zzefg"))
+keep      : true
+
