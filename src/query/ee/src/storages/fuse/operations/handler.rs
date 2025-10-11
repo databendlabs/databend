@@ -20,6 +20,7 @@ use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDroppedTablesCtx;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_enterprise_vacuum_handler::VacuumHandler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
@@ -50,13 +51,11 @@ impl VacuumHandler for RealVacuumHandler {
         do_vacuum2(table, ctx, respect_flash_back).await
     }
 
-    async fn do_vacuum_drop_tables(
+    async fn do_vacuum_dropped_tables(
         &self,
-        threads_nums: usize,
-        tables: Vec<Arc<dyn Table>>,
-        dry_run_limit: Option<usize>,
+        dropped_tables: VacuumDroppedTablesCtx,
     ) -> VacuumDropTablesResult {
-        vacuum_drop_tables(threads_nums, tables, dry_run_limit).await
+        vacuum_drop_tables(dropped_tables).await
     }
 
     async fn do_vacuum_temporary_files(
