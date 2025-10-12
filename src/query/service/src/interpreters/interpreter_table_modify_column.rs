@@ -152,13 +152,22 @@ impl ModifyTableColumnInterpreter {
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
+        // Marks columns whose type change is compatible:
+        // either from STRING to BINARY in Parquet, or when the data type remains unchanged.
+        let mut skip_alter_type_flags = vec![false; field_and_comments.len()];
         // first check default expr before lock table
-        for (field, _comment) in field_and_comments {
+        for (idx, (field, _comment)) in field_and_comments.iter().enumerate() {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
+                let is_alter_column_string_to_binary =
+                    is_string_to_binary(&old_field.data_type, &field.data_type);
+                let skip_alter_type_flag = (table.storage_format_as_parquet()
+                    && is_alter_column_string_to_binary)
+                    || old_field.data_type == field.data_type;
+                skip_alter_type_flags[idx] = skip_alter_type_flag;
                 // If the field's data type has changed, we need to drop the old column
                 // and add a new one to regenerate its column ID. This ensures consistency
                 // between the schema definition and column identifiers.
-                if old_field.data_type != field.data_type {
+                if !skip_alter_type_flag {
                     let _ = new_schema.drop_column_unchecked(&field.name);
                     let _ = new_schema.add_column(field, i);
 
@@ -270,23 +279,22 @@ impl ModifyTableColumnInterpreter {
         let mut modified_field_indices = HashSet::new();
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         if schema != new_schema {
-            for (field, _) in field_and_comments {
-                let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
+            for ((field, _), skip_alter_type_flag) in
+                field_and_comments.iter().zip(skip_alter_type_flags)
+            {
                 let old_field = schema.field_with_name(&field.name)?;
-                let is_alter_column_string_to_binary =
-                    is_string_to_binary(&old_field.data_type, &field.data_type);
                 // If two conditions are met, we don't need rebuild the table,
                 // as rebuild table can be a time-consuming job.
                 // 1. alter column from string to binary in parquet or data type not changed.
                 // 2. default expr and computed expr not changed. Otherwise, we need fill value for
                 //    new added column.
-                if ((table.storage_format_as_parquet() && is_alter_column_string_to_binary)
-                    || old_field.data_type == field.data_type)
+                if skip_alter_type_flag
                     && old_field.default_expr == field.default_expr
                     && old_field.computed_expr == field.computed_expr
                 {
                     continue;
                 }
+                let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
                 modified_field_indices.insert(field_index);
             }
             table_info.meta.schema = new_schema.clone().into();
