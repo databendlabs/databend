@@ -645,6 +645,13 @@ impl TableSchema {
         Ok(i)
     }
 
+    pub fn drop_column_unchecked(&mut self, column: &str) -> Result<FieldIndex> {
+        let i = self.index_of(column)?;
+        self.fields.remove(i);
+
+        Ok(i)
+    }
+
     pub fn to_leaf_column_id_set(&self) -> HashSet<ColumnId> {
         HashSet::from_iter(self.to_leaf_column_ids().iter().cloned())
     }

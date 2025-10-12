@@ -159,7 +159,7 @@ impl ModifyTableColumnInterpreter {
                 // and add a new one to regenerate its column ID. This ensures consistency
                 // between the schema definition and column identifiers.
                 if old_field.data_type != field.data_type {
-                    let _ = new_schema.drop_column(&field.name);
+                    let _ = new_schema.drop_column_unchecked(&field.name);
                     let _ = new_schema.add_column(field, i);
 
                     // Check if this column is referenced by computed columns.
