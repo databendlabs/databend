@@ -562,42 +562,27 @@ impl Processor for NewTransformAggregateFinal {
             return Ok(Event::Finished);
         }
 
-        // Priority 1: Output ready
-        if matches!(&self.state, LocalState::OutputReady(_)) {
-            if !self.output.can_push() {
-                return Ok(Event::NeedConsume);
-            }
-
-            if let LocalState::OutputReady(data_block) =
-                std::mem::replace(&mut self.state, LocalState::Idle)
-            {
-                self.output.push_data(Ok(data_block));
-            }
-
-            return Ok(Event::NeedData);
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
         }
 
-        // Priority 2: Async reading
-        if matches!(&self.state, LocalState::Reading(_)) {
-            return Ok(Event::Async);
-        }
-
-        // Priority 3: Sync processing (dispatching, deserializing, aggregating)
-        if matches!(
-            &self.state,
+        match &self.state {
             LocalState::DispatchingTasks(_)
-                | LocalState::Deserializing(_, _)
-                | LocalState::Aggregating(_)
-        ) {
-            return Ok(Event::Sync);
+            | LocalState::Deserializing(_, _)
+            | LocalState::Aggregating(_) => Ok(Event::Sync),
+            LocalState::Reading(_) => Ok(Event::Async),
+            LocalState::OutputReady(_) => {
+                let LocalState::OutputReady(data_block) =
+                    std::mem::replace(&mut self.state, LocalState::Idle)
+                else {
+                    unreachable!()
+                };
+                self.output.push_data(Ok(data_block));
+                Ok(Event::NeedConsume)
+            }
+            LocalState::Idle => self.try_get_work(),
         }
-
-        // Priority 4: Try to get work
-        if matches!(&self.state, LocalState::Idle) {
-            return self.try_get_work();
-        }
-
-        Ok(Event::NeedData)
     }
 
     fn process(&mut self) -> Result<()> {

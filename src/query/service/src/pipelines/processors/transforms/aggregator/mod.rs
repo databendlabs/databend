@@ -21,6 +21,7 @@ mod serde;
 mod transform_aggregate_expand;
 mod transform_aggregate_final;
 mod transform_aggregate_partial;
+mod transform_meta_dispatcher;
 mod transform_partition_bucket;
 mod transform_single_key;
 mod udaf_script;
