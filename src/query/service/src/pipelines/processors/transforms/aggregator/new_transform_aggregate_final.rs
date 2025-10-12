@@ -135,9 +135,9 @@ impl SharedRestoreState {
 // Local state for each processor
 enum LocalState {
     Idle,
-    DispatchingTasks(PartitionedMeta),
-    Reading(BucketSpilledPayload),
+    AsyncReading(BucketSpilledPayload),
     Deserializing(BucketSpilledPayload, Vec<u8>),
+    AsyncWait,
     Aggregating(usize), // partition_id
     OutputReady(DataBlock),
 }
@@ -189,119 +189,30 @@ impl NewTransformAggregateFinal {
     }
 
     fn try_get_work(&mut self) -> Result<Event> {
-        // Try to steal task from work queue
-        if let Ok(task) = self.shared_state.work_queue.pop() {
-            self.shared_state
-                .active_tasks
-                .fetch_add(1, Ordering::SeqCst);
-            self.state = LocalState::Reading(task);
-            return Ok(Event::Async);
+        if self.input.has_data() {
+            let mut data_block = self.input.pull_data().unwrap()?;
+
+            if let Some(block_meta) = data_block
+                .take_meta()
+                .and_then(AggregateMeta::downcast_from)
+            {
+                if let AggregateMeta::BucketSpilled(payload) = block_meta {
+                    self.state = LocalState::AsyncReading(payload);
+                    return Ok(Event::Async);
+                } else {
+                    unreachable!("Only BucketSpilled meta is expected from input");
+                }
+            } else {
+                unreachable!("Only Aggregate meta is expected from input");
+            }
         }
 
-        // Work queue is empty, check if we need to dispatch from ready queue
-        if self.shared_state.active_tasks.load(Ordering::SeqCst) == 0 {
-            // Try to get a meta from ready queue
-            let mut ready_queue = self.shared_state.ready_queue.lock().unwrap();
-
-            if let Some(partitioned_meta) = ready_queue.pop_front() {
-                drop(ready_queue); // Release lock early
-                self.state = LocalState::DispatchingTasks(partitioned_meta);
-                return Ok(Event::Sync);
-            }
-
-            drop(ready_queue);
-
-            // Ready queue is also empty, try to pull from input
-            if self.input.has_data() {
-                let mut data_block = self.input.pull_data().unwrap()?;
-                let meta = data_block
-                    .take_meta()
-                    .and_then(AggregateMeta::downcast_from);
-
-                match meta {
-                    Some(AggregateMeta::Partitioned { bucket, data }) => {
-                        // Normal case: Partitioned meta
-                        let mut ready_queue = self.shared_state.ready_queue.lock().unwrap();
-                        ready_queue.push_back(PartitionedMeta { data });
-                        drop(ready_queue);
-
-                        if self.input.is_finished() {
-                            self.shared_state
-                                .input_finished
-                                .store(true, Ordering::SeqCst);
-                        }
-                        return self.try_get_work();
-                    }
-                    Some(AggregateMeta::BucketSpilled(payload)) => {
-                        // Direct BucketSpilled meta (single spilled bucket)
-                        // Increment total tasks
-                        self.shared_state.total_tasks.fetch_add(1, Ordering::SeqCst);
-
-                        // Push to work queue
-                        self.shared_state.work_queue.push(payload).map_err(|_| {
-                            ErrorCode::Internal("Failed to push task to work queue")
-                        })?;
-
-                        if self.input.is_finished() {
-                            self.shared_state
-                                .input_finished
-                                .store(true, Ordering::SeqCst);
-                        }
-                        return self.try_get_work();
-                    }
-                    _ => {
-                        return Err(ErrorCode::Internal(
-                            "Expected Partitioned or BucketSpilled meta from upstream",
-                        ));
-                    }
-                }
-            }
-
-            if self.input.is_finished() {
-                self.shared_state
-                    .input_finished
-                    .store(true, Ordering::SeqCst);
-            }
-
-            if self.input.is_finished() && self.shared_state.input_finished.load(Ordering::SeqCst) {
-                // Phase 1 (restore) finished, check if we can start phase 2 (aggregate)
-                if !self.shared_state.restore_finished.load(Ordering::SeqCst) {
-                    let total = self.shared_state.total_tasks.load(Ordering::SeqCst);
-                    let completed = self.shared_state.completed_tasks.load(Ordering::SeqCst);
-
-                    if completed == total {
-                        self.shared_state
-                            .restore_finished
-                            .store(true, Ordering::SeqCst);
-                    } else {
-                        return Ok(Event::NeedData);
-                    }
-                }
-
-                if self.shared_state.restore_finished.load(Ordering::SeqCst) {
-                    match self.shared_state.partition_ready_queue.pop() {
-                        Ok(partition_id) => {
-                            self.state = LocalState::Aggregating(partition_id);
-                            return Ok(Event::Sync);
-                        }
-                        Err(_) => {
-                            if self.shared_state.pending_partitions.load(Ordering::SeqCst) == 0 {
-                                self.output.finish();
-                                return Ok(Event::Finished);
-                            }
-
-                            return Ok(Event::NeedData);
-                        }
-                    }
-                }
-
-                return Ok(Event::NeedData);
-            }
-
-            self.input.set_need_data();
-            return Ok(Event::NeedData);
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
+        self.input.set_need_data();
         Ok(Event::NeedData)
     }
 
@@ -324,53 +235,17 @@ impl NewTransformAggregateFinal {
         )
     }
 
-    fn process_dispatching_tasks(&mut self, partitioned_meta: PartitionedMeta) -> Result<()> {
-        // Dispatch tasks to work queue
-        let PartitionedMeta { data } = partitioned_meta;
-
-        for item in data {
-            match item {
-                AggregateMeta::BucketSpilled(payload) => {
-                    // Increment total tasks
-                    self.shared_state.total_tasks.fetch_add(1, Ordering::SeqCst);
-
-                    // Push to work queue
-                    self.shared_state
-                        .work_queue
-                        .push(payload)
-                        .map_err(|_| ErrorCode::Internal("Failed to push task to work queue"))?;
-                }
-                other => {
-                    // Directly processed tasks should also be tracked
-                    self.shared_state.total_tasks.fetch_add(1, Ordering::SeqCst);
-
-                    // Non-spilled data: directly repartition and push to aggregate queues
-                    self.repartition_and_push(other)?;
-                }
-            }
-        }
-
-        self.state = LocalState::Idle;
-        Ok(())
-    }
-
     fn process_deserializing(
         &mut self,
         payload: BucketSpilledPayload,
         data: Vec<u8>,
     ) -> Result<()> {
-        // Deserialize the data
         let deserialized = Self::deserialize(payload, data);
 
-        // Decrement active tasks
-        self.shared_state
-            .active_tasks
-            .fetch_sub(1, Ordering::SeqCst);
-
-        // Repartition and push to aggregate queues directly
         self.repartition_and_push(deserialized)?;
 
         self.state = LocalState::Idle;
+
         Ok(())
     }
 
@@ -568,10 +443,10 @@ impl Processor for NewTransformAggregateFinal {
         }
 
         match &self.state {
-            LocalState::DispatchingTasks(_)
-            | LocalState::Deserializing(_, _)
-            | LocalState::Aggregating(_) => Ok(Event::Sync),
-            LocalState::Reading(_) => Ok(Event::Async),
+            LocalState::Deserializing(_, _) | LocalState::Aggregating(_) => Ok(Event::Sync),
+            LocalState::AsyncReading(_) => {
+                unreachable!("Logic error")
+            }
             LocalState::OutputReady(_) => {
                 let LocalState::OutputReady(data_block) =
                     std::mem::replace(&mut self.state, LocalState::Idle)
@@ -587,50 +462,52 @@ impl Processor for NewTransformAggregateFinal {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, LocalState::Idle) {
-            LocalState::DispatchingTasks(partitioned_meta) => {
-                self.process_dispatching_tasks(partitioned_meta)
-            }
-
             LocalState::Deserializing(payload, data) => self.process_deserializing(payload, data),
 
             LocalState::Aggregating(partition_id) => self.process_aggregating(partition_id),
 
-            LocalState::Idle | LocalState::Reading(_) | LocalState::OutputReady(_) => {
-                // Nothing to do (OutputReady is handled in event())
-                Ok(())
+            LocalState::Idle
+            | LocalState::AsyncReading(_)
+            | LocalState::OutputReady(_)
+            | LocalState::AsyncWait => {
+                unreachable!("Logic error: only Deserializing, Aggregating can enter process");
             }
         }
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        if let LocalState::Reading(payload) = std::mem::replace(&mut self.state, LocalState::Idle) {
-            // Async read data
-            let _guard = self.semaphore.acquire().await;
-            let instant = Instant::now();
-            let data = self
-                .operator
-                .read_with(&payload.location)
-                .range(payload.data_range.clone())
-                .await?
-                .to_vec();
+        let LocalState::Reading(payload) = std::mem::replace(&mut self.state, LocalState::Idle)
+        else {
+            unreachable!("Logic error: only Reading state can enter async_process");
+        };
 
+        let _guard = self.semaphore.acquire().await;
+        let instant = Instant::now();
+        let data = self
+            .operator
+            .read_with(&payload.location)
+            .range(payload.data_range.clone())
+            .await?
+            .to_vec();
+
+        // perf
+        {
             Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
             Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, data.len());
             Profile::record_usize_profile(
                 ProfileStatisticsName::RemoteSpillReadTime,
                 instant.elapsed().as_millis() as usize,
             );
-
-            info!(
-                "Read aggregate spill {} successfully, elapsed: {:?}",
-                &payload.location,
-                instant.elapsed()
-            );
-
-            // Set state to deserializing (will be processed in process())
-            self.state = LocalState::Deserializing(payload, data);
         }
+
+        info!(
+            "Read aggregate spill {} successfully, elapsed: {:?}",
+            &payload.location,
+            instant.elapsed()
+        );
+
+        self.state = LocalState::Deserializing(payload, data);
 
         Ok(())
     }

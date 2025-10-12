@@ -46,7 +46,7 @@ impl Processor for TransformMetaDispatcher {
             return Ok(Event::Finished);
         }
 
-        if !self.can_push() {
+        if !self.output.can_push() {
             self.input.set_not_need_data();
             return Ok(Event::NeedData);
         }
