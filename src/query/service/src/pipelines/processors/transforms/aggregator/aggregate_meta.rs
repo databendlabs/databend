@@ -130,6 +130,8 @@ pub enum AggregateMeta {
     Spilled(Vec<BucketSpilledPayload>),
 
     Partitioned { bucket: isize, data: Vec<Self> },
+
+    Wait,
 }
 
 impl AggregateMeta {

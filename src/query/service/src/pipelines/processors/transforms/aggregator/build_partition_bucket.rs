@@ -62,7 +62,7 @@ pub fn build_partition_bucket(
 
         let shared_state = SharedRestoreState::new(partition_count);
 
-        pipeline.try_resize(normalized)?;
+        pipeline.try_resize(partition_count)?;
         pipeline.add_transform(|input, output| {
             let operator = operator.clone();
             let semaphore = semaphore.clone();

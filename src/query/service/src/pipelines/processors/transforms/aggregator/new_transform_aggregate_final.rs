@@ -41,6 +41,7 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use log::info;
 use opendal::Operator;
+use tokio::sync::Barrier;
 use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -56,15 +57,6 @@ struct PartitionedMeta {
 
 // Shared state across all NewTransformAggregateFinal processors
 pub struct SharedRestoreState {
-    // Ready queue: stores complete Partitioned meta pulled from input (with Mutex)
-    ready_queue: Mutex<VecDeque<PartitionedMeta>>,
-
-    // Work queue: stores BucketSpilled tasks to be processed (lock-free)
-    work_queue: ConcurrentQueue<BucketSpilledPayload>,
-
-    // Number of tasks currently being processed
-    active_tasks: AtomicUsize,
-
     // Aggregate worker queues: one queue per partition (after repartition)
     // Each processor will work on different partitions (orthogonal)
     aggregate_queues: Vec<ConcurrentQueue<AggregateMeta>>,
@@ -72,23 +64,11 @@ pub struct SharedRestoreState {
     // Whether a partition has pending aggregates waiting to be processed
     partition_ready: Vec<AtomicBool>,
 
-    // Queue of partitions that have pending aggregates
-    partition_ready_queue: ConcurrentQueue<usize>,
-
-    // Number of partitions currently scheduled for aggregation
-    pending_partitions: AtomicUsize,
-
-    // Total number of spilled tasks expected
-    total_tasks: AtomicUsize,
-
-    // Number of completed tasks
-    completed_tasks: AtomicUsize,
-
-    // Input finished flag
-    input_finished: AtomicBool,
-
     // Restore phase finished flag
-    restore_finished: AtomicBool,
+    pub bucket_finished: AtomicBool,
+
+    pub restored_finished: AtomicBool,
+    barrier: Barrier,
 }
 
 impl SharedRestoreState {
@@ -99,36 +79,14 @@ impl SharedRestoreState {
             .collect();
 
         Arc::new(SharedRestoreState {
-            ready_queue: Mutex::new(VecDeque::new()),
-            work_queue: ConcurrentQueue::unbounded(),
-            active_tasks: AtomicUsize::new(0),
             aggregate_queues,
             partition_ready: (0..partition_count)
                 .map(|_| AtomicBool::new(false))
                 .collect(),
-            partition_ready_queue: ConcurrentQueue::unbounded(),
-            pending_partitions: AtomicUsize::new(0),
-            total_tasks: AtomicUsize::new(0),
-            completed_tasks: AtomicUsize::new(0),
-            input_finished: AtomicBool::new(false),
-            restore_finished: AtomicBool::new(false),
+            bucket_finished: AtomicBool::new(false),
+            barrier: Barrier::new(partition_count),
+            restored_finished: AtomicBool::new(false),
         })
-    }
-
-    pub fn schedule_partition(&self, partition_id: usize) -> Result<()> {
-        if !self.partition_ready[partition_id].swap(true, Ordering::SeqCst) {
-            self.pending_partitions.fetch_add(1, Ordering::SeqCst);
-            self.partition_ready_queue
-                .push(partition_id)
-                .map_err(|_| ErrorCode::Internal("Failed to schedule partition"))?;
-        }
-        Ok(())
-    }
-
-    pub fn mark_partition_done(&self, partition_id: usize) {
-        if self.partition_ready[partition_id].swap(false, Ordering::SeqCst) {
-            self.pending_partitions.fetch_sub(1, Ordering::SeqCst);
-        }
     }
 }
 
@@ -138,7 +96,7 @@ enum LocalState {
     AsyncReading(BucketSpilledPayload),
     Deserializing(BucketSpilledPayload, Vec<u8>),
     AsyncWait,
-    Aggregating(usize), // partition_id
+    Aggregating,
     OutputReady(DataBlock),
 }
 
@@ -199,9 +157,14 @@ impl NewTransformAggregateFinal {
                 if let AggregateMeta::BucketSpilled(payload) = block_meta {
                     self.state = LocalState::AsyncReading(payload);
                     return Ok(Event::Async);
-                } else {
-                    unreachable!("Only BucketSpilled meta is expected from input");
+                };
+
+                if let AggregateMeta::Wait = block_meta {
+                    self.state = LocalState::AsyncWait;
+                    return Ok(Event::Async);
                 }
+
+                unreachable!("Only BucketSpilled and Wait meta is expected from input");
             } else {
                 unreachable!("Only Aggregate meta is expected from input");
             }
@@ -307,34 +270,17 @@ impl NewTransformAggregateFinal {
             self.shared_state.aggregate_queues[partition_id]
                 .push(meta)
                 .map_err(|_| ErrorCode::Internal("Failed to push to aggregate queue"))?;
-
-            self.shared_state.schedule_partition(partition_id)?;
-        }
-
-        // Increment completed tasks
-        let completed = self
-            .shared_state
-            .completed_tasks
-            .fetch_add(1, Ordering::SeqCst)
-            + 1;
-        let total = self.shared_state.total_tasks.load(Ordering::SeqCst);
-
-        // Check if all restore tasks are completed
-        if completed == total && self.shared_state.input_finished.load(Ordering::SeqCst) {
-            self.shared_state
-                .restore_finished
-                .store(true, Ordering::SeqCst);
         }
 
         Ok(())
     }
 
-    fn process_aggregating(&mut self, partition_id: usize) -> Result<()> {
+    fn process_aggregating(&mut self) -> Result<()> {
         // Collect all data from the partition queue
         let mut agg_hashtable: Option<AggregateHashTable> = None;
 
         // Pop all items from aggregate_queues[partition_id]
-        while let Ok(meta) = self.shared_state.aggregate_queues[partition_id].pop() {
+        while let Ok(meta) = self.shared_state.aggregate_queues[self.id].pop() {
             match meta {
                 AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
                     Some(ht) => {
@@ -410,13 +356,39 @@ impl NewTransformAggregateFinal {
             self.params.empty_result_block()
         };
 
-        self.shared_state.mark_partition_done(partition_id);
-        if !self.shared_state.aggregate_queues[partition_id].is_empty() {
-            self.shared_state.schedule_partition(partition_id)?;
-        }
-
         // Set state to OutputReady
         self.state = LocalState::OutputReady(output_block);
+        Ok(())
+    }
+
+    async fn async_reading(&mut self, payload: BucketSpilledPayload) -> Result<()> {
+        let _guard = self.semaphore.acquire().await;
+        let instant = Instant::now();
+        let data = self
+            .operator
+            .read_with(&payload.location)
+            .range(payload.data_range.clone())
+            .await?
+            .to_vec();
+
+        // perf
+        {
+            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
+            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, data.len());
+            Profile::record_usize_profile(
+                ProfileStatisticsName::RemoteSpillReadTime,
+                instant.elapsed().as_millis() as usize,
+            );
+        }
+
+        info!(
+            "Read aggregate spill {} successfully, elapsed: {:?}",
+            &payload.location,
+            instant.elapsed()
+        );
+
+        self.state = LocalState::Deserializing(payload, data);
+
         Ok(())
     }
 }
@@ -444,7 +416,8 @@ impl Processor for NewTransformAggregateFinal {
 
         match &self.state {
             LocalState::Deserializing(_, _) | LocalState::Aggregating(_) => Ok(Event::Sync),
-            LocalState::AsyncReading(_) => {
+            LocalState::AsyncReading(_) | LocalState::AsyncWait => {
+                // handled in try_get_work
                 unreachable!("Logic error")
             }
             LocalState::OutputReady(_) => {
@@ -464,7 +437,7 @@ impl Processor for NewTransformAggregateFinal {
         match std::mem::replace(&mut self.state, LocalState::Idle) {
             LocalState::Deserializing(payload, data) => self.process_deserializing(payload, data),
 
-            LocalState::Aggregating(partition_id) => self.process_aggregating(partition_id),
+            LocalState::Aggregating => self.process_aggregating(),
 
             LocalState::Idle
             | LocalState::AsyncReading(_)
@@ -477,37 +450,21 @@ impl Processor for NewTransformAggregateFinal {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        let LocalState::Reading(payload) = std::mem::replace(&mut self.state, LocalState::Idle)
-        else {
-            unreachable!("Logic error: only Reading state can enter async_process");
-        };
-
-        let _guard = self.semaphore.acquire().await;
-        let instant = Instant::now();
-        let data = self
-            .operator
-            .read_with(&payload.location)
-            .range(payload.data_range.clone())
-            .await?
-            .to_vec();
-
-        // perf
-        {
-            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, data.len());
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillReadTime,
-                instant.elapsed().as_millis() as usize,
-            );
+        let state = std::mem::replace(&mut self.state, LocalState::Idle);
+        match state {
+            LocalState::AsyncReading(payload) => self.async_reading(payload).await?,
+            LocalState::AsyncWait => {
+                // Wait for all processors to finish AsyncReading and Deserializing works
+                self.shared_state.barrier.wait().await;
+                // Restore phase finished, begin aggregating phase
+                self.state = LocalState::Aggregating;
+            }
+            _ => {
+                unreachable!(
+                    "Logic error: only AsyncReading and AsyncWait can enter async_process"
+                );
+            }
         }
-
-        info!(
-            "Read aggregate spill {} successfully, elapsed: {:?}",
-            &payload.location,
-            instant.elapsed()
-        );
-
-        self.state = LocalState::Deserializing(payload, data);
 
         Ok(())
     }

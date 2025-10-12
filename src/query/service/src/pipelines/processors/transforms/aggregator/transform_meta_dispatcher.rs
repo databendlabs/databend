@@ -23,12 +23,33 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::SharedRestoreState;
+
+impl TransformMetaDispatcher {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        shared_state: Arc<SharedRestoreState>,
+    ) -> Box<dyn Processor> {
+        Box::new(TransformMetaDispatcher {
+            input,
+            output,
+            queue: Vec::new(),
+            shared_state,
+            init_flag: false,
+        })
+    }
+}
 
 pub struct TransformMetaDispatcher {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
     queue: Vec<AggregateMeta>,
+
+    shared_state: Arc<SharedRestoreState>,
+
+    init_flag: bool,
 }
 
 impl Processor for TransformMetaDispatcher {
@@ -57,6 +78,19 @@ impl Processor for TransformMetaDispatcher {
             return Ok(Event::NeedConsume);
         }
 
+        if !self
+            .shared_state
+            .bucket_finished
+            .load(std::sync::atomic::Ordering::SeqCst)
+            && !self.init_flag
+        {
+            self.output
+                .push_data(Ok(DataBlock::empty_with_meta(Box::new(
+                    AggregateMeta::Wait,
+                ))));
+            return Ok(Event::NeedConsume);
+        }
+
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(block_meta) = data_block
@@ -71,6 +105,7 @@ impl Processor for TransformMetaDispatcher {
                 };
 
                 self.queue = data;
+                self.init_flag = true;
 
                 return if let Some(meta) = self.queue.pop() {
                     self.output
