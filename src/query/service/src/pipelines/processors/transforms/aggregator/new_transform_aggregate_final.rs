@@ -15,8 +15,6 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -116,6 +114,8 @@ pub struct NewTransformAggregateFinal {
     // Number of partitions for repartitioning
     partition_count: usize,
 
+    id: usize,
+
     // Local state
     state: LocalState,
 
@@ -132,6 +132,7 @@ impl NewTransformAggregateFinal {
         params: Arc<AggregatorParams>,
         shared_state: Arc<SharedRestoreState>,
         partition_count: usize,
+        id: usize,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(NewTransformAggregateFinal {
             input,
@@ -141,6 +142,7 @@ impl NewTransformAggregateFinal {
             params,
             shared_state,
             partition_count,
+            id,
             state: LocalState::Idle,
             flush_state: PayloadFlushState::default(),
         })))
@@ -415,7 +417,7 @@ impl Processor for NewTransformAggregateFinal {
         }
 
         match &self.state {
-            LocalState::Deserializing(_, _) | LocalState::Aggregating(_) => Ok(Event::Sync),
+            LocalState::Deserializing(_, _) | LocalState::Aggregating => Ok(Event::Sync),
             LocalState::AsyncReading(_) | LocalState::AsyncWait => {
                 // handled in try_get_work
                 unreachable!("Logic error")

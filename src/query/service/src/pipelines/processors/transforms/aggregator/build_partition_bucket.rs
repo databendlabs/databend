@@ -14,10 +14,13 @@
 
 use std::sync::Arc;
 
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::TransformPipeBuilder;
 use databend_common_storage::DataOperator;
 use tokio::sync::Semaphore;
 
@@ -63,21 +66,25 @@ pub fn build_partition_bucket(
         let shared_state = SharedRestoreState::new(partition_count);
 
         pipeline.try_resize(partition_count)?;
-        pipeline.add_transform(|input, output| {
-            let operator = operator.clone();
-            let semaphore = semaphore.clone();
-            let params = params.clone();
-            let shared_state = shared_state.clone();
-            NewTransformAggregateFinal::create(
-                input,
-                output,
-                operator,
-                semaphore,
-                params,
-                shared_state,
+
+        let mut builder = TransformPipeBuilder::create();
+        for id in 0..partition_count {
+            let input_port = InputPort::create();
+            let output_port = OutputPort::create();
+            let processor = NewTransformAggregateFinal::create(
+                input_port.clone(),
+                output_port.clone(),
+                operator.clone(),
+                semaphore.clone(),
+                params.clone(),
+                shared_state.clone(),
                 partition_count,
-            )
-        })?;
+                id,
+            )?;
+            builder.add_transform(input_port, output_port, processor);
+        }
+
+        pipeline.add_pipe(builder.finalize());
         pipeline.try_resize(after_worker)?;
     } else {
         pipeline.try_resize(std::cmp::min(input_nums, max_restore_worker as usize))?;
