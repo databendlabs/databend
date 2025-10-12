@@ -6,6 +6,90 @@ text      : a = 2 and b < 7
 expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), lt<Int32, Int32>(b, CAST<UInt8>(7_u8 AS Int32)))
 keep      : true
 
+text      : a > 2 and a < 1
+expr      : and<Boolean, Boolean>(gt<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)), lt<Int32, Int32>(a, CAST<UInt8>(1_u8 AS Int32)))
+keep      : false
+
+text      : a = 2 and a < 1
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), lt<Int32, Int32>(a, CAST<UInt8>(1_u8 AS Int32)))
+keep      : false
+
+text      : a < 2 and a > 2
+expr      : and<Boolean, Boolean>(lt<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)), gt<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)))
+keep      : false
+
+text      : a >= 3 and a < 2
+expr      : and<Boolean, Boolean>(gte<Int32, Int32>(a, CAST<UInt8>(3_u8 AS Int32)), lt<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)))
+keep      : false
+
+text      : a <= 1 and a > 3
+expr      : and<Boolean, Boolean>(lte<Int32, Int32>(a, CAST<UInt8>(1_u8 AS Int32)), gt<Int32, Int32>(a, CAST<UInt8>(3_u8 AS Int32)))
+keep      : false
+
+text      : a = 5 and a = 7
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 5_i32), eq<Int32, Int32>(a, 7_i32))
+keep      : false
+
+text      : a > 10 and a < 5
+expr      : and<Boolean, Boolean>(gt<Int32, Int32>(a, CAST<UInt8>(10_u8 AS Int32)), lt<Int32, Int32>(a, CAST<UInt8>(5_u8 AS Int32)))
+keep      : false
+
+text      : a >= 5 and a <= 2
+expr      : and<Boolean, Boolean>(gte<Int32, Int32>(a, CAST<UInt8>(5_u8 AS Int32)), lte<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)))
+keep      : false
+
+text      : a > 1 and a < 3
+expr      : and<Boolean, Boolean>(gt<Int32, Int32>(a, CAST<UInt8>(1_u8 AS Int32)), lt<Int32, Int32>(a, CAST<UInt8>(3_u8 AS Int32)))
+keep      : true
+
+text      : a >= 2 and a <= 2
+expr      : and<Boolean, Boolean>(gte<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)), lte<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)))
+keep      : true
+
+text      : a >= 1 and a < 3
+expr      : and<Boolean, Boolean>(gte<Int32, Int32>(a, CAST<UInt8>(1_u8 AS Int32)), lt<Int32, Int32>(a, CAST<UInt8>(3_u8 AS Int32)))
+keep      : true
+
+text      : a > 1 and a <= 2
+expr      : and<Boolean, Boolean>(gt<Int32, Int32>(a, CAST<UInt8>(1_u8 AS Int32)), lte<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)))
+keep      : true
+
+text      : a > 2 and a = 2
+expr      : and<Boolean, Boolean>(gt<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)), eq<Int32, Int32>(a, 2_i32))
+keep      : false
+
+text      : a < 5 and a = 2
+expr      : and<Boolean, Boolean>(lt<Int32, Int32>(a, CAST<UInt8>(5_u8 AS Int32)), eq<Int32, Int32>(a, 2_i32))
+keep      : true
+
+text      : a = 2 and a < 5
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), lt<Int32, Int32>(a, CAST<UInt8>(5_u8 AS Int32)))
+keep      : true
+
+text      : a > 1 and a = 2
+expr      : and<Boolean, Boolean>(gt<Int32, Int32>(a, CAST<UInt8>(1_u8 AS Int32)), eq<Int32, Int32>(a, 2_i32))
+keep      : true
+
+text      : a > 2 and a < 1 and b = 1
+expr      : and<Boolean, Boolean>(and<Boolean, Boolean>(gt<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)), lt<Int32, Int32>(a, CAST<UInt8>(1_u8 AS Int32))), eq<Int32, Int32>(b, 1_i32))
+keep      : false
+
+text      : a = 2 and b > 5 and b < 3
+expr      : and<Boolean, Boolean>(and<Boolean, Boolean>(eq<Int32, Int32>(a, 2_i32), gt<Int32, Int32>(b, CAST<UInt8>(5_u8 AS Int32))), lt<Int32, Int32>(b, CAST<UInt8>(3_u8 AS Int32)))
+keep      : false
+
+text      : a > 2 and a <= 2
+expr      : and<Boolean, Boolean>(gt<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)), lte<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)))
+keep      : false
+
+text      : a < 2 and a >= 2
+expr      : and<Boolean, Boolean>(lt<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)), gte<Int32, Int32>(a, CAST<UInt8>(2_u8 AS Int32)))
+keep      : false
+
+text      : a = 5 and a != 5
+expr      : and<Boolean, Boolean>(eq<Int32, Int32>(a, 5_i32), noteq<Int32, Int32>(a, CAST<UInt8>(5_u8 AS Int32)))
+keep      : false
+
 text      : to_string(a) = '4'
 expr      : eq<String, String>(CAST<Int32>(a AS String), "4")
 keep      : false
