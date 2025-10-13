@@ -23,6 +23,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use log::info;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::SharedRestoreState;
@@ -40,6 +41,81 @@ impl TransformMetaDispatcher {
             shared_state,
             init_flag: false,
         })))
+    }
+
+    pub fn debug_do_event(&mut self) -> Result<Event> {
+        info!("TransformMetaDispatcher event");
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedData);
+        }
+
+        if let Some(meta) = self.queue.pop() {
+            self.output
+                .push_data(Ok(DataBlock::empty_with_meta(Box::new(meta))));
+            return Ok(Event::NeedConsume);
+        }
+
+        if !self
+            .shared_state
+            .bucket_finished
+            .load(std::sync::atomic::Ordering::SeqCst)
+            && self.init_flag
+        {
+            info!("TransformMetaDispatcher send wait block");
+            self.output
+                .push_data(Ok(DataBlock::empty_with_meta(Box::new(
+                    AggregateMeta::Wait,
+                ))));
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input.has_data() {
+            let mut data_block = self.input.pull_data().unwrap()?;
+            if let Some(block_meta) = data_block
+                .take_meta()
+                .and_then(AggregateMeta::downcast_from)
+            {
+                let AggregateMeta::Partitioned { bucket, data } = block_meta else {
+                    return Err(databend_common_exception::ErrorCode::Internal(
+                        "TransformMetaDispatcher only support Partitioned AggregateMeta",
+                    ));
+                    // TODO:
+                };
+
+                info!(
+                    "TransformMetaDispatcher get Partitioned meta: {}, with len {} ",
+                    bucket,
+                    data.len()
+                );
+
+                self.queue = data;
+                self.init_flag = true;
+
+                return if let Some(meta) = self.queue.pop() {
+                    self.output
+                        .push_data(Ok(DataBlock::empty_with_meta(Box::new(meta))));
+                    Ok(Event::NeedConsume)
+                } else {
+                    Err(databend_common_exception::ErrorCode::Internal(
+                        "Logic error",
+                    ))
+                };
+            }
+        }
+
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        self.input.set_need_data();
+        Ok(Event::NeedData)
     }
 }
 
@@ -64,69 +140,8 @@ impl Processor for TransformMetaDispatcher {
     }
 
     fn event(&mut self) -> databend_common_exception::Result<Event> {
-        if self.output.is_finished() {
-            self.input.finish();
-            return Ok(Event::Finished);
-        }
-
-        if !self.output.can_push() {
-            self.input.set_not_need_data();
-            return Ok(Event::NeedData);
-        }
-
-        if let Some(meta) = self.queue.pop() {
-            self.output
-                .push_data(Ok(DataBlock::empty_with_meta(Box::new(meta))));
-            return Ok(Event::NeedConsume);
-        }
-
-        if !self
-            .shared_state
-            .bucket_finished
-            .load(std::sync::atomic::Ordering::SeqCst)
-            && !self.init_flag
-        {
-            self.output
-                .push_data(Ok(DataBlock::empty_with_meta(Box::new(
-                    AggregateMeta::Wait,
-                ))));
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input.has_data() {
-            let mut data_block = self.input.pull_data().unwrap()?;
-            if let Some(block_meta) = data_block
-                .take_meta()
-                .and_then(AggregateMeta::downcast_from)
-            {
-                let AggregateMeta::Partitioned { bucket: _, data } = block_meta else {
-                    return Err(databend_common_exception::ErrorCode::Internal(
-                        "TransformMetaDispatcher only support Partitioned AggregateMeta",
-                    ));
-                    // TODO:
-                };
-
-                self.queue = data;
-                self.init_flag = true;
-
-                return if let Some(meta) = self.queue.pop() {
-                    self.output
-                        .push_data(Ok(DataBlock::empty_with_meta(Box::new(meta))));
-                    Ok(Event::NeedConsume)
-                } else {
-                    Err(databend_common_exception::ErrorCode::Internal(
-                        "Logic error",
-                    ))
-                };
-            }
-        }
-
-        if self.input.is_finished() {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        self.input.set_need_data();
-        Ok(Event::NeedData)
+        let event = self.debug_do_event();
+        info!("TransformMetaDispatcher return event: {:?}", event);
+        event
     }
 }

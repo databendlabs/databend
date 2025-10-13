@@ -79,6 +79,7 @@ enum LocalState {
     Idle,
     AsyncReading(BucketSpilledPayload),
     Deserializing(BucketSpilledPayload, Vec<u8>),
+    Repartition(AggregateMeta),
     AsyncWait,
     Aggregating,
     OutputReady(DataBlock),
@@ -147,12 +148,24 @@ impl NewTransformAggregateFinal {
                     return Ok(Event::Async);
                 };
 
+                if matches!(
+                    block_meta,
+                    AggregateMeta::AggregatePayload(..) | AggregateMeta::AggregateSpilling(..)
+                ) {
+                    self.state = LocalState::Repartition(block_meta);
+                    return Ok(Event::Sync);
+                }
+
                 if let AggregateMeta::Wait = block_meta {
+                    info!("Aggregate id_{} receive async wait flag", self.id);
                     self.state = LocalState::AsyncWait;
                     return Ok(Event::Async);
                 }
 
-                unreachable!("Only BucketSpilled and Wait meta is expected from input");
+                unreachable!(
+                    "Only BucketSpilled and Wait meta is expected from input, we got: {:?}",
+                    block_meta
+                );
             } else {
                 unreachable!("Only Aggregate meta is expected from input");
             }
@@ -266,6 +279,11 @@ impl NewTransformAggregateFinal {
     fn process_aggregating(&mut self) -> Result<()> {
         // Collect all data from the partition queue
         let mut agg_hashtable: Option<AggregateHashTable> = None;
+        info!(
+            "Aggregate id_{} start aggregating with len {}",
+            self.id,
+            self.shared_state.aggregate_queues[self.id].len()
+        );
 
         // Pop all items from aggregate_queues[partition_id]
         while let Ok(meta) = self.shared_state.aggregate_queues[self.id].pop() {
@@ -317,6 +335,7 @@ impl NewTransformAggregateFinal {
                 }
             }
         }
+        info!("Aggregate id_{} finished aggregating", self.id,);
 
         // Generate output block
         let output_block = if let Some(mut ht) = agg_hashtable {
@@ -404,7 +423,7 @@ impl Processor for NewTransformAggregateFinal {
 
         match &self.state {
             LocalState::Deserializing(_, _) | LocalState::Aggregating => Ok(Event::Sync),
-            LocalState::AsyncReading(_) | LocalState::AsyncWait => {
+            LocalState::AsyncReading(_) | LocalState::AsyncWait | LocalState::Repartition(..) => {
                 // handled in try_get_work
                 unreachable!("Logic error")
             }
@@ -424,7 +443,7 @@ impl Processor for NewTransformAggregateFinal {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, LocalState::Idle) {
             LocalState::Deserializing(payload, data) => self.process_deserializing(payload, data),
-
+            LocalState::Repartition(meta) => self.repartition_and_push(meta),
             LocalState::Aggregating => self.process_aggregating(),
 
             LocalState::Idle
@@ -442,8 +461,15 @@ impl Processor for NewTransformAggregateFinal {
         match state {
             LocalState::AsyncReading(payload) => self.async_reading(payload).await?,
             LocalState::AsyncWait => {
+                info!("Aggregate id_{} enter barrier wait", self.id);
                 // Wait for all processors to finish AsyncReading and Deserializing works
-                self.shared_state.barrier.wait().await;
+                let res = self.shared_state.barrier.wait().await;
+                if res.is_leader() {
+                    self.shared_state
+                        .bucket_finished
+                        .store(true, std::sync::atomic::Ordering::SeqCst);
+                    info!("Flag bucket_finished set to true by id_{}", self.id);
+                }
                 // Restore phase finished, begin aggregating phase
                 self.state = LocalState::Aggregating;
             }
