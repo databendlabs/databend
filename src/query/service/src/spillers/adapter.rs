@@ -393,7 +393,7 @@ impl BackpressureSpiller {
         )
     }
 
-    pub fn new_writer_creater(&self, schema: Arc<DataSchema>) -> Result<WriterCreator> {
+    pub fn new_writer_creator(&self, schema: Arc<DataSchema>) -> Result<WriterCreator> {
         let props = Properties::new(&schema)?;
         Ok(WriterCreator {
             spiller: self.clone(),
