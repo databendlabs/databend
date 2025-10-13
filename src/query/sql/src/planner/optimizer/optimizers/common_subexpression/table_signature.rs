@@ -53,6 +53,13 @@ fn collect_table_signatures_rec(
         if table_entry.table().engine() != "FUSE" {
             return;
         }
+        for column_index in scan.columns.iter() {
+            if let crate::planner::metadata::ColumnEntry::InternalColumn(_) =
+                metadata.column(*column_index)
+            {
+                return;
+            }
+        }
         tables.insert(table_entry.table().get_id() as IndexType);
         signature_to_exprs
             .entry(TableSignature { tables })
