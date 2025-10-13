@@ -31,8 +31,7 @@ pub enum RaftStateKey {
     /// The node id.
     Id,
 
-    // typos:ignore-next-line
-    /// Hard state of the raft log, including `current_term` and `voted_vor`.
+    /// Hard state of the raft log, including `current_term` and `voted_for`.
     HardState,
 
     // TODO: remove this field. It is not used any more. It is kept only for compatibility.
