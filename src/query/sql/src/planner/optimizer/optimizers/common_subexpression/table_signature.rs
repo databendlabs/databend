@@ -50,6 +50,9 @@ fn collect_table_signatures_rec(
     if let RelOperator::Scan(scan) = expr.plan.as_ref() {
         let mut tables = BTreeSet::new();
         let table_entry = metadata.table(scan.table_index);
+        if table_entry.table().engine() != "FUSE" {
+            return;
+        }
         tables.insert(table_entry.table().get_id() as IndexType);
         signature_to_exprs
             .entry(TableSignature { tables })

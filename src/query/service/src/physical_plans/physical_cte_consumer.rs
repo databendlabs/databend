@@ -99,15 +99,49 @@ impl PhysicalPlanBuilder {
             .iter()
             .map(|(k, v)| (*v, *k))
             .collect::<HashMap<_, _>>();
-        let cte_output_columns: Vec<_> = self
+        let cte_required_columns = self
             .cte_required_columns
             .get(&cte_consumer.cte_name)
-            .unwrap()
-            .iter()
-            .map(|c| def_to_ref.get(c).unwrap())
-            .collect();
-        let mut fields = Vec::new();
+            .ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(format!(
+                    "CTE required columns not found for CTE name: {}",
+                    cte_consumer.cte_name
+                ))
+            })?;
+
         let metadata = self.metadata.read();
+        let mut cte_output_columns = Vec::with_capacity(cte_required_columns.len());
+        for c in cte_required_columns.iter() {
+            let index = def_to_ref.get(c).ok_or_else(|| {
+                // Build detailed error message with column names
+                let required_cols: Vec<String> = cte_required_columns
+                    .iter()
+                    .map(|idx| {
+                        let col = metadata.column(*idx);
+                        format!("{}({})", col.name(), idx)
+                    })
+                    .collect();
+
+                let available_mappings: Vec<String> = def_to_ref
+                    .iter()
+                    .map(|(def_idx, ref_idx)| {
+                        let def_col = metadata.column(*def_idx);
+                        let ref_col = metadata.column(*ref_idx);
+                        format!("{}({}) -> {}({})", def_col.name(), def_idx, ref_col.name(), ref_idx)
+                    })
+                    .collect();
+
+                let current_col = metadata.column(*c);
+                databend_common_exception::ErrorCode::Internal(format!(
+                    "Column mapping not found for column {}({}) in CTE: {}.\nRequired columns: [{}]\nAvailable mappings: [{}]",
+                    current_col.name(), c, cte_consumer.cte_name,
+                    required_cols.join(", "),
+                    available_mappings.join(", ")
+                ))
+            })?;
+            cte_output_columns.push(index);
+        }
+        let mut fields = Vec::new();
 
         for index in cte_output_columns.iter() {
             let column = metadata.column(**index);
