@@ -284,6 +284,7 @@ impl TransformPartitionBucket {
 
                         (payload.bucket, payload.max_partition_count)
                     }
+                    AggregateMeta::Wait => unreachable!(),
                 };
             } else {
                 return Err(ErrorCode::Internal(format!(
@@ -547,6 +548,7 @@ impl Processor for TransformPartitionBucket {
                 AggregateMeta::BucketSpilled(_) => unreachable!(),
                 AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
                 AggregateMeta::AggregatePayload(payload) => self.partition_payload(payload)?,
+                AggregateMeta::Wait => unreachable!(),
             };
 
             for (bucket, block) in data_blocks.into_iter().enumerate() {

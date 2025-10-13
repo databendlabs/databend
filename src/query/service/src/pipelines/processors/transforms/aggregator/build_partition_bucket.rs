@@ -24,6 +24,7 @@ use databend_common_pipeline_core::TransformPipeBuilder;
 use databend_common_storage::DataOperator;
 use tokio::sync::Semaphore;
 
+use crate::pipelines::processors::transforms::aggregator::transform_meta_dispatcher::TransformMetaDispatcher;
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::NewTransformAggregateFinal;
@@ -64,6 +65,10 @@ pub fn build_partition_bucket(
         }
 
         let shared_state = SharedRestoreState::new(partition_count);
+
+        pipeline.add_transform(|input, output| {
+            TransformMetaDispatcher::create(input, output, shared_state.clone())
+        })?;
 
         pipeline.try_resize(partition_count)?;
 

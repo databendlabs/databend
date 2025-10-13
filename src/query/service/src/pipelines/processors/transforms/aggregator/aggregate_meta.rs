@@ -207,6 +207,7 @@ impl Debug for AggregateMeta {
             AggregateMeta::AggregateSpilling(_) => {
                 f.debug_struct("AggregateMeta:AggregateSpilling").finish()
             }
+            AggregateMeta::Wait => f.debug_struct("AggregateMeta::Wait").finish(),
         }
     }
 }

@@ -162,6 +162,7 @@ impl Processor for TransformSpillReader {
                     self.deserialized_meta =
                         Some(AggregateMeta::create_partitioned(bucket, new_data));
                 }
+                AggregateMeta::Wait => unreachable!(),
             }
         }
 
@@ -269,6 +270,7 @@ impl Processor for TransformSpillReader {
                         );
                     }
                 }
+                AggregateMeta::Wait => unreachable!(),
             }
         }
 

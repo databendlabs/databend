@@ -13,10 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Instant;
 
 use bumpalo::Bump;
@@ -47,20 +45,11 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
-// Metadata structure extracted from TransformPartitionBucket output
-#[derive(Debug)]
-struct PartitionedMeta {
-    data: Vec<AggregateMeta>,
-}
-
 // Shared state across all NewTransformAggregateFinal processors
 pub struct SharedRestoreState {
     // Aggregate worker queues: one queue per partition (after repartition)
     // Each processor will work on different partitions (orthogonal)
     aggregate_queues: Vec<ConcurrentQueue<AggregateMeta>>,
-
-    // Whether a partition has pending aggregates waiting to be processed
-    partition_ready: Vec<AtomicBool>,
 
     // Restore phase finished flag
     pub bucket_finished: AtomicBool,
@@ -78,9 +67,6 @@ impl SharedRestoreState {
 
         Arc::new(SharedRestoreState {
             aggregate_queues,
-            partition_ready: (0..partition_count)
-                .map(|_| AtomicBool::new(false))
-                .collect(),
             bucket_finished: AtomicBool::new(false),
             barrier: Barrier::new(partition_count),
             restored_finished: AtomicBool::new(false),

@@ -15,12 +15,14 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::SharedRestoreState;
@@ -30,14 +32,14 @@ impl TransformMetaDispatcher {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         shared_state: Arc<SharedRestoreState>,
-    ) -> Box<dyn Processor> {
-        Box::new(TransformMetaDispatcher {
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(TransformMetaDispatcher {
             input,
             output,
             queue: Vec::new(),
             shared_state,
             init_flag: false,
-        })
+        })))
     }
 }
 
@@ -53,8 +55,8 @@ pub struct TransformMetaDispatcher {
 }
 
 impl Processor for TransformMetaDispatcher {
-    fn name(&self) -> &str {
-        "TransformMetaDispatcher"
+    fn name(&self) -> String {
+        String::from("TransformMetaDispatcher")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -97,7 +99,7 @@ impl Processor for TransformMetaDispatcher {
                 .take_meta()
                 .and_then(AggregateMeta::downcast_from)
             {
-                let AggregateMeta::Partitioned { bucket, data } = block_meta else {
+                let AggregateMeta::Partitioned { bucket: _, data } = block_meta else {
                     return Err(databend_common_exception::ErrorCode::Internal(
                         "TransformMetaDispatcher only support Partitioned AggregateMeta",
                     ));
