@@ -504,7 +504,7 @@ fn merge_into_to_format_tree<I: IdHumanizer>(
     ));
     // add matched clauses
     let mut matched_children = Vec::with_capacity(merge_into.matched_evaluators.len());
-    let taregt_schema = table_entry.table().schema_with_stream();
+    let target_schema = table_entry.table().schema_with_stream();
     for evaluator in &merge_into.matched_evaluators {
         let condition_format = evaluator.condition.as_ref().map_or_else(
             || "condition: None".to_string(),
@@ -526,7 +526,7 @@ fn merge_into_to_format_tree<I: IdHumanizer>(
                     let expr = map.get(field_idx).unwrap();
                     format!(
                         "{} = {}",
-                        taregt_schema.field(*field_idx).name(),
+                        target_schema.field(*field_idx).name(),
                         format_scalar(id_humanizer, expr)
                     )
                 })

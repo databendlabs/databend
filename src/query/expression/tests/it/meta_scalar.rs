@@ -94,7 +94,7 @@ pub fn test_simple_converts() -> databend_common_exception::Result<()> {
                 assert_eq!(scalar, convert_back_scalar);
             }
 
-            // TODO: comment these when we swith string in scalar
+            // TODO: comment these when we switch string in scalar
             // let data = rmp_serde::to_vec(&scalars).unwrap();
             // let new_scalars: Vec<IndexScalar> = rmp_serde::from_slice(&data).unwrap();
             // assert_eq!(simple_scalars, new_scalars);

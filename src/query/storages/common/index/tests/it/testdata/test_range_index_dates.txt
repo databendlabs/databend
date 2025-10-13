@@ -1,0 +1,24 @@
+text      : dt > '2019-05-01' and dt < '2019-04-30'
+expr      : and<Boolean, Boolean>(gt<Date, Date>(dt, CAST<String>("2019-05-01" AS Date)), lt<Date, Date>(dt, CAST<String>("2019-04-30" AS Date)))
+keep      : false
+
+text      : dt = '2019-05-01' and dt < '2019-04-30'
+expr      : and<Boolean, Boolean>(eq<Date, Date>(dt, CAST<String>("2019-05-01" AS Date)), lt<Date, Date>(dt, CAST<String>("2019-04-30" AS Date)))
+keep      : false
+
+text      : dt >= '2019-05-02' and dt <= '2019-05-01'
+expr      : and<Boolean, Boolean>(gte<Date, Date>(dt, CAST<String>("2019-05-02" AS Date)), lte<Date, Date>(dt, CAST<String>("2019-05-01" AS Date)))
+keep      : false
+
+text      : dt >= '2019-04-28' and dt <= '2019-05-03'
+expr      : and<Boolean, Boolean>(gte<Date, Date>(dt, CAST<String>("2019-04-28" AS Date)), lte<Date, Date>(dt, CAST<String>("2019-05-03" AS Date)))
+keep      : false
+
+text      : ts > '2019-05-01 12:00:00' and ts < '2019-05-01 06:00:00'
+expr      : and<Boolean, Boolean>(gt<Timestamp, Timestamp>(ts, CAST<String>("2019-05-01 12:00:00" AS Timestamp)), lt<Timestamp, Timestamp>(ts, CAST<String>("2019-05-01 06:00:00" AS Timestamp)))
+keep      : false
+
+text      : ts = '2019-05-01 12:00:00' and ts != '2019-05-01 12:00:00'
+expr      : and<Boolean, Boolean>(eq<Timestamp, Timestamp>(ts, CAST<String>("2019-05-01 12:00:00" AS Timestamp)), noteq<Timestamp, Timestamp>(ts, CAST<String>("2019-05-01 12:00:00" AS Timestamp)))
+keep      : false
+

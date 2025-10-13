@@ -1,39 +1,58 @@
 # If there are words that you think should not be treated as typo.
 # Please list here along with a comment.
+
+[default]
+extend-ignore-re = [
+    "(?Rm)^.*(#|//)\\s*typos:disable-line$",
+    "(#|//)\\s*typos:ignore-next-line\\n.*",
+    "(?s)(#|//)\\s*typos:off.*?\\n\\s*(#|//)\\s*typos:on",
+]
+
 [default.extend-words]
 # Preserved for NdJson
-"Nd" = "Nd"
-# Microsoft K8s Server
-"AKS" = "AKS"
-# Wrong cases
-"ba" = "ba"
-"ue" = "ue"
-"INOUT" = "INOUT"
-"ser" = "ser"
-"Ser" = "Ser"
-"flate" = "flate"
-"Tke" = "Tke"
-"typ" = "typ"
-"dows" = "dows"
-# created_ons & updated_ons
-"ons" = "ons"
+Nd = "Nd"
+typ = "typ"
+aranges = "aranges"
 
-# Intentional typos used in SQL error suggestion test cases
-"tabl" = "tabl"
-"optmize" = "optmize" 
-"vacum" = "vacum"
-"creat" = "creat"
-"crate" = "crate"
+[default.extend-identifiers]
+
+# Wrong cases
+Tke = "Tke"
+ba = "ba"
+
+# sql function name: diff_dows, between_dows
+diff_dows = "diff_dows"
+between_dows = "between_dows"
+
+into_flate2 = "into_flate2"
 
 [files]
 extend-exclude = [
     "**/Cargo.toml",
-    "scripts/benchmark/",
     "benchmark/",
-    "tests/",
-    "src/meta",
-    # masked secrets
-    "src/query/config/src/mask.rs",
-    # Forked from upstream
-    "src/common/parquet2"
+    "tests/sqllogictests",
+    "tests/nox/java_client/testng.xml",
+    "tests/data/ddl",
 ]
+
+# todo: fix me
+[type.py]
+check-file = false
+
+# todo: fix me
+[type.sh]
+check-file = false
+
+[type.txt]
+check-file = false
+
+[type.sql]
+check-file = false
+
+[type.csr]
+extend-glob = ["*.csr"]
+check-file = false
+
+[type.result]
+extend-glob = ["*.result"]
+check-file = false
