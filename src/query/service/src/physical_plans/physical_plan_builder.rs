@@ -285,8 +285,43 @@ impl PhysicalPlanBuilder {
                 child_required[0] = left_required.union(&others_required).cloned().collect();
                 child_required[1] = right_required.union(&others_required).cloned().collect();
             }
-            RelOperator::UnionAll(_) => {
-                // already initialised with parent_required clone
+            RelOperator::UnionAll(union_all) => {
+                let (left_required, right_required) = if !union_all.cte_scan_names.is_empty() {
+                    let left: ColumnSet = union_all
+                        .left_outputs
+                        .iter()
+                        .map(|(index, _)| *index)
+                        .collect();
+                    let right: ColumnSet = union_all
+                        .right_outputs
+                        .iter()
+                        .map(|(index, _)| *index)
+                        .collect();
+
+                    (left, right)
+                } else {
+                    let offset_indices: Vec<usize> = (0..union_all.left_outputs.len())
+                        .filter(|index| parent_required.contains(&union_all.output_indexes[*index]))
+                        .collect();
+
+                    if offset_indices.is_empty() {
+                        (
+                            ColumnSet::from([union_all.left_outputs[0].0]),
+                            ColumnSet::from([union_all.right_outputs[0].0]),
+                        )
+                    } else {
+                        offset_indices.iter().fold(
+                            (ColumnSet::default(), ColumnSet::default()),
+                            |(mut left, mut right), &index| {
+                                left.insert(union_all.left_outputs[index].0);
+                                right.insert(union_all.right_outputs[index].0);
+                                (left, right)
+                            },
+                        )
+                    }
+                };
+                child_required[0] = left_required;
+                child_required[1] = right_required;
             }
             RelOperator::Exchange(databend_common_sql::plans::Exchange::Hash(exprs)) => {
                 let req = &mut child_required[0];

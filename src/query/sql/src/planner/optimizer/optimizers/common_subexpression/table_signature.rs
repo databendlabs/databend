@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use crate::optimizer::ir::SExpr;
 use crate::planner::metadata::Metadata;
 use crate::plans::RelOperator;
+use crate::ColumnEntry;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -48,18 +49,29 @@ fn collect_table_signatures_rec(
     }
 
     if let RelOperator::Scan(scan) = expr.plan.as_ref() {
-        let mut tables = BTreeSet::new();
+        let has_internal_column = scan.columns.iter().any(|column_index| {
+            let column = metadata.column(*column_index);
+            matches!(column, ColumnEntry::InternalColumn(_))
+        });
+        if has_internal_column
+            || scan.prewhere.is_some()
+            || scan.agg_index.is_some()
+            || scan.change_type.is_some()
+            || scan.update_stream_columns
+            || scan.inverted_index.is_some()
+            || scan.vector_index.is_some()
+            || scan.is_lazy_table
+            || scan.sample.is_some()
+        {
+            return;
+        }
+
         let table_entry = metadata.table(scan.table_index);
         if table_entry.table().engine() != "FUSE" {
             return;
         }
-        for column_index in scan.columns.iter() {
-            if let crate::planner::metadata::ColumnEntry::InternalColumn(_) =
-                metadata.column(*column_index)
-            {
-                return;
-            }
-        }
+
+        let mut tables = BTreeSet::new();
         tables.insert(table_entry.table().get_id() as IndexType);
         signature_to_exprs
             .entry(TableSignature { tables })
