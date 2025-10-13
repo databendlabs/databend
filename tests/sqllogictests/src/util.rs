@@ -235,9 +235,15 @@ fn run_script(name: &str, args: &[&str]) -> Result<()> {
             String::from_utf8(output.stderr).unwrap()
         )));
     } else {
-        println!("script stdout:\n {}", String::from_utf8(output.stdout).unwrap());
+        println!(
+            "script stdout:\n {}",
+            String::from_utf8(output.stdout).unwrap()
+        );
         if !output.stderr.is_empty() {
-            println!("script stderr:\n {}", String::from_utf8(output.stderr).unwrap());
+            println!(
+                "script stderr:\n {}",
+                String::from_utf8(output.stderr).unwrap()
+            );
         }
     }
     Ok(())
