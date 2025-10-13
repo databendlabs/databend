@@ -417,7 +417,7 @@ impl ExecuteState {
         Ok(())
     }
 
-    #[fastrace::trace(name = "ExecuteState::execute")]
+    #[fastrace::trace(name = "ExecuteState::pull_and_send")]
     async fn pull_and_send(
         interpreter: Arc<dyn Interpreter>,
         schema: DataSchemaRef,
