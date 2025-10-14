@@ -158,8 +158,8 @@ impl ModifyTableColumnInterpreter {
                 // if the field has different leaf column numbers, we need drop the old column
                 // and add a new one to generate new column id. otherwise, leaf column ids will conflict.
                 if old_field.data_type.num_leaf_columns() != field.data_type.num_leaf_columns() {
-                    let _ = new_schema.drop_column(&field.name);
-                    let _ = new_schema.add_column(field, i);
+                    let _ = new_schema.drop_column_unchecked(&field.name)?;
+                    let _ = new_schema.add_column(field, i)?;
                 } else {
                     // new field don't have `column_id`, assign field directly will cause `column_id` lost.
                     new_schema.fields[i].data_type = field.data_type.clone();
@@ -699,7 +699,6 @@ fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
 }
 
 fn can_skip_rebuild(old: &TableField, new: &TableField, is_parquet: bool) -> bool {
-    println!("old: {:?}, new: {:?}", old, new);
     // 1. Computed expression changed → must rebuild
     if old.computed_expr != new.computed_expr {
         return false;
