@@ -48,13 +48,25 @@ fn process_candidate_expressions(
     }
 
     let cte_def = &candidates[0].1;
+
+    // If cte_def is a Scan, we need to clear push_down_predicates, limit, and order_by
+    let cte_def = if let RelOperator::Scan(scan) = cte_def.plan() {
+        let mut new_scan = scan.clone();
+        new_scan.push_down_predicates = None;
+        new_scan.limit = None;
+        new_scan.order_by = None;
+        Arc::new(SExpr::create_leaf(Arc::new(RelOperator::Scan(new_scan))))
+    } else {
+        Arc::new(cte_def.clone())
+    };
+
     let cte_def_columns = cte_def.derive_relational_prop()?.output_columns.clone();
     let cte_name = format!("cte_cse_{}", materialized_ctes.len());
 
     let cte_plan = MaterializedCTE::new(cte_name.clone(), None, None);
     let cte_expr = SExpr::create_unary(
         Arc::new(RelOperator::MaterializedCTE(cte_plan)),
-        Arc::new(cte_def.clone()),
+        cte_def.clone(),
     );
     materialized_ctes.push(cte_expr);
 
