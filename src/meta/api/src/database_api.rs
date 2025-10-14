@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::Display;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -48,6 +49,7 @@ use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
@@ -669,5 +671,22 @@ where
             }
         }
         Ok(db_names)
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_database_id_or_err(
+        &self,
+        name_key: &DatabaseNameIdent,
+        msg: impl Display + std::fmt::Debug + Send,
+    ) -> Result<Result<SeqV<DatabaseId>, UnknownDatabase>, MetaError> {
+        let seq_db_id = self.get_pb(name_key).await?;
+        let result = seq_db_id.map(|s| s.map(|x| x.into_inner())).ok_or_else(|| {
+            UnknownDatabase::new(
+                name_key.database_name(),
+                format!("{}: {}", msg, name_key.display()),
+            )
+        });
+        Ok(result)
     }
 }

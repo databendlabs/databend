@@ -22,6 +22,7 @@ use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::Streamed;
 use databend_common_meta_client::MIN_METASRV_SEMVER;
+use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::MetaError;
@@ -44,12 +45,12 @@ async fn test_grpc_client_timeout() -> anyhow::Result<()> {
     let timeout = Duration::from_secs(3);
     let client = new_client(&srv_addr, Some(timeout))?;
 
-    let res = client.request(UpsertKV::insert("foo", b"foo")).await;
+    let res = client.upsert_kv(UpsertKV::insert("foo", b"foo")).await;
 
     if let Err(err) = res {
         let got = err.to_string();
         assert!(got.starts_with(
-            "ConnectionError: failed to send RPC 'kv_api' to meta-service source: after 4 retries:"
+            "ConnectionError: failed to send RPC 'transaction' to meta-service source: after 4 retries:"
         ), "actually got: {}", got);
     } else {
         panic!("expect error, but got ok");

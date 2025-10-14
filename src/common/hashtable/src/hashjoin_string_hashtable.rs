@@ -14,8 +14,10 @@
 
 use std::alloc::Allocator;
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use databend_common_base::hints::assume;
 use databend_common_base::mem_allocator::DefaultAllocator;
 use databend_common_column::bitmap::Bitmap;
 
@@ -37,17 +39,29 @@ pub struct StringRawEntry {
     pub next: u64,
 }
 
-pub struct HashJoinStringHashTable<A: Allocator + Clone = DefaultAllocator> {
+pub struct HashJoinStringHashTable<
+    const SKIP_DUPLICATES: bool = false,
+    A: Allocator + Clone = DefaultAllocator,
+> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
+    pub(crate) count: AtomicUsize,
 }
 
-unsafe impl<A: Allocator + Clone + Send> Send for HashJoinStringHashTable<A> {}
+unsafe impl<A: Allocator + Clone + Send, const SKIP_DUPLICATES: bool> Send
+    for HashJoinStringHashTable<SKIP_DUPLICATES, A>
+{
+}
 
-unsafe impl<A: Allocator + Clone + Sync> Sync for HashJoinStringHashTable<A> {}
+unsafe impl<A: Allocator + Clone + Sync, const SKIP_DUPLICATES: bool> Sync
+    for HashJoinStringHashTable<SKIP_DUPLICATES, A>
+{
+}
 
-impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
+impl<A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES: bool>
+    HashJoinStringHashTable<SKIP_DUPLICATES, A>
+{
     pub fn with_build_row_num(row_num: usize) -> Self {
         let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
@@ -56,6 +70,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
             },
             atomic_pointers: std::ptr::null_mut(),
             hash_shift: (hash_bits() - capacity.trailing_zeros()) as usize,
+            count: Default::default(),
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -63,7 +78,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
         hashtable
     }
 
-    pub fn insert(&mut self, key: &[u8], entry_ptr: *mut StringRawEntry) {
+    pub fn insert(&self, key: &[u8], entry_ptr: *mut StringRawEntry) {
         let hash = hash_join_fast_string_hash(key);
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
@@ -71,6 +86,12 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
+            if SKIP_DUPLICATES
+                && early_filtering(old_header, hash)
+                && self.next_contains(key, remove_header_tag(old_header))
+            {
+                return;
+            }
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
                     old_header,
@@ -84,11 +105,13 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
                 Err(x) => old_header = x,
             };
         }
+        self.count.fetch_add(1, Ordering::Relaxed);
         unsafe { (*entry_ptr).next = remove_header_tag(old_header) };
     }
 }
 
-impl<A> HashJoinHashtableLike for HashJoinStringHashTable<A>
+impl<A, const SKIP_DUPLICATES: bool> HashJoinHashtableLike
+    for HashJoinStringHashTable<SKIP_DUPLICATES, A>
 where A: Allocator + Clone + 'static
 {
     type Key = [u8];
@@ -144,25 +167,19 @@ where A: Allocator + Clone + 'static
         &self,
         hashes: &mut [u64],
         bitmap: Option<Bitmap>,
-        matched_selection: &mut [u32],
-        unmatched_selection: &mut [u32],
+        matched_selection: &mut Vec<u32>,
+        unmatched_selection: &mut Vec<u32>,
     ) -> (usize, usize) {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
             if bitmap.null_count() == bitmap.len() {
-                unmatched_selection
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(idx, val)| {
-                        *val = idx as u32;
-                    });
+                unmatched_selection.extend(0..bitmap.null_count() as u32);
                 return (0, hashes.len());
             } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }
-        let mut matched_idx = 0;
-        let mut unmatched_idx = 0;
+
         match valids {
             Some(valids) => {
                 hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
@@ -170,21 +187,15 @@ where A: Allocator + Clone + 'static
                         let header = self.pointers[(*hash >> self.hash_shift) as usize];
                         if header != 0 && early_filtering(header, *hash) {
                             *hash = remove_header_tag(header);
-                            unsafe {
-                                *matched_selection.get_unchecked_mut(matched_idx) = idx as u32
-                            };
-                            matched_idx += 1;
+                            assume(matched_selection.len() < matched_selection.capacity());
+                            matched_selection.push(idx as u32);
                         } else {
-                            unsafe {
-                                *unmatched_selection.get_unchecked_mut(unmatched_idx) = idx as u32
-                            };
-                            unmatched_idx += 1;
+                            assume(unmatched_selection.len() < unmatched_selection.capacity());
+                            unmatched_selection.push(idx as u32);
                         }
                     } else {
-                        unsafe {
-                            *unmatched_selection.get_unchecked_mut(unmatched_idx) = idx as u32
-                        };
-                        unmatched_idx += 1;
+                        assume(unmatched_selection.len() < unmatched_selection.capacity());
+                        unmatched_selection.push(idx as u32);
                     }
                 });
             }
@@ -193,18 +204,16 @@ where A: Allocator + Clone + 'static
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 && early_filtering(header, *hash) {
                         *hash = remove_header_tag(header);
-                        unsafe { *matched_selection.get_unchecked_mut(matched_idx) = idx as u32 };
-                        matched_idx += 1;
+                        assume(matched_selection.len() < matched_selection.capacity());
+                        matched_selection.push(idx as u32);
                     } else {
-                        unsafe {
-                            *unmatched_selection.get_unchecked_mut(unmatched_idx) = idx as u32
-                        };
-                        unmatched_idx += 1;
+                        assume(unmatched_selection.len() < unmatched_selection.capacity());
+                        unmatched_selection.push(idx as u32);
                     }
                 });
             }
         }
-        (matched_idx, unmatched_idx)
+        (matched_selection.len(), unmatched_selection.len())
     }
 
     // Perform early filtering probe and store matched indexes in `selection`, return the number of matched indexes.
@@ -212,7 +221,7 @@ where A: Allocator + Clone + 'static
         &self,
         hashes: &mut [u64],
         bitmap: Option<Bitmap>,
-        selection: &mut [u32],
+        selection: &mut Vec<u32>,
     ) -> usize {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
@@ -222,7 +231,7 @@ where A: Allocator + Clone + 'static
                 valids = Some(bitmap);
             }
         }
-        let mut count = 0;
+
         match valids {
             Some(valids) => {
                 hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
@@ -230,8 +239,8 @@ where A: Allocator + Clone + 'static
                         let header = self.pointers[(*hash >> self.hash_shift) as usize];
                         if header != 0 && early_filtering(header, *hash) {
                             *hash = remove_header_tag(header);
-                            unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
-                            count += 1;
+                            assume(selection.len() < selection.capacity());
+                            selection.push(idx as u32);
                         }
                     }
                 });
@@ -241,13 +250,13 @@ where A: Allocator + Clone + 'static
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 && early_filtering(header, *hash) {
                         *hash = remove_header_tag(header);
-                        unsafe { *selection.get_unchecked_mut(count) = idx as u32 };
-                        count += 1;
+                        assume(selection.len() < selection.capacity());
+                        selection.push(idx as u32);
                     }
                 });
             }
         }
-        count
+        selection.len()
     }
 
     fn next_contains(&self, key: &Self::Key, mut ptr: u64) -> bool {
@@ -353,5 +362,9 @@ where A: Allocator + Clone + 'static
             ptr = raw_entry.next;
         }
         0
+    }
+
+    fn len(&self) -> usize {
+        self.count.load(Ordering::Relaxed)
     }
 }

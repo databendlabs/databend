@@ -34,6 +34,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -393,6 +394,7 @@ impl Binder {
             Statement::CreateRole {
                 create_option,
                 role_name,
+                comment,
             } => {
                 if illegal_ident_name(role_name) {
                     return Err(ErrorCode::IllegalRole(
@@ -402,6 +404,7 @@ impl Binder {
                 Plan::CreateRole(Box::new(CreateRolePlan {
                     create_option: create_option.clone().into(),
                     role_name: role_name.to_string(),
+                    comment: comment.clone(),
                 }))
             }
             Statement::DropRole {
@@ -411,6 +414,18 @@ impl Binder {
                 if_exists: *if_exists,
                 role_name: role_name.to_string(),
             })),
+            Statement::AlterRole(stmt) => {
+                let action = match &stmt.action {
+                    databend_common_ast::ast::AlterRoleAction::Comment(comment) => {
+                        crate::plans::AlterRoleAction::Comment(comment.clone())
+                    }
+                };
+                Plan::AlterRole(Box::new(crate::plans::AlterRolePlan {
+                    if_exists: stmt.if_exists,
+                    role_name: stmt.name.clone(),
+                    action,
+                }))
+            }
 
             // Stages
             Statement::ShowStages { show_options } => {
@@ -992,13 +1007,17 @@ impl Binder {
         &self,
         scalar: &ScalarExpr,
     ) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
-            )
+        let f = |scalar: &ScalarExpr| match scalar {
+            ScalarExpr::AggregateFunction(_)
+            | ScalarExpr::WindowFunction(_)
+            | ScalarExpr::UDAFCall(_)
+            | ScalarExpr::SubqueryExpr(_)
+            | ScalarExpr::AsyncFunctionCall(_) => true,
+            ScalarExpr::FunctionCall(func) => BUILTIN_FUNCTIONS
+                .get_property(&func.func_name)
+                .map(|property| property.kind == FunctionKind::SRF)
+                .unwrap_or(true),
+            _ => false,
         };
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;

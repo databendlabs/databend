@@ -607,6 +607,7 @@ impl Display for TimeTravelPoint {
 pub enum PivotValues {
     ColumnValues(Vec<Expr>),
     Subquery(Box<Query>),
+    Any { order_by: Option<Vec<OrderByExpr>> },
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -625,6 +626,13 @@ impl Display for Pivot {
             }
             PivotValues::Subquery(subquery) => {
                 write!(f, "{}", subquery)?;
+            }
+            PivotValues::Any { order_by } => {
+                write!(f, "ANY")?;
+                if let Some(order_by_exprs) = order_by {
+                    write!(f, " ORDER BY ")?;
+                    write_comma_separated_list(f, order_by_exprs)?;
+                }
             }
         }
         write!(f, "))")?;
@@ -1050,6 +1058,15 @@ impl Display for TableReference {
                     JoinOperator::RightAsof => {
                         write!(f, " ASOF RIGHT JOIN")?;
                     }
+                    JoinOperator::InnerAny => {
+                        write!(f, " INNER ANY JOIN")?;
+                    }
+                    JoinOperator::LeftAny => {
+                        write!(f, " LEFT ANY JOIN")?;
+                    }
+                    JoinOperator::RightAny => {
+                        write!(f, " RIGHT ANY JOIN")?;
+                    }
                 }
                 write!(f, " {}", join.right)?;
                 match &join.condition {
@@ -1126,6 +1143,10 @@ pub enum JoinOperator {
     Asof,
     LeftAsof,
     RightAsof,
+    // Any
+    InnerAny,
+    LeftAny,
+    RightAny,
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]

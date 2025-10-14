@@ -37,7 +37,7 @@ pub struct MetaSpec {
     /// - Values > `100_000_000_000`: treated as milliseconds since epoch
     /// - Values ≤ `100_000_000_000`: treated as seconds since epoch
     ///
-    /// See [`adaptable_timestamp_to_duration`]
+    /// See [`flexible_timestamp_to_duration`]
     pub(crate) expire_at: Option<u64>,
 
     /// Relative expiration time interval since when the raft log is applied.
@@ -108,12 +108,16 @@ impl MetaSpec {
     /// Convert meta spec into a [`KVMeta`] to be stored in storage.
     pub fn to_kv_meta(&self, cmd_ctx: &CmdContext) -> KVMeta {
         // If `ttl` is set, override `expire_at`
-        if let Some(ttl) = self.ttl {
-            return KVMeta::new_expires_at((cmd_ctx.time() + ttl).millis());
-        }
+        let expire_at_ms = if let Some(ttl) = self.ttl {
+            Some((cmd_ctx.time() + ttl).millis())
+        } else {
+            // Since 1.2.770 expire_at is in seconds or milliseconds.
+            self.expire_at
+        };
 
-        // No `ttl`, check if absolute expire time `expire_at` is set.
-        KVMeta::new(self.expire_at)
+        let proposed_at = Some(cmd_ctx.time().millis());
+
+        KVMeta::new(expire_at_ms, proposed_at)
     }
 }
 
@@ -149,6 +153,7 @@ mod tests {
         let meta_spec = MetaSpec::new_ttl(Duration::from_millis(1000));
         let kv_meta = meta_spec.to_kv_meta(&cmd_ctx);
         assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 1_723_102_820_000);
+        assert_eq!(kv_meta.proposed_at_ms(), Some(1_723_102_819_000));
 
         // expire_at
         let meta_spec = MetaSpec::new_expire(5);

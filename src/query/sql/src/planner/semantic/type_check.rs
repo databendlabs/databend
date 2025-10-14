@@ -2369,7 +2369,7 @@ impl<'a> TypeChecker<'a> {
     /// multiple fields can have a optional per-field boosting that
     /// gives preferential weight to fields being searched in.
     /// For example: title^5, content^1.2
-    /// The scond argument is the query text without query syntax.
+    /// The second argument is the query text without query syntax.
     fn resolve_match_search_function(
         &mut self,
         span: Span,
@@ -6056,7 +6056,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
+    pub fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
     where F: Fn(&Expr) -> Result<Option<Expr>> {
         #[derive(VisitorMut)]
         #[visitor(Expr(enter))]

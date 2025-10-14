@@ -648,6 +648,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
     }
 
+    pub fn get_enable_auto_analyze(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_analyze")? != 0)
+    }
+
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
@@ -787,10 +791,6 @@ impl Settings {
             "ZSTD" => Ok(Some(FlightCompression::Zstd)),
             _ => unreachable!("check possible_values in set variable"),
         }
-    }
-
-    pub fn get_enable_refresh_virtual_column_after_write(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_refresh_virtual_column_after_write")? != 0)
     }
 
     pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
@@ -1090,5 +1090,9 @@ impl Settings {
 
     pub fn get_queries_queue_retry_timeout(&self) -> Result<u64> {
         self.try_get_u64("queries_queue_retry_timeout")
+    }
+
+    pub fn get_enable_experimental_new_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_new_join")? == 1)
     }
 }

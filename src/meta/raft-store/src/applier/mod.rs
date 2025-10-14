@@ -114,7 +114,7 @@ where SM: StateMachineApi<SysData> + 'static
             Duration::from_millis(log_time_ms).display_unix_timestamp_short()
         );
 
-        self.cmd_ctx = CmdContext::from_millis(log_time_ms);
+        self.cmd_ctx = CmdContext::from_millis_and_log_id(log_time_ms, *log_id);
 
         self.clean_expired_kvs(log_time_ms).await?;
 
@@ -247,7 +247,7 @@ where SM: StateMachineApi<SysData> + 'static
     /// update the primary index and optionally update the secondary index.
     #[fastrace::trace]
     async fn apply_upsert_kv(&mut self, upsert_kv: &UpsertKV) -> Result<AppliedState, io::Error> {
-        debug!(upsert_kv :? =(upsert_kv); "apply_update_kv_cmd");
+        debug!("apply_update_kv_cmd {}: {}", self.cmd_ctx, upsert_kv);
 
         let (prev, result) = self.upsert_kv(upsert_kv).await?;
 
@@ -286,7 +286,7 @@ where SM: StateMachineApi<SysData> + 'static
         &mut self,
         upsert_kv: &UpsertKV,
     ) -> Result<(Option<SeqV>, Option<SeqV>), io::Error> {
-        debug!(upsert_kv :? =(upsert_kv); "upsert_kv");
+        debug!("upsert_kv {}: {}", self.cmd_ctx, upsert_kv);
 
         let (prev, result) = self
             .sm
@@ -301,8 +301,8 @@ where SM: StateMachineApi<SysData> + 'static
         let result = Into::<Option<SeqV>>::into(result);
 
         debug!(
-            "applied UpsertKV: {:?}; prev: {:?}; result: {:?}",
-            upsert_kv, prev, result
+            "applied UpsertKV {}: {}; prev: {:?}; result: {:?}",
+            self.cmd_ctx, upsert_kv, prev, result
         );
 
         self.push_change(&upsert_kv.key, prev.clone(), result.clone());
@@ -312,10 +312,10 @@ where SM: StateMachineApi<SysData> + 'static
 
     #[fastrace::trace]
     pub(crate) async fn apply_txn(&mut self, req: &TxnRequest) -> Result<AppliedState, io::Error> {
-        debug!(txn :% =(req); "apply txn cmd");
+        debug!("apply txn cmd {}: {}", self.cmd_ctx, req);
 
         // 1. Evaluate conditional operations one by one.
-        //    Once one of them is successful, execute the corresponding operations and retrun.
+        //    Once one of them is successful, execute the corresponding operations and return.
         //    Otherwise, try next.
         for (i, conditional) in req.operations.iter().enumerate() {
             let success = if let Some(predicate) = &conditional.predicate {

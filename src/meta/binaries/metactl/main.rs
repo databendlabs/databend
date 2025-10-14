@@ -32,6 +32,7 @@ use databend_common_meta_control::args::ExportArgs;
 use databend_common_meta_control::args::GetArgs;
 use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
+use databend_common_meta_control::args::KeysLayoutArgs;
 use databend_common_meta_control::args::ListFeatures;
 use databend_common_meta_control::args::LuaArgs;
 use databend_common_meta_control::args::MemberListArgs;
@@ -45,7 +46,9 @@ use databend_common_meta_control::args::WatchArgs;
 use databend_common_meta_control::export_from_disk;
 use databend_common_meta_control::export_from_grpc;
 use databend_common_meta_control::import;
+use databend_common_meta_control::keys_layout_from_grpc;
 use databend_common_meta_control::lua_support;
+use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::UpsertKV;
@@ -204,6 +207,11 @@ impl App {
         Ok(())
     }
 
+    async fn keys_layout(&self, args: &KeysLayoutArgs) -> anyhow::Result<()> {
+        keys_layout_from_grpc::keys_layout_from_running_node(args, &BUILD_INFO).await?;
+        Ok(())
+    }
+
     async fn watch(&self, args: &WatchArgs) -> anyhow::Result<()> {
         let addresses = vec![args.grpc_api_address.clone()];
         let client = self.new_grpc_client(addresses)?;
@@ -223,7 +231,7 @@ impl App {
 
         let upsert = UpsertKV::update(args.key.clone(), args.value.as_bytes());
 
-        let res = client.request(upsert).await?;
+        let res = client.upsert_kv(upsert).await?;
         println!(
             "upsert-result: {}: {:?} -> {:?}",
             res.ident.display(),
@@ -308,6 +316,7 @@ enum CtlCommand {
     Status(StatusArgs),
     Export(ExportArgs),
     Import(ImportArgs),
+    KeysLayout(KeysLayoutArgs),
     TransferLeader(TransferLeaderArgs),
     TriggerSnapshot(TriggerSnapshotArgs),
     SetFeature(SetFeature),
@@ -380,6 +389,9 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Import(args) => {
                 app.import(args).await?;
+            }
+            CtlCommand::KeysLayout(args) => {
+                app.keys_layout(args).await?;
             }
             CtlCommand::Watch(args) => {
                 app.watch(args).await?;

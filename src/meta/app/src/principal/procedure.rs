@@ -71,7 +71,7 @@ impl Display for ProcedureMeta {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
-            "Lanuage: {:?}, args {} return_type: {}, CreatedOn: {:?}, Script: {}, Comment: {:?}",
+            "Language: {:?}, args {} return_type: {}, CreatedOn: {:?}, Script: {}, Comment: {:?}",
             self.procedure_language,
             self.arg_names.display_n(1000),
             self.return_types.display_n(1000),

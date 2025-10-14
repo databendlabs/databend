@@ -32,6 +32,11 @@ message VariantDataType {
       Empty float64_t = 5;
       Empty string_t = 6;
       VariantDataType array_t = 7;
+      Decimal decimal_t = 8;
+      Empty binary_t = 9;
+      Empty date_t = 10;
+      Empty timestamp_t = 11;
+      Empty interval_t = 12;
   }
 }
 
@@ -54,7 +59,7 @@ message VirtualDataSchema {
 
   // Virtual Fields in the table
   repeated VirtualDataField fields = 1;
-  // Other optional virutal columns info
+  // Other optional virtual columns info
   map<string, string> metadata = 2;
   // start from 3_000_000_001, Avoid conflicts with the column ids of normal columns
   uint32 next_column_id = 3;

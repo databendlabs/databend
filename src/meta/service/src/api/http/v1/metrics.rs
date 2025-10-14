@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use poem::web::Data;
 
-use crate::meta_service::MetaNode;
+use crate::meta_node::meta_handle::MetaHandle;
 use crate::metrics::meta_metrics_to_prometheus_string;
 
 /// GET /v1/metrics
@@ -24,6 +24,6 @@ use crate::metrics::meta_metrics_to_prometheus_string;
 /// return the metrics.
 /// The response content is the same as `MetaMetrics` in metrics/meta_metrics.rs
 #[poem::handler]
-pub async fn metrics_handler(_meta_node: Data<&Arc<MetaNode>>) -> poem::Result<String> {
+pub async fn metrics_handler(_meta_handle: Data<&Arc<MetaHandle>>) -> poem::Result<String> {
     Ok(meta_metrics_to_prometheus_string())
 }

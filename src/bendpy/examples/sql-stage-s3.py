@@ -22,17 +22,17 @@ ctx = databend.SessionContext()
 ctx.create_s3_connection(
     name="s3_conn",
     access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+    secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
 )
 
 ctx.create_stage(
-    name="my_stage", 
-    url="s3://bohu/pybend/stage/", 
-    connection_name="s3_conn"
+    name="my_stage", url="s3://bohu/pybend/stage/", connection_name="s3_conn"
 )
 
 # Unload generated data to stage
-ctx.sql("copy into @my_stage from (select number from numbers(10)) file_format = (type = parquet)").collect()
+ctx.sql(
+    "copy into @my_stage from (select number from numbers(10)) file_format = (type = parquet)"
+).collect()
 
 # List files in stage
 ctx.list_stages("my_stage").show()
@@ -41,4 +41,6 @@ ctx.list_stages("my_stage").show()
 ctx.sql("select * from @my_stage (file_format => 'parquet')").show()
 
 # Count records from stage
-ctx.sql("select count(*) as total_records from @my_stage (file_format => 'parquet')").show()
+ctx.sql(
+    "select count(*) as total_records from @my_stage (file_format => 'parquet')"
+).show()

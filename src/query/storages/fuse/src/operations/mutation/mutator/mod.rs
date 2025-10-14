@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod analyze_light_mutator;
 mod block_compact_mutator;
 mod recluster_mutator;
 mod segment_compact_mutator;
 
-pub use analyze_light_mutator::AnalyzeLightMutator;
 pub use block_compact_mutator::BlockCompactMutator;
 pub use block_compact_mutator::SegmentCompactChecker;
 pub use recluster_mutator::ReclusterMode;

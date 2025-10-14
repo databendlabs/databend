@@ -25,6 +25,7 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::protobuf::Event;
 use databend_common_meta_types::protobuf::KvMeta;
@@ -67,7 +68,7 @@ async fn test_watch_main(
 
     loop {
         if let Ok(Some(resp)) = watch_stream.message().await {
-            let event = resp.event.unwrap();
+            let event = resp.event.unwrap().without_proposed_at();
 
             assert!(!watch_events.is_empty());
 
@@ -102,6 +103,7 @@ async fn test_watch_txn_main(
     loop {
         if let Ok(Some(resp)) = watch_stream.message().await {
             if let Some(event) = resp.event {
+                let event = event.without_proposed_at();
                 assert!(!watch_events.is_empty());
 
                 assert_eq!(watch_events.first(), Some(&event));
@@ -300,7 +302,7 @@ async fn test_watch() -> anyhow::Result<()> {
         let watch_events = vec![
             Event {
                 key: txn_key.clone(),
-                current: Some(SeqV::with_meta(seq + 2, Some(KvMeta::default()), txn_val)),
+                current: Some(SeqV::new(seq + 2, txn_val)),
                 prev: None,
             },
             Event {
@@ -492,7 +494,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         // 32 expired keys are auto cleaned.
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
-            let want = del_event(&k, 1 + i, &k, Some(KvMeta::new_expire(now_sec + 1)));
+            let want = del_event(&k, 1 + i, &k, Some(KvMeta::new(Some(now_sec + 1), None)));
             let msg = client_stream.message().await?.unwrap();
             assert!(msg.event.unwrap().close_to(&want, Duration::from_secs(2)));
         }
@@ -501,25 +503,30 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
 
         let seq = 34;
         let watch_events = vec![
-            del_event("w_b1", seq, "w_b1", Some(KvMeta::new_expire(now_sec + 6))), // expired
+            del_event(
+                "w_b1",
+                seq,
+                "w_b1",
+                Some(KvMeta::new(Some(now_sec + 6), None)),
+            ), // expired
             del_event(
                 "w_b2",
                 seq + 1,
                 "w_b2",
-                Some(KvMeta::new_expire(now_sec + 6)),
+                Some(KvMeta::new(Some(now_sec + 6), None)),
             ), // expired
             del_event(
                 "w_b3a",
                 seq + 2,
                 "w_b3a",
-                Some(KvMeta::new_expire(now_sec + 6)),
+                Some(KvMeta::new(Some(now_sec + 6), None)),
             ), // expired
-            add_event("w_b1", seq + 4, "w_b1_override", Some(KvMeta::default())),  // override
+            add_event("w_b1", seq + 4, "w_b1_override", Some(KvMeta::default())), // override
             del_event(
                 "w_b3b",
                 seq + 3,
                 "w_b3b",
-                Some(KvMeta::new_expire(now_sec + 15)),
+                Some(KvMeta::new(Some(now_sec + 15), None)),
             ), // expired
         ];
 
@@ -569,7 +576,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
     let client1 = make_client(&addr)?;
     let _watch_stream1 = client1.request(watch_req()).await?;
 
-    let mn: Arc<MetaNode> = tc.grpc_srv.as_ref().map(|x| x.get_meta_node()).unwrap();
+    let mn: Arc<MetaNode> = tc.grpc_srv.as_ref().unwrap().get_meta_node().await;
 
     info!("one watcher");
     {

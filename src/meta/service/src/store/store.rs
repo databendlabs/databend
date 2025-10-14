@@ -40,7 +40,6 @@ use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::snapshot_db::DBStat;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::Node;
 use futures::TryStreamExt;
@@ -312,22 +311,8 @@ impl RaftStore {
         }
     }
 
-    pub async fn get_node_raft_endpoint(
-        &self,
-        node_id: &NodeId,
-    ) -> Result<Endpoint, MetaNetworkError> {
-        let endpoint = self
-            .get_node(node_id)
-            .await
-            .map(|n| n.endpoint)
-            .ok_or_else(|| {
-                MetaNetworkError::GetNodeAddrError(format!(
-                    "fail to get endpoint of node_id: {}",
-                    node_id
-                ))
-            })?;
-
-        Ok(endpoint)
+    pub async fn get_node_raft_endpoint(&self, node_id: &NodeId) -> Option<Endpoint> {
+        self.get_node(node_id).await.map(|n| n.endpoint)
     }
 
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {

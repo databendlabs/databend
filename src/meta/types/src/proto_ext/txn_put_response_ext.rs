@@ -17,6 +17,8 @@ use std::fmt::Formatter;
 
 use display_more::DisplayOptionExt;
 
+use crate::protobuf as pb;
+use crate::SeqV;
 use crate::TxnPutResponse;
 
 impl Display for TxnPutResponse {
@@ -28,5 +30,17 @@ impl Display for TxnPutResponse {
             self.prev_value.as_ref().map(|x| x.seq).display(),
             self.current.as_ref().map(|x| x.seq).display()
         )
+    }
+}
+
+impl pb::TxnPutResponse {
+    pub fn unpack(self) -> (String, Option<SeqV>, Option<SeqV>) {
+        let pb::TxnPutResponse {
+            key,
+            prev_value,
+            current,
+        } = self;
+
+        (key, prev_value.map(SeqV::from), current.map(SeqV::from))
     }
 }

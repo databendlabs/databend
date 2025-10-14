@@ -20,6 +20,7 @@ use databend_common_base::base::Stoppable;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use log::debug;
@@ -53,7 +54,7 @@ async fn test_restart() -> anyhow::Result<()> {
         let res = res?;
         assert_eq!(
             UpsertKVReply::new(None, Some(SeqV::new(1, b("bar")))),
-            res,
+            res.without_proposed_at(),
             "upsert kv"
         );
     }
@@ -63,7 +64,11 @@ async fn test_restart() -> anyhow::Result<()> {
         let res = client.get_kv("foo").await;
         debug!("get kv res: {:?}", res);
         let res = res?;
-        assert_eq!(Some(SeqV::new(1, b("bar"))), res, "get kv");
+        assert_eq!(
+            Some(SeqV::new(1, b("bar"))),
+            res.without_proposed_at(),
+            "get kv"
+        );
     }
 
     info!("--- stop metasrv");
@@ -89,7 +94,11 @@ async fn test_restart() -> anyhow::Result<()> {
         let res = client.get_kv("foo").await;
         debug!("get kv res: {:?}", res);
         let res = res?;
-        assert_eq!(Some(SeqV::new(1, b("bar"))), res, "get kv");
+        assert_eq!(
+            Some(SeqV::new(1, b("bar"))),
+            res.without_proposed_at(),
+            "get kv"
+        );
     }
 
     Ok(())
@@ -179,7 +188,7 @@ async fn test_join() -> anyhow::Result<()> {
             let res = res?;
             assert_eq!(
                 UpsertKVReply::new(None, Some(SeqV::new(1 + i as u64, b(&k)))),
-                res,
+                res.without_proposed_at(),
                 "upsert kv to node {}",
                 i
             );
@@ -247,7 +256,7 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         let res = res?;
         assert_eq!(
             UpsertKVReply::new(None, Some(SeqV::new(1, b(&k)))),
-            res,
+            res.without_proposed_at(),
             "upsert kv to cluster",
         );
     }
@@ -277,8 +286,12 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
     info!("--- endpoints should changed when node is down");
     {
         let g = tc1.grpc_srv.as_ref().unwrap();
-        let meta_node = g.get_meta_node();
-        let old_term = meta_node.raft.metrics().borrow().current_term;
+        let meta_handle = g.get_meta_handle();
+        let old_term = meta_handle
+            .handle_raft_metrics()
+            .await?
+            .borrow()
+            .current_term;
 
         let mut srv = tc0.grpc_srv.take().unwrap();
         srv.stop(None).await?;
@@ -286,11 +299,11 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         // wait for leader observed
         // if tc0 is old leader, then we need to check both current_leader is some and current_term > old_term
         // if tc0 isn't old leader, then we need do nothing.
-        let leader_id = meta_node.get_leader().await?;
+        let leader_id = meta_handle.handle_get_leader().await?;
         if leader_id == Some(0) {
-            let metrics = meta_node
-                .raft
-                .wait(Some(Duration::from_millis(30_000)))
+            let metrics = meta_handle
+                .handle_raft_metrics_wait(Some(Duration::from_millis(30_000)))
+                .await?
                 .metrics(
                     |m| m.current_leader.is_some() && m.current_term > old_term,
                     "a leader is observed",
@@ -317,11 +330,11 @@ async fn test_auto_sync_addr() -> anyhow::Result<()> {
         start_metasrv_with_context(&mut tc3).await?;
 
         let g = tc3.grpc_srv.as_ref().unwrap();
-        let meta_node = g.get_meta_node();
+        let meta_handle = g.get_meta_handle();
 
-        let metrics = meta_node
-            .raft
-            .wait(Some(Duration::from_millis(30_000)))
+        let metrics = meta_handle
+            .handle_raft_metrics_wait(Some(Duration::from_millis(30_000)))
+            .await?
             .metrics(|m| m.current_leader.is_some(), "a leader is observed")
             .await?;
 

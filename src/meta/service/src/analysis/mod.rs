@@ -12,17 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Convert one type to another type for this crate to convert between 3rd party types.
+//! Provide analysis utilities for meta service.
 
-use std::io;
-
-/// Convert one type to another type for this crate to convert between 3rd party types.
-pub trait ValueConvert<T>
-where Self: Sized
-{
-    /// Convert `Self` to `T`.
-    fn conv_to(self) -> Result<T, io::Error>;
-
-    /// Convert `T` to `Self`.
-    fn conv_from(value: T) -> Result<Self, io::Error>;
-}
+pub mod count_prefix;

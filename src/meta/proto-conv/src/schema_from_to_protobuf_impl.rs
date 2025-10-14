@@ -78,6 +78,10 @@ impl FromToProto for ex::TableField {
             Some(computed_expr) => Some(ex::ComputedExpr::from_pb(computed_expr)?),
             None => None,
         };
+        let auto_increment_expr = match p.auto_increment_expr {
+            Some(auto_increment_expr) => Some(ex::AutoIncrementExpr::from_pb(auto_increment_expr)?),
+            None => None,
+        };
 
         let v = ex::TableField::new_from_column_id(
             &p.name,
@@ -87,13 +91,18 @@ impl FromToProto for ex::TableField {
             p.column_id,
         )
         .with_default_expr(p.default_expr)
-        .with_computed_expr(computed_expr);
+        .with_computed_expr(computed_expr)
+        .with_auto_increment_expr(auto_increment_expr);
         Ok(v)
     }
 
     fn to_pb(&self) -> Result<pb::DataField, Incompatible> {
         let computed_expr = match self.computed_expr() {
             Some(computed_expr) => Some(computed_expr.to_pb()?),
+            None => None,
+        };
+        let auto_increment_expr = match self.auto_increment_expr() {
+            Some(auto_increment_expr) => Some(auto_increment_expr.to_pb()?),
             None => None,
         };
         let p = pb::DataField {
@@ -104,6 +113,7 @@ impl FromToProto for ex::TableField {
             data_type: Some(self.data_type().to_pb()?),
             column_id: self.column_id(),
             computed_expr,
+            auto_increment_expr,
         };
         Ok(p)
     }
@@ -143,6 +153,37 @@ impl FromToProto for ex::ComputedExpr {
             min_reader_ver: MIN_READER_VER,
 
             computed_expr: Some(x),
+        })
+    }
+}
+
+impl FromToProto for ex::AutoIncrementExpr {
+    type PB = pb::AutoIncrementExpr;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(ex::AutoIncrementExpr {
+            column_id: p.column_id,
+            start: p.start,
+            step: p.step,
+            is_ordered: p.is_ordered,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::AutoIncrementExpr {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            start: self.start,
+            step: self.step,
+            column_id: self.column_id,
+            is_ordered: self.is_ordered,
         })
     }
 }
@@ -484,6 +525,13 @@ impl FromToProtoEnum for ex::VariantDataType {
             variant_data_type::Dt::ArrayT(dt) => {
                 ex::VariantDataType::Array(Box::new(ex::VariantDataType::from_pb_enum(*dt)?))
             }
+            variant_data_type::Dt::DecimalT(dt) => {
+                ex::VariantDataType::Decimal(ex::types::decimal::DecimalDataType::from_pb(dt)?)
+            }
+            variant_data_type::Dt::BinaryT(_) => ex::VariantDataType::Binary,
+            variant_data_type::Dt::DateT(_) => ex::VariantDataType::Date,
+            variant_data_type::Dt::TimestampT(_) => ex::VariantDataType::Timestamp,
+            variant_data_type::Dt::IntervalT(_) => ex::VariantDataType::Interval,
         })
     }
 
@@ -498,6 +546,14 @@ impl FromToProtoEnum for ex::VariantDataType {
             VariantDataType::Array(dt) => {
                 pb::variant_data_type::Dt::ArrayT(Box::new(dt.to_pb_enum()?))
             }
+            VariantDataType::Decimal(n) => {
+                let x = n.to_pb()?;
+                pb::variant_data_type::Dt::DecimalT(x)
+            }
+            VariantDataType::Binary => pb::variant_data_type::Dt::BinaryT(pb::Empty {}),
+            VariantDataType::Date => pb::variant_data_type::Dt::DateT(pb::Empty {}),
+            VariantDataType::Timestamp => pb::variant_data_type::Dt::TimestampT(pb::Empty {}),
+            VariantDataType::Interval => pb::variant_data_type::Dt::IntervalT(pb::Empty {}),
         };
 
         Ok(pb::VariantDataType { dt: Some(dt) })

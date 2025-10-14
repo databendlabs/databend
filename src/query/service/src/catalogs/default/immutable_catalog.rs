@@ -50,6 +50,8 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
+use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -78,6 +80,8 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -382,6 +386,13 @@ impl Catalog for ImmutableCatalog {
         ))
     }
 
+    #[async_backtrace::framed]
+    async fn swap_table(&self, _req: SwapTableReq) -> Result<SwapTableReply> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot swap table in system database",
+        ))
+    }
+
     async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         Err(ErrorCode::Unimplemented(
             "cannot commit_table_meta in system database",
@@ -591,6 +602,13 @@ impl Catalog for ImmutableCatalog {
     }
 
     async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
+        unimplemented!()
+    }
+
+    async fn get_autoincrement_next_value(
+        &self,
+        _req: GetAutoIncrementNextValueReq,
+    ) -> Result<GetAutoIncrementNextValueReply> {
         unimplemented!()
     }
 }

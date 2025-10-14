@@ -24,6 +24,8 @@ use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::Empty;
 use databend_common_meta_types::protobuf::ExportedChunk;
+use databend_common_meta_types::protobuf::KeysCount;
+use databend_common_meta_types::protobuf::KeysLayoutRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -274,6 +276,17 @@ impl EstablishedClient {
         request: impl tonic::IntoRequest<pb::ExportRequest>,
     ) -> Result<Response<Streaming<ExportedChunk>>, Status> {
         self.client.export_v1(request).await.update_client(self)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn snapshot_keys_layout(
+        &mut self,
+        request: impl tonic::IntoRequest<KeysLayoutRequest>,
+    ) -> Result<Response<Streaming<KeysCount>>, Status> {
+        self.client
+            .snapshot_keys_layout(request)
+            .await
+            .update_client(self)
     }
 
     #[async_backtrace::framed]

@@ -52,12 +52,14 @@ unsafe impl Send for KeysState {}
 
 unsafe impl Sync for KeysState {}
 
-pub trait KeyAccessor {
+pub trait KeyAccessor: Send + Sync {
     type Key: ?Sized;
 
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
     unsafe fn key_unchecked(&self, index: usize) -> &Self::Key;
+
+    fn len(&self) -> usize;
 }
 
 pub trait HashMethod: Clone + Sync + Send + 'static {
@@ -110,7 +112,10 @@ macro_rules! with_join_hash_method {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
             $t = [Serializer, SingleBinary, KeysU8, KeysU16,
-            KeysU32, KeysU64, KeysU128, KeysU256],
+            KeysU32, KeysU64, KeysU128, KeysU256, SkipDuplicatesSerializer,
+            SkipDuplicatesSingleBinary, SkipDuplicatesKeysU8, SkipDuplicatesKeysU16,
+            SkipDuplicatesKeysU32, SkipDuplicatesKeysU64, SkipDuplicatesKeysU128,
+            SkipDuplicatesKeysU256],
             $($tail)*
         }
     }

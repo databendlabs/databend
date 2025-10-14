@@ -23,18 +23,21 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 
+use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 
 #[derive(Clone)]
 pub enum CacheSourceState {
-    HashJoinCacheState(HashJoinCacheState),
+    OldHashJoinCacheState(HashJoinCacheState),
+    NewHashJoinCacheState(NewHashJoinCacheState),
 }
 
 impl CacheSourceState {
     fn next_data_block(&mut self) -> Option<DataBlock> {
         match self {
-            CacheSourceState::HashJoinCacheState(state) => state.next_data_block(),
+            CacheSourceState::OldHashJoinCacheState(state) => state.next_data_block(),
+            CacheSourceState::NewHashJoinCacheState(state) => state.next_data_block(),
         }
     }
 }
@@ -101,6 +104,41 @@ impl HashJoinCacheState {
         }
 
         self.output_buffer.pop_front()
+    }
+}
+
+#[derive(Clone)]
+pub struct NewHashJoinCacheState {
+    idx: usize,
+    memory_state: Arc<BasicHashJoinState>,
+    column_indexes: Vec<usize>,
+}
+
+impl NewHashJoinCacheState {
+    pub fn new(
+        column_indexes: Vec<usize>,
+        memory_state: Arc<BasicHashJoinState>,
+    ) -> NewHashJoinCacheState {
+        NewHashJoinCacheState {
+            idx: 0,
+            memory_state,
+            column_indexes,
+        }
+    }
+    fn next_data_block(&mut self) -> Option<DataBlock> {
+        if self.idx >= self.memory_state.chunks.len() {
+            return None;
+        }
+
+        let mut columns = Vec::with_capacity(self.column_indexes.len());
+        let num_rows = self.memory_state.chunks[self.idx].num_rows();
+        for column_index in self.column_indexes.iter() {
+            let column = self.memory_state.chunks[self.idx].get_by_offset(*column_index);
+            columns.push(column.clone());
+        }
+
+        self.idx += 1;
+        Some(DataBlock::new(columns, num_rows))
     }
 }
 

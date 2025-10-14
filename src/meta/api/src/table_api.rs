@@ -45,9 +45,13 @@ use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::app_error::VirtualColumnIdOutBound;
 use databend_common_meta_app::app_error::VirtualColumnTooMany;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::primitive::Id;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::AutoIncrementStorageIdent;
+use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
@@ -66,9 +70,12 @@ use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
@@ -129,7 +136,6 @@ use crate::list_u64_value;
 use crate::schema_api::build_upsert_table_deduplicated_label;
 use crate::schema_api::construct_drop_table_txn_operations;
 use crate::schema_api::get_db_by_id_or_err;
-use crate::schema_api::get_db_id_or_err;
 use crate::schema_api::get_history_table_metas;
 use crate::schema_api::handle_undrop_table;
 use crate::serialize_struct;
@@ -142,6 +148,7 @@ use crate::txn_op_builder_util::txn_op_put_pb;
 use crate::txn_op_del;
 use crate::txn_op_get;
 use crate::txn_op_put;
+use crate::txn_put_pb;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
 use crate::DEFAULT_MGET_SIZE;
@@ -208,7 +215,10 @@ where
         }
 
         // fixed: does not change in every loop.
-        let seq_db_id = get_db_id_or_err(self, &tenant_dbname, "create_table").await?;
+        let seq_db_id = self
+            .get_database_id_or_err(&tenant_dbname, "create_table")
+            .await?
+            .map_err(|e| KVAppError::AppError(AppError::UnknownDatabase(e)))?;
 
         // fixed
         let key_dbid = seq_db_id.data;
@@ -442,6 +452,21 @@ where
                     // (tenant, db_id, tb_name) -> tb_id
                     txn.if_then
                         .push(txn_op_put(&key_dbid_tbname, serialize_u64(table_id)?))
+                }
+
+                for table_field in req.table_meta.schema.fields() {
+                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
+                        continue;
+                    };
+
+                    let auto_increment_key =
+                        AutoIncrementKey::new(table_id, table_field.column_id());
+                    let storage_ident =
+                        AutoIncrementStorageIdent::new_generic(req.tenant(), auto_increment_key);
+                    let storage_value =
+                        Id::new_typed(AutoIncrementStorageValue(auto_increment_expr.start));
+                    txn.if_then
+                        .extend(vec![txn_put_pb(&storage_ident, &storage_value)?]);
                 }
 
                 let (succ, responses) = send_txn(self, txn).await?;
@@ -707,6 +732,192 @@ where
 
                 if succ {
                     return Ok(RenameTableReply { table_id });
+                }
+            }
+        }
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn swap_table(&self, req: SwapTableReq) -> Result<SwapTableReply, KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
+            // Get databases
+            let tenant_dbname_left = req.origin_table.db_name_ident();
+
+            let (seq_db_id_left, db_meta_left) =
+                get_db_or_err(self, &tenant_dbname_left, "swap_table: tenant_dbname_left").await?;
+
+            let dbid_tbname_left = DBIdTableName {
+                db_id: *seq_db_id_left.data,
+                table_name: req.origin_table.table_name.clone(),
+            };
+
+            let (tb_id_seq_left, table_id_left) = get_u64_value(self, &dbid_tbname_left).await?;
+            if req.if_exists && tb_id_seq_left == 0 {
+                return Ok(SwapTableReply {});
+            }
+            assert_table_exist(
+                tb_id_seq_left,
+                &req.origin_table,
+                "swap_table: origin_table",
+            )?;
+
+            let dbid_tbname_right = DBIdTableName {
+                db_id: *seq_db_id_left.data,
+                table_name: req.target_table_name.clone(),
+            };
+
+            let (tb_id_seq_right, table_id_right) = get_u64_value(self, &dbid_tbname_right).await?;
+            if req.if_exists && tb_id_seq_right == 0 {
+                return Ok(SwapTableReply {});
+            }
+            assert_table_exist(
+                tb_id_seq_right,
+                &TableNameIdent {
+                    tenant: req.origin_table.tenant.clone(),
+                    db_name: req.origin_table.db_name.clone(),
+                    table_name: req.target_table_name.clone(),
+                },
+                "swap_table: target_table",
+            )?;
+
+            // Get table id lists
+            let dbid_tbname_idlist_left = TableIdHistoryIdent {
+                database_id: *seq_db_id_left.data,
+                table_name: req.origin_table.table_name.clone(),
+            };
+            let dbid_tbname_idlist_right = TableIdHistoryIdent {
+                database_id: *seq_db_id_left.data,
+                table_name: req.target_table_name.clone(),
+            };
+
+            let seq_table_history_left = self.get_pb(&dbid_tbname_idlist_left).await?;
+            let seq_table_history_right = self.get_pb(&dbid_tbname_idlist_right).await?;
+
+            let tb_id_list_seq_left = seq_table_history_left.seq();
+            let tb_id_list_seq_right = seq_table_history_right.seq();
+
+            let mut tb_id_list_left = seq_table_history_left
+                .into_value()
+                .unwrap_or_else(|| TableIdList::new_with_ids([table_id_left]));
+            let mut tb_id_list_right = seq_table_history_right
+                .into_value()
+                .unwrap_or_else(|| TableIdList::new_with_ids([table_id_right]));
+
+            // Validate table IDs in history lists
+            {
+                let last_left = tb_id_list_left.last().copied();
+                if Some(table_id_left) != last_left {
+                    let err_message = format!(
+                        "swap_table {:?} but last table id conflict, id list last: {:?}, current: {}",
+                        req.origin_table, last_left, table_id_left
+                    );
+                    error!("{}", err_message);
+                    return Err(KVAppError::AppError(AppError::UnknownTable(
+                        UnknownTable::new(&req.origin_table.table_name, err_message),
+                    )));
+                }
+
+                let last_right = tb_id_list_right.last().copied();
+                if Some(table_id_right) != last_right {
+                    let err_message = format!(
+                        "swap_table {:?} but last table id conflict, id list last: {:?}, current: {}",
+                        req.target_table_name, last_right, table_id_right
+                    );
+                    error!("{}", err_message);
+                    return Err(KVAppError::AppError(AppError::UnknownTable(
+                        UnknownTable::new(&req.target_table_name, err_message),
+                    )));
+                }
+            }
+
+            // Get table id to name mappings
+            let table_id_to_name_key_left = TableIdToName {
+                table_id: table_id_left,
+            };
+            let table_id_to_name_key_right = TableIdToName {
+                table_id: table_id_right,
+            };
+            let table_id_to_name_seq_left = self.get_seq(&table_id_to_name_key_left).await?;
+            let table_id_to_name_seq_right = self.get_seq(&table_id_to_name_key_right).await?;
+
+            // Prepare new mappings after swap
+            let db_id_table_name_left = DBIdTableName {
+                db_id: *seq_db_id_left.data,
+                table_name: req.origin_table.table_name.clone(),
+            };
+            let db_id_table_name_right = DBIdTableName {
+                db_id: *seq_db_id_left.data,
+                table_name: req.target_table_name.clone(),
+            };
+
+            {
+                // Update history lists: remove current table IDs
+                tb_id_list_left.pop();
+                tb_id_list_right.pop();
+                // Add swapped table IDs
+                tb_id_list_left.append(table_id_right);
+                tb_id_list_right.append(table_id_left);
+
+                let txn = TxnRequest::new(
+                    vec![
+                        // Ensure databases haven't changed
+                        txn_cond_seq(&seq_db_id_left.data, Eq, db_meta_left.seq),
+                        // Ensure table name->table_id mappings haven't changed
+                        txn_cond_seq(&dbid_tbname_left, Eq, tb_id_seq_left),
+                        txn_cond_seq(&dbid_tbname_right, Eq, tb_id_seq_right),
+                        // Ensure table history lists haven't changed
+                        txn_cond_seq(&dbid_tbname_idlist_left, Eq, tb_id_list_seq_left),
+                        txn_cond_seq(&dbid_tbname_idlist_right, Eq, tb_id_list_seq_right),
+                        // Ensure table_id->name mappings haven't changed
+                        txn_cond_seq(&table_id_to_name_key_left, Eq, table_id_to_name_seq_left),
+                        txn_cond_seq(&table_id_to_name_key_right, Eq, table_id_to_name_seq_right),
+                    ],
+                    vec![
+                        // Swap table name->table_id mappings
+                        txn_op_put(&dbid_tbname_left, serialize_u64(table_id_right)?), /* origin_table_name -> target_table_id */
+                        txn_op_put(&dbid_tbname_right, serialize_u64(table_id_left)?), /* target_table_name -> origin_table_id */
+                        // Update database metadata sequences
+                        txn_op_put(&seq_db_id_left.data, serialize_struct(&*db_meta_left)?),
+                        // Update table history lists
+                        txn_op_put(
+                            &dbid_tbname_idlist_left,
+                            serialize_struct(&tb_id_list_left)?,
+                        ),
+                        txn_op_put(
+                            &dbid_tbname_idlist_right,
+                            serialize_struct(&tb_id_list_right)?,
+                        ),
+                        // Update table_id->name mappings
+                        txn_op_put(
+                            &table_id_to_name_key_left,
+                            serialize_struct(&db_id_table_name_right)?,
+                        ), // origin_table_id -> target_table_name
+                        txn_op_put(
+                            &table_id_to_name_key_right,
+                            serialize_struct(&db_id_table_name_left)?,
+                        ), // target_table_id -> origin_table_name
+                    ],
+                );
+
+                let (succ, _responses) = send_txn(self, txn).await?;
+
+                debug!(
+                    origin_table :? =(&req.origin_table),
+                    target_table_name :? =(&req.target_table_name),
+                    table_id_left :? =(&table_id_left),
+                    table_id_right :? =(&table_id_right),
+                    succ = succ;
+                    "swap_table"
+                );
+
+                if succ {
+                    return Ok(SwapTableReply {});
                 }
             }
         }
@@ -1537,6 +1748,24 @@ where
         Ok(GetTableCopiedFileReply {
             file_info: file_infos,
         })
+    }
+
+    async fn list_table_copied_file_info(
+        &self,
+        table_id: u64,
+    ) -> Result<ListTableCopiedFileReply, MetaError> {
+        let key = TableCopiedFileNameIdent {
+            table_id,
+            file: "".to_string(),
+        };
+
+        let res = self.list_pb_vec(&DirName::new(key)).await?;
+        let mut file_info = BTreeMap::new();
+        for (name_key, seqv) in res {
+            file_info.insert(name_key.file, seqv.data);
+        }
+
+        Ok(ListTableCopiedFileReply { file_info })
     }
 
     #[logcall::logcall]

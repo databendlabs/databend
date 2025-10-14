@@ -35,7 +35,7 @@ use crate::leveled_store::level::Level;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
-use crate::leveled_store::value_convert::ValueConvert;
+use crate::leveled_store::persisted_codec::PersistedCodec;
 
 // TODO: test it
 #[async_trait::async_trait]
@@ -45,7 +45,7 @@ where
     K: ViewKey,
     K: MapKeyEncode + MapKeyDecode,
     K::V: ViewValue,
-    SeqMarked<K::V>: ValueConvert<SeqMarked>,
+    SeqMarked<K::V>: PersistedCodec<SeqMarked>,
     Level: GetSubTable<K, K::V>,
     Immutable: mvcc::ScopedSeqBoundedRange<K, K::V>,
 {

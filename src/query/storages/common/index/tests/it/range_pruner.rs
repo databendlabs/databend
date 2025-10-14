@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::FunctionContext;
@@ -34,7 +35,7 @@ use super::eliminate_cast::parse_expr;
 #[test]
 fn test_range_index() -> Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("test_range_indexs.txt").unwrap();
+    let file = &mut mint.new_goldenfile("test_range_indies.txt").unwrap();
 
     fn n(n: i32) -> Scalar {
         Scalar::Number(n.into())
@@ -44,6 +45,37 @@ fn test_range_index() -> Result<()> {
 
     run_text(file, "a = 2 and b = 41", domains);
     run_text(file, "a = 2 and b < 7", domains);
+
+    // test not keep
+    run_text(file, "a > 2 and a < 1", domains);
+    run_text(file, "a = 2 and a < 1", domains);
+    run_text(file, "a < 2 and a > 2", domains);
+
+    run_text(file, "a >= 3 and a < 2", domains);
+    run_text(file, "a <= 1 and a > 3", domains);
+    run_text(file, "a = 5 and a = 7", domains);
+    run_text(file, "a > 10 and a < 5", domains);
+    run_text(file, "a >= 5 and a <= 2", domains);
+
+    // test keep - non-mutual exclusion cases
+    run_text(file, "a > 1 and a < 3", domains);
+    run_text(file, "a >= 2 and a <= 2", domains);
+    run_text(file, "a >= 1 and a < 3", domains);
+    run_text(file, "a > 1 and a <= 2", domains);
+    run_text(file, "a > 2 and a = 2", domains);
+    run_text(file, "a < 5 and a = 2", domains);
+    run_text(file, "a = 2 and a < 5", domains);
+    run_text(file, "a > 1 and a = 2", domains);
+
+    // test complex expressions with multiple columns
+    run_text(file, "a > 2 and a < 1 and b = 1", domains);
+    run_text(file, "a = 2 and b > 5 and b < 3", domains);
+
+    // test edge cases
+    run_text(file, "a > 2 and a <= 2", domains);
+    run_text(file, "a < 2 and a >= 2", domains);
+    run_text(file, "a = 5 and a != 5", domains);
+
     run_text(file, "to_string(a) = '4'", domains);
     run_text(file, "to_string(a) = 'a'", domains);
     run_text(file, "to_int8(a) = 3", domains);
@@ -54,6 +86,135 @@ fn test_range_index() -> Result<()> {
     run_text(file, "to_int16(a::int8) = 4", domains);
 
     Ok(())
+}
+
+#[test]
+fn test_range_index_dates() -> Result<()> {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("test_range_index_dates.txt").unwrap();
+
+    // Date scalar helper
+    fn date_scalar(days: i32) -> Scalar {
+        Scalar::Date(days)
+    }
+
+    // Timestamp scalar helper
+    fn timestamp_scalar(micros: i64) -> Scalar {
+        Scalar::Timestamp(micros)
+    }
+
+    // Test date ranges
+    let date_domains = &[
+        ("dt", date_scalar(18000), date_scalar(18010)), // ~2019-04-26 to 2019-05-06
+    ];
+
+    run_text_with_schema(
+        file,
+        "dt > '2019-05-01' and dt < '2019-04-30'",
+        date_domains,
+        vec![TableField::new("dt", TableDataType::Date)],
+    );
+
+    run_text_with_schema(
+        file,
+        "dt = '2019-05-01' and dt < '2019-04-30'",
+        date_domains,
+        vec![TableField::new("dt", TableDataType::Date)],
+    );
+
+    run_text_with_schema(
+        file,
+        "dt >= '2019-05-02' and dt <= '2019-05-01'",
+        date_domains,
+        vec![TableField::new("dt", TableDataType::Date)],
+    );
+
+    // Non-mutual exclusion cases
+    run_text_with_schema(
+        file,
+        "dt >= '2019-04-28' and dt <= '2019-05-03'",
+        date_domains,
+        vec![TableField::new("dt", TableDataType::Date)],
+    );
+
+    // Test timestamp ranges
+    let ts_domains = &[
+        (
+            "ts",
+            timestamp_scalar(1556668800000000),
+            timestamp_scalar(1556755200000000),
+        ), // 2019-05-01 to 2019-05-02
+    ];
+
+    run_text_with_schema(
+        file,
+        "ts > '2019-05-01 12:00:00' and ts < '2019-05-01 06:00:00'",
+        ts_domains,
+        vec![TableField::new("ts", TableDataType::Timestamp)],
+    );
+
+    run_text_with_schema(
+        file,
+        "ts = '2019-05-01 12:00:00' and ts != '2019-05-01 12:00:00'",
+        ts_domains,
+        vec![TableField::new("ts", TableDataType::Timestamp)],
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_range_index_strings() -> Result<()> {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("test_range_index_strings.txt").unwrap();
+
+    // String scalar helper
+    fn string_scalar(s: &str) -> Scalar {
+        Scalar::String(s.to_string())
+    }
+
+    // Test date ranges
+    let string_domains = &[("s", string_scalar("aaefg"), string_scalar("zzefg"))];
+    run_text_with_schema(file, "s > 'efg' and s = 'efg'", string_domains, vec![
+        TableField::new("s", TableDataType::String),
+    ]);
+
+    run_text_with_schema(file, "s > 'aaefg' and s < 'zzefg'", string_domains, vec![
+        TableField::new("s", TableDataType::String),
+    ]);
+    Ok(())
+}
+
+fn run_text_with_schema(
+    file: &mut impl Write,
+    text: &str,
+    domains: &[(&str, Scalar, Scalar)],
+    fields: Vec<TableField>,
+) {
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(fields.clone()));
+    let stats = create_stats(domains, &schema);
+
+    let columns: Vec<(&str, DataType)> = fields
+        .iter()
+        .map(|f| (f.name().as_str(), f.data_type().into()))
+        .collect();
+
+    let expr = parse_expr(text, &columns);
+    let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
+
+    writeln!(file, "text      : {text}").unwrap();
+    writeln!(file, "expr      : {expr}").unwrap();
+
+    match index.apply(&stats, |_| false) {
+        Err(err) => {
+            writeln!(file, "err       : {err}").unwrap();
+        }
+        Ok(keep) => {
+            writeln!(file, "keep      : {keep}").unwrap();
+        }
+    };
+    writeln!(file).unwrap();
 }
 
 fn create_stats(domains: &[(&str, Scalar, Scalar)], schema: &TableSchema) -> StatisticsOfColumns {

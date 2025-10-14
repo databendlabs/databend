@@ -382,14 +382,14 @@ async fn test_roles_table() -> Result<()> {
     let tenant = ctx.get_tenant();
 
     {
-        let role_info = RoleInfo::new("test");
+        let role_info = RoleInfo::new("test", None);
         UserApiProvider::instance()
             .add_role(&tenant, role_info, &CreateOrReplace)
             .await?;
     }
 
     {
-        let mut role_info = RoleInfo::new("test1");
+        let mut role_info = RoleInfo::new("test1", None);
         role_info.grants.grant_role("test".to_string());
         UserApiProvider::instance()
             .add_role(&tenant, role_info, &Create)
@@ -397,7 +397,7 @@ async fn test_roles_table() -> Result<()> {
     }
 
     {
-        let mut role_info = RoleInfo::new("test1");
+        let mut role_info = RoleInfo::new("test1", None);
         role_info.grants.grant_role("t2".to_string());
         UserApiProvider::instance()
             .add_role(&tenant, role_info, &CreateIfNotExists)

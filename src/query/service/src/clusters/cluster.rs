@@ -789,7 +789,7 @@ impl ClusterDiscovery {
                 "block_meta_count": cfg.cache.block_meta_count,
                 "segment_block_metas_count": cfg.cache.segment_block_metas_count,
                 "table_meta_statistic_count": cfg.cache.table_meta_statistic_count,
-                "segment_statistics_count": cfg.cache.segment_statistics_count,
+                "segment_statistics_bytes": cfg.cache.segment_statistics_bytes,
                 "enable_table_index_bloom": cfg.cache.enable_table_index_bloom,
                 "table_bloom_index_meta_count": cfg.cache.table_bloom_index_meta_count,
                 "table_bloom_index_filter_count": cfg.cache.table_bloom_index_filter_count,

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::io;
-use std::io::Error;
 use std::ops::RangeBounds;
 
 use databend_common_meta_types::snapshot_db::DB;
@@ -27,8 +26,8 @@ use rotbl::v001::SeqMarked;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
+use crate::leveled_store::persisted_codec::PersistedCodec;
 use crate::leveled_store::rotbl_codec::RotblCodec;
-use crate::leveled_store::value_convert::ValueConvert;
 
 /// A wrapper that implements the `ScopedSnapshot*` trait for the `DB`.
 #[derive(Debug, Clone)]
@@ -42,7 +41,7 @@ where
     K: ViewKey,
     K: MapKeyEncode + MapKeyDecode,
     K::V: ViewValue,
-    SeqMarked<K::V>: ValueConvert<SeqMarked>,
+    SeqMarked<K::V>: PersistedCodec<SeqMarked>,
 {
     async fn get(&self, key: K, _snapshot_seq: u64) -> Result<SeqMarked<K::V>, io::Error> {
         // TODO: DB does not consider snapshot_seq
@@ -55,7 +54,7 @@ where
             return Ok(SeqMarked::new_not_found());
         };
 
-        let marked = SeqMarked::<K::V>::conv_from(seq_marked)?;
+        let marked = SeqMarked::<K::V>::decode_from(seq_marked)?;
         Ok(marked)
     }
 }
@@ -68,13 +67,13 @@ where
     K: ViewKey,
     K: MapKeyEncode + MapKeyDecode,
     K::V: ViewValue,
-    SeqMarked<K::V>: ValueConvert<SeqMarked>,
+    SeqMarked<K::V>: PersistedCodec<SeqMarked>,
 {
     async fn range<R>(
         &self,
         range: R,
         _snapshot_seq: u64,
-    ) -> Result<IOResultStream<(K, SeqMarked<K::V>)>, Error>
+    ) -> Result<IOResultStream<(K, SeqMarked<K::V>)>, io::Error>
     where
         R: RangeBounds<K> + Send + Sync + Clone + 'static,
     {
@@ -88,7 +87,7 @@ where
         let strm = strm.map(|res_item: Result<(String, SeqMarked), io::Error>| {
             let (str_k, seq_marked) = res_item?;
             let key = RotblCodec::decode_key(&str_k)?;
-            let marked = SeqMarked::conv_from(seq_marked)?;
+            let marked = SeqMarked::decode_from(seq_marked)?;
             Ok((key, marked))
         });
 

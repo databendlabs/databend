@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub(crate) mod analyze_hook;
 pub(crate) mod compact_hook;
 pub(crate) mod refresh_hook;
 pub(crate) mod vacuum_hook;

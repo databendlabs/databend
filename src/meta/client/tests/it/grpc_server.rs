@@ -28,6 +28,8 @@ use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::Empty;
 use databend_common_meta_types::protobuf::ExportedChunk;
 use databend_common_meta_types::protobuf::HandshakeResponse;
+use databend_common_meta_types::protobuf::KeysCount;
+use databend_common_meta_types::protobuf::KeysLayoutRequest;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::MemberListRequest;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -140,6 +142,16 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<Empty>,
     ) -> Result<Response<ClientInfo>, Status> {
+        unimplemented!()
+    }
+
+    type SnapshotKeysLayoutStream =
+        Pin<Box<dyn Stream<Item = Result<KeysCount, Status>> + Send + 'static>>;
+
+    async fn snapshot_keys_layout(
+        &self,
+        _request: Request<KeysLayoutRequest>,
+    ) -> Result<Response<Self::SnapshotKeysLayoutStream>, Status> {
         unimplemented!()
     }
 }

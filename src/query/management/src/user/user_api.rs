@@ -49,5 +49,7 @@ pub trait UserApi: Sync + Send {
     where
         F: FnOnce(&mut UserInfo) + Send;
 
+    async fn upsert_user_info(&self, user: &UserInfo, seq: MatchSeq) -> Result<u64>;
+
     async fn drop_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<()>;
 }

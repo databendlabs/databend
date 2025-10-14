@@ -146,6 +146,7 @@ pub struct QueryContextShared {
     pub(super) can_scan_from_agg_index: Arc<AtomicBool>,
     pub(super) num_fragmented_block_hint: Arc<Mutex<HashMap<String, u64>>>,
     pub(super) enable_sort_spill: Arc<AtomicBool>,
+    pub(super) enable_auto_analyze: Arc<AtomicBool>,
     // Status info.
     pub(super) status: Arc<RwLock<String>>,
 
@@ -241,6 +242,7 @@ impl QueryContextShared {
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             num_fragmented_block_hint: Default::default(),
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
+            enable_auto_analyze: Arc::new(AtomicBool::new(false)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             join_spill_progress: Arc::new(Progress::create()),

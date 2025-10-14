@@ -17,7 +17,6 @@ use std::collections::BTreeSet;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::VariantDataType;
 use databend_common_expression::VirtualDataField;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
@@ -124,8 +123,7 @@ impl TransformMergeCommitMeta {
                                 if l_field.source_column_id == r_field.source_column_id
                                     && l_field.name == r_field.name
                                 {
-                                    let mut combined_data_types: BTreeSet<VariantDataType> =
-                                        BTreeSet::new();
+                                    let mut combined_data_types = BTreeSet::new();
                                     for dt in &l_field.data_types {
                                         combined_data_types.insert(dt.clone());
                                     }

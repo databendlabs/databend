@@ -26,10 +26,13 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
@@ -177,6 +180,14 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
+    async fn swap_table(&self, _req: SwapTableReq) -> Result<SwapTableReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement swap_table in {} Database",
+            self.name()
+        )))
+    }
+
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         _req: UpsertTableOptionReq,
@@ -205,6 +216,17 @@ pub trait Database: DynClone + Sync + Send {
     ) -> Result<GetTableCopiedFileReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement get_table_copied_file_info in {} Database",
+            self.name()
+        )))
+    }
+
+    #[async_backtrace::framed]
+    async fn list_table_copied_file_info(
+        &self,
+        _table_id: u64,
+    ) -> Result<ListTableCopiedFileReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "UnImplement list_table_copied_file_info in {} Database",
             self.name()
         )))
     }

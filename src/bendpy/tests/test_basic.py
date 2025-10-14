@@ -32,8 +32,8 @@ class TestBasic:
             "select number % 3 n, sum(number) b from numbers(100) group by n order by n"
         ).collect()
         assert (
-                str(df)
-                == """┌─────────────────────┐
+            str(df)
+            == """┌─────────────────────┐
 │   n   │      b      │
 │ UInt8 │ UInt64 NULL │
 ├───────┼─────────────┤

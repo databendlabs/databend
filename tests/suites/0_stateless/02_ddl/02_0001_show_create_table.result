@@ -104,4 +104,14 @@ tc	CREATE TABLE tc (
   id4 INT NULL,
   id5 INT NULL
 ) ENGINE=FUSE
+>>>> 
+create or replace table test.auto_increment(c1 int, c2 int autoincrement, c3 int identity (2, 3) order);
+
+>>>> show create table test.auto_increment;
+auto_increment	CREATE TABLE auto_increment (
+  c1 INT NULL,
+  c2 INT NULL AUTOINCREMENT (0, 1) ORDER,
+  c3 INT NULL AUTOINCREMENT (2, 3) ORDER
+) ENGINE=FUSE
+<<<<
 >>>> drop database test

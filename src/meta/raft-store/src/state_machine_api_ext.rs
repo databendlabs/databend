@@ -59,7 +59,11 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
         upsert_kv: &UpsertKV,
         cmd_ctx: &CmdContext,
     ) -> Result<(SeqMarked<MetaValue>, SeqMarked<MetaValue>), io::Error> {
-        let kv_meta = upsert_kv.value_meta.as_ref().map(|m| m.to_kv_meta(cmd_ctx));
+        let kv_meta = upsert_kv
+            .value_meta
+            .clone()
+            .unwrap_or_default()
+            .to_kv_meta(cmd_ctx);
 
         let prev = self
             .user_map()
@@ -76,7 +80,7 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
                 self.user_map_mut()
                     .fetch_and_set(
                         UserKey::new(&upsert_kv.key),
-                        Some((kv_meta.clone(), v.clone())),
+                        Some((Some(kv_meta.clone()), v.clone())),
                     )
                     .await?
             }
@@ -90,7 +94,7 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
                 MapApiHelper::update_meta(
                     self.user_map_mut(),
                     UserKey::new(&upsert_kv.key),
-                    kv_meta.clone(),
+                    Some(kv_meta.clone()),
                 )
                 .await?
             }
@@ -119,8 +123,8 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
         };
 
         debug!(
-            "applied upsert: {:?}; prev: {:?}; res: {:?}",
-            upsert_kv, prev, result
+            "upsert_kv_primary_index {}: {}; prev: {:?}; res: {:?}",
+            cmd_ctx, upsert_kv, prev, result
         );
 
         Ok((prev, result))

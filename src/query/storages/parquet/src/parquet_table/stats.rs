@@ -57,7 +57,10 @@ pub fn create_stats_provider(
     num_rows = (num_rows as f64 / ratio) as u64;
     let mut column_stats = HashMap::with_capacity(basic_column_stats.len());
     for (column_id, col_stat) in basic_column_stats.into_iter().enumerate() {
-        column_stats.insert(column_id as u32, col_stat.get_useful_stat(num_rows));
+        column_stats.insert(
+            column_id as u32,
+            col_stat.get_useful_stat(num_rows, num_rows),
+        );
     }
 
     ParquetTableColumnStatisticsProvider::new(column_stats, num_rows)

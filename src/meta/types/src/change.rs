@@ -21,6 +21,8 @@ use serde::Serialize;
 use state_machine_api::SeqV;
 use state_machine_api::SeqValue;
 
+use crate::normalize_meta::NormalizeMeta;
+
 /// `Change` describes a state transition: the states before and after an operation.
 ///
 /// Note that a success add-operation has a None `prev`, and a maybe-Some `result`.
@@ -142,5 +144,211 @@ where
         write!(f, "id: {:?}", self.ident)?;
         write!(f, "prev: {:?}", self.prev)?;
         write!(f, "result: {:?}", self.result)
+    }
+}
+
+impl<T, ID> NormalizeMeta for Change<T, ID>
+where ID: Clone + PartialEq
+{
+    fn without_proposed_at(self) -> Self {
+        Change {
+            ident: self.ident,
+            prev: self.prev.without_proposed_at(),
+            result: self.result.without_proposed_at(),
+        }
+    }
+
+    fn normalize(self) -> Self {
+        Change {
+            ident: self.ident,
+            prev: self.prev.normalize(),
+            result: self.result.normalize(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use state_machine_api::KVMeta;
+
+    use super::*;
+
+    #[test]
+    fn test_change_erase_proposed_at() {
+        // Test with both prev and result having proposed_at_ms
+        let change = Change {
+            ident: Some(123u64),
+            prev: Some(SeqV {
+                seq: 1,
+                meta: Some(KVMeta {
+                    expire_at: Some(1723102819),
+                    proposed_at_ms: Some(1_723_102_800_000),
+                }),
+                data: b"prev_value".to_vec(),
+            }),
+            result: Some(SeqV {
+                seq: 2,
+                meta: Some(KVMeta {
+                    expire_at: None,
+                    proposed_at_ms: Some(1_723_102_900_000),
+                }),
+                data: b"new_value".to_vec(),
+            }),
+        };
+
+        let erased = change.without_proposed_at();
+
+        // Check ident is preserved
+        assert_eq!(erased.ident, Some(123u64));
+
+        // Check prev: expire_at should remain, proposed_at_ms should be None
+        let prev = erased.prev.unwrap();
+        assert_eq!(prev.seq, 1);
+        assert_eq!(prev.data, b"prev_value");
+        let prev_meta = prev.meta.unwrap();
+        assert_eq!(prev_meta.expire_at, Some(1723102819));
+        assert_eq!(prev_meta.proposed_at_ms, None);
+
+        // Check result: meta should be removed (default after erasing proposed_at_ms)
+        let result = erased.result.unwrap();
+        assert_eq!(result.seq, 2);
+        assert_eq!(result.data, b"new_value");
+        assert_eq!(result.meta, None);
+    }
+
+    #[test]
+    fn test_change_reduce() {
+        // Test reduce without touching proposed_at_ms
+        let change = Change {
+            ident: Some(456u64),
+            prev: Some(SeqV {
+                seq: 1,
+                meta: Some(KVMeta {
+                    expire_at: None,
+                    proposed_at_ms: Some(1_723_102_800_000),
+                }),
+                data: b"prev_value".to_vec(),
+            }),
+            result: Some(SeqV {
+                seq: 2,
+                meta: Some(KVMeta {
+                    expire_at: Some(1723102819),
+                    proposed_at_ms: None,
+                }),
+                data: b"new_value".to_vec(),
+            }),
+        };
+
+        let reduced = change.normalize();
+
+        // Check ident is preserved
+        assert_eq!(reduced.ident, Some(456u64));
+
+        // Check prev: proposed_at_ms should remain (not default)
+        let prev = reduced.prev.unwrap();
+        let prev_meta = prev.meta.unwrap();
+        assert_eq!(prev_meta.proposed_at_ms, Some(1_723_102_800_000));
+        assert_eq!(prev_meta.expire_at, None);
+
+        // Check result: meta should remain (has expire_at)
+        let result = reduced.result.unwrap();
+        let result_meta = result.meta.unwrap();
+        assert_eq!(result_meta.expire_at, Some(1723102819));
+        assert_eq!(result_meta.proposed_at_ms, None);
+    }
+
+    #[test]
+    fn test_change_reduce_removes_default_meta() {
+        // Test that reduce removes default metadata
+        let change: Change<Vec<u8>> = Change {
+            ident: None,
+            prev: Some(SeqV {
+                seq: 1,
+                meta: Some(KVMeta {
+                    expire_at: None,
+                    proposed_at_ms: None,
+                }),
+                data: b"prev".to_vec(),
+            }),
+            result: Some(SeqV {
+                seq: 2,
+                meta: Some(Default::default()),
+                data: b"result".to_vec(),
+            }),
+        };
+
+        let reduced = change.normalize();
+
+        // Both prev and result should have meta removed
+        assert_eq!(reduced.prev.unwrap().meta, None);
+        assert_eq!(reduced.result.unwrap().meta, None);
+    }
+
+    #[test]
+    fn test_change_with_none_values() {
+        // Test with None prev and result
+        let change: Change<Vec<u8>> = Change {
+            ident: Some(789u64),
+            prev: None,
+            result: None,
+        };
+
+        let erased = change.clone().without_proposed_at();
+        let reduced = change.normalize();
+
+        assert_eq!(erased.ident, Some(789u64));
+        assert_eq!(erased.prev, None);
+        assert_eq!(erased.result, None);
+
+        assert_eq!(reduced.ident, Some(789u64));
+        assert_eq!(reduced.prev, None);
+        assert_eq!(reduced.result, None);
+    }
+
+    #[test]
+    fn test_change_erase_proposed_at_then_reduce() {
+        // Test the chain: erase_proposed_at calls reduce
+        let change = Change {
+            ident: Some(999u64),
+            prev: Some(SeqV {
+                seq: 1,
+                meta: Some(KVMeta {
+                    expire_at: None,
+                    proposed_at_ms: Some(1_723_102_800_000),
+                }),
+                data: b"data".to_vec(),
+            }),
+            result: None,
+        };
+
+        let erased = change.without_proposed_at();
+
+        // Meta should be removed entirely (was only proposed_at_ms, now default)
+        assert_eq!(erased.prev.unwrap().meta, None);
+    }
+
+    #[test]
+    fn test_change_preserves_ident_type() {
+        // Test with string ident type
+        let change: Change<Vec<u8>, String> = Change {
+            ident: Some("test-id".to_string()),
+            prev: Some(SeqV {
+                seq: 1,
+                meta: Some(KVMeta {
+                    expire_at: Some(1723102819),
+                    proposed_at_ms: Some(1_723_102_800_000),
+                }),
+                data: b"data".to_vec(),
+            }),
+            result: None,
+        };
+
+        let erased = change.without_proposed_at();
+
+        assert_eq!(erased.ident, Some("test-id".to_string()));
+        // proposed_at_ms should be erased but expire_at should remain
+        let prev_meta = erased.prev.unwrap().meta.unwrap();
+        assert_eq!(prev_meta.proposed_at_ms, None);
+        assert_eq!(prev_meta.expire_at, Some(1723102819));
     }
 }

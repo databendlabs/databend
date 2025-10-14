@@ -671,11 +671,14 @@ pub fn table_alias_without_as(i: Input) -> IResult<TableAlias> {
 
 pub fn join_operator(i: Input) -> IResult<JoinOperator> {
     alt((
+        value(JoinOperator::InnerAny, rule! { INNER ~ ANY }),
         value(JoinOperator::Inner, rule! { INNER }),
         value(JoinOperator::LeftSemi, rule! { LEFT? ~ SEMI }),
         value(JoinOperator::RightSemi, rule! { RIGHT ~ SEMI }),
         value(JoinOperator::LeftAnti, rule! { LEFT? ~ ANTI }),
         value(JoinOperator::RightAnti, rule! { RIGHT ~ ANTI }),
+        value(JoinOperator::LeftAny, rule! { LEFT ~ ANY }),
+        value(JoinOperator::RightAny, rule! { RIGHT ~ ANY }),
         value(JoinOperator::LeftOuter, rule! { LEFT ~ OUTER? }),
         value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
         value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),
@@ -945,8 +948,20 @@ fn unpivot(i: Input) -> IResult<Unpivot> {
 
 fn pivot_values(i: Input) -> IResult<PivotValues> {
     alt((
-        map(comma_separated_list1(expr), PivotValues::ColumnValues),
+        // Parse ANY [ORDER BY ...] - must be first to avoid ANY being parsed as expression
+        map(
+            rule! {
+                ANY ~
+                (ORDER ~ BY ~ #comma_separated_list1(order_by_expr))?
+            },
+            |(_, order_by_opt)| PivotValues::Any {
+                order_by: order_by_opt.map(|(_, _, order_by_list)| order_by_list),
+            },
+        ),
+        // Parse subquery - must be before expr list to avoid parsing subquery as expression
         map(query, |q| PivotValues::Subquery(Box::new(q))),
+        // Parse expression list - must be last
+        map(comma_separated_list1(expr), PivotValues::ColumnValues),
     ))(i)
 }
 

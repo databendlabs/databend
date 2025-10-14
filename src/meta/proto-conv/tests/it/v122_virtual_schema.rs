@@ -170,6 +170,7 @@ fn test_decode_v122_table_meta() -> anyhow::Result<()> {
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
         row_access_policy: None,
+        row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
     };

@@ -57,9 +57,24 @@ echo "create or replace table db1.t(id1 int);" | $BENDSQL_CLIENT_CONNECT
 echo "create or replace database db2;" | $BENDSQL_CLIENT_CONNECT
 echo "create or replace table db2.t(id2 int);" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
-echo "create user a identified by 'password';" | $BENDSQL_CLIENT_CONNECT
+echo "create user a identified by '$TEST_USER_PASSWORD';" | $BENDSQL_CLIENT_CONNECT
 echo "grant select on db1.t to a;" | $BENDSQL_CLIENT_CONNECT
 
 echo "select database, table, name from system.columns where database in ('db1', 'db2') and table='t';" | $USER_A_CONNECT
 echo "drop database if exists db1; drop database if exists db2; drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
+
+echo "=== FIX: ISSUE 18797 ==="
+echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
+echo "drop database if exists sysdb;" | $BENDSQL_CLIENT_CONNECT
+echo "create user a identified by '$TEST_USER_PASSWORD' with default_role='role1';" | $BENDSQL_CLIENT_CONNECT
+echo "create role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role1 to a;" | $BENDSQL_CLIENT_CONNECT
+echo "create database sysdb;" | $BENDSQL_CLIENT_CONNECT
+echo "create table sysdb.sysdb_tt(id int);" | $BENDSQL_CLIENT_CONNECT
+echo "grant ownership on sysdb.* to role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant ownership on sysdb.sysdb_tt to role role1;" | $BENDSQL_CLIENT_CONNECT
+
+echo "select database, table from system.columns where table='sysdb_tt';" | $USER_A_CONNECT
+echo "drop table sysdb.sysdb_tt; drop database if exists sysdb; drop user if exists a; drop role if exists role1;" | $BENDSQL_CLIENT_CONNECT
 echo "======"

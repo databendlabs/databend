@@ -36,7 +36,6 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
-use databend_common_meta_api::reply::reply_to_api_result;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
@@ -70,7 +69,6 @@ use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use prost::Message;
 use semver::Version;
-use serde::de::DeserializeOwned;
 use tonic::codegen::BoxStream;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
@@ -86,7 +84,6 @@ use crate::endpoints::Endpoints;
 use crate::errors::CreationError;
 use crate::established_client::EstablishedClient;
 use crate::from_digit_ver;
-use crate::grpc_action::RequestFor;
 use crate::grpc_metrics;
 use crate::message;
 use crate::message::Response;
@@ -102,7 +99,6 @@ use crate::ClientWorkerRequest;
 use crate::FeatureSpec;
 use crate::MetaChannelManager;
 use crate::MetaGrpcReadReq;
-use crate::MetaGrpcReq;
 
 const RPC_RETRIES: usize = 4;
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
@@ -367,15 +363,6 @@ impl MetaGrpcClient {
                     .await;
                 Response::StreamMGet(strm)
             }
-            message::Request::Upsert(r) => {
-                let resp = self
-                    .kv_api(r)
-                    .with_timing(|result, total, busy| {
-                        log_future_result(result, total, busy, "MetaGrpcClient::kv_api", &req_str)
-                    })
-                    .await;
-                Response::Upsert(resp)
-            }
             message::Request::Txn(r) => {
                 let resp = self
                     .transaction(r)
@@ -453,7 +440,7 @@ impl MetaGrpcClient {
         resp_err: Option<&(dyn std::error::Error + 'static)>,
     ) {
         // TODO: this current endpoint is not stable, may be modified by other thread.
-        //       The caller should pasing the in use endpoint.
+        //       The caller should passing the in use endpoint.
         let current_endpoint = self.get_current_endpoint();
 
         let Some(endpoint) = current_endpoint else {
@@ -857,51 +844,6 @@ impl MetaGrpcClient {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    pub(crate) async fn kv_api<T>(&self, v: T) -> Result<T::Reply, MetaError>
-    where
-        T: RequestFor,
-        T: Into<MetaGrpcReq>,
-        T::Reply: DeserializeOwned,
-    {
-        let service_spec = features::KV_API;
-        let grpc_req: MetaGrpcReq = v.into();
-
-        debug!("{}::kv_api request: {:?}", self, grpc_req);
-
-        let raft_req: RaftRequest = grpc_req.clone().into();
-        let mut rpc_handler = RpcHandler::new(self, service_spec);
-
-        for _i in 0..RPC_RETRIES {
-            let req = traced_req(raft_req.clone());
-
-            let established = rpc_handler.new_established_client().await?;
-
-            let result = established
-                .kv_api(req)
-                .with_timing_threshold(threshold(), info_spent(service_spec.0))
-                .await;
-
-            let retryable = rpc_handler.process_response_result(&grpc_req, result)?;
-
-            let response = match retryable {
-                ResponseAction::Success(resp) => resp,
-                ResponseAction::ShouldRetry => {
-                    continue;
-                }
-            };
-
-            let raft_reply = response.into_inner();
-
-            let resp: T::Reply = reply_to_api_result(raft_reply)?;
-            return Ok(resp);
-        }
-
-        let net_err = rpc_handler.create_network_error();
-        Err(net_err.into())
-    }
-
-    #[fastrace::trace]
-    #[async_backtrace::framed]
     pub(crate) async fn kv_read_v1(
         &self,
         grpc_req: MetaGrpcReadReq,
@@ -946,7 +888,7 @@ impl MetaGrpcClient {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    pub(crate) async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+    pub(crate) async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaClientError> {
         let service_spec = features::TRANSACTION;
 
         debug!("{self}::transaction request: {txn}");

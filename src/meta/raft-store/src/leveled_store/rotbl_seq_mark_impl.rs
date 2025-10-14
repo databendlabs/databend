@@ -27,38 +27,24 @@ use rotbl::v001::SeqMarked;
 use state_machine_api::KVMeta;
 use state_machine_api::MetaValue;
 
-use crate::leveled_store::value_convert::ValueConvert;
+use crate::leveled_store::persisted_codec::PersistedCodec;
 
-impl ValueConvert<SeqMarked> for SeqMarked<MetaValue> {
-    fn conv_to(self) -> Result<SeqMarked, io::Error> {
+impl PersistedCodec<SeqMarked> for SeqMarked<MetaValue> {
+    fn encode_to(self) -> Result<SeqMarked, io::Error> {
         let (seq, data) = self.into_parts();
+
         let seq_marked = match data {
             Marked::TombStone => SeqMarked::new_tombstone(seq),
-            Marked::Normal((meta, value)) => {
-                let kv_meta_str = serde_json::to_string(&meta).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("fail to encode KVMeta to json: {}", e),
-                    )
-                })?;
+            Marked::Normal(meta_value) => {
+                let bytes = meta_value.encode_to()?;
 
-                // version, meta in json string, value
-                let packed = (1u8, kv_meta_str, value);
-
-                let d = bincode::encode_to_vec(packed, bincode_config()).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("fail to encode rotbl::SeqMarked value: {}", e),
-                    )
-                })?;
-
-                SeqMarked::new_normal(seq, d)
+                SeqMarked::new_normal(seq, bytes)
             }
         };
         Ok(seq_marked)
     }
 
-    fn conv_from(seq_marked: SeqMarked) -> Result<Self, io::Error> {
+    fn decode_from(seq_marked: SeqMarked) -> Result<Self, io::Error> {
         let (seq, data) = seq_marked.into_parts();
 
         let data = match data {
@@ -68,55 +54,23 @@ impl ValueConvert<SeqMarked> for SeqMarked<MetaValue> {
             Marked::Normal(bytes) => bytes,
         };
 
-        // version, meta, value
-        let ((ver, meta_str, value), size): ((u8, String, Vec<u8>), usize) =
-            bincode::decode_from_slice(&data, bincode_config()).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("fail to decode rotbl::SeqMarked value: {}", e),
-                )
-            })?;
+        let meta_value = PersistedCodec::decode_from(data)?;
 
-        if ver != 1 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("unsupported rotbl::SeqMarked version: {}", ver),
-            ));
-        }
-
-        if size != data.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "remaining bytes in rotbl::SeqMarked: has read: {}, total: {}",
-                    size,
-                    data.len()
-                ),
-            ));
-        }
-
-        let kv_meta: Option<KVMeta> = serde_json::from_str(&meta_str).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("fail to decode KVMeta from rotbl::SeqMarked: {}", e),
-            )
-        })?;
-
-        let marked = SeqMarked::new_normal(seq, (kv_meta, value));
+        let marked = SeqMarked::new_normal(seq, meta_value);
         Ok(marked)
     }
 }
 
 /// Conversion for ExpireValue
-impl ValueConvert<SeqMarked> for SeqMarked<String> {
-    fn conv_to(self) -> Result<SeqMarked, io::Error> {
+impl PersistedCodec<SeqMarked> for SeqMarked<String> {
+    fn encode_to(self) -> Result<SeqMarked, io::Error> {
         let marked = self.map(|s| (None::<KVMeta>, s.into_bytes()));
 
-        marked.conv_to()
+        marked.encode_to()
     }
 
-    fn conv_from(seq_marked: SeqMarked) -> Result<Self, io::Error> {
-        let marked = SeqMarked::<(Option<KVMeta>, Vec<u8>)>::conv_from(seq_marked)?;
+    fn decode_from(seq_marked: SeqMarked) -> Result<Self, io::Error> {
+        let marked = SeqMarked::<(Option<KVMeta>, Vec<u8>)>::decode_from(seq_marked)?;
         let marked = marked.try_map(|(_meta, value)| {
             String::from_utf8(value).map_err(|e| {
                 io::Error::new(
@@ -130,16 +84,10 @@ impl ValueConvert<SeqMarked> for SeqMarked<String> {
     }
 }
 
-fn bincode_config() -> impl bincode::config::Config {
-    bincode::config::standard()
-        .with_big_endian()
-        .with_variable_int_encoding()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::leveled_store::value_convert::ValueConvert;
+    use crate::leveled_store::persisted_codec::PersistedCodec;
 
     #[test]
     fn test_marked_of_string_try_from_seq_marked() -> io::Result<()> {
@@ -156,10 +104,10 @@ mod tests {
     }
 
     fn t_string_try_from(marked: SeqMarked<String>, seq_marked: SeqMarked) {
-        let got: SeqMarked = marked.clone().conv_to().unwrap();
+        let got: SeqMarked = marked.clone().encode_to().unwrap();
         assert_eq!(seq_marked, got);
 
-        let got = SeqMarked::<String>::conv_from(got).unwrap();
+        let got = SeqMarked::<String>::decode_from(got).unwrap();
         assert_eq!(marked, got);
     }
 
@@ -180,10 +128,10 @@ mod tests {
     }
 
     fn t_try_from(marked: SeqMarked<MetaValue>, seq_marked: SeqMarked) {
-        let got: SeqMarked = marked.clone().conv_to().unwrap();
+        let got: SeqMarked = marked.clone().encode_to().unwrap();
         assert_eq!(seq_marked, got);
 
-        let got = SeqMarked::conv_from(got).unwrap();
+        let got = SeqMarked::decode_from(got).unwrap();
         assert_eq!(marked, got);
     }
 
@@ -191,27 +139,27 @@ mod tests {
     fn test_invalid_seq_marked() {
         t_invalid(
             SeqMarked::new_normal(1, b("\x00\x10{\"expire_at\":20}\x05hello")),
-            "unsupported rotbl::SeqMarked version: 0",
+            "unsupported rotbl value version: 0",
         );
 
         t_invalid(
             SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":2x}\x05hello")),
-            "fail to decode KVMeta from rotbl::SeqMarked: expected `,` or `}` at line 1 column 15",
+            "fail to decode KVMeta from rotbl value: expected `,` or `}` at line 1 column 15",
         );
 
         t_invalid(
             SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":20}\x05h")),
-            "fail to decode rotbl::SeqMarked value: UnexpectedEnd { additional: 4 }",
+            "fail to decode rotbl value: UnexpectedEnd { additional: 4 }",
         );
 
         t_invalid(
             SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":20}\x05hello-")),
-            "remaining bytes in rotbl::SeqMarked: has read: 24, total: 25",
+            "remaining bytes in rotbl value: has read: 24, total: 25",
         );
     }
 
     fn t_invalid(seq_mark: SeqMarked, want_err: impl ToString) {
-        let res = SeqMarked::<(Option<KVMeta>, Vec<u8>)>::conv_from(seq_mark);
+        let res = SeqMarked::<(Option<KVMeta>, Vec<u8>)>::decode_from(seq_mark);
         let err = res.unwrap_err();
         assert_eq!(want_err.to_string(), err.to_string());
     }

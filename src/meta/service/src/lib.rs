@@ -16,9 +16,11 @@
 #![feature(coroutines)]
 #![allow(clippy::uninlined_format_args)]
 
+pub mod analysis;
 pub mod api;
 pub mod configs;
 pub mod message;
+pub mod meta_node;
 pub mod meta_service;
 pub mod metrics;
 pub mod network;

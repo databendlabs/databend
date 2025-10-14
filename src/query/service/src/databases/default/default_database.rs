@@ -32,11 +32,14 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::ListTableCopiedFileReply;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::SwapTableReply;
+use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -260,6 +263,12 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
+    async fn swap_table(&self, req: SwapTableReq) -> Result<SwapTableReply> {
+        let res = self.ctx.meta.swap_table(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
     async fn upsert_table_option(
         &self,
         req: UpsertTableOptionReq,
@@ -282,6 +291,12 @@ impl Database for DefaultDatabase {
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
         let res = self.ctx.meta.get_table_copied_file_info(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_table_copied_file_info(&self, table_id: u64) -> Result<ListTableCopiedFileReply> {
+        let res = self.ctx.meta.list_table_copied_file_info(table_id).await?;
         Ok(res)
     }
 

@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::Add;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
@@ -149,7 +150,7 @@ pub struct DataSchema {
     pub(crate) metadata: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum VariantDataType {
     Jsonb,
     Boolean,
@@ -158,6 +159,11 @@ pub enum VariantDataType {
     Float64,
     String,
     Array(Box<VariantDataType>),
+    Decimal(DecimalDataType),
+    Binary,
+    Date,
+    Timestamp,
+    Interval,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -223,6 +229,19 @@ impl VirtualDataSchema {
         self.fields.push(field);
         Ok(column_id)
     }
+
+    pub fn field_of_column_id(&self, column_id: ColumnId) -> Result<&VirtualDataField> {
+        for field in &self.fields {
+            if field.column_id == column_id {
+                return Ok(field);
+            }
+        }
+        let valid_column_ids = self.fields.iter().map(|f| f.column_id).collect::<Vec<_>>();
+        Err(ErrorCode::BadArguments(format!(
+            "Unable to get virtual column_id {}. Valid column_ids: {:?}",
+            column_id, valid_column_ids
+        )))
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, FrozenAPI)]
@@ -247,6 +266,27 @@ pub struct DataField {
     default_expr: Option<String>,
     data_type: DataType,
     computed_expr: Option<ComputedExpr>,
+    auto_increment_expr: Option<AutoIncrementExpr>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AutoIncrementExpr {
+    pub column_id: ColumnId,
+    pub start: u64,
+    pub step: i64,
+    // Ensure that the generated sequence values are distributed strictly in the order of insertion time
+    pub is_ordered: bool,
+}
+
+impl AutoIncrementExpr {
+    pub fn to_sql_string(&self) -> String {
+        let string = format!("AUTOINCREMENT ({}, {}) ", self.start, self.step);
+        if self.is_ordered {
+            string.add("ORDER")
+        } else {
+            string.add("NOORDER")
+        }
+    }
 }
 
 fn uninit_column_id() -> ColumnId {
@@ -271,6 +311,7 @@ pub struct TableField {
     #[serde(default = "uninit_column_id")]
     pub column_id: ColumnId,
     pub computed_expr: Option<ComputedExpr>,
+    pub auto_increment_expr: Option<AutoIncrementExpr>,
 }
 
 /// DataType with more information that is only available for table field, e.g, the
@@ -1074,6 +1115,7 @@ impl DataField {
             default_expr: None,
             data_type,
             computed_expr: None,
+            auto_increment_expr: None,
         }
     }
 
@@ -1083,6 +1125,7 @@ impl DataField {
             default_expr: None,
             data_type: data_type.wrap_nullable(),
             computed_expr: None,
+            auto_increment_expr: None,
         }
     }
 
@@ -1094,6 +1137,14 @@ impl DataField {
 
     pub fn with_computed_expr(mut self, computed_expr: Option<ComputedExpr>) -> Self {
         self.computed_expr = computed_expr;
+        self
+    }
+
+    pub fn with_auto_increment_expr(
+        mut self,
+        auto_increment_expr: Option<AutoIncrementExpr>,
+    ) -> Self {
+        self.auto_increment_expr = auto_increment_expr;
         self
     }
 
@@ -1111,6 +1162,10 @@ impl DataField {
 
     pub fn computed_expr(&self) -> Option<&ComputedExpr> {
         self.computed_expr.as_ref()
+    }
+
+    pub fn auto_increment_expr(&self) -> Option<&AutoIncrementExpr> {
+        self.auto_increment_expr.as_ref()
     }
 
     #[inline]
@@ -1132,6 +1187,7 @@ impl TableField {
             data_type,
             column_id: 0,
             computed_expr: None,
+            auto_increment_expr: None,
         }
     }
 
@@ -1142,6 +1198,7 @@ impl TableField {
             data_type,
             column_id,
             computed_expr: None,
+            auto_increment_expr: None,
         }
     }
 
@@ -1188,6 +1245,7 @@ impl TableField {
             data_type: self.data_type.clone(),
             column_id,
             computed_expr: self.computed_expr.clone(),
+            auto_increment_expr: self.auto_increment_expr.clone(),
         }
     }
 
@@ -1233,6 +1291,14 @@ impl TableField {
         self
     }
 
+    pub fn with_auto_increment_expr(
+        mut self,
+        auto_increment_expr: Option<AutoIncrementExpr>,
+    ) -> Self {
+        self.auto_increment_expr = auto_increment_expr;
+        self
+    }
+
     pub fn name(&self) -> &String {
         &self.name
     }
@@ -1247,6 +1313,10 @@ impl TableField {
 
     pub fn computed_expr(&self) -> Option<&ComputedExpr> {
         self.computed_expr.as_ref()
+    }
+
+    pub fn auto_increment_expr(&self) -> Option<&AutoIncrementExpr> {
+        self.auto_increment_expr.as_ref()
     }
 
     #[inline]
@@ -1547,6 +1617,7 @@ impl From<&TableField> for DataField {
         DataField::new(&name, DataType::from(&data_type))
             .with_default_expr(f.default_expr.clone())
             .with_computed_expr(f.computed_expr.clone())
+            .with_auto_increment_expr(f.auto_increment_expr.clone())
     }
 }
 
@@ -1570,6 +1641,7 @@ impl From<&DataField> for TableField {
         TableField::new(&name, ty)
             .with_default_expr(f.default_expr.clone())
             .with_computed_expr(f.computed_expr.clone())
+            .with_auto_increment_expr(f.auto_increment_expr.clone())
     }
 }
 
@@ -1642,7 +1714,8 @@ pub fn infer_table_schema(data_schema: &DataSchema) -> Result<TableSchemaRef> {
         fields.push(
             TableField::new(field.name(), field_type)
                 .with_default_expr(field.default_expr.clone())
-                .with_computed_expr(field.computed_expr.clone()),
+                .with_computed_expr(field.computed_expr.clone())
+                .with_auto_increment_expr(field.auto_increment_expr.clone()),
         );
     }
     Ok(TableSchemaRefExt::create(fields))

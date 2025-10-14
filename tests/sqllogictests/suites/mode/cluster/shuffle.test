@@ -66,9 +66,9 @@ Sort(Final)
             │                   ├── output columns: [number (#1)]
             │                   ├── read rows: 14
             │                   ├── read size: < 1 KiB
-            │                   ├── partitions total: 6
-            │                   ├── partitions scanned: 6
-            │                   ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 6 to 6>]
+            │                   ├── partitions total: 4
+            │                   ├── partitions scanned: 4
+            │                   ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 4 to 4>]
             │                   ├── push downs: [filters: [], limit: NONE]
             │                   └── estimated rows: 14.00
             └── Exchange(Probe)

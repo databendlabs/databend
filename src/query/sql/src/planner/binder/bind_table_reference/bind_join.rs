@@ -490,6 +490,9 @@ impl Binder {
                     | JoinType::Asof
                     | JoinType::LeftAsof
                     | JoinType::RightAsof
+                    | JoinType::InnerAny
+                    | JoinType::LeftAny
+                    | JoinType::RightAny
                     | JoinType::LeftSemi
                     | JoinType::LeftAnti
                     | JoinType::RightSemi
@@ -563,11 +566,7 @@ impl Binder {
         check_duplicate_join_tables(left_column_bindings, right_column_bindings)?;
 
         match join_op {
-            JoinOperator::LeftOuter
-            | JoinOperator::RightOuter
-            | JoinOperator::FullOuter
-            | JoinOperator::LeftAsof
-            | JoinOperator::RightAsof
+            JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter
                 if join_condition == &JoinCondition::None =>
             {
                 return Err(ErrorCode::SemanticError(
@@ -579,7 +578,9 @@ impl Binder {
                     "cross join should not contain join conditions".to_string(),
                 ));
             }
-            JoinOperator::Asof if join_condition == &JoinCondition::None => {
+            JoinOperator::Asof | JoinOperator::LeftAsof | JoinOperator::RightAsof
+                if join_condition == &JoinCondition::None =>
+            {
                 return Err(ErrorCode::SemanticError(
                     "asof join should contain join conditions".to_string(),
                 ));
@@ -1030,6 +1031,9 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
         JoinOperator::Asof => JoinType::Asof,
         JoinOperator::LeftAsof => JoinType::LeftAsof,
         JoinOperator::RightAsof => JoinType::RightAsof,
+        JoinOperator::LeftAny => JoinType::LeftAny,
+        JoinOperator::RightAny => JoinType::RightAny,
+        JoinOperator::InnerAny => JoinType::InnerAny,
     }
 }
 

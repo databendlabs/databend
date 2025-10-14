@@ -805,6 +805,16 @@ impl TableContext for QueryContext {
         self.shared.enable_sort_spill.load(Ordering::Acquire)
     }
 
+    fn get_enable_auto_analyze(&self) -> bool {
+        self.shared.enable_auto_analyze.load(Ordering::Acquire)
+    }
+
+    fn set_enable_auto_analyze(&self, enable: bool) {
+        self.shared
+            .enable_auto_analyze
+            .store(enable, Ordering::Release);
+    }
+
     fn set_enable_sort_spill(&self, enable: bool) {
         self.shared
             .enable_sort_spill

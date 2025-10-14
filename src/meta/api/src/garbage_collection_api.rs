@@ -21,11 +21,13 @@ use databend_common_base::vec_ext::VecExt;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CleanDbIdTableNamesFailed;
 use databend_common_meta_app::app_error::MarkDatabaseMetaAsGCInProgressFailed;
+use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -127,7 +129,7 @@ async fn remove_copied_files_for_dropped_table(
     // Loop until:
     // - all cleaned
     // - or table is removed from meta-service
-    // - or is no longer in `droppped` state.
+    // - or is no longer in `dropped` state.
     for i in 0..usize::MAX {
         let mut txn = TxnRequest::default();
 
@@ -209,34 +211,26 @@ pub async fn get_history_tables_for_gc(
 
     let mut args = vec![];
 
-    // For table ids of each table with the same name, we keep the largest one, e.g.
+    // For table ids of each table with the same name, we keep the last one, e.g.
     // ```
-    //  create or replace table t ... ; -- table_id 1
-    //  create or replace table t ... ; -- table_id 2
+    //  create or replace table t ... ; -- table_id a
+    //  create or replace table t ... ; -- table_id b
     // ```
-    // table_id 2 will be kept for table t (we do not care about the table name though),
+    // table_id `b` will be kept for table t,
     //
-    // Please note that the largest table id might be "invisible", e.g.
+    // Please note that the largest table id might be dropped, e.g.
     // ```
     //  create or replace table t ... ; -- table_id 1
-    //  create or replace table t ... ; -- table_id 2
+    //  ...
     //  drop table t ... ;
     // ```
-    // In this case, table_id 2 is marked as dropped.
 
     let mut latest_table_ids = HashSet::with_capacity(table_history_kvs.len());
 
     for (ident, table_history) in table_history_kvs {
         let id_list = &table_history.id_list;
-        if !id_list.is_empty() {
-            // Make sure that the last table id is also the max one (of each table name).
-            let last_id = id_list.last().unwrap();
-            {
-                let max_id = id_list.iter().max().unwrap();
-                assert_eq!(max_id, last_id);
-            }
+        if let Some(last_id) = id_list.last() {
             latest_table_ids.insert(*last_id);
-
             for table_id in id_list.iter() {
                 args.push((TableId::new(*table_id), ident.table_name.clone()));
             }
@@ -681,6 +675,20 @@ async fn remove_data_for_dropped_table(
         txn_delete_exact(txn, &id_to_name, seq_name.seq);
     }
 
+    // Remove table auto increment sequences
+    {
+        // clear the sequence associated with auto increment in the table field
+        let auto_increment_key = AutoIncrementKey::new(table_id.table_id, 0);
+        let dir_name = DirName::new(AutoIncrementStorageIdent::new_generic(
+            tenant,
+            auto_increment_key,
+        ));
+        let mut auto_increments = kv_api.list_pb_keys(&dir_name).await?;
+
+        while let Some(auto_increment_ident) = auto_increments.try_next().await? {
+            txn.if_then.push(txn_op_del(&auto_increment_ident));
+        }
+    }
     // Remove table ownership
     {
         let table_ownership = OwnershipObject::Table {
