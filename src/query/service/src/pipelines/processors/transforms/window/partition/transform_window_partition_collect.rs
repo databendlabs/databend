@@ -93,10 +93,10 @@ impl WindowBuffer {
         }
     }
 
-    fn add_data_block(&mut self, partition_id: usize, data_block: DataBlock) {
+    fn add_data_block(&mut self, index: usize, data_block: DataBlock) {
         match self {
-            WindowBuffer::V1(inner) => inner.add_data_block(partition_id, data_block),
-            WindowBuffer::V2(inner) => inner.add_data_block(partition_id, data_block),
+            WindowBuffer::V1(inner) => inner.add_data_block(index, data_block),
+            WindowBuffer::V2(inner) => inner.add_data_block(index, data_block),
         }
     }
 
@@ -142,7 +142,7 @@ pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
     output_data_blocks: VecDeque<DataBlock>,
 
     // The partition id is used to map the partition id to the new partition id.
-    partition_id: Vec<usize>,
+    index_map: Vec<usize>,
     // The buffer is used to control the memory usage of the window operator.
     buffer: WindowBuffer,
 
@@ -173,10 +173,10 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
             .filter(|&partition| partition % num_processors == processor_id)
             .collect();
 
-        // Map each partition id to new partition id.
-        let mut partition_id = vec![0; num_partitions];
-        for (new_partition_id, partition) in partitions.iter().enumerate() {
-            partition_id[*partition] = new_partition_id;
+        // Map each partition id to new partition index.
+        let mut index_map = vec![0; num_partitions];
+        for (index, partition) in partitions.iter().enumerate() {
+            index_map[*partition] = index;
         }
 
         let location_prefix = ctx.query_id_spill_prefix();
@@ -211,7 +211,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
         Ok(Self {
             input,
             output,
-            partition_id,
+            index_map,
             buffer,
             strategy,
             is_collect_finished: false,
@@ -249,7 +249,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
         if self.input.has_data() {
             Self::collect_data_block(
                 self.input.pull_data().unwrap()?,
-                &self.partition_id,
+                &self.index_map,
                 &mut self.buffer,
             );
         }
@@ -306,27 +306,25 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
     fn event(&mut self) -> Result<Event> {
         // (collect <--> spill) -> (process <--> restore) -> finish
         match self.step {
-            Step::Sync(sync_step) => match sync_step {
-                SyncStep::Collect => self.collect(),
-                SyncStep::Process => self.output(),
-            },
-            Step::Async(async_step) => match async_step {
-                AsyncStep::Spill => match self.is_collect_finished {
-                    true => {
-                        self.step = Step::Sync(SyncStep::Process);
-                        self.output()
-                    }
-                    false => {
-                        // collect data again.
-                        self.step = Step::Sync(SyncStep::Collect);
-                        self.collect()
-                    }
-                },
-                AsyncStep::Restore => match self.restored_data_blocks.is_empty() {
-                    true => self.next_step(Step::Finish),
-                    false => self.next_step(Step::Sync(SyncStep::Process)),
-                },
-            },
+            Step::Sync(SyncStep::Collect) => self.collect(),
+            Step::Async(AsyncStep::Spill) => {
+                if self.is_collect_finished {
+                    self.step = Step::Sync(SyncStep::Process);
+                    self.output()
+                } else {
+                    // collect data again.
+                    self.step = Step::Sync(SyncStep::Collect);
+                    self.collect()
+                }
+            }
+            Step::Sync(SyncStep::Process) => self.output(),
+            Step::Async(AsyncStep::Restore) => {
+                if self.restored_data_blocks.is_empty() {
+                    self.next_step(Step::Finish)
+                } else {
+                    self.next_step(Step::Sync(SyncStep::Process))
+                }
+            }
             Step::Finish => Ok(Event::Finished),
         }
     }
@@ -357,18 +355,13 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
 }
 
 impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
-    fn collect_data_block(
-        data_block: DataBlock,
-        partition_ids: &[usize],
-        buffer: &mut WindowBuffer,
-    ) {
+    fn collect_data_block(data_block: DataBlock, index_map: &[usize], buffer: &mut WindowBuffer) {
         if let Some(meta) = data_block
             .get_owned_meta()
             .and_then(WindowPartitionMeta::downcast_from)
         {
-            for (partition_id, data_block) in meta.partitioned_data.into_iter() {
-                let partition_id = partition_ids[partition_id];
-                buffer.add_data_block(partition_id, data_block);
+            for (id, data_block) in meta.partitioned_data {
+                buffer.add_data_block(index_map[id], data_block);
             }
         }
     }

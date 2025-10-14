@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::spawn_blocking;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -32,7 +34,7 @@ pub trait Reader: Send {
 }
 
 #[async_trait::async_trait]
-pub trait Writer: Send {
+pub trait Writer: Send + 'static {
     type R: Reader;
 
     fn need_new_file(&mut self, incoming_size: usize) -> Result<bool>;
@@ -137,15 +139,7 @@ where F: WriterFactory
         self.buffered_blocks.push(block);
     }
 
-    fn memory_size(&self) -> usize {
-        self.buffered_size
-    }
-
-    fn is_empty(&self) -> bool {
-        self.buffered_blocks.is_empty()
-    }
-
-    fn fetch_blocks(&mut self, threshold: Option<usize>) -> Option<Vec<DataBlock>> {
+    fn take_blocks(&mut self, threshold: Option<usize>) -> Option<Vec<DataBlock>> {
         if self.buffered_size >= threshold.unwrap_or_default() {
             self.buffered_size = 0;
             Some(std::mem::take(&mut self.buffered_blocks))
@@ -167,27 +161,32 @@ where F: WriterFactory
         match &mut self.state {
             PartitionSpillState::Empty => {
                 const FILE_SIZE: usize = 10 * 1024 * 1024;
-                let mut writer = factory.open(Some(FILE_SIZE)).await?;
-                let ordinal = writer.add_row_group_encoded(encoder)?;
+                let writer = factory.open(Some(FILE_SIZE)).await?;
+                let (ordinal, writer) = add_row_group_encoded(writer, encoder).await?;
                 self.state = PartitionSpillState::Writing {
                     writer,
                     row_groups: vec![ordinal],
                 };
                 Ok(())
             }
-            PartitionSpillState::Writing { writer, row_groups } => {
+            PartitionSpillState::Writing { writer, .. } => {
                 if !writer.need_new_file(encoder.memory_size())? {
-                    let ordinal = writer.add_row_group_encoded(encoder)?;
+                    let PartitionSpillState::Writing {
+                        writer,
+                        mut row_groups,
+                    } = std::mem::replace(&mut self.state, PartitionSpillState::Empty)
+                    else {
+                        unreachable!()
+                    };
+
+                    let (ordinal, writer) = add_row_group_encoded(writer, encoder).await?;
                     row_groups.push(ordinal);
 
                     if ordinal >= SpillWriter::MAX_ORDINAL {
-                        let PartitionSpillState::Writing { writer, row_groups } =
-                            std::mem::replace(&mut self.state, PartitionSpillState::Empty)
-                        else {
-                            unreachable!()
-                        };
-                        let reader = writer.close()?;
+                        let reader = close_writer(writer).await?;
                         self.readers.push((reader, row_groups));
+                    } else {
+                        self.state = PartitionSpillState::Writing { writer, row_groups };
                     }
 
                     return Ok(());
@@ -198,11 +197,11 @@ where F: WriterFactory
                 else {
                     unreachable!()
                 };
-                let reader = writer.close()?;
+                let reader = close_writer(writer).await?;
                 self.readers.push((reader, row_groups));
 
-                let mut writer = factory.open(None).await?;
-                let ordinal = writer.add_row_group_encoded(encoder)?;
+                let writer = factory.open(None).await?;
+                let (ordinal, writer) = add_row_group_encoded(writer, encoder).await?;
                 self.state = PartitionSpillState::Writing {
                     writer,
                     row_groups: vec![ordinal],
@@ -213,14 +212,32 @@ where F: WriterFactory
         }
     }
 
-    fn take_readers(&mut self) -> Result<Vec<(FactoryReader<F>, Vec<usize>)>> {
+    async fn take_readers(&mut self) -> Result<Vec<(FactoryReader<F>, Vec<usize>)>> {
         if let PartitionSpillState::Writing { writer, row_groups } =
             std::mem::replace(&mut self.state, PartitionSpillState::Reading)
         {
-            self.readers.push((writer.close()?, row_groups));
+            let reader = close_writer(writer).await?;
+            self.readers.push((reader, row_groups));
         }
         Ok(std::mem::take(&mut self.readers))
     }
+}
+
+async fn close_writer<W: Writer>(writer: W) -> Result<W::R> {
+    spawn_blocking(move || writer.close())
+        .await
+        .map_err(|e| ErrorCode::Internal(format!("task failed: {e}")))?
+}
+
+async fn add_row_group_encoded<W: Writer>(
+    mut writer: W,
+    row_group: RowGroupEncoder,
+) -> Result<(usize, W)> {
+    let (ordinal, writer) =
+        spawn_blocking(move || (writer.add_row_group_encoded(row_group), writer))
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("task failed: {e}")))?;
+    Ok((ordinal?, writer))
 }
 
 pub(super) type WindowPartitionBufferV2 = PartitionBuffer<WriterCreator>;
@@ -233,10 +250,9 @@ where F: WriterFactory
     partitions: Vec<PartitionSlot<F>>,
     memory_settings: MemorySettings,
     min_row_group_size: usize,
-    num_partitions: usize,
     sort_block_size: usize,
     can_spill: bool,
-    next_to_restore_partition_id: isize,
+    next_to_restore: usize,
 }
 
 impl<F> PartitionBuffer<F>
@@ -257,10 +273,9 @@ where F: WriterFactory
             partitions,
             memory_settings,
             min_row_group_size: 10 * 1024 * 1024,
-            num_partitions,
             sort_block_size,
             can_spill: false,
-            next_to_restore_partition_id: -1,
+            next_to_restore: 0,
         })
     }
 
@@ -269,10 +284,10 @@ where F: WriterFactory
     }
 
     pub fn is_empty(&self) -> bool {
-        self.next_to_restore_partition_id + 1 >= self.num_partitions as isize
+        self.next_to_restore >= self.partitions.len()
     }
 
-    pub fn add_data_block(&mut self, partition_id: usize, data_block: DataBlock) {
+    pub fn add_data_block(&mut self, index: usize, data_block: DataBlock) {
         if data_block.is_empty() {
             return;
         }
@@ -282,45 +297,42 @@ where F: WriterFactory
             self.factory = Some(facroty)
         }
 
-        let partition = &mut self.partitions[partition_id];
+        let partition = &mut self.partitions[index];
         partition.add_block(data_block);
-        if !self.can_spill && partition.memory_size() >= self.min_row_group_size {
+        if !self.can_spill && partition.buffered_size >= self.min_row_group_size {
             self.can_spill = true;
         }
     }
 
     pub async fn spill(&mut self) -> Result<()> {
         let spill_unit_size = self.memory_settings.spill_unit_size;
-        let next_to_restore_partition_id = (self.next_to_restore_partition_id + 1) as usize;
 
-        let mut preferred_partition: Option<(usize, usize)> = None;
-        for partition_id in (next_to_restore_partition_id..self.num_partitions).rev() {
-            let partition = &mut self.partitions[partition_id];
-            if partition.is_empty() {
+        let mut preferred_partition = None;
+        for partition in self.partitions[self.next_to_restore..].iter_mut().rev() {
+            if partition.buffered_blocks.is_empty() {
                 continue;
             }
-            if let Some(blocks) = partition.fetch_blocks(Some(spill_unit_size)) {
+            if let Some(blocks) = partition.take_blocks(Some(spill_unit_size)) {
                 partition
                     .spill_blocks(self.factory.as_mut().unwrap(), blocks)
                     .await?;
                 return Ok(());
             }
 
-            let partition_size = partition.memory_size();
+            let partition_size = partition.buffered_size;
             if preferred_partition
                 .as_ref()
                 .map(|(_, size)| partition_size > *size)
                 .unwrap_or(true)
             {
-                preferred_partition = Some((partition_id, partition_size));
+                preferred_partition = Some((partition, partition_size));
             }
         }
 
-        if let Some((partition_id, size)) = preferred_partition
+        if let Some((partition, size)) = preferred_partition
             && size >= self.min_row_group_size
         {
-            let partition = &mut self.partitions[partition_id];
-            let blocks = partition.fetch_blocks(None).unwrap();
+            let blocks = partition.take_blocks(None).unwrap();
             partition
                 .spill_blocks(self.factory.as_mut().unwrap(), blocks)
                 .await?;
@@ -331,19 +343,17 @@ where F: WriterFactory
     }
 
     pub async fn restore(&mut self) -> Result<Vec<DataBlock>> {
-        while self.next_to_restore_partition_id + 1 < self.num_partitions as isize {
-            self.next_to_restore_partition_id += 1;
-            let partition_id = self.next_to_restore_partition_id as usize;
-            let partition = &mut self.partitions[partition_id];
+        for partition in &mut self.partitions[self.next_to_restore..] {
+            self.next_to_restore += 1;
 
             let mut result = Vec::new();
-            for (mut reader, row_groups) in partition.take_readers()? {
+            for (mut reader, row_groups) in partition.take_readers().await? {
                 debug_assert!(!row_groups.is_empty());
-                let mut blocks = reader.restore(row_groups).await?;
-                result.append(&mut blocks);
+                let blocks = reader.restore(row_groups).await?;
+                result.extend(blocks);
             }
 
-            if let Some(blocks) = partition.fetch_blocks(None) {
+            if let Some(blocks) = partition.take_blocks(None) {
                 result.extend(concat_data_blocks(blocks, self.sort_block_size)?);
             }
 
@@ -351,7 +361,6 @@ where F: WriterFactory
                 return Ok(result);
             }
         }
-
         Ok(vec![])
     }
 }

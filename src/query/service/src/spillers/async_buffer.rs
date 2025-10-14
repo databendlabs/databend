@@ -94,12 +94,9 @@ impl BufferPool {
         let memory = memory / CHUNK_SIZE * CHUNK_SIZE;
 
         for _ in 0..memory / CHUNK_SIZE {
-            if buffers_tx
+            buffers_tx
                 .try_send(BytesMut::with_capacity(CHUNK_SIZE))
-                .is_err()
-            {
-                panic!("Buffer pool available_write_buffers need unbounded.")
-            }
+                .expect("Buffer pool available_write_buffers need unbounded.");
         }
 
         for _ in 0..workers {
@@ -135,23 +132,15 @@ impl BufferPool {
     }
 
     pub fn write(&self, op: BufferWriteOperator) {
-        if self
-            .working_queue
+        self.working_queue
             .try_send(BufferOperator::Write(op))
-            .is_err()
-        {
-            unreachable!("Buffer pool working queue need unbounded.");
-        }
+            .expect("Buffer pool working queue need unbounded.")
     }
 
     pub fn close(&self, op: BufferCloseOperator) {
-        if self
-            .working_queue
+        self.working_queue
             .try_send(BufferOperator::Close(op))
-            .is_err()
-        {
-            unreachable!("Buffer pool working queue need unbounded.");
-        }
+            .expect("Buffer pool working queue need unbounded.")
     }
 
     pub fn buffer_write(self: &Arc<BufferPool>, writer: Writer) -> BufferWriter {
@@ -159,9 +148,9 @@ impl BufferPool {
     }
 
     pub fn release_buffer(&self, buffer: BytesMut) {
-        if self.available_write_buffers_tx.try_send(buffer).is_err() {
-            unreachable!("Buffer pool available_write_buffers need unbounded.");
-        }
+        self.available_write_buffers_tx
+            .try_send(buffer)
+            .expect("Buffer pool available_write_buffers need unbounded.")
     }
 }
 
@@ -326,10 +315,8 @@ impl io::Write for BufferWriter {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        if matches!(&self.current_bytes, Some(current_bytes) if !current_bytes.is_empty()) {
-            if let Some(current_bytes) = self.current_bytes.take() {
-                self.pending_buffers.push_back(current_bytes.freeze());
-            }
+        if let Some(current_bytes) = self.current_bytes.take_if(|bytes| !bytes.is_empty()) {
+            self.pending_buffers.push_back(current_bytes.freeze());
         }
 
         if !self.pending_buffers.is_empty() {
