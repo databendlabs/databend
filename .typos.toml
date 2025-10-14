@@ -16,6 +16,9 @@ aranges = "aranges"
 
 [default.extend-identifiers]
 
+## External
+WRONLY = "WRONLY"
+
 # Wrong cases
 Tke = "Tke"
 ba = "ba"
@@ -25,10 +28,6 @@ diff_dows = "diff_dows"
 between_dows = "between_dows"
 
 into_flate2 = "into_flate2"
-
-[default.extend-identifiers]
-## External
-WRONLY = "WRONLY"
 
 [files]
 extend-exclude = [
