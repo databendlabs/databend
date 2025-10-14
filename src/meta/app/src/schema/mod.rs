@@ -47,6 +47,8 @@ pub mod sequence_storage;
 mod table;
 pub mod table_lock_ident;
 pub mod table_niv;
+mod vacuum_watermark;
+pub mod vacuum_watermark_ident;
 
 pub use auto_increment::GetAutoIncrementNextValueReply;
 pub use auto_increment::GetAutoIncrementNextValueReq;
@@ -155,3 +157,5 @@ pub use table::UpsertTableCopiedFileReq;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
 pub use table_lock_ident::TableLockIdent;
+pub use vacuum_watermark::VacuumWatermark;
+pub use vacuum_watermark_ident::VacuumWatermarkIdent;
