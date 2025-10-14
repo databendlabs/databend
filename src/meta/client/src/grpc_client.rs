@@ -336,46 +336,17 @@ impl MetaGrpcClient {
             message::Request::StreamMGet(r) => {
                 let strm = self
                     .kv_read_v1(MetaGrpcReadReq::MGetKV(r.into_inner()))
-                    .with_timing(|result, total, busy| {
-                        log_future_result(
-                            result,
-                            total,
-                            busy,
-                            "MetaGrpcClient::kv_read_v1(MGetKV)",
-                            &req_str,
-                        )
-                    })
                     .await;
                 Response::StreamMGet(strm)
             }
             message::Request::StreamList(r) => {
                 let strm = self
                     .kv_read_v1(MetaGrpcReadReq::ListKV(r.into_inner()))
-                    .with_timing(|result, total, busy| {
-                        log_future_result(
-                            result,
-                            total,
-                            busy,
-                            "MetaGrpcClient::kv_read_v1(ListKV)",
-                            &req_str,
-                        )
-                    })
                     .await;
                 Response::StreamMGet(strm)
             }
             message::Request::Txn(r) => {
-                let resp = self
-                    .transaction(r)
-                    .with_timing(|result, total, busy| {
-                        log_future_result(
-                            result,
-                            total,
-                            busy,
-                            "MetaGrpcClient::transaction",
-                            &req_str,
-                        )
-                    })
-                    .await;
+                let resp = self.transaction(r).await;
                 Response::Txn(resp)
             }
             message::Request::Watch(r) => {
@@ -986,34 +957,6 @@ where T: Debug {
         info!(
             "{} spent: total: {:?}, busy: {:?}; result: {:?}",
             msg, total, busy, output
-        );
-    }
-}
-
-fn log_future_result<T, E>(
-    t: &Result<T, E>,
-    total: Duration,
-    busy: Duration,
-    req_type: impl Display,
-    req_str: impl Display,
-) where
-    E: Debug,
-{
-    if let Err(e) = t {
-        warn!(
-            "{req_type}: done with error: Elapsed: total: {:?}, busy: {:?}; error: {:?}; request: {}",
-            total,
-            busy,
-            e,
-            req_str
-
-        );
-    }
-
-    if total > threshold() {
-        warn!(
-            "{req_type}: done slowly: Elapsed: total: {:?}, busy: {:?}; request: {}",
-            total, busy, req_str
         );
     }
 }
