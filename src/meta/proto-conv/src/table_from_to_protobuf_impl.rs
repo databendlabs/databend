@@ -24,7 +24,7 @@ use chrono::Utc;
 use databend_common_expression as ex;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::schema::RowAccessPolicyColumnMap;
+use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app_types::non_empty::NonEmptyString;
@@ -243,8 +243,18 @@ impl FromToProto for mt::TableMeta {
             },
             row_access_policy: p.row_access_policy,
             row_access_policy_columns_ids: match p.row_access_policy_columns_ids {
-                Some(r) => Some(RowAccessPolicyColumnMap::from_pb(r)?),
+                Some(r) => Some(SecurityPolicyColumnMap::from_pb(r)?),
                 None => None,
+            },
+            column_mask_policy_columns_ids: if p.column_mask_policy_columns_ids.is_empty() {
+                None
+            } else {
+                let policies_map = p
+                    .column_mask_policy_columns_ids
+                    .into_iter()
+                    .map(|(k, v)| Ok((k, SecurityPolicyColumnMap::from_pb(v)?)))
+                    .collect::<Result<BTreeMap<_, _>, _>>()?;
+                Some(policies_map)
             },
             indexes,
             virtual_schema,
@@ -298,6 +308,13 @@ impl FromToProto for mt::TableMeta {
                 Some(r) => Some(r.to_pb()?),
                 None => None,
             },
+            column_mask_policy_columns_ids: match &self.column_mask_policy_columns_ids {
+                Some(policies_map) => policies_map
+                    .iter()
+                    .map(|(k, v)| Ok((*k, v.to_pb()?)))
+                    .collect::<Result<BTreeMap<_, _>, _>>()?,
+                None => BTreeMap::new(),
+            },
             indexes,
             virtual_schema: self
                 .virtual_schema
@@ -310,7 +327,7 @@ impl FromToProto for mt::TableMeta {
     }
 }
 
-impl FromToProto for mt::RowAccessPolicyColumnMap {
+impl FromToProto for SecurityPolicyColumnMap {
     type PB = pb::RowAccessPolicyColumnMap;
 
     fn get_pb_ver(p: &Self::PB) -> u64 {

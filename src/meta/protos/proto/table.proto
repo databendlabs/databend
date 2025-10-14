@@ -140,6 +140,7 @@ message TableMeta {
 
   map<string, Constraint> constraints = 34;
   optional RowAccessPolicyColumnMap row_access_policy_columns_ids = 35;
+  map<uint32, RowAccessPolicyColumnMap> column_mask_policy_columns_ids = 36;
 }
 
 message RowAccessPolicyColumnMap {

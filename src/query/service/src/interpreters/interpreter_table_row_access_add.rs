@@ -21,7 +21,7 @@ use databend_common_expression::TableDataType;
 use databend_common_license::license::Feature::RowAccessPolicy;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
+use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_sql::plans::AddTableRowAccessPolicyPlan;
 use databend_common_sql::resolve_type_name_by_str;
@@ -148,7 +148,7 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
         let req = SetTableRowAccessPolicyReq {
             tenant: self.ctx.get_tenant(),
             table_id,
-            action: SetTableRowAccessPolicyAction::Set(*policy_id.data, columns_ids),
+            action: SetSecurityPolicyAction::Set(*policy_id.data, columns_ids),
         };
 
         let _resp = catalog.set_table_row_access_policy(req).await?;

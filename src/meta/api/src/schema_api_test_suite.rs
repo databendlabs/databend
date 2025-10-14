@@ -40,8 +40,8 @@ use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskIdIdent;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
-use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
-use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
+use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
@@ -110,10 +110,10 @@ use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::SequenceIdent;
-use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
+use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
@@ -3090,6 +3090,8 @@ impl SchemaApiTestSuite {
         }
 
         info!("--- create mask policy");
+        let mask1_id;
+        let mask2_id;
         {
             let req = CreateDatamaskReq {
                 create_option: CreateOption::CreateIfNotExists,
@@ -3105,6 +3107,9 @@ impl SchemaApiTestSuite {
             };
             mt.create_data_mask(req).await?;
 
+            let mask1_name_ident = DataMaskNameIdent::new(tenant.clone(), mask_name_1.to_string());
+            mask1_id = get_kv_u64_data(mt, &mask1_name_ident).await?;
+
             let req = CreateDatamaskReq {
                 create_option: CreateOption::CreateIfNotExists,
                 name: DataMaskNameIdent::new(tenant.clone(), mask_name_2.to_string()),
@@ -3118,6 +3123,9 @@ impl SchemaApiTestSuite {
                 },
             };
             mt.create_data_mask(req).await?;
+
+            let mask2_name_ident = DataMaskNameIdent::new(tenant.clone(), mask_name_2.to_string());
+            mask2_id = get_kv_u64_data(mt, &mask2_name_ident).await?;
         }
 
         let table_id_1;
@@ -3134,12 +3142,20 @@ impl SchemaApiTestSuite {
             let table_id = res.ident.table_id;
             table_id_1 = table_id;
 
+            let column_id = res
+                .meta
+                .schema
+                .fields
+                .iter()
+                .find(|f| f.name == "number")
+                .unwrap()
+                .column_id;
             let req = SetTableColumnMaskPolicyReq {
                 tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 column: "number".to_string(),
-                action: SetTableColumnMaskPolicyAction::Set(mask_name_1.to_string(), None),
+                action: SetSecurityPolicyAction::Set(mask1_id, vec![column_id]),
             };
             mt.set_table_column_mask_policy(req).await?;
             // check table meta
@@ -3153,13 +3169,27 @@ impl SchemaApiTestSuite {
             let res = mt.get_table(req).await?;
             let mut expect_column_mask_policy = BTreeMap::new();
             expect_column_mask_policy.insert("number".to_string(), mask_name_1.to_string());
-            assert_eq!(res.meta.column_mask_policy, Some(expect_column_mask_policy));
-            // check mask policy id list
-            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_1);
-            let id_list: MaskpolicyTableIdList = get_kv_data(mt, &id_list_key).await?;
-            let mut expect_id_list = BTreeSet::new();
-            expect_id_list.insert(table_id);
-            assert_eq!(id_list.id_list, expect_id_list);
+            assert_eq!(
+                res.meta.column_mask_policy_columns_ids,
+                Some({
+                    let mut map = BTreeMap::new();
+                    map.insert(0, SecurityPolicyColumnMap {
+                        policy_id: mask1_id,
+                        columns_ids: vec![0],
+                    });
+                    map
+                })
+            );
+            // check mask policy id table id ref
+            let tenant = Tenant::new_literal("tenant1");
+            let mid = MaskPolicyIdTableId {
+                policy_id: mask1_id,
+                table_id: table_id_1,
+            };
+            let ident = MaskPolicyTableIdIdent::new_generic(tenant.clone(), mid);
+            let res = mt.get_pb(&ident).await?;
+
+            assert!(res.is_some());
         }
 
         let table_id_2;
@@ -3176,12 +3206,20 @@ impl SchemaApiTestSuite {
             let table_id = res.ident.table_id;
             table_id_2 = table_id;
 
+            let column_id = res
+                .meta
+                .schema
+                .fields
+                .iter()
+                .find(|f| f.name == "number")
+                .unwrap()
+                .column_id;
             let req = SetTableColumnMaskPolicyReq {
                 tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
                 column: "number".to_string(),
-                action: SetTableColumnMaskPolicyAction::Set(mask_name_1.to_string(), None),
+                action: SetSecurityPolicyAction::Set(mask1_id, vec![column_id]),
             };
             mt.set_table_column_mask_policy(req).await?;
             // check table meta
@@ -3195,14 +3233,27 @@ impl SchemaApiTestSuite {
             let res = mt.get_table(req).await?;
             let mut expect_column_mask_policy = BTreeMap::new();
             expect_column_mask_policy.insert("number".to_string(), mask_name_1.to_string());
-            assert_eq!(res.meta.column_mask_policy, Some(expect_column_mask_policy));
-            // check mask policy id list
-            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_1);
-            let id_list: MaskpolicyTableIdList = get_kv_data(mt, &id_list_key).await?;
-            let mut expect_id_list = BTreeSet::new();
-            expect_id_list.insert(table_id);
-            expect_id_list.insert(table_id_1);
-            assert_eq!(id_list.id_list, expect_id_list);
+            assert_eq!(
+                res.meta.column_mask_policy_columns_ids,
+                Some({
+                    let mut map = BTreeMap::new();
+                    map.insert(0, SecurityPolicyColumnMap {
+                        policy_id: mask1_id,
+                        columns_ids: vec![0],
+                    });
+                    map
+                })
+            );
+            // check mask policy id table id ref
+            let tenant = Tenant::new_literal("tenant1");
+            let mid = MaskPolicyIdTableId {
+                policy_id: mask1_id,
+                table_id: table_id_2,
+            };
+            let ident = MaskPolicyTableIdIdent::new_generic(tenant.clone(), mid);
+            let res = mt.get_pb(&ident).await?;
+
+            assert!(res.is_some());
         }
 
         info!("--- apply mask2 policy to table 1 and check");
@@ -3216,15 +3267,20 @@ impl SchemaApiTestSuite {
             };
             let res = mt.get_table(req).await?;
 
+            let column_id = res
+                .meta
+                .schema
+                .fields
+                .iter()
+                .find(|f| f.name == "number")
+                .unwrap()
+                .column_id;
             let req = SetTableColumnMaskPolicyReq {
                 tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
                 column: "number".to_string(),
-                action: SetTableColumnMaskPolicyAction::Set(
-                    mask_name_2.to_string(),
-                    Some(mask_name_1.to_string()),
-                ),
+                action: SetSecurityPolicyAction::Set(mask2_id, vec![column_id]),
             };
             mt.set_table_column_mask_policy(req).await?;
             // check table meta
@@ -3238,19 +3294,28 @@ impl SchemaApiTestSuite {
             let res = mt.get_table(req).await?;
             let mut expect_column_mask_policy = BTreeMap::new();
             expect_column_mask_policy.insert("number".to_string(), mask_name_2.to_string());
-            assert_eq!(res.meta.column_mask_policy, Some(expect_column_mask_policy));
-            // check mask policy id list
-            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_1);
-            let id_list: MaskpolicyTableIdList = get_kv_data(mt, &id_list_key).await?;
-            let mut expect_id_list = BTreeSet::new();
-            expect_id_list.insert(table_id_2);
-            assert_eq!(id_list.id_list, expect_id_list);
+            assert_eq!(
+                res.meta.column_mask_policy_columns_ids,
+                Some({
+                    let mut map = BTreeMap::new();
+                    // The second policy should overwrite the first one for the same column
+                    map.insert(0, SecurityPolicyColumnMap {
+                        policy_id: mask2_id,
+                        columns_ids: vec![0],
+                    });
+                    map
+                })
+            );
+            // check mask policy id table id ref
+            let tenant = Tenant::new_literal("tenant1");
+            let mid = MaskPolicyIdTableId {
+                policy_id: mask2_id,
+                table_id: table_id_1,
+            };
+            let ident = MaskPolicyTableIdIdent::new_generic(tenant.clone(), mid);
+            let res = mt.get_pb(&ident).await?;
 
-            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_2);
-            let id_list: MaskpolicyTableIdList = get_kv_data(mt, &id_list_key).await?;
-            let mut expect_id_list = BTreeSet::new();
-            expect_id_list.insert(table_id_1);
-            assert_eq!(id_list.id_list, expect_id_list);
+            assert!(res.is_some());
         }
 
         info!("--- unset mask policy of table 1 and check");
@@ -3269,7 +3334,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
                 column: "number".to_string(),
-                action: SetTableColumnMaskPolicyAction::Unset(mask_name_2.to_string()),
+                action: SetSecurityPolicyAction::Unset(mask2_id),
             };
             mt.set_table_column_mask_policy(req).await?;
 
@@ -3283,12 +3348,38 @@ impl SchemaApiTestSuite {
             };
             let res = mt.get_table(req).await?;
             assert_eq!(res.meta.column_mask_policy, None);
+            assert_eq!(
+                res.meta.column_mask_policy_columns_ids,
+                Some({
+                    let mut map = BTreeMap::new();
+                    map.insert(0, SecurityPolicyColumnMap {
+                        policy_id: mask1_id,
+                        columns_ids: vec![0],
+                    });
+                    map
+                })
+            );
 
-            // check mask policy id list
-            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_2);
-            let id_list: MaskpolicyTableIdList = get_kv_data(mt, &id_list_key).await?;
-            let expect_id_list = BTreeSet::new();
-            assert_eq!(id_list.id_list, expect_id_list);
+            // check mask policy id table id ref
+            let tenant = Tenant::new_literal("tenant1");
+            let mid = MaskPolicyIdTableId {
+                policy_id: mask1_id,
+                table_id: table_id_1,
+            };
+            let ident = MaskPolicyTableIdIdent::new_generic(tenant.clone(), mid);
+            let res = mt.get_pb(&ident).await?;
+
+            assert!(res.is_some());
+
+            let tenant = Tenant::new_literal("tenant1");
+            let mid = MaskPolicyIdTableId {
+                policy_id: mask2_id,
+                table_id: table_id_1,
+            };
+            let ident = MaskPolicyTableIdIdent::new_generic(tenant.clone(), mid);
+            let res = mt.get_pb(&ident).await?;
+
+            assert!(res.is_none());
         }
 
         info!("--- drop mask policy check");
@@ -3296,23 +3387,6 @@ impl SchemaApiTestSuite {
             let name_ident = DataMaskNameIdent::new(tenant.clone(), mask_name_1);
             let dropped = mt.drop_data_mask(&name_ident).await?;
             assert!(dropped.is_some());
-
-            // check table meta
-            let req = GetTableReq {
-                inner: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name_2.to_string(),
-                },
-            };
-            let res = mt.get_table(req).await?;
-            assert_eq!(res.meta.column_mask_policy, None);
-
-            // check mask policy id list
-            let id_list_key = MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name_1);
-            let id_list: Result<MaskpolicyTableIdList, KVAppError> =
-                get_kv_data(mt, &id_list_key).await;
-            assert!(id_list.is_err())
         }
 
         info!("--- create or replace mask policy");
@@ -3453,7 +3527,7 @@ impl SchemaApiTestSuite {
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
                 table_id,
-                action: SetTableRowAccessPolicyAction::Set(*policy1_id, vec![1]),
+                action: SetSecurityPolicyAction::Set(*policy1_id, vec![1]),
             };
             mt.set_table_row_access_policy(req).await??;
             // check table meta
@@ -3470,7 +3544,7 @@ impl SchemaApiTestSuite {
                 Some(r) => assert_eq!(r.policy_id, *policy1_id),
                 None => panic!(),
             }
-            // check mask policy id list
+            // check row policy id list
             let tenant = Tenant::new_literal("tenant1");
             let id = RowAccessPolicyIdTableId {
                 policy_id: *policy1_id,
@@ -3499,7 +3573,7 @@ impl SchemaApiTestSuite {
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
                 table_id,
-                action: SetTableRowAccessPolicyAction::Set(*policy1_id, vec![1]),
+                action: SetSecurityPolicyAction::Set(*policy1_id, vec![1]),
             };
             mt.set_table_row_access_policy(req).await??;
             // check table meta
@@ -3532,7 +3606,7 @@ impl SchemaApiTestSuite {
             let req = SetTableRowAccessPolicyReq {
                 tenant: tenant.clone(),
                 table_id: table_id_1,
-                action: SetTableRowAccessPolicyAction::Unset(*policy1_id),
+                action: SetSecurityPolicyAction::Unset(*policy1_id),
             };
             mt.set_table_row_access_policy(req).await??;
 

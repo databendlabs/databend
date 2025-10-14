@@ -172,7 +172,7 @@ impl ToReadDataSourcePlan for dyn Table {
             let table_meta = &table_info.meta;
             let tenant = ctx.get_tenant();
 
-            if let Some(column_mask_policy) = &table_meta.column_mask_policy {
+            if let Some(column_mask_policy) = &table_meta.column_mask_policy_columns_ids {
                 if LicenseManagerSwitch::instance()
                     .check_enterprise_enabled(ctx.get_license_key(), DataMask)
                     .is_err()
@@ -187,15 +187,17 @@ impl ToReadDataSourcePlan for dyn Table {
                         .get_ddl_column_type_nullable()
                         .unwrap_or(true);
                     for (i, field) in output_schema.fields().iter().enumerate() {
-                        if let Some(mask_policy) = column_mask_policy.get(field.name()) {
+                        if let Some(policy) = column_mask_policy.get(&field.column_id) {
                             ctx.set_status_info(&format!(
                                 "[TABLE-SCAN] Loading data mask policies, elapsed: {:?}",
                                 start.elapsed()
                             ));
+                            let mask_policy = policy.policy_id;
                             if let Ok(policy) = handler
-                                .get_data_mask(meta_api.clone(), &tenant, mask_policy.clone())
+                                .get_data_mask_by_id(meta_api.clone(), &tenant, mask_policy)
                                 .await
                             {
+                                let policy = policy.data;
                                 let args = &policy.args;
                                 let mut aliases = Vec::with_capacity(args.len());
                                 for (i, (arg_name, arg_type)) in args.iter().enumerate() {

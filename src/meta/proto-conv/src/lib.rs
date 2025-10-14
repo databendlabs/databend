@@ -73,6 +73,7 @@ mod id_from_to_protobuf_impl;
 mod index_from_to_protobuf_impl;
 mod least_visible_time_from_to_protobuf_impl;
 mod lock_from_to_protobuf_impl;
+mod mask_policy_table_id_from_to_protobuf_impl;
 mod owner_from_to_protobuf_impl;
 mod ownership_from_to_protobuf_impl;
 mod procedure_from_to_protobuf_impl;

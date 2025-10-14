@@ -13,20 +13,20 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UnknownTableId;
-use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
+use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
-use databend_common_meta_app::schema::RowAccessPolicyColumnMap;
-use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
+use databend_common_meta_app::schema::SecurityPolicyColumnMap;
+use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
-use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::TableId;
@@ -47,7 +47,6 @@ use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
-use crate::txn_core_util::txn_replace_exact;
 use crate::txn_op_del;
 use crate::txn_op_put;
 
@@ -103,25 +102,39 @@ where
             let table_meta = seq_meta.data;
 
             let mut new_table_meta = table_meta.clone();
-            if new_table_meta.column_mask_policy.is_none() {
-                let column_mask_policy = BTreeMap::default();
-                new_table_meta.column_mask_policy = Some(column_mask_policy);
-            }
 
             match &req.action {
-                SetTableColumnMaskPolicyAction::Set(new_mask_name, _old_mask_name) => {
-                    new_table_meta
-                        .column_mask_policy
-                        .as_mut()
-                        .unwrap()
-                        .insert(req.column.clone(), new_mask_name.clone());
+                SetSecurityPolicyAction::Set(policy_id, column_ids) => {
+                    // Get policy name from policy ID by finding the name ident that maps to this ID
+                    // use databend_common_meta_app::data_mask::DataMaskNameIdent;
+                    // We need to iterate through mask policies to find the name that corresponds to this ID
+                    // For now, let's use the policy ID as a string since that's what's stored in column_mask_policy
+                    new_table_meta.column_mask_policy = None;
+                    let policy_map = SecurityPolicyColumnMap {
+                        policy_id: *policy_id,
+                        columns_ids: column_ids.clone(),
+                    };
+
+                    if new_table_meta.column_mask_policy_columns_ids.is_none() {
+                        new_table_meta.column_mask_policy_columns_ids = Some(BTreeMap::new());
+                    }
+
+                    if let Some(policies_map) =
+                        new_table_meta.column_mask_policy_columns_ids.as_mut()
+                    {
+                        for column_id in column_ids {
+                            policies_map.insert(*column_id, policy_map.clone());
+                        }
+                    }
                 }
-                SetTableColumnMaskPolicyAction::Unset(_) => {
-                    new_table_meta
-                        .column_mask_policy
-                        .as_mut()
-                        .unwrap()
-                        .remove(&req.column);
+                SetSecurityPolicyAction::Unset(policy_id) => {
+                    new_table_meta.column_mask_policy = None;
+                    if let Some(policies_map) =
+                        new_table_meta.column_mask_policy_columns_ids.as_mut()
+                    {
+                        // Remove entries where the policy ID matches
+                        policies_map.retain(|_, policy| policy.policy_id != *policy_id);
+                    }
                 }
             }
 
@@ -135,8 +148,7 @@ where
                 ],
             );
 
-            let _ = update_mask_policy(self, &req.action, &mut txn_req, &req.tenant, req.table_id)
-                .await;
+            let _ = update_mask_policy(&req.action, &mut txn_req, &req.tenant, req.table_id).await;
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
@@ -183,8 +195,8 @@ where
             let table_meta = seq_meta.data;
             let mut new_table_meta = table_meta.clone();
             let policy_id = match req.action {
-                SetTableRowAccessPolicyAction::Set(id, _) => id,
-                SetTableRowAccessPolicyAction::Unset(id) => id,
+                SetSecurityPolicyAction::Set(id, _) => id,
+                SetSecurityPolicyAction::Unset(id) => id,
             };
             let id = RowAccessPolicyIdTableId {
                 policy_id,
@@ -198,7 +210,7 @@ where
                 .condition
                 .push(txn_cond_seq(&tbid, Eq, seq_meta.seq));
             match &req.action {
-                SetTableRowAccessPolicyAction::Set(new_policy_id, columns_ids) => {
+                SetSecurityPolicyAction::Set(new_policy_id, columns_ids) => {
                     if table_meta.row_access_policy_columns_ids.is_some() {
                         return Ok(Err(TableError::AlterTableError {
                             tenant: req.tenant.tenant_name().to_string(),
@@ -206,7 +218,7 @@ where
                         }));
                     }
                     new_table_meta.row_access_policy_columns_ids = Some(
-                        RowAccessPolicyColumnMap::new(*new_policy_id, columns_ids.clone()),
+                        SecurityPolicyColumnMap::new(*new_policy_id, columns_ids.clone()),
                     );
                     // Compatibility, can be deleted in the future
                     new_table_meta.row_access_policy = None;
@@ -215,7 +227,7 @@ where
                         txn_op_put(&ident, serialize_struct(&RowAccessPolicyTableId {})?), /* add policy_tb_id */
                     ];
                 }
-                SetTableRowAccessPolicyAction::Unset(old_policy) => {
+                SetSecurityPolicyAction::Unset(old_policy) => {
                     // drop row access policy and table does not have row access policy
                     match (
                         table_meta.row_access_policy_columns_ids,
@@ -268,64 +280,29 @@ where
 }
 
 async fn update_mask_policy(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    action: &SetTableColumnMaskPolicyAction,
+    action: &SetSecurityPolicyAction,
     txn_req: &mut TxnRequest,
     tenant: &Tenant,
     table_id: u64,
 ) -> Result<(), KVAppError> {
-    /// Fetch and update the table id list with `f`, and fill in the txn preconditions and operations.
-    async fn update_table_ids(
-        kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-        txn_req: &mut TxnRequest,
-        key: MaskPolicyTableIdListIdent,
-        f: impl FnOnce(&mut BTreeSet<u64>),
-    ) -> Result<(), KVAppError> {
-        let Some(mut seq_list) = kv_api.get_pb(&key).await? else {
-            return Ok(());
-        };
-
-        f(&mut seq_list.data.id_list);
-
-        txn_replace_exact(txn_req, &key, seq_list.seq, &seq_list.data)?;
-
-        Ok(())
-    }
-
     match action {
-        SetTableColumnMaskPolicyAction::Set(new_mask_name, old_mask_name_opt) => {
-            update_table_ids(
-                kv_api,
-                txn_req,
-                MaskPolicyTableIdListIdent::new(tenant.clone(), new_mask_name),
-                |list: &mut BTreeSet<u64>| {
-                    list.insert(table_id);
-                },
-            )
-            .await?;
-
-            if let Some(old) = old_mask_name_opt {
-                update_table_ids(
-                    kv_api,
-                    txn_req,
-                    MaskPolicyTableIdListIdent::new(tenant.clone(), old),
-                    |list: &mut BTreeSet<u64>| {
-                        list.remove(&table_id);
-                    },
-                )
-                .await?;
-            }
+        SetSecurityPolicyAction::Set(policy_id, _column_ids) => {
+            let id = MaskPolicyIdTableId {
+                policy_id: *policy_id,
+                table_id,
+            };
+            let ident = MaskPolicyTableIdIdent::new_generic(tenant.clone(), id);
+            txn_req
+                .if_then
+                .push(txn_op_put(&ident, serialize_struct(&MaskPolicyTableId)?));
         }
-        SetTableColumnMaskPolicyAction::Unset(mask_name) => {
-            update_table_ids(
-                kv_api,
-                txn_req,
-                MaskPolicyTableIdListIdent::new(tenant.clone(), mask_name),
-                |list: &mut BTreeSet<u64>| {
-                    list.remove(&table_id);
-                },
-            )
-            .await?;
+        SetSecurityPolicyAction::Unset(policy_id) => {
+            let id = MaskPolicyIdTableId {
+                policy_id: *policy_id,
+                table_id,
+            };
+            let ident = MaskPolicyTableIdIdent::new_generic(tenant.clone(), id);
+            txn_req.if_then.push(txn_op_del(&ident));
         }
     }
 

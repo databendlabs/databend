@@ -171,24 +171,26 @@ pub struct TableMeta {
     pub statistics: TableStatistics,
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
+    // should be discard
     pub column_mask_policy: Option<BTreeMap<String, String>>,
+    pub column_mask_policy_columns_ids: Option<BTreeMap<ColumnId, SecurityPolicyColumnMap>>,
     // One table only has an unique row access policy
     // should be discard
     pub row_access_policy: Option<String>,
     // One table only has an unique row access policy
     // store policy id and which column apply row access policy
-    pub row_access_policy_columns_ids: Option<RowAccessPolicyColumnMap>,
+    pub row_access_policy_columns_ids: Option<SecurityPolicyColumnMap>,
     pub indexes: BTreeMap<String, TableIndex>,
     pub constraints: BTreeMap<String, Constraint>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct RowAccessPolicyColumnMap {
+pub struct SecurityPolicyColumnMap {
     pub policy_id: u64,
     pub columns_ids: Vec<ColumnId>,
 }
 
-impl RowAccessPolicyColumnMap {
+impl SecurityPolicyColumnMap {
     pub fn new(policy_id: u64, field_indexes: Vec<ColumnId>) -> Self {
         Self {
             policy_id,
@@ -350,6 +352,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
+            column_mask_policy_columns_ids: None,
             row_access_policy: None,
             row_access_policy_columns_ids: None,
             indexes: BTreeMap::new(),
@@ -787,27 +790,19 @@ impl Display for UpsertTableOptionReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SetTableColumnMaskPolicyAction {
-    // new mask name, old mask name(if any)
-    Set(String, Option<String>),
-    // prev mask name
-    Unset(String),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableColumnMaskPolicyReq {
     pub tenant: Tenant,
     pub table_id: u64,
     pub seq: MatchSeq,
     pub column: String,
-    pub action: SetTableColumnMaskPolicyAction,
+    pub action: SetSecurityPolicyAction,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableColumnMaskPolicyReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SetTableRowAccessPolicyAction {
+pub enum SetSecurityPolicyAction {
     // new policy name
     Set(u64, Vec<ColumnId>),
     // old policy name
@@ -818,7 +813,7 @@ pub enum SetTableRowAccessPolicyAction {
 pub struct SetTableRowAccessPolicyReq {
     pub tenant: Tenant,
     pub table_id: u64,
-    pub action: SetTableRowAccessPolicyAction,
+    pub action: SetSecurityPolicyAction,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

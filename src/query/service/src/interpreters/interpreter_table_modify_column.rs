@@ -31,8 +31,10 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
+use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -97,6 +99,20 @@ impl ModifyTableColumnInterpreter {
 
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
+
+        // Get mask policy ID from name using KV API
+        let name_ident = DataMaskNameIdent::new(self.ctx.get_tenant(), mask_name.clone());
+        let mask_id_seq = meta_api.get_pb(&name_ident).await?;
+        let policy_id = match mask_id_seq {
+            Some(seq_id) => seq_id.data,
+            None => {
+                return Err(ErrorCode::UnknownDatamask(format!(
+                    "Data mask policy {} not found",
+                    mask_name
+                )))
+            }
+        };
+
         let policy = handler
             .get_data_mask(meta_api, &self.ctx.get_tenant(), mask_name.clone())
             .await?;
@@ -105,7 +121,8 @@ impl ModifyTableColumnInterpreter {
         let policy_data_type = policy.args[0].1.to_string().to_lowercase();
         let schema = table.schema();
         let table_info = table.get_table_info();
-        if let Some((_, data_field)) = schema.column_with_name(&column) {
+
+        let column_id = if let Some((_, data_field)) = schema.column_with_name(&column) {
             let data_type = data_field.data_type().to_string().to_lowercase();
             if data_type != policy_data_type {
                 return Err(ErrorCode::UnmatchColumnDataType(format!(
@@ -113,28 +130,22 @@ impl ModifyTableColumnInterpreter {
                     column, data_type, policy_data_type,
                 )));
             }
+            data_field.column_id
         } else {
             return Err(ErrorCode::UnknownColumn(format!(
                 "Cannot find column {}",
                 column
             )));
-        }
+        };
 
         let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
 
-        let prev_column_mask_name =
-            if let Some(column_mask_policy) = &table_info.meta.column_mask_policy {
-                column_mask_policy.get(&column).cloned()
-            } else {
-                None
-            };
         let req = SetTableColumnMaskPolicyReq {
             tenant: self.ctx.get_tenant(),
-            seq: MatchSeq::Exact(table_version),
+            seq: MatchSeq::Exact(table_info.ident.seq),
             table_id,
             column,
-            action: SetTableColumnMaskPolicyAction::Set(mask_name, prev_column_mask_name),
+            action: SetSecurityPolicyAction::Set(*policy_id, vec![column_id]),
         };
 
         let _resp = catalog.set_table_column_mask_policy(req).await?;
@@ -510,23 +521,29 @@ impl ModifyTableColumnInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let table_info = table.get_table_info();
+        let column_id = table_info
+            .schema()
+            .fields()
+            .iter()
+            .find(|field| field.name.as_str() == column.as_str())
+            .map(|field| field.column_id)
+            .ok_or_else(|| ErrorCode::UnknownColumn(format!("Cannot find column {}", column)))?;
+
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        let prev_column_mask_name =
-            if let Some(column_mask_policy) = &table_info.meta.column_mask_policy {
-                column_mask_policy.get(&column).cloned()
-            } else {
-                None
-            };
-
-        if let Some(prev_column_mask_name) = prev_column_mask_name {
+        if let Some(policy) = table_info
+            .meta
+            .column_mask_policy_columns_ids
+            .as_ref()
+            .and_then(|policies_map| policies_map.get(&column_id))
+        {
             let req = SetTableColumnMaskPolicyReq {
                 tenant: self.ctx.get_tenant(),
                 seq: MatchSeq::Exact(table_version),
                 table_id,
-                column,
-                action: SetTableColumnMaskPolicyAction::Unset(prev_column_mask_name),
+                column: column.clone(),
+                action: SetSecurityPolicyAction::Unset(policy.policy_id),
             };
 
             let _resp = catalog.set_table_column_mask_policy(req).await?;
