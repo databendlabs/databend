@@ -66,7 +66,3 @@ fn test_decode_v152_external_udf() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-fn s(ss: impl ToString) -> String {
-    ss.to_string()
-}
