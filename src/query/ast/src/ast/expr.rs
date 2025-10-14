@@ -1201,6 +1201,7 @@ pub enum TypeName {
     Vector(u64),
     Nullable(Box<TypeName>),
     NotNull(Box<TypeName>),
+    StageLocation,
 }
 
 impl TypeName {
@@ -1332,6 +1333,9 @@ impl Display for TypeName {
             }
             TypeName::Vector(dimension) => {
                 write!(f, "VECTOR({dimension})")?;
+            }
+            TypeName::StageLocation => {
+                write!(f, "STAGE_LOCATION")?;
             }
         }
         Ok(())

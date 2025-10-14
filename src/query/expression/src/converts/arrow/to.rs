@@ -221,6 +221,9 @@ impl From<&TableField> for Field {
                 let inner_field = Arc::new(Field::new_list_field(inner_ty, false));
                 ArrowDataType::FixedSizeList(inner_field, dimension)
             }
+            TableDataType::StageLocation => {
+                unreachable!("TableDataType::StageLocation only for UDFServer/UDAFServer")
+            }
         };
 
         Field::new(f.name(), ty, f.is_nullable()).with_metadata(metadata)

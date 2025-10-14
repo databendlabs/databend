@@ -33,6 +33,7 @@ pub struct UDFServer {
     pub handler: String,
     pub headers: BTreeMap<String, String>,
     pub language: String,
+    pub arg_names: Vec<String>,
     pub arg_types: Vec<DataType>,
     pub return_type: DataType,
     pub immutable: Option<bool>,
@@ -168,6 +169,7 @@ impl UserDefinedFunction {
         handler: &str,
         headers: &BTreeMap<String, String>,
         language: &str,
+        arg_names: Vec<String>,
         arg_types: Vec<DataType>,
         return_type: DataType,
         description: &str,
@@ -181,6 +183,7 @@ impl UserDefinedFunction {
                 handler: handler.to_string(),
                 headers: headers.clone(),
                 language: language.to_string(),
+                arg_names,
                 arg_types,
                 return_type,
                 immutable,
@@ -237,6 +240,7 @@ impl Display for UDFDefinition {
             }
             UDFDefinition::UDFServer(UDFServer {
                 address,
+                arg_names,
                 arg_types,
                 return_type,
                 handler,
@@ -249,6 +253,9 @@ impl Display for UDFDefinition {
                         write!(f, ", ")?;
                     }
                     write!(f, "{item}")?;
+                    if !arg_names.is_empty() {
+                        write!(f, " {}", arg_names[i])?;
+                    }
                 }
                 write!(f, ") RETURNS {return_type} LANGUAGE {language}")?;
                 if let Some(immutable) = immutable {

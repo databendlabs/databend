@@ -20,6 +20,7 @@ use databend_common_ast::ast::CreateUDFStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UDAFStateField;
+use databend_common_ast::ast::UDFArgs;
 use databend_common_ast::ast::UDFDefinition;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -90,8 +91,26 @@ impl Binder {
                 UDFValidator::is_udf_server_allowed(address.as_str())?;
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
-                for arg_type in arg_types {
-                    arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                let mut arg_names = Vec::with_capacity(arg_types.len());
+                match arg_types {
+                    UDFArgs::Types(types) => {
+                        for arg_type in types {
+                            if matches!(arg_type, TypeName::StageLocation) {
+                                return Err(ErrorCode::InvalidArgument(
+                                    "StageLocation must have a corresponding variable name",
+                                ));
+                            }
+                            arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                        }
+                    }
+                    UDFArgs::NameWithTypes(name_with_types) => {
+                        for (arg_name, arg_type) in name_with_types {
+                            arg_names.push(
+                                normalize_identifier(arg_name, &self.name_resolution_ctx).name,
+                            );
+                            arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                        }
+                    }
                 }
                 let return_type = DataType::from(&resolve_type_name_udf(return_type)?);
 
@@ -132,6 +151,7 @@ impl Binder {
                     description,
                     definition: PlanUDFDefinition::UDFServer(UDFServer {
                         address: address.clone(),
+                        arg_names,
                         arg_types: arg_datatypes,
                         return_type,
                         handler: handler.clone(),

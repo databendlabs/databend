@@ -1665,7 +1665,7 @@ impl Column {
                 }
                 Column::Vector(builder.build())
             }
-            DataType::Generic(_) => unreachable!(),
+            DataType::Generic(_) | DataType::StageLocation => unreachable!(),
             DataType::Opaque(size) => {
                 with_opaque_size!(|N| match *size {
                     N => {
@@ -2179,6 +2179,9 @@ impl ColumnBuilder {
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
             }
+            DataType::StageLocation => {
+                unreachable!("unable to initialize column builder for stage location type")
+            }
         }
     }
 
@@ -2252,6 +2255,9 @@ impl ColumnBuilder {
             }
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
+            }
+            DataType::StageLocation => {
+                unreachable!("unable to initialize column builder for stage location type")
             }
         }
     }

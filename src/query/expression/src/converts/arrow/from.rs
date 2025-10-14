@@ -437,6 +437,7 @@ impl Column {
                 }
             }
             DataType::Generic(_) => unreachable!("Generic type is not supported"),
+            DataType::StageLocation => unreachable!("StageLocation type is not supported"),
         };
 
         Ok(column)

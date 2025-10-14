@@ -640,6 +640,7 @@ impl Display for DataType {
             DataType::Vector(vector) => write!(f, "{vector}"),
             DataType::Generic(index) => write!(f, "T{index}"),
             DataType::Opaque(size) => write!(f, "Opaque({size})"),
+            DataType::StageLocation => write!(f, "StageLocation"),
         }
     }
 }
@@ -691,6 +692,7 @@ impl Display for TableDataType {
             TableDataType::Geometry => write!(f, "Geometry"),
             TableDataType::Geography => write!(f, "Geography"),
             TableDataType::Vector(vector) => write!(f, "{vector}"),
+            TableDataType::StageLocation => write!(f, "StageLocation"),
         }
     }
 }

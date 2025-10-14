@@ -690,6 +690,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
             DataType::Vector(VectorDataType::Float32(d))
         }
         databend_common_ast::ast::TypeName::NotNull(inner_type) => transform_data_type(*inner_type),
+        databend_common_ast::ast::TypeName::StageLocation => DataType::StageLocation,
     }
 }
 

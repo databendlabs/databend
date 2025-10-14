@@ -181,6 +181,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (149, "2025-09-24: Add: add AutoIncrement name and display on TableField"),
     (150, "2025-09-26: Add: RoleInfo::comment"),
     (151, "2025-09-28: Add: TableMeta::RowAccessPolicyColumnMap store policy name and column id"),
+    (152, "2025-10-14: Add: TableDataType::StageLocation and UDFServer add arg_names"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

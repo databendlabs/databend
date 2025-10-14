@@ -55,6 +55,7 @@ fn test_decode_v57_udf() -> anyhow::Result<()> {
             handler: "plus_int_py".to_string(),
             headers: BTreeMap::default(),
             language: "python".to_string(),
+            arg_names: vec![],
             arg_types: vec![
                 DataType::Number(NumberDataType::Int32),
                 DataType::Number(NumberDataType::Int32),

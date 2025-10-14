@@ -1911,6 +1911,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { VECTOR ~ ^"(" ~ ^#literal_u64 ~ ^")" },
         |(_, _, dimension, _)| TypeName::Vector(dimension),
     );
+    let ty_stage_location = value(TypeName::StageLocation, rule! { STAGE_LOCATION });
     map_res(
         alt((
             rule! {
@@ -1945,6 +1946,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_geography
             | #ty_nullable
             | #ty_vector
+            | #ty_stage_location
             ) ~ #nullable? : "type name" },
         )),
         |(ty, opt_nullable)| match opt_nullable {

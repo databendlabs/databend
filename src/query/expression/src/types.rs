@@ -134,6 +134,8 @@ pub enum DataType {
 
     // Used internally for generic types
     Generic(usize),
+
+    StageLocation,
 }
 
 impl DataType {
@@ -214,7 +216,7 @@ impl DataType {
             DataType::Map(ty) => ty.has_generic(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_generic()),
             DataType::Generic(_) => true,
-            DataType::Opaque(_) => false,
+            DataType::Opaque(_) | DataType::StageLocation => false,
         }
     }
 
@@ -243,6 +245,7 @@ impl DataType {
             DataType::Map(ty) => ty.has_nested_nullable(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
             DataType::Opaque(_) => false,
+            DataType::StageLocation => false,
         }
     }
 
@@ -470,7 +473,8 @@ impl DataType {
             | DataType::EmptyArray
             | DataType::EmptyMap
             | DataType::Opaque(_)
-            | DataType::Generic(_) => Err(ErrorCode::BadArguments(format!(
+            | DataType::Generic(_)
+            | DataType::StageLocation => Err(ErrorCode::BadArguments(format!(
                 "Unsupported data type {} to sql type",
                 self
             ))),

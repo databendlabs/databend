@@ -1150,6 +1150,8 @@ pub enum TokenKind {
     SPLIT_SIZE,
     #[token("STAGE", ignore(ascii_case))]
     STAGE,
+    #[token("STAGE_LOCATION", ignore(ascii_case))]
+    STAGE_LOCATION,
     #[token("SYNTAX", ignore(ascii_case))]
     SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
