@@ -20,7 +20,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from pyarrow import flight
 
 # https://github.com/datafuselabs/databend-udf
-from databend_udf import udf, UDFServer
+from databend_udf import StageLocation, UDFServer, udf
 
 logging.basicConfig(level=logging.INFO)
 
@@ -425,6 +425,32 @@ def embedding_4(s: str):
     return [1.1, 1.2, 1.3, 1.4]
 
 
+@udf(stage_refs=["data_stage"], input_types=["INT"], result_type="VARCHAR")
+def stage_summary(data_stage: StageLocation, value: int) -> str:
+    assert data_stage.stage_type.lower() == "external"
+    assert data_stage.storage
+    bucket = data_stage.storage.get("bucket", data_stage.storage.get("container", ""))
+    return f"{data_stage.stage_name}:{bucket}:{data_stage.relative_path}:{value}"
+
+
+@udf(
+    stage_refs=["input_stage", "output_stage"],
+    input_types=["INT"],
+    result_type="INT",
+)
+def multi_stage_process(
+        input_stage: StageLocation, output_stage: StageLocation, value: int
+) -> int:
+    assert input_stage.storage and output_stage.storage
+    assert input_stage.stage_type.lower() == "external"
+    assert output_stage.stage_type.lower() == "external"
+    # Simple deterministic behaviour for testing
+    return (
+            value
+            + len(input_stage.storage.get("bucket", ""))
+            + len(output_stage.storage.get("bucket", ""))
+    )
+
 if __name__ == "__main__":
     udf_server = CheckHeadersServer(
         location="0.0.0.0:8815", middleware={"headers": HeadersMiddlewareFactory()}
@@ -456,6 +482,8 @@ if __name__ == "__main__":
     udf_server.add_function(url_len_mul_100)
     udf_server.add_function(check_headers)
     udf_server.add_function(embedding_4)
+    udf_server.add_function(stage_summary)
+    udf_server.add_function(multi_stage_process)
 
     # Built-in function
     udf_server.add_function(ping)
