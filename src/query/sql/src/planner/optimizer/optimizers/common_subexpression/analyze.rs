@@ -28,6 +28,11 @@ pub fn analyze_common_subexpression(
     s_expr: &SExpr,
     metadata: &Metadata,
 ) -> Result<(Vec<SExprReplacement>, Vec<SExpr>)> {
+    // Skip CSE optimization if the expression contains recursive CTE
+    if contains_recursive_cte(s_expr) {
+        return Ok((vec![], vec![]));
+    }
+
     let signature_to_exprs = collect_table_signatures(s_expr, metadata);
     let mut replacements = vec![];
     let mut materialized_ctes = vec![];
@@ -92,4 +97,12 @@ fn process_candidate_expressions(
         });
     }
     Ok(())
+}
+
+fn contains_recursive_cte(expr: &SExpr) -> bool {
+    if matches!(expr.plan(), RelOperator::RecursiveCteScan(_)) {
+        return true;
+    }
+
+    expr.children().any(contains_recursive_cte)
 }
