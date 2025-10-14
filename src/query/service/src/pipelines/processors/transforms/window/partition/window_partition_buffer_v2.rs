@@ -20,6 +20,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_pipeline_transforms::MemorySettings;
+use fastrace::future::FutureExt;
+use fastrace::Span;
 
 use super::concat_data_blocks;
 use crate::spillers::AnyFileWriter;
@@ -112,17 +114,19 @@ type FactoryReader<F> = <<F as WriterFactory>::W as Writer>::R;
 struct PartitionSlot<F>
 where F: WriterFactory
 {
+    id: usize,
     state: PartitionSpillState<F::W>,
     readers: Vec<(FactoryReader<F>, Vec<usize>)>,
     buffered_blocks: Vec<DataBlock>,
     buffered_size: usize,
 }
 
-impl<F> Default for PartitionSlot<F>
+impl<F> PartitionSlot<F>
 where F: WriterFactory
 {
-    fn default() -> Self {
+    fn new(id: usize) -> Self {
         Self {
+            id,
             state: Default::default(),
             readers: Default::default(),
             buffered_blocks: Default::default(),
@@ -148,20 +152,27 @@ where F: WriterFactory
         }
     }
 
-    async fn spill_blocks(&mut self, factory: &mut F, blocks: Vec<DataBlock>) -> Result<()> {
-        if blocks.is_empty() {
-            return Ok(());
-        }
-
+    #[fastrace::trace(name = "PartitionSlot::spill_blocks", enter_on_poll = true)]
+    async fn spill_blocks(
+        &mut self,
+        factory: &mut F,
+        blocks: Vec<DataBlock>,
+        spill_unit_size: usize,
+    ) -> Result<()> {
         let mut encoder = factory.create_encoder();
         for block in blocks {
             encoder.add(block)?;
         }
+        let row_group_size = encoder.memory_size();
+        log::debug!(id = self.id, row_group_size ; "spill new row_group");
 
         match &mut self.state {
             PartitionSpillState::Empty => {
-                const FILE_SIZE: usize = 10 * 1024 * 1024;
-                let writer = factory.open(Some(FILE_SIZE)).await?;
+                let local_file_size = self
+                    .readers
+                    .is_empty()
+                    .then(|| spill_unit_size.max(row_group_size));
+                let writer = factory.open(local_file_size).await?;
                 let (ordinal, writer) = add_row_group_encoded(writer, encoder).await?;
                 self.state = PartitionSpillState::Writing {
                     writer,
@@ -224,7 +235,9 @@ where F: WriterFactory
 }
 
 async fn close_writer<W: Writer>(writer: W) -> Result<W::R> {
+    let span = Span::enter_with_local_parent(fastrace::func_path!());
     spawn_blocking(move || writer.close())
+        .in_span(span)
         .await
         .map_err(|e| ErrorCode::Internal(format!("task failed: {e}")))?
 }
@@ -233,8 +246,10 @@ async fn add_row_group_encoded<W: Writer>(
     mut writer: W,
     row_group: RowGroupEncoder,
 ) -> Result<(usize, W)> {
+    let span = Span::enter_with_local_parent(fastrace::func_path!());
     let (ordinal, writer) =
         spawn_blocking(move || (writer.add_row_group_encoded(row_group), writer))
+            .in_span(span)
             .await
             .map_err(|e| ErrorCode::Internal(format!("task failed: {e}")))?;
     Ok((ordinal?, writer))
@@ -265,7 +280,7 @@ where F: WriterFactory
         memory_settings: MemorySettings,
     ) -> Result<Self> {
         let partitions = (0..num_partitions)
-            .map(|_| PartitionSlot::default())
+            .map(|id| PartitionSlot::new(id))
             .collect();
         Ok(Self {
             factory: None,
@@ -304,6 +319,7 @@ where F: WriterFactory
         }
     }
 
+    #[fastrace::trace(name = "PartitionBuffer::spill")]
     pub async fn spill(&mut self) -> Result<()> {
         let spill_unit_size = self.memory_settings.spill_unit_size;
 
@@ -314,7 +330,7 @@ where F: WriterFactory
             }
             if let Some(blocks) = partition.take_blocks(Some(spill_unit_size)) {
                 partition
-                    .spill_blocks(self.factory.as_mut().unwrap(), blocks)
+                    .spill_blocks(self.factory.as_mut().unwrap(), blocks, spill_unit_size)
                     .await?;
                 return Ok(());
             }
@@ -334,7 +350,7 @@ where F: WriterFactory
         {
             let blocks = partition.take_blocks(None).unwrap();
             partition
-                .spill_blocks(self.factory.as_mut().unwrap(), blocks)
+                .spill_blocks(self.factory.as_mut().unwrap(), blocks, spill_unit_size)
                 .await?;
         } else {
             self.can_spill = false;
@@ -342,6 +358,7 @@ where F: WriterFactory
         Ok(())
     }
 
+    #[fastrace::trace(name = "PartitionBuffer::restore")]
     pub async fn restore(&mut self) -> Result<Vec<DataBlock>> {
         for partition in &mut self.partitions[self.next_to_restore..] {
             self.next_to_restore += 1;

@@ -362,13 +362,16 @@ pub struct BackpressureAdapter {
 }
 
 impl BackpressureAdapter {
-    fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
+    fn add_spill_file(&self, location: Location, layout: Layout) {
         if location.is_remote() {
-            self.ctx.as_ref().incr_spill_progress(1, size);
             self.ctx
                 .as_ref()
                 .add_spill_file(location.clone(), layout.clone());
         }
+    }
+
+    fn update_progress(&self, file: usize, bytes: usize) {
+        self.ctx.as_ref().incr_spill_progress(file, bytes);
     }
 }
 
@@ -432,6 +435,7 @@ impl WriterCreator {
                 local_file_size,
             )
             .await?;
+        self.spiller.adapter.update_progress(1, 0);
 
         Ok(SpillWriter {
             spiller: self.spiller.clone(),
@@ -477,12 +481,16 @@ impl SpillWriter {
         match &mut self.file_writer {
             AnyFileWriter::Local(file_writer) => {
                 let row_group_meta = file_writer.flush_row_group(row_group)?;
-                record_write_profile(true, &start, row_group_meta.compressed_size() as _);
+                let size = row_group_meta.compressed_size() as _;
+                self.spiller.adapter.update_progress(0, size);
+                record_write_profile(true, &start, size);
                 Ok(row_group_meta)
             }
             AnyFileWriter::Remote(_, file_writer) => {
                 let row_group_meta = file_writer.flush_row_group(row_group)?;
-                record_write_profile(false, &start, row_group_meta.compressed_size() as _);
+                let size = row_group_meta.compressed_size() as _;
+                self.spiller.adapter.update_progress(0, size);
+                record_write_profile(false, &start, size);
                 Ok(row_group_meta)
             }
         }
@@ -496,20 +504,18 @@ impl SpillWriter {
         let (metadata, location) = match self.file_writer {
             AnyFileWriter::Local(file_writer) => {
                 let (metadata, path) = file_writer.finish()?;
-                self.spiller.adapter.add_spill_file(
-                    Location::Local(path.clone()),
-                    Layout::Parquet,
-                    path.size(),
-                );
+                self.spiller
+                    .adapter
+                    .add_spill_file(Location::Local(path.clone()), Layout::Parquet);
                 (metadata, Location::Local(path))
             }
             AnyFileWriter::Remote(path, file_writer) => {
-                let (metadata, size) = file_writer.finish()?;
+                let (metadata, _) = file_writer.finish()?;
                 let location = Location::Remote(path);
 
                 self.spiller
                     .adapter
-                    .add_spill_file(location.clone(), Layout::Parquet, size);
+                    .add_spill_file(location.clone(), Layout::Parquet);
 
                 (metadata, location)
             }
