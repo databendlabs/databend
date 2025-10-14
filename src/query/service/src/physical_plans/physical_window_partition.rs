@@ -161,7 +161,6 @@ impl IPhysicalPlan for WindowPartition {
             _ => unimplemented!(),
         };
         let window_spill_settings = MemorySettings::from_window_settings(&builder.ctx)?;
-        let enable_backpressure_spiller = settings.get_enable_backpressure_spiller()?;
 
         let processor_id = AtomicUsize::new(0);
         builder.main_pipeline.add_transform(|input, output| {
@@ -182,7 +181,6 @@ impl IPhysicalPlan for WindowPartition {
                     num_partitions,
                     window_spill_settings.clone(),
                     disk_spill.clone(),
-                    enable_backpressure_spiller,
                     strategy,
                 )?,
             )))

@@ -154,7 +154,6 @@ pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
 }
 
 impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
-    #[expect(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
@@ -165,7 +164,6 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
         num_partitions: usize,
         memory_settings: MemorySettings,
         disk_spill: Option<SpillerDiskConfig>,
-        enable_backpressure_spiller: bool,
         strategy: S,
     ) -> Result<Self> {
         // Calculate the partition ids collected by the processor.
@@ -189,7 +187,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
 
         // Create spillers for window operator.
         let operator = DataOperator::instance().spill_operator();
-        let spiller = if !enable_backpressure_spiller {
+        let spiller = if !settings.get_enable_backpressure_spiller()? {
             Either::Left(Spiller::create(ctx, operator, spill_config)?)
         } else {
             let runtime = GlobalIORuntime::instance();
