@@ -152,25 +152,28 @@ impl ModifyTableColumnInterpreter {
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
-        // Marks columns whose type change is compatible:
-        // either from STRING to BINARY in Parquet, or when the data type remains unchanged.
-        let mut skip_alter_type_flags = vec![false; field_and_comments.len()];
         // first check default expr before lock table
-        for (idx, (field, _comment)) in field_and_comments.iter().enumerate() {
+        for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
-                let is_alter_column_string_to_binary =
-                    is_string_to_binary(&old_field.data_type, &field.data_type);
-                let skip_alter_type_flag = (table.storage_format_as_parquet()
-                    && is_alter_column_string_to_binary)
-                    || old_field.data_type == field.data_type;
-                skip_alter_type_flags[idx] = skip_alter_type_flag;
-                // If the field's data type has changed, we need to drop the old column
-                // and add a new one to regenerate its column ID. This ensures consistency
-                // between the schema definition and column identifiers.
-                if !skip_alter_type_flag {
-                    let _ = new_schema.drop_column_unchecked(&field.name);
+                // if the field has different leaf column numbers, we need drop the old column
+                // and add a new one to generate new column id. otherwise, leaf column ids will conflict.
+                if old_field.data_type.num_leaf_columns() != field.data_type.num_leaf_columns() {
+                    let _ = new_schema.drop_column(&field.name);
                     let _ = new_schema.add_column(field, i);
-
+                } else {
+                    // new field don't have `column_id`, assign field directly will cause `column_id` lost.
+                    new_schema.fields[i].data_type = field.data_type.clone();
+                    // TODO: support set computed field.
+                    new_schema.fields[i].computed_expr = field.computed_expr.clone();
+                }
+                if let Some(default_expr) = &field.default_expr {
+                    let default_expr = default_expr.to_string();
+                    new_schema.fields[i].default_expr = Some(default_expr);
+                    let _ = default_expr_binder.get_scalar(&new_schema.fields[i])?;
+                } else {
+                    new_schema.fields[i].default_expr = None;
+                }
+                if old_field.data_type != field.data_type {
                     // Check if this column is referenced by computed columns.
                     let data_schema = DataSchema::from(&new_schema);
                     check_referenced_computed_columns(
@@ -178,19 +181,6 @@ impl ModifyTableColumnInterpreter {
                         Arc::new(data_schema),
                         &field.name,
                     )?;
-                } else {
-                    // new field don't have `column_id`, assign field directly will cause `column_id` lost.
-                    new_schema.fields[i].data_type = field.data_type.clone();
-                    // TODO: support set computed field.
-                    new_schema.fields[i].computed_expr = field.computed_expr.clone();
-                }
-
-                if let Some(default_expr) = &field.default_expr {
-                    let default_expr = default_expr.to_string();
-                    new_schema.fields[i].default_expr = Some(default_expr);
-                    let _ = default_expr_binder.get_scalar(&new_schema.fields[i])?;
-                } else {
-                    new_schema.fields[i].default_expr = None;
                 }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
@@ -266,32 +256,17 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        if fuse_table.change_tracking_enabled() {
-            // Modifying columns while change tracking is active may break
-            // the consistency between tracked changes and the current table schema,
-            // leading to incorrect or incomplete change records.
-            log::warn!(
-                "table {} has change tracking enabled, modifying columns should be avoided",
-                table_info.desc
-            );
-        }
-
         let mut modified_field_indices = HashSet::new();
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         if schema != new_schema {
-            for ((field, _), skip_alter_type_flag) in
-                field_and_comments.iter().zip(skip_alter_type_flags)
-            {
+            for (field, _) in field_and_comments {
                 let old_field = schema.field_with_name(&field.name)?;
                 // If two conditions are met, we don't need rebuild the table,
                 // as rebuild table can be a time-consuming job.
                 // 1. alter column from string to binary in parquet or data type not changed.
                 // 2. default expr and computed expr not changed. Otherwise, we need fill value for
                 //    new added column.
-                if skip_alter_type_flag
-                    && old_field.default_expr == field.default_expr
-                    && old_field.computed_expr == field.computed_expr
-                {
+                if can_skip_rebuild(old_field, field, table.storage_format_as_parquet()) {
                     continue;
                 }
                 let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
@@ -312,6 +287,16 @@ impl ModifyTableColumnInterpreter {
             .await?;
 
             return Ok(PipelineBuildResult::create());
+        }
+
+        if fuse_table.change_tracking_enabled() {
+            // Modifying columns while change tracking is active may break
+            // the consistency between tracked changes and the current table schema,
+            // leading to incorrect or incomplete change records.
+            return Err(ErrorCode::AlterTableError(format!(
+                "table {} has change tracking enabled, modifying columns should be avoided",
+                table_info.desc
+            )));
         }
 
         // construct sql for selecting data from old table.
@@ -711,6 +696,25 @@ fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
         }
         _ => false,
     }
+}
+
+fn can_skip_rebuild(old: &TableField, new: &TableField, is_parquet: bool) -> bool {
+    println!("old: {:?}, new: {:?}", old, new);
+    // 1. Computed expression changed → must rebuild
+    if old.computed_expr != new.computed_expr {
+        return false;
+    }
+
+    // 2. Data type changed and not a Parquet string→binary conversion → must rebuild
+    if (old.data_type != new.data_type)
+        && !(is_parquet && is_string_to_binary(&old.data_type, &new.data_type))
+    {
+        return false;
+    }
+
+    // 3. Otherwise, skip rebuild if default expr is same or both are NOT NULL
+    old.default_expr == new.default_expr
+        || (!old.data_type.is_nullable() && !new.data_type.is_nullable())
 }
 
 pub(crate) async fn build_select_insert_plan(
