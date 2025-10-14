@@ -204,11 +204,15 @@ impl UDFFlightClient {
         // DataType::StageLocation is only used to pass the stage location parameter to the external UDF.
         // It will be passed to the Python server in the UDF headers and skipped when passing this parameter to the UDF server.
         // That is why it is skipped.
-        fn eq_skip_stage(a: &[DataType], b: &[DataType]) -> bool {
-            a.iter().zip(b.iter()).all(|(x, y)| match (x, y) {
-                (DataType::StageLocation, _) | (_, DataType::StageLocation) => true,
-                _ => x == y,
-            })
+        fn eq_skip_stage(remote_args: &[DataType], input_args: &[DataType]) -> bool {
+            remote_args
+                .iter()
+                .zip(
+                    input_args
+                        .iter()
+                        .filter(|ty| ty.remove_nullable() != DataType::StageLocation),
+                )
+                .all(|(x, y)| x == y)
         }
 
         let descriptor = FlightDescriptor::new_path(vec![func_name.to_string()]);
@@ -239,7 +243,7 @@ impl UDFFlightClient {
             .iter()
             .map(|f| f.data_type())
             .collect::<Vec<_>>();
-        if eq_skip_stage(&remote_arg_types, arg_types) {
+        if !eq_skip_stage(&remote_arg_types, arg_types) {
             return Err(ErrorCode::UDFSchemaMismatch(format!(
                 "UDF arg types mismatch on UDF function {}, remote arg types: ({:?}), defined arg types: ({:?})",
                 func_name,
