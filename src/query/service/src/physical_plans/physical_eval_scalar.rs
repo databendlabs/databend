@@ -192,7 +192,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         eval_scalar: &databend_common_sql::plans::EvalScalar,
-        required: ColumnSet,
+        mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
@@ -204,20 +204,19 @@ impl PhysicalPlanBuilder {
                 continue;
             }
             used.push(s.clone());
+            s.scalar.used_columns().iter().for_each(|c| {
+                required.insert(*c);
+            })
         }
-        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
-        debug_assert_eq!(child_required.len(), s_expr.arity());
-        let child_required = child_required.remove(0);
-
         // 2. Build physical plan.
         if used.is_empty() {
-            self.build(s_expr.child(0)?, child_required).await
+            self.build(s_expr.child(0)?, required).await
         } else {
             let child = s_expr.child(0)?;
             let input = if let Some(new_child) = self.try_eliminate_flatten_columns(&used, child)? {
-                self.build(&new_child, child_required.clone()).await?
+                self.build(&new_child, required).await?
             } else {
-                self.build(child, child_required).await?
+                self.build(child, required).await?
             };
 
             let column_projections: HashSet<usize> = column_projections
