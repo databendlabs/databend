@@ -15,13 +15,13 @@
 use std::fmt;
 use std::fmt::Display;
 use std::time::Duration;
+use std::time::Instant;
 
 use anyerror::AnyError;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaNetworkError;
-use display_more::DisplayOptionExt;
 use log::debug;
 use log::info;
 use log::warn;
@@ -70,9 +70,9 @@ pub(crate) struct RpcHandler<'a> {
     /// Used to validate compatibility before executing RPCs.
     pub(crate) required_feature: FeatureSpec,
 
-    /// Currently established connection to the meta-service, if any.
-    /// This is populated after a successful connection is made and validated.
-    pub(crate) established_client: Option<EstablishedClient>,
+    /// Currently established connection and its start time.
+    /// The client and start time are paired together to ensure consistent timing tracking.
+    pub(crate) established_client: Option<(EstablishedClient, Instant)>,
 }
 
 impl<'a> RpcHandler<'a> {
@@ -115,9 +115,9 @@ impl<'a> RpcHandler<'a> {
 
         client.ensure_feature_spec(&self.required_feature)?;
 
-        self.established_client = Some(client);
+        self.established_client = Some((client, Instant::now()));
 
-        Ok(self.established_client.as_mut().unwrap())
+        Ok(&mut self.established_client.as_mut().unwrap().0)
     }
 
     /// Processes an RPC response and determines the appropriate action.
@@ -132,6 +132,9 @@ impl<'a> RpcHandler<'a> {
     /// - Record the failure for error reporting
     /// - Switch to the next endpoint for retry
     ///
+    /// The established client is consumed by this method to prevent accidental reuse.
+    /// For retry attempts, a new client must be established via `new_established_client()`.
+    ///
     /// # Returns
     /// - `Ok(ResponseAction::ShouldRetry)` for retryable errors
     /// - `Ok(ResponseAction::Success(response))` for successful responses
@@ -145,44 +148,60 @@ impl<'a> RpcHandler<'a> {
         R: fmt::Debug,
         T: fmt::Debug,
     {
+        let (established_client, start_time) = self
+            .established_client
+            .take()
+            .expect("established client should be set before processing response");
+
+        let elapsed = start_time.elapsed();
+
         debug!(
-            "MetaGrpcClient::{} {}-th try: result: {:?}",
+            "MetaGrpcClient::{} {}-th try: elapsed: {:?}; with {}; result: {:?}",
             self.required_feature.0,
             self.rpc_failures.len(),
+            elapsed,
+            established_client,
             result
         );
 
         let status = match result {
             Err(e) => e,
-            Ok(x) => return Ok(ResponseAction::Success(x)),
+            Ok(x) => {
+                // Log slow requests even on success
+                if elapsed > default_timing_threshold() {
+                    warn!(
+                        "MetaGrpcClient::{}: done slowly: elapsed: {:?}; with {}; request: {:?}",
+                        self.required_feature.0, elapsed, established_client, request
+                    );
+                }
+                return Ok(ResponseAction::Success(x));
+            }
         };
 
         if is_status_retryable(&status) {
+            let client_display = established_client.to_string();
+
             warn!(
-                "MetaGrpcClient::{} retryable error: {:?}; with {}: request: {:?}",
+                "MetaGrpcClient::{} retryable error: elapsed: {:?}; error: {:?}; with {}; request: {:?}",
                 self.required_feature.0,
+                elapsed,
                 status,
-                self.established_client.display(),
+                client_display,
                 request
             );
 
-            let established_client = self
-                .established_client
-                .as_mut()
-                .expect("established client should be set before processing response");
-
-            self.rpc_failures
-                .push((established_client.to_string(), status));
+            self.rpc_failures.push((client_display, status));
 
             established_client.rotate_failing_target();
 
             Ok(ResponseAction::ShouldRetry)
         } else {
             warn!(
-                "MetaGrpcClient::{} non-retryable error: {:?}; with {}: request: {:?}",
+                "MetaGrpcClient::{} non-retryable error: elapsed: {:?}; error: {:?}; with {}; request: {:?}",
                 self.required_feature.0,
+                elapsed,
                 status,
-                self.established_client.display(),
+                established_client,
                 request
             );
 
