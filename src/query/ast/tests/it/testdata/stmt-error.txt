@@ -39,7 +39,7 @@ error:
   --> SQL:1:19
   |
 1 | create table a (c varch)
-  | ------          - ^^^^^ unexpected `varch`, expecting `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `VECTOR`, `GEOGRAPHY`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `NUMERIC`, `SMALLINT`, `DATETIME`, `INTERVAL`, `NULLABLE`, `REAL`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `TEXT`, `JSON`, or `GEOMETRY`
+  | ------          - ^^^^^ unexpected `varch`, expecting `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `VECTOR`, `GEOGRAPHY`, `STAGE_LOCATION`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `NUMERIC`, `SMALLINT`, `DATETIME`, `INTERVAL`, `NULLABLE`, `REAL`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `TEXT`, `JSON`, or `GEOMETRY`
   | |               |  
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
@@ -52,7 +52,7 @@ error:
   --> SQL:1:25
   |
 1 | create table a (c tuple())
-  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, `VECTOR`, <Ident>, <LiteralString>, or `IDENTIFIER`
+  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, `VECTOR`, `STAGE_LOCATION`, <Ident>, <LiteralString>, or `IDENTIFIER`
   | |               | |      
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
@@ -66,7 +66,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a (b tuple(c int, uint64));
-  | ------          - -----              ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, or `VECTOR`
+  | ------          - -----              ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, `VECTOR`, or `STAGE_LOCATION`
   | |               | |                   
   | |               | while parsing TUPLE(<name> <type>, ...)
   | |               | while parsing type name
@@ -1067,7 +1067,7 @@ error:
   --> SQL:1:40
   |
 1 | CREATE FUNCTION my_agg (INT) STATE { s STRIN } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
-  | ------                 -               ^^^^^ unexpected `STRIN`, expecting `STRING`, `SIGNED`, `INTERVAL`, `TINYINT`, `VARIANT`, `SMALLINT`, `TINYBLOB`, `VARBINARY`, `INT8`, `JSON`, `INT16`, `INT32`, `INT64`, `UINT8`, `BIGINT`, `UINT16`, `UINT32`, `UINT64`, `BINARY`, `INTEGER`, `DATETIME`, `NUMERIC`, `TIMESTAMP`, `UNSIGNED`, `REAL`, `DATE`, `CHAR`, `TEXT`, `ARRAY`, `TUPLE`, `VECTOR`, `BOOLEAN`, `DECIMAL`, `VARCHAR`, `LONGBLOB`, `NULLABLE`, `CHARACTER`, `GEOGRAPHY`, `MEDIUMBLOB`, `BITMAP`, `}`, `BOOL`, `INT`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `MAP`, `BLOB`, or `GEOMETRY`
+  | ------                 -               ^^^^^ unexpected `STRIN`, expecting `STRING`, `SIGNED`, `INTERVAL`, `TINYINT`, `VARIANT`, `SMALLINT`, `TINYBLOB`, `VARBINARY`, `INT8`, `JSON`, `INT16`, `INT32`, `INT64`, `UINT8`, `BIGINT`, `UINT16`, `UINT32`, `UINT64`, `BINARY`, `INTEGER`, `DATETIME`, `NUMERIC`, `TIMESTAMP`, `UNSIGNED`, `STAGE_LOCATION`, `REAL`, `DATE`, `CHAR`, `TEXT`, `ARRAY`, `TUPLE`, `VECTOR`, `BOOLEAN`, `DECIMAL`, `VARCHAR`, `LONGBLOB`, `NULLABLE`, `CHARACTER`, `GEOGRAPHY`, `MEDIUMBLOB`, `BITMAP`, `}`, `BOOL`, `INT`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `MAP`, `BLOB`, or `GEOMETRY`
   | |                      |                
   | |                      while parsing (<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
@@ -1155,7 +1155,7 @@ error:
   | ------ while parsing `CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `
 2 |         (
 3 |             user_name tuple(),
-  |             --------- ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, `VECTOR`, <Ident>, <LiteralString>, or `IDENTIFIER`
+  |             --------- ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, `VECTOR`, `STAGE_LOCATION`, <Ident>, <LiteralString>, or `IDENTIFIER`
   |             |         |      
   |             |         while parsing type name
   |             while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
@@ -1206,7 +1206,7 @@ error:
   --> SQL:1:19
   |
 1 | drop procedure p1(a int)
-  | ----              ^ unexpected `a`, expecting `DATE`, `ARRAY`, `VARCHAR`, `VARIANT`, `SMALLINT`, `DATETIME`, `VARBINARY`, `CHARACTER`, `)`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `MAP`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `CHAR`, `TEXT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, or `VECTOR`
+  | ----              ^ unexpected `a`, expecting `DATE`, `ARRAY`, `VARCHAR`, `VARIANT`, `SMALLINT`, `DATETIME`, `VARBINARY`, `CHARACTER`, `STAGE_LOCATION`, `)`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `MAP`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `CHAR`, `TEXT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, or `VECTOR`
   | |                  
   | while parsing `DROP PROCEDURE <procedure_name>()`
 
@@ -1238,7 +1238,7 @@ error:
   --> SQL:1:44
   |
 1 | create PROCEDURE p1() returns table(string not null, int null) language sql comment = 'test' as $$
-  | ------                        -----        ^^^ unexpected `not`, expecting `INT8`, `INT16`, `INT32`, `INT64`, `UINT16`, `UINT32`, `UINT64`, `INTEGER`, `FLOAT32`, `FLOAT64`, `INTERVAL`, `GEOMETRY`, `INT`, `BOOL`, `DATE`, `BLOB`, `TEXT`, `JSON`, `UINT8`, `FLOAT`, `TUPLE`, `DOUBLE`, `BITMAP`, `BINARY`, `STRING`, `VECTOR`, `BOOLEAN`, `NUMERIC`, `UNSIGNED`, `DATETIME`, `NULLABLE`, `TIMESTAMP`, `GEOGRAPHY`, `TINYINT`, `LONGBLOB`, `TINYBLOB`, `SMALLINT`, `BIGINT`, `SIGNED`, `REAL`, `DECIMAL`, `ARRAY`, `MAP`, `VARBINARY`, `MEDIUMBLOB`, `VARCHAR`, `CHAR`, `CHARACTER`, or `VARIANT`
+  | ------                        -----        ^^^ unexpected `not`, expecting `INT8`, `INT16`, `INT32`, `INT64`, `UINT16`, `UINT32`, `UINT64`, `INTEGER`, `FLOAT32`, `FLOAT64`, `INTERVAL`, `GEOMETRY`, `INT`, `BOOL`, `DATE`, `BLOB`, `TEXT`, `JSON`, `UINT8`, `FLOAT`, `TUPLE`, `DOUBLE`, `BITMAP`, `BINARY`, `STRING`, `VECTOR`, `BOOLEAN`, `NUMERIC`, `UNSIGNED`, `DATETIME`, `NULLABLE`, `TIMESTAMP`, `GEOGRAPHY`, `TINYINT`, `LONGBLOB`, `TINYBLOB`, `STAGE_LOCATION`, `SMALLINT`, `BIGINT`, `SIGNED`, `REAL`, `DECIMAL`, `ARRAY`, `MAP`, `VARBINARY`, `MEDIUMBLOB`, `VARCHAR`, `CHAR`, `CHARACTER`, or `VARIANT`
   | |                             |             
   | |                             while parsing TABLE(<var_name> <type_name>, ...)
   | while parsing `CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`
@@ -1259,7 +1259,7 @@ error:
   --> SQL:1:24
   |
 1 | create PROCEDURE p1(int, string) returns table(string not null, int null) language sql comment = 'test' as $$
-  | ------             -   ^ unexpected `,`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, or `VECTOR`
+  | ------             -   ^ unexpected `,`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, `VECTOR`, or `STAGE_LOCATION`
   | |                  |    
   | |                  while parsing (<var_name> <type_name>, ...)
   | while parsing `CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`
