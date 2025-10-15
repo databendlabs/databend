@@ -102,7 +102,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let _ = interpreter.execute(ctx.clone()).await?;
 
     let new_table = table.refresh(ctx.as_ref()).await?;
-    let new_fuse_table = FuseTable::do_create(new_table.get_table_info().clone())?;
+    let new_fuse_table = FuseTable::create_without_refresh_table_info(new_table.get_table_info().clone())?;
     let table_schema = new_fuse_table.schema();
 
     // get index location from new table snapshot

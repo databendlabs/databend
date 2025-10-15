@@ -211,7 +211,7 @@ async fn check_index_data(
     let new_table_info = new_table.get_table_info().clone();
     let table_indexes = new_table_info.meta.indexes.clone();
 
-    let new_fuse_table = FuseTable::do_create(new_table_info)?;
+    let new_fuse_table = FuseTable::create_without_refresh_table_info(new_table_info)?;
 
     // Get index locations from new table snapshot
     let new_snapshot = new_fuse_table.read_table_snapshot().await?;

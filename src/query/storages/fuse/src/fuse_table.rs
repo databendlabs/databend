@@ -160,12 +160,11 @@ pub struct FuseTable {
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 impl FuseTable {
-    // TODO rename these creators
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
+    pub fn create_and_refresh_table_info(table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Self::do_create_table_ext(table_info, false)?)
     }
 
-    pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
+    pub fn create_without_refresh_table_info(table_info: TableInfo) -> Result<Box<FuseTable>> {
         Self::do_create_table_ext(table_info, true)
     }
 

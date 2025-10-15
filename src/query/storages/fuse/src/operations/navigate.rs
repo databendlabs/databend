@@ -84,7 +84,7 @@ impl FuseTable {
             let mut table_info = self.table_info.clone();
             table_info.meta.options.remove(OPT_KEY_SNAPSHOT_LOCATION);
             table_info.meta.statistics = TableStatistics::default();
-            let table = FuseTable::do_create(table_info)?;
+            let table = FuseTable::create_without_refresh_table_info(table_info)?;
             return Ok(table.into());
         };
         let (snapshot, format_version) =
@@ -231,7 +231,7 @@ impl FuseTable {
         };
 
         // let's instantiate it
-        let table = FuseTable::do_create(table_info)?;
+        let table = FuseTable::create_without_refresh_table_info(table_info)?;
         Ok(table.into())
     }
 

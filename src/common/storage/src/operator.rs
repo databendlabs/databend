@@ -402,6 +402,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         .external_id(&cfg.external_id)
         // It's safe to allow anonymous since opendal will perform the check first.
         .allow_anonymous()
+        // TODO
+        .default_storage_class("INTELLIGENT_TIERING")
         // Root.
         .root(&cfg.root);
 

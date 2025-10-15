@@ -46,7 +46,7 @@ impl FailSafeHandler for RealFailSafeHandler {
             None => DataOperator::instance().operator(),
         };
 
-        let fuse_table = FuseTable::do_create(table_info)?;
+        let fuse_table = FuseTable::create_without_refresh_table_info(table_info)?;
 
         let amender = Amender::new(op);
         amender.recover_snapshot(fuse_table).await?;
