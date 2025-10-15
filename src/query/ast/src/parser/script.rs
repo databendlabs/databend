@@ -24,6 +24,7 @@ use crate::parser::input::Input;
 use crate::parser::statement::*;
 use crate::parser::token::*;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum ScriptBlockOrStmt {
     ScriptBlock(ScriptBlock),
@@ -32,7 +33,7 @@ pub enum ScriptBlockOrStmt {
 
 pub fn script_block_or_stmt(i: Input) -> IResult<ScriptBlockOrStmt> {
     alt((
-        map(script_block, |stmt| ScriptBlockOrStmt::ScriptBlock(stmt)),
+        map(script_block, ScriptBlockOrStmt::ScriptBlock),
         map(
             consumed(rule! {
                 #statement
