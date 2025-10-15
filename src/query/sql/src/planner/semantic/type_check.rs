@@ -4922,9 +4922,8 @@ impl<'a> TypeChecker<'a> {
                 }
                 let expr = arg.as_expr()?;
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let Ok(Some(location)) = expr
-                    .into_constant()
-                    .map(|c| c.scalar.as_string().map(String::clone))
+                let Ok(Some(location)) =
+                    expr.into_constant().map(|c| c.scalar.as_string().cloned())
                 else {
                     return Err(ErrorCode::SemanticError(format!(
                         "invalid parameter {argument} for udf function, expected constant string",
@@ -6138,12 +6137,12 @@ impl<'a> TypeChecker<'a> {
     fn resolve_stage_location(
         &mut self,
         span: Span,
-        location: &String,
+        location: &str,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         Ok(Box::new((
             ScalarExpr::ConstantExpr(ConstantExpr {
                 span,
-                value: Scalar::String(location.clone()),
+                value: Scalar::String(location.to_string()),
             }),
             DataType::String,
         )))
