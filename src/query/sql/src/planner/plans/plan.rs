@@ -605,10 +605,7 @@ impl Plan {
     }
 
     pub fn is_dynamic_schema(&self) -> bool {
-        match self {
-            Plan::ExecuteImmediate { .. } => true,
-            _ => false,
-        }
+        matches!(self, Plan::ExecuteImmediate { .. })
     }
 
     pub fn remove_exchange_for_select(&self) -> Self {
