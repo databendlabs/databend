@@ -163,7 +163,18 @@ impl PhysicalPlanBuilder {
         self.metadata = metadata;
     }
 
-    pub(crate) fn derive_child_required_columns(
+    pub(crate) fn derive_single_child_required_columns(
+        &self,
+        s_expr: &SExpr,
+        parent_required: &ColumnSet,
+    ) -> Result<ColumnSet> {
+        assert_eq!(s_expr.arity(), 1, "Expected arity to be 1");
+
+        let child_required = self.derive_children_required_columns(s_expr, parent_required)?;
+        Ok(child_required.into_iter().next().unwrap())
+    }
+
+    pub(crate) fn derive_children_required_columns(
         &self,
         s_expr: &SExpr,
         parent_required: &ColumnSet,
@@ -395,7 +406,7 @@ impl PhysicalPlanBuilder {
                 Ok(())
             }
             _ => {
-                let child_required = self.derive_child_required_columns(s_expr, &required)?;
+                let child_required = self.derive_children_required_columns(s_expr, &required)?;
                 for (idx, columns) in child_required.into_iter().enumerate() {
                     self.collect_cte_required_columns(s_expr.child(idx)?, columns)?;
                 }

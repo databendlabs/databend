@@ -219,9 +219,7 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
-        debug_assert_eq!(child_required.len(), s_expr.arity());
-        let child_required = child_required.remove(0);
+        let child_required = self.derive_single_child_required_columns(s_expr, &required)?;
 
         // single key without aggregation
         if agg.group_items.is_empty() && used.is_empty() {

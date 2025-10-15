@@ -149,9 +149,7 @@ impl PhysicalPlanBuilder {
         }
 
         // 2. Build physical plan.
-        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
-        debug_assert_eq!(child_required.len(), s_expr.arity());
-        let child_required = child_required.remove(0);
+        let child_required = self.derive_single_child_required_columns(s_expr, &required)?;
         let input_plan = self.build(s_expr.child(0)?, child_required).await?;
         if limit.before_exchange || limit.lazy_columns.is_empty() || !support_lazy_materialize {
             return Ok(PhysicalPlan::new(Limit {

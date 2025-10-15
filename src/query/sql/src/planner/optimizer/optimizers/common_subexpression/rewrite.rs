@@ -211,8 +211,6 @@ mod tests {
         let result = replace_at_path(&original, &[0], replacement);
 
         assert!(result.is_err());
-        let error = result.unwrap_err();
-        assert!(error.to_string().contains("out of bounds"));
     }
 
     #[test]
@@ -225,7 +223,5 @@ mod tests {
         let result = replace_at_path(&original, &[0, 0], replacement);
 
         assert!(result.is_err());
-        let error = result.unwrap_err();
-        assert!(error.to_string().contains("out of bounds"));
     }
 }

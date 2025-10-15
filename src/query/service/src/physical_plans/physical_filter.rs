@@ -137,9 +137,7 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
-        debug_assert_eq!(child_required.len(), s_expr.arity());
-        let child_required = child_required.remove(0);
+        let child_required = self.derive_single_child_required_columns(s_expr, &required)?;
 
         // 2. Build physical plan.
         let input = self.build(s_expr.child(0)?, child_required).await?;

@@ -382,9 +382,7 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
-        debug_assert_eq!(child_required.len(), s_expr.arity());
-        let child_required = child_required.remove(0);
+        let child_required = self.derive_single_child_required_columns(s_expr, &required)?;
 
         // If the query will be optimized by lazy reading, we don't need to do pre-projection.
         let pre_projection: Option<Vec<usize>> = if self.metadata.read().lazy_columns().is_empty() {
@@ -461,7 +459,7 @@ impl PhysicalPlanBuilder {
         };
 
         if !settings.get_enable_shuffle_sort()? || settings.get_max_threads()? == 1 {
-            let input_plan = self.build(s_expr.unary_child(), required).await?;
+            let input_plan = self.build(s_expr.unary_child(), child_required).await?;
             return if !after_exchange {
                 Ok(PhysicalPlan::new(Sort {
                     input: input_plan,
@@ -490,7 +488,7 @@ impl PhysicalPlanBuilder {
         }
 
         if after_exchange {
-            let input_plan = self.build(s_expr.unary_child(), required).await?;
+            let input_plan = self.build(s_expr.unary_child(), child_required).await?;
             return Ok(PhysicalPlan::new(Sort {
                 input: input_plan,
                 order_by,
@@ -504,7 +502,7 @@ impl PhysicalPlanBuilder {
             }));
         }
 
-        let input_plan = self.build(s_expr.unary_child(), required).await?;
+        let input_plan = self.build(s_expr.unary_child(), child_required).await?;
         let sample = PhysicalPlan::new(Sort {
             input: input_plan,
             order_by: order_by.clone(),

@@ -150,7 +150,7 @@ impl PhysicalPlanBuilder {
                 others_required.insert(*column);
             }
         }
-        let mut child_required = self.derive_child_required_columns(s_expr, &required)?;
+        let mut child_required = self.derive_children_required_columns(s_expr, &required)?;
         debug_assert_eq!(child_required.len(), s_expr.arity());
         let left_required = child_required.remove(0);
         let right_required = child_required.remove(0);
