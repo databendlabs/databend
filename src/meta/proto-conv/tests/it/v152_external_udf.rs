@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::types::DataType;
+use databend_common_expression::TableDataType;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
@@ -63,6 +64,17 @@ fn test_decode_v152_external_udf() -> anyhow::Result<()> {
         152,
         want(),
     )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_decode_v152_data_type_stage_location() -> anyhow::Result<()> {
+    let table_data_type_v152 = vec![162, 3, 0, 160, 6, 152, 1, 168, 6, 24];
+
+    let want = || TableDataType::StageLocation;
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), table_data_type_v152.as_slice(), 152, want())?;
 
     Ok(())
 }
