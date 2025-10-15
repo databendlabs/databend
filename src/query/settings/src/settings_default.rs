@@ -803,13 +803,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_experimental_merge_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Deprecated setting",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_experimental_procedure", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables the experimental feature for 'PROCEDURE'. In default disable the experimental feature",
