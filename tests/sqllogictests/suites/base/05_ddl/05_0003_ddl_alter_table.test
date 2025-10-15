@@ -319,7 +319,7 @@ statement ok
 DROP TABLE IF EXISTS t1_random;
 
 statement ok
-CREATE OR REPLACE TABLE test_modify(a int, b int);
+CREATE OR REPLACE TABLE test_modify(a int, b int) STORAGE_FORMAT='parquet';
 
 query T
 DESC TABLE test_modify;
