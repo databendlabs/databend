@@ -1403,6 +1403,7 @@ fn test_expr() {
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
         r#"INTERVAL '1 YEAR'"#,
         r#"(?, ?)"#,
+        r#"@test_stage/input/34"#,
     ];
 
     for case in cases {

@@ -170,7 +170,7 @@ pub enum TokenKind {
     #[regex(r#"\$\$([^\$]|(\$[^\$]))*\$\$"#)]
     LiteralCodeString,
 
-    #[regex(r#"@([^\s`;'"()]|\\\s|\\'|\\"|\\\\)+"#)]
+    #[regex(r#"@([^\s,`;'"()]|\\\s|\\'|\\"|\\\\)+"#)]
     LiteralAtString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]

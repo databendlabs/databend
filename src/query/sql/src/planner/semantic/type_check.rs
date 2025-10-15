@@ -1212,6 +1212,9 @@ impl<'a> TypeChecker<'a> {
                 )
                 .set_span(*span))
             }
+            Expr::StageLocation { span, location } => {
+                self.resolve_stage_location(*span, location)?
+            }
         };
         Ok(Box::new((scalar, data_type)))
     }
@@ -4905,7 +4908,10 @@ impl<'a> TypeChecker<'a> {
         {
             let box (arg, ty) = self.resolve(argument)?;
             // TODO: support cast constant
-            if !matches!(arg, ScalarExpr::ConstantExpr(_)) || ty != dest_type.remove_nullable() {
+            if !matches!(arg, ScalarExpr::ConstantExpr(_))
+                || (ty != dest_type.remove_nullable()
+                    && dest_type.remove_nullable() != DataType::StageLocation)
+            {
                 all_args_const = false;
             }
             if dest_type.remove_nullable() == DataType::StageLocation {
@@ -4916,12 +4922,10 @@ impl<'a> TypeChecker<'a> {
                 }
                 let expr = arg.as_expr()?;
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let Ok(Some(location)) = expr.into_constant().map(|c| {
-                    c.scalar
-                        .as_string()
-                        .and_then(|s| s.strip_prefix('@'))
-                        .map(str::to_string)
-                }) else {
+                let Ok(Some(location)) = expr
+                    .into_constant()
+                    .map(|c| c.scalar.as_string().map(String::clone))
+                else {
                     return Err(ErrorCode::SemanticError(format!(
                         "invalid parameter {argument} for udf function, expected constant string",
                     ))
@@ -5021,7 +5025,12 @@ impl<'a> TypeChecker<'a> {
         udf_definition: UDFServer,
     ) -> Result<Scalar> {
         let mut block_entries = Vec::with_capacity(args.len());
-        for (arg, dest_type) in args.into_iter().zip(udf_definition.arg_types.iter()) {
+        for (arg, dest_type) in args.into_iter().zip(
+            udf_definition
+                .arg_types
+                .iter()
+                .filter(|ty| ty.remove_nullable() != DataType::StageLocation),
+        ) {
             if matches!(dest_type, DataType::StageLocation) {
                 continue;
             }
@@ -6123,6 +6132,20 @@ impl<'a> TypeChecker<'a> {
                 arguments: args,
             }),
             DataType::Nullable(Box::new(DataType::Variant)),
+        )))
+    }
+
+    fn resolve_stage_location(
+        &mut self,
+        span: Span,
+        location: &String,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        Ok(Box::new((
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                span,
+                value: Scalar::String(location.clone()),
+            }),
+            DataType::String,
         )))
     }
 

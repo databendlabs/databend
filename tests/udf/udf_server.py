@@ -451,6 +451,24 @@ def multi_stage_process(
             + len(output_stage.storage.get("bucket", ""))
     )
 
+@udf(
+    stage_refs=["input_stage", "output_stage"],
+    input_types=["VARCHAR"],
+    result_type="INT",
+)
+def immutable_multi_stage_process(
+        input_stage: StageLocation, output_stage: StageLocation, value: str
+) -> int:
+    assert input_stage.storage and output_stage.storage
+    assert input_stage.stage_type.lower() == "external"
+    assert output_stage.stage_type.lower() == "external"
+    # Simple deterministic behaviour for testing
+    return (
+            len(value)
+            + len(input_stage.storage.get("bucket", ""))
+            + len(output_stage.storage.get("bucket", ""))
+    )
+
 if __name__ == "__main__":
     udf_server = CheckHeadersServer(
         location="0.0.0.0:8815", middleware={"headers": HeadersMiddlewareFactory()}
@@ -484,6 +502,7 @@ if __name__ == "__main__":
     udf_server.add_function(embedding_4)
     udf_server.add_function(stage_summary)
     udf_server.add_function(multi_stage_process)
+    udf_server.add_function(immutable_multi_stage_process)
 
     # Built-in function
     udf_server.add_function(ping)

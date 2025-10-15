@@ -296,6 +296,10 @@ pub enum Expr {
     Placeholder {
         span: Span,
     },
+    StageLocation {
+        span: Span,
+        location: String,
+    },
 }
 
 impl Expr {
@@ -341,7 +345,8 @@ impl Expr {
             | Expr::PreviousDay { span, .. }
             | Expr::NextDay { span, .. }
             | Expr::Hole { span, .. }
-            | Expr::Placeholder { span } => *span,
+            | Expr::Placeholder { span }
+            | Expr::StageLocation { span, .. } => *span,
         }
     }
 
@@ -510,6 +515,7 @@ impl Expr {
             Expr::NextDay { span, date, .. } => merge_span(*span, date.whole_span()),
             Expr::Hole { span, .. } => *span,
             Expr::Placeholder { span } => *span,
+            Expr::StageLocation { span, .. } => *span,
         }
     }
 
@@ -905,6 +911,9 @@ impl Display for Expr {
                 }
                 Expr::Placeholder { .. } => {
                     write!(f, "?")?;
+                }
+                Expr::StageLocation { location, .. } => {
+                    write!(f, "@{location}")?;
                 }
             }
 

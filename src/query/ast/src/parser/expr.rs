@@ -351,6 +351,9 @@ pub enum ExprElement {
         name: String,
     },
     Placeholder,
+    StageLocation {
+        location: String,
+    },
 }
 
 pub const BETWEEN_PREC: u32 = 20;
@@ -471,6 +474,7 @@ impl ExprElement {
             ExprElement::Hole { .. } => Affix::Nilfix,
             ExprElement::Placeholder => Affix::Nilfix,
             ExprElement::VariableAccess { .. } => Affix::Nilfix,
+            ExprElement::StageLocation { .. } => Affix::Nilfix,
         }
     }
 }
@@ -522,6 +526,7 @@ impl Expr {
             Expr::NextDay { .. } => Affix::Nilfix,
             Expr::Hole { .. } => Affix::Nilfix,
             Expr::Placeholder { .. } => Affix::Nilfix,
+            Expr::StageLocation { .. } => Affix::Nilfix,
         }
     }
 }
@@ -770,6 +775,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 let span = transform_span(elem.span.tokens);
                 make_func_get_variable(span, name)
             }
+            ExprElement::StageLocation { location } => Expr::StageLocation {
+                span: transform_span(elem.span.tokens),
+                location,
+            },
             _ => unreachable!(),
         };
         Ok(expr)
@@ -1490,6 +1499,10 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         }
     });
 
+    let stage_location = map(rule! { #at_string }, |location| {
+        ExprElement::StageLocation { location }
+    });
+
     map(
         consumed(alt((
             // Note: each `alt` call supports maximum of 21 parsers
@@ -1540,6 +1553,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 #case : "`CASE ... END`"
                 | #tuple : "`(<expr> [, ...])`"
                 | #subquery : "`(SELECT ...)`"
+                | #stage_location: "@<location>"
                 | #column_ref : "<column>"
                 | #dot_access : "<dot_access>"
                 | #map_access : "[<key>] | .<key> | :<key>"
