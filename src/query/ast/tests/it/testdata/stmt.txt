@@ -26453,9 +26453,55 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
-            arg_types: [
-                Binary,
-            ],
+            arg_types: Types(
+                [
+                    Binary,
+                ],
+            ),
+            return_type: Binary,
+            address: "http://0.0.0.0:8815",
+            handler: "binary_reverse",
+            headers: {},
+            language: "python",
+            immutable: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE FUNCTION binary_reverse (arg0 BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+CREATE FUNCTION binary_reverse ( arg0 BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: Create,
+        udf_name: Identifier {
+            span: Some(
+                16..30,
+            ),
+            name: "binary_reverse",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDFServer {
+            arg_types: NameWithTypes(
+                [
+                    (
+                        Identifier {
+                            span: Some(
+                                32..36,
+                            ),
+                            name: "arg0",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        Binary,
+                    ),
+                ],
+            ),
             return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
@@ -26485,9 +26531,11 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
-            arg_types: [
-                Binary,
-            ],
+            arg_types: Types(
+                [
+                    Binary,
+                ],
+            ),
             return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
@@ -26558,9 +26606,11 @@ AlterUDF(
         },
         description: None,
         definition: UDFServer {
-            arg_types: [
-                Binary,
-            ],
+            arg_types: Types(
+                [
+                    Binary,
+                ],
+            ),
             return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
@@ -26590,9 +26640,11 @@ CreateUDF(
         },
         description: None,
         definition: UDFServer {
-            arg_types: [
-                Binary,
-            ],
+            arg_types: Types(
+                [
+                    Binary,
+                ],
+            ),
             return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
@@ -26835,9 +26887,11 @@ CreateUDF(
         },
         description: None,
         definition: UDAFServer {
-            arg_types: [
-                Int32,
-            ],
+            arg_types: Types(
+                [
+                    Int32,
+                ],
+            ),
             state_fields: [
                 UDAFStateField {
                     name: Identifier {

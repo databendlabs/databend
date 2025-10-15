@@ -312,6 +312,7 @@ impl FromToProto for ex::TableDataType {
                     Dt24::VectorT(v) => {
                         ex::TableDataType::Vector(ex::types::VectorDataType::from_pb(v)?)
                     }
+                    Dt24::StageLocationT(_) => ex::TableDataType::StageLocation,
                 };
                 Ok(x)
             }
@@ -380,6 +381,7 @@ impl FromToProto for ex::TableDataType {
                 let x = v.to_pb()?;
                 new_pb_dt24(Dt24::VectorT(x))
             }
+            TableDataType::StageLocation => new_pb_dt24(Dt24::StageLocationT(pb::Empty {})),
         };
         Ok(x)
     }

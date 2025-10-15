@@ -5326,9 +5326,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
-    let udf = map(
+    let udf = map_res(
         rule! {
-            "(" ~ #comma_separated_list0(type_name) ~ ")"
+            #udf_args
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
             ~ (#udf_immutable)?
@@ -5339,9 +5339,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ #udf_script_or_address
         },
         |(
-            _,
             arg_types,
-            _,
             _,
             return_type,
             _,
@@ -5356,7 +5354,12 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             address_or_code,
         )| {
             if address_or_code.1 {
-                UDFDefinition::UDFScript {
+                let UDFArgs::Types(arg_types) = arg_types else {
+                    return Err(nom::Err::Failure(ErrorKind::Other(
+                        "UDFScript parameters can only be of type",
+                    )));
+                };
+                Ok(UDFDefinition::UDFScript {
                     arg_types,
                     return_type,
                     code: address_or_code.0,
@@ -5372,9 +5375,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     // Now we use fixed runtime version
                     runtime_version: "".to_string(),
                     immutable,
-                }
+                })
             } else {
-                UDFDefinition::UDFServer {
+                Ok(UDFDefinition::UDFServer {
                     arg_types,
                     return_type,
                     address: address_or_code.0,
@@ -5384,7 +5387,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                         .map(|(_, _, _, headers, _)| BTreeMap::from_iter(headers))
                         .unwrap_or_default(),
                     immutable,
-                }
+                })
             }
         },
     );
@@ -5409,9 +5412,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
-    let udaf = map(
+    let udaf = map_res(
         rule! {
-            "(" ~ #comma_separated_list0(type_name) ~ ")"
+            #udf_args
             ~ STATE ~ "{" ~ #comma_separated_list0(udaf_state_field) ~ "}"
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
@@ -5421,9 +5424,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ #udf_script_or_address
         },
         |(
-            _,
             arg_types,
-            _,
             _,
             _,
             state_types,
@@ -5438,7 +5439,12 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             address_or_code,
         )| {
             if address_or_code.1 {
-                UDFDefinition::UDAFScript {
+                let UDFArgs::Types(arg_types) = arg_types else {
+                    return Err(nom::Err::Failure(ErrorKind::Other(
+                        "UDAFScript parameters can only be of type",
+                    )));
+                };
+                Ok(UDFDefinition::UDAFScript {
                     arg_types,
                     state_fields: state_types,
                     return_type,
@@ -5453,9 +5459,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     // TODO inject runtime_version by user
                     // Now we use fixed runtime version
                     runtime_version: "".to_string(),
-                }
+                })
             } else {
-                UDFDefinition::UDAFServer {
+                Ok(UDFDefinition::UDAFServer {
                     arg_types,
                     state_fields: state_types,
                     return_type,
@@ -5464,7 +5470,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                         .map(|(_, _, _, headers, _)| BTreeMap::from_iter(headers))
                         .unwrap_or_default(),
                     language: language.to_string(),
-                }
+                })
             }
         },
     );
@@ -5474,6 +5480,26 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         | #udaf: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
         | #udf: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
         | #scalar_udf_or_udtf: "(<arg_type>, ...) RETURNS <return body> AS <sql> }"
+    )(i)
+}
+
+fn udf_args(i: Input) -> IResult<UDFArgs> {
+    let types = map(
+        rule! {
+            "(" ~ #comma_separated_list0(type_name) ~ ")"
+        },
+        |(_, types, _)| UDFArgs::Types(types),
+    );
+    let name_with_types = map(
+        rule! {
+            "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+        },
+        |(_, name_with_types, _)| UDFArgs::NameWithTypes(name_with_types),
+    );
+
+    rule!(
+        #types: "(<arg_type>, ...)"
+        | #name_with_types: "(<arg_name arg_type>, ...)"
     )(i)
 }
 
