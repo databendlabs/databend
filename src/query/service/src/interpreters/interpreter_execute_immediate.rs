@@ -16,20 +16,20 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::DeclareItem;
 use databend_common_ast::ast::ScriptStatement;
-use databend_common_ast::parser::run_parser;
-use databend_common_ast::parser::script::script_block;
-use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::ParseMode;
 use databend_common_exception::Result;
-use databend_common_expression::block_debug::box_render;
-use databend_common_expression::types::StringType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Scalar;
 use databend_common_script::compile;
 use databend_common_script::Executor;
 use databend_common_script::ReturnValue;
 use databend_common_sql::plans::ExecuteImmediatePlan;
 use databend_common_storages_fuse::TableContext;
+use tokio::sync::Mutex;
 
 use crate::interpreters::util::ScriptClient;
 use crate::interpreters::Interpreter;
@@ -40,11 +40,17 @@ use crate::sessions::QueryContext;
 pub struct ExecuteImmediateInterpreter {
     ctx: Arc<QueryContext>,
     plan: ExecuteImmediatePlan,
+    // schema is only known after execute
+    schema: Mutex<Option<DataSchemaRef>>,
 }
 
 impl ExecuteImmediateInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: ExecuteImmediatePlan) -> Result<Self> {
-        Ok(ExecuteImmediateInterpreter { ctx, plan })
+        Ok(ExecuteImmediateInterpreter {
+            ctx,
+            plan,
+            schema: Mutex::new(None),
+        })
     }
 }
 
@@ -58,21 +64,15 @@ impl Interpreter for ExecuteImmediateInterpreter {
         false
     }
 
+    async fn get_dynamic_schema(&self) -> Option<DataSchemaRef> {
+        self.schema.lock().await.clone()
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let res: Result<_> = try {
-            let settings = self.ctx.get_settings();
-            let sql_dialect = settings.get_sql_dialect()?;
-            let tokens = tokenize_sql(&self.plan.script)?;
-            let mut ast = run_parser(
-                &tokens,
-                sql_dialect,
-                ParseMode::Template,
-                false,
-                script_block,
-            )?;
-
+            let mut ast = self.plan.script_block.clone();
             let mut src = vec![];
             for declare in ast.declares {
                 match declare {
@@ -89,32 +89,43 @@ impl Interpreter for ExecuteImmediateInterpreter {
                 ctx: self.ctx.clone(),
             };
             let mut executor = Executor::load(ast.span, client, compiled);
+            let settings = self.ctx.get_settings();
             let script_max_steps = settings.get_script_max_steps()?;
             let result = executor.run(script_max_steps as usize).await?;
 
             match result {
                 Some(ReturnValue::Var(scalar)) => {
-                    PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                        StringType::from_data(vec![scalar.to_string()]),
-                    ])])?
+                    let typ = scalar.as_ref().infer_data_type();
+                    let value = BlockEntry::new_const_column(typ.clone(), scalar, 1);
+
+                    let mut w = self.schema.lock().await;
+                    *w = Some(DataSchemaRefExt::create(vec![DataField::new(
+                        "Result", typ,
+                    )]));
+                    PipelineBuildResult::from_blocks(vec![DataBlock::new(vec![value], 1)])?
                 }
                 Some(ReturnValue::Set(set)) => {
-                    let rendered_table = box_render(
-                        &set.schema,
-                        &[set.block.clone()],
-                        usize::MAX,
-                        usize::MAX,
-                        usize::MAX,
-                        true,
-                    )?;
-                    let lines = rendered_table.lines().map(|x| x.to_string()).collect();
-                    PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                        StringType::from_data(lines),
-                    ])])?
+                    let block = set.block;
+
+                    let mut w = self.schema.lock().await;
+                    *w = Some(set.schema);
+
+                    PipelineBuildResult::from_blocks(vec![block])?
                 }
-                None => PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                    StringType::from_data(Vec::<String>::new()),
-                ])])?,
+                None => {
+                    let value = BlockEntry::new_const_column(
+                        DataType::String.wrap_nullable(),
+                        Scalar::Null,
+                        1,
+                    );
+
+                    let mut w = self.schema.lock().await;
+                    *w = Some(DataSchemaRefExt::create(vec![DataField::new(
+                        "Result",
+                        DataType::String.wrap_nullable(),
+                    )]));
+                    PipelineBuildResult::from_blocks(vec![DataBlock::new(vec![value], 1)])?
+                }
             }
         };
 

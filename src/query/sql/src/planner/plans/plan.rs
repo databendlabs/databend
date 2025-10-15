@@ -604,6 +604,13 @@ impl Plan {
         !self.schema().fields().is_empty()
     }
 
+    pub fn is_dynamic_schema(&self) -> bool {
+        match self {
+            Plan::ExecuteImmediate { .. } => true,
+            _ => false,
+        }
+    }
+
     pub fn remove_exchange_for_select(&self) -> Self {
         if let Plan::Query {
             s_expr,

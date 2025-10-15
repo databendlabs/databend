@@ -22,7 +22,6 @@ use databend_common_ast::ast::CreateTaskStmt;
 use databend_common_ast::ast::DescribeTaskStmt;
 use databend_common_ast::ast::DropTaskStmt;
 use databend_common_ast::ast::ExecuteTaskStmt;
-use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowTasksStmt;
 use databend_common_ast::ast::TaskSql;

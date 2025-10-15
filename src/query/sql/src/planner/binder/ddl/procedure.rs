@@ -18,11 +18,15 @@ use databend_common_ast::ast::CreateProcedureStmt;
 use databend_common_ast::ast::DescProcedureStmt;
 use databend_common_ast::ast::DropProcedureStmt;
 use databend_common_ast::ast::ExecuteImmediateStmt;
-use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ProcedureIdentity as AstProcedureIdentity;
 use databend_common_ast::ast::ProcedureLanguage;
 use databend_common_ast::ast::ProcedureType;
 use databend_common_ast::ast::ShowOptions;
+use databend_common_ast::parser::run_parser;
+use databend_common_ast::parser::script::script_block_or_stmt;
+use databend_common_ast::parser::script::ScriptBlockOrStmt;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::ParseMode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -70,9 +74,30 @@ impl Binder {
                 ))
             }
         };
-        Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
-            script,
-        })))
+
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let tokens = tokenize_sql(&script)?;
+        let ast = run_parser(
+            &tokens,
+            sql_dialect,
+            ParseMode::Template,
+            false,
+            script_block_or_stmt,
+        )?;
+
+        match ast {
+            ScriptBlockOrStmt::ScriptBlock(script_block) => {
+                Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
+                    script_block,
+                    script,
+                })))
+            }
+            ScriptBlockOrStmt::Statement(stmt) => {
+                let binder = self.clone();
+                binder.bind(&stmt).await
+            }
+        }
     }
 
     pub async fn bind_create_procedure(&mut self, stmt: &CreateProcedureStmt) -> Result<Plan> {

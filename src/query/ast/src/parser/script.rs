@@ -24,39 +24,42 @@ use crate::parser::input::Input;
 use crate::parser::statement::*;
 use crate::parser::token::*;
 
-pub fn script_block(i: Input) -> IResult<ScriptBlock> {
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScriptBlockOrStmt {
+    ScriptBlock(ScriptBlock),
+    Statement(Statement),
+}
+
+pub fn script_block_or_stmt(i: Input) -> IResult<ScriptBlockOrStmt> {
     alt((
-        map(
-            consumed(rule! {
-                ( DECLARE ~ #semicolon_terminated_list1(declare_item) )?
-                ~ BEGIN
-                ~ #semicolon_terminated_list1(script_stmt)
-                ~ END
-                ~ ";"
-            }),
-            |(span, (declares, _, body, _, _))| {
-                let declares = declares.map(|(_, declare)| declare).unwrap_or_default();
-                ScriptBlock {
-                    span: transform_span(span.tokens),
-                    declares,
-                    body,
-                }
-            },
-        ),
+        map(script_block, |stmt| ScriptBlockOrStmt::ScriptBlock(stmt)),
         map(
             consumed(rule! {
                 #statement
             }),
-            |(span, stmt)| ScriptBlock {
-                span: transform_span(span.tokens),
-                declares: Vec::new(),
-                body: vec![ScriptStatement::RunStatement {
-                    stmt: stmt.stmt,
-                    span: transform_span(span.tokens),
-                }],
-            },
+            |(_, stmt)| ScriptBlockOrStmt::Statement(stmt.stmt),
         ),
     ))(i)
+}
+
+pub fn script_block(i: Input) -> IResult<ScriptBlock> {
+    map(
+        consumed(rule! {
+            ( DECLARE ~ #semicolon_terminated_list1(declare_item) )?
+            ~ BEGIN
+            ~ #semicolon_terminated_list1(script_stmt)
+            ~ END
+            ~ ";"
+        }),
+        |(span, (declares, _, body, _, _))| {
+            let declares = declares.map(|(_, declare)| declare).unwrap_or_default();
+            ScriptBlock {
+                span: transform_span(span.tokens),
+                declares,
+                body,
+            }
+        },
+    )(i)
 }
 
 pub fn declare_item(i: Input) -> IResult<DeclareItem> {

@@ -13,10 +13,8 @@
 // limitations under the License.
 
 use databend_common_ast::ast::CallStmt;
-use databend_common_ast::ast::Identifier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::Scalar;
 
 use crate::binder::Binder;
 use crate::plans::Plan;
