@@ -13,10 +13,10 @@
 ## limitations under the License.
 
 statement ok
-create or replace table t_18827(a int, b int not null default 1);
+create or replace table t_18827(a string, b int not null default 1);
 
 query I
-insert into t_18827 values(1, 1),(2, 2);
+insert into t_18827 values('a', 1),('b', 2);
 ----
 2
 
@@ -30,7 +30,13 @@ statement error 1132
 alter table t_18827 modify column b float64;
 
 statement ok
-alter table t_18827 modify column b int not null default 2;
+alter table t_18827 modify column a binary;
+
+query T
+select a, b from t_18827;
+----
+61 1
+62 2
 
 query T
 select a, b, change$action, change$is_update from s1_18827;

@@ -246,7 +246,7 @@ impl ModifyTableColumnInterpreter {
                             .is_some_and(|v| v.null_count > 0);
                         if has_null {
                             return Err(ErrorCode::TableOptionInvalid(format!(
-                                "Cannot modify column '{}' from NULL to NOT NULL because it contains NULL values",
+                                "Cannot modify column `{}` from NULL to NOT NULL because it contains NULL values",
                                 field.name
                             )));
                         }
@@ -276,12 +276,18 @@ impl ModifyTableColumnInterpreter {
             if base_snapshot.is_some_and(|v| v.summary.row_count > 0) {
                 for (field, _) in field_and_comments {
                     let old_field = schema.field_with_name(&field.name)?;
+                    let is_alter_column_string_to_binary =
+                        is_string_to_binary(&old_field.data_type, &field.data_type);
                     // If two conditions are met, we don't need rebuild the table,
                     // as rebuild table can be a time-consuming job.
                     // 1. alter column from string to binary in parquet or data type not changed.
                     // 2. default expr and computed expr not changed. Otherwise, we need fill value for
                     //    new added column.
-                    if can_skip_rebuild(old_field, field, table.storage_format_as_parquet()) {
+                    if ((table.storage_format_as_parquet() && is_alter_column_string_to_binary)
+                        || old_field.data_type == field.data_type)
+                        && old_field.default_expr == field.default_expr
+                        && old_field.computed_expr == field.computed_expr
+                    {
                         continue;
                     }
                     let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
@@ -712,24 +718,6 @@ fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
         }
         _ => false,
     }
-}
-
-fn can_skip_rebuild(old: &TableField, new: &TableField, is_parquet: bool) -> bool {
-    // 1. Computed expression changed → must rebuild
-    if old.computed_expr != new.computed_expr {
-        return false;
-    }
-
-    // 2. Data type changed and not a Parquet string→binary conversion → must rebuild
-    if (old.data_type != new.data_type)
-        && !(is_parquet && is_string_to_binary(&old.data_type, &new.data_type))
-    {
-        return false;
-    }
-
-    // 3. Otherwise, skip rebuild if default expr is same or both are NOT NULL
-    old.default_expr == new.default_expr
-        || (!old.data_type.is_nullable() && !new.data_type.is_nullable())
 }
 
 pub(crate) async fn build_select_insert_plan(
