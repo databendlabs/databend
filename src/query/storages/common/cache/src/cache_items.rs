@@ -41,10 +41,10 @@ impl ColumnData {
         ColumnData(bytes)
     }
 
-    pub fn from_merge_io_read_result(bytes: Bytes) -> Self {
+    pub fn from_merge_io_read_result(bytes: Vec<u8>) -> Self {
         // Bytes are from merge read result, may refer to a large chunk of memory;
         // Caching this large buffer wastes memory, so we need to copy it out.
-        ColumnData(bytes.to_vec().into())
+        ColumnData(bytes.into())
     }
 
     pub fn bytes(&self) -> Bytes {

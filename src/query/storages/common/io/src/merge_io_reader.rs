@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
 use futures::future::try_join_all;
+use opendal::Buffer;
 use opendal::Operator;
 
 use crate::merge_io_result::OwnerMemory;
@@ -125,9 +126,9 @@ impl MergeIOReader {
         index: usize,
         start: u64,
         end: u64,
-    ) -> Result<(usize, Vec<u8>)> {
+    ) -> Result<(usize, Buffer)> {
         let chunk = op.read_with(path).range(start..end).await?;
-        Ok((index, chunk.to_vec()))
+        Ok((index, chunk))
     }
 
     pub fn sync_merge_io_read(
@@ -196,8 +197,8 @@ impl MergeIOReader {
         index: usize,
         start: u64,
         end: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = op.blocking().read_with(path).range(start..end).call()?;
-        Ok((index, chunk.to_vec()))
+    ) -> Result<(usize, Buffer)> {
+        let buf = op.blocking().read_with(path).range(start..end).call()?;
+        Ok((index, buf))
     }
 }

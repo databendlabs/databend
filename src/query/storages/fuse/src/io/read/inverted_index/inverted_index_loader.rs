@@ -135,10 +135,10 @@ pub(crate) async fn load_inverted_index_files<'a>(
             let chunk = merge_io_result
                 .owner_memory
                 .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
-            let data = chunk.slice(range.clone());
+            let data = chunk.slice(range.clone()).to_vec();
 
             let (name, cache_key) = names_map.remove(column_id).unwrap();
-            let file = InvertedIndexFile::create(name, data.into());
+            let file = InvertedIndexFile::create(name, data);
 
             // add index file to cache
             inverted_index_file_cache.insert(cache_key, file.clone());

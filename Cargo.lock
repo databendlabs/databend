@@ -5478,7 +5478,6 @@ name = "databend-storages-common-io"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "bytes",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",

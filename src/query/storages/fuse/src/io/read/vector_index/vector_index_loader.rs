@@ -165,7 +165,7 @@ pub async fn load_vector_index_files<'a>(
             let data = chunk.slice(range.clone());
 
             let (name, cache_key) = names_map.remove(i).unwrap();
-            let file = VectorIndexFile::create(name.clone(), data.into());
+            let file = VectorIndexFile::create(name.clone(), data.to_vec());
 
             // add index file to cache
             vector_index_file_cache.insert(cache_key, file.clone());
