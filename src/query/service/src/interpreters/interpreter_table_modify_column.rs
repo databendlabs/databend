@@ -200,6 +200,7 @@ impl ModifyTableColumnInterpreter {
             .ctx
             .get_table_meta_timestamps(table.as_ref(), base_snapshot.clone())?;
         let col_stats = base_snapshot.as_ref().map(|v| &v.summary.col_stats);
+        let format_as_parquet = fuse_table.storage_format_as_parquet();
 
         let mut bloom_index_cols = vec![];
         if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
@@ -240,7 +241,10 @@ impl ModifyTableColumnInterpreter {
                     }
                     // Prevent changing a nullable column to NOT NULL when existing data contains NULL values.
                     // Check column statistics to ensure no NULLs are present before allowing this modification.
-                    if old_field.data_type.is_nullable() && !field.data_type.is_nullable() {
+                    if format_as_parquet
+                        && old_field.data_type.is_nullable()
+                        && !field.data_type.is_nullable()
+                    {
                         let has_null = col_stats
                             .and_then(|v| v.get(&old_field.column_id))
                             .is_some_and(|v| v.null_count > 0);
@@ -283,7 +287,7 @@ impl ModifyTableColumnInterpreter {
                     // 1. alter column from string to binary in parquet or data type not changed.
                     // 2. default expr and computed expr not changed. Otherwise, we need fill value for
                     //    new added column.
-                    if ((table.storage_format_as_parquet() && is_alter_column_string_to_binary)
+                    if ((format_as_parquet && is_alter_column_string_to_binary)
                         || old_field.data_type == field.data_type)
                         && old_field.default_expr == field.default_expr
                         && old_field.computed_expr == field.computed_expr
