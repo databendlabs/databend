@@ -1918,6 +1918,106 @@ RunStatement {
 
 
 ---------- Input ----------
+EXECUTE TASK IDENTIFIER(:my_task)
+---------- Output ---------
+EXECUTE TASK IDENTIFIER(:my_task)
+---------- AST ------------
+RunStatement {
+    span: Some(
+        0..33,
+    ),
+    stmt: ExecuteTask(
+        ExecuteTaskStmt {
+            name: Identifier {
+                span: Some(
+                    13..33,
+                ),
+                name: "my_task",
+                quote: None,
+                ident_type: Hole,
+            },
+        },
+    ),
+}
+
+
+---------- Input ----------
+DESC TASK IDENTIFIER(:my_task)
+---------- Output ---------
+DESCRIBE TASK IDENTIFIER(:my_task)
+---------- AST ------------
+RunStatement {
+    span: Some(
+        0..30,
+    ),
+    stmt: DescribeTask(
+        DescribeTaskStmt {
+            name: Identifier {
+                span: Some(
+                    10..30,
+                ),
+                name: "my_task",
+                quote: None,
+                ident_type: Hole,
+            },
+        },
+    ),
+}
+
+
+---------- Input ----------
+CALL IDENTIFIER(:test)(a)
+---------- Output ---------
+CALL IDENTIFIER(:test)('a')
+---------- AST ------------
+RunStatement {
+    span: Some(
+        0..25,
+    ),
+    stmt: Call(
+        CallStmt {
+            name: Identifier {
+                span: Some(
+                    5..22,
+                ),
+                name: "test",
+                quote: None,
+                ident_type: Hole,
+            },
+            args: [
+                "a",
+            ],
+        },
+    ),
+}
+
+
+---------- Input ----------
+call PROCEDURE IDENTIFIER(:proc_name)()
+---------- Output ---------
+CALL PROCEDURE IDENTIFIER(:proc_name)()
+---------- AST ------------
+RunStatement {
+    span: Some(
+        0..39,
+    ),
+    stmt: CallProcedure(
+        CallProcedureStmt {
+            name: Identifier {
+                span: Some(
+                    15..37,
+                ),
+                name: "proc_name",
+                quote: None,
+                ident_type: Hole,
+            },
+            args: [],
+        },
+    ),
+}
+
+
+---------- Input ----------
 BEGIN
     LOOP
         CONTINUE;

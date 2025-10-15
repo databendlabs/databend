@@ -774,7 +774,7 @@ impl Compiler {
                     let index = self.compiler.lookup_var(ident);
                     match index {
                         Ok(index) => {
-                            *ident = Identifier::from_name(ident.span, index.to_string());
+                            *ident = Identifier::from_name(ident.span, index.index.to_string());
                             ident.ident_type = IdentifierType::Hole;
                         }
                         Err(e) => {

@@ -22,6 +22,7 @@ use databend_common_ast::ast::CreateTaskStmt;
 use databend_common_ast::ast::DescribeTaskStmt;
 use databend_common_ast::ast::DropTaskStmt;
 use databend_common_ast::ast::ExecuteTaskStmt;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowTasksStmt;
 use databend_common_ast::ast::TaskSql;
@@ -136,7 +137,7 @@ impl Binder {
         let plan = CreateTaskPlan {
             create_option: create_option.clone().into(),
             tenant,
-            task_name: name.to_string(),
+            task_name: name.clone(),
             warehouse: warehouse.clone(),
             schedule_opts: schedule_opts.clone(),
             suspend_task_after_num_failures: *suspend_task_after_num_failures,
@@ -195,7 +196,7 @@ impl Binder {
         let plan = AlterTaskPlan {
             if_exists: *if_exists,
             tenant,
-            task_name: name.to_string(),
+            task_name: name.clone(),
             alter_options: options.clone(),
         };
         Ok(Plan::AlterTask(Box::new(plan)))
@@ -213,7 +214,7 @@ impl Binder {
         let plan = DropTaskPlan {
             if_exists: *if_exists,
             tenant,
-            task_name: name.to_string(),
+            task_name: name.clone(),
         };
         Ok(Plan::DropTask(Box::new(plan)))
     }
@@ -223,13 +224,11 @@ impl Binder {
         &mut self,
         stmt: &DescribeTaskStmt,
     ) -> Result<Plan> {
-        let DescribeTaskStmt { name } = stmt;
-
         let tenant = self.ctx.get_tenant();
 
         let plan = DescribeTaskPlan {
             tenant,
-            task_name: name.to_string(),
+            task_name: stmt.name.to_string(),
         };
         Ok(Plan::DescribeTask(Box::new(plan)))
     }
@@ -239,13 +238,11 @@ impl Binder {
         &mut self,
         stmt: &ExecuteTaskStmt,
     ) -> Result<Plan> {
-        let ExecuteTaskStmt { name } = stmt;
-
         let tenant = self.ctx.get_tenant();
 
         let plan = ExecuteTaskPlan {
             tenant,
-            task_name: name.to_string(),
+            task_name: stmt.name.to_string(),
         };
         Ok(Plan::ExecuteTask(Box::new(plan)))
     }

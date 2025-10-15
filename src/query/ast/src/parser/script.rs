@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
 use nom_rule::rule;
@@ -24,23 +25,38 @@ use crate::parser::statement::*;
 use crate::parser::token::*;
 
 pub fn script_block(i: Input) -> IResult<ScriptBlock> {
-    map(
-        consumed(rule! {
-            ( DECLARE ~ #semicolon_terminated_list1(declare_item) )?
-            ~ BEGIN
-            ~ #semicolon_terminated_list1(script_stmt)
-            ~ END
-            ~ ";"
-        }),
-        |(span, (declares, _, body, _, _))| {
-            let declares = declares.map(|(_, declare)| declare).unwrap_or_default();
-            ScriptBlock {
+    alt((
+        map(
+            consumed(rule! {
+                ( DECLARE ~ #semicolon_terminated_list1(declare_item) )?
+                ~ BEGIN
+                ~ #semicolon_terminated_list1(script_stmt)
+                ~ END
+                ~ ";"
+            }),
+            |(span, (declares, _, body, _, _))| {
+                let declares = declares.map(|(_, declare)| declare).unwrap_or_default();
+                ScriptBlock {
+                    span: transform_span(span.tokens),
+                    declares,
+                    body,
+                }
+            },
+        ),
+        map(
+            consumed(rule! {
+                #statement
+            }),
+            |(span, stmt)| ScriptBlock {
                 span: transform_span(span.tokens),
-                declares,
-                body,
-            }
-        },
-    )(i)
+                declares: Vec::new(),
+                body: vec![ScriptStatement::RunStatement {
+                    stmt: stmt.stmt,
+                    span: transform_span(span.tokens),
+                }],
+            },
+        ),
+    ))(i)
 }
 
 pub fn declare_item(i: Input) -> IResult<DeclareItem> {

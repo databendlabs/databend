@@ -226,22 +226,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             EXECUTE ~ TASK ~ #ident
         },
-        |(_, _, task)| {
-            Statement::ExecuteTask(ExecuteTaskStmt {
-                name: task.to_string(),
-            })
-        },
+        |(_, _, task)| Statement::ExecuteTask(ExecuteTaskStmt { name: task }),
     );
 
     let desc_task = map(
         rule! {
             ( DESC | DESCRIBE ) ~ TASK ~ #ident
         },
-        |(_, _, task)| {
-            Statement::DescribeTask(DescribeTaskStmt {
-                name: task.to_string(),
-            })
-        },
+        |(_, _, task)| Statement::DescribeTask(DescribeTaskStmt { name: task }),
     );
 
     let merge = map(
@@ -2005,12 +1997,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
         },
-        |(_, name, _, args, _)| {
-            Statement::Call(CallStmt {
-                name: name.to_string(),
-                args,
-            })
-        },
+        |(_, name, _, args, _)| Statement::Call(CallStmt { name, args }),
     );
 
     let vacuum_temporary_tables = map(
@@ -2019,7 +2006,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, _, opt_limit)| {
             Statement::Call(CallStmt {
-                name: "fuse_vacuum_temporary_table".to_string(),
+                name: Identifier::from_name(None, "fuse_vacuum_temporary_table"),
                 args: opt_limit.map(|v| v.1.to_string()).into_iter().collect(),
             })
         },
@@ -2418,7 +2405,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let execute_immediate = map(
         rule! {
-            EXECUTE ~ IMMEDIATE ~ #code_string
+            EXECUTE ~ IMMEDIATE ~ #expr
         },
         |(_, _, script)| Statement::ExecuteImmediate(ExecuteImmediateStmt { script }),
     );
@@ -2556,7 +2543,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, name, _, opt_args, _)| {
             Statement::CallProcedure(CallProcedureStmt {
-                name: name.to_string(),
+                name,
                 args: opt_args.unwrap_or_default(),
             })
         },

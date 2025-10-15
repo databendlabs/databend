@@ -15,6 +15,28 @@ $$;
 query I
 EXECUTE IMMEDIATE $$
 BEGIN
+    LET RES RESULTSET := select  number % 3 a, number % 4 b from numbers(10);
+    LET SUM := 0;
+
+    CREATE OR REPLACE TABLE abc(a int, b int);
+
+    for x in RES do
+        LET A := x.a;
+        LET B := x.b;
+        INSERT INTO abc VALUES (:A, :B);
+
+        SUM := SUM + A;
+        SUM := SUM + B;
+    end for;
+    return SUM;
+END;
+$$;
+----
+22
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
     LET x := -1;
     LET sum := 0;
     FOR x IN x TO x + 3 DO

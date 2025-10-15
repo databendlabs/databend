@@ -18,6 +18,7 @@ use databend_common_ast::ast::CreateProcedureStmt;
 use databend_common_ast::ast::DescProcedureStmt;
 use databend_common_ast::ast::DropProcedureStmt;
 use databend_common_ast::ast::ExecuteImmediateStmt;
+use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ProcedureIdentity as AstProcedureIdentity;
 use databend_common_ast::ast::ProcedureLanguage;
 use databend_common_ast::ast::ProcedureType;
@@ -25,6 +26,7 @@ use databend_common_ast::ast::ShowOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureMeta;
@@ -34,6 +36,7 @@ use databend_common_users::UserApiProvider;
 
 use crate::binder::show::get_show_options;
 use crate::plans::CallProcedurePlan;
+use crate::plans::ConstantExpr;
 use crate::plans::CreateProcedurePlan;
 use crate::plans::DescProcedurePlan;
 use crate::plans::DropProcedurePlan;
@@ -55,8 +58,20 @@ impl Binder {
         stmt: &ExecuteImmediateStmt,
     ) -> Result<Plan> {
         let ExecuteImmediateStmt { script } = stmt;
+        let script = self.bind_expr(script)?;
+        let script = match script {
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                value: Scalar::String(value),
+                ..
+            }) => value,
+            _ => {
+                return Err(ErrorCode::InvalidArgument(
+                    "immediate script must be a string",
+                ))
+            }
+        };
         Ok(Plan::ExecuteImmediate(Box::new(ExecuteImmediatePlan {
-            script: script.clone(),
+            script,
         })))
     }
 
@@ -151,6 +166,7 @@ impl Binder {
             }
             arg_types.push(arg_type.to_string());
         }
+        let name = name.to_string();
         let procedure_ident = ProcedureIdentity::new(name, arg_types.join(","));
         let req = GetProcedureReq {
             inner: ProcedureNameIdent::new(tenant.clone(), procedure_ident.clone()),
