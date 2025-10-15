@@ -159,7 +159,7 @@ impl ModifyTableColumnInterpreter {
                 // and add a new one to generate new column id. otherwise, leaf column ids will conflict.
                 if old_field.data_type.num_leaf_columns() != field.data_type.num_leaf_columns() {
                     let _ = new_schema.drop_column_unchecked(&field.name)?;
-                    let _ = new_schema.add_column(field, i)?;
+                    new_schema.add_column(field, i)?;
                 } else {
                     // new field don't have `column_id`, assign field directly will cause `column_id` lost.
                     new_schema.fields[i].data_type = field.data_type.clone();
@@ -199,6 +199,7 @@ impl ModifyTableColumnInterpreter {
         let table_meta_timestamps = self
             .ctx
             .get_table_meta_timestamps(table.as_ref(), base_snapshot.clone())?;
+        let col_stats = base_snapshot.as_ref().map(|v| &v.summary.col_stats);
 
         let mut bloom_index_cols = vec![];
         if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
@@ -237,6 +238,19 @@ impl ModifyTableColumnInterpreter {
                             }
                         }
                     }
+                    // Prevent changing a nullable column to NOT NULL when existing data contains NULL values.
+                    // Check column statistics to ensure no NULLs are present before allowing this modification.
+                    if old_field.data_type.is_nullable() && !field.data_type.is_nullable() {
+                        let has_null = col_stats
+                            .and_then(|v| v.get(&old_field.column_id))
+                            .is_some_and(|v| v.null_count > 0);
+                        if has_null {
+                            return Err(ErrorCode::TableOptionInvalid(format!(
+                                "Cannot modify column '{}' from NULL to NOT NULL because it contains NULL values",
+                                field.name
+                            )));
+                        }
+                    }
                 }
 
                 if table_info.meta.field_comments[i] != *comment {
@@ -259,18 +273,20 @@ impl ModifyTableColumnInterpreter {
         let mut modified_field_indices = HashSet::new();
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         if schema != new_schema {
-            for (field, _) in field_and_comments {
-                let old_field = schema.field_with_name(&field.name)?;
-                // If two conditions are met, we don't need rebuild the table,
-                // as rebuild table can be a time-consuming job.
-                // 1. alter column from string to binary in parquet or data type not changed.
-                // 2. default expr and computed expr not changed. Otherwise, we need fill value for
-                //    new added column.
-                if can_skip_rebuild(old_field, field, table.storage_format_as_parquet()) {
-                    continue;
+            if base_snapshot.is_some_and(|v| v.summary.row_count > 0) {
+                for (field, _) in field_and_comments {
+                    let old_field = schema.field_with_name(&field.name)?;
+                    // If two conditions are met, we don't need rebuild the table,
+                    // as rebuild table can be a time-consuming job.
+                    // 1. alter column from string to binary in parquet or data type not changed.
+                    // 2. default expr and computed expr not changed. Otherwise, we need fill value for
+                    //    new added column.
+                    if can_skip_rebuild(old_field, field, table.storage_format_as_parquet()) {
+                        continue;
+                    }
+                    let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
+                    modified_field_indices.insert(field_index);
                 }
-                let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
-                modified_field_indices.insert(field_index);
             }
             table_info.meta.schema = new_schema.clone().into();
         }
