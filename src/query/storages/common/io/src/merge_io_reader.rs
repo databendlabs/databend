@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
 use futures::future::try_join_all;
-use opendal::Buffer;
 use opendal::Operator;
 
 use crate::merge_io_result::OwnerMemory;
@@ -69,24 +68,21 @@ impl MergeIOReader {
         let merged_ranges = range_merger.ranges();
 
         // Read merged range data.
-        let mut read_handlers = Vec::with_capacity(merged_ranges.len());
-        for (idx, range) in merged_ranges.iter().enumerate() {
-            // Perf.
-            {
-                metrics_inc_remote_io_seeks_after_merged(1);
-                metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
-            }
-
-            read_handlers.push(UnlimitedFuture::create(Self::read_range(
-                op.clone(),
-                location,
-                idx,
-                range.start,
-                range.end,
-            )));
-        }
-
         let start = Instant::now();
+        let read_handlers = merged_ranges
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(idx, range)| {
+                // Perf.
+                {
+                    metrics_inc_remote_io_seeks_after_merged(1);
+                    metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
+                }
+
+                let read = op.read_with(location).range(range);
+                UnlimitedFuture::create(async move { read.await.map(|chunk| (idx, chunk)) })
+            });
         let owner_memory = OwnerMemory::create(try_join_all(read_handlers).await?);
 
         // Perf.
@@ -118,19 +114,6 @@ impl MergeIOReader {
         Ok(read_res)
     }
 
-    #[inline]
-    #[async_backtrace::framed]
-    async fn read_range(
-        op: Operator,
-        path: &str,
-        index: usize,
-        start: u64,
-        end: u64,
-    ) -> Result<(usize, Buffer)> {
-        let chunk = op.read_with(path).range(start..end).await?;
-        Ok((index, chunk))
-    }
-
     pub fn sync_merge_io_read(
         read_settings: &ReadSettings,
         op: Operator,
@@ -155,13 +138,12 @@ impl MergeIOReader {
         // Read merged range data.
         let mut io_res = Vec::with_capacity(merged_ranges.len());
         for (idx, range) in merged_ranges.iter().enumerate() {
-            io_res.push(Self::sync_read_range(
-                op.clone(),
-                location,
-                idx,
-                range.start,
-                range.end,
-            )?);
+            let buf = op
+                .blocking()
+                .read_with(location)
+                .range(range.clone())
+                .call()?;
+            io_res.push((idx, buf));
         }
 
         let owner_memory = OwnerMemory::create(io_res);
@@ -188,17 +170,5 @@ impl MergeIOReader {
             MergeIOReadResult::create(owner_memory, columns_chunk_offsets, location.to_string());
 
         Ok(read_res)
-    }
-
-    #[inline]
-    pub fn sync_read_range(
-        op: Operator,
-        path: &str,
-        index: usize,
-        start: u64,
-        end: u64,
-    ) -> Result<(usize, Buffer)> {
-        let buf = op.blocking().read_with(path).range(start..end).call()?;
-        Ok((index, buf))
     }
 }
