@@ -317,36 +317,3 @@ DROP TABLE IF EXISTS t1;
 
 statement ok
 DROP TABLE IF EXISTS t1_random;
-
-statement ok
-CREATE OR REPLACE TABLE test_modify(a int, b int) STORAGE_FORMAT='parquet';
-
-query T
-DESC TABLE test_modify;
-----
-a INT YES NULL (empty)
-b INT YES NULL (empty)
-
-statement ok
-INSERT INTO test_modify values(1, 2), (3, null);
-
-statement ok
-ALTER TABLE test_modify MODIFY COLUMN a int not null;
-
-statement error 1301
-ALTER TABLE test_modify MODIFY COLUMN b int not null;
-
-query T
-DESC TABLE test_modify;
-----
-a INT NO 0 (empty)
-b INT YES NULL (empty)
-
-query II
-SELECT * FROM test_modify;
-----
-1 2
-3 NULL
-
-statement ok
-DROP TABLE IF EXISTS test_modify;

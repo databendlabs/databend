@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
@@ -151,7 +151,6 @@ impl ModifyTableColumnInterpreter {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
-        let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
@@ -166,13 +165,14 @@ impl ModifyTableColumnInterpreter {
                     // TODO: support set computed field.
                     new_schema.fields[i].computed_expr = field.computed_expr.clone();
                 }
+
                 if let Some(default_expr) = &field.default_expr {
                     let default_expr = default_expr.to_string();
                     new_schema.fields[i].default_expr = Some(default_expr);
-                    let _ = default_expr_binder.get_scalar(&new_schema.fields[i])?;
                 } else {
                     new_schema.fields[i].default_expr = None;
                 }
+
                 if old_field.data_type != field.data_type {
                     // Check if this column is referenced by computed columns.
                     let data_schema = DataSchema::from(&new_schema);
@@ -199,8 +199,6 @@ impl ModifyTableColumnInterpreter {
         let table_meta_timestamps = self
             .ctx
             .get_table_meta_timestamps(table.as_ref(), base_snapshot.clone())?;
-        let col_stats = base_snapshot.as_ref().map(|v| &v.summary.col_stats);
-        let format_as_parquet = fuse_table.storage_format_as_parquet();
 
         let mut bloom_index_cols = vec![];
         if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
@@ -239,22 +237,6 @@ impl ModifyTableColumnInterpreter {
                             }
                         }
                     }
-                    // Prevent changing a nullable column to NOT NULL when existing data contains NULL values.
-                    // Check column statistics to ensure no NULLs are present before allowing this modification.
-                    if format_as_parquet
-                        && old_field.data_type.is_nullable()
-                        && !field.data_type.is_nullable()
-                    {
-                        let has_null = col_stats
-                            .and_then(|v| v.get(&old_field.column_id))
-                            .is_some_and(|v| v.null_count > 0);
-                        if has_null {
-                            return Err(ErrorCode::TableOptionInvalid(format!(
-                                "Cannot modify column `{}` from NULL to NOT NULL because it contains NULL values",
-                                field.name
-                            )));
-                        }
-                    }
                 }
 
                 if table_info.meta.field_comments[i] != *comment {
@@ -274,8 +256,10 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let mut modified_field_indices = HashSet::new();
+        let mut modified_default_scalars = HashMap::new();
+        let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
+        let format_as_parquet = fuse_table.storage_format_as_parquet();
         if schema != new_schema {
             if base_snapshot.is_some_and(|v| v.summary.row_count > 0) {
                 for (field, _) in field_and_comments {
@@ -295,14 +279,16 @@ impl ModifyTableColumnInterpreter {
                         continue;
                     }
                     let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
-                    modified_field_indices.insert(field_index);
+                    let default_scalar = default_expr_binder
+                        .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
+                    modified_default_scalars.insert(field_index, default_scalar);
                 }
             }
             table_info.meta.schema = new_schema.clone().into();
         }
 
         // if don't need rebuild table, only update table meta.
-        if modified_field_indices.is_empty() {
+        if modified_default_scalars.is_empty() {
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),
@@ -332,7 +318,7 @@ impl ModifyTableColumnInterpreter {
             .iter()
             .enumerate()
             .map(|(index, field)| {
-                if modified_field_indices.contains(&index) {
+                if let Some(default_scalar) = modified_default_scalars.get(&index) {
                     let old_field = schema.field_with_name(&field.name).unwrap();
                     let need_remove_nullable =
                         old_field.data_type.is_nullable() && !field.data_type.is_nullable();
@@ -457,7 +443,13 @@ impl ModifyTableColumnInterpreter {
                         }
                         (_, _) => {
                             if need_remove_nullable {
-                                format!("remove_nullable(`{}`)", field.name)
+                                // If the column is being changed from NULLABLE to NOT NULL,
+                                // wrap it with `coalesce()` to replace NULL values with the default,
+                                // and `remove_nullable()` to mark the resulting expression as non-nullable.
+                                format!(
+                                    "remove_nullable(coalesce(`{}`, {}))",
+                                    field.name, default_scalar
+                                )
                             } else {
                                 format!("`{}`", field.name)
                             }
