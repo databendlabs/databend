@@ -261,34 +261,34 @@ impl ModifyTableColumnInterpreter {
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         let format_as_parquet = fuse_table.storage_format_as_parquet();
         if schema != new_schema {
-            if base_snapshot.is_some_and(|v| v.summary.row_count > 0) {
-                for (field, _) in field_and_comments {
-                    let old_field = schema.field_with_name(&field.name)?;
-                    let is_alter_column_string_to_binary =
-                        is_string_to_binary(&old_field.data_type, &field.data_type);
-                    // If two conditions are met, we don't need rebuild the table,
-                    // as rebuild table can be a time-consuming job.
-                    // 1. alter column from string to binary in parquet or data type not changed.
-                    // 2. default expr and computed expr not changed. Otherwise, we need fill value for
-                    //    new added column.
-                    if ((format_as_parquet && is_alter_column_string_to_binary)
-                        || old_field.data_type == field.data_type)
-                        && old_field.default_expr == field.default_expr
-                        && old_field.computed_expr == field.computed_expr
-                    {
-                        continue;
-                    }
-                    let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
-                    let default_scalar = default_expr_binder
-                        .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
-                    modified_default_scalars.insert(field_index, default_scalar);
+            for (field, _) in field_and_comments {
+                let old_field = schema.field_with_name(&field.name)?;
+                let is_alter_column_string_to_binary =
+                    is_string_to_binary(&old_field.data_type, &field.data_type);
+                // If two conditions are met, we don't need rebuild the table,
+                // as rebuild table can be a time-consuming job.
+                // 1. alter column from string to binary in parquet or data type not changed.
+                // 2. default expr and computed expr not changed. Otherwise, we need fill value for
+                //    new added column.
+                if ((format_as_parquet && is_alter_column_string_to_binary)
+                    || old_field.data_type == field.data_type)
+                    && old_field.default_expr == field.default_expr
+                    && old_field.computed_expr == field.computed_expr
+                {
+                    continue;
                 }
+                let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
+                let default_scalar = default_expr_binder
+                    .get_scalar(&new_schema_without_computed_fields.fields[field_index])?;
+                modified_default_scalars.insert(field_index, default_scalar);
             }
             table_info.meta.schema = new_schema.clone().into();
         }
 
         // if don't need rebuild table, only update table meta.
-        if modified_default_scalars.is_empty() {
+        if modified_default_scalars.is_empty()
+            || base_snapshot.is_none_or(|v| v.summary.row_count == 0)
+        {
             commit_table_meta(
                 &self.ctx,
                 table.as_ref(),
