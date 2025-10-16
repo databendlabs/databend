@@ -227,7 +227,7 @@ impl Pipeline {
                 new_sinks.push_back((index, idx));
             }
         }
-
+        self.max_threads = self.max_threads.max(new_sinks.len());
         self.sinks = new_sinks;
     }
 
@@ -246,13 +246,11 @@ impl Pipeline {
     }
 
     pub fn set_max_threads(&mut self, max_threads: usize) {
-        let mut max_pipe_size = 0;
         let sinks = self.graph.externals(Direction::Outgoing).count();
         let sources = self.graph.externals(Direction::Incoming).count();
 
-        max_pipe_size = std::cmp::max(max_pipe_size, sinks);
-        max_pipe_size = std::cmp::max(max_pipe_size, sources);
-        self.max_threads = std::cmp::min(max_pipe_size, max_threads);
+        self.max_threads = std::cmp::max(self.max_threads, std::cmp::max(sinks, sources));
+        self.max_threads = std::cmp::min(self.max_threads, max_threads);
     }
 
     pub fn get_max_threads(&self) -> usize {
