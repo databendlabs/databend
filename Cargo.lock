@@ -4946,6 +4946,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
+ "databend-common-meta-app",
 ]
 
 [[package]]

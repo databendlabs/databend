@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -31,9 +32,7 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
-use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::schema::TableId;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
@@ -41,15 +40,12 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 use databend_common_version::BUILD_INFO;
-use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
-use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::vacuum_drop_tables_by_table_info;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
-use databend_enterprise_query::storages::fuse::vacuum_drop_tables;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_query::test_kits::*;
 use databend_storages_common_io::Files;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
 use opendal::raw::OpStat;
@@ -57,23 +53,20 @@ use opendal::raw::RpStat;
 use opendal::EntryMode;
 use opendal::Metadata;
 use opendal::OperatorBuilder;
+use tempfile::TempDir;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
-    let fixture = TestFixture::setup().await?;
+    let ee_setup = EESetup::new();
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
 
     fixture
-        .default_session()
-        .get_settings()
-        .set_data_retention_time_in_days(0)?;
+        .execute_command("create database test_vacuum")
+        .await?;
 
-    fixture.create_default_database().await?;
-    fixture.create_default_table().await?;
-
-    let number_of_block = 1;
-    append_sample_data(number_of_block, &fixture).await?;
-
-    let table = fixture.latest_default_table().await?;
+    fixture
+        .execute_command("create table test_vacuum.t (c int) as select * from numbers(100)")
+        .await?;
 
     check_data_dir(
         &fixture,
@@ -89,17 +82,14 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     )
     .await?;
 
-    // do gc.
-    let db = fixture.default_db_name();
-    let tbl = fixture.default_table_name();
-    let qry = format!("drop table {}.{}", db, tbl);
-    fixture.execute_command(&qry).await?;
-    let ctx = fixture.new_query_ctx().await?;
-    let threads_nums = ctx.get_settings().get_max_threads()? as usize;
+    fixture.execute_command("drop table test_vacuum.t").await?;
 
     // verify dry run never delete files
     {
-        vacuum_drop_tables(threads_nums, vec![table.clone()], Some(100)).await?;
+        fixture
+            .execute_command("vacuum drop table from test_vacuum dry run")
+            .await?;
+        fixture.execute_command("vacuum drop table dry run").await?;
         check_data_dir(
             &fixture,
             "test_fuse_do_vacuum_drop_table: verify generate files",
@@ -116,7 +106,9 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     }
 
     {
-        vacuum_drop_tables(threads_nums, vec![table], None).await?;
+        fixture
+            .execute_command("settings(data_retention_time_in_days = 0) vacuum drop table")
+            .await?;
 
         // after vacuum drop tables, verify the files number
         check_data_dir(
@@ -221,334 +213,209 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     Ok(())
 }
 
-mod test_accessor {
-    use std::future::Future;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::Ordering;
-
-    use opendal::raw::oio;
-    use opendal::raw::oio::Entry;
-    use opendal::raw::MaybeSend;
-    use opendal::raw::OpDelete;
-    use opendal::raw::OpList;
-    use opendal::raw::RpDelete;
-    use opendal::raw::RpList;
-
-    use super::*;
-
-    // Accessor that throws an error when deleting dir or files.
-    #[derive(Debug)]
-    pub(crate) struct AccessorFaultyDeletion {
-        hit_delete: AtomicBool,
-        hit_batch: Arc<AtomicBool>,
-        hit_stat: AtomicBool,
-        inject_delete_faulty: bool,
-        inject_stat_faulty: bool,
-    }
-
-    impl AccessorFaultyDeletion {
-        pub(crate) fn with_delete_fault() -> Self {
-            AccessorFaultyDeletion {
-                hit_delete: AtomicBool::new(false),
-                hit_batch: Arc::new(AtomicBool::new(false)),
-                hit_stat: AtomicBool::new(false),
-                inject_delete_faulty: true,
-                inject_stat_faulty: false,
-            }
-        }
-
-        pub(crate) fn with_stat_fault() -> Self {
-            AccessorFaultyDeletion {
-                hit_delete: AtomicBool::new(false),
-                hit_batch: Arc::new(AtomicBool::new(false)),
-                hit_stat: AtomicBool::new(false),
-                inject_delete_faulty: false,
-                inject_stat_faulty: true,
-            }
-        }
-
-        pub(crate) fn hit_delete_operation(&self) -> bool {
-            self.hit_delete.load(Ordering::Acquire)
-        }
-    }
-
-    pub struct VecLister(Vec<String>);
-    impl oio::List for VecLister {
-        fn next(&mut self) -> impl Future<Output = opendal::Result<Option<Entry>>> + MaybeSend {
-            let me = &mut self.0;
-            async move {
-                Ok(me.pop().map(|v| {
-                    Entry::new(
-                        &v,
-                        if v.ends_with('/') {
-                            Metadata::new(EntryMode::DIR)
-                        } else {
-                            Metadata::new(EntryMode::FILE)
-                        },
-                    )
-                }))
-            }
-        }
-    }
-
-    pub struct MockDeleter {
-        size: usize,
-        hit_batch: Arc<AtomicBool>,
-    }
-
-    impl oio::Delete for MockDeleter {
-        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
-            self.size += 1;
-            Ok(())
-        }
-
-        async fn flush(&mut self) -> opendal::Result<usize> {
-            self.hit_batch.store(true, Ordering::Release);
-
-            let n = self.size;
-            self.size = 0;
-            Ok(n)
-        }
-    }
-
-    impl Access for AccessorFaultyDeletion {
-        type Reader = ();
-        type BlockingReader = ();
-        type Writer = ();
-        type BlockingWriter = ();
-        type Lister = VecLister;
-        type BlockingLister = ();
-        type Deleter = MockDeleter;
-        type BlockingDeleter = ();
-
-        fn info(&self) -> Arc<AccessorInfo> {
-            let info = AccessorInfo::default();
-            info.set_native_capability(opendal::Capability {
-                stat: true,
-                create_dir: true,
-                delete: true,
-                delete_max_size: Some(1000),
-                list: true,
-                ..Default::default()
-            });
-            info.into()
-        }
-
-        async fn stat(&self, _path: &str, _args: OpStat) -> opendal::Result<RpStat> {
-            self.hit_stat.store(true, Ordering::Release);
-            if self.inject_stat_faulty {
-                Err(opendal::Error::new(
-                    opendal::ErrorKind::NotFound,
-                    "does not matter (stat)",
-                ))
-            } else {
-                let stat = if _path.ends_with('/') {
-                    RpStat::new(Metadata::new(EntryMode::DIR))
-                } else {
-                    RpStat::new(Metadata::new(EntryMode::FILE))
-                };
-                Ok(stat)
-            }
-        }
-
-        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
-            self.hit_delete.store(true, Ordering::Release);
-
-            if self.inject_delete_faulty {
-                Err(opendal::Error::new(
-                    opendal::ErrorKind::Unexpected,
-                    "does not matter (delete)",
-                ))
-            } else {
-                Ok((RpDelete::default(), MockDeleter {
-                    size: 0,
-                    hit_batch: self.hit_batch.clone(),
-                }))
-            }
-        }
-
-        async fn list(&self, path: &str, _args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
-            if self.inject_delete_faulty {
-                // While injecting faulty for delete operation, return an empty list;
-                // otherwise we need to impl other methods.
-                return Ok((RpList::default(), VecLister(vec![])));
-            };
-
-            Ok((
-                RpList::default(),
-                if path.ends_with('/') {
-                    VecLister(vec!["a".to_owned(), "b".to_owned()])
-                } else {
-                    VecLister(vec![])
-                },
-            ))
-        }
-    }
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
-    // do_vacuum_drop_table should return Err if file deletion failed
+    // **** Primary Scenario ********************************************************************
+    // Test vacuum dropped table should keep going if some of the table data can not be removed
+    // successfully, e.g. bucket of external tables may under heavy load, can not handle the
+    // deletion operations in time.
+    // But, the metadata of the table that owns those data, should not be removed.
+    // *******************************************************************************************
 
-    let mut table_info = TableInfo::default();
-    table_info
-        .meta
-        .options
-        .insert(OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned());
-    table_info.desc = "`default`.`t`".to_string();
+    let meta = new_local_meta().await;
+    let endpoints = meta.endpoints.clone();
 
-    use test_accessor::AccessorFaultyDeletion;
-    // Operator with mocked accessor that will fail on `remove_all`
+    // Modify config to use local meta store
+    let mut ee_setup = EESetup::new();
+    let config = ee_setup.config_mut();
+    config.meta.endpoints = endpoints.clone();
+
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+
+    let session = fixture.default_session();
+    session.get_settings().set_data_retention_time_in_days(0)?;
+
+    // Prepare 2 tables with some data
+    fixture
+        .execute_command("create database test_vacuum")
+        .await?;
+
+    fixture
+        .execute_command("create table test_vacuum.t1 (c int) as select * from numbers(100)")
+        .await?;
+
+    fixture
+        .execute_command("create table test_vacuum.t2 (c int) as select * from numbers(100)")
+        .await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    let cat = ctx.get_default_catalog()?;
+    let db = cat.get_database(&tenant, "test_vacuum").await?;
+
+    let t1 = cat.get_table(&tenant, "test_vacuum", "t1").await?;
+    let t2 = cat.get_table(&tenant, "test_vacuum", "t2").await?;
+    let t1_table_id = t1.get_id();
+    let t2_table_id = t2.get_id();
+    let db_id = db.get_db_info().database_id.db_id;
+    let storage_root = fixture.storage_root();
+
+    // Let make t1's data path unremovable
+    {
+        let path = Path::new(storage_root)
+            .join(db_id.to_string())
+            .join(t1_table_id.to_string());
+
+        let mut perms = std::fs::metadata(&path)?.permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&path, perms)?;
+    }
+
+    // Drop tables and vacuum them
+    fixture.execute_command("drop table test_vacuum.t1").await?;
+    fixture.execute_command("drop table test_vacuum.t2").await?;
+
+    // before vacuum, check that tables' data paths exist
+
+    let path = Path::new(storage_root)
+        .join(db_id.to_string())
+        .join(t1_table_id.to_string());
+    assert!(path.exists());
+
+    let path = Path::new(storage_root)
+        .join(db_id.to_string())
+        .join(t2_table_id.to_string());
+    assert!(path.exists());
+
+    // Expects:
     //
-    // Note that:
-    // In real case, `Accessor::batch` will be called (instead of Accessor::delete)
-    // but all that we need here is let Operator::remove_all failed
-    let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
-    let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+    // - the vacuum drop operation returns Ok
+    fixture.execute_command("vacuum drop table").await?;
 
-    let tables = vec![(table_info, operator)];
-    let result = do_vacuum_drop_table(tables, None).await?;
-    assert!(!result.1.is_empty());
-    // verify that accessor.delete() was called
-    assert!(faulty_accessor.hit_delete_operation());
+    // - t2's metadata should be removed, and its metadata should also have be removed
 
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Result<()> {
-    let mut table_info = TableInfo::default();
-    table_info
-        .meta
-        .options
-        .insert(OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned());
-    table_info.desc = "`default`.`t`".to_string();
-    use test_accessor::AccessorFaultyDeletion;
-
-    // Case 1: non-parallel vacuum dropped tables
     {
-        let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
-        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+        let path = Path::new(storage_root)
+            .join(db_id.to_string())
+            .join(t2_table_id.to_string());
 
-        let table = (table_info.clone(), operator);
+        assert!(!path.exists());
 
-        // with one table and one thread, `vacuum_drop_tables_by_table_info` will NOT run in parallel
-        let tables = vec![table];
-        let num_threads = 1;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await?;
-        // verify that accessor.delete() was called
-        assert!(faulty_accessor.hit_delete_operation());
-
-        // verify that errors of deletions are not swallowed
-        assert!(!result.1.is_empty());
+        let table_id_key = TableId::new(t2_table_id);
+        let t2_table_meta = meta.get_pb(&table_id_key).await?;
+        assert!(t2_table_meta.is_none());
     }
 
-    // Case 2: parallel vacuum dropped tables
-    {
-        let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
-        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+    // - but t1's metadata should still be there, since its table data is unable to be removed
+    let table_id_key = TableId::new(t1_table_id);
+    let t1_table_meta = meta.get_pb(&table_id_key).await?;
+    assert!(t1_table_meta.is_some());
 
-        let table = (table_info, operator);
-        // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
-        let tables = vec![table.clone(), table];
-        let num_threads = 2;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await?;
-        // verify that accessor.delete() was called
-        assert!(faulty_accessor.hit_delete_operation());
-        // verify that errors of deletions are not swallowed
-        assert!(!result.1.is_empty());
+    // *********************
+    // * Appendix scenario *
+    // *********************
+
+    // Let make t1's data path removable
+    {
+        let path = Path::new(storage_root)
+            .join(db_id.to_string())
+            .join(t1_table_id.to_string());
+        let mut perms = std::fs::metadata(&path)?.permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        perms.set_readonly(false);
+        std::fs::set_permissions(&path, perms)?;
+
+        // make sure it still there
+        let path = Path::new(storage_root)
+            .join(db_id.to_string())
+            .join(t1_table_id.to_string());
+
+        assert!(path.exists());
     }
 
-    Ok(())
-}
+    // vacuum again
+    fixture.execute_command("vacuum drop table").await?;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Result<()> {
-    let mut table_info = TableInfo::default();
-    table_info
-        .meta
-        .options
-        .insert(OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned());
+    // Expects:
+    // - t1's metadata and table data should be removed
 
-    use test_accessor::AccessorFaultyDeletion;
-
-    // Case 1: non-parallel vacuum dry-run dropped tables
     {
-        let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
-        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+        let path = Path::new(storage_root)
+            .join(db_id.to_string())
+            .join(t1_table_id.to_string());
 
-        let table = (table_info.clone(), operator);
+        assert!(!path.exists());
 
-        // with one table and one thread, `vacuum_drop_tables_by_table_info` will NOT run in parallel
-        let tables = vec![table];
-        let num_threads = 1;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
-        // verify that errors of NotFound are swallowed
-        assert!(result.is_ok());
-    }
-
-    // Case 2: parallel vacuum dry-run dropped tables
-    {
-        let faulty_accessor = Arc::new(AccessorFaultyDeletion::with_stat_fault());
-        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
-
-        let table = (table_info, operator);
-        // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
-        let tables = vec![table.clone(), table];
-        let num_threads = 2;
-        let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
-        // verify that errors of NotFound are swallowed
-        assert!(result.is_ok());
+        let table_id_key = TableId::new(t1_table_id);
+        let t1_table_meta = meta.get_pb(&table_id_key).await?;
+        assert!(t1_table_meta.is_none());
     }
 
     Ok(())
 }
 
-// fuse table on external storage is same as internal storage.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
-    let meta = TableMeta {
-        storage_params: Some(StorageParams::default()),
-        ..Default::default()
-    };
+    // Test vacuum works on external tables
+    let meta = new_local_meta().await;
+    let endpoints = meta.endpoints.clone();
 
-    let table_info = TableInfo {
-        desc: "`default`.`t`".to_string(),
-        meta,
-        ..Default::default()
-    };
+    // Modify config to use local meta store
+    let mut ee_setup = EESetup::new();
+    let config = ee_setup.config_mut();
+    config.meta.endpoints = endpoints.clone();
 
-    // Accessor passed in does NOT matter in this case, `do_vacuum_drop_table` should
-    // return Ok(None) before accessor is used.
-    use test_accessor::AccessorFaultyDeletion;
-    let accessor = std::sync::Arc::new(AccessorFaultyDeletion::with_delete_fault());
-    let operator = OperatorBuilder::new(accessor.clone()).finish();
+    let fixture = TestFixture::setup_with_custom(ee_setup).await?;
+    let tmp_dir_for_t1 = TempDir::new().unwrap().keep();
+    let tmp_dir_for_t2 = TempDir::new().unwrap().keep();
 
-    let tables = vec![(table_info, operator)];
-    let result = do_vacuum_drop_table(tables, None).await?;
-    assert!(!result.1.is_empty());
+    let external_location_for_t1 = format!("fs://{}/", tmp_dir_for_t1.to_str().unwrap());
+    let external_location_for_t2 = format!("fs://{}/", tmp_dir_for_t2.to_str().unwrap());
 
-    // verify that accessor.delete() was called
-    assert!(!accessor.hit_delete_operation());
+    fixture
+        .execute_command("create database test_vacuum")
+        .await?;
 
-    Ok(())
-}
+    fixture
+        .execute_command(&format!("create table test_vacuum.t1 (c int) '{external_location_for_t1}' as select * from numbers(100)"))
+        .await?;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
-    // errors should not be swallowed in remove_file_in_batch
-    let faulty_accessor = Arc::new(test_accessor::AccessorFaultyDeletion::with_delete_fault());
-    let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
-    let fixture = TestFixture::setup().await?;
+    fixture
+        .execute_command(&format!("create table test_vacuum.t2 (c int) '{external_location_for_t2}' as select * from numbers(100)"))
+        .await?;
+
     let ctx = fixture.new_query_ctx().await?;
-    let file_util = Files::create(ctx, operator);
+    let cat = ctx.get_default_catalog()?;
+    let tenant = ctx.get_tenant();
+    let t1 = cat.get_table(&tenant, "test_vacuum", "t1").await?;
+    let t2 = cat.get_table(&tenant, "test_vacuum", "t2").await?;
 
-    // files to be deleted does not matter, faulty_accessor will always fail to delete
-    let r = file_util.remove_file_in_batch(vec!["1", "2"]).await;
-    assert!(r.is_err());
+    fixture.execute_command("drop table test_vacuum.t1").await?;
+    fixture.execute_command("drop table test_vacuum.t2").await?;
 
-    // verify that accessor.delete() was called
-    assert!(faulty_accessor.hit_delete_operation());
+    let t1_storage_path = {
+        let storage_prefix = parse_storage_prefix(&t1.get_table_info().meta.options, t1.get_id())?;
+        let mut dir = tmp_dir_for_t1.clone();
+        dir.push(storage_prefix);
+        dir
+    };
+
+    let t2_storage_path = {
+        let storage_prefix = parse_storage_prefix(&t2.get_table_info().meta.options, t2.get_id())?;
+        let mut dir = tmp_dir_for_t2.clone();
+        dir.push(storage_prefix);
+        dir
+    };
+
+    assert!(t1_storage_path.exists());
+    assert!(t2_storage_path.exists());
+
+    fixture
+        .execute_command("settings (data_retention_time_in_days = 0) vacuum drop table")
+        .await?;
+
+    assert!(!t1_storage_path.exists());
+    assert!(!t2_storage_path.exists());
 
     Ok(())
 }
@@ -737,6 +604,13 @@ async fn test_vacuum_dropped_table_clean_ownership() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Result<()> {
+    // During dry run, vacuum should ignore obj not found error
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_gc_in_progress_db_not_undroppable() -> Result<()> {
     // 1. Prepare local meta service
     let meta = new_local_meta().await;
@@ -909,4 +783,188 @@ async fn new_local_meta() -> MetaStore {
         provider.create_meta_store().await.unwrap()
     };
     meta
+}
+
+mod test_accessor {
+    use std::future::Future;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+
+    use opendal::raw::oio;
+    use opendal::raw::oio::Entry;
+    use opendal::raw::MaybeSend;
+    use opendal::raw::OpDelete;
+    use opendal::raw::OpList;
+    use opendal::raw::RpDelete;
+    use opendal::raw::RpList;
+
+    use super::*;
+
+    // Accessor that throws an error when deleting dir or files.
+    #[derive(Debug)]
+    pub(crate) struct AccessorFaultyDeletion {
+        hit_delete: AtomicBool,
+        hit_batch: Arc<AtomicBool>,
+        hit_stat: AtomicBool,
+        inject_delete_faulty: bool,
+        inject_stat_faulty: bool,
+    }
+
+    impl AccessorFaultyDeletion {
+        pub(crate) fn with_delete_fault() -> Self {
+            AccessorFaultyDeletion {
+                hit_delete: AtomicBool::new(false),
+                hit_batch: Arc::new(AtomicBool::new(false)),
+                hit_stat: AtomicBool::new(false),
+                inject_delete_faulty: true,
+                inject_stat_faulty: false,
+            }
+        }
+
+        #[allow(dead_code)]
+        pub(crate) fn with_stat_fault() -> Self {
+            AccessorFaultyDeletion {
+                hit_delete: AtomicBool::new(false),
+                hit_batch: Arc::new(AtomicBool::new(false)),
+                hit_stat: AtomicBool::new(false),
+                inject_delete_faulty: false,
+                inject_stat_faulty: true,
+            }
+        }
+
+        pub(crate) fn hit_delete_operation(&self) -> bool {
+            self.hit_delete.load(Ordering::Acquire)
+        }
+    }
+
+    pub struct VecLister(Vec<String>);
+    impl oio::List for VecLister {
+        fn next(&mut self) -> impl Future<Output = opendal::Result<Option<Entry>>> + MaybeSend {
+            let me = &mut self.0;
+            async move {
+                Ok(me.pop().map(|v| {
+                    Entry::new(
+                        &v,
+                        if v.ends_with('/') {
+                            Metadata::new(EntryMode::DIR)
+                        } else {
+                            Metadata::new(EntryMode::FILE)
+                        },
+                    )
+                }))
+            }
+        }
+    }
+
+    pub struct MockDeleter {
+        size: usize,
+        hit_batch: Arc<AtomicBool>,
+    }
+
+    impl oio::Delete for MockDeleter {
+        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
+            self.size += 1;
+            Ok(())
+        }
+
+        async fn flush(&mut self) -> opendal::Result<usize> {
+            self.hit_batch.store(true, Ordering::Release);
+
+            let n = self.size;
+            self.size = 0;
+            Ok(n)
+        }
+    }
+
+    impl Access for AccessorFaultyDeletion {
+        type Reader = ();
+        type BlockingReader = ();
+        type Writer = ();
+        type BlockingWriter = ();
+        type Lister = VecLister;
+        type BlockingLister = ();
+        type Deleter = MockDeleter;
+        type BlockingDeleter = ();
+
+        fn info(&self) -> Arc<AccessorInfo> {
+            let info = AccessorInfo::default();
+            info.set_native_capability(opendal::Capability {
+                stat: true,
+                create_dir: true,
+                delete: true,
+                delete_max_size: Some(1000),
+                list: true,
+                ..Default::default()
+            });
+            info.into()
+        }
+
+        async fn stat(&self, _path: &str, _args: OpStat) -> opendal::Result<RpStat> {
+            self.hit_stat.store(true, Ordering::Release);
+            if self.inject_stat_faulty {
+                Err(opendal::Error::new(
+                    opendal::ErrorKind::NotFound,
+                    "does not matter (stat)",
+                ))
+            } else {
+                let stat = if _path.ends_with('/') {
+                    RpStat::new(Metadata::new(EntryMode::DIR))
+                } else {
+                    RpStat::new(Metadata::new(EntryMode::FILE))
+                };
+                Ok(stat)
+            }
+        }
+
+        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
+            self.hit_delete.store(true, Ordering::Release);
+
+            if self.inject_delete_faulty {
+                Err(opendal::Error::new(
+                    opendal::ErrorKind::Unexpected,
+                    "does not matter (delete)",
+                ))
+            } else {
+                Ok((RpDelete::default(), MockDeleter {
+                    size: 0,
+                    hit_batch: self.hit_batch.clone(),
+                }))
+            }
+        }
+
+        async fn list(&self, path: &str, _args: OpList) -> opendal::Result<(RpList, Self::Lister)> {
+            if self.inject_delete_faulty {
+                // While injecting faulty for delete operation, return an empty list;
+                // otherwise we need to impl other methods.
+                return Ok((RpList::default(), VecLister(vec![])));
+            };
+
+            Ok((
+                RpList::default(),
+                if path.ends_with('/') {
+                    VecLister(vec!["a".to_owned(), "b".to_owned()])
+                } else {
+                    VecLister(vec![])
+                },
+            ))
+        }
+    }
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_file_util_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
+        // errors should not be swallowed in remove_file_in_batch
+        let faulty_accessor = Arc::new(test_accessor::AccessorFaultyDeletion::with_delete_fault());
+        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let file_util = Files::create(ctx, operator);
+
+        // files to be deleted does not matter, faulty_accessor will always fail to delete
+        let r = file_util.remove_file_in_batch(vec!["1", "2"]).await;
+        assert!(r.is_err());
+
+        // verify that accessor.delete() was called
+        assert!(faulty_accessor.hit_delete_operation());
+
+        Ok(())
+    }
 }
