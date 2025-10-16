@@ -1043,7 +1043,7 @@ error:
   | |                                        |        |  |          
   | |                                        |        |  while parsing `(<expr> [, ...])`
   | |                                        |        while parsing expression
-  | |                                        while parsing AS (<parameter>, ...) -> <definition expr>
+  | |                                        while parsing AS (<parameter [parameter type]>, ...) -> <definition expr>
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
 
 
@@ -1056,7 +1056,7 @@ error:
 1 | CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';
   | ------                 -                                                            ^^^^^^^ unexpected `HANDLER`, expecting `HEADERS`, `ADDRESS`, `PACKAGES`, `AS`, or `IMPORTS`
   | |                      |                                                             
-  | |                      while parsing (<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
+  | |                      while parsing (<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
 
 
@@ -1069,7 +1069,7 @@ error:
 1 | CREATE FUNCTION my_agg (INT) STATE { s STRIN } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
   | ------                 -               ^^^^^ unexpected `STRIN`, expecting `STRING`, `SIGNED`, `INTERVAL`, `TINYINT`, `VARIANT`, `SMALLINT`, `TINYBLOB`, `VARBINARY`, `INT8`, `JSON`, `INT16`, `INT32`, `INT64`, `UINT8`, `BIGINT`, `UINT16`, `UINT32`, `UINT64`, `BINARY`, `INTEGER`, `DATETIME`, `NUMERIC`, `TIMESTAMP`, `UNSIGNED`, `STAGE_LOCATION`, `REAL`, `DATE`, `CHAR`, `TEXT`, `ARRAY`, `TUPLE`, `VECTOR`, `BOOLEAN`, `DECIMAL`, `VARCHAR`, `LONGBLOB`, `NULLABLE`, `CHARACTER`, `GEOGRAPHY`, `MEDIUMBLOB`, `BITMAP`, `}`, `BOOL`, `INT`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `MAP`, `BLOB`, or `GEOMETRY`
   | |                      |                
-  | |                      while parsing (<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
+  | |                      while parsing (<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
 
 
