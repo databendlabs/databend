@@ -341,7 +341,7 @@ impl JwkKeyStore {
     #[async_backtrace::framed]
     async fn get_key_from_cache(&self, key_id: &String) -> Option<PubKey> {
         let cached_maps = self.recent_cached_maps.read();
-        for keys_map in self.recent_cached_maps.read().iter().rev() {
+        for keys_map in cached_maps.iter().rev() {
             for (kid, pubkey) in keys_map.iter() {
                 if kid == key_id {
                     return Some(pubkey.clone());
