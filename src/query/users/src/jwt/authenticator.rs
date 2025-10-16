@@ -158,10 +158,12 @@ impl JwtAuthenticator {
         for store in &self.key_stores {
             let pub_key = match store.get_key(&key_id, true).await? {
                 None => {
-                    return Err(ErrorCode::AuthenticateFailure(format!(
-                        "key id {} not found in jwk store",
-                        key_id.unwrap_or_default()
-                    )));
+                    combined_code = combined_code.add_message(format!(
+                        "key id {} not found in jwk store, url: {}",
+                        key_id.clone().unwrap_or_default(),
+                        store.url()
+                    ));
+                    continue;
                 }
                 Some(pk) => pk,
             };
@@ -169,7 +171,7 @@ impl JwtAuthenticator {
                 Ok(e) => return Ok(e),
                 Err(e) => {
                     combined_code = combined_code.add_message(format!(
-                        "message: {} , source file: {}, ",
+                        "verify jwt token with key failed, error: {}, url: {}",
                         e,
                         store.url()
                     ));
