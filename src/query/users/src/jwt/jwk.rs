@@ -319,7 +319,7 @@ impl JwkKeyStore {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_key(&self, key_id: &Option<String>) -> Result<Option<PubKey>> {
+    pub async fn get_key(&self, key_id: &Option<String>, refresh: bool) -> Result<Option<PubKey>> {
         self.maybe_refresh_cached_keys(false).await?;
 
         // if the key_id is not set, and there is only one key in the store, return it
@@ -334,12 +334,27 @@ impl JwkKeyStore {
                 if let Some((_, pub_key)) = first_key {
                     return Ok(Some(pub_key.clone()));
                 } else {
-                    return Err(ErrorCode::AuthenticateFailure(
-                        "must specify key_id for jwt when multi keys exists ",
-                    ));
+                    if refresh {
+                        return Err(ErrorCode::AuthenticateFailure(
+                            "must specify key_id for jwt when multi keys exists ",
+                        ));
+                    } else {
+                        return Ok(None);
+                    }
                 }
             }
         };
+
+        // First check cached keys
+        for keys_map in self.recent_cached_maps.read().iter().rev() {
+            if let Some(key) = keys_map.get(&key_id) {
+                return Ok(Some(key.clone()));
+            }
+        }
+
+        if !refresh {
+            return Ok(None);
+        }
 
         // if the key is not found, try to refresh the keys and try again. this refresh only
         // happens once within retry interval (default 2s).
