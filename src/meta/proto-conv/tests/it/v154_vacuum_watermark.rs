@@ -30,7 +30,7 @@ use crate::common;
 //
 
 #[test]
-fn test_decode_v153_vacuum_watermakr() -> anyhow::Result<()> {
+fn test_decode_v154_vacuum_watermark() -> anyhow::Result<()> {
     // Serialized VacuumWatermark with timestamp 1702603569 (2023-12-15 01:26:09 UTC)
     let vacuum_watermark_v154 = vec![
         10, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32, 48, 49, 58, 50, 54, 58, 48, 57, 32, 85,
