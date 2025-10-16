@@ -360,7 +360,7 @@ impl JwkKeyStore {
         };
 
         // First check cached keys
-        let key = self.get_key_from_cache(&key_id).await;
+        let key = self.get_key_from_cache(key_id).await;
         if let Some(key) = key {
             return Ok(Some(key));
         }
