@@ -24,39 +24,42 @@ FROM t1;
 Exchange
 ├── output columns: [t1.a (#0), EXISTS (SELECT 1 FROM t2 WHERE t2.a = t1.a) (#5), has_match (#6)]
 ├── exchange type: Merge
-└── EvalScalar
-    ├── output columns: [t1.a (#0), EXISTS (SELECT 1 FROM t2 WHERE t2.a = t1.a) (#5), has_match (#6)]
-    ├── expressions: [is_true(7 (#7)), NOT is_true(8 (#8))]
-    ├── estimated rows: 3.00
-    └── HashJoin
-        ├── output columns: [t1.a (#0), marker (#7), marker (#8)]
-        ├── join type: RIGHT MARK
-        ├── build keys: [a (#3)]
-        ├── probe keys: [a (#0)]
-        ├── keys is null equal: [true]
-        ├── filters: []
+└── Sequence
+    ├── MaterializedCTE: cte_cse_0
+    │   └── TableScan
+    │       ├── table: default.d_subquery.t2
+    │       ├── output columns: [a (#1)]
+    │       ├── read rows: 2
+    │       ├── read size: < 1 KiB
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 2.00
+    └── EvalScalar
+        ├── output columns: [t1.a (#0), EXISTS (SELECT 1 FROM t2 WHERE t2.a = t1.a) (#5), has_match (#6)]
+        ├── expressions: [is_true(7 (#7)), NOT is_true(8 (#8))]
         ├── estimated rows: 3.00
-        ├── Exchange(Build)
-        │   ├── output columns: [t2.a (#3)]
-        │   ├── exchange type: Broadcast
-        │   └── Filter
-        │       ├── output columns: [t2.a (#3)]
-        │       ├── filters: [is_true(outer.a (#3) = outer.a (#3))]
-        │       ├── estimated rows: 0.40
-        │       └── TableScan
-        │           ├── table: default.d_subquery.t2
-        │           ├── output columns: [a (#3)]
-        │           ├── read rows: 2
-        │           ├── read size: < 1 KiB
-        │           ├── partitions total: 1
-        │           ├── partitions scanned: 1
-        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        │           ├── push downs: [filters: [is_true(t2.a (#3) = t2.a (#3))], limit: NONE]
-        │           └── estimated rows: 2.00
-        └── Exchange(Probe)
-            ├── output columns: [t1.a (#0), marker (#7)]
-            ├── exchange type: Hash(a (#0))
-            └── HashJoin
+        └── HashJoin
+            ├── output columns: [t1.a (#0), marker (#7), marker (#8)]
+            ├── join type: RIGHT MARK
+            ├── build keys: [a (#3)]
+            ├── probe keys: [a (#0)]
+            ├── keys is null equal: [true]
+            ├── filters: []
+            ├── estimated rows: 3.00
+            ├── Exchange(Build)
+            │   ├── output columns: [t2.a (#3)]
+            │   ├── exchange type: Broadcast
+            │   └── Filter
+            │       ├── output columns: [t2.a (#3)]
+            │       ├── filters: [is_true(outer.a (#3) = outer.a (#3))]
+            │       ├── estimated rows: 0.40
+            │       └── MaterializeCTERef
+            │           ├── cte_name: cte_cse_0
+            │           ├── cte_schema: [a (#3)]
+            │           └── estimated rows: 2.00
+            └── HashJoin(Probe)
                 ├── output columns: [t1.a (#0), marker (#7)]
                 ├── join type: RIGHT MARK
                 ├── build keys: [a (#1)]
@@ -71,29 +74,20 @@ Exchange
                 │       ├── output columns: [t2.a (#1)]
                 │       ├── filters: [is_true(outer.a (#1) = outer.a (#1))]
                 │       ├── estimated rows: 0.40
-                │       └── TableScan
-                │           ├── table: default.d_subquery.t2
-                │           ├── output columns: [a (#1)]
-                │           ├── read rows: 2
-                │           ├── read size: < 1 KiB
-                │           ├── partitions total: 1
-                │           ├── partitions scanned: 1
-                │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                │           ├── push downs: [filters: [is_true(t2.a (#1) = t2.a (#1))], limit: NONE]
+                │       └── MaterializeCTERef
+                │           ├── cte_name: cte_cse_0
+                │           ├── cte_schema: [a (#1)]
                 │           └── estimated rows: 2.00
-                └── Exchange(Probe)
-                    ├── output columns: [t1.a (#0)]
-                    ├── exchange type: Hash(a (#0))
-                    └── TableScan
-                        ├── table: default.d_subquery.t1
-                        ├── output columns: [a (#0)]
-                        ├── read rows: 3
-                        ├── read size: < 1 KiB
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 3.00
+                └── TableScan(Probe)
+                    ├── table: default.d_subquery.t1
+                    ├── output columns: [a (#0)]
+                    ├── read rows: 3
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 3.00
 
 query T
 explain SELECT
@@ -105,68 +99,68 @@ FROM t1;
 Exchange
 ├── output columns: [t1.a (#0), in_match (#3), not_in_match (#4)]
 ├── exchange type: Merge
-└── EvalScalar
-    ├── output columns: [t1.a (#0), in_match (#3), not_in_match (#4)]
-    ├── expressions: [NOT 5 (#5)]
-    ├── estimated rows: 3.00
-    └── HashJoin
-        ├── output columns: [t1.a (#0), in_match (#3), marker (#5)]
-        ├── join type: RIGHT MARK
-        ├── build keys: [subquery_2 (#2)]
-        ├── probe keys: [t1.a (#0)]
-        ├── keys is null equal: [true]
-        ├── filters: []
+└── Sequence
+    ├── MaterializedCTE: cte_cse_0
+    │   └── TableScan
+    │       ├── table: default.d_subquery.t2
+    │       ├── output columns: [a (#1)]
+    │       ├── read rows: 2
+    │       ├── read size: < 1 KiB
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 2.00
+    └── EvalScalar
+        ├── output columns: [t1.a (#0), in_match (#3), not_in_match (#4)]
+        ├── expressions: [NOT 5 (#5)]
         ├── estimated rows: 3.00
-        ├── Exchange(Build)
-        │   ├── output columns: [t2.a (#2)]
-        │   ├── exchange type: Broadcast
-        │   └── TableScan
-        │       ├── table: default.d_subquery.t2
-        │       ├── output columns: [a (#2)]
-        │       ├── read rows: 2
-        │       ├── read size: < 1 KiB
-        │       ├── partitions total: 1
-        │       ├── partitions scanned: 1
-        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        │       ├── push downs: [filters: [], limit: NONE]
-        │       └── estimated rows: 2.00
-        └── Exchange(Probe)
-            ├── output columns: [t1.a (#0), in_match (#3)]
-            ├── exchange type: Hash(t1.a (#0))
-            └── HashJoin
+        └── HashJoin
+            ├── output columns: [t1.a (#0), in_match (#3), marker (#5)]
+            ├── join type: RIGHT MARK
+            ├── build keys: [subquery_2 (#2)]
+            ├── probe keys: [t1.a (#0)]
+            ├── keys is null equal: [true]
+            ├── filters: []
+            ├── estimated rows: 3.00
+            ├── Exchange(Build)
+            │   ├── output columns: [t2.a (#2)]
+            │   ├── exchange type: Hash(subquery_2 (#2))
+            │   └── MaterializeCTERef
+            │       ├── cte_name: cte_cse_0
+            │       ├── cte_schema: [a (#2)]
+            │       └── estimated rows: 2.00
+            └── Exchange(Probe)
                 ├── output columns: [t1.a (#0), in_match (#3)]
-                ├── join type: RIGHT MARK
-                ├── build keys: [subquery_1 (#1)]
-                ├── probe keys: [t1.a (#0)]
-                ├── keys is null equal: [true]
-                ├── filters: []
-                ├── estimated rows: 3.00
-                ├── Exchange(Build)
-                │   ├── output columns: [t2.a (#1)]
-                │   ├── exchange type: Broadcast
-                │   └── TableScan
-                │       ├── table: default.d_subquery.t2
-                │       ├── output columns: [a (#1)]
-                │       ├── read rows: 2
-                │       ├── read size: < 1 KiB
-                │       ├── partitions total: 1
-                │       ├── partitions scanned: 1
-                │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                │       ├── push downs: [filters: [], limit: NONE]
-                │       └── estimated rows: 2.00
-                └── Exchange(Probe)
-                    ├── output columns: [t1.a (#0)]
-                    ├── exchange type: Hash(t1.a (#0))
-                    └── TableScan
-                        ├── table: default.d_subquery.t1
-                        ├── output columns: [a (#0)]
-                        ├── read rows: 3
-                        ├── read size: < 1 KiB
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 3.00
+                ├── exchange type: Hash(t1.a (#0))
+                └── HashJoin
+                    ├── output columns: [t1.a (#0), in_match (#3)]
+                    ├── join type: RIGHT MARK
+                    ├── build keys: [subquery_1 (#1)]
+                    ├── probe keys: [t1.a (#0)]
+                    ├── keys is null equal: [true]
+                    ├── filters: []
+                    ├── estimated rows: 3.00
+                    ├── Exchange(Build)
+                    │   ├── output columns: [t2.a (#1)]
+                    │   ├── exchange type: Hash(subquery_1 (#1))
+                    │   └── MaterializeCTERef
+                    │       ├── cte_name: cte_cse_0
+                    │       ├── cte_schema: [a (#1)]
+                    │       └── estimated rows: 2.00
+                    └── Exchange(Probe)
+                        ├── output columns: [t1.a (#0)]
+                        ├── exchange type: Hash(t1.a (#0))
+                        └── TableScan
+                            ├── table: default.d_subquery.t1
+                            ├── output columns: [a (#0)]
+                            ├── read rows: 3
+                            ├── read size: < 1 KiB
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 3.00
 
 
 statement ok
