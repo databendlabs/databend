@@ -137,29 +137,6 @@ impl JwtAuthenticator {
         }
     }
 
-    // parse jwt claims from single source,
-    // if custom claim is not matching on desired,
-    // claim parsed would be empty
-    #[async_backtrace::framed]
-    pub async fn parse_jwt_claims_from_store(
-        &self,
-        token: &str,
-        key_store: &jwk::JwkKeyStore,
-    ) -> Result<JWTClaims<CustomClaims>> {
-        let metadata = Token::decode_metadata(token);
-        let key_id = metadata.map_or(None, |e| e.key_id().map(|s| s.to_string()));
-        let pub_key = match key_store.get_key(&key_id, true).await? {
-            None => {
-                return Err(ErrorCode::AuthenticateFailure(format!(
-                    "key id {} not found in jwk store",
-                    key_id.unwrap_or_default()
-                )));
-            }
-            Some(pk) => pk,
-        };
-        self.verify_jwt_token_with_key(token, &pub_key)
-    }
-
     #[async_backtrace::framed]
     pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
         let metadata = Token::decode_metadata(token);
@@ -179,8 +156,16 @@ impl JwtAuthenticator {
             "could not decode token from all available jwt key stores. ",
         );
         for store in &self.key_stores {
-            let claim = self.parse_jwt_claims_from_store(token, store).await;
-            match claim {
+            let pub_key = match store.get_key(&key_id, true).await? {
+                None => {
+                    return Err(ErrorCode::AuthenticateFailure(format!(
+                        "key id {} not found in jwk store",
+                        key_id.unwrap_or_default()
+                    )));
+                }
+                Some(pk) => pk,
+            };
+            match self.verify_jwt_token_with_key(token, &pub_key) {
                 Ok(e) => return Ok(e),
                 Err(e) => {
                     combined_code = combined_code.add_message(format!(
