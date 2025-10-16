@@ -325,13 +325,9 @@ impl JwkKeyStore {
         let latest_keys = cached_maps.iter().last();
         if let Some(keys) = latest_keys {
             if keys.len() == 1 {
-                for (_, pubkey) in keys.iter() {
+                if let Some((_, pubkey)) = keys.iter().next() {
                     return Ok(Some(pubkey.clone()));
                 }
-            } else {
-                return Err(ErrorCode::AuthenticateFailure(
-                    "must specify key_id for jwt when multiple keys exist",
-                ));
             }
         }
         Ok(None)
