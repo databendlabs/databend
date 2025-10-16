@@ -125,7 +125,12 @@ pub struct DeclareCursor {
 
 impl Display for DeclareCursor {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let DeclareCursor { name, stmt, resultset, .. } = self;
+        let DeclareCursor {
+            name,
+            stmt,
+            resultset,
+            ..
+        } = self;
         if let Some(stmt) = stmt {
             write!(f, "{name} CURSOR FOR {stmt}")
         } else if let Some(resultset) = resultset {
@@ -260,7 +265,9 @@ impl Display for ScriptStatement {
             ScriptStatement::RunStatement { stmt, .. } => write!(f, "{stmt}"),
             ScriptStatement::Assign { name, value, .. } => write!(f, "{name} := {value}"),
             ScriptStatement::OpenCursor { cursor, .. } => write!(f, "OPEN {cursor}"),
-            ScriptStatement::FetchCursor { cursor, into_var, .. } => write!(f, "FETCH {cursor} INTO {into_var}"),
+            ScriptStatement::FetchCursor {
+                cursor, into_var, ..
+            } => write!(f, "FETCH {cursor} INTO {into_var}"),
             ScriptStatement::CloseCursor { cursor, .. } => write!(f, "CLOSE {cursor}"),
             ScriptStatement::Return { value, .. } => {
                 if let Some(value) = value {

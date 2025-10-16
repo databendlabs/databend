@@ -104,21 +104,19 @@ pub fn declare_cursor(i: Input) -> IResult<DeclareCursor> {
         consumed(rule! {
             #ident ~ CURSOR ~ ^FOR ~ ^#cursor_target
         }),
-        |(span, (name, _, _, target))| {
-            match target {
-                CursorTarget::Resultset(resultset) => DeclareCursor {
-                    span: transform_span(span.tokens),
-                    name,
-                    stmt: None,
-                    resultset: Some(resultset),
-                },
-                CursorTarget::Statement(stmt) => DeclareCursor {
-                    span: transform_span(span.tokens),
-                    name,
-                    stmt: Some(stmt),
-                    resultset: None,
-                },
-            }
+        |(span, (name, _, _, target))| match target {
+            CursorTarget::Resultset(resultset) => DeclareCursor {
+                span: transform_span(span.tokens),
+                name,
+                stmt: None,
+                resultset: Some(resultset),
+            },
+            CursorTarget::Statement(stmt) => DeclareCursor {
+                span: transform_span(span.tokens),
+                name,
+                stmt: Some(stmt),
+                resultset: None,
+            },
         },
     )(i)
 }
