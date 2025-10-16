@@ -24,6 +24,7 @@ use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use log::info;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::SharedRestoreState;
@@ -145,22 +146,13 @@ impl TransformMetaDispatcher {
 
         Ok(Event::NeedConsume)
     }
-}
 
-impl Processor for TransformMetaDispatcher {
-    fn name(&self) -> String {
-        String::from("TransformMetaDispatcher")
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+    fn debug_event(&mut self, cause: EventCause) -> Result<Event> {
         // Handle initialization
         if !self.initialized {
             self.initialized = true;
             self.input.status = PortStatus::NeedData;
+            self.input.port.set_need_data();
             return Ok(Event::NeedData);
         }
 
@@ -180,9 +172,21 @@ impl Processor for TransformMetaDispatcher {
                     let meta = self.queue.pop_front().unwrap();
                     let data_block = DataBlock::empty_with_meta(Box::new(meta));
                     output.port.push_data(Ok(data_block));
+                    info!("Dispatch meta to output {} data", output_index);
                     return self.process_events();
                 } else {
-                    // Queue is empty, send Wait
+                    // Queue is empty
+                    // If input is waiting for data (NeedData state), don't send Wait yet
+                    // Wait until we actually have data from upstream
+                    if self.input.status == PortStatus::NeedData {
+                        info!(
+                            "Output {} needs data but input is pulling, wait for upstream data",
+                            output_index
+                        );
+                        return Ok(Event::NeedData);
+                    }
+
+                    // Input is Idle, send Wait
                     let meta = AggregateMeta::Wait;
                     let data_block = DataBlock::empty_with_meta(Box::new(meta));
                     output.port.push_data(Ok(data_block));
@@ -190,10 +194,15 @@ impl Processor for TransformMetaDispatcher {
                     // Increment wait count for this port
                     self.wait_counts[output_index] += 1;
 
+                    info!(
+                        "Dispatch Wait to output {}, wait_count: {}",
+                        output_index, self.wait_counts[output_index]
+                    );
+
                     // Check if all ports have received two waits
-                    if self.all_ports_received_two_waits() && self.input.status == PortStatus::Idle
-                    {
+                    if self.all_ports_received_two_waits() {
                         // Time to pull from upstream
+                        info!("All outputs received 2 waits, triggering upstream pull");
                         self.input.status = PortStatus::NeedData;
                     }
 
@@ -205,6 +214,7 @@ impl Processor for TransformMetaDispatcher {
         // Handle input port events
         if let EventCause::Input(_) = cause {
             if self.input.port.has_data() {
+                info!("TransformMetaDispatcher: Pulling data from input port");
                 // Pull data from input
                 let mut data_block = self.input.port.pull_data().unwrap()?;
                 self.input.status = PortStatus::Idle;
@@ -231,5 +241,21 @@ impl Processor for TransformMetaDispatcher {
         }
 
         self.process_events()
+    }
+}
+
+impl Processor for TransformMetaDispatcher {
+    fn name(&self) -> String {
+        String::from("TransformMetaDispatcher")
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        let event = self.debug_event(cause)?;
+        info!("TransformMetaDispatcher return event: {:?}", event);
+        Ok(event)
     }
 }
