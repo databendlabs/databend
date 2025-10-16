@@ -116,12 +116,51 @@ impl Display for ReturnItem {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct DeclareCursor {
+    pub span: Span,
+    pub name: Identifier,
+    pub stmt: Option<Statement>,
+    pub resultset: Option<Identifier>,
+}
+
+impl Display for DeclareCursor {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let DeclareCursor { name, stmt, resultset, .. } = self;
+        if let Some(stmt) = stmt {
+            write!(f, "{name} CURSOR FOR {stmt}")
+        } else if let Some(resultset) = resultset {
+            write!(f, "{name} CURSOR FOR {resultset}")
+        } else {
+            write!(f, "{name} CURSOR")
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum IterableItem {
+    Resultset(Identifier),
+    Cursor(Identifier),
+}
+
+impl Display for IterableItem {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            IterableItem::Resultset(name) => write!(f, "{name}"),
+            IterableItem::Cursor(name) => write!(f, "{name}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum ScriptStatement {
     LetVar {
         declare: DeclareVar,
     },
     LetStatement {
         declare: DeclareSet,
+    },
+    LetCursor {
+        declare: DeclareCursor,
     },
     RunStatement {
         span: Span,
@@ -131,6 +170,19 @@ pub enum ScriptStatement {
         span: Span,
         name: Identifier,
         value: Expr,
+    },
+    OpenCursor {
+        span: Span,
+        cursor: Identifier,
+    },
+    FetchCursor {
+        span: Span,
+        cursor: Identifier,
+        into_var: Identifier,
+    },
+    CloseCursor {
+        span: Span,
+        cursor: Identifier,
     },
     Return {
         span: Span,
@@ -148,7 +200,7 @@ pub enum ScriptStatement {
     ForInSet {
         span: Span,
         variable: Identifier,
-        resultset: Identifier,
+        iterable: IterableItem,
         body: Vec<ScriptStatement>,
         label: Option<Identifier>,
     },
@@ -204,8 +256,12 @@ impl Display for ScriptStatement {
         match self {
             ScriptStatement::LetVar { declare, .. } => write!(f, "LET {declare}"),
             ScriptStatement::LetStatement { declare, .. } => write!(f, "LET {declare}"),
+            ScriptStatement::LetCursor { declare, .. } => write!(f, "LET {declare}"),
             ScriptStatement::RunStatement { stmt, .. } => write!(f, "{stmt}"),
             ScriptStatement::Assign { name, value, .. } => write!(f, "{name} := {value}"),
+            ScriptStatement::OpenCursor { cursor, .. } => write!(f, "OPEN {cursor}"),
+            ScriptStatement::FetchCursor { cursor, into_var, .. } => write!(f, "FETCH {cursor} INTO {into_var}"),
+            ScriptStatement::CloseCursor { cursor, .. } => write!(f, "CLOSE {cursor}"),
             ScriptStatement::Return { value, .. } => {
                 if let Some(value) = value {
                     write!(f, "RETURN {value}")
@@ -242,12 +298,12 @@ impl Display for ScriptStatement {
             }
             ScriptStatement::ForInSet {
                 variable,
-                resultset,
+                iterable,
                 body,
                 label,
                 ..
             } => {
-                writeln!(f, "FOR {variable} IN {resultset} DO")?;
+                writeln!(f, "FOR {variable} IN {iterable} DO")?;
                 for stmt in body {
                     writeln!(
                         f,

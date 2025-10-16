@@ -471,14 +471,16 @@ ForInSet {
         quote: None,
         ident_type: None,
     },
-    resultset: Identifier {
-        span: Some(
-            11..20,
-        ),
-        name: "resultset",
-        quote: None,
-        ident_type: None,
-    },
+    iterable: Resultset(
+        Identifier {
+            span: Some(
+                11..20,
+            ),
+            name: "resultset",
+            quote: None,
+            ident_type: None,
+        },
+    ),
     body: [
         Continue {
             span: Some(

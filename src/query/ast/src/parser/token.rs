@@ -459,10 +459,14 @@ pub enum TokenKind {
     CONTENT_TYPE,
     #[token("CONTINUE", ignore(ascii_case))]
     CONTINUE,
+    #[token("CURSOR", ignore(ascii_case))]
+    CURSOR,
     #[token("CHAR", ignore(ascii_case))]
     CHAR,
     #[token("CHECK", ignore(ascii_case))]
     CHECK,
+    #[token("CLOSE", ignore(ascii_case))]
+    CLOSE,
     #[token("COLUMN", ignore(ascii_case))]
     COLUMN,
     #[token("CACHE", ignore(ascii_case))]
@@ -633,6 +637,8 @@ pub enum TokenKind {
     ELSEIF,
     #[token("FALSE", ignore(ascii_case))]
     FALSE,
+    #[token("FETCH", ignore(ascii_case))]
+    FETCH,
     #[token("FIELDS", ignore(ascii_case))]
     FIELDS,
     #[token("FIELD_DELIMITER", ignore(ascii_case))]
@@ -912,6 +918,8 @@ pub enum TokenKind {
     OFFSET,
     #[token("ON", ignore(ascii_case))]
     ON,
+    #[token("OPEN", ignore(ascii_case))]
+    OPEN,
     #[token("ON_CREATE", ignore(ascii_case))]
     ON_CREATE,
     #[token("ON_SCHEDULE", ignore(ascii_case))]
@@ -1699,7 +1707,7 @@ impl TokenKind {
             | TokenKind::CREATE
             | TokenKind::ATTACH
             | TokenKind::EXCEPT
-            // | TokenKind::FETCH
+            | TokenKind::FETCH
             | TokenKind::FOR
             | TokenKind::FROM
             // | TokenKind::GRANT
@@ -1831,7 +1839,7 @@ impl TokenKind {
             | TokenKind::CREATE
             | TokenKind::ATTACH
             | TokenKind::EXCEPT
-            // | TokenKind::FETCH
+            | TokenKind::FETCH
             | TokenKind::FROM
             | TokenKind::GRANT
             | TokenKind::GROUP

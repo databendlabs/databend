@@ -99,6 +99,54 @@ pub fn declare_set(i: Input) -> IResult<DeclareSet> {
     )(i)
 }
 
+pub fn declare_cursor(i: Input) -> IResult<DeclareCursor> {
+    map(
+        consumed(rule! {
+            #ident ~ CURSOR ~ ^FOR ~ ^#cursor_target
+        }),
+        |(span, (name, _, _, target))| {
+            match target {
+                CursorTarget::Resultset(resultset) => DeclareCursor {
+                    span: transform_span(span.tokens),
+                    name,
+                    stmt: None,
+                    resultset: Some(resultset),
+                },
+                CursorTarget::Statement(stmt) => DeclareCursor {
+                    span: transform_span(span.tokens),
+                    name,
+                    stmt: Some(stmt),
+                    resultset: None,
+                },
+            }
+        },
+    )(i)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum CursorTarget {
+    Resultset(Identifier),
+    Statement(Statement),
+}
+
+pub(crate) fn cursor_target(i: Input) -> IResult<CursorTarget> {
+    // Try identifier first, then statement
+    let resultset = map(ident, CursorTarget::Resultset);
+    let statement = map(statement_body, CursorTarget::Statement);
+
+    rule!(
+        #resultset
+        | #statement
+    )(i)
+}
+
+pub(crate) fn iterable_item(i: Input) -> IResult<IterableItem> {
+    // For now, we'll treat all identifiers as potential iterables
+    // The compiler will determine if it's a cursor or resultset
+    // based on what was actually declared
+    map(ident, IterableItem::Resultset)(i)
+}
+
 pub fn script_stmts(i: Input) -> IResult<Vec<ScriptStatement>> {
     semicolon_terminated_list1(script_stmt)(i)
 }
@@ -115,6 +163,40 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             LET ~ #declare_set
         },
         |(_, declare)| ScriptStatement::LetStatement { declare },
+    );
+    let let_cursor_stmt = map(
+        rule! {
+            LET ~ #declare_cursor
+        },
+        |(_, declare)| ScriptStatement::LetCursor { declare },
+    );
+    let open_cursor_stmt = map(
+        consumed(rule! {
+            OPEN ~ #ident
+        }),
+        |(span, (_, cursor))| ScriptStatement::OpenCursor {
+            span: transform_span(span.tokens),
+            cursor,
+        },
+    );
+    let fetch_cursor_stmt = map(
+        consumed(rule! {
+            FETCH ~ #ident ~ ^INTO ~ ^#ident
+        }),
+        |(span, (_, cursor, _, into_var))| ScriptStatement::FetchCursor {
+            span: transform_span(span.tokens),
+            cursor,
+            into_var,
+        },
+    );
+    let close_cursor_stmt = map(
+        consumed(rule! {
+            CLOSE ~ #ident
+        }),
+        |(span, (_, cursor))| ScriptStatement::CloseCursor {
+            span: transform_span(span.tokens),
+            cursor,
+        },
     );
     let run_stmt = map(
         consumed(rule! {
@@ -193,14 +275,14 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
     );
     let for_in_set_stmt = map(
         consumed(rule! {
-            FOR ~ ^#ident ~ ^IN ~ #ident ~ ^DO
+            FOR ~ ^#ident ~ ^IN ~ #iterable_item ~ ^DO
             ~ ^#semicolon_terminated_list1(script_stmt)
             ~ ^END ~ ^FOR ~ #ident?
         }),
-        |(span, (_, variable, _, resultset, _, body, _, _, label))| ScriptStatement::ForInSet {
+        |(span, (_, variable, _, iterable, _, body, _, _, label))| ScriptStatement::ForInSet {
             span: transform_span(span.tokens),
             variable,
-            resultset,
+            iterable,
             body,
             label,
         },
@@ -319,24 +401,48 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
         },
     );
 
-    rule!(
+    let cursor_stmts = rule!(
+        #let_cursor_stmt
+        | #open_cursor_stmt
+        | #fetch_cursor_stmt
+        | #close_cursor_stmt
+    );
+
+    let assignment_stmts = rule!(
         #let_stmt_stmt
         | #let_var_stmt
-        | #run_stmt
         | #assign_stmt
-        | #return_set_stmt
+    );
+
+    let control_flow_stmts = rule!(
+        #return_set_stmt
         | #return_stmt_stmt
         | #return_var_stmt
         | #return_stmt
-        | #for_loop_stmt
+        | #break_stmt
+        | #continue_stmt
+    );
+
+    let loop_stmts = rule!(
+        #for_loop_stmt
         | #for_in_set_stmt
         | #for_in_stmt_stmt
         | #while_loop_stmt
         | #repeat_loop_stmt
         | #loop_stmt
-        | #break_stmt
-        | #continue_stmt
-        | #case_stmt
+    );
+
+    let conditional_stmts = rule!(
+        #case_stmt
         | #if_stmt
+    );
+
+    rule!(
+        #assignment_stmts
+        | #cursor_stmts
+        | #control_flow_stmts
+        | #loop_stmts
+        | #conditional_stmts
+        | #run_stmt
     )(i)
 }

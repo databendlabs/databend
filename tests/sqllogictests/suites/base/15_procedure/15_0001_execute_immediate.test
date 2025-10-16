@@ -171,6 +171,52 @@ $$;
 ----
 333
 
+## cursors
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+  LET c1 CURSOR FOR SELECT number + 10 FROM numbers(10);
+  OPEN c1;
+  FETCH c1 INTO var_for_column_value;
+  FETCH c1 INTO var_for_column_value;
+  CLOSE c1;
+  RETURN var_for_column_value;
+END;
+$$;
+----
+11
+
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+  LET S RESULTSET := (select number + 10 a, number + 20 b FROM numbers(10));
+  LET c1 CURSOR FOR S;
+  OPEN c1;
+  FETCH c1 INTO var_for_column_value;
+  FETCH c1 INTO var_for_column_value;
+  CLOSE c1;
+  RETURN var_for_column_value;
+END;
+$$;
+----
+11
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+  LET S RESULTSET := (select number + 10 a, number + 20 b FROM numbers(10));
+  LET c1 CURSOR FOR S;
+  LET sum := 0;
+  for c in c1 do
+    sum := sum + c.a + c.b;
+  end for;
+  RETURN sum;
+END;
+$$;
+----
+390
 
 statement ok
 drop database test_procedure;
