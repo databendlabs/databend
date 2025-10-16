@@ -4779,6 +4779,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-meta-store",
+ "databend-common-meta-types",
 ]
 
 [[package]]

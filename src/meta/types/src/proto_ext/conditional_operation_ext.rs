@@ -115,7 +115,7 @@ mod tests {
         ));
         assert!(matches!(
             cond_op.operations[3].request,
-            Some(pb::txn_op::Request::FetchAddU64(_))
+            Some(pb::txn_op::Request::FetchIncreaseU64(_))
         ));
     }
 
