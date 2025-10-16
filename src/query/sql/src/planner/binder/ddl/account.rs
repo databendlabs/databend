@@ -37,6 +37,7 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_users::UserApiProvider;
@@ -372,14 +373,29 @@ impl Binder {
             auth_option,
             user_options,
         } = stmt;
-        // None means current user
-        let user_info = if user.is_none() {
-            self.ctx.get_current_user()?
+
+        let user_identity = if let Some(user) = user {
+            UserIdentity::from(user.clone())
         } else {
-            UserApiProvider::instance()
-                .get_user(&self.ctx.get_tenant(), user.clone().unwrap().into())
-                .await?
+            // None means current user
+            self.ctx.get_current_user()?.identity()
         };
+        let user_api = UserApiProvider::instance();
+        if user_api
+            .get_configured_user(&user_identity.username)
+            .is_some()
+        {
+            return Err(ErrorCode::IllegalUser(format!(
+                "Can not alter built-in user `{}`",
+                user_identity.username
+            )));
+        }
+
+        let user_info = UserApiProvider::instance()
+            .get_meta_user(&self.ctx.get_tenant(), user_identity)
+            .await?;
+        let seq = user_info.seq;
+        let mut user_info = user_info.data;
 
         // TODO: Only user with OWNERSHIP privilege can change user options.
         let mut user_option = user_info.option.clone();
@@ -434,15 +450,23 @@ impl Binder {
             None
         };
 
-        let new_user_option = if user_option == user_info.option {
-            None
-        } else {
+        let change_auth = new_auth_info.is_some();
+        let change_user_option = user_option != user_info.option;
+        let new_user_option = if change_user_option {
             Some(user_option)
+        } else {
+            None
         };
+
+        user_info.update_auth_option(new_auth_info.clone(), new_user_option);
+        user_info.update_user_time();
+        user_info.update_auth_history(new_auth_info);
+
         let plan = AlterUserPlan {
-            user: user_info.identity(),
-            auth_info: new_auth_info,
-            user_option: new_user_option,
+            seq,
+            user_info,
+            change_auth,
+            change_user_option,
         };
 
         Ok(Plan::AlterUser(Box::new(plan)))

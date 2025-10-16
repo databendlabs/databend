@@ -533,8 +533,8 @@ pub trait HashJoinHashtableLike {
         &self,
         hashes: &mut [u64],
         valids: Option<Bitmap>,
-        matched_selection: &mut [u32],
-        unmatched_selection: &mut [u32],
+        matched_selection: &mut Vec<u32>,
+        unmatched_selection: &mut Vec<u32>,
     ) -> (usize, usize);
 
     // Perform early filtering probe and store matched indexes in `selection`, return the number of matched indexes.
@@ -542,7 +542,7 @@ pub trait HashJoinHashtableLike {
         &self,
         hashes: &mut [u64],
         valids: Option<Bitmap>,
-        selection: &mut [u32],
+        selection: &mut Vec<u32>,
     ) -> usize;
 
     // we use `next_contains` to see whether we can find a matched row in the link.
@@ -569,4 +569,10 @@ pub trait HashJoinHashtableLike {
 
     // Find the next matched ptr.
     fn next_matched_ptr(&self, key: &Self::Key, ptr: u64) -> u64;
+
+    fn len(&self) -> usize;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }

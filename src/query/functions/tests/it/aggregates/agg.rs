@@ -49,7 +49,7 @@ fn eval_aggr(
 }
 
 #[test]
-fn test_aggr_funtions() {
+fn test_aggr_functions() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("agg.txt").unwrap();
 

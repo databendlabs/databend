@@ -14,6 +14,7 @@
 
 use std::sync::atomic::Ordering;
 
+use databend_common_base::hints::assume;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -47,17 +48,17 @@ impl HashJoinProbeState {
         let (probe_indexes, count) = if probe_state.probe_with_selection {
             // Safe to unwrap.
             let probe_unmatched_indexes = probe_state.probe_unmatched_indexes.as_mut().unwrap();
-            let mut unmatched_idx = probe_state.probe_unmatched_indexes_count;
             let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
             for idx in selection.iter() {
                 let key = unsafe { keys.key_unchecked(*idx as usize) };
                 let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
                 if !hash_table.next_contains(key, ptr) {
-                    unsafe { *probe_unmatched_indexes.get_unchecked_mut(unmatched_idx) = *idx };
-                    unmatched_idx += 1;
+                    assume(probe_unmatched_indexes.len() < probe_unmatched_indexes.capacity());
+                    probe_unmatched_indexes.push(*idx);
                 }
             }
-            (probe_unmatched_indexes, unmatched_idx)
+            let unmatched_count = probe_unmatched_indexes.len();
+            (probe_unmatched_indexes, unmatched_count)
         } else {
             let mutable_indexes = &mut probe_state.mutable_indexes;
             let probe_indexes = &mut mutable_indexes.probe_indexes;
@@ -78,6 +79,10 @@ impl HashJoinProbeState {
         }
 
         let result_block = DataBlock::take(&process_state.input, &probe_indexes[0..count])?;
+
+        if probe_state.probe_with_selection {
+            probe_indexes.clear();
+        }
 
         probe_state.process_state = None;
 

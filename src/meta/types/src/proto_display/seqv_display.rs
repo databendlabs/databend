@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::time::Duration;
 
 use display_more::DisplayUnixTimeStampExt;
 
@@ -22,18 +23,34 @@ use crate::time::flexible_timestamp_to_duration;
 
 impl fmt::Display for KvMeta {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.expire_at {
-            None => {
-                write!(f, "[]")
-            }
-            Some(e) => {
-                write!(
-                    f,
-                    "[expire={}]",
-                    flexible_timestamp_to_duration(e).display_unix_timestamp_short()
-                )
-            }
+        write!(f, "[")?;
+
+        let mut need_comma = self.expire_at.is_some();
+
+        if let Some(e) = self.expire_at {
+            write!(
+                f,
+                "expire={}",
+                flexible_timestamp_to_duration(e).display_unix_timestamp_short()
+            )?;
         }
+
+        if let Some(p) = self.proposed_at_ms {
+            if need_comma {
+                write!(f, ", ")?;
+            }
+            write!(
+                f,
+                "proposed={}",
+                Duration::from_millis(p).display_unix_timestamp_short()
+            )?;
+            need_comma = true;
+        }
+
+        let _ = need_comma;
+
+        write!(f, "]")?;
+        Ok(())
     }
 }
 
@@ -67,13 +84,21 @@ mod tests {
 
         let meta = KvMeta {
             expire_at: Some(1723102819),
+            proposed_at_ms: Some(1_723_102_800_000),
         };
-        assert_eq!(meta.to_string(), "[expire=2024-08-08T07:40:19.000]");
+        assert_eq!(
+            meta.to_string(),
+            "[expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000]"
+        );
 
         let meta = KvMeta {
             expire_at: Some(1_723_102_819_000),
+            proposed_at_ms: Some(1_723_102_800_000),
         };
-        assert_eq!(meta.to_string(), "[expire=2024-08-08T07:40:19.000]");
+        assert_eq!(
+            meta.to_string(),
+            "[expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000]"
+        );
     }
 
     #[test]
@@ -89,36 +114,39 @@ mod tests {
             seq: 1,
             meta: Some(KvMeta {
                 expire_at: Some(1723102819),
+                proposed_at_ms: Some(1_723_102_800_000),
             }),
             data: vec![65, 66, 67],
         };
         assert_eq!(
             seqv.to_string(),
-            "(seq=1 [expire=2024-08-08T07:40:19.000] 'ABC')"
+            "(seq=1 [expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000] 'ABC')"
         );
 
         let seqv = SeqV {
             seq: 1,
             meta: Some(KvMeta {
                 expire_at: Some(1_723_102_819_000),
+                proposed_at_ms: Some(1_723_102_800_000),
             }),
             data: vec![65, 66, 67],
         };
         assert_eq!(
             seqv.to_string(),
-            "(seq=1 [expire=2024-08-08T07:40:19.000] 'ABC')"
+            "(seq=1 [expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000] 'ABC')"
         );
 
         let seqv = SeqV {
             seq: 1,
             meta: Some(KvMeta {
                 expire_at: Some(1723102819),
+                proposed_at_ms: Some(1_723_102_800_000),
             }),
             data: vec![0, 159, 146, 150],
         };
         assert_eq!(
             seqv.to_string(),
-            "(seq=1 [expire=2024-08-08T07:40:19.000] [0, 159, 146, 150])"
+            "(seq=1 [expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000] [0, 159, 146, 150])"
         );
 
         let seqv = SeqV {
@@ -126,12 +154,13 @@ mod tests {
             meta: Some(KvMeta {
                 // in millis
                 expire_at: Some(1_723_102_819_000),
+                proposed_at_ms: Some(1_723_102_800_000),
             }),
             data: vec![0, 159, 146, 150],
         };
         assert_eq!(
             seqv.to_string(),
-            "(seq=1 [expire=2024-08-08T07:40:19.000] [0, 159, 146, 150])"
+            "(seq=1 [expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000] [0, 159, 146, 150])"
         );
     }
 }

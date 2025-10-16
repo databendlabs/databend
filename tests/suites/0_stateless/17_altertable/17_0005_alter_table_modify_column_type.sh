@@ -61,7 +61,7 @@ echo "SELECT a,b from test_modify_column_type.f order by b"  | $BENDSQL_CLIENT_C
 echo "DESC test_modify_column_type.f"  | $BENDSQL_CLIENT_CONNECT
 
 echo "begin test modify column NULL to not NULL"
-echo "CREATE TABLE test_modify_column_type.g(a STRING NULL, b INT NULL) STORAGE_FORMAT='native'"  | $BENDSQL_CLIENT_CONNECT
+echo "CREATE TABLE test_modify_column_type.g(a STRING NULL, b INT NULL)"  | $BENDSQL_CLIENT_CONNECT
 echo "INSERT INTO test_modify_column_type.g VALUES('a',1),('b',NULL),(NULL,3),('d',4)"  | $BENDSQL_CLIENT_CONNECT
 echo "SELECT a,b from test_modify_column_type.g" | $BENDSQL_CLIENT_CONNECT
 echo "ALTER TABLE test_modify_column_type.g MODIFY COLUMN a STRING NOT NULL"  | $BENDSQL_CLIENT_CONNECT

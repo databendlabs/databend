@@ -324,7 +324,7 @@ impl<T: AccessType> ArrayColumn<T> {
 
 impl<T: ValueType> ArrayColumn<T> {
     pub fn upcast(self, data_type: &DataType) -> ArrayColumn<AnyType> {
-        let values_type = data_type.as_array().unwrap();
+        let values_type = data_type.as_array().expect("must array type");
         ArrayColumn {
             values: T::upcast_column_with_type(self.values, values_type),
             offsets: self.offsets,

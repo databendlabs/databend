@@ -164,6 +164,11 @@ pub fn check_cast<Index: ColumnIndex>(
         dest_type.clone()
     };
 
+    if expr.data_type() == &DataType::String
+        && dest_type.remove_nullable() == DataType::StageLocation
+    {
+        return Ok(expr);
+    }
     if expr.data_type() == &wrapped_dest_type {
         Ok(expr)
     } else if expr.data_type().wrap_nullable() == wrapped_dest_type {

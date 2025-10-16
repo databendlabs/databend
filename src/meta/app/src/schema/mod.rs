@@ -113,6 +113,7 @@ pub use table::GetTableCopiedFileReq;
 pub use table::GetTableReq;
 pub use table::ListDroppedTableReq;
 pub use table::ListDroppedTableResp;
+pub use table::ListTableCopiedFileReply;
 pub use table::ListTableReq;
 pub use table::RenameTableReply;
 pub use table::RenameTableReq;

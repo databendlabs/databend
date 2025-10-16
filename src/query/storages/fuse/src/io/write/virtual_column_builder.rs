@@ -493,6 +493,9 @@ impl VirtualColumnBuilder {
                     break;
                 }
             }
+            if virtual_fields.len() >= VIRTUAL_COLUMNS_LIMIT {
+                break;
+            }
         }
 
         // Create the virtual block and convert to parquet

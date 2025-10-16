@@ -20,7 +20,7 @@ ctx = databend.SessionContext()
 ctx.create_s3_connection(
     name="s3_conn",
     access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+    secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
 )
 
 ctx.register_parquet("trips", "s3://yellow-trips/", connection="s3_conn")

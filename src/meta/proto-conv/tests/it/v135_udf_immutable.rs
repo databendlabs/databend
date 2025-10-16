@@ -60,6 +60,7 @@ fn test_decode_v135_udf_server() -> anyhow::Result<()> {
                 ("X-Api-Version".to_string(), "11".to_string()),
             ]),
             language: "python".to_string(),
+            arg_names: vec![],
             arg_types: vec![DataType::String],
             return_type: DataType::Boolean,
             immutable: Some(true),

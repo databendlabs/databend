@@ -110,7 +110,7 @@ impl HashJoinProbeState {
     ) -> Result<Self> {
         if matches!(
             join_type,
-            &JoinType::Right | &JoinType::RightSingle | &JoinType::Full
+            &JoinType::Right | &JoinType::RightAny | &JoinType::RightSingle | &JoinType::Full
         ) {
             probe_schema = probe_schema_wrap_nullable(&probe_schema);
         }
@@ -180,7 +180,7 @@ impl HashJoinProbeState {
         let mut _nullable_data_block = None;
         let evaluator = if matches!(
             self.hash_join_state.hash_join_desc.join_type,
-            JoinType::Right | JoinType::RightSingle | JoinType::Full
+            JoinType::Right | JoinType::RightAny | JoinType::RightSingle | JoinType::Full
         ) {
             let nullable_columns = input
                 .columns()
@@ -280,7 +280,11 @@ impl HashJoinProbeState {
         if self.hash_join_state.fast_return.load(Ordering::Acquire)
             && matches!(
                 self.hash_join_state.hash_join_desc.join_type,
-                JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+                JoinType::Left
+                    | JoinType::LeftAny
+                    | JoinType::LeftSingle
+                    | JoinType::Full
+                    | JoinType::LeftAnti
             )
         {
             return self.left_fast_return(
@@ -335,6 +339,7 @@ impl HashJoinProbeState {
                     probe_state.with_conjunction,
                 ) {
                     if prefer_early_filtering {
+                        probe_state.selection.clear();
                         // Early filtering, use selection to get better performance.
                         table.hash_table.early_filtering_matched_probe(
                             &mut probe_state.hashes,
@@ -350,6 +355,8 @@ impl HashJoinProbeState {
                         // Early filtering, use matched selection and unmatched selection to get better performance.
                         let unmatched_selection =
                             probe_state.probe_unmatched_indexes.as_mut().unwrap();
+                        probe_state.selection.clear();
+                        unmatched_selection.clear();
                         let (matched_count, unmatched_count) =
                             table.hash_table.early_filtering_probe(
                                 &mut probe_state.hashes,
@@ -386,8 +393,10 @@ impl HashJoinProbeState {
         matches!(
             join_type,
             JoinType::Inner
+                | JoinType::InnerAny
                 | JoinType::Full
                 | JoinType::Left
+                | JoinType::LeftAny
                 | JoinType::LeftSingle
                 | JoinType::LeftAnti
                 | JoinType::LeftSemi
@@ -400,7 +409,11 @@ impl HashJoinProbeState {
     pub fn need_unmatched_selection(join_type: &JoinType, with_conjunction: bool) -> bool {
         matches!(
             join_type,
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
+            JoinType::Left
+                | JoinType::LeftAny
+                | JoinType::LeftSingle
+                | JoinType::Full
+                | JoinType::LeftAnti
         ) && !with_conjunction
     }
 
@@ -438,7 +451,7 @@ impl HashJoinProbeState {
 
     pub fn final_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match &self.hash_join_state.hash_join_desc.join_type {
-            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
+            JoinType::Right | JoinType::RightAny | JoinType::RightSingle | JoinType::Full => {
                 self.right_and_full_outer_scan(task, state)
             }
             JoinType::RightSemi => self.right_semi_outer_scan(task, state),

@@ -33,7 +33,7 @@ def java_client(session, driver_version):
         raise Exception("evn JDBC_MAIN_VER should not be empty")
 
     session.install("requests")
-    session.run("python", "java_client/perpare.py", driver_version)
+    session.run("python", "java_client/prepare.py", driver_version)
     run_jdbc_test(session, driver_version, main_ver)
 
 

@@ -510,6 +510,7 @@ def main(args):
     )
     databend_query_proc_create.communicate(b"SELECT 1")
 
+    # typos:ignore-next-line
     def sute_key_func(item):
         if -1 == item.find("_"):
             return 99998, ""
@@ -564,6 +565,7 @@ def main(args):
         return all_tests
 
     total_tests_run = 0
+    # typos:ignore-next-line
     for suite in sorted(os.listdir(base_dir), key=sute_key_func):
         if SERVER_DIED:
             break

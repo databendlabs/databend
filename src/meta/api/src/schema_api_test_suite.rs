@@ -2714,7 +2714,7 @@ impl SchemaApiTestSuite {
                 // Change the comment, this modification should not be committed
                 req.new_table_meta.comment = "some new comment".to_string();
                 // Expects no KV api level error, and no app level error.
-                // For the convenience of reviewing, using explict type signature
+                // For the convenience of reviewing, using explicit type signature
                 let _r: databend_common_meta_app::schema::UpdateTableMetaReply = mt
                     .update_multi_table_meta_with_sender(
                         UpdateMultiTableMetaReq {
@@ -5526,7 +5526,7 @@ impl SchemaApiTestSuite {
             let handle = runtime.spawn(async move {
                 let resp = arc_mt.create_table(create_table_req.clone()).await;
 
-                // assert that when create table concurrently with corret params return error,
+                // assert that when create table concurrently with correct params return error,
                 // the error MUST be TxnRetryMaxTimes
                 if resp.is_err() {
                     assert!(matches!(
@@ -5547,7 +5547,7 @@ impl SchemaApiTestSuite {
                 };
                 let resp = arc_mt.commit_table_meta(commit_table_req).await;
 
-                // assert that when commit_table_meta concurrently with corret params return error,
+                // assert that when commit_table_meta concurrently with correct params return error,
                 // the error MUST be TxnRetryMaxTimes or CommitTableMetaError(prev table id has been changed)
                 if resp.is_err() {
                     assert!(
@@ -6074,6 +6074,12 @@ impl SchemaApiTestSuite {
             };
 
             let resp = mt.get_table_copied_file_info(req).await?;
+            assert_eq!(file_infos, resp.file_info);
+        }
+
+        info!("--- list copied file infos");
+        {
+            let resp = mt.list_table_copied_file_info(table_id).await?;
             assert_eq!(file_infos, resp.file_info);
         }
 

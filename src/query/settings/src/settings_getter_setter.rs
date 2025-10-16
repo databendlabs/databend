@@ -897,6 +897,10 @@ impl Settings {
         self.try_get_u64("dynamic_sample_time_budget_ms")
     }
 
+    pub fn get_enable_backpressure_spiller(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_backpressure_spiller")? != 0)
+    }
+
     pub fn get_max_spill_io_requests(&self) -> Result<u64> {
         self.try_get_u64("max_spill_io_requests")
     }
@@ -1086,5 +1090,9 @@ impl Settings {
 
     pub fn get_queries_queue_retry_timeout(&self) -> Result<u64> {
         self.try_get_u64("queries_queue_retry_timeout")
+    }
+
+    pub fn get_enable_experimental_new_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_new_join")? == 1)
     }
 }

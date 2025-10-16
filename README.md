@@ -1,6 +1,6 @@
 <h1 align="center">Databend</h1>
 <h2 align="center">ANY DATA. ANY SCALE. ONE DATABASE.</h2>
-<h3 align="center">Multimodal data warehouse for the AI era with Snowflake-compatible SQL</h3>
+<h3 align="center">Blazing analytics, fast search, geo insights, vector AI — supercharged in a new-era Snowflake-compatible warehouse</h3>
 
 <div align="center">
 

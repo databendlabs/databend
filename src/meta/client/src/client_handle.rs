@@ -26,6 +26,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
+use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::MemberListReply;
@@ -35,9 +36,10 @@ use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use databend_common_metrics::count::Count;
 use fastrace::Span;
-use futures::FutureExt;
 use log::debug;
 use log::error;
 use log::info;
@@ -124,6 +126,15 @@ impl ClientHandle {
         self.request((watch, InitFlag)).await
     }
 
+    pub async fn upsert_via_txn(&self, upsert: UpsertKV) -> Result<UpsertKVReply, MetaClientError> {
+        let txn = TxnRequest::from_upsert(upsert);
+
+        let resp = self.request(txn).await?;
+
+        let reply = resp.into_upsert_reply()?;
+        Ok(reply)
+    }
+
     /// Send a request to the internal worker task, which will be running in another runtime.
     #[fastrace::trace]
     #[async_backtrace::framed]
@@ -139,12 +150,13 @@ impl ClientHandle {
             .send_request_to_worker(req)
             .map_err(MetaClientError::from)?;
 
-        UnlimitedFuture::create(async move {
+        let recv_res = UnlimitedFuture::create(async move {
             let _g = grpc_metrics::client_request_inflight.counter_guard();
             rx.await
         })
-        .map(|recv_res| Self::parse_worker_result(recv_res))
-        .await
+        .await;
+
+        Self::parse_worker_result(recv_res)
     }
 
     /// Send a request to the internal worker task, which will be running in another runtime.

@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use tonic::Status;
 
 use crate::ConnectionError;
+use crate::InvalidReply;
 use crate::MetaHandshakeError;
 use crate::MetaNetworkError;
 
@@ -60,6 +61,12 @@ impl From<MetaClientError> for io::Error {
                 io::Error::new(io::ErrorKind::NotConnected, e.to_string())
             }
         }
+    }
+}
+
+impl From<InvalidReply> for MetaClientError {
+    fn from(e: InvalidReply) -> Self {
+        Self::NetworkError(e.into())
     }
 }
 

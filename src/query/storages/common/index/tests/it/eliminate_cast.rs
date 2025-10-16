@@ -66,10 +66,10 @@ fn run_text(file: &mut impl Write, text: &str, ctx: &[(&str, DataType, Domain)])
         .collect();
     match eliminate_cast(&expr, input_domains) {
         Some(new_expr) => {
-            writeln!(file, "rewrited  : {new_expr}").unwrap();
+            writeln!(file, "rewrited  : {new_expr}").unwrap(); // typos:disable-line
         }
         None => {
-            writeln!(file, "rewrited  : Unchange").unwrap();
+            writeln!(file, "rewrited  : Unchange").unwrap(); // typos:disable-line
         }
     };
     writeln!(file).unwrap();

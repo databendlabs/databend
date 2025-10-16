@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::io;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::Condvar;
@@ -23,6 +24,8 @@ use bytes::Bytes;
 use bytes::BytesMut;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
+use fastrace::future::FutureExt;
+use fastrace::Span;
 use opendal::Metadata;
 use opendal::Writer;
 
@@ -86,7 +89,6 @@ pub struct BufferPool {
 }
 
 impl BufferPool {
-    #[allow(dead_code)]
     pub fn create(executor: Arc<Runtime>, memory: usize, workers: usize) -> Arc<BufferPool> {
         let (working_tx, working_rx) = async_channel::unbounded();
         let (buffers_tx, buffers_rx) = async_channel::unbounded();
@@ -94,21 +96,19 @@ impl BufferPool {
         let memory = memory / CHUNK_SIZE * CHUNK_SIZE;
 
         for _ in 0..memory / CHUNK_SIZE {
-            if buffers_tx
+            buffers_tx
                 .try_send(BytesMut::with_capacity(CHUNK_SIZE))
-                .is_err()
-            {
-                panic!("Buffer pool available_write_buffers need unbounded.")
-            }
+                .expect("Buffer pool available_write_buffers need unbounded.");
         }
 
         for _ in 0..workers {
-            let working_queue = working_rx.clone();
+            let working_queue: async_channel::Receiver<BufferOperator> = working_rx.clone();
             let available_write_buffers = buffers_tx.clone();
             executor.spawn(async move {
                 let mut background = Background::create(available_write_buffers);
                 while let Ok(op) = working_queue.recv().await {
-                    background.recv(op).await;
+                    let span = Span::enter_with_parent("Background::recv", op.span());
+                    background.recv(op).in_span(span).await;
                 }
             });
         }
@@ -119,6 +119,7 @@ impl BufferPool {
             available_write_buffers_tx: buffers_tx,
         })
     }
+
     pub fn try_alloc_buffer(&self) -> Option<BytesMut> {
         self.available_write_buffers.try_recv().ok()
     }
@@ -134,34 +135,25 @@ impl BufferPool {
     }
 
     pub fn write(&self, op: BufferWriteOperator) {
-        if self
-            .working_queue
+        self.working_queue
             .try_send(BufferOperator::Write(op))
-            .is_err()
-        {
-            unreachable!("Buffer pool working queue need unbounded.");
-        }
+            .expect("Buffer pool working queue need unbounded.")
     }
 
     pub fn close(&self, op: BufferCloseOperator) {
-        if self
-            .working_queue
+        self.working_queue
             .try_send(BufferOperator::Close(op))
-            .is_err()
-        {
-            unreachable!("Buffer pool working queue need unbounded.");
-        }
+            .expect("Buffer pool working queue need unbounded.")
     }
 
-    #[allow(dead_code)]
     pub fn buffer_write(self: &Arc<BufferPool>, writer: Writer) -> BufferWriter {
         BufferWriter::new(writer, self.clone())
     }
 
     pub fn release_buffer(&self, buffer: BytesMut) {
-        if self.available_write_buffers_tx.try_send(buffer).is_err() {
-            unreachable!("Buffer pool available_write_buffers need unbounded.");
-        }
+        self.available_write_buffers_tx
+            .try_send(buffer)
+            .expect("Buffer pool available_write_buffers need unbounded.")
     }
 }
 
@@ -222,6 +214,7 @@ impl BufferWriter {
             self.pending_response = Some(pending_response.clone());
 
             self.buffer_pool.write(BufferWriteOperator {
+                span: Span::enter_with_local_parent("BufferWriteOperator"),
                 writer,
                 response: pending_response,
                 buffers: std::mem::take(&mut self.pending_buffers),
@@ -231,7 +224,6 @@ impl BufferWriter {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn close(mut self) -> std::io::Result<Metadata> {
         self.flush()?;
 
@@ -242,6 +234,7 @@ impl BufferWriter {
             });
 
             self.buffer_pool.close(BufferCloseOperator {
+                span: Span::enter_with_local_parent("BufferCloseOperator"),
                 writer,
                 response: pending_response.clone(),
             });
@@ -262,10 +255,21 @@ impl BufferWriter {
             "Writer already closed",
         ))
     }
+
+    pub(super) fn finish(&mut self) -> std::io::Result<Metadata> {
+        std::mem::replace(self, Self {
+            writer: None,
+            current_bytes: None,
+            buffer_pool: self.buffer_pool.clone(),
+            pending_buffers: Default::default(),
+            pending_response: None,
+        })
+        .close()
+    }
 }
 
-impl std::io::Write for BufferWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+impl io::Write for BufferWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         if buf.is_empty() {
             return Ok(0);
         }
@@ -315,11 +319,9 @@ impl std::io::Write for BufferWriter {
         Ok(written)
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
-        if matches!(&self.current_bytes, Some(current_bytes) if !current_bytes.is_empty()) {
-            if let Some(current_bytes) = self.current_bytes.take() {
-                self.pending_buffers.push_back(current_bytes.freeze());
-            }
+    fn flush(&mut self) -> io::Result<()> {
+        if let Some(current_bytes) = self.current_bytes.take_if(|bytes| !bytes.is_empty()) {
+            self.pending_buffers.push_back(current_bytes.freeze());
         }
 
         if !self.pending_buffers.is_empty() {
@@ -378,6 +380,7 @@ pub struct BufferWriteResp {
 }
 
 pub struct BufferWriteOperator {
+    span: Span,
     writer: Writer,
     buffers: VecDeque<Bytes>,
     response: Arc<BufferOperatorResp<BufferWriteResp>>,
@@ -389,6 +392,7 @@ pub struct BufferCloseResp {
 }
 
 pub struct BufferCloseOperator {
+    span: Span,
     writer: Writer,
     response: Arc<BufferOperatorResp<BufferCloseResp>>,
 }
@@ -401,6 +405,15 @@ pub struct BufferOperatorResp<T> {
 pub enum BufferOperator {
     Write(BufferWriteOperator),
     Close(BufferCloseOperator),
+}
+
+impl BufferOperator {
+    fn span(&self) -> &Span {
+        match self {
+            BufferOperator::Write(op) => &op.span,
+            BufferOperator::Close(op) => &op.span,
+        }
+    }
 }
 
 pub struct Background {

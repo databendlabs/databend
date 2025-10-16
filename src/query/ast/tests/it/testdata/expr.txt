@@ -6651,3 +6651,16 @@ Tuple {
 }
 
 
+---------- Input ----------
+@test_stage/input/34
+---------- Output ---------
+@test_stage/input/34
+---------- AST ------------
+StageLocation {
+    span: Some(
+        0..20,
+    ),
+    location: "test_stage/input/34",
+}
+
+

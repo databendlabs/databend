@@ -29,7 +29,9 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
 use crate::pipelines::processors::transforms::CacheSourceState;
 use crate::pipelines::processors::transforms::HashJoinCacheState;
+use crate::pipelines::processors::transforms::NewHashJoinCacheState;
 use crate::pipelines::processors::transforms::TransformCacheScan;
+use crate::pipelines::HashJoinStateRef;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -75,19 +77,26 @@ impl IPhysicalPlan for CacheScan {
         let max_block_size = builder.settings.get_max_block_size()? as usize;
         let cache_source_state = match &self.cache_source {
             CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
-                let hash_join_state = match builder.hash_join_states.get(cache_index) {
-                    Some(hash_join_state) => hash_join_state.clone(),
+                match builder.hash_join_states.get(cache_index) {
+                    Some(HashJoinStateRef::OldHashJoinState(hash_join_state)) => {
+                        CacheSourceState::OldHashJoinCacheState(HashJoinCacheState::new(
+                            column_indexes.clone(),
+                            hash_join_state.clone(),
+                            max_block_size,
+                        ))
+                    }
+                    Some(HashJoinStateRef::NewHashJoinState(hash_join_state)) => {
+                        CacheSourceState::NewHashJoinCacheState(NewHashJoinCacheState::new(
+                            column_indexes.clone(),
+                            hash_join_state.clone(),
+                        ))
+                    }
                     None => {
                         return Err(ErrorCode::Internal(
                             "Hash join state not found during building cache scan".to_string(),
                         ));
                     }
-                };
-                CacheSourceState::HashJoinCacheState(HashJoinCacheState::new(
-                    column_indexes.clone(),
-                    hash_join_state,
-                    max_block_size,
-                ))
+                }
             }
         };
 

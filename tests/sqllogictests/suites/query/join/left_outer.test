@@ -286,14 +286,14 @@ statement ok
 set max_block_size = 2;
 
 query I
-SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a;
+SELECT * FROM t1 LEFT JOIN t2 ON t1.a = t2.a ORDER BY t1.a, t2.b;
 ----
-2 3 2 10
-2 3 2 8
 1 2 NULL NULL
-2 3 2 6
-2 3 2 4
 2 3 2 2
+2 3 2 4
+2 3 2 6
+2 3 2 8
+2 3 2 10
 3 4 NULL NULL
 4 5 NULL NULL
 5 6 NULL NULL

@@ -56,14 +56,22 @@ impl pb::TxnOp {
         self
     }
 
-    pub fn with_expires_at_ms(mut self, expires_at_ms: Option<u64>) -> Self {
+    pub fn with_expires_at(mut self, expires_at: Option<Duration>) -> Self {
         match &mut self.request {
             // Require 1.2.770 that support expire_at in milliseconds
-            Some(pb::txn_op::Request::Put(p)) => p.expire_at = expires_at_ms,
-            Some(pb::txn_op::Request::PutSequential(p)) => p.expires_at_ms = expires_at_ms,
+            Some(pb::txn_op::Request::Put(p)) => {
+                p.expire_at = expires_at.map(|d| d.as_millis() as u64)
+            }
+            Some(pb::txn_op::Request::PutSequential(p)) => {
+                p.expires_at_ms = expires_at.map(|d| d.as_millis() as u64)
+            }
             _ => {}
         }
         self
+    }
+
+    pub fn with_expires_at_ms(self, expires_at_ms: Option<u64>) -> Self {
+        self.with_expires_at(expires_at_ms.map(Duration::from_millis))
     }
 
     /// Create a new `TxnOp` with a `Delete` operation.
