@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use crate::protobuf as pb;
 use crate::SeqV;
 
-impl pb::FetchAddU64Response {
+impl pb::FetchIncreaseU64Response {
     pub fn new(key: impl ToString, before: SeqV<u64>, after: SeqV<u64>) -> Self {
         Self {
             key: key.to_string(),
@@ -44,11 +44,11 @@ impl pb::FetchAddU64Response {
     }
 }
 
-impl Display for pb::FetchAddU64Response {
+impl Display for pb::FetchIncreaseU64Response {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "FetchAddU64Response{{ key={} before=(seq={} {}), after=(seq={} {}), delta={} }}",
+            "FetchIncreaseU64Response{{ key={} before=(seq={} {}), after=(seq={} {}), delta={} }}",
             self.key,
             self.before_seq,
             self.before,
@@ -64,25 +64,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_fetch_add_u64_response() {
-        let resp = pb::FetchAddU64Response::new("foo", SeqV::new(10, 100), SeqV::new(20, 200));
+    fn test_fetch_increase_u64_response() {
+        let resp = pb::FetchIncreaseU64Response::new("foo", SeqV::new(10, 100), SeqV::new(20, 200));
 
         assert_eq!(resp.delta(), 100);
     }
 
     #[test]
-    fn test_display_fetch_add_u64_response() {
-        let resp = pb::FetchAddU64Response::new("k1", SeqV::new(1, 3), SeqV::new(2, 4));
+    fn test_display_fetch_increase_u64_response() {
+        let resp = pb::FetchIncreaseU64Response::new("k1", SeqV::new(1, 3), SeqV::new(2, 4));
         assert_eq!(
             resp.to_string(),
-            "FetchAddU64Response{ key=k1 before=(seq=1 3), after=(seq=2 4), delta=1 }"
+            "FetchIncreaseU64Response{ key=k1 before=(seq=1 3), after=(seq=2 4), delta=1 }"
         );
     }
 
     #[test]
-    fn test_fetch_add_u64_response_new() {
-        let resp = pb::FetchAddU64Response::new("k1", SeqV::new(1, 3), SeqV::new(2, 4));
-        assert_eq!(resp, pb::FetchAddU64Response {
+    fn test_fetch_increase_u64_response_new() {
+        let resp = pb::FetchIncreaseU64Response::new("k1", SeqV::new(1, 3), SeqV::new(2, 4));
+        assert_eq!(resp, pb::FetchIncreaseU64Response {
             key: "k1".to_string(),
             before_seq: 1,
             before: 3,
@@ -92,9 +92,9 @@ mod tests {
     }
 
     #[test]
-    fn test_fetch_add_u64_response_new_unchanged() {
-        let resp = pb::FetchAddU64Response::new_unchanged("k1", SeqV::new(1, 3));
-        assert_eq!(resp, pb::FetchAddU64Response {
+    fn test_fetch_increase_u64_response_new_unchanged() {
+        let resp = pb::FetchIncreaseU64Response::new_unchanged("k1", SeqV::new(1, 3));
+        assert_eq!(resp, pb::FetchIncreaseU64Response {
             key: "k1".to_string(),
             before_seq: 1,
             before: 3,
