@@ -16,6 +16,9 @@ aranges = "aranges"
 
 [default.extend-identifiers]
 
+## External
+WRONLY = "WRONLY"
+
 # Wrong cases
 Tke = "Tke"
 ba = "ba"

@@ -342,6 +342,8 @@ pub enum TableDataType {
     Interval,
     Vector(VectorDataType),
     Opaque(usize),
+    // Only used to persist DataType in meta
+    StageLocation,
 }
 
 impl DataSchema {
@@ -639,6 +641,13 @@ impl TableSchema {
                 "cannot drop table column to empty",
             ));
         }
+        let i = self.index_of(column)?;
+        self.fields.remove(i);
+
+        Ok(i)
+    }
+
+    pub fn drop_column_unchecked(&mut self, column: &str) -> Result<FieldIndex> {
         let i = self.index_of(column)?;
         self.fields.remove(i);
 
@@ -1363,6 +1372,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Geometry => DataType::Geometry,
             TableDataType::Geography => DataType::Geography,
             TableDataType::Vector(ty) => DataType::Vector(*ty),
+            TableDataType::StageLocation => DataType::StageLocation,
         }
     }
 }
@@ -1469,6 +1479,7 @@ impl TableDataType {
             TableDataType::String => "VARCHAR".to_string(),
             TableDataType::Vector(ty) => format!("VECTOR({})", ty.dimension()),
             TableDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
+            TableDataType::StageLocation => "STAGE_LOCATION".to_string(),
             _ => self.to_string().to_uppercase(),
         }
     }
@@ -1519,7 +1530,8 @@ impl TableDataType {
                 | TableDataType::Geometry
                 | TableDataType::Geography
                 | TableDataType::Interval
-                | TableDataType::Vector(_) => ty.sql_name(),
+                | TableDataType::Vector(_)
+                | TableDataType::StageLocation => ty.sql_name(),
             };
             if is_null {
                 format!("{} NULL", s)
@@ -1700,6 +1712,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
             })
         }
         DataType::Vector(ty) => Ok(TableDataType::Vector(*ty)),
+        DataType::StageLocation => Ok(TableDataType::StageLocation),
         DataType::Generic(_) => Err(ErrorCode::SemanticError(format!(
             "Cannot create table with type: {data_type}",
         ))),

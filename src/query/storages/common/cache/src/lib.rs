@@ -15,6 +15,7 @@
 #![feature(write_all_vectored)]
 #![feature(associated_type_defaults)]
 #![feature(assert_matches)]
+#![feature(io_const_error)]
 
 mod cache;
 mod cache_items;

@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs;
 use std::hash::Hash;
+use std::io;
 use std::io::ErrorKind;
 use std::ops::Deref;
 use std::ops::Drop;
@@ -182,12 +183,11 @@ impl TempDirManager {
         self.alignment
     }
 
-    fn insufficient_disk(&self, size: u64) -> Result<bool> {
-        let stat = statvfs(self.root.as_ref().unwrap().as_ref())
-            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+    fn insufficient_disk(&self, grow: u64) -> io::Result<bool> {
+        let stat = statvfs(self.root.as_ref().unwrap().as_ref())?;
 
         debug_assert_eq!(stat.f_frsize, self.alignment.as_usize() as u64);
-        let n = self.alignment.align_up_count(size as usize) as u64;
+        let n = self.alignment.align_up_count(grow as usize) as u64;
         Ok(stat.f_bavail < self.reserved + n)
     }
 }
@@ -215,9 +215,11 @@ impl TempDir {
     pub fn new_file_with_size(&self, size: usize) -> Result<Option<TempPath>> {
         let path = self.path.join(GlobalUniqName::unique()).into_boxed_path();
 
-        if self.dir_info.limit < *self.dir_info.size.lock().unwrap() + size
-            || self.manager.global_limit < self.manager.group.lock().unwrap().size() + size
-            || self.manager.insufficient_disk(size as u64)?
+        if self.manager.global_limit < self.manager.group.lock().unwrap().size() + size
+            || self
+                .manager
+                .insufficient_disk(size as u64)
+                .map_err(|e| ErrorCode::Internal(format!("insufficient_disk fail {e}")))?
         {
             return Ok(None);
         }
@@ -242,6 +244,58 @@ impl TempDir {
         }))))
     }
 
+    pub fn try_grow_size(
+        &self,
+        path: &mut TempPath,
+        grow: usize,
+        check_disk: bool,
+    ) -> io::Result<bool> {
+        let Some(path) = Arc::get_mut(&mut path.0) else {
+            return Err(io::const_error!(
+                io::ErrorKind::InvalidInput,
+                "can't set size after share"
+            ));
+        };
+        debug_assert_eq!(
+            self.dir_info.as_ref() as *const _,
+            self.dir_info.as_ref() as *const _
+        );
+
+        if self.manager.global_limit < self.manager.group.lock().unwrap().size() + grow {
+            return Ok(false);
+        }
+
+        if check_disk && self.manager.insufficient_disk(grow as u64)? {
+            return Ok(false);
+        }
+
+        let mut dir_size = self.dir_info.size.lock().unwrap();
+        if self.dir_info.limit < *dir_size + grow {
+            return Ok(false);
+        }
+
+        *dir_size += grow;
+        path.size += grow;
+
+        Ok(true)
+    }
+
+    pub fn check_grow(&self, grow: usize, check_disk: bool) -> io::Result<bool> {
+        if self.manager.global_limit < self.manager.group.lock().unwrap().size() + grow {
+            return Ok(false);
+        }
+
+        if check_disk && self.manager.insufficient_disk(grow as u64)? {
+            return Ok(false);
+        }
+
+        let dir_size = *self.dir_info.size.lock().unwrap();
+        if self.dir_info.limit < dir_size + grow {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+
     fn init_dir(&self) -> Result<()> {
         let mut rt = Ok(());
         self.dir_info.inited.call_once(|| {
@@ -260,6 +314,10 @@ impl TempDir {
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn insufficient_disk(&self, grow: usize) -> io::Result<bool> {
+        self.manager.insufficient_disk(grow as _)
     }
 }
 

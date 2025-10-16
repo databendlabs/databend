@@ -216,6 +216,7 @@ fn create_test_udf_server() -> UserDefinedFunction {
         "strlen_py",
         &BTreeMap::default(),
         "python",
+        vec![],
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),
         "This is a description",

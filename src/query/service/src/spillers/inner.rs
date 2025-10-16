@@ -100,18 +100,18 @@ pub trait SpillAdapter: Send + Sync + 'static {
 /// 3. Serialization and deserialization input data
 /// 4. Interact with the underlying storage engine to write and read spilled data
 #[derive(Clone)]
-pub struct SpillerInner<A: SpillAdapter> {
+pub struct SpillerInner<A> {
     pub(super) adapter: A,
     pub(super) operator: Operator,
     location_prefix: String,
-    temp_dir: Option<Arc<TempDir>>,
+    pub(super) temp_dir: Option<Arc<TempDir>>,
     // for dio disabled
     pub(super) local_operator: Option<Operator>,
-    use_parquet: bool,
+    pub(super) use_parquet: bool,
     _spiller_type: SpillerType,
 }
 
-impl<A: SpillAdapter> SpillerInner<A> {
+impl<A> SpillerInner<A> {
     pub fn new(adapter: A, operator: Operator, config: SpillerConfig) -> Result<Self> {
         let SpillerConfig {
             location_prefix,
@@ -139,17 +139,6 @@ impl<A: SpillAdapter> SpillerInner<A> {
         })
     }
 
-    /// Spill some [`DataBlock`] to storage. These blocks will be concat into one.
-    #[fastrace::trace(name = "Spiller::spill")]
-    pub async fn spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
-        let (location, layout, data_size) = self.spill_unmanage(data_block).await?;
-
-        // Record columns layout for spilled data.
-        self.adapter
-            .add_spill_file(location.clone(), layout, data_size);
-        Ok(location)
-    }
-
     async fn spill_unmanage(
         &self,
         data_block: Vec<DataBlock>,
@@ -170,20 +159,13 @@ impl<A: SpillAdapter> SpillerInner<A> {
         let location = self.write_encodes(data_size, buf).await?;
 
         // Record statistics.
-        record_write_profile(&location, &instant, data_size);
+        record_write_profile(location.is_local(), &instant, data_size);
         let layout = columns_layout.pop().unwrap();
         Ok((location, layout, data_size))
     }
 
     pub fn create_unique_location(&self) -> String {
         format!("{}/{}", self.location_prefix, GlobalUniqName::unique())
-    }
-
-    /// Read a certain file to a [`DataBlock`].
-    #[fastrace::trace(name = "Spiller::read_spilled_file")]
-    pub async fn read_spilled_file(&self, location: &Location) -> Result<DataBlock> {
-        let layout = self.adapter.get_spill_layout(location).unwrap();
-        self.read_unmanage_spilled_file(location, &layout).await
     }
 
     async fn read_unmanage_spilled_file(
@@ -219,17 +201,22 @@ impl<A: SpillAdapter> SpillerInner<A> {
             Location::Remote(loc) => self.operator.read(loc).await?,
         };
 
-        record_read_profile(location, &instant, data.len());
+        record_read_profile(location.is_local(), &instant, data.len());
 
         deserialize_block(columns_layout, data)
     }
 
-    pub(super) async fn write_encodes(&self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
+    pub(super) fn new_location(&self, size: usize) -> Result<Location> {
         let location = match &self.temp_dir {
             None => None,
             Some(disk) => disk.new_file_with_size(size)?.map(Location::Local),
         }
         .unwrap_or(Location::Remote(self.create_unique_location()));
+        Ok(location)
+    }
+
+    pub(super) async fn write_encodes(&self, size: usize, buf: DmaWriteBuf) -> Result<Location> {
+        let location = self.new_location(size)?;
 
         let mut writer = match (&location, &self.local_operator) {
             (Location::Local(path), None) => {
@@ -268,47 +255,58 @@ impl<A: SpillAdapter> SpillerInner<A> {
     }
 }
 
-pub(super) fn record_write_profile(location: &Location, start: &Instant, write_bytes: usize) {
-    match location {
-        Location::Remote(_) => {
-            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteBytes,
-                write_bytes,
-            );
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteTime,
-                start.elapsed().as_millis() as usize,
-            );
-        }
-        Location::Local(_) => {
-            Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteBytes, write_bytes);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::LocalSpillWriteTime,
-                start.elapsed().as_millis() as usize,
-            );
-        }
+impl<A: SpillAdapter> SpillerInner<A> {
+    /// Spill some [`DataBlock`] to storage. These blocks will be concat into one.
+    #[fastrace::trace(name = "Spiller::spill")]
+    pub async fn spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
+        let (location, layout, data_size) = self.spill_unmanage(data_block).await?;
+
+        // Record columns layout for spilled data.
+        self.adapter
+            .add_spill_file(location.clone(), layout, data_size);
+        Ok(location)
+    }
+
+    /// Read a certain file to a [`DataBlock`].
+    #[fastrace::trace(name = "Spiller::read_spilled_file")]
+    pub async fn read_spilled_file(&self, location: &Location) -> Result<DataBlock> {
+        let layout = self.adapter.get_spill_layout(location).unwrap();
+        self.read_unmanage_spilled_file(location, &layout).await
     }
 }
 
-pub(super) fn record_read_profile(location: &Location, start: &Instant, read_bytes: usize) {
-    match location {
-        Location::Remote(_) => {
-            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillReadTime,
-                start.elapsed().as_millis() as usize,
-            );
-        }
-        Location::Local(_) => {
-            Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadBytes, read_bytes);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::LocalSpillReadTime,
-                start.elapsed().as_millis() as usize,
-            );
-        }
+pub(super) fn record_write_profile(is_local: bool, start: &Instant, write_bytes: usize) {
+    if !is_local {
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, write_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RemoteSpillWriteTime,
+            start.elapsed().as_millis() as usize,
+        );
+    } else {
+        Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteBytes, write_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::LocalSpillWriteTime,
+            start.elapsed().as_millis() as usize,
+        );
+    }
+}
+
+pub(super) fn record_read_profile(is_local: bool, start: &Instant, read_bytes: usize) {
+    if is_local {
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RemoteSpillReadTime,
+            start.elapsed().as_millis() as usize,
+        );
+    } else {
+        Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadBytes, read_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::LocalSpillReadTime,
+            start.elapsed().as_millis() as usize,
+        );
     }
 }

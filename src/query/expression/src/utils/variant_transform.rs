@@ -49,6 +49,7 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         DataType::Map(ty) => contains_variant(ty.as_ref()),
         DataType::Tuple(types) => types.iter().any(contains_variant),
         DataType::Opaque(_) => false,
+        DataType::StageLocation => false,
     }
 }
 

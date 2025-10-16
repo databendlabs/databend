@@ -93,7 +93,7 @@ impl Interpreter for DropTableInterpreter {
         let engine = tbl.get_table_info().engine();
         if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
-                "{}.{} engine is {} that doesn't support drop, use `DROP {} {}.{}` instead",
+                "{}.{} engine is {}, use `DROP {} {}.{}` instead",
                 &self.plan.database,
                 &self.plan.table,
                 engine,

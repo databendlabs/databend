@@ -16,6 +16,7 @@ mod data_processor_strategy;
 mod hilbert_partition_exchange;
 mod transform_window_partition_collect;
 mod window_partition_buffer;
+mod window_partition_buffer_v2;
 mod window_partition_exchange;
 mod window_partition_meta;
 mod window_partition_partial_top_n_exchange;
