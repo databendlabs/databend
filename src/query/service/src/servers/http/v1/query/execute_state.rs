@@ -384,8 +384,9 @@ impl ExecuteState {
             .await
             .with_context(make_error)?;
         let has_result_set = plan.has_result_set();
+        // For dynamic schema, we just return empty schema and update it later.
         let is_dynamic_schema = plan.is_dynamic_schema();
-        let schema = if has_result_set {
+        let schema = if has_result_set && !is_dynamic_schema {
             // check has_result_set first for safety
             QueryResponseField::from_schema(plan.schema())
         } else {
