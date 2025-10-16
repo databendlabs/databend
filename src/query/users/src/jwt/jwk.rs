@@ -322,8 +322,8 @@ impl JwkKeyStore {
     #[async_backtrace::framed]
     async fn get_single_key_from_cache(&self) -> Result<Option<PubKey>> {
         let cached_maps = self.recent_cached_maps.read();
-        let latest_keys = cached_maps.iter().last();
-        if let Some(keys) = latest_keys {
+        let latest_keys_map = cached_maps.iter().last();
+        if let Some(keys) = latest_keys_map {
             if keys.len() == 1 {
                 if let Some((_, pubkey)) = keys.iter().next() {
                     return Ok(Some(pubkey.clone()));
@@ -341,9 +341,8 @@ impl JwkKeyStore {
     #[async_backtrace::framed]
     async fn get_key_from_cache(&self, key_id: &String) -> Option<PubKey> {
         let cached_maps = self.recent_cached_maps.read();
-        let latest_keys = cached_maps.iter().last();
-        if let Some(keys) = latest_keys {
-            for (kid, pubkey) in keys.iter() {
+        for keys_map in self.recent_cached_maps.read().iter().rev() {
+            for (kid, pubkey) in keys_map.iter() {
                 if kid == key_id {
                     return Some(pubkey.clone());
                 }
