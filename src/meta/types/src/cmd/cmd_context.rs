@@ -13,21 +13,29 @@
 // limitations under the License.
 
 use std::fmt;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
 
 use display_more::DisplayUnixTimeStampExt;
 
+use crate::cmd::io_timing::IoTimer;
+use crate::cmd::io_timing::IoTiming;
 use crate::raft_types::LogId;
 use crate::Time;
 
 /// A context used when executing a [`Cmd`], to provide additional environment information.
 ///
 /// [`Cmd`]: crate::Cmd
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct CmdContext {
     time: Time,
 
     /// Current log id to apply
     log_id: LogId,
+
+    /// I/O timing information for tracking read operations
+    io_timing: Arc<Mutex<IoTiming>>,
 }
 
 impl fmt::Display for CmdContext {
@@ -46,6 +54,7 @@ impl CmdContext {
         Self {
             time: Time::from_millis(millis),
             log_id,
+            io_timing: Arc::new(Mutex::new(IoTiming::new())),
         }
     }
 
@@ -57,11 +66,51 @@ impl CmdContext {
         CmdContext {
             time,
             log_id: LogId::default(),
+            io_timing: Arc::new(Mutex::new(IoTiming::new())),
         }
     }
 
     /// Returns the time since 1970-01-01 when this log is proposed by the leader.
     pub fn time(&self) -> Time {
         self.time
+    }
+
+    /// Record an I/O operation with its timing.
+    pub fn record_io(
+        &self,
+        op_type: impl Into<String>,
+        details: impl Into<String>,
+        duration: Duration,
+    ) {
+        self.io_timing
+            .lock()
+            .unwrap()
+            .record(op_type, details, duration);
+    }
+
+    /// Get I/O timing total duration.
+    pub fn io_total_duration(&self) -> Duration {
+        self.io_timing.lock().unwrap().total_duration()
+    }
+
+    /// Get I/O timing details (cloned for logging).
+    pub fn io_timing(&self) -> IoTiming {
+        self.io_timing.lock().unwrap().clone()
+    }
+
+    /// Start an RAII-based I/O timer that automatically records timing on drop.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let _timer = self.cmd_ctx.start_io_timer("get", key);
+    /// let result = self.sm.get_maybe_expired_kv(key).await?;
+    /// // Timer automatically records on scope exit
+    /// ```
+    pub fn start_io_timer(
+        &self,
+        op_type: impl Into<String>,
+        details: impl Into<String>,
+    ) -> IoTimer {
+        IoTimer::new(self, op_type, details)
     }
 }

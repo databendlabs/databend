@@ -71,6 +71,9 @@ use crate::state_machine_api_ext::StateMachineApiExt;
 
 pub(crate) mod applier_data;
 
+/// Threshold in milliseconds for logging slow log entry application
+const SLOW_LOG_ENTRY_THRESHOLD_MS: u128 = 100;
+
 /// A helper that applies raft log `Entry` to the state machine.
 pub struct Applier<SM>
 where SM: StateMachineApi<SysData> + 'static
@@ -150,6 +153,31 @@ where SM: StateMachineApi<SysData> + 'static
         for event in self.changes.drain(..) {
             debug!("send to EventSender: {:?}", event);
             self.sm.on_change_applied(event);
+        }
+
+        // Log I/O timing information
+        let io_time_ms = self.cmd_ctx.io_total_duration().as_millis();
+        let io_timing = self.cmd_ctx.io_timing();
+        let log_time = Duration::from_millis(log_time_ms);
+
+        if io_time_ms > SLOW_LOG_ENTRY_THRESHOLD_MS {
+            warn!(
+                "Slow log entry applied: {}, time: {}, io: {}ms, ops: {}, entry: {}",
+                log_id,
+                log_time.display_unix_timestamp_short(),
+                io_time_ms,
+                io_timing,
+                entry
+            );
+        } else {
+            info!(
+                "Log entry applied: {}, time: {}, io: {}ms, ops: {}, entry: {}",
+                log_id,
+                log_time.display_unix_timestamp_short(),
+                io_time_ms,
+                io_timing,
+                entry
+            );
         }
 
         Ok(applied_state)
@@ -427,7 +455,7 @@ where SM: StateMachineApi<SysData> + 'static
         // If the key expired, it should be treated as `None` value.
         // sm.get_kv() does not check expiration.
         // Expired keys are cleaned before applying a log, see: `clean_expired_kvs()`.
-        let seqv = self.sm.get_maybe_expired_kv(key).await?;
+        let seqv = self.get_maybe_expired_kv_with_timing(key).await?;
 
         debug!(
             "txn_execute_one_condition: key: {} curr: seq:{} value:{:?}",
@@ -461,7 +489,7 @@ where SM: StateMachineApi<SysData> + 'static
             Target::KeysWithPrefix(against_n) => {
                 let against_n = *against_n;
 
-                let strm = self.sm.list_kv(key).await?;
+                let strm = self.list_kv_with_timing(key).await?;
                 // Taking at most `against_n + 1` keys is just enough for every predicate.
                 let strm = strm.take((against_n + 1) as usize);
                 let count: u64 = strm.try_fold(0, |acc, _| ready(Ok(acc + 1))).await?;
@@ -525,7 +553,8 @@ where SM: StateMachineApi<SysData> + 'static
     }
 
     async fn txn_execute_get(&self, get: &TxnGetRequest) -> Result<pb::TxnGetResponse, io::Error> {
-        let sv = self.sm.get_maybe_expired_kv(&get.key).await?;
+        let sv = self.get_maybe_expired_kv_with_timing(&get.key).await?;
+
         let get_resp = pb::TxnGetResponse {
             key: get.key.clone(),
             value: sv.map(pb::SeqV::from),
@@ -580,9 +609,9 @@ where SM: StateMachineApi<SysData> + 'static
         &mut self,
         delete_by_prefix: &TxnDeleteByPrefixRequest,
     ) -> Result<TxnDeleteByPrefixResponse, io::Error> {
-        let mut strm = self.sm.list_kv(&delete_by_prefix.prefix).await?;
-        let mut count = 0;
+        let mut strm = self.list_kv_with_timing(&delete_by_prefix.prefix).await?;
 
+        let mut count = 0;
         while let Some((key, _seq_v)) = strm.try_next().await? {
             let (prev, res) = self.upsert_kv(&UpsertKV::delete(&key)).await?;
             self.push_change(key, prev, res);
@@ -601,7 +630,7 @@ where SM: StateMachineApi<SysData> + 'static
         &mut self,
         req: &FetchIncreaseU64,
     ) -> Result<pb::FetchIncreaseU64Response, io::Error> {
-        let before_seqv = self.sm.get_maybe_expired_kv(&req.key).await?;
+        let before_seqv = self.get_maybe_expired_kv_with_timing(&req.key).await?;
 
         let before_seq = before_seqv.seq();
 
@@ -703,24 +732,29 @@ where SM: StateMachineApi<SysData> + 'static
             Duration::from_millis(log_time_ms).display_unix_timestamp_short()
         );
 
-        let mut to_clean = vec![];
-        let mut strm = self.sm.list_expire_index(log_time_ms).await?;
+        let to_clean = {
+            let _timer = self.cmd_ctx.start_io_timer("expire_scan", "expired_keys");
+            let mut to_clean = vec![];
+            let mut strm = self.sm.list_expire_index(log_time_ms).await?;
 
-        // Save the log time for next cleaning.
-        // Avoid listing tombstone records.
-        self.sm
-            .set_cleanup_start_timestamp(Duration::from_millis(log_time_ms));
+            // Save the log time for next cleaning.
+            // Avoid listing tombstone records.
+            self.sm
+                .set_cleanup_start_timestamp(Duration::from_millis(log_time_ms));
 
-        {
-            let mut strm = std::pin::pin!(strm);
-            while let Some((expire_key, key)) = strm.try_next().await? {
-                if !expire_key.is_expired(log_time_ms) {
-                    break;
+            {
+                let mut strm = std::pin::pin!(strm);
+                while let Some((expire_key, key)) = strm.try_next().await? {
+                    if !expire_key.is_expired(log_time_ms) {
+                        break;
+                    }
+
+                    to_clean.push((expire_key, key));
                 }
-
-                to_clean.push((expire_key, key));
             }
-        }
+
+            to_clean
+        };
 
         for (expire_key, key) in to_clean {
             let upsert = UpsertKV::delete(key);
@@ -740,6 +774,23 @@ where SM: StateMachineApi<SysData> + 'static
         }
 
         self.changes.push((key.to_string(), prev, result))
+    }
+
+    /// Get KV with I/O timing tracking.
+    ///
+    /// Does not check expiration - may return expired entries.
+    async fn get_maybe_expired_kv_with_timing(&self, key: &str) -> Result<Option<SeqV>, io::Error> {
+        let _timer = self.cmd_ctx.start_io_timer("get", key);
+        self.sm.get_maybe_expired_kv(key).await
+    }
+
+    /// List KV with I/O timing tracking.
+    async fn list_kv_with_timing(
+        &self,
+        prefix: &str,
+    ) -> Result<map_api::IOResultStream<(String, SeqV)>, io::Error> {
+        let _timer = self.cmd_ctx.start_io_timer("list", format!("{}*", prefix));
+        self.sm.list_kv(prefix).await
     }
 
     /// Retrieve the proposing time from a raft-log.
