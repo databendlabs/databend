@@ -158,8 +158,11 @@ use semver::Version;
 /// - 2025-09-30: since 1.2.823
 ///   🖥 server: store raft-log proposing time `proposed_at_ms` in `KVMeta`.
 ///
-/// - 2025-09-27: since TODO: update when merged
+/// - 2025-09-27: since 1.2.823
 ///   👥 client: require 1.2.770, remove calling RPC kv_api
+///
+/// - 2025-10-16: since TODO
+///   🖥 server: rename `FetchAddU64` to `FetchIncreaseU64`, add `max_value`.
 ///
 /// Server feature set:
 /// ```yaml

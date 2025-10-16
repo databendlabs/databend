@@ -24,6 +24,7 @@ use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::SeqV;
 use databend_enterprise_data_mask_feature::data_mask_handler::DatamaskHandler;
 use databend_enterprise_data_mask_feature::data_mask_handler::DatamaskHandlerWrapper;
 
@@ -66,6 +67,24 @@ impl DatamaskHandler for RealDatamaskHandler {
             .await?
             .ok_or_else(|| AppError::from(name_ident.unknown_error("get data mask")))?;
         Ok(seq_meta.data)
+    }
+
+    async fn get_data_mask_by_id(
+        &self,
+        meta_api: Arc<MetaStore>,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<SeqV<DatamaskMeta>> {
+        let res = meta_api
+            .get_data_mask_by_id(tenant, policy_id)
+            .await?
+            .ok_or_else(|| {
+                databend_common_exception::ErrorCode::UnknownMaskPolicy(format!(
+                    "Unknown mask policy {}",
+                    policy_id
+                ))
+            })?;
+        Ok(res)
     }
 }
 

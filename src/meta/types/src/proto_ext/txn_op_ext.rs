@@ -95,14 +95,37 @@ impl pb::TxnOp {
         }
     }
 
+    /// Fetch and add delta to a u64 value (backward compatible, uses max_value=0).
     pub fn fetch_add_u64(key: impl ToString, delta: i64) -> Self {
         pb::TxnOp {
-            request: Some(pb::txn_op::Request::FetchAddU64(pb::FetchAddU64 {
-                key: key.to_string(),
-                match_seq: None,
-                delta,
-            })),
+            request: Some(pb::txn_op::Request::FetchIncreaseU64(
+                pb::FetchIncreaseU64 {
+                    key: key.to_string(),
+                    match_seq: None,
+                    delta,
+                    max_value: 0,
+                },
+            )),
         }
+    }
+
+    /// Fetch and increase: after = max(current, max_value) + delta
+    pub fn fetch_increase_u64(key: impl ToString, max_value: u64, delta: i64) -> Self {
+        pb::TxnOp {
+            request: Some(pb::txn_op::Request::FetchIncreaseU64(
+                pb::FetchIncreaseU64 {
+                    key: key.to_string(),
+                    match_seq: None,
+                    delta,
+                    max_value,
+                },
+            )),
+        }
+    }
+
+    /// Fetch and update to max value (convenience method: delta=0)
+    pub fn fetch_max_u64(key: impl ToString, max_value: u64) -> Self {
+        Self::fetch_increase_u64(key, max_value, 0)
     }
 
     pub fn put_sequential(
@@ -127,7 +150,7 @@ impl pb::TxnOp {
 
         match req {
             pb::txn_op::Request::Delete(p) => p.match_seq = seq,
-            pb::txn_op::Request::FetchAddU64(d) => d.match_seq = seq,
+            pb::txn_op::Request::FetchIncreaseU64(d) => d.match_seq = seq,
             _ => {
                 unreachable!("Not support match_seq for: {}", req)
             }
@@ -274,12 +297,13 @@ mod tests {
     fn test_fetch_add_u64() {
         let op = pb::TxnOp::fetch_add_u64("counter_key", 10);
 
-        let Some(pb::txn_op::Request::FetchAddU64(fetch_req)) = &op.request else {
-            panic!("Expected FetchAddU64 request");
+        let Some(pb::txn_op::Request::FetchIncreaseU64(fetch_req)) = &op.request else {
+            panic!("Expected FetchIncreaseU64 request");
         };
 
         assert_eq!(fetch_req.key, "counter_key");
         assert_eq!(fetch_req.delta, 10);
+        assert_eq!(fetch_req.max_value, 0);
         assert!(fetch_req.match_seq.is_none());
     }
 
@@ -287,12 +311,13 @@ mod tests {
     fn test_fetch_add_u64_negative_delta() {
         let op = pb::TxnOp::fetch_add_u64("counter_key", -5);
 
-        let Some(pb::txn_op::Request::FetchAddU64(fetch_req)) = &op.request else {
-            panic!("Expected FetchAddU64 request");
+        let Some(pb::txn_op::Request::FetchIncreaseU64(fetch_req)) = &op.request else {
+            panic!("Expected FetchIncreaseU64 request");
         };
 
         assert_eq!(fetch_req.key, "counter_key");
         assert_eq!(fetch_req.delta, -5);
+        assert_eq!(fetch_req.max_value, 0);
     }
 
     #[test]
@@ -311,12 +336,13 @@ mod tests {
     fn test_match_seq_on_fetch_add_u64() {
         let op = pb::TxnOp::fetch_add_u64("counter", 1).match_seq(Some(456));
 
-        let Some(pb::txn_op::Request::FetchAddU64(fetch_req)) = &op.request else {
-            panic!("Expected FetchAddU64 request");
+        let Some(pb::txn_op::Request::FetchIncreaseU64(fetch_req)) = &op.request else {
+            panic!("Expected FetchIncreaseU64 request");
         };
 
         assert_eq!(fetch_req.key, "counter");
         assert_eq!(fetch_req.delta, 1);
+        assert_eq!(fetch_req.max_value, 0);
         assert_eq!(fetch_req.match_seq, Some(456));
     }
 
@@ -350,12 +376,13 @@ mod tests {
     fn test_method_chaining_with_match_seq() {
         let op = pb::TxnOp::fetch_add_u64("counter", 5).match_seq(Some(100));
 
-        let Some(pb::txn_op::Request::FetchAddU64(fetch_req)) = &op.request else {
-            panic!("Expected FetchAddU64 request");
+        let Some(pb::txn_op::Request::FetchIncreaseU64(fetch_req)) = &op.request else {
+            panic!("Expected FetchIncreaseU64 request");
         };
 
         assert_eq!(fetch_req.key, "counter");
         assert_eq!(fetch_req.delta, 5);
+        assert_eq!(fetch_req.max_value, 0);
         assert_eq!(fetch_req.match_seq, Some(100));
     }
 

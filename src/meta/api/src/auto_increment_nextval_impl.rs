@@ -19,7 +19,7 @@ use databend_common_meta_app::tenant::ToTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::anyerror::func_name;
-use databend_common_meta_types::protobuf::FetchAddU64Response;
+use databend_common_meta_types::protobuf::FetchIncreaseU64Response;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
@@ -46,7 +46,7 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         self,
         tenant: impl ToTenant,
         count: u64,
-    ) -> Result<Result<FetchAddU64Response, AutoIncrementError>, MetaTxnError> {
+    ) -> Result<Result<FetchIncreaseU64Response, AutoIncrementError>, MetaTxnError> {
         debug!("{}", func_name!());
 
         // Key for the sequence number value.
@@ -69,7 +69,7 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         );
         debug_assert!(succ);
 
-        let resp = responses[0].try_as_fetch_add_u64().unwrap();
+        let resp = responses[0].try_as_fetch_increase_u64().unwrap();
         let got_delta = resp.delta();
 
         if got_delta < delta {

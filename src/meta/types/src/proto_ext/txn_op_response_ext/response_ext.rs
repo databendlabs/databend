@@ -34,8 +34,8 @@ impl Display for Response {
             Response::DeleteByPrefix(r) => {
                 write!(f, "DeleteByPrefix: {}", r)
             }
-            Response::FetchAddU64(r) => {
-                write!(f, "FetchAddU64: {}", r)
+            Response::FetchIncreaseU64(r) => {
+                write!(f, "FetchIncreaseU64: {}", r)
             }
         }
     }
@@ -47,14 +47,14 @@ mod tests {
     use crate::SeqV;
     #[test]
     fn test_from() {
-        let resp = Response::from(pb::FetchAddU64Response::new_unchanged(
+        let resp = Response::from(pb::FetchIncreaseU64Response::new_unchanged(
             "key",
             SeqV::new(1, 2),
         ));
 
         assert_eq!(
             resp,
-            Response::FetchAddU64(pb::FetchAddU64Response {
+            Response::FetchIncreaseU64(pb::FetchIncreaseU64Response {
                 key: "key".to_string(),
                 before_seq: 1,
                 before: 2,

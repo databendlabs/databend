@@ -58,7 +58,7 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
-use databend_common_meta_app::schema::RowAccessPolicyColumnMap;
+use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::StageFileInfo;
@@ -494,7 +494,7 @@ impl Binder {
         table_index: IndexType,
         bind_context: &mut BindContext,
         scan_s_expr: SExpr,
-        policy: &RowAccessPolicyColumnMap,
+        policy: &SecurityPolicyColumnMap,
         fields: &[TableField],
     ) -> Result<SExpr> {
         LicenseManagerSwitch::instance()

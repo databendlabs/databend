@@ -23,7 +23,7 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::MetaError;
@@ -40,7 +40,6 @@ use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
-use crate::txn_core_util::txn_replace_exact;
 use crate::txn_op_builder_util::txn_op_put_pb;
 
 /// DatamaskApi is implemented upon kvapi::KVApi.
@@ -82,8 +81,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
                         txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
 
-                        clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
-
                         curr_seq = seq_id.seq;
                     }
                 };
@@ -111,8 +108,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 let id_list = MaskpolicyTableIdList::default();
                 txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
                 txn.if_then.extend(vec![
-                    txn_op_put_pb(name_ident, &id, None)?,        // name -> db_id
-                    txn_op_put_pb(&id_ident, &meta, None)?,       // id -> meta
+                    txn_op_put_pb(name_ident, &id, None)?,  // name -> db_id
+                    txn_op_put_pb(&id_ident, &meta, None)?, // id -> meta
+                    // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
                     txn_op_put_pb(&id_list_key, &id_list, None)?, // data mask name -> id_list
                 ]);
 
@@ -143,7 +141,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
-
             let mut txn = TxnRequest::default();
 
             let res = self.get_id_and_value(name_ident).await?;
@@ -157,9 +154,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
             txn_delete_exact(&mut txn, name_ident, seq_id.seq);
             txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-
+            // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
             clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
-
             let (succ, _responses) = send_txn(self, txn).await?;
             debug!(succ = succ;"{}", func_name!());
 
@@ -179,6 +175,20 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
         Ok(res.map(|(_, seq_meta)| seq_meta))
     }
+
+    async fn get_data_mask_by_id(
+        &self,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<Option<SeqV<DatamaskMeta>>, MetaError> {
+        debug!(req :? =(policy_id); "DatamaskApi: {}", func_name!());
+
+        let id = DataMaskId::new(policy_id);
+        let id_ident = DataMaskIdIdent::new_generic(tenant, id);
+
+        let res = self.get_pb(&id_ident).await?;
+        Ok(res)
+    }
 }
 
 async fn clear_table_column_mask_policy(
@@ -195,30 +205,5 @@ async fn clear_table_column_mask_policy(
     };
 
     txn_delete_exact(txn, &id_list_key, seq_id_list.seq);
-
-    // remove mask policy from table meta
-    for table_id in seq_id_list.data.id_list.into_iter() {
-        let tbid = TableId { table_id };
-
-        let seq_meta = kv_api.get_pb(&tbid).await?;
-
-        let Some(seq_meta) = seq_meta else {
-            continue;
-        };
-
-        let (seq, mut meta) = (seq_meta.seq, seq_meta.data);
-
-        if let Some(column_mask_policy) = meta.column_mask_policy {
-            let new_column_mask_policy = column_mask_policy
-                .into_iter()
-                .filter(|(_, name)| name != name_ident.name())
-                .collect();
-
-            meta.column_mask_policy = Some(new_column_mask_policy);
-
-            txn_replace_exact(txn, &tbid, seq, &meta)?;
-        }
-    }
-
     Ok(())
 }

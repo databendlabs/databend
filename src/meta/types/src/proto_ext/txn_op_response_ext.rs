@@ -59,11 +59,11 @@ impl pb::TxnOpResponse {
         }
     }
 
-    pub fn unchanged_fetch_add_u64(key: impl ToString, seq: u64, value: u64) -> Self {
-        Self::fetch_add_u64(key, seq, value, seq, value)
+    pub fn unchanged_fetch_increase_u64(key: impl ToString, seq: u64, value: u64) -> Self {
+        Self::fetch_increase_u64(key, seq, value, seq, value)
     }
 
-    pub fn fetch_add_u64(
+    pub fn fetch_increase_u64(
         key: impl ToString,
         before_seq: u64,
         before: u64,
@@ -71,8 +71,8 @@ impl pb::TxnOpResponse {
         after: u64,
     ) -> Self {
         pb::TxnOpResponse {
-            response: Some(pb::txn_op_response::Response::FetchAddU64(
-                pb::FetchAddU64Response {
+            response: Some(pb::txn_op_response::Response::FetchIncreaseU64(
+                pb::FetchIncreaseU64Response {
                     key: key.to_string(),
                     before_seq,
                     before,
@@ -112,9 +112,9 @@ impl pb::TxnOpResponse {
         }
     }
 
-    pub fn try_as_fetch_add_u64(&self) -> Option<&pb::FetchAddU64Response> {
+    pub fn try_as_fetch_increase_u64(&self) -> Option<&pb::FetchIncreaseU64Response> {
         match &self.response {
-            Some(pb::txn_op_response::Response::FetchAddU64(resp)) => Some(resp),
+            Some(pb::txn_op_response::Response::FetchIncreaseU64(resp)) => Some(resp),
             _ => None,
         }
     }
@@ -220,12 +220,12 @@ mod tests {
     }
 
     #[test]
-    fn test_unchanged_fetch_add_u64() {
-        let response = pb::TxnOpResponse::unchanged_fetch_add_u64("counter", 5, 100);
+    fn test_unchanged_fetch_increase_u64() {
+        let response = pb::TxnOpResponse::unchanged_fetch_increase_u64("counter", 5, 100);
 
-        let Some(pb::txn_op_response::Response::FetchAddU64(fetch_resp)) = &response.response
+        let Some(pb::txn_op_response::Response::FetchIncreaseU64(fetch_resp)) = &response.response
         else {
-            panic!("Expected FetchAddU64 response");
+            panic!("Expected FetchIncreaseU64 response");
         };
 
         assert_eq!(fetch_resp.key, "counter");
@@ -236,12 +236,12 @@ mod tests {
     }
 
     #[test]
-    fn test_fetch_add_u64() {
-        let response = pb::TxnOpResponse::fetch_add_u64("counter", 10, 50, 11, 55);
+    fn test_fetch_increase_u64() {
+        let response = pb::TxnOpResponse::fetch_increase_u64("counter", 10, 50, 11, 55);
 
-        let Some(pb::txn_op_response::Response::FetchAddU64(fetch_resp)) = &response.response
+        let Some(pb::txn_op_response::Response::FetchIncreaseU64(fetch_resp)) = &response.response
         else {
-            panic!("Expected FetchAddU64 response");
+            panic!("Expected FetchIncreaseU64 response");
         };
 
         assert_eq!(fetch_resp.key, "counter");
@@ -252,8 +252,8 @@ mod tests {
     }
 
     #[test]
-    fn test_fetch_add_u64_large_values() {
-        let response = pb::TxnOpResponse::fetch_add_u64(
+    fn test_fetch_increase_u64_large_values() {
+        let response = pb::TxnOpResponse::fetch_increase_u64(
             "big_counter",
             u64::MAX - 1,
             u64::MAX - 100,
@@ -261,9 +261,9 @@ mod tests {
             u64::MAX,
         );
 
-        let Some(pb::txn_op_response::Response::FetchAddU64(fetch_resp)) = &response.response
+        let Some(pb::txn_op_response::Response::FetchIncreaseU64(fetch_resp)) = &response.response
         else {
-            panic!("Expected FetchAddU64 response");
+            panic!("Expected FetchIncreaseU64 response");
         };
 
         assert_eq!(fetch_resp.before_seq, u64::MAX - 1);
@@ -355,22 +355,22 @@ mod tests {
     }
 
     #[test]
-    fn test_try_as_fetch_add_u64_success() {
-        let response = pb::TxnOpResponse::fetch_add_u64("counter", 1, 10, 2, 15);
+    fn test_try_as_fetch_increase_u64_success() {
+        let response = pb::TxnOpResponse::fetch_increase_u64("counter", 1, 10, 2, 15);
 
         let fetch_resp = response
-            .try_as_fetch_add_u64()
-            .expect("Should return FetchAddU64 response");
+            .try_as_fetch_increase_u64()
+            .expect("Should return FetchIncreaseU64 response");
         assert_eq!(fetch_resp.key, "counter");
         assert_eq!(fetch_resp.before, 10);
         assert_eq!(fetch_resp.after, 15);
     }
 
     #[test]
-    fn test_try_as_fetch_add_u64_failure() {
+    fn test_try_as_fetch_increase_u64_failure() {
         let response = pb::TxnOpResponse::get("key", None);
 
-        let result = response.try_as_fetch_add_u64();
+        let result = response.try_as_fetch_increase_u64();
         assert!(result.is_none());
     }
 
@@ -381,13 +381,13 @@ mod tests {
         let resp2 = pb::TxnOpResponse::put(String::from("owned_string"), None, None);
         let key_ref = "string_ref";
         let resp3 = pb::TxnOpResponse::get(key_ref, None);
-        let resp4 = pb::TxnOpResponse::fetch_add_u64(key_ref, 1, 1, 1, 1);
+        let resp4 = pb::TxnOpResponse::fetch_increase_u64(key_ref, 1, 1, 1, 1);
 
         // Extract keys and verify
         assert_eq!(resp1.try_as_delete().unwrap().key, "static_str");
         assert_eq!(resp2.try_as_put().unwrap().key, "owned_string");
         assert_eq!(resp3.try_as_get().unwrap().key, "string_ref");
-        assert_eq!(resp4.try_as_fetch_add_u64().unwrap().key, "string_ref");
+        assert_eq!(resp4.try_as_fetch_increase_u64().unwrap().key, "string_ref");
     }
 
     #[test]
@@ -396,7 +396,7 @@ mod tests {
         let delete_resp = pb::TxnOpResponse::delete("key", true, None);
         let put_resp = pb::TxnOpResponse::put("key", None, None);
         let get_resp = pb::TxnOpResponse::get("key", None);
-        let fetch_resp = pb::TxnOpResponse::fetch_add_u64("key", 1, 1, 1, 1);
+        let fetch_resp = pb::TxnOpResponse::fetch_increase_u64("key", 1, 1, 1, 1);
 
         assert_eq!(
             format!("{}", delete_resp),
@@ -412,7 +412,7 @@ mod tests {
         );
         assert_eq!(
             format!("{}", fetch_resp),
-            "TxnOpResponse: FetchAddU64: FetchAddU64Response{ key=key before=(seq=1 1), after=(seq=1 1), delta=0 }"
+            "TxnOpResponse: FetchIncreaseU64: FetchIncreaseU64Response{ key=key before=(seq=1 1), after=(seq=1 1), delta=0 }"
         );
     }
 }

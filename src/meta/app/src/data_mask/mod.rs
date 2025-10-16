@@ -14,6 +14,7 @@
 
 pub mod data_mask_id_ident;
 pub mod data_mask_name_ident;
+pub mod mask_policy_policy_table_id_ident;
 pub mod mask_policy_table_id_list_ident;
 
 use std::collections::BTreeSet;
@@ -23,6 +24,8 @@ use chrono::Utc;
 pub use data_mask_id_ident::DataMaskId;
 pub use data_mask_id_ident::DataMaskIdIdent;
 pub use data_mask_name_ident::DataMaskNameIdent;
+pub use mask_policy_policy_table_id_ident::MaskPolicyIdTableId;
+pub use mask_policy_policy_table_id_ident::MaskPolicyTableIdIdent;
 pub use mask_policy_table_id_list_ident::MaskPolicyTableIdListIdent;
 
 use crate::schema::CreateOption;
@@ -66,3 +69,6 @@ pub struct GetDatamaskReq {
 pub struct MaskpolicyTableIdList {
     pub id_list: BTreeSet<u64>,
 }
+
+#[derive(Clone, Debug, Eq, Default, PartialEq)]
+pub struct MaskPolicyTableId;

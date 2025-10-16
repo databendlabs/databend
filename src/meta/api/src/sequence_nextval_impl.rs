@@ -127,7 +127,7 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         );
 
         if succ {
-            let resp = responses[0].try_as_fetch_add_u64().unwrap();
+            let resp = responses[0].try_as_fetch_increase_u64().unwrap();
 
             let got_delta = resp.delta();
 

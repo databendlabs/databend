@@ -155,11 +155,11 @@ fn build_proto() {
             r#"#[serde(skip_serializing_if = "Vec::is_empty")] #[serde(default)]"#,
         )
         .type_attribute(
-            "FetchAddU64",
+            "FetchIncreaseU64",
             "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
-            "FetchAddU64Response",
+            "FetchIncreaseU64Response",
             "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(

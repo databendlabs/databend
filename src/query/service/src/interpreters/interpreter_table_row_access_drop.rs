@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::RowAccessPolicy;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
+use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_sql::plans::DropTableRowAccessPolicyPlan;
 use databend_common_users::UserApiProvider;
@@ -77,7 +77,7 @@ impl Interpreter for DropTableRowAccessPolicyInterpreter {
         let req = SetTableRowAccessPolicyReq {
             tenant: self.ctx.get_tenant(),
             table_id,
-            action: SetTableRowAccessPolicyAction::Unset(*policy_id.data),
+            action: SetSecurityPolicyAction::Unset(*policy_id.data),
         };
 
         let _resp = catalog.set_table_row_access_policy(req).await?;

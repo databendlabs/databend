@@ -289,6 +289,8 @@ build_exceptions! {
     AlterTableError(1132),
     /// Constraint error
     ConstraintError(1133),
+    /// Unknown row policy
+    UnknownMaskPolicy(1134),
 }
 
 // Sequence Errors [1124-1126, 3101-3102]

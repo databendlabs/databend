@@ -20,7 +20,7 @@ use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
-use databend_common_meta_types::protobuf::FetchAddU64Response;
+use databend_common_meta_types::protobuf::FetchIncreaseU64Response;
 use databend_common_meta_types::protobuf::KvMeta;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
@@ -1259,8 +1259,8 @@ impl TestSuite {
             let resp = kv.transaction(txn).await?;
 
             assert_eq!(
-                resp.responses[0].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[0].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k1".to_string(),
                     before_seq: 0,
                     before: 0,
@@ -1269,8 +1269,8 @@ impl TestSuite {
                 }
             );
             assert_eq!(
-                resp.responses[1].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[1].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k2".to_string(),
                     before_seq: 0,
                     before: 0,
@@ -1290,8 +1290,8 @@ impl TestSuite {
             let resp = kv.transaction(txn).await?;
 
             assert_eq!(
-                resp.responses[0].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[0].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k1".to_string(),
                     before_seq: 1,
                     before: 2,
@@ -1300,8 +1300,8 @@ impl TestSuite {
                 }
             );
             assert_eq!(
-                resp.responses[1].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[1].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k2".to_string(),
                     before_seq: 2,
                     before: 3,
@@ -1322,8 +1322,8 @@ impl TestSuite {
             let resp = kv.transaction(txn).await?;
 
             assert_eq!(
-                resp.responses[0].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[0].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k1".to_string(),
                     before_seq: 3,
                     before: 4,
@@ -1332,8 +1332,8 @@ impl TestSuite {
                 }
             );
             assert_eq!(
-                resp.responses[1].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[1].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k2".to_string(),
                     before_seq: 4,
                     before: 6,
@@ -1342,8 +1342,8 @@ impl TestSuite {
                 }
             );
             assert_eq!(
-                resp.responses[2].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[2].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k2".to_string(),
                     before_seq: 6,
                     before: u64::MAX / 2 + 6,
@@ -1378,8 +1378,8 @@ impl TestSuite {
             let resp = kv.transaction(txn).await?;
 
             assert_eq!(
-                resp.responses[0].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[0].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k1".to_string(),
                     before_seq: 0,
                     before: 0,
@@ -1388,8 +1388,8 @@ impl TestSuite {
                 }
             );
             assert_eq!(
-                resp.responses[1].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[1].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k1".to_string(),
                     before_seq: 1,
                     before: 2,
@@ -1398,8 +1398,8 @@ impl TestSuite {
                 }
             );
             assert_eq!(
-                resp.responses[2].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[2].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k1".to_string(),
                     before_seq: 1,
                     before: 2,
@@ -1408,8 +1408,8 @@ impl TestSuite {
                 }
             );
             assert_eq!(
-                resp.responses[3].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[3].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k2".to_string(),
                     before_seq: 0,
                     before: 0,
@@ -1430,8 +1430,8 @@ impl TestSuite {
             let resp = kv.transaction(txn).await?;
 
             assert_eq!(
-                resp.responses[0].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[0].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k1".to_string(),
                     before_seq: 2,
                     before: 6,
@@ -1440,8 +1440,8 @@ impl TestSuite {
                 }
             );
             assert_eq!(
-                resp.responses[1].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[1].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k1".to_string(),
                     before_seq: 4,
                     before: 8,
@@ -1450,8 +1450,8 @@ impl TestSuite {
                 }
             );
             assert_eq!(
-                resp.responses[2].try_as_fetch_add_u64().unwrap(),
-                &FetchAddU64Response {
+                resp.responses[2].try_as_fetch_increase_u64().unwrap(),
+                &FetchIncreaseU64Response {
                     key: "k1".to_string(),
                     before_seq: 4,
                     before: 8,

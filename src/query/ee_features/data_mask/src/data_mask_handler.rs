@@ -35,6 +35,7 @@ use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait DatamaskHandler: Sync + Send {
@@ -52,6 +53,13 @@ pub trait DatamaskHandler: Sync + Send {
         tenant: &Tenant,
         name: String,
     ) -> Result<DatamaskMeta>;
+
+    async fn get_data_mask_by_id(
+        &self,
+        meta_api: Arc<MetaStore>,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<SeqV<DatamaskMeta>>;
 }
 
 pub struct DatamaskHandlerWrapper {
@@ -86,6 +94,17 @@ impl DatamaskHandlerWrapper {
         name: String,
     ) -> Result<DatamaskMeta> {
         self.handler.get_data_mask(meta_api, tenant, name).await
+    }
+
+    pub async fn get_data_mask_by_id(
+        &self,
+        meta_api: Arc<MetaStore>,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<SeqV<DatamaskMeta>> {
+        self.handler
+            .get_data_mask_by_id(meta_api, tenant, policy_id)
+            .await
     }
 }
 
