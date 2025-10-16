@@ -162,6 +162,33 @@ impl ModifyTableColumnInterpreter {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
+        
+        // Validate that columns being changed to NOT NULL don't contain NULL values
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let base_snapshot = fuse_table.read_table_snapshot().await?;
+        if let Some(snapshot) = base_snapshot.as_ref() {
+            for (field, _comment) in field_and_comments {
+                if let Some((_, old_field)) = schema.column_with_name(&field.name) {
+                    // Check if we're changing from nullable to NOT NULL
+                    let is_removing_nullable = 
+                        old_field.data_type.is_nullable() && !field.data_type.is_nullable();
+                    
+                    if is_removing_nullable {
+                        // Check if column contains NULL values by examining statistics
+                        let column_id = old_field.column_id;
+                        if let Some(col_stats) = snapshot.summary.col_stats.get(&column_id) {
+                            if col_stats.null_count > 0 {
+                                return Err(ErrorCode::BadArguments(format!(
+                                    "Cannot change column '{}' to NOT NULL: column contains {} NULL values",
+                                    field.name, col_stats.null_count
+                                )));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
@@ -455,12 +482,10 @@ impl ModifyTableColumnInterpreter {
                         (_, _) => {
                             if need_remove_nullable {
                                 // If the column is being changed from NULLABLE to NOT NULL,
-                                // wrap it with `coalesce()` to replace NULL values with the default,
-                                // and `remove_nullable()` to mark the resulting expression as non-nullable.
-                                format!(
-                                    "remove_nullable(coalesce(`{}`, {}))",
-                                    field.name, default_scalar
-                                )
+                                // use `remove_nullable()` to mark the resulting expression as non-nullable.
+                                // Note: We validate earlier that the column doesn't contain NULL values,
+                                // so we don't need to use coalesce() to replace NULLs.
+                                format!("remove_nullable(`{}`)", field.name)
                             } else {
                                 format!("`{}`", field.name)
                             }

@@ -1,0 +1,83 @@
+statement ok
+USE default
+
+statement ok
+DROP TABLE IF EXISTS test_alter_not_null
+
+# Test 1: Cannot alter column to NOT NULL when it contains NULL values
+statement ok
+CREATE OR REPLACE TABLE test_alter_not_null(a STRING NULL, b INT NULL);
+
+statement ok
+INSERT INTO test_alter_not_null VALUES ('a',1), ('b',NULL), (NULL,3), ('d',4);
+
+query IT
+SELECT a, b FROM test_alter_not_null ORDER BY b;
+----
+a 1
+b NULL
+NULL 3
+d 4
+
+# Should fail: column 'a' contains NULL values
+statement error 1065
+ALTER TABLE test_alter_not_null MODIFY COLUMN a STRING NOT NULL;
+
+# Should fail: column 'b' contains NULL values
+statement error 1065
+ALTER TABLE test_alter_not_null MODIFY COLUMN b INT NOT NULL;
+
+statement ok
+DROP TABLE test_alter_not_null
+
+# Test 2: Can alter column to NOT NULL when it doesn't contain NULL values
+statement ok
+CREATE OR REPLACE TABLE test_alter_not_null(a STRING NULL, b INT NULL);
+
+statement ok
+INSERT INTO test_alter_not_null VALUES ('a',1), ('b',2), ('c',3), ('d',4);
+
+query IT
+SELECT a, b FROM test_alter_not_null ORDER BY b;
+----
+a 1
+b 2
+c 3
+d 4
+
+# Should succeed: column 'a' doesn't contain NULL values
+statement ok
+ALTER TABLE test_alter_not_null MODIFY COLUMN a STRING NOT NULL;
+
+# Should succeed: column 'b' doesn't contain NULL values
+statement ok
+ALTER TABLE test_alter_not_null MODIFY COLUMN b INT NOT NULL;
+
+query TT
+DESC test_alter_not_null;
+----
+a VARCHAR NO NULL (empty)
+b INT NO NULL (empty)
+
+statement ok
+DROP TABLE test_alter_not_null
+
+# Test 3: Empty table should allow NOT NULL
+statement ok
+CREATE OR REPLACE TABLE test_alter_not_null(a STRING NULL, b INT NULL);
+
+# Should succeed: table is empty
+statement ok
+ALTER TABLE test_alter_not_null MODIFY COLUMN a STRING NOT NULL;
+
+statement ok
+ALTER TABLE test_alter_not_null MODIFY COLUMN b INT NOT NULL;
+
+query TT
+DESC test_alter_not_null;
+----
+a VARCHAR NO NULL (empty)
+b INT NO NULL (empty)
+
+statement ok
+DROP TABLE test_alter_not_null
