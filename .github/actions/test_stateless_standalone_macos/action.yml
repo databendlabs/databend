@@ -13,7 +13,7 @@ runs:
     - name: Start UDF Server
       shell: bash
       run: |
-        pip install databend-udf>=0.2.6
+        pip install databend-udf>=0.2.7
         python3 tests/udf/udf_server.py &
         sleep 2
 

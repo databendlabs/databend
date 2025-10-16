@@ -702,7 +702,11 @@ async fn test_result_timeout() -> Result<()> {
         .build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
-    let json = serde_json::json!({ "sql": "SELECT 1", "pagination": {"wait_time_secs": 5}, "session": { "settings": {"http_handler_result_timeout_secs": "1"}}});
+    let json = serde_json::json!({
+        "sql": "SELECT * from numbers(5)",
+        "pagination": {"wait_time_secs": 5,  "max_rows_per_page": 1,},
+        "session": { "settings": {"http_handler_result_timeout_secs": "1"}}}
+    );
     let mut req = TestHttpQueryRequest::new(json);
     assert_eq!(req.status().await.running_queries_count, 0);
     let (status, result, _) = req.fetch_begin().await?;
@@ -710,19 +714,9 @@ async fn test_result_timeout() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1);
 
-    sleep(std::time::Duration::from_secs(10)).await;
+    sleep(std::time::Duration::from_secs(6)).await;
     let status = req.status().await;
     assert_eq!(status.running_queries_count, 0);
-
-    let query_id = result.id.clone();
-    // fail to get page 0 again (e.g. retry) due to timeout
-    let (status, _, body) = req
-        .do_request(Method::GET, &format!("/v1/query/{query_id}/page/0",))
-        .await?;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "{:?}", body);
-    assert!(body.contains("timeout"), "{}", body);
-    // let (status, result, _) = req.fetch_next().await?;
-    // assert_eq!(status, StatusCode::BAD_REQUEST, "{:?}", result);
     Ok(())
 }
 

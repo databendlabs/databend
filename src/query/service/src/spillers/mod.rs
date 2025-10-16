@@ -18,14 +18,17 @@ mod block_reader;
 mod block_writer;
 mod inner;
 mod partition_buffer;
+mod row_group_encoder;
 mod serialize;
 #[cfg(test)]
 mod test_memory;
 
 pub use adapter::*;
+pub use async_buffer::BufferPool;
 pub use block_writer::*;
 pub use databend_common_pipeline_transforms::traits::Location;
 pub use inner::*;
 pub use partition_buffer::PartitionBuffer;
 pub use partition_buffer::PartitionBufferFetchOption;
+pub use row_group_encoder::*;
 pub use serialize::Layout;
