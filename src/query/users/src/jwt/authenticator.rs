@@ -174,7 +174,7 @@ impl JwtAuthenticator {
             }
         }
 
-        // Phase 2: If not found in cache, try with refresh (original logic)
+        // Phase 2: If not found in cache, try with refresh
         let mut combined_code = ErrorCode::AuthenticateFailure(
             "could not decode token from all available jwt key stores. ",
         );
