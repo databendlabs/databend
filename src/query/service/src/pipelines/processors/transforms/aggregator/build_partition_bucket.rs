@@ -66,11 +66,25 @@ pub fn build_partition_bucket(
 
         let shared_state = SharedRestoreState::new(partition_count);
 
-        pipeline.add_transform(|input, output| {
-            TransformMetaDispatcher::create(input, output, shared_state.clone())
-        })?;
+        let dispatcher_input = InputPort::create();
+        let dispatcher_outputs = (0..partition_count)
+            .map(|_| OutputPort::create())
+            .collect::<Vec<_>>();
+        let dispatcher = TransformMetaDispatcher::create(
+            dispatcher_input.clone(),
+            dispatcher_outputs.clone(),
+            shared_state.clone(),
+        )?;
 
-        pipeline.try_resize(partition_count)?;
+        pipeline.add_pipe(Pipe::create(
+            1,
+            dispatcher_outputs.len(),
+            vec![PipeItem::create(
+                dispatcher,
+                vec![dispatcher_input],
+                dispatcher_outputs,
+            )],
+        ));
 
         let mut builder = TransformPipeBuilder::create();
         for id in 0..partition_count {

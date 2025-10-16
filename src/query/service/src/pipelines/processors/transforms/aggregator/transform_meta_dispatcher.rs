@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -28,106 +31,55 @@ use log::info;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::SharedRestoreState;
 
-impl TransformMetaDispatcher {
-    pub fn create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        shared_state: Arc<SharedRestoreState>,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(TransformMetaDispatcher {
-            input,
-            output,
-            queue: Vec::new(),
-            shared_state,
-            init_flag: false,
-        })))
-    }
+#[derive(PartialEq)]
+enum PortStatus {
+    Idle,
+    HasData,
+    NeedData,
+    Finished,
+}
 
-    pub fn debug_do_event(&mut self) -> Result<Event> {
-        info!("TransformMetaDispatcher event");
-        if self.output.is_finished() {
-            self.input.finish();
-            return Ok(Event::Finished);
-        }
-
-        if !self.output.can_push() {
-            self.input.set_not_need_data();
-            return Ok(Event::NeedData);
-        }
-
-        if let Some(meta) = self.queue.pop() {
-            self.output
-                .push_data(Ok(DataBlock::empty_with_meta(Box::new(meta))));
-            return Ok(Event::NeedConsume);
-        }
-
-        if !self
-            .shared_state
-            .bucket_finished
-            .load(std::sync::atomic::Ordering::SeqCst)
-            && self.init_flag
-        {
-            info!("TransformMetaDispatcher send wait block");
-            self.output
-                .push_data(Ok(DataBlock::empty_with_meta(Box::new(
-                    AggregateMeta::Wait,
-                ))));
-            return Ok(Event::NeedConsume);
-        }
-
-        if self.input.has_data() {
-            let mut data_block = self.input.pull_data().unwrap()?;
-            if let Some(block_meta) = data_block
-                .take_meta()
-                .and_then(AggregateMeta::downcast_from)
-            {
-                let AggregateMeta::Partitioned { bucket, data } = block_meta else {
-                    return Err(databend_common_exception::ErrorCode::Internal(
-                        "TransformMetaDispatcher only support Partitioned AggregateMeta",
-                    ));
-                    // TODO:
-                };
-
-                info!(
-                    "TransformMetaDispatcher get Partitioned meta: {}, with len {} ",
-                    bucket,
-                    data.len()
-                );
-
-                self.queue = data;
-                self.init_flag = true;
-
-                return if let Some(meta) = self.queue.pop() {
-                    self.output
-                        .push_data(Ok(DataBlock::empty_with_meta(Box::new(meta))));
-                    Ok(Event::NeedConsume)
-                } else {
-                    Err(databend_common_exception::ErrorCode::Internal(
-                        "Logic error",
-                    ))
-                };
-            }
-        }
-
-        if self.input.is_finished() {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        self.input.set_need_data();
-        Ok(Event::NeedData)
-    }
+struct PortWithStatus<Port> {
+    pub status: PortStatus,
+    pub port: Arc<Port>,
 }
 
 pub struct TransformMetaDispatcher {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-
-    queue: Vec<AggregateMeta>,
-
+    initialized: bool,
+    input: PortWithStatus<InputPort>,
+    outputs: Vec<PortWithStatus<OutputPort>>,
+    finished_outputs: usize,
+    waiting_outputs: VecDeque<usize>,
+    queue: VecDeque<AggregateMeta>,
     shared_state: Arc<SharedRestoreState>,
+}
 
-    init_flag: bool,
+impl TransformMetaDispatcher {
+    pub fn create(
+        output_num: usize,
+        shared_state: Arc<SharedRestoreState>,
+    ) -> Result<ProcessorPtr> {
+        let input = PortWithStatus {
+            status: PortStatus::Idle,
+            port: InputPort::create(),
+        };
+        let mut outputs_port = Vec::with_capacity(output_num);
+        for _index in 0..output_num {
+            outputs_port.push(PortWithStatus {
+                status: PortStatus::Idle,
+                port: OutputPort::create(),
+            });
+        }
+        Ok(ProcessorPtr::create(Box::new(TransformMetaDispatcher {
+            input,
+            outputs,
+            queue: VecDeque::new(),
+            shared_state,
+            initialized: false,
+            finished_outputs: 0,
+            waiting_outputs: VecDeque::new(),
+        })))
+    }
 }
 
 impl Processor for TransformMetaDispatcher {
@@ -139,9 +91,96 @@ impl Processor for TransformMetaDispatcher {
         self
     }
 
-    fn event(&mut self) -> databend_common_exception::Result<Event> {
-        let event = self.debug_do_event();
-        info!("TransformMetaDispatcher return event: {:?}", event);
-        event
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        if let EventCause::Output(output_index) = &cause {
+            let output = &mut self.outputs[*output_index];
+
+            if output.port.is_finished() {
+                if output.status != PortStatus::Finished {
+                    self.finished_outputs += 1;
+                    output.status = PortStatus::Finished;
+                }
+            } else if output.port.can_push() {
+                if output.status != PortStatus::NeedData {
+                    output.status = PortStatus::NeedData;
+                    self.waiting_outputs.push_back(*output_index);
+                }
+            }
+        }
+
+        if !self.initialized && !self.waiting_outputs.is_empty() {
+            self.initialized = true;
+            self.input.port.set_need_data()
+        }
+
+        if self.finished_outputs == self.outputs.len() {
+            self.input.port.finish();
+            return Ok(Event::Finished);
+        }
+
+        let mut input_has_data = false;
+
+        if let EventCause::Input(_input_index) = &cause {
+            let input = &mut self.input;
+
+            if input.port.is_finished() {
+                for output in &self.outputs {
+                    output.port.finish();
+                }
+                return Ok(Event::Finished);
+            } else if input.port.has_data() {
+                if input.status != PortStatus::NeedData {
+                    input_has_data = true;
+                    input.status = PortStatus::NeedData;
+                }
+            }
+        }
+
+        while input_has_data && !self.waiting_outputs.is_empty() {
+            let output_index = self.waiting_outputs.pop_front().ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(
+                    "Waiting outputs queue should not be empty",
+                )
+            })?;
+
+            // Port is finished when waiting.
+            if self.outputs[output_index].port.is_finished() {
+                if self.outputs[output_index].status != PortStatus::Finished {
+                    self.finished_outputs += 1;
+                    self.outputs[output_index].status = PortStatus::Finished;
+                }
+
+                continue;
+            }
+
+            let data = self.input.port.pull_data().ok_or_else(|| {
+                databend_common_exception::ErrorCode::Internal(
+                    "Failed to pull data from input port",
+                )
+            })?;
+
+            self.outputs[output_index].port.push_data(data);
+            self.input.status = PortStatus::Idle;
+            self.outputs[output_index].status = PortStatus::Idle;
+
+            if self.input.port.is_finished() {
+                for output in &self.outputs {
+                    output.port.finish();
+                }
+                return Ok(Event::Finished);
+            }
+
+            self.input.port.set_need_data();
+        }
+
+        if self.finished_outputs == self.outputs.len() {
+            self.input.port.finish();
+            return Ok(Event::Finished);
+        }
+
+        match self.waiting_outputs.is_empty() {
+            true => Ok(Event::NeedConsume),
+            false => Ok(Event::NeedData),
+        }
     }
 }
