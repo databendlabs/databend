@@ -329,9 +329,9 @@ impl JwkKeyStore {
         let latest_keys = cached_maps.iter().last();
         if let Some(keys) = latest_keys {
             if let Some(key_id) = key_id {
-                for key in keys.iter() {
-                    if let Some(key) = key.get(key_id) {
-                        return Ok(Some(key.clone()));
+                for (kid, pubkey) in keys.iter() {
+                    if kid == key_id {
+                        return Ok(Some(pubkey.clone()));
                     }
                 }
             } else if fallback {
