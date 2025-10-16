@@ -25,7 +25,7 @@ use databend_common_meta_types::node::Node;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
 use databend_common_meta_types::protobuf::BooleanExpression;
-use databend_common_meta_types::protobuf::FetchAddU64;
+use databend_common_meta_types::protobuf::FetchIncreaseU64;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::raft_types::StoredMembership;
@@ -509,8 +509,10 @@ where SM: StateMachineApi<SysData> + 'static
                 let r = self.txn_execute_delete_by_prefix(delete_by_prefix).await?;
                 TxnOpResponse::new(r)
             }
-            Request::FetchAddU64(fetch_add_u64) => {
-                let r = self.txn_execute_fetch_add_u64(fetch_add_u64).await?;
+            Request::FetchIncreaseU64(fetch_increase_u64) => {
+                let r = self
+                    .txn_execute_fetch_increase_u64(fetch_increase_u64)
+                    .await?;
                 TxnOpResponse::new(r)
             }
             Request::PutSequential(put_sequential) => {
@@ -595,10 +597,10 @@ where SM: StateMachineApi<SysData> + 'static
         Ok(del_resp)
     }
 
-    async fn txn_execute_fetch_add_u64(
+    async fn txn_execute_fetch_increase_u64(
         &mut self,
-        req: &FetchAddU64,
-    ) -> Result<pb::FetchAddU64Response, io::Error> {
+        req: &FetchIncreaseU64,
+    ) -> Result<pb::FetchIncreaseU64Response, io::Error> {
         let before_seqv = self.sm.get_maybe_expired_kv(&req.key).await?;
 
         let before_seq = before_seqv.seq();
@@ -610,7 +612,7 @@ where SM: StateMachineApi<SysData> + 'static
                 Ok(v) => v,
                 Err(e) => {
                     warn!(
-                        "fetch_add_u64: failed to deserialize u64 value: {:?}, error: {}",
+                        "fetch_increase_u64: failed to deserialize u64 value: {:?}, error: {}",
                         bytes, e
                     );
                     0
@@ -622,13 +624,16 @@ where SM: StateMachineApi<SysData> + 'static
 
         if let Some(match_seq) = req.match_seq {
             if match_seq != before_seq {
-                let response =
-                    pb::FetchAddU64Response::new_unchanged(&req.key, SeqV::new(before_seq, before));
+                let response = pb::FetchIncreaseU64Response::new_unchanged(
+                    &req.key,
+                    SeqV::new(before_seq, before),
+                );
                 return Ok(response);
             }
         }
 
-        let after = before.saturating_add_signed(req.delta);
+        // First take max, then add delta
+        let after = std::cmp::max(before, req.max_value).saturating_add_signed(req.delta);
 
         let (_prev, result) = {
             let after_value = serde_json::to_vec(&after).expect("serialize u64 to json");
@@ -636,7 +641,7 @@ where SM: StateMachineApi<SysData> + 'static
             self.upsert_kv(&upsert).await?
         };
 
-        let response = pb::FetchAddU64Response::new(
+        let response = pb::FetchIncreaseU64Response::new(
             &req.key,
             SeqV::new(before_seq, before),
             SeqV::new(result.seq(), after),
@@ -651,13 +656,16 @@ where SM: StateMachineApi<SysData> + 'static
     ) -> Result<TxnPutResponse, io::Error> {
         // Step 1. Build sequential key
 
-        let fetch_add_u64 = FetchAddU64 {
+        let fetch_increase_u64 = FetchIncreaseU64 {
             key: req.sequence_key.clone(),
             delta: 1,
             match_seq: None,
+            max_value: 0,
         };
 
-        let fetch_add_response = self.txn_execute_fetch_add_u64(&fetch_add_u64).await?;
+        let fetch_add_response = self
+            .txn_execute_fetch_increase_u64(&fetch_increase_u64)
+            .await?;
         let next_seq = fetch_add_response.before;
 
         let key = req.build_key(next_seq);

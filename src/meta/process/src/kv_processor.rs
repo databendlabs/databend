@@ -210,7 +210,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
             }
             Request::Delete(_) => {}
             Request::DeleteByPrefix(_) => {}
-            Request::FetchAddU64(_) => {}
+            Request::FetchIncreaseU64(_) => {}
             Request::PutSequential(_) => {}
         }
 
