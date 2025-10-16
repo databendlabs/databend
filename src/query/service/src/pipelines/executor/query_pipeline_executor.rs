@@ -343,6 +343,7 @@ impl QueryPipelineExecutor {
 
     fn execute_threads(self: &Arc<Self>, threads: usize) -> Vec<ThreadJoinHandle<Result<()>>> {
         let mut thread_join_handles = Vec::with_capacity(threads);
+        info!(num = threads; "starting worker threads");
 
         for thread_num in 0..threads {
             let this = self.clone();
