@@ -328,6 +328,10 @@ impl JwkKeyStore {
                 if let Some((_, pubkey)) = keys.iter().next() {
                     return Ok(Some(pubkey.clone()));
                 }
+            } else {
+                return Err(ErrorCode::AuthenticateFailure(
+                    "must specify key_id for jwt when multiple keys exist",
+                ));
             }
         }
         Ok(None)
