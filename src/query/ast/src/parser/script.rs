@@ -121,6 +121,7 @@ pub fn declare_cursor(i: Input) -> IResult<DeclareCursor> {
     )(i)
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum CursorTarget {
     Resultset(Identifier),

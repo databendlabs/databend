@@ -1022,11 +1022,11 @@ impl Compiler {
         let name = self.normalize_ident(cursor_name);
         // Find and remove the iterator from the current scope
         for scope in self.scopes.iter_mut().rev() {
-            if scope.items.contains_key(&name) {
-                if matches!(scope.items.get(&name), Some(RefItem::Iter(_))) {
-                    scope.items.remove(&name);
-                    return Ok(());
-                }
+            if scope.items.contains_key(&name)
+                && matches!(scope.items.get(&name), Some(RefItem::Iter(_)))
+            {
+                scope.items.remove(&name);
+                return Ok(());
             }
         }
         Err(
