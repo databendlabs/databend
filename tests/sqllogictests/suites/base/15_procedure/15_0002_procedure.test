@@ -185,7 +185,7 @@ $$;
 query T
 call procedure p2('x');
 ----
-'x'
+x
 
 statement ok
 drop procedure p2(string);
