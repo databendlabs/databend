@@ -874,6 +874,8 @@ SELECT * from s;"#,
         r#"DROP FUNCTION isnotempty;"#,
         r#"CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
+        r#"CREATE FUNCTION IF NOT EXISTS my_agg (a INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE FUNCTION IF NOT EXISTS my_agg (a INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
         r#"ALTER FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
         r#"
             EXECUTE IMMEDIATE

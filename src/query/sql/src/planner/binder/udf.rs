@@ -346,7 +346,7 @@ impl Binder {
 }
 
 fn create_udf_definition_script(
-    arg_types: &[TypeName],
+    arg_types: &UDFArgs,
     state_fields: Option<&[UDAFStateField]>,
     return_type: &TypeName,
     runtime_version: &str,
@@ -364,7 +364,7 @@ fn create_udf_definition_script(
     };
 
     let arg_types = arg_types
-        .iter()
+        .types_iter()
         .map(|arg_type| Ok(DataType::from(&resolve_type_name_udf(arg_type)?)))
         .collect::<Result<Vec<_>>>()?;
 

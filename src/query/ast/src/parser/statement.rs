@@ -5354,11 +5354,6 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             address_or_code,
         )| {
             if address_or_code.1 {
-                let UDFArgs::Types(arg_types) = arg_types else {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
-                        "UDFScript parameters can only be of type",
-                    )));
-                };
                 Ok(UDFDefinition::UDFScript {
                     arg_types,
                     return_type,
@@ -5439,11 +5434,6 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             address_or_code,
         )| {
             if address_or_code.1 {
-                let UDFArgs::Types(arg_types) = arg_types else {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
-                        "UDAFScript parameters can only be of type",
-                    )));
-                };
                 Ok(UDFDefinition::UDAFScript {
                     arg_types,
                     state_fields: state_types,
@@ -5477,9 +5467,9 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
     rule!(
         #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
-        | #udaf: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
-        | #udf: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
-        | #scalar_udf_or_udtf: "(<arg_type>, ...) RETURNS <return body> AS <sql> }"
+        | #udaf: "(<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+        | #udf: "(<[arg_name] arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+        | #scalar_udf_or_udtf: "(<arg_name arg_type>, ...) RETURNS <return body> AS <sql> }"
     )(i)
 }
 

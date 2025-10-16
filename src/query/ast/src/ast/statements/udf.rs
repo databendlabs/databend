@@ -49,7 +49,7 @@ pub enum UDFDefinition {
         immutable: Option<bool>,
     },
     UDFScript {
-        arg_types: Vec<TypeName>,
+        arg_types: UDFArgs,
         return_type: TypeName,
         code: String,
         imports: Vec<String>,
@@ -68,7 +68,7 @@ pub enum UDFDefinition {
         language: String,
     },
     UDAFScript {
-        arg_types: Vec<TypeName>,
+        arg_types: UDFArgs,
         state_fields: Vec<UDAFStateField>,
         return_type: TypeName,
         imports: Vec<String>,
@@ -99,6 +99,15 @@ impl UDFArgs {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn types_iter(&self) -> Box<dyn Iterator<Item = &TypeName> + '_> {
+        match self {
+            UDFArgs::Types(types) => Box::new(types.iter()),
+            UDFArgs::NameWithTypes(name_with_types) => {
+                Box::new(name_with_types.iter().map(|(_, ty)| ty))
+            }
+        }
     }
 }
 
@@ -174,8 +183,7 @@ impl Display for UDFDefinition {
                 packages,
                 immutable,
             } => {
-                write!(f, "( ")?;
-                write_comma_separated_list(f, arg_types)?;
+                write!(f, "( {arg_types}")?;
                 let imports = imports
                     .iter()
                     .map(|s| QuotedString(s, '\'').to_string())
@@ -270,8 +278,7 @@ impl Display for UDFDefinition {
                     .map(|s| QuotedString(s, '\'').to_string())
                     .join(",");
 
-                write!(f, "( ")?;
-                write_comma_separated_list(f, arg_types)?;
+                write!(f, "( {arg_types}")?;
                 write!(f, " ) STATE {{ ")?;
                 write_comma_separated_list(f, state_types)?;
                 write!(

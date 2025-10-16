@@ -136,3 +136,47 @@ select SOME_NAME(now());
 
 statement ok
 drop function `SOME_NAME`
+
+statement ok
+CREATE FUNCTION gcd (a INT, b INT) RETURNS BIGINT LANGUAGE javascript HANDLER = 'gcd_js' AS $$
+        export function gcd_js(a, b) {
+                while (b != 0) {
+                    let t = b;
+                    b = a % b;
+                    a = t;
+                }
+                return a;
+            }
+$$
+
+statement ok
+drop function gcd
+
+statement ok
+CREATE or REPLACE FUNCTION weighted_avg (a INT, b INT) STATE {sum INT, weight INT} RETURNS FLOAT
+LANGUAGE javascript AS $$
+export function create_state() {
+    return {sum: 0, weight: 0};
+}
+export function accumulate(state, value, weight) {
+    state.sum += value * weight;
+    state.weight += weight;
+    return state;
+}
+export function retract(state, value, weight) {
+    state.sum -= value * weight;
+    state.weight -= weight;
+    return state;
+}
+export function merge(state1, state2) {
+    state1.sum += state2.sum;
+    state1.weight += state2.weight;
+    return state1;
+}
+export function finish(state) {
+    return state.sum / state.weight;
+}
+$$;
+
+statement ok
+drop function weighted_avg
