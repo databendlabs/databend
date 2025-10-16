@@ -20,11 +20,11 @@ NULL 3
 d 4
 
 # Should fail: column 'a' contains NULL values
-statement error 1065
+statement error 1006
 ALTER TABLE test_alter_not_null MODIFY COLUMN a STRING NOT NULL;
 
 # Should fail: column 'b' contains NULL values
-statement error 1065
+statement error 1006
 ALTER TABLE test_alter_not_null MODIFY COLUMN b INT NOT NULL;
 
 statement ok
