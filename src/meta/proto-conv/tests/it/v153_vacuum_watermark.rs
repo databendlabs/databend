@@ -30,11 +30,11 @@ use crate::common;
 //
 
 #[test]
-fn test_decode_v152_vacuum_watermakr() -> anyhow::Result<()> {
+fn test_decode_v153_vacuum_watermakr() -> anyhow::Result<()> {
     // Serialized VacuumWatermark with timestamp 1702603569 (2023-12-15 01:26:09 UTC)
-    let vacuum_watermark_v152 = vec![
+    let vacuum_watermark_v153 = vec![
         10, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32, 48, 49, 58, 50, 54, 58, 48, 57, 32, 85,
-        84, 67, 160, 6, 152, 1, 168, 6, 24,
+        84, 67, 160, 6, 153, 1, 168, 6, 24,
     ];
 
     let want = || mt::VacuumWatermark {
@@ -42,7 +42,7 @@ fn test_decode_v152_vacuum_watermakr() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), vacuum_watermark_v152.as_slice(), 152, want())?;
+    common::test_load_old(func_name!(), vacuum_watermark_v153.as_slice(), 153, want())?;
 
     Ok(())
 }
