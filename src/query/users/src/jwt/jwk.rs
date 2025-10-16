@@ -318,45 +318,53 @@ impl JwkKeyStore {
         Ok(())
     }
 
-    // get key from cache, if fallback is true, return the one key in the cache
+    // get single key from cache, if there is only one key in the cache, return it
     #[async_backtrace::framed]
-    async fn get_key_from_cache(
-        &self,
-        key_id: &Option<String>,
-        fallback: bool,
-    ) -> Result<Option<PubKey>> {
+    async fn get_single_key_from_cache(&self) -> Result<Option<PubKey>> {
         let cached_maps = self.recent_cached_maps.read();
         let latest_keys = cached_maps.iter().last();
         if let Some(keys) = latest_keys {
-            if let Some(key_id) = key_id {
-                for (kid, pubkey) in keys.iter() {
-                    if kid == key_id {
-                        return Ok(Some(pubkey.clone()));
-                    }
+            if keys.len() == 1 {
+                for (_, pubkey) in keys.iter() {
+                    return Ok(Some(pubkey.clone()));
                 }
-            } else if fallback {
-                // if the key_id is not set,
-                // and there is only one key in the store, return it
-                if keys.len() == 1 {
-                    for key in keys.iter() {
-                        return Ok(Some(key.clone()));
-                    }
-                } else {
-                    return Err(ErrorCode::AuthenticateFailure(
-                        "must specify key_id for jwt when multiple keys exist",
-                    ));
-                }
+            } else {
+                return Err(ErrorCode::AuthenticateFailure(
+                    "must specify key_id for jwt when multiple keys exist",
+                ));
             }
         }
         Ok(None)
+    }
+
+    // get key from cache by key_id
+    #[async_backtrace::framed]
+    async fn get_key_from_cache(&self, key_id: &String) -> Option<PubKey> {
+        let cached_maps = self.recent_cached_maps.read();
+        let latest_keys = cached_maps.iter().last();
+        if let Some(keys) = latest_keys {
+            for (kid, pubkey) in keys.iter() {
+                if kid == key_id {
+                    return Some(pubkey.clone());
+                }
+            }
+        }
+        None
     }
 
     #[async_backtrace::framed]
     pub async fn get_key(&self, key_id: &Option<String>, refresh: bool) -> Result<Option<PubKey>> {
         self.maybe_refresh_cached_keys(false).await?;
 
+        let key_id = match key_id {
+            Some(key_id) => key_id,
+            None => {
+                return self.get_single_key_from_cache().await;
+            }
+        };
+
         // First check cached keys
-        let key = self.get_key_from_cache(key_id, false).await?;
+        let key = self.get_key_from_cache(&key_id).await;
         if let Some(key) = key {
             return Ok(Some(key));
         }
@@ -368,7 +376,7 @@ impl JwkKeyStore {
         // if the key is not found, try to refresh the keys and try again. this refresh only
         // happens once within retry interval (default 2s).
         for _ in 0..2 {
-            let key = self.get_key_from_cache(key_id, true).await?;
+            let key = self.get_key_from_cache(key_id).await;
             if let Some(key) = key {
                 return Ok(Some(key));
             }
