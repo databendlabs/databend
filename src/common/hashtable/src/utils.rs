@@ -234,7 +234,7 @@ pub struct MergeIntoBlockInfoIndex {
 pub type Interval = (u32, u32);
 
 /// the segment blocks are not sequential,because we do parallel hashtable build.
-/// the block lay out in chunks could be like belows:
+/// the block lay out in chunks could be like bellows:
 /// segment0_block1 |
 /// segment1_block0 |  chunk0
 /// segment0_block0 |

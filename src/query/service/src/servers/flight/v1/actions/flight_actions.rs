@@ -95,7 +95,7 @@ impl FlightActions {
                     let future = CatchUnwindFuture::create(future);
                     match future
                         .await
-                        .with_context(|| "failed to do filght action")
+                        .with_context(|| "failed to do flight action")
                         .flatten()
                     {
                         Ok(v) => {

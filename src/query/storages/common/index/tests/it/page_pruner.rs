@@ -33,7 +33,7 @@ use super::eliminate_cast::parse_expr;
 #[test]
 fn test_page_index() -> Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("test_page_indexs.txt").unwrap();
+    let file = &mut mint.new_goldenfile("test_page_indies.txt").unwrap();
 
     fn n(n: i32) -> Scalar {
         Scalar::Number(n.into())

@@ -395,7 +395,7 @@ impl ExecuteState {
         let ctx_clone = ctx.clone();
         let block_sender_closer = block_sender.closer();
 
-        let res = Self::execute(
+        let res = Self::pull_and_send(
             interpreter,
             plan.schema(),
             ctx_clone,
@@ -417,8 +417,8 @@ impl ExecuteState {
         Ok(())
     }
 
-    #[fastrace::trace(name = "ExecuteState::execute")]
-    async fn execute(
+    #[fastrace::trace(name = "ExecuteState::pull_and_send")]
+    async fn pull_and_send(
         interpreter: Arc<dyn Interpreter>,
         schema: DataSchemaRef,
         ctx: Arc<QueryContext>,

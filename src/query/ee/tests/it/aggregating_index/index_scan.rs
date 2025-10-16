@@ -702,13 +702,13 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     let actual = DataBlock::concat(&actual)?;
     let actual = DataBlock::sort(&actual, &get_sort_col_descs(actual.num_columns()), None)?;
 
-    let formated_expect = pretty_format_blocks(&[expect])?;
-    let formated_actual = pretty_format_blocks(&[actual])?;
+    let formatted_expect = pretty_format_blocks(&[expect])?;
+    let formatted_actual = pretty_format_blocks(&[actual])?;
 
     assert_eq!(
-        formated_expect, formated_actual,
+        formatted_expect, formatted_actual,
         "Test params:{}\nExpected data block:\n{}\nActual data block:\n{}\n",
-        fuzz_info, formated_expect, formated_actual
+        fuzz_info, formatted_expect, formatted_actual
     );
 
     // Clear

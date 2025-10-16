@@ -176,7 +176,7 @@ async fn remove_copied_files_for_dropped_table(
     // Loop until:
     // - all cleaned
     // - or table is removed from meta-service
-    // - or is no longer in `droppped` state.
+    // - or is no longer in `dropped` state.
     for i in 0..usize::MAX {
         let mut txn = TxnRequest::default();
 

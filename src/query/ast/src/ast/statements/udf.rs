@@ -28,13 +28,19 @@ use crate::ast::Identifier;
 use crate::ast::TypeName;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum UDFArgs {
+    Types(Vec<TypeName>),
+    NameWithTypes(Vec<(Identifier, TypeName)>),
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum UDFDefinition {
     LambdaUDF {
         parameters: Vec<Identifier>,
         definition: Box<Expr>,
     },
     UDFServer {
-        arg_types: Vec<TypeName>,
+        arg_types: UDFArgs,
         return_type: TypeName,
         address: String,
         handler: String,
@@ -54,7 +60,7 @@ pub enum UDFDefinition {
         immutable: Option<bool>,
     },
     UDAFServer {
-        arg_types: Vec<TypeName>,
+        arg_types: UDFArgs,
         state_fields: Vec<UDAFStateField>,
         return_type: TypeName,
         address: String,
@@ -83,6 +89,38 @@ pub enum UDFDefinition {
     },
 }
 
+impl UDFArgs {
+    pub fn len(&self) -> usize {
+        match self {
+            UDFArgs::Types(types) => types.len(),
+            UDFArgs::NameWithTypes(name_with_types) => name_with_types.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl Display for UDFArgs {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UDFArgs::Types(types) => {
+                write_comma_separated_list(f, types)?;
+            }
+            UDFArgs::NameWithTypes(name_with_types) => {
+                write_comma_separated_list(
+                    f,
+                    name_with_types
+                        .iter()
+                        .map(|(name, ty)| format!("{name} {ty}")),
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Display for UDFDefinition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -103,8 +141,7 @@ impl Display for UDFDefinition {
                 language,
                 immutable,
             } => {
-                write!(f, "( ")?;
-                write_comma_separated_list(f, arg_types)?;
+                write!(f, "( {arg_types}")?;
                 write!(f, " ) RETURNS {return_type} LANGUAGE {language}")?;
                 if let Some(immutable) = immutable {
                     if *immutable {
@@ -169,8 +206,7 @@ impl Display for UDFDefinition {
                 headers,
                 language,
             } => {
-                write!(f, "( ")?;
-                write_comma_separated_list(f, arg_types)?;
+                write!(f, "( {arg_types}")?;
                 write!(f, " ) STATE {{ ")?;
                 write_comma_separated_list(f, state_types)?;
                 write!(f, " }} RETURNS {return_type} LANGUAGE {language}")?;

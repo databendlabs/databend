@@ -133,7 +133,7 @@ impl WriterV003 {
     /// It returns a sender to send entries and a handle to wait for the thread to finish.
     /// Internally it calls tokio::spawn_blocking.
     ///
-    /// When a [`WritenEntry::Finish`] is received, the thread will flush the data to disk and return
+    /// When a [`WriteEntry::Finish`] is received, the thread will flush the data to disk and return
     /// a [`TempSnapshotDataV003`] and a [`SnapshotStat`].
     ///
     /// [`TempSnapshotDataV003`] is a temporary snapshot data that will be renamed to the final path by the caller.

@@ -1,4 +1,4 @@
-# Fuse table compatability test
+# Fuse table compatibility test
 
 This script tests whether a newer version databend-query can read fuse table data written
 by a older version databend-query.

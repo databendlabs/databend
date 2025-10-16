@@ -84,7 +84,7 @@ impl SnapshotConfig {
         (self.snapshot_dir(), temp_snapshot_id)
     }
 
-    // TODO: remvoe this
+    // TODO: remove this
     pub fn snapshot_temp_path(&self) -> String {
         let temp_snapshot_id = self.temp_snapshot_id();
         format!("{}/{}", self.snapshot_dir(), temp_snapshot_id)
