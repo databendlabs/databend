@@ -18,32 +18,23 @@
 use databend_common_meta_app::data_mask as mt;
 use databend_common_protos::pb;
 
-use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
-use crate::MIN_READER_VER;
-use crate::VER;
 
 impl FromToProto for mt::MaskPolicyTableId {
-    type PB = pb::MaskPolicyTableId;
+    type PB = pb::Empty;
 
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
     }
 
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    fn from_pb(_p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
         let v = Self {};
         Ok(v)
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let p = pb::MaskPolicyTableId {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-        };
-        Ok(p)
+        Ok(Self::PB {})
     }
 }
