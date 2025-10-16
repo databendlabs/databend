@@ -137,7 +137,9 @@ impl JwtAuthenticator {
         }
     }
 
-    // parse jwt claims from single source, if custom claim is not matching on desired, claim parsed would be empty
+    // parse jwt claims from single source,
+    // if custom claim is not matching on desired,
+    // claim parsed would be empty
     #[async_backtrace::framed]
     pub async fn parse_jwt_claims_from_store(
         &self,
