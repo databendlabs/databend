@@ -127,24 +127,20 @@ impl Compiler {
                 }
                 ScriptStatement::OpenCursor { cursor, .. } => {
                     let cursor_set = self.lookup_cursor(cursor)?;
-                    let cursor_iter = IterRef::new(
-                        cursor.span,
-                        &cursor.name,
-                        &mut self.ref_allocator,
-                    );
+                    let cursor_iter =
+                        IterRef::new(cursor.span, &cursor.name, &mut self.ref_allocator);
                     output.push(ScriptIR::Iter {
                         set: cursor_set,
                         to_iter: cursor_iter.clone(),
                     });
                     self.declare_ref(cursor, RefItem::Iter(cursor_iter))?;
                 }
-                ScriptStatement::FetchCursor { cursor, into_var, .. } => {
+                ScriptStatement::FetchCursor {
+                    cursor, into_var, ..
+                } => {
                     let cursor_iter = self.lookup_iter(cursor)?;
-                    let to_var = VarRef::new(
-                        into_var.span,
-                        &into_var.name,
-                        &mut self.ref_allocator,
-                    );
+                    let to_var =
+                        VarRef::new(into_var.span, &into_var.name, &mut self.ref_allocator);
                     output.push(ScriptIR::Read {
                         iter: cursor_iter.clone(),
                         column: ColumnAccess::Position(0),
@@ -230,10 +226,12 @@ impl Compiler {
                                 cursor_set
                             } else {
                                 return Err(ErrorCode::ScriptSemanticError(format!(
-                                    "`{}` is not a resultset or cursor", name.name
-                                )).set_span(name.span));
+                                    "`{}` is not a resultset or cursor",
+                                    name.name
+                                ))
+                                .set_span(name.span));
                             }
-                        },
+                        }
                         IterableItem::Cursor(cursor) => {
                             // Explicitly specified as cursor
                             self.lookup_cursor(cursor)?
@@ -1031,9 +1029,10 @@ impl Compiler {
                 }
             }
         }
-        Err(ErrorCode::ScriptSemanticError(format!(
-            "cursor `{}` is not open", name
-        )).set_span(cursor_name.span))
+        Err(
+            ErrorCode::ScriptSemanticError(format!("cursor `{}` is not open", name))
+                .set_span(cursor_name.span),
+        )
     }
 
     fn current_loop(&self, span: Span) -> Result<LoopItem> {
