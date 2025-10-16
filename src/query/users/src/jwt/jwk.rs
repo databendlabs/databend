@@ -363,8 +363,7 @@ impl JwkKeyStore {
         };
 
         // First check cached keys
-        let key = self.get_key_from_cache(key_id).await;
-        if let Some(key) = key {
+        if let Some(key) = self.get_key_from_cache(key_id).await {
             return Ok(Some(key));
         }
 
@@ -375,8 +374,7 @@ impl JwkKeyStore {
         // if the key is not found, try to refresh the keys and try again. this refresh only
         // happens once within retry interval (default 2s).
         for _ in 0..2 {
-            let key = self.get_key_from_cache(key_id).await;
-            if let Some(key) = key {
+            if let Some(key) = self.get_key_from_cache(key_id).await {
                 return Ok(Some(key));
             }
             let need_retry = match *self.last_retry_time.read() {
