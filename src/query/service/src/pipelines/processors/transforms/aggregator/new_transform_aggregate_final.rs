@@ -108,6 +108,9 @@ pub struct NewTransformAggregateFinal {
 
     // Flush state for final aggregation
     flush_state: PayloadFlushState,
+
+    // aggregated this round
+    aggregated: bool,
 }
 
 impl NewTransformAggregateFinal {
@@ -132,6 +135,7 @@ impl NewTransformAggregateFinal {
             id,
             state: LocalState::Idle,
             flush_state: PayloadFlushState::default(),
+            aggregated: false,
         })))
     }
 
@@ -364,6 +368,7 @@ impl NewTransformAggregateFinal {
         };
 
         // Set state to OutputReady
+        self.aggregated = true;
         self.state = LocalState::OutputReady(output_block);
         Ok(())
     }
@@ -463,15 +468,14 @@ impl Processor for NewTransformAggregateFinal {
             LocalState::AsyncWait => {
                 info!("Aggregate id_{} enter barrier wait", self.id);
                 // Wait for all processors to finish AsyncReading and Deserializing works
-                let res = self.shared_state.barrier.wait().await;
-                if res.is_leader() {
-                    self.shared_state
-                        .bucket_finished
-                        .store(true, std::sync::atomic::Ordering::SeqCst);
-                    info!("Flag bucket_finished set to true by id_{}", self.id);
-                }
+                self.shared_state.barrier.wait().await;
                 // Restore phase finished, begin aggregating phase
-                self.state = LocalState::Aggregating;
+                if self.aggregated {
+                    // if aggregated this round, we enter next round
+                    self.state = LocalState::Idle;
+                } else {
+                    self.state = LocalState::Aggregating;
+                }
             }
             _ => {
                 unreachable!(

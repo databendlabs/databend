@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -31,14 +32,13 @@ use crate::pipelines::processors::transforms::aggregator::NewTransformAggregateF
 use crate::pipelines::processors::transforms::aggregator::SharedRestoreState;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
-
 pub fn build_partition_bucket(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
     max_restore_worker: u64,
     after_worker: usize,
     experiment_aggregate_final: bool,
-) -> databend_common_exception::Result<()> {
+) -> Result<()> {
     let input_nums = pipeline.output_len();
     let transform = TransformPartitionBucket::create(input_nums, params.clone())?;
 
@@ -66,25 +66,15 @@ pub fn build_partition_bucket(
 
         let shared_state = SharedRestoreState::new(partition_count);
 
-        let dispatcher_input = InputPort::create();
-        let dispatcher_outputs = (0..partition_count)
-            .map(|_| OutputPort::create())
-            .collect::<Vec<_>>();
-        let dispatcher = TransformMetaDispatcher::create(
-            dispatcher_input.clone(),
-            dispatcher_outputs.clone(),
-            shared_state.clone(),
-        )?;
+        let dispatcher = TransformMetaDispatcher::create(partition_count, shared_state.clone())?;
+        let dispatcher_input = dispatcher.input_port();
+        let dispatcher_outputs: Vec<Arc<OutputPort>> = dispatcher.output_ports();
 
-        pipeline.add_pipe(Pipe::create(
-            1,
-            dispatcher_outputs.len(),
-            vec![PipeItem::create(
-                dispatcher,
-                vec![dispatcher_input],
-                dispatcher_outputs,
-            )],
-        ));
+        pipeline.add_pipe(Pipe::create(1, partition_count, vec![PipeItem::create(
+            ProcessorPtr::create(Box::new(dispatcher)),
+            vec![dispatcher_input],
+            dispatcher_outputs,
+        )]));
 
         let mut builder = TransformPipeBuilder::create();
         for id in 0..partition_count {
