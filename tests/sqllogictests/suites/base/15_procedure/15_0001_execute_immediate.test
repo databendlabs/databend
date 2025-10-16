@@ -11,20 +11,18 @@ BEGIN
 END;
 $$;
 ----
+NULL
 
 query I
 EXECUTE IMMEDIATE $$
 BEGIN
     LET RES RESULTSET := select  number % 3 a, number % 4 b from numbers(10);
     LET SUM := 0;
-
     CREATE OR REPLACE TABLE abc(a int, b int);
-
     for x in RES do
         LET A := x.a;
         LET B := x.b;
         INSERT INTO abc VALUES (:A, :B);
-
         SUM := SUM + A;
         SUM := SUM + B;
     end for;
@@ -85,7 +83,7 @@ BEGIN
 END;
 $$;
 
-query I
+query IRT
 EXECUTE IMMEDIATE $$
 BEGIN
     CREATE OR REPLACE TABLE t1 (a INT, b FLOAT, c STRING);
@@ -94,12 +92,7 @@ BEGIN
 END;
 $$;
 ----
-┌─────────────────────────────────────────┐
-│      a     │       b      │      c      │
-│ Int32 NULL │ Float32 NULL │ String NULL │
-├────────────┼──────────────┼─────────────┤
-│ 1          │ 2            │ '3'         │
-└─────────────────────────────────────────┘
+1 2.0 3
 
 query I
 EXECUTE IMMEDIATE $$
@@ -111,12 +104,7 @@ BEGIN
 END;
 $$;
 ----
-┌───────┐
-│ 2 + 1 │
-│ UInt8 │
-├───────┤
-│     3 │
-└───────┘
+3
 
 query I
 EXECUTE IMMEDIATE $$
@@ -126,12 +114,7 @@ BEGIN
 END;
 $$;
 ----
-┌───────┐
-│ 1 + 1 │
-│ UInt8 │
-├───────┤
-│     2 │
-└───────┘
+2
 
 query error divided by zero
 EXECUTE IMMEDIATE $$
