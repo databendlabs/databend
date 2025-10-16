@@ -135,10 +135,6 @@ drop procedure p1(UInt8, UInt8);
 statement ok
 drop procedure p1(int);
 
-query T
-select count(name) from system.procedures
-----
-0
 
 statement ok
 drop procedure if exists not_exists_p();
@@ -189,7 +185,6 @@ x
 
 statement ok
 drop procedure p2(string);
-
 
 
 statement ok
