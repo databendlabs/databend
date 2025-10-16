@@ -55,7 +55,7 @@ pub fn column_chunks_to_record_batch(
             DataItem::RawData(chunk) => {
                 let dfs_id = column_id_to_dfs_id.get(column_id).cloned().unwrap();
                 projection_mask.push(dfs_id);
-                builder.add_column_chunk(dfs_id, chunk.to_bytes());
+                builder.add_column_chunk(dfs_id, chunk.clone());
             }
             DataItem::ColumnArray(_) => {}
         }

@@ -26,6 +26,7 @@ mod visited_pool;
 
 use std::collections::BTreeMap;
 
+use bytes::Bytes;
 pub use common::fixed_length_priority_queue::FixedLengthPriorityQueue;
 pub use common::types::ScoredPointOffset;
 use databend_common_exception::ErrorCode;
@@ -43,11 +44,11 @@ pub struct VectorIndexMeta {
 #[derive(Clone, Debug)]
 pub struct VectorIndexFile {
     pub name: String,
-    pub data: Vec<u8>,
+    pub data: Bytes,
 }
 
 impl VectorIndexFile {
-    pub fn create(name: String, data: Vec<u8>) -> Self {
+    pub fn create(name: String, data: Bytes) -> Self {
         Self { name, data }
     }
 }
