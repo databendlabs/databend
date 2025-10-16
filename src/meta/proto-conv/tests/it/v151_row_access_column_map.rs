@@ -52,7 +52,7 @@ fn test_decode_v151_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: None,
-        column_mask_policy_columns_ids: None,
+        column_mask_policy_columns_ids: BTreeMap::new(),
         row_access_policy: None,
         row_access_policy_columns_ids: Some(mt::SecurityPolicyColumnMap {
             policy_id: 1,

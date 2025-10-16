@@ -53,14 +53,14 @@ fn test_decode_v152_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: None,
-        column_mask_policy_columns_ids: Some({
+        column_mask_policy_columns_ids: {
             let mut map = BTreeMap::new();
             map.insert(2, mt::SecurityPolicyColumnMap {
                 policy_id: 2,
                 columns_ids: vec![2],
             });
             map
-        }),
+        },
         row_access_policy: None,
         row_access_policy_columns_ids: Some(mt::SecurityPolicyColumnMap {
             policy_id: 1,

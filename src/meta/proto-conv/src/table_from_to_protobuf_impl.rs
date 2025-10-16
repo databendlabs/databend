@@ -246,16 +246,11 @@ impl FromToProto for mt::TableMeta {
                 Some(r) => Some(SecurityPolicyColumnMap::from_pb(r)?),
                 None => None,
             },
-            column_mask_policy_columns_ids: if p.column_mask_policy_columns_ids.is_empty() {
-                None
-            } else {
-                let policies_map = p
-                    .column_mask_policy_columns_ids
-                    .into_iter()
-                    .map(|(k, v)| Ok((k, SecurityPolicyColumnMap::from_pb(v)?)))
-                    .collect::<Result<BTreeMap<_, _>, _>>()?;
-                Some(policies_map)
-            },
+            column_mask_policy_columns_ids: p
+                .column_mask_policy_columns_ids
+                .into_iter()
+                .map(|(k, v)| Ok((k, SecurityPolicyColumnMap::from_pb(v)?)))
+                .collect::<Result<BTreeMap<_, _>, _>>()?,
             indexes,
             virtual_schema,
             constraints,
@@ -308,13 +303,11 @@ impl FromToProto for mt::TableMeta {
                 Some(r) => Some(r.to_pb()?),
                 None => None,
             },
-            column_mask_policy_columns_ids: match &self.column_mask_policy_columns_ids {
-                Some(policies_map) => policies_map
-                    .iter()
-                    .map(|(k, v)| Ok((*k, v.to_pb()?)))
-                    .collect::<Result<BTreeMap<_, _>, _>>()?,
-                None => BTreeMap::new(),
-            },
+            column_mask_policy_columns_ids: self
+                .column_mask_policy_columns_ids
+                .iter()
+                .map(|(k, v)| Ok((*k, v.to_pb()?)))
+                .collect::<Result<BTreeMap<_, _>, _>>()?,
             indexes,
             virtual_schema: self
                 .virtual_schema

@@ -173,7 +173,7 @@ pub struct TableMeta {
     pub shared_by: BTreeSet<u64>,
     // should be discard
     pub column_mask_policy: Option<BTreeMap<String, String>>,
-    pub column_mask_policy_columns_ids: Option<BTreeMap<ColumnId, SecurityPolicyColumnMap>>,
+    pub column_mask_policy_columns_ids: BTreeMap<ColumnId, SecurityPolicyColumnMap>,
     // One table only has an unique row access policy
     // should be discard
     pub row_access_policy: Option<String>,
@@ -352,7 +352,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
-            column_mask_policy_columns_ids: None,
+            column_mask_policy_columns_ids: BTreeMap::new(),
             row_access_policy: None,
             row_access_policy_columns_ids: None,
             indexes: BTreeMap::new(),

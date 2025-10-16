@@ -3048,10 +3048,10 @@ impl SchemaApiTestSuite {
         let mask_name_2 = "mask2";
 
         let schema = || {
-            Arc::new(TableSchema::new(vec![TableField::new(
-                "number",
-                TableDataType::Number(NumberDataType::UInt64),
-            )]))
+            Arc::new(TableSchema::new(vec![
+                TableField::new("number", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("c1", TableDataType::Number(NumberDataType::UInt64)),
+            ]))
         };
 
         let table_meta = |created_on| TableMeta {
@@ -3169,17 +3169,14 @@ impl SchemaApiTestSuite {
             let res = mt.get_table(req).await?;
             let mut expect_column_mask_policy = BTreeMap::new();
             expect_column_mask_policy.insert("number".to_string(), mask_name_1.to_string());
-            assert_eq!(
-                res.meta.column_mask_policy_columns_ids,
-                Some({
-                    let mut map = BTreeMap::new();
-                    map.insert(0, SecurityPolicyColumnMap {
-                        policy_id: mask1_id,
-                        columns_ids: vec![0],
-                    });
-                    map
-                })
-            );
+            assert_eq!(res.meta.column_mask_policy_columns_ids, {
+                let mut map = BTreeMap::new();
+                map.insert(0, SecurityPolicyColumnMap {
+                    policy_id: mask1_id,
+                    columns_ids: vec![0],
+                });
+                map
+            });
             // check mask policy id table id ref
             let tenant = Tenant::new_literal("tenant1");
             let mid = MaskPolicyIdTableId {
@@ -3233,17 +3230,14 @@ impl SchemaApiTestSuite {
             let res = mt.get_table(req).await?;
             let mut expect_column_mask_policy = BTreeMap::new();
             expect_column_mask_policy.insert("number".to_string(), mask_name_1.to_string());
-            assert_eq!(
-                res.meta.column_mask_policy_columns_ids,
-                Some({
-                    let mut map = BTreeMap::new();
-                    map.insert(0, SecurityPolicyColumnMap {
-                        policy_id: mask1_id,
-                        columns_ids: vec![0],
-                    });
-                    map
-                })
-            );
+            assert_eq!(res.meta.column_mask_policy_columns_ids, {
+                let mut map = BTreeMap::new();
+                map.insert(0, SecurityPolicyColumnMap {
+                    policy_id: mask1_id,
+                    columns_ids: vec![0],
+                });
+                map
+            });
             // check mask policy id table id ref
             let tenant = Tenant::new_literal("tenant1");
             let mid = MaskPolicyIdTableId {
@@ -3272,14 +3266,15 @@ impl SchemaApiTestSuite {
                 .schema
                 .fields
                 .iter()
-                .find(|f| f.name == "number")
+                .find(|f| f.name == "c1")
                 .unwrap()
                 .column_id;
+            println!("fields is {:?}", res.meta.schema.fields);
             let req = SetTableColumnMaskPolicyReq {
                 tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
-                column: "number".to_string(),
+                column: "c1".to_string(),
                 action: SetSecurityPolicyAction::Set(mask2_id, vec![column_id]),
             };
             mt.set_table_column_mask_policy(req).await?;
@@ -3292,20 +3287,18 @@ impl SchemaApiTestSuite {
                 },
             };
             let res = mt.get_table(req).await?;
-            let mut expect_column_mask_policy = BTreeMap::new();
-            expect_column_mask_policy.insert("number".to_string(), mask_name_2.to_string());
-            assert_eq!(
-                res.meta.column_mask_policy_columns_ids,
-                Some({
-                    let mut map = BTreeMap::new();
-                    // The second policy should overwrite the first one for the same column
-                    map.insert(0, SecurityPolicyColumnMap {
-                        policy_id: mask2_id,
-                        columns_ids: vec![0],
-                    });
-                    map
-                })
-            );
+            assert_eq!(res.meta.column_mask_policy_columns_ids, {
+                let mut map = BTreeMap::new();
+                map.insert(1, SecurityPolicyColumnMap {
+                    policy_id: mask2_id,
+                    columns_ids: vec![1],
+                });
+                map.insert(0, SecurityPolicyColumnMap {
+                    policy_id: mask1_id,
+                    columns_ids: vec![0],
+                });
+                map
+            });
             // check mask policy id table id ref
             let tenant = Tenant::new_literal("tenant1");
             let mid = MaskPolicyIdTableId {
@@ -3348,17 +3341,14 @@ impl SchemaApiTestSuite {
             };
             let res = mt.get_table(req).await?;
             assert_eq!(res.meta.column_mask_policy, None);
-            assert_eq!(
-                res.meta.column_mask_policy_columns_ids,
-                Some({
-                    let mut map = BTreeMap::new();
-                    map.insert(0, SecurityPolicyColumnMap {
-                        policy_id: mask1_id,
-                        columns_ids: vec![0],
-                    });
-                    map
-                })
-            );
+            assert_eq!(res.meta.column_mask_policy_columns_ids, {
+                let mut map = BTreeMap::new();
+                map.insert(0, SecurityPolicyColumnMap {
+                    policy_id: mask1_id,
+                    columns_ids: vec![0],
+                });
+                map
+            });
 
             // check mask policy id table id ref
             let tenant = Tenant::new_literal("tenant1");

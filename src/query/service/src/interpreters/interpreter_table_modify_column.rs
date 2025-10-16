@@ -535,8 +535,7 @@ impl ModifyTableColumnInterpreter {
         if let Some(policy) = table_info
             .meta
             .column_mask_policy_columns_ids
-            .as_ref()
-            .and_then(|policies_map| policies_map.get(&column_id))
+            .get(&column_id)
         {
             let req = SetTableColumnMaskPolicyReq {
                 tenant: self.ctx.get_tenant(),

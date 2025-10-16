@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UnknownTableId;
@@ -115,26 +113,18 @@ where
                         columns_ids: column_ids.clone(),
                     };
 
-                    if new_table_meta.column_mask_policy_columns_ids.is_none() {
-                        new_table_meta.column_mask_policy_columns_ids = Some(BTreeMap::new());
-                    }
-
-                    if let Some(policies_map) =
-                        new_table_meta.column_mask_policy_columns_ids.as_mut()
-                    {
-                        for column_id in column_ids {
-                            policies_map.insert(*column_id, policy_map.clone());
-                        }
+                    for column_id in column_ids {
+                        new_table_meta
+                            .column_mask_policy_columns_ids
+                            .insert(*column_id, policy_map.clone());
                     }
                 }
                 SetSecurityPolicyAction::Unset(policy_id) => {
                     new_table_meta.column_mask_policy = None;
-                    if let Some(policies_map) =
-                        new_table_meta.column_mask_policy_columns_ids.as_mut()
-                    {
-                        // Remove entries where the policy ID matches
-                        policies_map.retain(|_, policy| policy.policy_id != *policy_id);
-                    }
+                    // Remove entries where the policy ID matches
+                    new_table_meta
+                        .column_mask_policy_columns_ids
+                        .retain(|_, policy| policy.policy_id != *policy_id);
                 }
             }
 
