@@ -333,14 +333,12 @@ impl JwkKeyStore {
                     .and_then(|keys| keys.iter().next());
                 if let Some((_, pub_key)) = first_key {
                     return Ok(Some(pub_key.clone()));
+                } else if refresh {
+                    return Err(ErrorCode::AuthenticateFailure(
+                        "must specify key_id for jwt when multi keys exists ",
+                    ));
                 } else {
-                    if refresh {
-                        return Err(ErrorCode::AuthenticateFailure(
-                            "must specify key_id for jwt when multi keys exists ",
-                        ));
-                    } else {
-                        return Ok(None);
-                    }
+                    return Ok(None);
                 }
             }
         };
