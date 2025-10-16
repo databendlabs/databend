@@ -96,7 +96,7 @@ impl Interpreter for ExplainInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let options = FormatOptions {
             verbose: self.config.verbose,
         };
@@ -236,7 +236,7 @@ impl Interpreter for ExplainInterpreter {
                     Plan::Query { .. } | Plan::DataMutation { .. } => {
                         let interpter =
                             InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
-                        interpter.execute2().await?
+                        interpter.build_pipeline().await?
                     }
                     _ => PipelineBuildResult::create(),
                 };

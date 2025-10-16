@@ -50,7 +50,7 @@ impl Interpreter for AddTableConstraintInterpreter {
         true
     }
 
-    async fn execute2(&self) -> databend_common_exception::Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> databend_common_exception::Result<PipelineBuildResult> {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();

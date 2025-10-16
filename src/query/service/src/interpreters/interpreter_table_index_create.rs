@@ -51,7 +51,7 @@ impl Interpreter for CreateTableIndexInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         match self.plan.index_type {
             ast::TableIndexType::Inverted => {
                 LicenseManagerSwitch::instance()

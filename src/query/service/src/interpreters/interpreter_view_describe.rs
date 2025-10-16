@@ -54,7 +54,7 @@ impl Interpreter for DescribeViewInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let catalog = self.plan.catalog.as_str();
         let database = self.plan.database.as_str();
         let view = self.plan.view_name.as_str();

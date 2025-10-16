@@ -51,7 +51,7 @@ impl Interpreter for CreateSequenceInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let req = CreateSequenceReq {
             create_option: self.plan.create_option,
             ident: self.plan.ident.clone(),

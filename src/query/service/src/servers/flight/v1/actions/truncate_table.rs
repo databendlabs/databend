@@ -27,5 +27,5 @@ pub async fn truncate_table(plan: TruncateTablePlan) -> Result<()> {
     let version = GlobalConfig::version();
     let query_context = session.create_query_context(version).await?;
     let interpreter = TruncateTableInterpreter::from_flight(query_context, plan)?;
-    interpreter.execute2().await.map(|_| ())
+    interpreter.build_pipeline().await.map(|_| ())
 }

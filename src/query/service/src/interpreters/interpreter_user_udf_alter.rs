@@ -48,7 +48,7 @@ impl Interpreter for AlterUserUDFScript {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         // Alter udf only modify the UserDefinedFunction, no need to modify ownership.
         debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_user_udf_execute");
 

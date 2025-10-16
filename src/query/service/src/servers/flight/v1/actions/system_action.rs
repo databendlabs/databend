@@ -27,5 +27,5 @@ pub async fn system_action(plan: SystemPlan) -> Result<()> {
     let version = GlobalConfig::version();
     let query_context = session.create_query_context(version).await?;
     let interpreter = SystemActionInterpreter::from_flight(query_context, plan)?;
-    interpreter.execute2().await.map(|_| ())
+    interpreter.build_pipeline().await.map(|_| ())
 }

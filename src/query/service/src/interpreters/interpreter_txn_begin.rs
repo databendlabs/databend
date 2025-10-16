@@ -48,7 +48,7 @@ impl Interpreter for BeginInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         self.txn_manager.lock().begin();
         Ok(PipelineBuildResult::create())
     }

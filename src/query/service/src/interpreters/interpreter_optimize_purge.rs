@@ -46,7 +46,7 @@ impl Interpreter for OptimizePurgeInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         purge(
             self.ctx.clone(),
             &self.plan.catalog,

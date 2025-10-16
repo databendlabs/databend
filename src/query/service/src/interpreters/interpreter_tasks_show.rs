@@ -50,7 +50,7 @@ impl Interpreter for ShowTasksInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let tasks = TaskInterpreterManager::build(&self.ctx)?
             .show_tasks(&self.ctx, &self.plan)
             .await?;

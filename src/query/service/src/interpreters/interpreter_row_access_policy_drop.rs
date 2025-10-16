@@ -49,7 +49,7 @@ impl Interpreter for DropRowAccessPolicyInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();

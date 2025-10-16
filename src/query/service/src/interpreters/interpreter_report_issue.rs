@@ -70,7 +70,7 @@ impl Interpreter for ReportIssueInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         // Detection error
         let mut report_context = ReportContext::new(self.ctx.get_fuse_version());
         let settings = self.ctx.get_settings();

@@ -175,7 +175,7 @@ async fn compact_table(
             lock_opt.clone(),
             false,
         )?;
-        let mut build_res = compact_interpreter.execute2().await?;
+        let mut build_res = compact_interpreter.build_pipeline().await?;
         // execute the compact pipeline
         if build_res.main_pipeline.is_complete_pipeline()? {
             let query_ctx = ctx.clone();
@@ -235,7 +235,7 @@ async fn compact_table(
                     ReclusterTableInterpreter::try_create(ctx.clone(), recluster, lock_opt)?;
                 // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
                 // we do not need to use `PipelineCompleteExecutor` to execute it.
-                let build_res = recluster_interpreter.execute2().await?;
+                let build_res = recluster_interpreter.build_pipeline().await?;
                 debug_assert!(build_res.main_pipeline.is_empty());
             }
         }

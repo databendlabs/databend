@@ -51,7 +51,7 @@ impl Interpreter for DescSequenceInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let req = GetSequenceReq {
             ident: self.plan.ident.clone(),
         };

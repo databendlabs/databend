@@ -114,7 +114,7 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                 Plan::RefreshIndex(agg_index_plan) => {
                     let refresh_agg_index_interpreter =
                         RefreshIndexInterpreter::try_create(ctx_cloned.clone(), *agg_index_plan)?;
-                    let mut build_res = refresh_agg_index_interpreter.execute2().await?;
+                    let mut build_res = refresh_agg_index_interpreter.build_pipeline().await?;
                     if build_res.main_pipeline.is_empty() {
                         return Ok(());
                     }
@@ -151,7 +151,7 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                             ctx_cloned.clone(),
                             *inverted_index_plan,
                         )?;
-                    let mut build_res = refresh_inverted_index_interpreter.execute2().await?;
+                    let mut build_res = refresh_inverted_index_interpreter.build_pipeline().await?;
                     if build_res.main_pipeline.is_empty() {
                         return Ok(());
                     }

@@ -46,7 +46,7 @@ impl Interpreter for OptimizeCompactSegmentInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let lock_guard = self
             .ctx
             .clone()

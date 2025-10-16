@@ -115,7 +115,7 @@ impl Interpreter for CreateTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let tenant = &self.plan.tenant;
 
         let has_computed_column = self
@@ -262,7 +262,7 @@ impl CreateTableInterpreter {
         };
 
         let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
-            .execute2()
+            .build_pipeline()
             .await?;
 
         let db_name = self.plan.database.clone();

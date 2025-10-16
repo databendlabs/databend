@@ -48,7 +48,7 @@ impl Interpreter for DescProcedureInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let tenant = self.plan.tenant.clone();
 
         let req: GetProcedureReq = self.plan.clone().into();

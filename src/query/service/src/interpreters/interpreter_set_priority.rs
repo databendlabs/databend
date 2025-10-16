@@ -93,7 +93,7 @@ impl Interpreter for SetPriorityInterpreter {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let id = &self.plan.id;
         match self.ctx.get_session_by_id(id) {
             None => match self.proxy_to_warehouse {

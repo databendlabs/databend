@@ -51,7 +51,7 @@ impl Interpreter for DropSequenceInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let req = DropSequenceReq {
             ident: self.plan.ident.clone(),
             if_exists: self.plan.if_exists,

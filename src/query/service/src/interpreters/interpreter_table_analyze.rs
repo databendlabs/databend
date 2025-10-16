@@ -90,7 +90,7 @@ impl Interpreter for AnalyzeTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let table = self
             .ctx

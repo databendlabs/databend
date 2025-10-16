@@ -46,7 +46,7 @@ impl Interpreter for RenameTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         // TODO check privileges
         // You must have ALTER and DROP privileges for the original table,
         // and CREATE and INSERT privileges for the new table.

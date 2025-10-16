@@ -152,7 +152,7 @@ impl Interpreter for UnSetInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         match self.unset.unset_type {
             SetType::SettingsSession | SetType::SettingsGlobal => {
                 self.execute_unset_settings().await?

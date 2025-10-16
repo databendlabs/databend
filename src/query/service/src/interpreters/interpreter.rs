@@ -131,7 +131,7 @@ pub trait Interpreter: Sync + Send {
 
         CacheManager::instance().set_allows_disk_cache(allow_disk_cache);
 
-        let mut build_res = match self.execute2().await {
+        let mut build_res = match self.build_pipeline().await {
             Ok(build_res) => build_res,
             Err(err) => {
                 return Err(err);
@@ -177,7 +177,7 @@ pub trait Interpreter: Sync + Send {
     }
 
     /// The core of the databend processor which will execute the logical plan and build the pipeline
-    async fn execute2(&self) -> Result<PipelineBuildResult>;
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult>;
 
     fn set_source_pipe_builder(&self, _builder: Option<SourcePipeBuilder>) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(

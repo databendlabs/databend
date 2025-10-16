@@ -47,7 +47,7 @@ impl Interpreter for DropTaskInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         TaskInterpreterManager::build(&self.ctx)?
             .drop_task(&self.ctx, &self.plan)
             .await?;

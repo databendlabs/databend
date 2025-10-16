@@ -280,7 +280,7 @@ impl Interpreter for SelectInterpreter {
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[fastrace::trace(name = "SelectInterpreter::execute2")]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         self.attach_tables_to_ctx();
 
         self.ctx

@@ -28,7 +28,7 @@ pub async fn kill_query(plan: KillPlan) -> Result<bool> {
     let version = GlobalConfig::version();
     let query_context = session.create_query_context(version).await?;
     let interpreter = KillInterpreter::from_flight(query_context, plan)?;
-    match interpreter.execute2().await {
+    match interpreter.build_pipeline().await {
         Ok(_) => Ok(true),
         Err(cause) => match cause.code() == ErrorCode::UNKNOWN_SESSION {
             true => Ok(false),

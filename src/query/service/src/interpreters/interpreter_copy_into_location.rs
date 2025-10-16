@@ -120,7 +120,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_location_interpreter_execute_v2");
 
         if check_deduplicate_label(self.ctx.clone()).await? {

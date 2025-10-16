@@ -114,7 +114,7 @@ impl Interpreter for ReclusterTableInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let ctx = self.ctx.clone();
         let recluster_timeout_secs = ctx.get_settings().get_recluster_timeout_secs()?;
 

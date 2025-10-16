@@ -86,7 +86,7 @@ impl Interpreter for SetOptionsInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         // valid_options_check and do request to meta_srv
         let mut options_map = HashMap::new();
         // check block_per_segment

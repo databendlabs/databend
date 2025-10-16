@@ -62,7 +62,7 @@ impl Interpreter for CallProcedureInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         let res: Result<_> = try {
             let mut src = vec![];
             for (arg, arg_name) in self.plan.args.iter().zip(self.plan.arg_names.iter()) {

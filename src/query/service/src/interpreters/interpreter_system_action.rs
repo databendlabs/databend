@@ -64,7 +64,7 @@ impl Interpreter for SystemActionInterpreter {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         if self.proxy_to_warehouse {
             let warehouse = self.ctx.get_warehouse_cluster().await?;
 

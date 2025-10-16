@@ -46,7 +46,7 @@ impl Interpreter for UseDatabaseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         if self.plan.database.trim().is_empty() {
             return Err(ErrorCode::UnknownDatabase("No database selected"));
         }

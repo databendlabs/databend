@@ -46,7 +46,7 @@ impl Interpreter for UseCatalogInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         if self.plan.catalog.trim().is_empty() {
             return Err(ErrorCode::UnknownCatalog("No catalog selected"));
         }

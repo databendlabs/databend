@@ -223,7 +223,7 @@ async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result
         };
         let drop_table_interpreter =
             DropTableInterpreter::try_create(ctx.clone(), drop_table_plan)?;
-        drop_table_interpreter.execute2().await?;
+        drop_table_interpreter.build_pipeline().await?;
     }
     Ok(())
 }

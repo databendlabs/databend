@@ -59,7 +59,7 @@ impl Interpreter for CreatePasswordPolicyInterpreter {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "create_password_policy_execute");
 
         let plan = self.plan.clone();

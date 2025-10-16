@@ -46,7 +46,7 @@ impl Interpreter for RenameDatabaseInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         for entity in &self.plan.entities {
             let catalog = self.ctx.get_catalog(&entity.catalog).await?;
             let tenant = self.plan.tenant.clone();
