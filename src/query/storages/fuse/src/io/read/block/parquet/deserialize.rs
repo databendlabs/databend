@@ -52,10 +52,10 @@ pub fn column_chunks_to_record_batch(
     );
     for (column_id, data_item) in column_chunks.iter() {
         match data_item {
-            DataItem::RawData(chunk) => {
+            DataItem::RawData(bytes) => {
                 let dfs_id = column_id_to_dfs_id.get(column_id).cloned().unwrap();
                 projection_mask.push(dfs_id);
-                builder.add_column_chunk(dfs_id, chunk.clone());
+                builder.add_column_chunk(dfs_id, bytes.clone());
             }
             DataItem::ColumnArray(_) => {}
         }
