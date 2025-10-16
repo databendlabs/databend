@@ -161,6 +161,16 @@ $$;
 ----
 100
 
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    let x RESULTSET :=  EXECUTE IMMEDIATE 'select 333';
+    RETURN TABLE(x);
+END;
+$$;
+----
+333
+
 
 statement ok
 drop database test_procedure;

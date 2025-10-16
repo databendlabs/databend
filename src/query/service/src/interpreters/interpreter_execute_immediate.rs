@@ -41,7 +41,58 @@ pub struct ExecuteImmediateInterpreter {
     ctx: Arc<QueryContext>,
     plan: ExecuteImmediatePlan,
     // schema is only known after execute
+    state: ProcedureState,
+}
+
+#[derive(Debug)]
+pub(crate) struct ProcedureState {
     schema: Mutex<Option<DataSchemaRef>>,
+}
+
+impl ProcedureState {
+    pub fn new() -> Self {
+        Self {
+            schema: Mutex::new(None),
+        }
+    }
+
+    pub async fn get_schema(&self) -> Option<DataSchemaRef> {
+        self.schema.lock().await.clone()
+    }
+
+    pub async fn set_null_schema(&self) {
+        let mut w = self.schema.lock().await;
+        *w = None;
+    }
+
+    pub fn null_result() -> DataBlock {
+        DataBlock::new(
+            vec![BlockEntry::new_const_column(
+                DataType::String.wrap_nullable(),
+                Scalar::Null,
+                1,
+            )],
+            1,
+        )
+    }
+
+    pub async fn set_scalar_schema(&self, scalar: &Scalar) {
+        let mut w = self.schema.lock().await;
+        *w = Some(DataSchemaRefExt::create(vec![DataField::new(
+            "Result",
+            scalar.as_ref().infer_data_type(),
+        )]));
+    }
+
+    pub fn scalar_result(scalar: Scalar) -> DataBlock {
+        let typ = scalar.as_ref().infer_data_type();
+        DataBlock::new(vec![BlockEntry::new_const_column(typ, scalar, 1)], 1)
+    }
+
+    pub async fn set_schema(&self, schema: DataSchemaRef) {
+        let mut w = self.schema.lock().await;
+        *w = Some(schema);
+    }
 }
 
 impl ExecuteImmediateInterpreter {
@@ -49,7 +100,7 @@ impl ExecuteImmediateInterpreter {
         Ok(ExecuteImmediateInterpreter {
             ctx,
             plan,
-            schema: Mutex::new(None),
+            state: ProcedureState::new(),
         })
     }
 }
@@ -65,7 +116,7 @@ impl Interpreter for ExecuteImmediateInterpreter {
     }
 
     async fn get_dynamic_schema(&self) -> Option<DataSchemaRef> {
-        self.schema.lock().await.clone()
+        self.state.get_schema().await
     }
 
     #[fastrace::trace]
@@ -95,36 +146,17 @@ impl Interpreter for ExecuteImmediateInterpreter {
 
             match result {
                 Some(ReturnValue::Var(scalar)) => {
-                    let typ = scalar.as_ref().infer_data_type();
-                    let value = BlockEntry::new_const_column(typ.clone(), scalar, 1);
-
-                    let mut w = self.schema.lock().await;
-                    *w = Some(DataSchemaRefExt::create(vec![DataField::new(
-                        "Result", typ,
-                    )]));
-                    PipelineBuildResult::from_blocks(vec![DataBlock::new(vec![value], 1)])?
-                }
-                Some(ReturnValue::Set(set)) => {
-                    let block = set.block;
-
-                    let mut w = self.schema.lock().await;
-                    *w = Some(set.schema);
-
+                    self.state.set_scalar_schema(&scalar).await;
+                    let block = ProcedureState::scalar_result(scalar);
                     PipelineBuildResult::from_blocks(vec![block])?
                 }
+                Some(ReturnValue::Set(set)) => {
+                    self.state.set_schema(set.schema).await;
+                    PipelineBuildResult::from_blocks(vec![set.block])?
+                }
                 None => {
-                    let value = BlockEntry::new_const_column(
-                        DataType::String.wrap_nullable(),
-                        Scalar::Null,
-                        1,
-                    );
-
-                    let mut w = self.schema.lock().await;
-                    *w = Some(DataSchemaRefExt::create(vec![DataField::new(
-                        "Result",
-                        DataType::String.wrap_nullable(),
-                    )]));
-                    PipelineBuildResult::from_blocks(vec![DataBlock::new(vec![value], 1)])?
+                    self.state.set_null_schema().await;
+                    PipelineBuildResult::from_blocks(vec![ProcedureState::null_result()])?
                 }
             }
         };
