@@ -154,7 +154,7 @@ impl RowGroupEncoder {
 
         let reader = ParquetRecordBatchReader::try_new(parquet_bytes, usize::MAX)?;
         let blocks = reader
-            .map(|batch| Ok(DataBlock::from_record_batch(&data_schema, &batch?)?.0))
+            .map(|batch| DataBlock::from_record_batch(&data_schema, &batch?))
             .collect::<Result<Vec<_>>>()?;
 
         if blocks.is_empty() {

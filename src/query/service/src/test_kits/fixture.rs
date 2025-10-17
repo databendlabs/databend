@@ -142,10 +142,6 @@ impl Setup for OSSSetup {
 }
 
 impl TestFixture {
-    /// Extends the lifetime of TestFixture to prevent GlobalInstance from being used after drop,
-    /// typically used across await points
-    pub fn keep_alive(&self) {}
-
     /// Create a new TestFixture with default config.
     pub async fn setup() -> Result<TestFixture> {
         let config = ConfigBuilder::create().config();

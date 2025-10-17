@@ -74,8 +74,7 @@ pub fn transform_record_batch(
     if let Some(field_paths) = field_paths {
         transform_record_batch_by_field_paths(batch, field_paths)
     } else {
-        let (block, _) = DataBlock::from_record_batch(data_schema, batch)?;
-        Ok(block)
+        Ok(DataBlock::from_record_batch(data_schema, batch)?)
     }
 }
 

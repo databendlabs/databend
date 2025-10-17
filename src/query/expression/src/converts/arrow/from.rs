@@ -240,10 +240,7 @@ impl TryFrom<&Schema> for TableSchema {
 }
 
 impl DataBlock {
-    pub fn from_record_batch(
-        schema: &DataSchema,
-        batch: &RecordBatch,
-    ) -> Result<(Self, DataSchema)> {
+    pub fn from_record_batch(schema: &DataSchema, batch: &RecordBatch) -> Result<Self> {
         assert_eq!(
             schema.num_fields(),
             batch.num_columns(),
@@ -261,7 +258,7 @@ impl DataBlock {
         }
 
         if batch.num_columns() == 0 {
-            return Ok((DataBlock::new(vec![], batch.num_rows()), schema.clone()));
+            return Ok(DataBlock::new(vec![], batch.num_rows()));
         }
 
         let mut columns = Vec::with_capacity(batch.columns().len());
@@ -269,7 +266,7 @@ impl DataBlock {
             columns.push(Column::from_arrow_rs(array.clone(), field.data_type())?)
         }
 
-        Ok((DataBlock::new_from_columns(columns), schema.clone()))
+        Ok(DataBlock::new_from_columns(columns))
     }
 }
 
