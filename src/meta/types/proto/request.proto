@@ -45,14 +45,19 @@ message TxnGetResponse {
   optional SeqV value = 2;
 }
 
-// Return the value by key, then add the delta to the key.
+// Fetch and increase the value: after = max(current, max_value) + delta
 //
-// This operation assume the value bytes is a json encoded `uint64`,
+// This operation assumes the value bytes is a json encoded `uint64`,
 // e.g. `1025` in bytes is `b"1025"`.
 // If the result is negative, it will be set to zero.
-message FetchAddU64 {
+//
+// Use cases:
+// - Pure ADD: max_value=0, delta=N -> adds N to current value
+// - Pure MAX: max_value=N, delta=0 -> ensures value is at least N
+// - Combined: max_value=N, delta=M -> ensures at least N, then adds M
+message FetchIncreaseU64 {
 
-  // The key to fetch and add the delta.
+  // The key to fetch and increase.
   string key = 1;
 
   // Assert the seq number of the record before update.
@@ -60,12 +65,15 @@ message FetchAddU64 {
   // - If it is None, the update will always be made.
   optional uint64 match_seq = 3;
 
-  // The delta to add to the value.
+  // The delta to add to the value after taking max.
   int64 delta = 2;
+
+  // The minimum value to ensure before adding delta. Defaults to 0 for backward compatibility.
+  uint64 max_value = 4;
 }
 
-// Response for FetchAddU64, contains the value before and after `add`
-message FetchAddU64Response {
+// Response for FetchIncreaseU64, contains the value before and after increase
+message FetchIncreaseU64Response {
 
   string key = 1;
 

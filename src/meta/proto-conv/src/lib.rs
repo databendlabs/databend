@@ -91,6 +91,7 @@ mod token_from_to_protobuf_impl;
 mod udf_from_to_protobuf_impl;
 mod user_from_to_protobuf_impl;
 mod util;
+mod vacuum_watermark_from_to_protobuf_impl;
 
 pub use from_to_protobuf::FromToProto;
 pub use from_to_protobuf::FromToProtoEnum;

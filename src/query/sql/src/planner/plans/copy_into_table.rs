@@ -139,6 +139,8 @@ pub struct CopyIntoTablePlan {
     // query may be Some even if is_transform=false
     pub is_transform: bool,
 
+    // control by setting `enable_distributed_copy`
+    // set in optimizer
     pub enable_distributed: bool,
 
     pub files_collected: bool,

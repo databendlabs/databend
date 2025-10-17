@@ -33,8 +33,8 @@ impl fmt::Display for Request {
             Request::DeleteByPrefix(r) => {
                 write!(f, "DeleteByPrefix({})", r)
             }
-            Request::FetchAddU64(r) => {
-                write!(f, "FetchAddU64({})", r)
+            Request::FetchIncreaseU64(r) => {
+                write!(f, "FetchIncreaseU64({})", r)
             }
             Request::PutSequential(r) => {
                 write!(f, "PutSequential({})", r)
@@ -69,8 +69,11 @@ mod tests {
             "DeleteByPrefix(TxnDeleteByPrefixRequest prefix=)"
         );
         assert_eq!(
-            format!("{}", Request::FetchAddU64(pb::FetchAddU64::default())),
-            "FetchAddU64(FetchAddU64 key= delta=0)"
+            format!(
+                "{}",
+                Request::FetchIncreaseU64(pb::FetchIncreaseU64::default())
+            ),
+            "FetchIncreaseU64(FetchIncreaseU64 key= max_value=0 delta=0)"
         );
     }
 }
