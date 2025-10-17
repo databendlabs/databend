@@ -51,10 +51,10 @@ b	NULL	c2
 NULL	3	c3
 d	4	c4
 >>>> ALTER TABLE test_modify_column_type.g MODIFY COLUMN a STRING NOT NULL
-Error: APIError: QueryFailed: [1006]Cannot change column 'a' to NOT NULL: column contains 1 NULL values
+Error: APIError: QueryFailed: [1006]Cannot change column 'a' to NOT NULL: contains 1 NULL values
 <<<<
 >>>> ALTER TABLE test_modify_column_type.g MODIFY COLUMN b INT NOT NULL
-Error: APIError: QueryFailed: [1006]Cannot change column 'b' to NOT NULL: column contains 1 NULL values
+Error: APIError: QueryFailed: [1006]Cannot change column 'b' to NOT NULL: contains 1 NULL values
 <<<<
 >>>> ALTER TABLE test_modify_column_type.g MODIFY COLUMN c STRING NOT NULL
 >>>> SELECT a,b,c from test_modify_column_type.g
