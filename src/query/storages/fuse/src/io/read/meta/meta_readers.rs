@@ -201,6 +201,13 @@ impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
             meta.content_length()
         };
 
+        // read the ThriftFileMetaData, omit unnecessary conversions
+        if let Ok(meta) =
+            read_thrift_file_metadata(operator.clone(), &params.location, params.len_hint).await
+        {
+            return InvertedIndexMeta::try_from(meta);
+        }
+
         // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
         let end_len = std::cmp::min(DEFAULT_FOOTER_READ_SIZE, file_size) as usize;
 
@@ -250,7 +257,10 @@ impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
                 prev_offset = offset;
                 columns.push((name, column_meta));
             }
-            return Ok(InvertedIndexMeta { columns });
+            return Ok(InvertedIndexMeta {
+                version: 1,
+                columns,
+            });
         }
 
         let schema_len =
@@ -279,7 +289,10 @@ impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
             columns.push((field.name().clone(), column_meta));
         }
 
-        Ok(InvertedIndexMeta { columns })
+        Ok(InvertedIndexMeta {
+            version: 2,
+            columns,
+        })
     }
 }
 

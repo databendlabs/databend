@@ -506,10 +506,10 @@ strum = "0.24.1"
 sub-cache = "0.2.1"
 sys-info = "0.9"
 sysinfo = "0.34.2"
-tantivy = "0.22.0"
-tantivy-common = "0.7.0"
+tantivy = "0.25.0"
+tantivy-common = "0.10.0"
 tantivy-fst = "0.5"
-tantivy-jieba = "0.11.0"
+tantivy-jieba = "0.17.0"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
 terminal_size = "0.4.2"
@@ -665,8 +665,8 @@ recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "1
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
-tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
-tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
-tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
+tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d" }
+tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d", package = "tantivy-common" }
+tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "ac27464" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

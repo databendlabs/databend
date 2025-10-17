@@ -43,8 +43,8 @@ use tantivy_fst::raw::Fst;
 use crate::index::DocIdsCollector;
 use crate::index::TermReader;
 use crate::io::read::inverted_index::inverted_index_loader::cache_key_of_index_columns;
+use crate::io::read::inverted_index::inverted_index_loader::legacy_load_inverted_index_files;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_directory;
-use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_files;
 use crate::io::read::inverted_index::inverted_index_loader::load_inverted_index_meta;
 
 #[derive(Clone)]
@@ -105,17 +105,68 @@ impl InvertedIndexReader {
         Ok(matched_rows)
     }
 
-    // legacy query search function, using tantivy searcher.
-    async fn legacy_search(
+    async fn search(
         &self,
         settings: &ReadSettings,
         index_path: &str,
         query: Box<dyn Query>,
+        field_ids: &HashSet<u32>,
+        index_record: &IndexRecordOption,
+        fuzziness: &Option<u8>,
+    ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
+        // read index meta.
+        let inverted_index_meta = load_inverted_index_meta(self.dal.clone(), index_path).await?;
+        let version = inverted_index_meta.version;
+
+        let inverted_index_meta_map = inverted_index_meta
+            .columns
+            .clone()
+            .into_iter()
+            .collect::<HashMap<_, _>>();
+
+        // The first and third versions utilize tantivy's search function,
+        // while the second version employs a custom search function.
+        if version == 2 {
+            // To maintain compatibility with legacy data, will be removed in the future
+            self.custom_search_impl(
+                settings,
+                index_path,
+                query,
+                field_ids,
+                index_record,
+                fuzziness,
+                inverted_index_meta_map,
+            )
+            .await
+        } else {
+            self.tantivy_search_impl(
+                settings,
+                index_path,
+                query,
+                version,
+                inverted_index_meta_map,
+            )
+            .await
+        }
+    }
+
+    // query search function, using tantivy searcher.
+    async fn tantivy_search_impl(
+        &self,
+        settings: &ReadSettings,
+        index_path: &str,
+        query: Box<dyn Query>,
+        version: usize,
         inverted_index_meta_map: HashMap<String, SingleColumnMeta>,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
-        let directory =
-            load_inverted_index_directory(settings, index_path, &self.dal, inverted_index_meta_map)
-                .await?;
+        let directory = load_inverted_index_directory(
+            settings,
+            index_path,
+            &self.dal,
+            version,
+            inverted_index_meta_map,
+        )
+        .await?;
 
         let mut index = Index::open(directory)?;
         index.set_tokenizers(self.tokenizer_manager.clone());
@@ -151,6 +202,8 @@ impl InvertedIndexReader {
         }
     }
 
+    // Self-developed search function, will be removed in the future
+    //
     // Follow the process below to perform the query search:
     //
     // 1. Read the `fst` first, check if the term in the query matches.
@@ -180,7 +233,7 @@ impl InvertedIndexReader {
     // If the term matches, the `term_dict` and `postings`, `positions`
     // data of the related terms need to be read instead of all
     // the `postings` and `positions` data.
-    async fn search(
+    async fn custom_search_impl(
         &self,
         settings: &ReadSettings,
         index_path: &str,
@@ -188,26 +241,9 @@ impl InvertedIndexReader {
         field_ids: &HashSet<u32>,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
+        mut inverted_index_meta_map: HashMap<String, SingleColumnMeta>,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
-        // 1. read index meta.
-        let inverted_index_meta = load_inverted_index_meta(self.dal.clone(), index_path).await?;
-
-        let mut inverted_index_meta_map = inverted_index_meta
-            .columns
-            .clone()
-            .into_iter()
-            .collect::<HashMap<_, _>>();
-
-        // if meta contains `meta.json` columns,
-        // the index file is the first version implementation
-        // use compatible search function to read.
-        if inverted_index_meta_map.contains_key("meta.json") {
-            return self
-                .legacy_search(settings, index_path, query, inverted_index_meta_map)
-                .await;
-        }
-
-        // 2. read fst and term files.
+        // 1. read fst and term files.
         let mut columns = Vec::with_capacity(field_ids.len() * 2);
         for field_id in field_ids {
             let fst_col_name = format!("fst-{}", field_id);
@@ -224,7 +260,7 @@ impl InvertedIndexReader {
         }
 
         let column_files =
-            load_inverted_index_files(settings, columns, index_path, &self.dal).await?;
+            legacy_load_inverted_index_files(settings, columns, index_path, &self.dal).await?;
         let mut column_files_map = column_files
             .into_iter()
             .map(|f| (f.name.clone(), f.data.clone()))
@@ -252,7 +288,7 @@ impl InvertedIndexReader {
             fst_maps.insert(*field_id, fst_map);
         }
 
-        // 3. check whether query is matched in the fsts.
+        // 2. check whether query is matched in the fsts.
         let mut matched_terms = HashMap::new();
         let mut prefix_terms = HashMap::new();
         let mut fuzziness_terms = HashMap::new();
@@ -270,7 +306,7 @@ impl InvertedIndexReader {
             return Ok(None);
         }
 
-        // 4. collect term infos for each terms.
+        // 3. collect term infos for each terms.
         let mut term_infos = HashMap::with_capacity(matched_terms.len());
         let mut field_term_ids = HashMap::with_capacity(field_ids.len());
         for field_id in field_ids {
@@ -292,7 +328,7 @@ impl InvertedIndexReader {
             }
         }
 
-        // 5. read postings and optional positions.
+        // 4. read postings and optional positions.
         let mut term_slice_len = if self.need_position {
             term_infos.len() * 2
         } else {
@@ -370,7 +406,8 @@ impl InvertedIndexReader {
         }
 
         let slice_column_files =
-            load_inverted_index_files(settings, slice_columns, index_path, &self.dal).await?;
+            legacy_load_inverted_index_files(settings, slice_columns, index_path, &self.dal)
+                .await?;
         let slice_column_files_map = slice_column_files
             .into_iter()
             .map(|f| (f.name.clone(), f.data.clone()))
@@ -420,7 +457,7 @@ impl InvertedIndexReader {
             }
         }
 
-        // 6. collect matched doc ids.
+        // 5. collect matched doc ids.
         let term_reader = TermReader::create(
             self.row_count,
             self.need_position,

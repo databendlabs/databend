@@ -85,6 +85,8 @@ impl SyncSystemTable for CachesTable {
         let block_meta_cache = cache_manager.get_block_meta_cache();
         let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
         let inverted_index_file_cache = cache_manager.get_inverted_index_file_cache();
+        let vector_index_meta_cache = cache_manager.get_vector_index_meta_cache();
+        let vector_index_file_cache = cache_manager.get_vector_index_file_cache();
         let prune_partitions_cache = cache_manager.get_prune_partitions_cache();
         let parquet_meta_data_cache = cache_manager.get_parquet_meta_data_cache();
         let column_data_cache = cache_manager.get_column_data_cache();
@@ -142,6 +144,14 @@ impl SyncSystemTable for CachesTable {
 
         if let Some(inverted_index_file_cache) = inverted_index_file_cache {
             Self::append_row(&inverted_index_file_cache, &local_node, &mut columns);
+        }
+
+        if let Some(vector_index_meta_cache) = vector_index_meta_cache {
+            Self::append_row(&vector_index_meta_cache, &local_node, &mut columns);
+        }
+
+        if let Some(vector_index_file_cache) = vector_index_file_cache {
+            Self::append_row(&vector_index_file_cache, &local_node, &mut columns);
         }
 
         if let Some(prune_partitions_cache) = prune_partitions_cache {
