@@ -189,6 +189,7 @@ fn bare_blocks_to_parquet<W: Write + Send>(
 
     let props = WriterProperties::builder()
         .set_compression(Compression::LZ4_RAW)
+        .set_offset_index_disabled(true)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
         .build();

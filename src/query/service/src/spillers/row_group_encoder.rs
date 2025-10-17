@@ -15,9 +15,11 @@
 use std::future;
 use std::io;
 use std::io::Write;
+use std::ops::Range;
 use std::sync::Arc;
 
 use arrow_schema::Schema;
+use bytes::Bytes;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::AsyncDmaFile;
 use databend_common_base::base::DmaWriteBuf;
@@ -43,10 +45,12 @@ use parquet::arrow::arrow_writer::get_column_writers;
 use parquet::arrow::arrow_writer::ArrowColumnWriter;
 use parquet::arrow::async_reader::AsyncFileReader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
+use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
 use parquet::errors;
 use parquet::file::metadata::RowGroupMetaDataPtr;
+use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterPropertiesPtr;
 use parquet::file::writer::SerializedFileWriter;
@@ -66,7 +70,12 @@ pub struct Properties {
 
 impl Properties {
     pub fn new(data_schema: &DataSchema) -> errors::Result<Self> {
-        let writer_props = Arc::new(WriterProperties::default());
+        let writer_props = Arc::new(
+            WriterProperties::builder()
+                .set_offset_index_disabled(true)
+                .set_statistics_enabled(EnabledStatistics::None)
+                .build(),
+        );
         let schema = Arc::new(Schema::from(data_schema));
         let parquet = ArrowSchemaConverter::new()
             .with_coerce_types(writer_props.coerce_types())
@@ -316,23 +325,70 @@ impl AsyncFileReader for FileReader {
 
     fn get_metadata<'a>(
         &'a mut self,
-        _options: Option<&'a ArrowReaderOptions>,
+        _: Option<&'a ArrowReaderOptions>,
     ) -> BoxFuture<'a, errors::Result<Arc<ParquetMetaData>>> {
         future::ready(Ok(self.meta.clone())).boxed()
     }
 }
 
 impl FileReader {
-    fn row_group(&self, i: usize) -> RowGroupCore {
-        let meta = self.meta.row_group(i);
-        let mut core = RowGroupCore::new(meta, None);
-        core.async_fetch(&ProjectionMask::all(), None, |ranges| {
-            self.get_ranges(ranges)
-        })
+    fn new(meta: Arc<ParquetMetaData>, reader: Either<AsyncDmaFile, Reader>) -> Self {
+        Self { meta, reader }
     }
 
-    async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<Vec<Bytes>> {
+    #[allow(dead_code)]
+    fn load_row_group(&self, i: usize) -> Result<RowGroupCore> {
+        let meta = self.meta.row_group(i);
+        let mut core = RowGroupCore::new(meta, None);
+        core.fetch(&ProjectionMask::all(), None, |ranges| {
+            self.get_ranges(ranges)
+        })?;
+        Ok(core)
+    }
+
+    #[allow(dead_code)]
+    fn get_ranges(&self, _ranges: &[Range<u64>]) -> Result<Vec<Bytes>> {
         todo!()
+    }
+
+    #[allow(dead_code)]
+    fn read_row_group<'a>(
+        &'a self,
+        schema: &DataSchema,
+        row_group: &RowGroupCore<'a>,
+        batch_size: usize,
+    ) -> Result<Vec<DataBlock>> {
+        let field_levels = parquet_to_arrow_field_levels(
+            self.meta.file_metadata().schema_descr(),
+            ProjectionMask::all(),
+            None,
+        )?;
+
+        let reader = ParquetRecordBatchReader::try_new_with_row_groups(
+            &field_levels,
+            row_group,
+            batch_size,
+            None,
+        )?;
+
+        let mut blocks = Vec::new();
+        for record in reader {
+            let record = record?;
+
+            let num_rows = record.num_rows();
+            let mut columns = Vec::with_capacity(record.num_columns());
+            for (array, field) in record.columns().iter().zip(schema.fields()) {
+                let data_type = field.data_type();
+                columns.push(BlockEntry::new(
+                    Value::from_arrow_rs(array.clone(), data_type)?,
+                    || (data_type.clone(), num_rows),
+                ))
+            }
+            let block = DataBlock::new(columns, num_rows);
+            blocks.push(block);
+        }
+
+        Ok(blocks)
     }
 }
 
@@ -399,15 +455,9 @@ impl<A> SpillerInner<A> {
             Location::Local(path) => {
                 let alignment = Some(self.temp_dir.as_ref().unwrap().block_alignment());
                 let file = AsyncDmaFile::open(path, true, alignment).await?;
-                FileReader {
-                    meta,
-                    reader: Either::Left(file),
-                }
+                FileReader::new(meta, Either::Left(file))
             }
-            Location::Remote(path) => FileReader {
-                meta,
-                reader: Either::Right(op.reader(path).await?),
-            },
+            Location::Remote(path) => FileReader::new(meta, Either::Right(op.reader(path).await?)),
         };
 
         let builder = ArrowReaderBuilder::new(input).await?;
@@ -446,10 +496,6 @@ where
     }
 
     Ok(blocks)
-}
-
-async fn load(row_group: RowGroupCore, reader: FileReader) -> Result<Vec<DataBlock>> {
-    todo!()
 }
 
 #[cfg(test)]
