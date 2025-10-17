@@ -85,10 +85,11 @@ Experience the full warehouse capabilities locally - same features as cloud clus
 
 ## Use Cases
 
-- **Data Analytics**: Snowflake alternative with significant cost reduction
-- **AI/ML Pipelines**: Vector search and AI functions built-in
-- **Real-time Analytics**: High-performance queries on petabyte-scale data
-- **Data Lake Analytics**: Query Parquet, CSV, TSV, NDJSON, Avro, ORC directly from S3
+- **Warehouse Analytics**: ANSI SQL joins, window functions, incremental aggregates, and streaming ingestion for BI workloads.
+- **AI & Vector Systems**: Persist embeddings alongside facts, index vectors, and run semantic retrieval for RAG and agent pipelines.
+- **Hybrid Search**: Mix full-text search over JSON, metadata filters, and semantic similarity inside one query plan.
+- **Geospatial Processing**: Run distance, containment, and hex-grid analytics to power maps and mobility scenarios.
+- **Lakehouse ETL**: Query Parquet, CSV, and NDJSON in object storage, transform streaming updates, and load them into managed tables.
 
 ## Community
 
