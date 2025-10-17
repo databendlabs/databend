@@ -163,32 +163,6 @@ impl ModifyTableColumnInterpreter {
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
         
-        // Validate that columns being changed to NOT NULL don't contain NULL values
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let base_snapshot = fuse_table.read_table_snapshot().await?;
-        if let Some(snapshot) = base_snapshot.as_ref() {
-            for (field, _comment) in field_and_comments {
-                if let Some((_, old_field)) = schema.column_with_name(&field.name) {
-                    // Check if we're changing from nullable to NOT NULL
-                    let is_removing_nullable = 
-                        old_field.data_type.is_nullable() && !field.data_type.is_nullable();
-                    
-                    if is_removing_nullable {
-                        // Check if column contains NULL values by examining statistics
-                        let column_id = old_field.column_id;
-                        if let Some(col_stats) = snapshot.summary.col_stats.get(&column_id) {
-                            if col_stats.null_count > 0 {
-                                return Err(ErrorCode::BadArguments(format!(
-                                    "Cannot change column '{}' to NOT NULL: column contains {} NULL values",
-                                    field.name, col_stats.null_count
-                                )));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
@@ -237,6 +211,31 @@ impl ModifyTableColumnInterpreter {
         let table_meta_timestamps = self
             .ctx
             .get_table_meta_timestamps(table.as_ref(), base_snapshot.clone())?;
+
+        // Validate that columns being changed to NOT NULL don't contain NULL values
+        if let Some(snapshot) = base_snapshot.as_ref() {
+            for (field, _comment) in field_and_comments {
+                if let Some((_, old_field)) = schema.column_with_name(&field.name) {
+                    // Check if we're changing from nullable to NOT NULL
+                    let is_removing_nullable = 
+                        old_field.data_type.is_nullable() && !field.data_type.is_nullable();
+                    
+                    if is_removing_nullable {
+                        // Check if column contains NULL values by examining statistics
+                        let column_id = old_field.column_id;
+                        if let Some(col_stats) = snapshot.summary.col_stats.get(&column_id) {
+                            if col_stats.null_count > 0 {
+                                return Err(ErrorCode::BadArguments(format!(
+                                    "Cannot change column '{}' to NOT NULL: column contains {} NULL values",
+                                    field.name, col_stats.null_count
+                                )));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
 
         let mut bloom_index_cols = vec![];
         if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
