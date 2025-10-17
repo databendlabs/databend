@@ -3789,6 +3789,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "databend-meta",
+ "display-more 0.2.1",
  "futures",
  "mlua",
  "raft-log",
