@@ -28,4 +28,5 @@ pub use reader::ParquetWholeFileReader;
 pub use reader::RowGroupReader;
 pub use row_group::cached_range_full_read;
 pub use row_group::InMemoryRowGroup;
+pub use row_group::RowGroupCore;
 pub use utils::DataBlockIterator;

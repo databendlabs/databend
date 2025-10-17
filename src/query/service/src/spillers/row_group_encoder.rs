@@ -27,6 +27,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
+use databend_common_storages_parquet::parquet_reader::RowGroupCore;
 use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
@@ -43,6 +44,7 @@ use parquet::arrow::arrow_writer::ArrowColumnWriter;
 use parquet::arrow::async_reader::AsyncFileReader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
 use parquet::arrow::ArrowSchemaConverter;
+use parquet::arrow::ProjectionMask;
 use parquet::errors;
 use parquet::file::metadata::RowGroupMetaDataPtr;
 use parquet::file::properties::WriterProperties;
@@ -320,6 +322,20 @@ impl AsyncFileReader for FileReader {
     }
 }
 
+impl FileReader {
+    fn row_group(&self, i: usize) -> RowGroupCore {
+        let meta = self.meta.row_group(i);
+        let mut core = RowGroupCore::new(meta, None);
+        core.async_fetch(&ProjectionMask::all(), None, |ranges| {
+            self.get_ranges(ranges)
+        })
+    }
+
+    async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<Vec<Bytes>> {
+        todo!()
+    }
+}
+
 pub enum AnyFileWriter {
     Local(FileWriter<LocalWriter>),
     Remote(String, FileWriter<BufferWriter>),
@@ -430,6 +446,10 @@ where
     }
 
     Ok(blocks)
+}
+
+async fn load(row_group: RowGroupCore, reader: FileReader) -> Result<Vec<DataBlock>> {
+    todo!()
 }
 
 #[cfg(test)]

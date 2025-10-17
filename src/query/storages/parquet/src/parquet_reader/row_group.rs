@@ -104,10 +104,7 @@ pub struct InMemoryRowGroup<'a> {
     location: &'a str,
     op: Operator,
 
-    metadata: &'a RowGroupMetaData,
-    page_locations: Option<&'a [Vec<PageLocation>]>,
-    column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
-    row_count: usize,
+    core: RowGroupCore<'a>,
     read_settings: ReadSettings,
 }
 
@@ -122,16 +119,13 @@ impl<'a> InMemoryRowGroup<'a> {
         Self {
             location,
             op,
-            metadata: rg,
-            page_locations,
-            column_chunks: vec![None; rg.num_columns()],
-            row_count: rg.num_rows() as usize,
+            core: RowGroupCore::new(rg, page_locations),
             read_settings,
         }
     }
 
     pub fn row_count(&self) -> usize {
-        self.row_count
+        self.core.num_rows()
     }
 
     /// Fetches the necessary column data into memory
@@ -142,133 +136,246 @@ impl<'a> InMemoryRowGroup<'a> {
         projection: &ProjectionMask,
         selection: Option<&RowSelection>,
     ) -> Result<()> {
+        self.core
+            .async_fetch(projection, selection, async |ranges| {
+                let (chunk, _) =
+                    get_ranges(ranges, &self.read_settings, self.location, &self.op).await?;
+                Ok(chunk)
+            })
+            .await
+    }
+}
+
+async fn get_ranges(
+    ranges: &[Range<u64>],
+    read_settings: &ReadSettings,
+    location: &str,
+    op: &Operator,
+) -> Result<(Vec<Bytes>, bool)> {
+    let range_merger = RangeMerger::from_iter(
+        ranges.iter().cloned(),
+        read_settings.max_gap_size,
+        read_settings.max_range_size,
+        Some(read_settings.parquet_fast_read_bytes),
+    );
+    let merged_ranges = range_merger.ranges();
+    let merged = merged_ranges.len() < ranges.len();
+
+    let chunks = cached_range_read(op, location, merged_ranges, read_settings.enable_cache).await?;
+
+    Ok((
+        ranges
+            .iter()
+            .cloned()
+            .map(|raw_range| {
+                let range = range_merger.get(raw_range.clone()).unwrap().1;
+                let chunk = chunks.get(&range).unwrap();
+                let start = (raw_range.start - range.start) as usize;
+                let end = (raw_range.end - range.start) as usize;
+                chunk.clone().slice(start..end)
+            })
+            .collect(),
+        merged,
+    ))
+}
+
+pub struct RowGroupCore<'a> {
+    metadata: &'a RowGroupMetaData,
+    page_locations: Option<&'a [Vec<PageLocation>]>,
+    column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
+}
+
+impl<'a> RowGroupCore<'a> {
+    pub fn new(
+        meta: &'a RowGroupMetaData,
+        page_locations: Option<&'a [Vec<PageLocation>]>,
+    ) -> RowGroupCore<'a> {
+        RowGroupCore {
+            metadata: meta,
+            page_locations,
+            column_chunks: vec![None; meta.num_columns()],
+        }
+    }
+
+    pub async fn async_fetch(
+        &mut self,
+        projection: &ProjectionMask,
+        selection: Option<&RowSelection>,
+        get_ranges: impl AsyncFnOnce(&[Range<u64>]) -> Result<Vec<Bytes>>,
+    ) -> Result<()> {
         if let Some((selection, page_locations)) = selection.zip(self.page_locations) {
             // If we have a `RowSelection` and an `OffsetIndex` then only fetch pages required for the
             // `RowSelection`
-            let mut page_start_offsets: Vec<Vec<usize>> = vec![];
-
-            let fetch_ranges = self
-                .column_chunks
-                .iter()
-                .zip(self.metadata.columns())
-                .enumerate()
-                .filter(|&(idx, (chunk, _chunk_meta))| {
-                    chunk.is_none() && projection.leaf_included(idx)
-                })
-                .flat_map(|(idx, (_chunk, chunk_meta))| {
-                    // If the first page does not start at the beginning of the column,
-                    // then we need to also fetch a dictionary page.
-                    let mut ranges = vec![];
-                    let (start, _len) = chunk_meta.byte_range();
-                    match page_locations[idx].first() {
-                        Some(first) if first.offset as u64 != start => {
-                            ranges.push(start..first.offset as u64);
-                        }
-                        _ => (),
-                    }
-
-                    ranges.extend(
-                        selection
-                            .scan_ranges(&page_locations[idx])
-                            .iter()
-                            .map(|r| r.start..r.end),
-                    );
-                    page_start_offsets
-                        .push(ranges.iter().map(|range| range.start as usize).collect());
-
-                    ranges
-                })
-                .collect::<Vec<_>>();
+            let (fetch_ranges, page_start_offsets) =
+                self.get_fetch_ranges_with_index(projection, selection, page_locations);
 
             // Fetch ranges in different async tasks.
-            let chunk_data = self.get_ranges(&fetch_ranges).await?.0;
-            let mut chunk_iter = chunk_data.into_iter();
-            let mut page_start_offsets = page_start_offsets.into_iter();
+            let chunk_data = get_ranges(&fetch_ranges).await?;
 
-            for (idx, chunk) in self.column_chunks.iter_mut().enumerate() {
-                if chunk.is_some() || !projection.leaf_included(idx) {
-                    continue;
-                }
-
-                if let Some(offsets) = page_start_offsets.next() {
-                    let mut chunks = Vec::with_capacity(offsets.len());
-                    for _ in 0..offsets.len() {
-                        chunks.push(chunk_iter.next().unwrap());
-                    }
-
-                    *chunk = Some(Arc::new(ColumnChunkData::Sparse {
-                        length: self.metadata.column(idx).byte_range().1 as usize,
-                        data: offsets.into_iter().zip(chunks.into_iter()).collect(),
-                    }))
-                }
-            }
+            self.set_data_with_index(projection, chunk_data, page_start_offsets);
+            Ok(())
         } else {
-            let fetch_ranges = self
-                .column_chunks
-                .iter()
-                .enumerate()
-                .filter(|&(idx, chunk)| (chunk.is_none() && projection.leaf_included(idx)))
-                .map(|(idx, _chunk)| {
-                    let column = self.metadata.column(idx);
-                    let (start, length) = column.byte_range();
-                    start..(start + length)
-                })
-                .collect::<Vec<_>>();
+            let fetch_ranges = self.get_fetch_ranges_without_index(projection);
 
             // Fetch ranges in different async tasks.
-            let chunk_data = self.get_ranges(&fetch_ranges).await?.0;
-            let mut chunk_iter = chunk_data.into_iter();
+            let chunk_data = get_ranges(&fetch_ranges).await?;
 
-            for (idx, chunk) in self.column_chunks.iter_mut().enumerate() {
-                if chunk.is_some() || !projection.leaf_included(idx) {
-                    continue;
-                }
-
-                if let Some(data) = chunk_iter.next() {
-                    *chunk = Some(Arc::new(ColumnChunkData::Dense {
-                        offset: self.metadata.column(idx).byte_range().0 as usize,
-                        data,
-                    }));
-                }
-            }
+            self.set_data_without_index(projection, chunk_data);
+            Ok(())
         }
-
-        Ok(())
     }
 
-    pub async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<(Vec<Bytes>, bool)> {
-        let raw_ranges = ranges.to_vec();
-        let range_merger = RangeMerger::from_iter(
-            raw_ranges.clone(),
-            self.read_settings.max_gap_size,
-            self.read_settings.max_range_size,
-            Some(self.read_settings.parquet_fast_read_bytes),
-        );
-        let merged_ranges = range_merger.ranges();
-        let location = self.location.to_owned();
-        let merged = merged_ranges.len() < raw_ranges.len();
+    pub fn fetch(
+        &mut self,
+        projection: &ProjectionMask,
+        selection: Option<&RowSelection>,
+        get_ranges: impl Fn(&[Range<u64>]) -> Result<Vec<Bytes>>,
+    ) -> Result<()> {
+        if let Some((selection, page_locations)) = selection.zip(self.page_locations) {
+            // If we have a `RowSelection` and an `OffsetIndex` then only fetch pages required for the
+            // `RowSelection`
+            let (fetch_ranges, page_start_offsets) =
+                self.get_fetch_ranges_with_index(projection, selection, page_locations);
 
-        let chunks = cached_range_read(
-            &self.op,
-            &location,
-            merged_ranges,
-            self.read_settings.enable_cache,
-        )
-        .await?;
+            // Fetch ranges in different async tasks.
+            let chunk_data = get_ranges(&fetch_ranges)?;
 
-        Ok((
-            raw_ranges
-                .into_iter()
-                .map(|raw_range| {
-                    let range = range_merger.get(raw_range.clone()).unwrap().1;
-                    let chunk = chunks.get(&range).unwrap();
-                    let start = (raw_range.start - range.start) as usize;
-                    let end = (raw_range.end - range.start) as usize;
-                    chunk.clone().slice(start..end)
-                })
-                .collect::<Vec<_>>(),
-            merged,
-        ))
+            self.set_data_with_index(projection, chunk_data, page_start_offsets);
+            Ok(())
+        } else {
+            let fetch_ranges = self.get_fetch_ranges_without_index(projection);
+
+            // Fetch ranges in different async tasks.
+            let chunk_data = get_ranges(&fetch_ranges)?;
+
+            self.set_data_without_index(projection, chunk_data);
+            Ok(())
+        }
+    }
+
+    fn get_fetch_ranges_with_index(
+        &self,
+        projection: &ProjectionMask,
+        selection: &RowSelection,
+        page_locations: &[Vec<PageLocation>],
+    ) -> (Vec<Range<u64>>, Vec<Vec<usize>>) {
+        let mut page_start_offsets: Vec<Vec<usize>> = vec![];
+
+        let fetch_ranges = self
+            .column_chunks
+            .iter()
+            .zip(self.metadata.columns())
+            .enumerate()
+            .filter(|&(idx, (chunk, _chunk_meta))| chunk.is_none() && projection.leaf_included(idx))
+            .flat_map(|(idx, (_chunk, chunk_meta))| {
+                // If the first page does not start at the beginning of the column,
+                // then we need to also fetch a dictionary page.
+                let mut ranges = vec![];
+                let (start, _len) = chunk_meta.byte_range();
+                match page_locations[idx].first() {
+                    Some(first) if first.offset as u64 != start => {
+                        ranges.push(start..first.offset as u64);
+                    }
+                    _ => (),
+                }
+
+                ranges.extend(
+                    selection
+                        .scan_ranges(&page_locations[idx])
+                        .iter()
+                        .map(|r| r.start..r.end),
+                );
+                page_start_offsets.push(ranges.iter().map(|range| range.start as usize).collect());
+
+                ranges
+            })
+            .collect::<Vec<_>>();
+        (fetch_ranges, page_start_offsets)
+    }
+
+    fn set_data_with_index(
+        &mut self,
+        projection: &ProjectionMask,
+        chunk_data: Vec<Bytes>,
+        page_start_offsets: Vec<Vec<usize>>,
+    ) {
+        let mut chunk_iter = chunk_data.into_iter();
+        let mut page_start_offsets = page_start_offsets.into_iter();
+
+        for (idx, chunk) in self.column_chunks.iter_mut().enumerate() {
+            if chunk.is_some() || !projection.leaf_included(idx) {
+                continue;
+            }
+
+            if let Some(offsets) = page_start_offsets.next() {
+                let mut chunks = Vec::with_capacity(offsets.len());
+                for _ in 0..offsets.len() {
+                    chunks.push(chunk_iter.next().unwrap());
+                }
+
+                *chunk = Some(Arc::new(ColumnChunkData::Sparse {
+                    length: self.metadata.column(idx).byte_range().1 as usize,
+                    data: offsets.into_iter().zip(chunks.into_iter()).collect(),
+                }))
+            }
+        }
+    }
+
+    fn get_fetch_ranges_without_index(&self, projection: &ProjectionMask) -> Vec<Range<u64>> {
+        self.column_chunks
+            .iter()
+            .enumerate()
+            .filter(|&(idx, chunk)| (chunk.is_none() && projection.leaf_included(idx)))
+            .map(|(idx, _chunk)| {
+                let column = self.metadata.column(idx);
+                let (start, length) = column.byte_range();
+                start..(start + length)
+            })
+            .collect()
+    }
+
+    fn set_data_without_index(&mut self, projection: &ProjectionMask, chunk_data: Vec<Bytes>) {
+        let mut chunk_iter = chunk_data.into_iter();
+
+        for (idx, chunk) in self.column_chunks.iter_mut().enumerate() {
+            if chunk.is_some() || !projection.leaf_included(idx) {
+                continue;
+            }
+
+            if let Some(data) = chunk_iter.next() {
+                *chunk = Some(Arc::new(ColumnChunkData::Dense {
+                    offset: self.metadata.column(idx).byte_range().0 as usize,
+                    data,
+                }));
+            }
+        }
+    }
+}
+
+impl<'a> RowGroups for RowGroupCore<'a> {
+    fn num_rows(&self) -> usize {
+        self.metadata.num_rows() as _
+    }
+
+    fn column_chunks(&self, i: usize) -> parquet::errors::Result<Box<dyn PageIterator>> {
+        match &self.column_chunks[i] {
+            None => Err(ParquetError::General(format!(
+                "Invalid column index {i}, column was not fetched"
+            ))),
+            Some(data) => {
+                let page_locations = self.page_locations.map(|index| index[i].clone());
+                let page_reader: Box<dyn PageReader> = Box::new(SerializedPageReader::new(
+                    data.clone(),
+                    self.metadata.column(i),
+                    self.num_rows(),
+                    page_locations,
+                )?);
+
+                Ok(Box::new(ColumnChunkIterator {
+                    reader: Some(Ok(page_reader)),
+                }))
+            }
+        }
     }
 }
 
@@ -303,28 +410,11 @@ impl PageIterator for ColumnChunkIterator {}
 
 impl RowGroups for InMemoryRowGroup<'_> {
     fn num_rows(&self) -> usize {
-        self.row_count
+        self.core.num_rows()
     }
 
     fn column_chunks(&self, i: usize) -> parquet::errors::Result<Box<dyn PageIterator>> {
-        match &self.column_chunks[i] {
-            None => Err(ParquetError::General(format!(
-                "Invalid column index {i}, column was not fetched"
-            ))),
-            Some(data) => {
-                let page_locations = self.page_locations.map(|index| index[i].clone());
-                let page_reader: Box<dyn PageReader> = Box::new(SerializedPageReader::new(
-                    data.clone(),
-                    self.metadata.column(i),
-                    self.row_count,
-                    page_locations,
-                )?);
-
-                Ok(Box::new(ColumnChunkIterator {
-                    reader: Some(Ok(page_reader)),
-                }))
-            }
-        }
+        self.core.column_chunks(i)
     }
 }
 
@@ -438,8 +528,7 @@ mod test {
     use parquet::schema::types::*;
     use rand::Rng;
 
-    use crate::parquet_reader::InMemoryRowGroup;
-    use crate::read_settings::ReadSettings;
+    use super::*;
 
     #[tokio::test]
     async fn test_merge() {
@@ -510,8 +599,23 @@ mod test {
             enable_cache: false,
         });
         let ranges = [(1..10), (15..30), (40..50)];
-        let (gap0_chunks, gap0_merged) = gap0.get_ranges(ranges.as_ref()).await.unwrap();
-        let (gap10_chunks, gap10_merged) = gap10.get_ranges(ranges.as_ref()).await.unwrap();
+        let (gap0_chunks, gap0_merged) = get_ranges(
+            ranges.as_ref(),
+            &gap0.read_settings,
+            gap0.location,
+            &gap0.op,
+        )
+        .await
+        .unwrap();
+
+        let (gap10_chunks, gap10_merged) = get_ranges(
+            ranges.as_ref(),
+            &gap10.read_settings,
+            gap10.location,
+            &gap10.op,
+        )
+        .await
+        .unwrap();
         // gap=0 no merged
         assert!(!gap0_merged);
         // gap=10  merge happened
