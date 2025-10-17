@@ -5489,6 +5489,7 @@ dependencies = [
  "futures",
  "log",
  "opendal",
+ "parquet",
 ]
 
 [[package]]

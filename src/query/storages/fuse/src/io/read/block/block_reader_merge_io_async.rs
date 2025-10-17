@@ -116,7 +116,7 @@ impl BlockReader {
 
                 column_data_cache.insert(
                     column_cache_key.as_ref().to_owned(),
-                    ColumnData::from_merge_io_read_result(data),
+                    ColumnData::from_merge_io_read_result(data.to_vec()),
                 );
             }
         }

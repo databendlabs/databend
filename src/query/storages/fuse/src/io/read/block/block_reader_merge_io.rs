@@ -22,13 +22,14 @@ use databend_storages_common_cache::ColumnData;
 use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_io::MergeIOReadResult;
 use enum_as_inner::EnumAsInner;
+use opendal::Buffer;
 
 type CachedColumnData = Vec<(ColumnId, Arc<ColumnData>)>;
 type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
 
 #[derive(EnumAsInner)]
 pub enum DataItem<'a> {
-    RawData(Bytes),
+    RawData(Buffer),
     ColumnArray(&'a Arc<SizedColumnArray>),
 }
 
@@ -65,8 +66,7 @@ impl BlockReadResult {
 
         // merge column data from cache
         for (column_id, data) in &self.cached_column_data {
-            let data = data.as_ref();
-            res.insert(*column_id, DataItem::RawData(data.bytes()));
+            res.insert(*column_id, DataItem::RawData(data.bytes().into()));
         }
 
         // merge column array from cache
@@ -86,7 +86,7 @@ impl BlockReadResult {
                 .merge_io_result
                 .owner_memory
                 .get_chunk(*chunk_idx, &self.merge_io_result.block_path)?;
-            res.insert(*column_id, chunk.slice(range.clone()));
+            res.insert(*column_id, chunk.slice(range.clone()).to_bytes());
         }
 
         // merge column data from cache
