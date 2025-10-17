@@ -118,49 +118,120 @@ impl JwtAuthenticator {
         Some(JwtAuthenticator { key_stores })
     }
 
-    // parse jwt claims from single source, if custom claim is not matching on desired, claim parsed would be empty
-    #[async_backtrace::framed]
-    pub async fn parse_jwt_claims_from_store(
+    // Verify JWT token with a public key
+    fn verify_jwt_token_with_key(
         &self,
         token: &str,
-        key_store: &jwk::JwkKeyStore,
+        pub_key: &PubKey,
     ) -> Result<JWTClaims<CustomClaims>> {
-        let metadata = Token::decode_metadata(token);
-        let key_id = metadata.map_or(None, |e| e.key_id().map(|s| s.to_string()));
-        let pub_key = match key_store.get_key(&key_id).await? {
-            None => {
-                return Err(ErrorCode::AuthenticateFailure(format!(
-                    "key id {} not found in jwk store",
-                    key_id.unwrap_or_default()
-                )));
-            }
-            Some(pk) => pk,
-        };
-        let r = match &pub_key {
+        let result = match pub_key {
             PubKey::RSA256(pk) => pk.verify_token::<CustomClaims>(token, None),
             PubKey::ES256(pk) => pk.verify_token::<CustomClaims>(token, None),
         };
-        let c = r.map_err(|err| ErrorCode::AuthenticateFailure(err.to_string()))?;
-        match c.subject {
+        let claims = result.map_err(|err| ErrorCode::AuthenticateFailure(err.to_string()))?;
+        match claims.subject {
             None => Err(ErrorCode::AuthenticateFailure(
                 "missing field `subject` in jwt",
             )),
-            Some(_) => Ok(c),
+            Some(_) => Ok(claims),
         }
     }
 
     #[async_backtrace::framed]
-    pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
+    async fn parse_jwt_claims_with_no_key_id(
+        &self,
+        token: &str,
+    ) -> Result<JWTClaims<CustomClaims>> {
         let mut combined_code = ErrorCode::AuthenticateFailure(
             "could not decode token from all available jwt key stores. ",
         );
         for store in &self.key_stores {
-            let claim = self.parse_jwt_claims_from_store(token, store).await;
-            match claim {
+            match store.get_single_key().await {
+                Ok(Some(pub_key)) => match self.verify_jwt_token_with_key(token, &pub_key) {
+                    Ok(claims) => return Ok(claims),
+                    Err(e) => {
+                        combined_code = combined_code.add_message(format!(
+                            "verify jwt token with key failed, error: {}, url: {}",
+                            e,
+                            store.url()
+                        ));
+                        continue;
+                    }
+                },
+                Ok(None) => continue,
+                Err(e) => {
+                    combined_code = combined_code.add_message(format!(
+                        "get single key failed, error: {}, url: {}",
+                        e,
+                        store.url()
+                    ));
+                    continue;
+                }
+            }
+        }
+        Err(combined_code)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
+        let metadata = Token::decode_metadata(token);
+        let key_id = metadata.map_or(None, |e| e.key_id().map(|s| s.to_string()));
+
+        // If key_id is not provided, try to parse the token with no key_id from all available jwt key stores.
+        let key_id = match key_id {
+            Some(key_id) => key_id,
+            None => {
+                return self.parse_jwt_claims_with_no_key_id(token).await;
+            }
+        };
+
+        // Phase 1: Check cached keys only, without triggering refresh
+        for store in &self.key_stores {
+            match store.get_key(&key_id, false).await {
+                Ok(Some(pub_key)) => {
+                    if let Ok(claims) = self.verify_jwt_token_with_key(token, &pub_key) {
+                        return Ok(claims);
+                    }
+                }
+                Ok(None) => {
+                    continue;
+                }
+                // ignore error in phase 1
+                Err(_) => {
+                    continue;
+                }
+            }
+        }
+
+        // Phase 2: If not found in cache, try with refresh
+        let mut combined_code = ErrorCode::AuthenticateFailure(
+            "could not decode token from all available jwt key stores. ",
+        );
+        for store in &self.key_stores {
+            let pub_key = match store.get_key(&key_id, true).await {
+                Ok(Some(pk)) => pk,
+                Ok(None) => {
+                    combined_code = combined_code.add_message(format!(
+                        "key id {} not found in jwk store, url: {}",
+                        key_id,
+                        store.url()
+                    ));
+                    continue;
+                }
+                Err(e) => {
+                    combined_code = combined_code.add_message(format!(
+                        "get key failed, error: {}, url: {}",
+                        e,
+                        store.url()
+                    ));
+                    continue;
+                }
+            };
+            match self.verify_jwt_token_with_key(token, &pub_key) {
                 Ok(e) => return Ok(e),
                 Err(e) => {
                     combined_code = combined_code.add_message(format!(
-                        "message: {} , source file: {}, ",
+                        "verify jwt token with key failed, error: {}, url: {}",
                         e,
                         store.url()
                     ));

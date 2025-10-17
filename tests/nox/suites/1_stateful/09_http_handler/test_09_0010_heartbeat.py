@@ -4,8 +4,11 @@ import time
 auth = ("root", "")
 STICKY_HEADER = "X-DATABEND-STICKY-NODE"
 
+
 def do_query(query, to, port=8000):
-    session = {"settings": {"http_handler_result_timeout_secs": f"{to}", "max_threads": "32"}}
+    session = {
+        "settings": {"http_handler_result_timeout_secs": f"{to}", "max_threads": "32"}
+    }
     url = f"http://localhost:{port}/v1/query"
     query_payload = {
         "sql": query,
@@ -23,6 +26,7 @@ def do_query(query, to, port=8000):
     response = requests.post(url, headers=headers, json=query_payload, auth=auth)
     return response.json()
 
+
 def do_hb(resps):
     m = {}
     for resp in resps:
@@ -33,6 +37,7 @@ def do_hb(resps):
     hb_uri = f"http://localhost:8000/v1/session/heartbeat"
     payload = {"node_to_queries": m}
     return requests.post(hb_uri, headers=headers, json=payload, auth=auth).json()
+
 
 def test_heartbeat():
     # t = 0
@@ -56,7 +61,9 @@ def test_heartbeat():
         headers = {STICKY_HEADER: r.get("node_id")}
         next_uri = f"http://localhost:8000/{r.get('next_uri')}?"
         response = requests.get(next_uri, headers=headers, auth=auth)
-        assert response.status_code == 200, f"query {i}:{response.status_code} {response.text}"
+        assert response.status_code == 200, (
+            f"query {i}:{response.status_code} {response.text}"
+        )
         response = response.json()
         assert len(response.get("data")) > 0, f"query {i}: {response}"
     # query 0 not timed out, but drained, no need to hb

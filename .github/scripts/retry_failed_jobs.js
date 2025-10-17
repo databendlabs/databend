@@ -1,3 +1,5 @@
+const TITLE = '## 🤖 CI Job Analysis';
+
 function isRetryableError(errorMessage) {
     if (!errorMessage) return false;
     return errorMessage.includes('The self-hosted runner lost communication with the server.') ||
@@ -299,7 +301,7 @@ async function findExistingRetryComment(github, context, core, pr) {
         // Look for our smart retry analysis comment
         const retryComment = comments.find(comment =>
             comment.user.type === 'Bot' &&
-            comment.body.includes('## 🤖 Smart Auto-retry Analysis')
+            comment.body.includes(TITLE)
         );
 
         if (retryComment) {
@@ -379,7 +381,7 @@ async function addCommentToPR(github, context, core, runID, runURL, jobData, pri
 
         if (priorityCancelled) {
             // Simplified comment for priority cancelled workflow
-            comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
+            comment = `${TITLE}${titleSuffix}
 
 > **Workflow:** [\`${runID}\`](${runURL})
 
@@ -389,7 +391,7 @@ Higher priority request detected - retry cancelled to avoid conflicts.
 [View Workflow](${runURL})`;
         } else if (maxRetriesReached) {
             // Comment for when max retries reached
-            comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
+            comment = `${TITLE}${titleSuffix}
 
 > **Workflow:** [\`${runID}\`](${runURL})
 
@@ -436,7 +438,7 @@ Automated analysis using job annotations to distinguish infrastructure issues (a
 </details>`;
         } else {
             // Full comment for normal analysis
-            comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
+            comment = `${TITLE}${titleSuffix}
 
 > **Workflow:** [\`${runID}\`](${runURL})
 
