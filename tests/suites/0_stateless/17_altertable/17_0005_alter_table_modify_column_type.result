@@ -51,12 +51,10 @@ b	NULL	c2
 NULL	3	c3
 d	4	c4
 >>>> ALTER TABLE test_modify_column_type.g MODIFY COLUMN a STRING NOT NULL
-Error: APIError: QueryFailed: [1006]fail to auto cast column a (String NULL) to column a (String)
-unable to cast `NULL` to type `String`, during run expr: `CAST(a AS String)`
+Error: APIError: QueryFailed: [1006]Cannot change column 'a' to NOT NULL: column contains 1 NULL values
 <<<<
 >>>> ALTER TABLE test_modify_column_type.g MODIFY COLUMN b INT NOT NULL
-Error: APIError: QueryFailed: [1006]fail to auto cast column b (Int32 NULL) to column b (Int32)
-unable to cast `NULL` to type `Int32`, during run expr: `CAST(b AS Int32)`
+Error: APIError: QueryFailed: [1006]Cannot change column 'b' to NOT NULL: column contains 1 NULL values
 <<<<
 >>>> ALTER TABLE test_modify_column_type.g MODIFY COLUMN c STRING NOT NULL
 >>>> SELECT a,b,c from test_modify_column_type.g
