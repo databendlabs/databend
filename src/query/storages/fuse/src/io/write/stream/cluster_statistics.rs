@@ -55,7 +55,7 @@ impl ClusterStatisticsBuilder {
         }
 
         let input_schema: Arc<DataSchema> = DataSchema::from(source_schema).into();
-        let input_filed_len = input_schema.fields.len();
+        let input_field_len = input_schema.fields.len();
 
         let cluster_keys = table.linear_cluster_keys(ctx.clone());
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
@@ -70,7 +70,7 @@ impl ClusterStatisticsBuilder {
                 Expr::ColumnRef(ColumnRef { id, .. }) => *id,
                 _ => {
                     exprs.push(expr);
-                    let offset = input_filed_len + extra_key_num;
+                    let offset = input_field_len + extra_key_num;
                     extra_key_num += 1;
                     offset
                 }
