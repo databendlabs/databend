@@ -81,8 +81,6 @@ Experience the full warehouse capabilities locally - same features as cloud clus
 
 ![Databend Architecture](https://github.com/databendlabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
 
-**Multimodal Cloud Warehouse**: Production clusters analyze structured, semi-structured, vector, and geospatial data with Snowflake-compatible SQL. Local development environments can attach to the same warehouse data for seamless development.
-
 ## Use Cases
 
 - **SQL Analytics**: ANSI joins, window functions, incremental aggregates, and streaming ingestion for BI workloads.
