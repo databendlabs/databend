@@ -49,9 +49,8 @@ Databend has expanded from analytics into a unified multimodal database: **one S
 **Performance**: [TPC-H vs Snowflake](https://docs.databend.com/guides/benchmark/tpch) | [ClickBench Results](https://www.databend.com/blog/category-product/clickbench-databend-top)
 **Cost**: [90% Cost Reduction](https://docs.databend.com/guides/benchmark/data-ingest)
 
-## Architecture
 
-![Databend Architecture](https://github.com/databendlabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
+![Databend Architecture](https://github.com/user-attachments/assets/ee9c19e7-f9a1-4de3-943c-21f03abbd3c5)
 
 
 ## Use Cases
