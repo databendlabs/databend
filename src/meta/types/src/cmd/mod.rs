@@ -22,10 +22,13 @@ use crate::raft_types::NodeId;
 use crate::TxnRequest;
 
 mod cmd_context;
+mod io_timing;
 mod meta_spec;
 mod upsert_kv;
 
 pub use cmd_context::CmdContext;
+pub use io_timing::IoTimer;
+pub use io_timing::IoTiming;
 pub use meta_spec::MetaSpec;
 pub use upsert_kv::UpsertKV;
 
