@@ -187,9 +187,17 @@ impl JwtAuthenticator {
 
         // Phase 1: Check cached keys only, without triggering refresh
         for store in &self.key_stores {
-            if let Some(pub_key) = store.get_key(&key_id, false).await? {
-                if let Ok(claims) = self.verify_jwt_token_with_key(token, &pub_key) {
-                    return Ok(claims);
+            match store.get_key(&key_id, false).await {
+                Ok(Some(pub_key)) => {
+                    if let Ok(claims) = self.verify_jwt_token_with_key(token, &pub_key) {
+                        return Ok(claims);
+                    }
+                }
+                Ok(None) => {
+                    continue;
+                }
+                Err(_) => {
+                    continue;
                 }
             }
         }
@@ -199,12 +207,20 @@ impl JwtAuthenticator {
             "could not decode token from all available jwt key stores. ",
         );
         for store in &self.key_stores {
-            let pub_key = match store.get_key(&key_id, true).await? {
-                Some(pk) => pk,
-                None => {
+            let pub_key = match store.get_key(&key_id, true).await {
+                Ok(Some(pk)) => pk,
+                Ok(None) => {
                     combined_code = combined_code.add_message(format!(
                         "key id {} not found in jwk store, url: {}",
                         key_id,
+                        store.url()
+                    ));
+                    continue;
+                }
+                Err(e) => {
+                    combined_code = combined_code.add_message(format!(
+                        "get key failed, error: {}, url: {}",
+                        e,
                         store.url()
                     ));
                     continue;
