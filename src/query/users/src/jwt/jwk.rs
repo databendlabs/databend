@@ -255,7 +255,7 @@ impl JwkKeyStore {
             return Ok(());
         }
 
-        let old_keys = self
+        let current_keys = self
             .recent_cached_maps
             .read()
             .iter()
@@ -273,7 +273,7 @@ impl JwkKeyStore {
                     err.code(),
                 );
                 warn!("failed to load JWKS from {}: {}", self.url, err);
-                if !old_keys.is_empty() {
+                if !current_keys.is_empty() {
                     return Ok(());
                 }
                 return Err(err.add_message("failed to load JWKS keys, and no available fallback"));
@@ -287,14 +287,14 @@ impl JwkKeyStore {
         }
 
         // only update the cache when the keys are changed
-        if new_keys.keys().eq(old_keys.keys()) {
+        if new_keys.keys().eq(current_keys.keys()) {
             return Ok(());
         }
         info!(
-            "JWKS keys changed on refresh: url={}, reason={}, old={}, new={}",
+            "JWKS keys changed on refresh: url={}, reason={}, current={}, new={}",
             self.url,
             reason.as_str(),
-            old_keys
+            current_keys
                 .keys()
                 .map(|k| k.as_str())
                 .collect::<Vec<_>>()
