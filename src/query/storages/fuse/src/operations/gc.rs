@@ -28,7 +28,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexMeta;
-use databend_storages_common_index::InvertedIndexFile;
+use databend_storages_common_index::InvertedIndexCacheFile;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
@@ -599,7 +599,7 @@ impl FuseTable {
             counter.inverted_indexes += inverted_index_count;
 
             // if there is inverted index file cache, evict the cached items
-            if let Some(inverted_index_cache) = InvertedIndexFile::cache() {
+            if let Some(inverted_index_cache) = InvertedIndexCacheFile::cache() {
                 for index_path in &inverted_indexes_to_be_purged {
                     InvertedIndexReader::cache_key_of_index_columns(index_path)
                         .iter()

@@ -52,7 +52,7 @@ pub type BloomIndexFilterCache = HybridCache<FilterImpl>;
 pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 
 pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
-pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;
+pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexCacheFile>;
 
 pub type VectorIndexMetaCache = InMemoryLruCache<VectorIndexMeta>;
 pub type VectorIndexFileCache = InMemoryLruCache<VectorIndexFile>;
@@ -149,7 +149,7 @@ impl CachedObject<ParquetMetaData> for ParquetMetaData {
     }
 }
 
-impl CachedObject<InvertedIndexFile> for InvertedIndexFile {
+impl CachedObject<InvertedIndexCacheFile> for InvertedIndexCacheFile {
     type Cache = InvertedIndexFileCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_inverted_index_file_cache()
@@ -307,10 +307,10 @@ impl From<InvertedIndexMeta> for CacheValue<InvertedIndexMeta> {
     }
 }
 
-impl From<InvertedIndexFile> for CacheValue<InvertedIndexFile> {
-    fn from(value: InvertedIndexFile) -> Self {
+impl From<InvertedIndexCacheFile> for CacheValue<InvertedIndexCacheFile> {
+    fn from(value: InvertedIndexCacheFile) -> Self {
         CacheValue {
-            mem_bytes: std::mem::size_of::<InvertedIndexFile>() + value.data.len(),
+            mem_bytes: std::mem::size_of::<InvertedIndexCacheFile>() + value.data.len(),
             inner: Arc::new(value),
         }
     }
