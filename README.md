@@ -85,10 +85,10 @@ Experience the full warehouse capabilities locally - same features as cloud clus
 
 ## Use Cases
 
-- **Warehouse Analytics**: ANSI SQL joins, window functions, incremental aggregates, and streaming ingestion for BI workloads.
-- **AI & Vector Systems**: Persist embeddings alongside facts, index vectors, and run semantic retrieval for RAG and agent pipelines.
-- **Hybrid Search**: Mix full-text search over JSON, metadata filters, and semantic similarity inside one query plan.
-- **Geospatial Processing**: Run distance, containment, and hex-grid analytics to power maps and mobility scenarios.
+- **SQL Analytics**: ANSI joins, window functions, incremental aggregates, and streaming ingestion for BI workloads.
+- **AI Vector**: Persist embeddings alongside facts, index vectors, and run semantic retrieval for RAG and agent pipelines.
+- **JSON Search**: Mix full-text search over JSON, metadata filters, and semantic similarity inside one query plan.
+- **Geo Analytics**: Run distance, containment, and hex-grid analytics to power maps and mobility scenarios.
 - **Lakehouse ETL**: Query Parquet, CSV, and NDJSON in object storage, transform streaming updates, and load them into managed tables.
 
 ## Community
