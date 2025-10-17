@@ -26,17 +26,19 @@
 
 ## Why Databend?
 
-**Multimodal Data Warehouse**: Analyze structured, semi-structured, vector, and geospatial data with unified Snowflake-compatible SQL.
+Databend has evolved from an analytics warehouse into a unified multimodal database that powers AI, search, and geospatial workloads side by side with classic analytics — all through the same Snowflake-compatible SQL surface.
 
-**AI-Native Platform**: Built-in vector search, AI functions, embedding generation, and full-text search - no separate systems needed.
+**Unified Multimodal Engine**: Analytics, vector search, full-text, and geospatial run on one elastic engine with a shared optimizer and execution runtime.
 
-**10x Faster & 90% Cost Reduction**: Rust-powered vectorized execution with S3-native storage eliminates vendor lock-in and proprietary overhead.
+**Rust-Powered & Cost Efficient**: Vectorized Rust execution with separated storage delivers fast performance while keeping compute spend lean.
 
-**Deploy Anywhere, Connect Everything**: 100% open source - run locally with `pip install databend`, self-host, or use managed cloud clusters. All instances share the same data seamlessly.
+**Store Everything, Query Anything**: Structured, semi-structured, vector, and unstructured media data live together in columnar storage with indexes, caching, and transactional guarantees.
 
-**Production Proven**: Trusted by world-class enterprises managing 800+ petabytes and 100+ million queries daily.
+**AI-Native & Developer Friendly**: Built-in embeddings, semantic ranking, and SDKs for Python, Java, and AI frameworks make it easy to ship intelligent applications.
 
-**Enterprise Ready**: Fine-grained access control, data masking, and audit logging with complete data sovereignty.
+**Cloud Scale, Edge Ready**: Deploy Databend Cloud, self-host in your environment, or run locally with `pip install databend` — every deployment speaks the same protocols and reads the same open storage.
+
+**Enterprise Grade**: Fine-grained governance, masking, auditing, and proven production scale handling 800+ PB of data and 100M+ daily queries.
 
 ## Quick Start
 
