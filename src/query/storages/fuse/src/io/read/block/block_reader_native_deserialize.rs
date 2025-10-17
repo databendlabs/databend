@@ -31,6 +31,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use opendal::Buffer;
 
 use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
@@ -177,14 +178,14 @@ impl BlockReader {
     fn chunks_to_native_column(
         &self,
         metas: Vec<&ColumnMeta>,
-        chunks: Vec<&[u8]>,
+        chunks: Vec<Buffer>,
         field: TableField,
     ) -> Result<Column> {
         let mut page_metas = Vec::with_capacity(chunks.len());
         let mut readers = Vec::with_capacity(chunks.len());
         for (chunk, meta) in chunks.into_iter().zip(metas.into_iter()) {
             let meta = meta.as_native().unwrap();
-            let reader = std::io::Cursor::new(chunk);
+            let reader = std::io::Cursor::new(chunk.to_bytes());
             readers.push(reader);
             page_metas.push(meta.pages.clone());
         }
@@ -222,7 +223,7 @@ impl BlockReader {
                     match chunk {
                         DataItem::RawData(data) => {
                             field_column_metas.push(column_meta);
-                            field_column_data.push(data.as_ref());
+                            field_column_data.push(data.clone());
                             field_leaf_ids.push(*leaf_index);
                             field_uncompressed_size += data.len();
                         }

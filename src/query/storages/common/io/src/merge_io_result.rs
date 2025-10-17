@@ -15,26 +15,23 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
-use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use opendal::Buffer;
 
 type ChunkIndex = usize;
 pub struct OwnerMemory {
-    pub chunks: HashMap<ChunkIndex, Bytes>,
+    pub chunks: HashMap<ChunkIndex, Buffer>,
 }
 
 impl OwnerMemory {
-    pub fn create(chunks: Vec<(ChunkIndex, Vec<u8>)>) -> OwnerMemory {
-        let chunks = chunks
-            .into_iter()
-            .map(|(idx, chunk)| (idx, Bytes::from(chunk)))
-            .collect();
+    pub fn create(chunks: Vec<(ChunkIndex, Buffer)>) -> OwnerMemory {
+        let chunks = chunks.into_iter().collect();
         OwnerMemory { chunks }
     }
 
-    pub fn get_chunk(&self, index: ChunkIndex, path: &str) -> Result<Bytes> {
+    pub fn get_chunk(&self, index: ChunkIndex, path: &str) -> Result<Buffer> {
         match self.chunks.get(&index) {
             Some(chunk) => Ok(chunk.clone()),
             None => Err(ErrorCode::Internal(format!(

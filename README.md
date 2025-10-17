@@ -26,19 +26,41 @@
 
 ## Why Databend?
 
-Databend has evolved from an analytics warehouse into a unified multimodal database that powers AI, search, and geospatial workloads side by side with classic analytics — all through the same Snowflake-compatible SQL surface.
+Databend has expanded from analytics into a unified multimodal database: **one Snowflake-compatible SQL surface for BI, AI, search, and geospatial workloads.**
 
-**Unified Multimodal Engine**: Analytics, vector search, full-text, and geospatial run on one elastic engine with a shared optimizer and execution runtime.
+**Unified Engine**: Analytics, vector, full-text, and geospatial share the same optimizer and elastic runtime.
 
-**Rust-Powered & Cost Efficient**: Vectorized Rust execution with separated storage delivers fast performance while keeping compute spend lean.
+**Unified Data**: Structured, semi-structured, vector, and unstructured live directly on object stores with indexes, caching, transactions, MVCC branching.
 
-**Store Everything, Query Anything**: Structured, semi-structured, vector, and unstructured media data live together in columnar storage with indexes, caching, and transactional guarantees.
+**Analytics Native**: ANSI SQL, windowing, incremental aggregates, and streaming ingestion deliver BI without moving data.
 
-**AI-Native & Developer Friendly**: Built-in embeddings, semantic ranking, and SDKs for Python, Java, and AI frameworks make it easy to ship intelligent applications.
+**Vector Native**: Built-in embeddings, vector indexes, and semantic retrieval exposed through SQL and SDKs.
 
-**Cloud Scale, Edge Ready**: Deploy Databend Cloud, self-host in your environment, or run locally with `pip install databend` — every deployment speaks the same protocols and reads the same open storage.
+**Search Native**: JSON full-text indexing, structured filters, and ranking to power hybrid search experiences.
 
-**Enterprise Grade**: Fine-grained governance, masking, auditing, and proven production scale handling 800+ PB of data and 100M+ daily queries.
+**Unified Deployment**: Cloud, self-hosted, or `pip install databend` all run the same engine on shared object storage.
+
+**Rust Performance**: Vectorized Rust execution with separated storage keeps performance high and compute spend lean.
+
+**Enterprise Scale**: Fine-grained governance, masking, auditing, and production deployments exceeding 800+ PB and 100M+ daily queries.
+
+## Benchmarks
+
+**Performance**: [TPC-H vs Snowflake](https://docs.databend.com/guides/benchmark/tpch) | [ClickBench Results](https://www.databend.com/blog/category-product/clickbench-databend-top)
+**Cost**: [90% Cost Reduction](https://docs.databend.com/guides/benchmark/data-ingest)
+
+## Architecture
+
+![Databend Architecture](https://github.com/databendlabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
+
+
+## Use Cases
+
+- **SQL Analytics**: ANSI joins, window functions, incremental aggregates, and streaming ingestion for BI workloads.
+- **AI Vector**: Persist embeddings alongside facts, index vectors, and run semantic retrieval for RAG and agent pipelines.
+- **JSON Search**: Mix full-text search over JSON, metadata filters, and semantic similarity inside one query plan.
+- **Geo Analytics**: Run distance, containment, and hex-grid analytics to power maps and mobility scenarios.
+- **Lakehouse ETL**: Query Parquet, CSV, and NDJSON in object storage, transform streaming updates, and load them into managed tables.
 
 ## Quick Start
 
@@ -71,24 +93,6 @@ ctx.sql("SELECT COUNT(*) FROM sales").show()
 docker run -p 8000:8000 datafuselabs/databend
 ```
 Experience the full warehouse capabilities locally - same features as cloud clusters.
-
-## Benchmarks
-
-**Performance**: [TPC-H vs Snowflake](https://docs.databend.com/guides/benchmark/tpch) | [ClickBench Results](https://www.databend.com/blog/category-product/clickbench-databend-top)
-**Cost**: [90% Cost Reduction](https://docs.databend.com/guides/benchmark/data-ingest)
-
-## Architecture
-
-![Databend Architecture](https://github.com/databendlabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
-
-**Multimodal Cloud Warehouse**: Production clusters analyze structured, semi-structured, vector, and geospatial data with Snowflake-compatible SQL. Local development environments can attach to the same warehouse data for seamless development.
-
-## Use Cases
-
-- **Data Analytics**: Snowflake alternative with significant cost reduction
-- **AI/ML Pipelines**: Vector search and AI functions built-in
-- **Real-time Analytics**: High-performance queries on petabyte-scale data
-- **Data Lake Analytics**: Query Parquet, CSV, TSV, NDJSON, Avro, ORC directly from S3
 
 ## Community
 

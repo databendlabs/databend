@@ -108,7 +108,7 @@ pub struct BloomFilterLoader {
 impl Loader<FilterImpl> for BloomFilterLoader {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<FilterImpl> {
-        let bytes = self
+        let chunk = self
             .operator
             .read_with(&params.location)
             .range(self.offset..self.offset + self.len)
@@ -118,7 +118,7 @@ impl Loader<FilterImpl> for BloomFilterLoader {
             &self.schema_desc,
             ParquetCompression::UNCOMPRESSED,
         );
-        builder.add_column_chunk(self.column_id as usize, bytes.to_bytes());
+        builder.add_column_chunk(self.column_id as usize, chunk);
         let row_group = Box::new(builder.build());
         let field_levels = parquet_to_arrow_field_levels(
             self.schema_desc.as_ref(),

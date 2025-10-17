@@ -20,7 +20,6 @@ use std::time::Instant;
 use arrow::datatypes::Field;
 use arrow::datatypes::Fields;
 use arrow::datatypes::Schema;
-use bytes::Bytes;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
@@ -165,7 +164,7 @@ pub async fn load_vector_index_files<'a>(
             let data = chunk.slice(range.clone());
 
             let (name, cache_key) = names_map.remove(i).unwrap();
-            let file = VectorIndexFile::create(name.clone(), data.into());
+            let file = VectorIndexFile::create(name.clone(), data.to_vec().into());
 
             // add index file to cache
             vector_index_file_cache.insert(cache_key, file.clone());
@@ -178,7 +177,7 @@ pub async fn load_vector_index_files<'a>(
         RowGroupImplBuilder::new(1, &vector_index_schema_desc, TableCompression::Zstd.into());
 
     for (i, column_data) in column_data {
-        builder.add_column_chunk(i, Bytes::copy_from_slice(&column_data.data));
+        builder.add_column_chunk(i, column_data.data.clone().into());
     }
     let row_group = Box::new(builder.build());
     let field_levels = parquet_to_arrow_field_levels(

@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod buffer_reader;
 mod files;
 mod merge_io_reader;
 mod merge_io_result;
 mod read_settings;
 
+pub use buffer_reader::BufferReader;
 pub use files::Files;
 pub use merge_io_reader::MergeIOReader;
 pub use merge_io_result::MergeIOReadResult;
