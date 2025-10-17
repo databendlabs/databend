@@ -320,7 +320,8 @@ impl JwkKeyStore {
 
     // get single key from cache, if there is only one key in the cache, return it
     #[async_backtrace::framed]
-    async fn get_single_key_from_cache(&self) -> Result<Option<PubKey>> {
+    pub async fn get_single_key(&self) -> Result<Option<PubKey>> {
+        self.maybe_refresh_cached_keys(false).await?;
         let cached_maps = self.recent_cached_maps.read();
         let latest_keys_map = cached_maps.iter().last();
         if let Some(keys) = latest_keys_map {
@@ -339,7 +340,7 @@ impl JwkKeyStore {
 
     // get key from cache by key_id
     #[async_backtrace::framed]
-    async fn get_key_from_cache(&self, key_id: &String) -> Option<PubKey> {
+    async fn get_key_from_cache(&self, key_id: &str) -> Option<PubKey> {
         let cached_maps = self.recent_cached_maps.read();
         for keys_map in cached_maps.iter().rev() {
             if let Some(pubkey) = keys_map.get(key_id) {
@@ -350,15 +351,8 @@ impl JwkKeyStore {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_key(&self, key_id: &Option<String>, refresh: bool) -> Result<Option<PubKey>> {
+    pub async fn get_key(&self, key_id: &str, refresh: bool) -> Result<Option<PubKey>> {
         self.maybe_refresh_cached_keys(false).await?;
-
-        let key_id = match key_id {
-            Some(key_id) => key_id,
-            None => {
-                return self.get_single_key_from_cache().await;
-            }
-        };
 
         // First check cached keys
         if let Some(key) = self.get_key_from_cache(key_id).await {

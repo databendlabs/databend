@@ -138,9 +138,52 @@ impl JwtAuthenticator {
     }
 
     #[async_backtrace::framed]
+    async fn parse_jwt_claims_with_no_key_id(
+        &self,
+        token: &str,
+    ) -> Result<JWTClaims<CustomClaims>> {
+        let mut combined_code = ErrorCode::AuthenticateFailure(
+            "could not decode token from all available jwt key stores. ",
+        );
+        for store in &self.key_stores {
+            match store.get_single_key().await {
+                Ok(Some(pub_key)) => match self.verify_jwt_token_with_key(token, &pub_key) {
+                    Ok(claims) => return Ok(claims),
+                    Err(e) => {
+                        combined_code = combined_code.add_message(format!(
+                            "verify jwt token with key failed, error: {}, url: {}",
+                            e,
+                            store.url()
+                        ));
+                        continue;
+                    }
+                },
+                Ok(None) => continue,
+                Err(e) => {
+                    combined_code = combined_code.add_message(format!(
+                        "get single key failed, error: {}, url: {}",
+                        e,
+                        store.url()
+                    ));
+                    continue;
+                }
+            }
+        }
+        Err(combined_code)
+    }
+
+    #[async_backtrace::framed]
     pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
         let metadata = Token::decode_metadata(token);
         let key_id = metadata.map_or(None, |e| e.key_id().map(|s| s.to_string()));
+
+        // If key_id is not provided, try to parse the token with no key_id from all available jwt key stores.
+        let key_id = match key_id {
+            Some(key_id) => key_id,
+            None => {
+                return self.parse_jwt_claims_with_no_key_id(token).await;
+            }
+        };
 
         // Phase 1: Check cached keys only, without triggering refresh
         for store in &self.key_stores {
@@ -157,15 +200,15 @@ impl JwtAuthenticator {
         );
         for store in &self.key_stores {
             let pub_key = match store.get_key(&key_id, true).await? {
+                Some(pk) => pk,
                 None => {
                     combined_code = combined_code.add_message(format!(
                         "key id {} not found in jwk store, url: {}",
-                        key_id.clone().unwrap_or_default(),
+                        key_id,
                         store.url()
                     ));
                     continue;
                 }
-                Some(pk) => pk,
             };
             match self.verify_jwt_token_with_key(token, &pub_key) {
                 Ok(e) => return Ok(e),
