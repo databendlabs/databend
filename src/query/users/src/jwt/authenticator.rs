@@ -196,6 +196,7 @@ impl JwtAuthenticator {
                 Ok(None) => {
                     continue;
                 }
+                // ignore error in phase 1
                 Err(_) => {
                     continue;
                 }
