@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::env;
+use std::sync::LazyLock;
 
 use clap::ArgAction;
 use clap::Args;
@@ -20,6 +21,7 @@ use clap::Parser;
 use databend_common_config::StorageConfig;
 use databend_common_meta_raft_store::config::get_default_raft_advertise_host;
 use databend_common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
+use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::Config as InnerLogConfig;
@@ -33,6 +35,10 @@ use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig;
 use databend_common_tracing::TracingConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
+use databend_common_version::DATABEND_GIT_SEMVER;
+use databend_common_version::VERGEN_BUILD_TIMESTAMP;
+use databend_common_version::VERGEN_GIT_SHA;
+use databend_common_version::VERGEN_RUSTC_SEMVER;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -41,9 +47,28 @@ use serfig::collectors::from_self;
 use serfig::parsers::Toml;
 
 use super::inner::Config as InnerConfig;
+use crate::version::MIN_METACLI_SEMVER;
+
+/// Full version string for databend-meta including build info, min client version, and data version
+static FULL_VERSION: LazyLock<String> = LazyLock::new(|| {
+    let rustc_semver = VERGEN_RUSTC_SEMVER;
+    let timestamp = VERGEN_BUILD_TIMESTAMP;
+
+    let first_line = match (rustc_semver, timestamp) {
+        (Some(rustc_semver), Some(timestamp)) => {
+            format!("{DATABEND_GIT_SEMVER}-{VERGEN_GIT_SHA}(rust-{rustc_semver}-{timestamp})")
+        }
+        _ => format!("{DATABEND_GIT_SEMVER}-{VERGEN_GIT_SHA}"),
+    };
+
+    format!(
+        "{}\nmin-compatible-client-version: {}\ndata-version: {:?}",
+        first_line, MIN_METACLI_SEMVER, DATA_VERSION
+    )
+});
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
-#[clap(about, author)]
+#[clap(about, author, version = &**FULL_VERSION)]
 #[serde(default)]
 pub struct Config {
     /// Run a command
