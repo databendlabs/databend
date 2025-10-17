@@ -362,7 +362,7 @@ impl SegmentCompactChecker {
         self.compacted_segment_cnt += segments.len();
         self.compacted_block_cnt += segments
             .iter()
-            .map(|(_, info)| info.summary.block_count)
+            .map(|(_, info)| (info.summary.block_count - info.summary.perfect_block_count))
             .sum::<u64>();
         true
     }
@@ -420,7 +420,7 @@ impl SegmentCompactChecker {
         let residual_block_cnt: u64 = self
             .segments
             .iter()
-            .map(|(_, info)| info.summary.block_count)
+            .map(|(_, info)| (info.summary.block_count - info.summary.perfect_block_count))
             .sum();
         self.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
             || self.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
