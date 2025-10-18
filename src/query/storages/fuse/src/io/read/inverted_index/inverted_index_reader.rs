@@ -118,15 +118,11 @@ impl InvertedIndexReader {
         let inverted_index_meta = load_inverted_index_meta(self.dal.clone(), index_path).await?;
         let version = inverted_index_meta.version;
 
-        let mut inverted_index_meta_map = inverted_index_meta
+        let inverted_index_meta_map = inverted_index_meta
             .columns
             .clone()
             .into_iter()
             .collect::<HashMap<_, _>>();
-
-        if !self.need_position {
-            inverted_index_meta_map.remove("pos");
-        }
 
         // The first and third versions utilize tantivy's search function,
         // while the second version employs a custom search function.

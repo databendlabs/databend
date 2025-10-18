@@ -42,6 +42,7 @@ use log::error;
 use log::info;
 use log::warn;
 
+use crate::index::InvertedIndexFile;
 use crate::io::read::ColumnOrientedSegmentReader;
 use crate::io::read::RowOrientedSegmentReader;
 use crate::io::InvertedIndexReader;

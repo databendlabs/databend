@@ -464,7 +464,9 @@ pub(crate) fn create_index_schema(
         .set_tokenizer(&tokenizer_name)
         .set_index_option(index_record);
     let text_options = TextOptions::default().set_indexing_options(text_field_indexing.clone());
-    let json_options = JsonObjectOptions::default().set_indexing_options(text_field_indexing);
+    let json_options = JsonObjectOptions::default()
+        .set_indexing_options(text_field_indexing)
+        .set_fast(None);
 
     let mut schema_builder = Schema::builder();
     let mut index_fields = Vec::with_capacity(schema.fields.len());
