@@ -254,6 +254,27 @@ impl ModifyTableColumnInterpreter {
                     table_info.meta.field_comments[i] = comment.to_string();
                     modify_comment = true;
                 }
+
+                // Check for NULL values in columns that are being changed to NOT NULL
+                if old_field.data_type.is_nullable() && !field.data_type.is_nullable() {
+                    let statistics_provider = fuse_table
+                        .column_statistics_provider(self.ctx.clone())
+                        .await?;
+                    let column_stat = statistics_provider
+                        .column_statistics(old_field.column_id)
+                        .ok_or_else(|| {
+                            ErrorCode::UnknownColumn(format!(
+                                "Cannot find statistics for column '{}' (id: {})",
+                                field.name, old_field.column_id
+                            ))
+                        })?;
+                    if column_stat.null_count > 0 {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Cannot change column '{}' to NOT NULL: contains {} NULL values",
+                            field.name, column_stat.null_count
+                        )));
+                    }
+                }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Cannot find column {}",
@@ -327,147 +348,129 @@ impl ModifyTableColumnInterpreter {
         let query_fields = new_schema_without_computed_fields
             .fields()
             .iter()
-            .enumerate()
-            .map(|(index, field)| {
-                if let Some(default_scalar) = modified_default_scalars.get(&index) {
-                    let old_field = schema.field_with_name(&field.name).unwrap();
-                    let need_remove_nullable =
-                        old_field.data_type.is_nullable() && !field.data_type.is_nullable();
-                    // If the column type is Tuple or Array(Tuple), the difference in the number of leaf columns may cause
-                    // the auto cast to fail.
-                    // We read the leaf column data, and then use build function to construct a new Tuple or Array(Tuple).
-                    // Note: other nested types auto cast can still fail, we need a more general handling
-                    // to solve this problem in the future.
-                    match (
-                        old_field.data_type.remove_nullable(),
-                        field.data_type.remove_nullable(),
-                    ) {
-                        (
-                            TableDataType::Tuple {
-                                fields_name: old_fields_name,
-                                ..
-                            },
-                            TableDataType::Tuple {
-                                fields_name: new_fields_name,
-                                fields_type: new_fields_type,
-                            },
-                        ) => {
-                            let transform_funcs = new_fields_name
-                                .iter()
-                                .zip(new_fields_type.iter())
-                                .map(|(new_field_name, new_field_type)| {
-                                    match old_fields_name.iter().position(|n| n == new_field_name) {
-                                        Some(idx) => {
-                                            format!("`{}`.{}", field.name, idx + 1)
-                                        }
-                                        None => {
-                                            let new_data_type = DataType::from(new_field_type);
-                                            let default_value =
-                                                Scalar::default_value(&new_data_type);
-                                            format!("{default_value}")
-                                        }
+            .map(|field| {
+                let old_field = schema.field_with_name(&field.name).unwrap();
+                // If the column type is Tuple or Array(Tuple), the difference in the number of leaf columns may cause
+                // the auto cast to fail.
+                // We read the leaf column data, and then use build function to construct a new Tuple or Array(Tuple).
+                // Note: other nested types auto cast can still fail, we need a more general handling
+                // to solve this problem in the future.
+                match (
+                    old_field.data_type.remove_nullable(),
+                    field.data_type.remove_nullable(),
+                ) {
+                    (
+                        TableDataType::Tuple {
+                            fields_name: old_fields_name,
+                            ..
+                        },
+                        TableDataType::Tuple {
+                            fields_name: new_fields_name,
+                            fields_type: new_fields_type,
+                        },
+                    ) => {
+                        let transform_funcs = new_fields_name
+                            .iter()
+                            .zip(new_fields_type.iter())
+                            .map(|(new_field_name, new_field_type)| {
+                                match old_fields_name.iter().position(|n| n == new_field_name) {
+                                    Some(idx) => {
+                                        format!("`{}`.{}", field.name, idx + 1)
                                     }
-                                })
-                                .collect::<Vec<_>>()
-                                .join(", ");
-
-                            format!(
-                                "if(is_not_null(`{}`), tuple({}), NULL) AS {}",
-                                field.name, transform_funcs, field.name
-                            )
-                        }
-                        (
-                            TableDataType::Array(box TableDataType::Tuple {
-                                fields_name: old_fields_name,
-                                ..
-                            }),
-                            TableDataType::Array(box TableDataType::Tuple {
-                                fields_name: new_fields_name,
-                                fields_type: new_fields_type,
-                            }),
-                        )
-                        | (
-                            TableDataType::Array(box TableDataType::Nullable(
-                                box TableDataType::Tuple {
-                                    fields_name: old_fields_name,
-                                    ..
-                                },
-                            )),
-                            TableDataType::Array(box TableDataType::Tuple {
-                                fields_name: new_fields_name,
-                                fields_type: new_fields_type,
-                            }),
-                        )
-                        | (
-                            TableDataType::Array(box TableDataType::Tuple {
-                                fields_name: old_fields_name,
-                                ..
-                            }),
-                            TableDataType::Array(box TableDataType::Nullable(
-                                box TableDataType::Tuple {
-                                    fields_name: new_fields_name,
-                                    fields_type: new_fields_type,
-                                },
-                            )),
-                        )
-                        | (
-                            TableDataType::Array(box TableDataType::Nullable(
-                                box TableDataType::Tuple {
-                                    fields_name: old_fields_name,
-                                    ..
-                                },
-                            )),
-                            TableDataType::Array(box TableDataType::Nullable(
-                                box TableDataType::Tuple {
-                                    fields_name: new_fields_name,
-                                    fields_type: new_fields_type,
-                                },
-                            )),
-                        ) => {
-                            let transform_funcs = new_fields_name
-                                .iter()
-                                .zip(new_fields_type.iter())
-                                .map(|(new_field_name, new_field_type)| {
-                                    match old_fields_name.iter().position(|n| n == new_field_name) {
-                                        Some(idx) => {
-                                            format!(
-                                                "array_transform(`{}`, v -> v.{})",
-                                                field.name,
-                                                idx + 1
-                                            )
-                                        }
-                                        None => {
-                                            let new_data_type = DataType::from(new_field_type);
-                                            let default_value =
-                                                Scalar::default_value(&new_data_type);
-                                            format!("{default_value}")
-                                        }
+                                    None => {
+                                        let new_data_type = DataType::from(new_field_type);
+                                        let default_value = Scalar::default_value(&new_data_type);
+                                        format!("{default_value}")
                                     }
-                                })
-                                .collect::<Vec<_>>()
-                                .join(", ");
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
 
-                            format!(
-                                "if(is_not_null(`{}`), arrays_zip({}), NULL) AS {}",
-                                field.name, transform_funcs, field.name
-                            )
-                        }
-                        (_, _) => {
-                            if need_remove_nullable {
-                                // If the column is being changed from NULLABLE to NOT NULL,
-                                // wrap it with `coalesce()` to replace NULL values with the default,
-                                // and `remove_nullable()` to mark the resulting expression as non-nullable.
-                                format!(
-                                    "remove_nullable(coalesce(`{}`, {}))",
-                                    field.name, default_scalar
-                                )
-                            } else {
-                                format!("`{}`", field.name)
-                            }
-                        }
+                        format!(
+                            "if(is_not_null(`{}`), tuple({}), NULL) AS {}",
+                            field.name, transform_funcs, field.name
+                        )
                     }
-                } else {
-                    format!("`{}`", field.name)
+                    (
+                        TableDataType::Array(box TableDataType::Tuple {
+                            fields_name: old_fields_name,
+                            ..
+                        }),
+                        TableDataType::Array(box TableDataType::Tuple {
+                            fields_name: new_fields_name,
+                            fields_type: new_fields_type,
+                        }),
+                    )
+                    | (
+                        TableDataType::Array(box TableDataType::Nullable(
+                            box TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            },
+                        )),
+                        TableDataType::Array(box TableDataType::Tuple {
+                            fields_name: new_fields_name,
+                            fields_type: new_fields_type,
+                        }),
+                    )
+                    | (
+                        TableDataType::Array(box TableDataType::Tuple {
+                            fields_name: old_fields_name,
+                            ..
+                        }),
+                        TableDataType::Array(box TableDataType::Nullable(
+                            box TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            },
+                        )),
+                    )
+                    | (
+                        TableDataType::Array(box TableDataType::Nullable(
+                            box TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            },
+                        )),
+                        TableDataType::Array(box TableDataType::Nullable(
+                            box TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            },
+                        )),
+                    ) => {
+                        let transform_funcs = new_fields_name
+                            .iter()
+                            .zip(new_fields_type.iter())
+                            .map(|(new_field_name, new_field_type)| {
+                                match old_fields_name.iter().position(|n| n == new_field_name) {
+                                    Some(idx) => {
+                                        format!(
+                                            "array_transform(`{}`, v -> v.{})",
+                                            field.name,
+                                            idx + 1
+                                        )
+                                    }
+                                    None => {
+                                        let new_data_type = DataType::from(new_field_type);
+                                        let default_value = Scalar::default_value(&new_data_type);
+                                        format!("{default_value}")
+                                    }
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+
+                        format!(
+                            "if(is_not_null(`{}`), arrays_zip({}), NULL) AS {}",
+                            field.name, transform_funcs, field.name
+                        )
+                    }
+                    (_, _) => {
+                        // No need to remove_nullable already check NULL value
+                        format!("`{}`", field.name)
+                    }
                 }
             })
             .collect::<Vec<_>>()
