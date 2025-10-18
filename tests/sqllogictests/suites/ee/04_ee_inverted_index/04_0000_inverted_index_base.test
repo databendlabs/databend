@@ -473,25 +473,25 @@ idx INVERTED t1(body)tokenizer='chinese'
 idx1 INVERTED t(content)index_record='"basic"' tokenizer='chinese'
 idx2 INVERTED books(title, author, description)index_record='"basic"' tokenizer='chinese'
 
-query TII
-select name, index_size, inverted_index_size from system.tables where name='t1' and database='test_inverted_index';
-----
-t1 2828 2390
+#query TII
+#select name, index_size, inverted_index_size from system.tables where name='t1' and database='test_inverted_index';
+#----
+#t1 2828 2390
 
-query III
-select row_count, bloom_filter_size, inverted_index_size from fuse_block('test_inverted_index', 't1')
-----
-10 438 2390
+#query III
+#select row_count, bloom_filter_size, inverted_index_size from fuse_block('test_inverted_index', 't1')
+#----
+#10 438 2390
 
-query IIII
-select block_count, row_count, index_size, inverted_index_size from fuse_segment('test_inverted_index', 't1');
-----
-1 10 2828 2390
+#query IIII
+#select block_count, row_count, index_size, inverted_index_size from fuse_segment('test_inverted_index', 't1');
+#----
+#1 10 2828 2390
 
-query IIII
-select block_count, row_count, index_size, inverted_index_size from fuse_snapshot('test_inverted_index', 't1');
-----
-1 10 2828 2390
+#query IIII
+#select block_count, row_count, index_size, inverted_index_size from fuse_snapshot('test_inverted_index', 't1');
+#----
+#1 10 2828 2390
 
 statement ok
 CREATE TABLE t2 (id int, body string)

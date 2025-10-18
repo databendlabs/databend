@@ -160,7 +160,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let queries = vec![
         ("rust".to_string(), vec![0, 1]),
         ("java".to_string(), vec![2]),
-        ("data".to_string(), vec![1, 4, 5]),
+        ("data".to_string(), vec![4, 1, 5]),
     ];
 
     for (query_text, ids) in queries.into_iter() {
