@@ -43,7 +43,6 @@ pub use inverted_index::build_tantivy_footer;
 pub use inverted_index::extract_component_fields;
 pub use inverted_index::extract_fsts;
 pub use inverted_index::DocIdsCollector;
-pub use inverted_index::InvertedIndexCacheFile;
 pub use inverted_index::InvertedIndexDirectory;
 pub use inverted_index::InvertedIndexFile;
 pub use inverted_index::InvertedIndexMeta;

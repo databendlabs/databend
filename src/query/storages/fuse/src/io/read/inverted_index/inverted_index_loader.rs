@@ -44,7 +44,6 @@ use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
 
-use crate::index::InvertedIndexCacheFile;
 use crate::index::InvertedIndexFile;
 use crate::io::read::block::parquet::RowGroupImplBuilder;
 use crate::io::MetaReaders;
@@ -184,105 +183,121 @@ pub(crate) async fn load_inverted_index_files<'a>(
 ) -> Result<Vec<Arc<InvertedIndexFile>>> {
     let start = Instant::now();
 
-    let inverted_index_fields = vec![
-        Field::new(".managed.json", arrow::datatypes::DataType::Binary, false),
-        Field::new("meta.json", arrow::datatypes::DataType::Binary, false),
-        Field::new("fast", arrow::datatypes::DataType::Binary, false),
-        Field::new("store", arrow::datatypes::DataType::Binary, false),
-        Field::new("fieldnorm", arrow::datatypes::DataType::Binary, false),
-        Field::new("pos", arrow::datatypes::DataType::Binary, false),
-        Field::new("idx", arrow::datatypes::DataType::Binary, false),
-        Field::new("term", arrow::datatypes::DataType::Binary, false),
-    ];
-
-    let inverted_index_schema = Schema::new(Fields::from(inverted_index_fields.clone()));
-    let inverted_index_schema_desc =
-        Arc::new(ArrowSchemaConverter::new().convert(&inverted_index_schema)?);
+    let mut inverted_index_fields = Vec::with_capacity(inverted_index_meta_map.len());
+    for (name, _) in inverted_index_meta_map.iter() {
+        let field = Field::new(name, arrow::datatypes::DataType::Binary, false);
+        inverted_index_fields.push(field);
+    }
 
     // 1. read column data, first try to read from cache,
     // if not exists, fetch from object storage
+
     let mut ranges = Vec::new();
     let mut names_map = HashMap::new();
-    let mut column_data = HashMap::new();
+    let mut inverted_files = Vec::with_capacity(inverted_index_fields.len());
     let inverted_index_file_cache = CacheManager::instance().get_inverted_index_file_cache();
-    for (i, index_field) in inverted_index_fields.iter().enumerate() {
+    for (idx, index_field) in inverted_index_fields.iter().enumerate() {
         let name = index_field.name();
         let col_meta = inverted_index_meta_map.get(name).unwrap();
         let cache_key = cache_key_of_column(location, name);
         if let Some(cache_file) = inverted_index_file_cache.get_sized(&cache_key, col_meta.len) {
-            column_data.insert(i, cache_file);
+            inverted_files.push(cache_file);
             continue;
         }
 
         // if cache missed, prepare the ranges to be read
         let col_range = col_meta.offset..(col_meta.offset + col_meta.len);
 
-        ranges.push((i as u32, col_range));
-        names_map.insert(i as u32, (name, cache_key));
+        ranges.push((idx as u32, col_range));
+        names_map.insert(idx as u32, (name, cache_key));
     }
 
     if !ranges.is_empty() {
         let merge_io_result =
             MergeIOReader::merge_io_read(settings, operator.clone(), location, &ranges).await?;
 
+        let raw_column_data = HashMap::with_capacity(ranges.len());
         // merge column data fetched from object storage
-        for (i, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
+        for (idx, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
             let chunk = merge_io_result
                 .owner_memory
                 .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
             let data = chunk.slice(range.clone());
 
-            let (name, cache_key) = names_map.remove(i).unwrap();
-            let file = InvertedIndexCacheFile::create(name.clone(), data.to_vec().into());
+
+            //let (name, cache_key) = names_map.remove(i).unwrap();
+            //let file = InvertedIndexCacheFile::create(name.clone(), data.to_vec().into());
 
             // add index file to cache
-            inverted_index_file_cache.insert(cache_key, file.clone());
-            column_data.insert(*i as usize, file.into());
+            //inverted_index_file_cache.insert(cache_key, file.clone());
+            //column_data.insert(*i as usize, file.into());
+            raw_column_data.insert(*idx as usize, data);
         }
-    }
+/**
+        let raw_inverted_index_fields = if ranges.len() == inverted_index_meta_map.len() {
+            inverted_index_fields
+        } else {
+            let mut new_inverted_index_fields = Vec::with_capacity(ranges.len());
+            for (i, _) in ranges {
+                new_inverted_index_fields.push(inverted_index_fields[i].clone());
+            }
+            new_inverted_index_fields
+        };
+*/
+        let mut column_indices = Vec::with_capacity(ranges.len());
+        for (idx, _) in ranges {
+            column_indices.push(idx);
+        }
 
-    // 2. deserialize raw data to inverted index data
-    let mut builder = RowGroupImplBuilder::new(
-        1,
-        &inverted_index_schema_desc,
-        TableCompression::Zstd.into(),
-    );
+        let inverted_index_schema = Schema::new(Fields::from(inverted_index_fields.clone()));
+        let inverted_index_schema_desc =
+            Arc::new(ArrowSchemaConverter::new().convert(&inverted_index_schema)?);
 
-    for (i, column_data) in column_data.into_iter() {
-        // builder.add_column_chunk(i, column_data.data.into());
-        builder.add_column_chunk(i, <bytes::Bytes as Clone>::clone(&column_data.data).into());
-    }
-    let row_group = Box::new(builder.build());
-    let field_levels = parquet_to_arrow_field_levels(
-        inverted_index_schema_desc.as_ref(),
-        // ProjectionMask::leaves(&inverted_index_schema_desc, column_indices),
-        ProjectionMask::all(),
-        None,
-    )?;
-    let mut record_reader = ParquetRecordBatchReader::try_new_with_row_groups(
-        &field_levels,
-        row_group.as_ref(),
-        1,
-        None,
-    )?;
-    let record = record_reader.next().unwrap()?;
-    assert!(record_reader.next().is_none());
+        // 2. deserialize raw data to inverted index data
+        let mut builder = RowGroupImplBuilder::new(
+            1,
+            &inverted_index_schema_desc,
+            TableCompression::Zstd.into(),
+        );
 
-    let mut inverted_bytes_len = 0;
-    let mut inverted_files = Vec::with_capacity(8);
-    for (i, index_field) in inverted_index_fields.iter().enumerate() {
-        let name = index_field.name();
-
-        let inverted_binary = record.column(i).clone();
-        let column = Column::from_arrow_rs(
-            inverted_binary,
-            &databend_common_expression::types::DataType::Binary,
+        for (idx, column_data) in raw_column_data.into_iter() {
+            builder.add_column_chunk(idx, column_data);
+        }
+        let row_group = Box::new(builder.build());
+        let field_levels = parquet_to_arrow_field_levels(
+            inverted_index_schema_desc.as_ref(),
+            ProjectionMask::leaves(&inverted_index_schema_desc, column_indices),
+            None,
         )?;
-        inverted_bytes_len += column.memory_size();
-        let value = unsafe { column.index_unchecked(0) };
-        let bytes = value.as_binary().unwrap();
-        let file = InvertedIndexFile::create(name.clone(), bytes.to_vec());
-        inverted_files.push(Arc::new(file));
+        let mut record_reader = ParquetRecordBatchReader::try_new_with_row_groups(
+            &field_levels,
+            row_group.as_ref(),
+            1,
+            None,
+        )?;
+        let record = record_reader.next().unwrap()?;
+        assert!(record_reader.next().is_none());
+
+        let mut inverted_bytes_len = 0;
+        for (i, (idx, _)) in ranges.iter().enumerate() {
+            let (name, cache_key) = names_map.remove(idx).unwrap();
+            //let file = InvertedIndexCacheFile::create(name.clone(), data.to_vec().into());
+
+            //column_data.insert(*i as usize, file.into());
+
+            let inverted_binary = record.column(i).clone();
+            let column = Column::from_arrow_rs(
+                inverted_binary,
+                &databend_common_expression::types::DataType::Binary,
+            )?;
+            inverted_bytes_len += column.memory_size();
+            let value = unsafe { column.index_unchecked(0) };
+            let bytes = value.as_binary().unwrap();
+            let file = InvertedIndexFile::create(name, bytes.to_vec());
+            // add index file to cache
+            inverted_index_file_cache.insert(cache_key, file.clone());
+            inverted_files.push(Arc::new(file));
+        }
     }
 
     // Perf.

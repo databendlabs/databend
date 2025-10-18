@@ -19,7 +19,6 @@ pub use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 pub use databend_storages_common_index::filters::FilterImpl;
 pub use databend_storages_common_index::BloomIndexMeta;
-pub use databend_storages_common_index::InvertedIndexCacheFile;
 pub use databend_storages_common_index::InvertedIndexFile;
 pub use databend_storages_common_index::InvertedIndexMeta;
 pub use databend_storages_common_index::VectorIndexFile;

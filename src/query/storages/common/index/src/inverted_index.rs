@@ -50,7 +50,6 @@ use std::path::PathBuf;
 use std::result;
 use std::sync::Arc;
 
-use bytes::Bytes;
 use crc32fast::Hasher;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -1300,18 +1299,6 @@ impl TryFrom<FileMetaData> for InvertedIndexMeta {
             version: 3,
             columns: col_metas,
         })
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct InvertedIndexCacheFile {
-    pub name: String,
-    pub data: Bytes,
-}
-
-impl InvertedIndexCacheFile {
-    pub fn create(name: String, data: Bytes) -> Self {
-        Self { name, data }
     }
 }
 
