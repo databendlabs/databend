@@ -28,7 +28,6 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexMeta;
-use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
@@ -43,6 +42,7 @@ use log::error;
 use log::info;
 use log::warn;
 
+use crate::index::InvertedIndexFile;
 use crate::io::read::ColumnOrientedSegmentReader;
 use crate::io::read::RowOrientedSegmentReader;
 use crate::io::InvertedIndexReader;

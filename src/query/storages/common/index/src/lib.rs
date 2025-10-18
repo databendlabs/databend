@@ -39,6 +39,7 @@ pub use hnsw_index::ScoredPointOffset;
 pub use hnsw_index::VectorIndexFile;
 pub use hnsw_index::VectorIndexMeta;
 pub use index::Index;
+pub use inverted_index::build_tantivy_footer;
 pub use inverted_index::extract_component_fields;
 pub use inverted_index::extract_fsts;
 pub use inverted_index::DocIdsCollector;

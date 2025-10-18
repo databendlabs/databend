@@ -22,6 +22,7 @@ bitvec = { workspace = true }
 bytemuck = { workspace = true }
 bytes = { workspace = true }
 cbordata = { workspace = true }
+crc32fast = { workspace = true }
 fastrace = { workspace = true }
 feistel-permutation-rs = { workspace = true }
 goldenfile = { workspace = true }
