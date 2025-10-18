@@ -450,3 +450,90 @@ query T
 SELECT TRUNC(150.45,-2);
 ----
 100
+
+# Test isnan function
+query T
+SELECT isnan('nan'::float)
+----
+1
+
+query T
+SELECT isnan(0.0::float)
+----
+0
+
+query T
+SELECT isnan('inf'::float)
+----
+0
+
+query T
+SELECT isnan('-inf'::float)
+----
+0
+
+query T
+SELECT isnan(1.23::float)
+----
+0
+
+query T
+SELECT isnan(NULL::float)
+----
+NULL
+
+query T
+SELECT isnan('nan'::double)
+----
+1
+
+query T
+SELECT isnan(0.0::double)
+----
+0
+
+# Test isinf function
+query T
+SELECT isinf('inf'::float)
+----
+1
+
+query T
+SELECT isinf('-inf'::float)
+----
+1
+
+query T
+SELECT isinf('nan'::float)
+----
+0
+
+query T
+SELECT isinf(0.0::float)
+----
+0
+
+query T
+SELECT isinf(1.23::float)
+----
+0
+
+query T
+SELECT isinf(NULL::float)
+----
+NULL
+
+query T
+SELECT isinf('inf'::double)
+----
+1
+
+query T
+SELECT isinf('-inf'::double)
+----
+1
+
+query T
+SELECT isinf(0.0::double)
+----
+0

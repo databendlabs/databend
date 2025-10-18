@@ -2286,6 +2286,14 @@ Functions overloads:
 1 is_timestamp(Variant NULL) :: Boolean NULL
 0 is_true(Boolean) :: Boolean
 1 is_true(Boolean NULL) :: Boolean
+0 isinf(Float32) :: Boolean
+1 isinf(Float32 NULL) :: Boolean NULL
+2 isinf(Float64) :: Boolean
+3 isinf(Float64 NULL) :: Boolean NULL
+0 isnan(Float32) :: Boolean
+1 isnan(Float32 NULL) :: Boolean NULL
+2 isnan(Float64) :: Boolean
+3 isnan(Float64 NULL) :: Boolean NULL
 0 jaro_winkler(String, String) :: Float64
 1 jaro_winkler(String NULL, String NULL) :: Float64 NULL
 0 jq FACTORY
