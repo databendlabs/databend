@@ -785,7 +785,7 @@ pub struct FileLogConfig {
 
     /// Log file max size, default is 4GB
     #[clap(long = "log-file-max-size", default_value = "4294967296")]
-    #[serde(rename = "max-size")]
+    #[serde(rename = "max_size")]
     pub file_max_size: usize,
 
     /// Deprecated fields, used for catching error, will be removed later.
