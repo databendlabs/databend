@@ -1,0 +1,58 @@
+statement ok
+set global enable_experimental_procedure=1;
+
+statement ok
+CREATE OR REPLACE PROCEDURE p1() RETURNS int not null LANGUAGE SQL AS $$
+BEGIN
+    RETURN 1;
+END;
+$$;
+
+statement ok
+CREATE OR REPLACE PROCEDURE p2() RETURNS int not null LANGUAGE SQL AS $$
+BEGIN
+    LET p := 'p1';
+    call procedure IDENTIFIER(:p)();
+    RETURN 1;
+END;
+$$;
+
+query T
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET p := 'p1';
+    LET s RESULTSET := call procedure IDENTIFIER(:p)();
+    RETURN TABLE(s);
+END;
+$$;
+----
+1
+
+query I
+CALL PROCEDURE p2();
+----
+1
+
+## returns null if no return stmt is defined
+query T
+EXECUTE IMMEDIATE $$
+BEGIN
+    select 11;
+END;
+$$;
+----
+NULL
+
+query TT
+EXECUTE IMMEDIATE $$
+BEGIN
+    let x RESULTSET :=  (select number , number + 1  from numbers(5) order by 1, 2);
+    RETURN TABLE(x);
+END;
+$$;
+----
+0 1
+1 2
+2 3
+3 4
+4 5

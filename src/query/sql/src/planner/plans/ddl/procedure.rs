@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::ScriptBlock;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -27,12 +28,16 @@ use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExecuteImmediatePlan {
+    pub script_block: ScriptBlock,
     pub script: String,
 }
 
 impl ExecuteImmediatePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![DataField::new("Result", DataType::String)])
+        DataSchemaRefExt::create(vec![DataField::new(
+            "Result",
+            DataType::String.wrap_nullable(),
+        )])
     }
 }
 

@@ -32,6 +32,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_pipeline_core::always_callback;
@@ -94,6 +95,10 @@ pub trait Interpreter: Sync + Send {
                 Err(err)
             }
         }
+    }
+
+    async fn get_dynamic_schema(&self) -> Option<DataSchemaRef> {
+        None
     }
 
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {

@@ -21,16 +21,17 @@ use derive_visitor::DriveMut;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Expr;
+use crate::ast::Identifier;
 use crate::ast::TypeName;
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ExecuteImmediateStmt {
-    pub script: String,
+    pub script: Expr,
 }
 
 impl Display for ExecuteImmediateStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "EXECUTE IMMEDIATE $$\n{}\n$$", self.script)?;
+        write!(f, "EXECUTE IMMEDIATE {}", self.script)?;
         Ok(())
     }
 }
@@ -170,7 +171,7 @@ impl Display for DescProcedureStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CallProcedureStmt {
-    pub name: String,
+    pub name: Identifier,
     pub args: Vec<Expr>,
 }
 

@@ -1584,6 +1584,10 @@ fn test_script() {
         r#"select :a + 1"#,
         r#"select IDENTIFIER(:b)"#,
         r#"select a.IDENTIFIER(:b).c + minus(:d)"#,
+        r#"EXECUTE TASK IDENTIFIER(:my_task)"#,
+        r#"DESC TASK IDENTIFIER(:my_task)"#,
+        r#"CALL IDENTIFIER(:test)(a)"#,
+        r#"call PROCEDURE IDENTIFIER(:proc_name)()"#,
     ];
 
     for case in cases {

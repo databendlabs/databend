@@ -28,13 +28,14 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &CallStmt,
     ) -> Result<Plan> {
-        let table_function_name = stmt.name.split('$').next_back().unwrap();
+        let function_name = stmt.name.to_string();
+        let table_function_name = function_name.split('$').next_back().unwrap();
 
         let query = if table_function_name.eq_ignore_ascii_case("search_tables") {
             if stmt.args.len() != 1 {
                 return Err(ErrorCode::NumberArgumentsNotMatch(format!(
                     "Incorrect number of arguments to function {}. Expected 1, got {}",
-                    stmt.name,
+                    function_name,
                     stmt.args.len()
                 )));
             }

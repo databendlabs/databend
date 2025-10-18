@@ -24,6 +24,7 @@ use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::Expr;
+use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -370,7 +371,7 @@ impl Display for ShowTasksStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ExecuteTaskStmt {
-    pub name: String,
+    pub name: Identifier,
 }
 
 impl Display for ExecuteTaskStmt {
@@ -381,7 +382,7 @@ impl Display for ExecuteTaskStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DescribeTaskStmt {
-    pub name: String,
+    pub name: Identifier,
 }
 
 impl Display for DescribeTaskStmt {
