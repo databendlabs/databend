@@ -489,73 +489,73 @@ explain  SELECT /*+ SET_VAR(enforce_shuffle_join=1) SET_VAR(disable_join_reorder
 Exchange
 ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#28)]
 ├── exchange type: Merge
-└── HashJoin
-    ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#28)]
-    ├── join type: RIGHT OUTER
-    ├── build keys: [t1.a0f (#28)]
-    ├── probe keys: [t2.a0f (#2)]
-    ├── keys is null equal: [false]
-    ├── filters: []
-    ├── build join filters(distributed):
-    │   └── filter id:0, build key:t1.a0f (#28), probe key:t2.a0f (#2), filter type:inlist,min_max
-    ├── estimated rows: 0.00
-    ├── Filter(Build)
-    │   ├── output columns: [a00c.a0f (#28)]
-    │   ├── filters: [row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50) = 1]
-    │   ├── estimated rows: 0.00
-    │   └── Window
-    │       ├── output columns: [a00c.a0f (#28), a00c.a0t (#42), row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50)]
-    │       ├── aggregate function: [row_number]
-    │       ├── partition by: [a0f]
-    │       ├── order by: [a0t]
-    │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    │       └── WindowPartition
-    │           ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
-    │           ├── hash keys: [a0f]
-    │           ├── top: 1
-    │           ├── estimated rows: 0.00
-    │           └── Exchange
-    │               ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
-    │               ├── exchange type: Hash(a00c.a0f (#28))
-    │               └── TableScan
-    │                   ├── table: default.default.a00c
-    │                   ├── output columns: [a0f (#28), a0t (#42)]
-    │                   ├── read rows: 0
-    │                   ├── read size: 0
-    │                   ├── partitions total: 0
-    │                   ├── partitions scanned: 0
-    │                   ├── push downs: [filters: [], limit: NONE]
-    │                   └── estimated rows: 0.00
-    └── Exchange(Probe)
-        ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
-        ├── exchange type: Hash(t2.a0f (#2))
-        └── AggregateFinal
+└── Sequence
+    ├── MaterializedCTE: cte_cse_0
+    │   └── TableScan
+    │       ├── table: default.default.a00c
+    │       ├── output columns: [a0f (#2), a0t (#16), a0w (#19)]
+    │       ├── read rows: 0
+    │       ├── read size: 0
+    │       ├── partitions total: 0
+    │       ├── partitions scanned: 0
+    │       ├── push downs: [filters: [], limit: NONE]
+    │       └── estimated rows: 0.00
+    └── HashJoin
+        ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#28)]
+        ├── join type: RIGHT OUTER
+        ├── build keys: [t1.a0f (#28)]
+        ├── probe keys: [t2.a0f (#2)]
+        ├── keys is null equal: [false]
+        ├── filters: []
+        ├── build join filters(distributed):
+        │   └── filter id:0, build key:t1.a0f (#28), probe key:t2.a0f (#2), filter type:inlist,min_max
+        ├── estimated rows: 0.00
+        ├── Filter(Build)
+        │   ├── output columns: [a00c.a0f (#28)]
+        │   ├── filters: [row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50) = 1]
+        │   ├── estimated rows: 0.00
+        │   └── Window
+        │       ├── output columns: [a00c.a0f (#28), a00c.a0t (#42), a00c.a0w (#45), row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50)]
+        │       ├── aggregate function: [row_number]
+        │       ├── partition by: [a0f]
+        │       ├── order by: [a0t]
+        │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        │       └── WindowPartition
+        │           ├── output columns: [a00c.a0f (#28), a00c.a0t (#42), a00c.a0w (#45)]
+        │           ├── hash keys: [a0f]
+        │           ├── top: 1
+        │           ├── estimated rows: 0.00
+        │           └── Exchange
+        │               ├── output columns: [a00c.a0f (#28), a00c.a0t (#42), a00c.a0w (#45)]
+        │               ├── exchange type: Hash(a00c.a0f (#28))
+        │               └── MaterializeCTERef
+        │                   ├── cte_name: cte_cse_0
+        │                   ├── cte_schema: [a0f (#28), a0t (#42), a0w (#45)]
+        │                   └── estimated rows: 0.00
+        └── Exchange(Probe)
             ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
-            ├── group by: [a0f]
-            ├── aggregate functions: [min(min_arg_0)]
-            ├── estimated rows: 0.00
-            └── Exchange
+            ├── exchange type: Hash(t2.a0f (#2))
+            └── AggregateFinal
                 ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
-                ├── exchange type: Hash(0)
-                └── AggregatePartial
-                    ├── group by: [a0f]
-                    ├── aggregate functions: [min(min_arg_0)]
-                    ├── estimated rows: 0.00
-                    └── EvalScalar
-                        ├── output columns: [a00c.a0f (#2), min_arg_0 (#24)]
-                        ├── expressions: [to_yyyymm(CAST(a00c.a0t (#16) AS Date NULL))]
+                ├── group by: [a0f]
+                ├── aggregate functions: [min(min_arg_0)]
+                ├── estimated rows: 0.00
+                └── Exchange
+                    ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
+                    ├── exchange type: Hash(0)
+                    └── AggregatePartial
+                        ├── group by: [a0f]
+                        ├── aggregate functions: [min(min_arg_0)]
                         ├── estimated rows: 0.00
-                        └── Filter
-                            ├── output columns: [a00c.a0f (#2), a00c.a0t (#16)]
-                            ├── filters: [is_true(a00c.a0w (#19) = '汇缴')]
+                        └── EvalScalar
+                            ├── output columns: [a00c.a0f (#2), min_arg_0 (#24)]
+                            ├── expressions: [to_yyyymm(CAST(a00c.a0t (#16) AS Date NULL))]
                             ├── estimated rows: 0.00
-                            └── TableScan
-                                ├── table: default.default.a00c
-                                ├── output columns: [a0f (#2), a0t (#16), a0w (#19)]
-                                ├── read rows: 0
-                                ├── read size: 0
-                                ├── partitions total: 0
-                                ├── partitions scanned: 0
-                                ├── push downs: [filters: [is_true(a00c.a0w (#19) = '汇缴')], limit: NONE]
-                                ├── apply join filters: [#0]
-                                └── estimated rows: 0.00
+                            └── Filter
+                                ├── output columns: [a00c.a0f (#2), a00c.a0t (#16)]
+                                ├── filters: [is_true(a00c.a0w (#19) = '汇缴')]
+                                ├── estimated rows: 0.00
+                                └── MaterializeCTERef
+                                    ├── cte_name: cte_cse_0
+                                    ├── cte_schema: [a0f (#2), a0t (#16), a0w (#19)]
+                                    └── estimated rows: 0.00
