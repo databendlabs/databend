@@ -129,6 +129,7 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::KeyWithTenant;
@@ -155,7 +156,7 @@ use crate::storages::Table;
 /// - Database engines are free to save table meta in metastore or not
 #[derive(Clone)]
 pub struct MutableCatalog {
-    ctx: CatalogContext,
+    pub ctx: CatalogContext,
     tenant: Tenant,
     disable_table_info_refresh: bool,
 }
@@ -222,6 +223,21 @@ impl MutableCatalog {
             tenant,
             disable_table_info_refresh: false,
         })
+    }
+
+    pub fn with_storage_class_spec(self, storage_class: S3StorageClass) -> Self {
+        let storage_factor = self
+            .ctx
+            .storage_factory
+            .with_storage_class_specs(storage_class);
+
+        Self {
+            ctx: CatalogContext {
+                storage_factory: Arc::new(storage_factor),
+                ..self.ctx
+            },
+            ..self
+        }
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {

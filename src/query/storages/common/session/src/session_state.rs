@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::storage::S3StorageClass;
+
 use crate::TempTblMgr;
 use crate::TempTblMgrRef;
 use crate::TxnManager;
@@ -21,6 +23,7 @@ use crate::TxnManagerRef;
 pub struct SessionState {
     pub txn_mgr: TxnManagerRef,
     pub temp_tbl_mgr: TempTblMgrRef,
+    pub s3_storage_class: S3StorageClass,
 }
 
 impl Default for SessionState {
@@ -28,6 +31,7 @@ impl Default for SessionState {
         SessionState {
             txn_mgr: TxnManager::init(),
             temp_tbl_mgr: TempTblMgr::init(),
+            s3_storage_class: S3StorageClass::default(),
         }
     }
 }

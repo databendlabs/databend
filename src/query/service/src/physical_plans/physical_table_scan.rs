@@ -530,7 +530,7 @@ impl PhysicalPlanBuilder {
     pub async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
-            .get_default_catalog(self.ctx.session_state())?
+            .get_default_catalog(self.ctx.session_state()?)?
             .get_table(&self.ctx.get_tenant(), "system", "one")
             .await?;
 

@@ -43,6 +43,7 @@ use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -65,6 +66,8 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::storage::S3StorageClass;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
@@ -161,19 +164,22 @@ type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 impl FuseTable {
     pub fn create_and_refresh_table_info(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Self::do_create_table_ext(table_info, false)?)
+        // TODO storage class is incorrect
+        Ok(Self::try_create(
+            table_info,
+            Some(S3StorageClass::Standard),
+            false,
+        )?)
     }
 
     pub fn create_without_refresh_table_info(table_info: TableInfo) -> Result<Box<FuseTable>> {
-        Self::do_create_table_ext(table_info, true)
+        // TODO storage class is incorrect
+        Self::try_create(table_info, Some(S3StorageClass::Standard), true)
     }
 
-    pub fn try_create_ext(table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>> {
-        Ok(Self::do_create_table_ext(table_info, disable_refresh)?)
-    }
-
-    pub fn do_create_table_ext(
+    pub fn try_create(
         mut table_info: TableInfo,
+        storage_class_specs: Option<S3StorageClass>,
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
@@ -183,7 +189,14 @@ impl FuseTable {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     // External or attached table.
-                    Some(sp) => {
+                    Some(mut sp) => {
+                        // TODO refactor
+                        if let Some(s3storage_class) = storage_class_specs {
+                            if let StorageParams::S3(config) = &mut sp {
+                                config.storage_class = s3storage_class
+                            };
+                        }
+
                         let table_meta_options = &table_info.meta.options;
                         let operator = init_operator(&sp)?;
                         let table_type = if Self::is_table_attached(table_meta_options) {
@@ -203,7 +216,15 @@ impl FuseTable {
                     }
                     // Normal table.
                     None => {
-                        let operator = DataOperator::instance().operator();
+                        let mut sp = GlobalConfig::instance().storage.params.clone();
+                        let operator = if let Some(s3storage_class) = storage_class_specs {
+                            if let StorageParams::S3(config) = &mut sp {
+                                config.storage_class = s3storage_class
+                            };
+                            init_operator(&sp)?
+                        } else {
+                            DataOperator::instance().operator()
+                        };
                         (operator, FuseTableType::Standard)
                     }
                 }
@@ -267,13 +288,18 @@ impl FuseTable {
         }))
     }
 
-    pub fn from_table_meta(id: u64, seq: u64, table_meta: TableMeta) -> Result<Box<FuseTable>> {
+    pub fn from_table_meta(
+        id: u64,
+        seq: u64,
+        table_meta: TableMeta,
+        storage_class: S3StorageClass,
+    ) -> Result<Box<FuseTable>> {
         let table_info = TableInfo {
             ident: TableIdent { table_id: id, seq },
             meta: table_meta,
             ..Default::default()
         };
-        let table = Self::do_create_table_ext(table_info, false)?;
+        let table = Self::try_create(table_info, Some(storage_class), false)?;
         Ok(table)
     }
 

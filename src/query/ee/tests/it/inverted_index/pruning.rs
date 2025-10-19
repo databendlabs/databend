@@ -537,7 +537,8 @@ async fn test_block_pruner() -> Result<()> {
     let _ = interpreter.execute(ctx.clone()).await?;
 
     let new_table = table.refresh(ctx.as_ref()).await?;
-    let fuse_table = FuseTable::create_without_refresh_table_info(new_table.get_table_info().clone())?;
+    let fuse_table =
+        FuseTable::create_without_refresh_table_info(new_table.get_table_info().clone())?;
 
     let snapshot = fuse_table.read_table_snapshot().await?;
     assert!(snapshot.is_some());

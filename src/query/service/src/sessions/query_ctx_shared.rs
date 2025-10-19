@@ -528,7 +528,7 @@ impl QueryContextShared {
             .get_catalog(
                 tenant.tenant_name(),
                 catalog_name,
-                self.session.session_ctx.session_state(),
+                self.session.session_ctx.session_state()?,
             )
             .await?;
         let cache_table = catalog.get_table(&tenant, database, table).await?;

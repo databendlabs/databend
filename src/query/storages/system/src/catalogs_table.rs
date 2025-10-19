@@ -53,7 +53,7 @@ impl AsyncSystemTable for CatalogsTable {
         let mgr = CatalogManager::instance();
 
         let catalog_names = mgr
-            .list_catalogs(&ctx.get_tenant(), ctx.session_state())
+            .list_catalogs(&ctx.get_tenant(), ctx.session_state()?)
             .await?
             .into_iter()
             .map(|v| v.name())

@@ -215,7 +215,7 @@ impl QueryContext {
         let catalog = self
             .shared
             .catalog_manager
-            .build_catalog(table_info.catalog_info.clone(), self.session_state())?;
+            .build_catalog(table_info.catalog_info.clone(), self.session_state()?)?;
 
         let is_default = catalog.info().catalog_type() == CatalogType::Default;
         match (table_args, is_default) {
@@ -223,7 +223,7 @@ impl QueryContext {
                 let default_catalog = self
                     .shared
                     .catalog_manager
-                    .get_default_catalog(self.session_state())?;
+                    .get_default_catalog(self.session_state()?)?;
                 let table_function =
                     default_catalog.get_table_function(&table_info.name, table_args)?;
                 Ok(table_function.as_table())
@@ -882,7 +882,7 @@ impl TableContext for QueryContext {
             .get_catalog(
                 self.get_tenant().tenant_name(),
                 catalog_name.as_ref(),
-                self.session_state(),
+                self.session_state()?,
             )
             .await
     }
@@ -890,7 +890,7 @@ impl TableContext for QueryContext {
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_default_catalog(self.session_state())
+            .get_default_catalog(self.session_state()?)
     }
 
     fn get_id(&self) -> String {
@@ -1601,7 +1601,7 @@ impl TableContext for QueryContext {
         self.shared.session.session_ctx.txn_mgr()
     }
 
-    fn session_state(&self) -> SessionState {
+    fn session_state(&self) -> Result<SessionState> {
         self.shared.session.session_ctx.session_state()
     }
 

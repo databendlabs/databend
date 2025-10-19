@@ -414,6 +414,40 @@ pub struct StorageHdfsConfig {
 
 pub static STORAGE_S3_DEFAULT_ENDPOINT: &str = "https://s3.amazonaws.com";
 
+/// The S3 Storage Classes we utilizes
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug, Copy, Default)]
+pub enum S3StorageClass {
+    #[default]
+    Standard,
+    IntelligentTiering,
+}
+
+const S3_STORAGE_CLASS_STANDARD: &str = "STANDARD";
+const S3_STORAGE_CLASS_INTELLIGENT_TIERING: &str = "INTELLIGENT_TIERING";
+impl Display for S3StorageClass {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            S3StorageClass::Standard => {
+                write!(f, "{}", S3_STORAGE_CLASS_STANDARD)
+            }
+            S3StorageClass::IntelligentTiering => {
+                write!(f, "{}", S3_STORAGE_CLASS_INTELLIGENT_TIERING)
+            }
+        }
+    }
+}
+impl std::str::FromStr for S3StorageClass {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            S3_STORAGE_CLASS_STANDARD => Ok(S3StorageClass::Standard),
+            S3_STORAGE_CLASS_INTELLIGENT_TIERING => Ok(S3StorageClass::IntelligentTiering),
+            _ => Err(format!("Invalid s3 storage class: {}", s)),
+        }
+    }
+}
+
 /// Config for storage backend s3.
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageS3Config {
@@ -444,6 +478,7 @@ pub struct StorageS3Config {
     /// The ExternalId that used for AssumeRole.
     pub external_id: String,
     pub network_config: Option<StorageNetworkParams>,
+    pub storage_class: S3StorageClass,
 }
 
 impl Default for StorageS3Config {
@@ -462,6 +497,7 @@ impl Default for StorageS3Config {
             role_arn: "".to_string(),
             external_id: "".to_string(),
             network_config: Default::default(),
+            storage_class: S3StorageClass::default(),
         }
     }
 }
@@ -472,6 +508,7 @@ impl Debug for StorageS3Config {
             .field("endpoint_url", &self.endpoint_url)
             .field("region", &self.region)
             .field("bucket", &self.bucket)
+            .field("storage_class", &self.storage_class)
             .field("root", &self.root)
             .field("disable_credential_loader", &self.disable_credential_loader)
             .field("enable_virtual_host_style", &self.enable_virtual_host_style)

@@ -68,7 +68,7 @@ impl Interpreter for CreateCatalogInterpreter {
             },
         };
         let ctl = catalog_manager
-            .build_catalog(Arc::new(ctl_info), self.ctx.session_state())
+            .build_catalog(Arc::new(ctl_info), self.ctx.session_state()?)
             .map_err(|err| err.add_message("Error creating catalog."))?;
 
         // list databases to check if the catalog is valid.

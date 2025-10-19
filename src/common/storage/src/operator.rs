@@ -26,6 +26,7 @@ use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
@@ -402,10 +403,13 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         .external_id(&cfg.external_id)
         // It's safe to allow anonymous since opendal will perform the check first.
         .allow_anonymous()
-        // TODO
-        .default_storage_class("INTELLIGENT_TIERING")
         // Root.
         .root(&cfg.root);
+
+    if cfg.storage_class != S3StorageClass::Standard {
+        // TODO log?
+        builder = builder.default_storage_class(cfg.storage_class.to_string().as_ref())
+    }
 
     // Disable credential loader
     if cfg.disable_credential_loader {
