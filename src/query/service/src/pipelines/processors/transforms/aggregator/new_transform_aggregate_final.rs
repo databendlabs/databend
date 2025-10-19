@@ -150,7 +150,7 @@ impl NewTransformAggregateFinal {
                 .take_meta()
                 .and_then(AggregateMeta::downcast_from)
             {
-                info!("Aggregate id_{} receive meta {:?}", self.id, block_meta);
+                // info!("Aggregate id_{} receive meta {:?}", self.id, block_meta);
                 if let AggregateMeta::BucketSpilled(payload) = block_meta {
                     self.state = LocalState::AsyncReading(payload);
                     return Ok(Event::Async);
@@ -165,7 +165,7 @@ impl NewTransformAggregateFinal {
                 }
 
                 if let AggregateMeta::Wait = block_meta {
-                    info!("Aggregate id_{} receive async wait flag", self.id);
+                    // info!("Aggregate id_{} receive async wait flag", self.id);
                     self.state = LocalState::AsyncWait;
                     return Ok(Event::Async);
                 }
@@ -183,7 +183,7 @@ impl NewTransformAggregateFinal {
             self.output.finish();
             return Ok(Event::Finished);
         }
-        info!("id_{} flag need data", self.id);
+        // info!("id_{} flag need data", self.id);
         self.input.set_need_data();
         Ok(Event::NeedData)
     }
@@ -372,7 +372,7 @@ impl NewTransformAggregateFinal {
 
         // Set state to OutputReady
         self.aggregated = true;
-        info!("flag id_{} as aggregated finish", self.id);
+        // info!("flag id_{} as aggregated finish", self.id);
         self.state = LocalState::OutputReady(output_block);
         Ok(())
     }
@@ -397,11 +397,11 @@ impl NewTransformAggregateFinal {
             );
         }
 
-        info!(
-            "Read aggregate spill {} successfully, elapsed: {:?}",
-            &payload.location,
-            instant.elapsed()
-        );
+        // info!(
+        //     "Read aggregate spill {} successfully, elapsed: {:?}",
+        //     &payload.location,
+        //     instant.elapsed()
+        // );
 
         self.state = LocalState::Deserializing(payload, data);
 
@@ -429,7 +429,7 @@ impl Processor for NewTransformAggregateFinal {
             self.input.set_not_need_data();
             return Ok(Event::NeedConsume);
         }
-        info!("id_{} current before event {:?}", self.id, self.state);
+        // info!("id_{} current before event {:?}", self.id, self.state);
 
         match &self.state {
             LocalState::Deserializing(_, _) | LocalState::Aggregating => Ok(Event::Sync),

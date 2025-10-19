@@ -146,12 +146,24 @@ impl TransformMetaDispatcher {
             return Ok(Event::Finished);
         }
 
-        if self.input.port.is_finished() {
-            info!("flag input finished");
-            if self.input.status != PortStatus::Finished {
-                self.input.status = PortStatus::Finished;
+        if self.bucket_finished() {
+            info!("this bucket finished, set data ready to false");
+            self.input.status = PortStatus::Idle;
+            // we cannot begin next round until all aggregate work finished
+            self.shared_state.bucket_finished.store(0, Ordering::SeqCst);
+            self.data_ready = false;
+        }
+
+        // it is safe to finish output when no data ready because no one is waiting
+        if !self.data_ready && self.input.port.is_finished() {
+            info!("finish all output port");
+            for output in &self.outputs {
+                output.port.finish();
             }
-        } else if self.input.port.has_data() {
+            return Ok(Event::Finished);
+        }
+
+        if self.input.port.has_data() {
             if self.input.status != PortStatus::HasData {
                 info!("dispatcher input get data, set ready to true");
                 self.data_ready = true;
@@ -159,31 +171,9 @@ impl TransformMetaDispatcher {
                 let data_block = self.input.port.pull_data().unwrap()?;
                 debug_assert!(self.queue.is_empty());
                 self.extract_partitioned(data_block)?;
-
-                if self.input.port.is_finished() {
-                    info!("flag input finished after pull data");
-                    if self.input.status != PortStatus::Finished {
-                        self.input.status = PortStatus::Finished;
-                        // todo: wo may not need this?
-                    }
-                } else {
+                if !self.input.port.is_finished() {
                     self.input.port.set_need_data();
                 }
-            }
-        }
-
-        if self.bucket_finished() {
-            info!("this bucket finished, set data ready to false");
-            self.input.status = PortStatus::Idle;
-            // we cannot begin next round until all aggregate work finished
-            self.shared_state.bucket_finished.store(0, Ordering::SeqCst);
-            self.data_ready = false;
-            if self.input.port.is_finished() {
-                info!("finish all output port");
-                for output in &self.outputs {
-                    output.port.finish();
-                }
-                return Ok(Event::Finished);
             }
         }
 
