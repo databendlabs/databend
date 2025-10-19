@@ -32,12 +32,15 @@ use crate::pipelines::processors::transforms::aggregator::NewTransformAggregateF
 use crate::pipelines::processors::transforms::aggregator::SharedRestoreState;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
+use crate::sessions::QueryContext;
+
 pub fn build_partition_bucket(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
     max_restore_worker: u64,
     after_worker: usize,
     experiment_aggregate_final: bool,
+    ctx: Arc<QueryContext>,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
     let transform = TransformPartitionBucket::create(input_nums, params.clone())?;
@@ -81,6 +84,7 @@ pub fn build_partition_bucket(
             let input_port = InputPort::create();
             let output_port = OutputPort::create();
             let processor = NewTransformAggregateFinal::create(
+                ctx.clone(),
                 input_port.clone(),
                 output_port.clone(),
                 operator.clone(),

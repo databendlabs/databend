@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -37,19 +38,22 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::MemorySettings;
 use opendal::Operator;
 use parking_lot::Mutex;
 use tokio::sync::Barrier;
 use tokio::sync::Semaphore;
 
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::sessions::QueryContext;
 
 // Shared state across all NewTransformAggregateFinal processors
 pub struct SharedRestoreState {
-    partition_count: usize,
+    pub partition_count: usize,
 
     // Aggregate worker queues: one queue per partition (after repartition)
     // Each processor will work on different partitions (orthogonal)
@@ -62,6 +66,8 @@ pub struct SharedRestoreState {
 
     // Stream to write spilled data blocks
     pub stream_partition: Mutex<BlockPartitionStream>,
+
+    pub spill_occurred: Arc<AtomicBool>,
 }
 
 impl SharedRestoreState {
@@ -79,6 +85,7 @@ impl SharedRestoreState {
             bucket_finished: AtomicUsize::new(0),
             barrier: Barrier::new(partition_count),
             stream_partition: Mutex::new(stream_partition),
+            spill_occurred: Arc::new(AtomicBool::new(false)),
         })
     }
 }
@@ -91,12 +98,16 @@ enum LocalState {
     Repartition(AggregateMeta),
     AsyncWait,
     Aggregating,
+    Spill(usize, DataBlock),
     OutputReady(DataBlock),
 }
 
 // NewTransformAggregateFinal is an experimental final aggregate processor
 // It combines spill reader and final aggregate
 pub struct NewTransformAggregateFinal {
+    // used for debug
+    id: usize,
+
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     operator: Operator,
@@ -104,15 +115,17 @@ pub struct NewTransformAggregateFinal {
     params: Arc<AggregatorParams>,
     shared_state: Arc<SharedRestoreState>,
     partition_count: usize,
-    id: usize,
     state: LocalState,
     flush_state: PayloadFlushState,
     // Whether this processor has finished aggregating in the current round
     aggregated: bool,
+    settings: MemorySettings,
+    should_spill: bool,
 }
 
 impl NewTransformAggregateFinal {
     pub fn create(
+        ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
@@ -122,6 +135,7 @@ impl NewTransformAggregateFinal {
         partition_count: usize,
         id: usize,
     ) -> Result<ProcessorPtr> {
+        let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
         Ok(ProcessorPtr::create(Box::new(NewTransformAggregateFinal {
             input,
             output,
@@ -134,10 +148,17 @@ impl NewTransformAggregateFinal {
             state: LocalState::Idle,
             flush_state: PayloadFlushState::default(),
             aggregated: false,
+            settings: memory_settings,
+            should_spill: false,
         })))
     }
 
     fn try_get_work(&mut self) -> Result<Event> {
+        if self.shared_state.spill_occurred.load(Ordering::SeqCst) {
+            self.state = LocalState::AsyncWait;
+            return Ok(Event::Async);
+        }
+
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
 
@@ -199,20 +220,6 @@ impl NewTransformAggregateFinal {
         )
     }
 
-    fn process_deserializing(
-        &mut self,
-        payload: BucketSpilledPayload,
-        data: Vec<u8>,
-    ) -> Result<()> {
-        let deserialized = Self::deserialize(payload, data);
-
-        self.repartition_and_push(deserialized)?;
-
-        self.state = LocalState::Idle;
-
-        Ok(())
-    }
-
     fn repartition_and_push(&mut self, meta: AggregateMeta) -> Result<()> {
         let mut flush_state = PayloadFlushState::default();
 
@@ -261,6 +268,12 @@ impl NewTransformAggregateFinal {
             self.shared_state.aggregate_queues[partition_id]
                 .push(meta)
                 .map_err(|_| ErrorCode::Internal("Failed to push to aggregate queue"))?;
+        }
+
+        if self.settings.check_spill() {
+            self.shared_state
+                .spill_occurred
+                .store(true, Ordering::SeqCst);
         }
 
         Ok(())
@@ -415,7 +428,9 @@ impl Processor for NewTransformAggregateFinal {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, LocalState::Idle) {
-            LocalState::Deserializing(payload, data) => self.process_deserializing(payload, data),
+            LocalState::Deserializing(payload, data) => {
+                self.repartition_and_push(Self::deserialize(payload, data))
+            }
             LocalState::Repartition(meta) => self.repartition_and_push(meta),
             LocalState::Aggregating => self.process_aggregating(),
 
@@ -440,6 +455,9 @@ impl Processor for NewTransformAggregateFinal {
                         .fetch_add(1, Ordering::SeqCst);
                 }
                 self.shared_state.barrier.wait().await;
+                if self.shared_state.spill_occurred.load(Ordering::SeqCst) && !self.should_spill {
+                    self.should_spill = true;
+                }
                 if self.aggregated {
                     self.aggregated = false;
                     // if aggregated this round, we enter next round
