@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -28,6 +27,7 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PartitionedPayload;
@@ -37,8 +37,8 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use log::info;
 use opendal::Operator;
+use parking_lot::Mutex;
 use tokio::sync::Barrier;
 use tokio::sync::Semaphore;
 
@@ -49,15 +49,19 @@ use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
 // Shared state across all NewTransformAggregateFinal processors
 pub struct SharedRestoreState {
+    partition_count: usize,
+
     // Aggregate worker queues: one queue per partition (after repartition)
     // Each processor will work on different partitions (orthogonal)
-    aggregate_queues: Vec<ConcurrentQueue<AggregateMeta>>,
+    pub aggregate_queues: Vec<ConcurrentQueue<AggregateMeta>>,
+
+    pub barrier: Barrier,
 
     // Restore phase finished flag
     pub bucket_finished: AtomicUsize,
 
-    pub restored_finished: AtomicBool,
-    barrier: Barrier,
+    // Stream to write spilled data blocks
+    pub stream_partition: Mutex<BlockPartitionStream>,
 }
 
 impl SharedRestoreState {
@@ -67,16 +71,18 @@ impl SharedRestoreState {
             .map(|_| ConcurrentQueue::unbounded())
             .collect();
 
+        let stream_partition = BlockPartitionStream::create(65535, 50 * 1024, partition_count);
+
         Arc::new(SharedRestoreState {
+            partition_count,
             aggregate_queues,
             bucket_finished: AtomicUsize::new(0),
             barrier: Barrier::new(partition_count),
-            restored_finished: AtomicBool::new(false),
+            stream_partition: Mutex::new(stream_partition),
         })
     }
 }
 
-// Local state for each processor
 #[derive(Debug)]
 enum LocalState {
     Idle,
@@ -89,30 +95,19 @@ enum LocalState {
 }
 
 // NewTransformAggregateFinal is an experimental final aggregate processor
-// It combines spill reader and final aggregate with work-stealing pattern
+// It combines spill reader and final aggregate
 pub struct NewTransformAggregateFinal {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-
     operator: Operator,
     semaphore: Arc<Semaphore>,
     params: Arc<AggregatorParams>,
-
-    // Shared state across all processors
     shared_state: Arc<SharedRestoreState>,
-
-    // Number of partitions for repartitioning
     partition_count: usize,
-
     id: usize,
-
-    // Local state
     state: LocalState,
-
-    // Flush state for final aggregation
     flush_state: PayloadFlushState,
-
-    // aggregated this round
+    // Whether this processor has finished aggregating in the current round
     aggregated: bool,
 }
 
@@ -150,7 +145,6 @@ impl NewTransformAggregateFinal {
                 .take_meta()
                 .and_then(AggregateMeta::downcast_from)
             {
-                // info!("Aggregate id_{} receive meta {:?}", self.id, block_meta);
                 if let AggregateMeta::BucketSpilled(payload) = block_meta {
                     self.state = LocalState::AsyncReading(payload);
                     return Ok(Event::Async);
@@ -165,7 +159,6 @@ impl NewTransformAggregateFinal {
                 }
 
                 if let AggregateMeta::Wait = block_meta {
-                    // info!("Aggregate id_{} receive async wait flag", self.id);
                     self.state = LocalState::AsyncWait;
                     return Ok(Event::Async);
                 }
@@ -183,7 +176,6 @@ impl NewTransformAggregateFinal {
             self.output.finish();
             return Ok(Event::Finished);
         }
-        // info!("id_{} flag need data", self.id);
         self.input.set_need_data();
         Ok(Event::NeedData)
     }
@@ -224,20 +216,15 @@ impl NewTransformAggregateFinal {
     fn repartition_and_push(&mut self, meta: AggregateMeta) -> Result<()> {
         let mut flush_state = PayloadFlushState::default();
 
-        // Convert to PartitionedPayload
         let single_partition_payload = match meta {
-            AggregateMeta::Serialized(payload) => {
-                // Convert serialized payload to PartitionedPayload with partition_count=1
-                payload.convert_to_partitioned_payload(
-                    self.params.group_data_types.clone(),
-                    self.params.aggregate_functions.clone(),
-                    self.params.num_states(),
-                    0, // radix_bits=0 => partition_count=1
-                    Arc::new(Bump::new()),
-                )?
-            }
+            AggregateMeta::Serialized(payload) => payload.convert_to_partitioned_payload(
+                self.params.group_data_types.clone(),
+                self.params.aggregate_functions.clone(),
+                self.params.num_states(),
+                0,
+                Arc::new(Bump::new()),
+            )?,
             AggregateMeta::AggregatePayload(agg_payload) => {
-                // Wrap single payload into PartitionedPayload with partition_count=1
                 let payload = agg_payload.payload;
                 let arena = payload.arena.clone();
                 let mut partitioned = PartitionedPayload::new(
@@ -249,10 +236,7 @@ impl NewTransformAggregateFinal {
                 partitioned.combine_single(payload, &mut flush_state, None);
                 partitioned
             }
-            AggregateMeta::AggregateSpilling(partitioned_payload) => {
-                // Already a PartitionedPayload
-                partitioned_payload
-            }
+            AggregateMeta::AggregateSpilling(partitioned_payload) => partitioned_payload,
             _ => {
                 return Err(ErrorCode::Internal(
                     "Unexpected meta type for repartitioning",
@@ -260,14 +244,12 @@ impl NewTransformAggregateFinal {
             }
         };
 
-        // Repartition to self.partition_count
         let repartitioned =
             single_partition_payload.repartition(self.partition_count, &mut flush_state);
 
-        // Push each partition to corresponding aggregate queue
         for (partition_id, payload) in repartitioned.payloads.into_iter().enumerate() {
             if payload.len() == 0 {
-                continue; // Skip empty partitions
+                continue;
             }
 
             let meta = AggregateMeta::AggregatePayload(AggregatePayload {
@@ -285,15 +267,8 @@ impl NewTransformAggregateFinal {
     }
 
     fn process_aggregating(&mut self) -> Result<()> {
-        // Collect all data from the partition queue
         let mut agg_hashtable: Option<AggregateHashTable> = None;
-        info!(
-            "Aggregate id_{} start aggregating with len {}",
-            self.id,
-            self.shared_state.aggregate_queues[self.id].len()
-        );
 
-        // Pop all items from aggregate_queues[partition_id]
         while let Ok(meta) = self.shared_state.aggregate_queues[self.id].pop() {
             match meta {
                 AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
@@ -344,7 +319,6 @@ impl NewTransformAggregateFinal {
             }
         }
 
-        // Generate output block
         let output_block = if let Some(mut ht) = agg_hashtable {
             let mut blocks = vec![];
             self.flush_state.clear();
@@ -370,9 +344,7 @@ impl NewTransformAggregateFinal {
             self.params.empty_result_block()
         };
 
-        // Set state to OutputReady
         self.aggregated = true;
-        // info!("flag id_{} as aggregated finish", self.id);
         self.state = LocalState::OutputReady(output_block);
         Ok(())
     }
@@ -387,7 +359,6 @@ impl NewTransformAggregateFinal {
             .await?
             .to_vec();
 
-        // perf
         {
             Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
             Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, data.len());
@@ -396,12 +367,6 @@ impl NewTransformAggregateFinal {
                 instant.elapsed().as_millis() as usize,
             );
         }
-
-        // info!(
-        //     "Read aggregate spill {} successfully, elapsed: {:?}",
-        //     &payload.location,
-        //     instant.elapsed()
-        // );
 
         self.state = LocalState::Deserializing(payload, data);
 
@@ -429,8 +394,6 @@ impl Processor for NewTransformAggregateFinal {
             self.input.set_not_need_data();
             return Ok(Event::NeedConsume);
         }
-        // info!("id_{} current before event {:?}", self.id, self.state);
-
         match &self.state {
             LocalState::Deserializing(_, _) | LocalState::Aggregating => Ok(Event::Sync),
             LocalState::AsyncReading(_) | LocalState::AsyncWait | LocalState::Repartition(..) => {
@@ -471,14 +434,11 @@ impl Processor for NewTransformAggregateFinal {
         match state {
             LocalState::AsyncReading(payload) => self.async_reading(payload).await?,
             LocalState::AsyncWait => {
-                info!("Aggregate id_{} enter barrier wait", self.id);
                 if self.aggregated {
-                    info!("aggregated, let +1");
                     self.shared_state
                         .bucket_finished
                         .fetch_add(1, Ordering::SeqCst);
                 }
-                // Wait for all processors to finish AsyncReading and Deserializing works
                 self.shared_state.barrier.wait().await;
                 if self.aggregated {
                     self.aggregated = false;

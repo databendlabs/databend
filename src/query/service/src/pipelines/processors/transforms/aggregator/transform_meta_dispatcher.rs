@@ -26,7 +26,6 @@ use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use log::info;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::SharedRestoreState;
@@ -112,13 +111,18 @@ impl TransformMetaDispatcher {
     fn bucket_finished(&self) -> bool {
         self.shared_state.bucket_finished.load(Ordering::SeqCst) == self.outputs.len()
     }
+}
 
-    fn debug_event(&mut self, cause: EventCause) -> Result<Event> {
-        info!(
-            "dispatcher event cause: {:?}, queue {}",
-            cause,
-            self.queue.len()
-        );
+impl Processor for TransformMetaDispatcher {
+    fn name(&self) -> String {
+        String::from("TransformMetaDispatcher")
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
         if let EventCause::Output(output_index) = &cause {
             let output = &mut self.outputs[*output_index];
 
@@ -129,7 +133,6 @@ impl TransformMetaDispatcher {
                 }
             } else if output.port.can_push() {
                 if output.status != PortStatus::NeedData {
-                    info!("dispatcher output {} can push", output_index);
                     output.status = PortStatus::NeedData;
                     self.waiting_outputs.push_back(*output_index);
                 }
@@ -147,7 +150,6 @@ impl TransformMetaDispatcher {
         }
 
         if self.bucket_finished() {
-            info!("this bucket finished, set data ready to false");
             self.input.status = PortStatus::Idle;
             // we cannot begin next round until all aggregate work finished
             self.shared_state.bucket_finished.store(0, Ordering::SeqCst);
@@ -156,7 +158,6 @@ impl TransformMetaDispatcher {
 
         // it is safe to finish output when no data ready because no one is waiting
         if !self.data_ready && self.input.port.is_finished() {
-            info!("finish all output port");
             for output in &self.outputs {
                 output.port.finish();
             }
@@ -165,7 +166,6 @@ impl TransformMetaDispatcher {
 
         if self.input.port.has_data() {
             if self.input.status != PortStatus::HasData {
-                info!("dispatcher input get data, set ready to true");
                 self.data_ready = true;
                 self.input.status = PortStatus::HasData;
                 let data_block = self.input.port.pull_data().unwrap()?;
@@ -176,8 +176,6 @@ impl TransformMetaDispatcher {
                 }
             }
         }
-
-        info!("{:?} {:?}", self.waiting_outputs, self.data_ready);
 
         while !self.waiting_outputs.is_empty() && self.data_ready {
             let output_index = self
@@ -191,15 +189,9 @@ impl TransformMetaDispatcher {
                     .port
                     .push_data(Ok(DataBlock::empty_with_meta(Box::new(meta))));
                 output.status = PortStatus::Idle;
-                info!("send meta to output {}", output_index);
                 continue;
             }
-            info!(
-                "aggregate finished: {}",
-                self.shared_state.bucket_finished.load(Ordering::SeqCst)
-            );
 
-            info!("send wait to output {}", output_index);
             let output = &mut self.outputs[output_index];
             output
                 .port
@@ -213,21 +205,5 @@ impl TransformMetaDispatcher {
             true => Ok(Event::NeedConsume),
             false => Ok(Event::NeedData),
         }
-    }
-}
-
-impl Processor for TransformMetaDispatcher {
-    fn name(&self) -> String {
-        String::from("TransformMetaDispatcher")
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
-        let event = self.debug_event(cause)?;
-        info!("TransformMetaDispatcher return event: {:?}", event);
-        Ok(event)
     }
 }
