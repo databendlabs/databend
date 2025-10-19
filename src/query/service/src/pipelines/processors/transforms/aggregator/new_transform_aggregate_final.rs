@@ -481,6 +481,7 @@ impl Processor for NewTransformAggregateFinal {
                 // Wait for all processors to finish AsyncReading and Deserializing works
                 self.shared_state.barrier.wait().await;
                 if self.aggregated {
+                    self.aggregated = false;
                     // if aggregated this round, we enter next round
                     self.state = LocalState::Idle;
                 } else {
