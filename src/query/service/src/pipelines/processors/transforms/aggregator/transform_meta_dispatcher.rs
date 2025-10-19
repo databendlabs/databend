@@ -49,7 +49,6 @@ pub struct TransformMetaDispatcher {
     outputs: Vec<PortWithStatus<OutputPort>>,
     finished_outputs: usize,
     waiting_outputs: VecDeque<usize>,
-    queue: VecDeque<AggregateMeta>,
     shared_state: Arc<SharedRestoreState>,
     data_ready: bool,
 }
@@ -73,7 +72,6 @@ impl TransformMetaDispatcher {
         Ok(TransformMetaDispatcher {
             input,
             outputs: outputs_port,
-            queue: VecDeque::new(),
             shared_state,
             initialized: false,
             finished_outputs: 0,
@@ -88,24 +86,6 @@ impl TransformMetaDispatcher {
 
     pub fn output_ports(&self) -> Vec<Arc<OutputPort>> {
         self.outputs.iter().map(|x| x.port.clone()).collect()
-    }
-
-    // Extract Partitioned aggregate meta and push all items into the waiting queue
-    fn extract_partitioned(&mut self, mut data_block: DataBlock) -> Result<()> {
-        let Some(meta) = data_block
-            .take_meta()
-            .and_then(AggregateMeta::downcast_from)
-        else {
-            return Err(ErrorCode::Internal(
-                "TransformMetaDispatcher expects AggregateMeta",
-            ));
-        };
-        if let AggregateMeta::Partitioned { data, .. } = meta {
-            for item in data {
-                self.queue.push_back(item);
-            }
-        }
-        Ok(())
     }
 
     fn bucket_finished(&self) -> bool {
@@ -150,13 +130,18 @@ impl Processor for TransformMetaDispatcher {
         }
 
         if self.bucket_finished() {
-            self.input.status = PortStatus::Idle;
+            // first get aggregate meta from inner queue
+            // only when inner queue is empty, we try to get new data from upstream
+            if !self.shared_state.spiller.lock().refill_working_bucket() {
+                self.input.status = PortStatus::Idle;
+                self.data_ready = false;
+            }
             // we cannot begin next round until all aggregate work finished
             self.shared_state.bucket_finished.store(0, Ordering::SeqCst);
-            self.data_ready = false;
         }
 
-        // it is safe to finish output when no data ready because no one is waiting
+        // it is safe to finish output when input is finished and no more
+        // data we stored but not processed
         if !self.data_ready && self.input.port.is_finished() {
             for output in &self.outputs {
                 output.port.finish();
@@ -169,8 +154,7 @@ impl Processor for TransformMetaDispatcher {
                 self.data_ready = true;
                 self.input.status = PortStatus::HasData;
                 let data_block = self.input.port.pull_data().unwrap()?;
-                debug_assert!(self.queue.is_empty());
-                self.extract_partitioned(data_block)?;
+                self.shared_state.spiller.lock().add_bucket(data_block)?;
                 if !self.input.port.is_finished() {
                     self.input.port.set_need_data();
                 }
@@ -183,7 +167,7 @@ impl Processor for TransformMetaDispatcher {
                 .pop_front()
                 .ok_or_else(|| ErrorCode::Internal("Waiting outputs queue should not be empty"))?;
 
-            if let Some(meta) = self.queue.pop_front() {
+            if let Some(meta) = self.shared_state.spiller.lock().get_meta() {
                 let output = &mut self.outputs[output_index];
                 output
                     .port

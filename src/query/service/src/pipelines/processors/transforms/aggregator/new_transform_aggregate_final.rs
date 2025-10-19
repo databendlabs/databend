@@ -48,8 +48,12 @@ use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::BucketSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::final_aggregate_spiller::FinalAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::sessions::QueryContext;
+
+const SPILL_ROWS_THRESHOLD: usize = 65535;
+const SPILL_BYTES_THRESHOLD: usize = 50 * 1024 * 1024; // 50 MB
 
 // Shared state across all NewTransformAggregateFinal processors
 pub struct SharedRestoreState {
@@ -64,10 +68,9 @@ pub struct SharedRestoreState {
     // Restore phase finished flag
     pub bucket_finished: AtomicUsize,
 
-    // Stream to write spilled data blocks
-    pub stream_partition: Mutex<BlockPartitionStream>,
-
     pub spill_occurred: Arc<AtomicBool>,
+
+    pub spiller: Mutex<FinalAggregateSpiller>,
 }
 
 impl SharedRestoreState {
@@ -77,14 +80,20 @@ impl SharedRestoreState {
             .map(|_| ConcurrentQueue::unbounded())
             .collect();
 
-        let stream_partition = BlockPartitionStream::create(65535, 50 * 1024, partition_count);
+        let stream_partition = BlockPartitionStream::create(
+            SPILL_ROWS_THRESHOLD,
+            SPILL_BYTES_THRESHOLD,
+            partition_count,
+        );
+
+        let spiller = Mutex::new(FinalAggregateSpiller::new(stream_partition));
 
         Arc::new(SharedRestoreState {
             partition_count,
             aggregate_queues,
             bucket_finished: AtomicUsize::new(0),
             barrier: Barrier::new(partition_count),
-            stream_partition: Mutex::new(stream_partition),
+            spiller,
             spill_occurred: Arc::new(AtomicBool::new(false)),
         })
     }
@@ -385,6 +394,48 @@ impl NewTransformAggregateFinal {
 
         Ok(())
     }
+
+    fn prepare_spill(&self) -> Result<()> {
+        let mut stream_partition =
+            BlockPartitionStream::create(SPILL_ROWS_THRESHOLD, SPILL_BYTES_THRESHOLD, 1);
+        let mut ready_blocks = Vec::new();
+
+        let queue = &self.shared_state.aggregate_queues[self.id];
+        while let Ok(meta) = queue.pop() {
+            match meta {
+                AggregateMeta::AggregatePayload(AggregatePayload { payload, .. }) => {
+                    if payload.len() == 0 {
+                        continue;
+                    }
+                    let block = payload.aggregate_flush_all()?;
+                    if block.is_empty() {
+                        continue;
+                    }
+
+                    let scatter_indices = vec![0_u64; block.num_rows()];
+                    let partitions = stream_partition.partition(scatter_indices, block, true);
+                    ready_blocks.extend(partitions.into_iter().map(|(_, block)| block));
+                }
+                _ => {
+                    return Err(ErrorCode::Internal(
+                        "Unexpected meta type in aggregate queue during spill",
+                    ));
+                }
+            }
+        }
+        if let Some(block) = stream_partition.finalize_partition(0) {
+            if !block.is_empty() {
+                ready_blocks.push(block);
+            }
+        }
+
+        if !ready_blocks.is_empty() {
+            let mut spiller = self.shared_state.spiller.lock();
+            spiller.add_ready_blocks(ready_blocks);
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -456,6 +507,7 @@ impl Processor for NewTransformAggregateFinal {
                 }
                 self.shared_state.barrier.wait().await;
                 if self.shared_state.spill_occurred.load(Ordering::SeqCst) && !self.should_spill {
+                    self.prepare_spill()?;
                     self.should_spill = true;
                 }
                 if self.aggregated {
