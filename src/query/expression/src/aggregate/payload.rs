@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
+use databend_common_column::types::months_days_micros;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
 use log::info;
 use strength_reduce::StrengthReducedU64;
 
@@ -24,6 +27,14 @@ use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowPtr;
+use crate::types::decimal::i256;
+use crate::types::decimal::DecimalDataKind;
+use crate::types::decimal::DecimalScalar;
+use crate::types::geography::Geography;
+use crate::types::number::NumberDataType;
+use crate::types::number::NumberScalar;
+use crate::types::number::F32;
+use crate::types::number::F64;
 use crate::types::DataType;
 use crate::AggrState;
 use crate::AggregateFunctionRef;
@@ -32,6 +43,7 @@ use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::PayloadFlushState;
 use crate::ProjectedBlock;
+use crate::Scalar;
 use crate::SelectVector;
 use crate::StateAddr;
 use crate::StatesLayout;
@@ -89,6 +101,106 @@ impl Page {
 }
 
 pub type Pages = Vec<Page>;
+
+struct PageDebugSnapshot {
+    index: usize,
+    row_count: usize,
+    capacity_rows: usize,
+    used_bytes: usize,
+    capacity_bytes: usize,
+    state_offsets: usize,
+    state_rows: Option<usize>,
+    partial_state: bool,
+    rows: Vec<PageRowDebug>,
+}
+
+struct StatesLayoutDebug {
+    aggr_funcs: usize,
+    layout_size: usize,
+    layout_align: usize,
+}
+
+struct PageRowDebug {
+    index: usize,
+    hash: u64,
+    values: Vec<ValueDebug>,
+    state_addr: Option<usize>,
+}
+
+enum ValueDebug {
+    Null,
+    Value(String),
+}
+
+impl fmt::Debug for PageDebugSnapshot {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Page")
+            .field("index", &self.index)
+            .field("row_count", &self.row_count)
+            .field("capacity_rows", &self.capacity_rows)
+            .field("used_bytes", &self.used_bytes)
+            .field("capacity_bytes", &self.capacity_bytes)
+            .field("state_offsets", &self.state_offsets)
+            .field("state_rows", &self.state_rows)
+            .field("partial_state", &self.partial_state)
+            .field_with("rows", |f| {
+                if self.rows.is_empty() {
+                    return f.write_str("[]");
+                }
+                f.write_str("[\n")?;
+                for row in &self.rows {
+                    writeln!(f, "    {row:?},")?;
+                }
+                f.write_str("]")
+            })
+            .finish()
+    }
+}
+
+impl fmt::Debug for PageRowDebug {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug = f.debug_struct("Row");
+        debug
+            .field("index", &self.index)
+            .field("hash", &format_args!("0x{hash:016x}", hash = self.hash))
+            .field("values", &self.values);
+
+        if let Some(addr) = self.state_addr {
+            debug.field("state_addr", &format_args!("0x{addr:016x}"));
+        }
+
+        debug.finish()
+    }
+}
+
+impl fmt::Debug for StatesLayoutDebug {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StatesLayout")
+            .field("aggr_funcs", &self.aggr_funcs)
+            .field("layout_size", &self.layout_size)
+            .field("layout_align", &self.layout_align)
+            .finish()
+    }
+}
+
+impl fmt::Debug for ValueDebug {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ValueDebug::Null => f.write_str("NULL"),
+            ValueDebug::Value(val) => f.write_str(val),
+        }
+    }
+}
+
+impl ValueDebug {
+    fn null() -> Self {
+        ValueDebug::Null
+    }
+
+    fn from_scalar(scalar: Scalar) -> Self {
+        ValueDebug::Value(scalar.to_string())
+    }
+}
 
 impl Payload {
     pub fn new(
@@ -440,8 +552,215 @@ impl Payload {
             .collect();
         DataBlock::new(entries, fake_rows)
     }
+
+    fn debug_page_rows(&self, page: &Page) -> Vec<PageRowDebug> {
+        (0..page.rows)
+            .map(|row_idx| {
+                let row_ptr = self.data_ptr(page, row_idx);
+                let values = (0..self.group_types.len())
+                    .map(|column_idx| self.debug_group_value(row_ptr, column_idx))
+                    .collect();
+                let state_addr = self
+                    .row_layout
+                    .states_layout
+                    .as_ref()
+                    .map(|_| row_ptr.state_addr(&self.row_layout).addr())
+                    .filter(|addr| *addr != 0);
+
+                PageRowDebug {
+                    index: row_idx,
+                    hash: row_ptr.hash(&self.row_layout),
+                    values,
+                    state_addr,
+                }
+            })
+            .collect()
+    }
+
+    fn debug_group_value(&self, row: RowPtr, column_idx: usize) -> ValueDebug {
+        let offset = self.row_layout.group_offsets[column_idx];
+        match &self.group_types[column_idx] {
+            DataType::Nullable(inner) => {
+                let validity_offset = self.row_layout.validity_offsets[column_idx];
+                let is_valid = unsafe { row.read::<u8>(validity_offset) != 0 };
+                if is_valid {
+                    ValueDebug::from_scalar(decode_scalar(row, inner, offset))
+                } else {
+                    ValueDebug::null()
+                }
+            }
+            data_type => ValueDebug::from_scalar(decode_scalar(row, data_type, offset)),
+        }
+    }
 }
 
+impl fmt::Debug for Payload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let agg_len = self.aggrs.len();
+        let tuple_size = self.tuple_size;
+
+        let pages: Vec<PageDebugSnapshot> = self
+            .pages
+            .iter()
+            .enumerate()
+            .map(|(index, page)| {
+                let state_rows = if agg_len == 0 {
+                    None
+                } else {
+                    Some(page.state_offsets / agg_len)
+                };
+                let rows = self.debug_page_rows(page);
+                PageDebugSnapshot {
+                    index,
+                    row_count: page.rows,
+                    capacity_rows: page.capacity,
+                    used_bytes: page.rows * tuple_size,
+                    capacity_bytes: page.capacity * tuple_size,
+                    state_offsets: page.state_offsets,
+                    state_rows,
+                    partial_state: page.is_partial_state(agg_len),
+                    rows,
+                }
+            })
+            .collect();
+
+        let group_types: Vec<String> = self.group_types.iter().map(|ty| ty.to_string()).collect();
+        let aggregate_functions: Vec<String> = self
+            .aggrs
+            .iter()
+            .map(|func| func.name().to_string())
+            .collect();
+        let states_layout = self.states_layout().map(|layout| StatesLayoutDebug {
+            aggr_funcs: layout.num_aggr_func(),
+            layout_size: layout.layout.size(),
+            layout_align: layout.layout.align(),
+        });
+
+        let mut debug = f.debug_struct("Payload");
+        debug
+            .field("rows", &self.total_rows)
+            .field("tuple_size", &self.tuple_size)
+            .field("row_per_page", &self.row_per_page)
+            .field("current_write_page", &self.current_write_page)
+            .field("state_move_out", &self.state_move_out)
+            .field("min_cardinality", &self.min_cardinality)
+            .field("group_types", &group_types)
+            .field("aggregate_functions", &aggregate_functions)
+            .field("pages", &pages)
+            .field(
+                "arena_addr",
+                &format_args!("{:p}", Arc::as_ptr(&self.arena)),
+            )
+            .field("arena_strong", &Arc::strong_count(&self.arena));
+
+        if let Some(layout) = states_layout {
+            debug.field("states_layout", &layout);
+        }
+
+        debug.finish()
+    }
+}
+
+fn decode_scalar(row: RowPtr, data_type: &DataType, offset: usize) -> Scalar {
+    match data_type {
+        DataType::Null => Scalar::Null,
+        DataType::EmptyArray => Scalar::EmptyArray,
+        DataType::EmptyMap => Scalar::EmptyMap,
+        DataType::Boolean => Scalar::Boolean(unsafe { row.read::<u8>(offset) != 0 }),
+        DataType::Number(number_type) => match number_type {
+            NumberDataType::UInt8 => {
+                Scalar::Number(NumberScalar::UInt8(unsafe { row.read::<u8>(offset) }))
+            }
+            NumberDataType::UInt16 => {
+                Scalar::Number(NumberScalar::UInt16(unsafe { row.read::<u16>(offset) }))
+            }
+            NumberDataType::UInt32 => {
+                Scalar::Number(NumberScalar::UInt32(unsafe { row.read::<u32>(offset) }))
+            }
+            NumberDataType::UInt64 => {
+                Scalar::Number(NumberScalar::UInt64(unsafe { row.read::<u64>(offset) }))
+            }
+            NumberDataType::Int8 => {
+                Scalar::Number(NumberScalar::Int8(unsafe { row.read::<i8>(offset) }))
+            }
+            NumberDataType::Int16 => {
+                Scalar::Number(NumberScalar::Int16(unsafe { row.read::<i16>(offset) }))
+            }
+            NumberDataType::Int32 => {
+                Scalar::Number(NumberScalar::Int32(unsafe { row.read::<i32>(offset) }))
+            }
+            NumberDataType::Int64 => {
+                Scalar::Number(NumberScalar::Int64(unsafe { row.read::<i64>(offset) }))
+            }
+            NumberDataType::Float32 => {
+                let value: f32 = unsafe { row.read::<f32>(offset) };
+                Scalar::Number(NumberScalar::Float32(F32::from(value)))
+            }
+            NumberDataType::Float64 => {
+                let value: f64 = unsafe { row.read::<f64>(offset) };
+                Scalar::Number(NumberScalar::Float64(F64::from(value)))
+            }
+        },
+        DataType::Decimal(size) => match DecimalDataKind::from(*size) {
+            DecimalDataKind::Decimal64 => Scalar::Decimal(DecimalScalar::Decimal64(
+                unsafe { row.read::<i64>(offset) },
+                *size,
+            )),
+            DecimalDataKind::Decimal128 => Scalar::Decimal(DecimalScalar::Decimal128(
+                unsafe { row.read::<i128>(offset) },
+                *size,
+            )),
+            DecimalDataKind::Decimal256 => Scalar::Decimal(DecimalScalar::Decimal256(
+                unsafe { row.read::<i256>(offset) },
+                *size,
+            )),
+        },
+        DataType::Timestamp => Scalar::Timestamp(unsafe { row.read::<i64>(offset) }),
+        DataType::Date => Scalar::Date(unsafe { row.read::<i32>(offset) }),
+        DataType::Interval => Scalar::Interval(unsafe { row.read::<months_days_micros>(offset) }),
+        DataType::Binary => {
+            let bytes = unsafe { row.read_bytes(offset) };
+            Scalar::Binary(bytes.to_vec())
+        }
+        DataType::String => {
+            let bytes = unsafe { row.read_bytes(offset) };
+            let value = String::from_utf8(bytes.to_vec())
+                .unwrap_or_else(|_| String::from_utf8_lossy(bytes).into_owned());
+            Scalar::String(value)
+        }
+        DataType::Bitmap => {
+            let bytes = unsafe { row.read_bytes(offset) };
+            Scalar::Bitmap(bytes.to_vec())
+        }
+        DataType::Variant => {
+            let bytes = unsafe { row.read_bytes(offset) };
+            Scalar::Variant(bytes.to_vec())
+        }
+        DataType::Geometry => {
+            let bytes = unsafe { row.read_bytes(offset) };
+            Scalar::Geometry(bytes.to_vec())
+        }
+        DataType::Geography => {
+            let bytes = unsafe { row.read_bytes(offset) };
+            Scalar::Geography(Geography(bytes.to_vec()))
+        }
+        DataType::Array(_)
+        | DataType::Map(_)
+        | DataType::Tuple(_)
+        | DataType::Vector(_)
+        | DataType::Opaque(_) => {
+            let bytes = unsafe { row.read_bytes(offset) };
+            match bincode_deserialize_from_slice(bytes) {
+                Ok(value) => value,
+                Err(err) => Scalar::String(format!("<bincode error: {err}>")),
+            }
+        }
+        DataType::Nullable(inner) => decode_scalar(row, inner, offset),
+        DataType::Generic(_) | DataType::StageLocation => {
+            Scalar::String(format!("<unsupported type: {data_type}>"))
+        }
+    }
+}
 impl Drop for Payload {
     fn drop(&mut self) {
         drop_guard(move || {

@@ -145,12 +145,12 @@ impl NewTransformAggregateFinal {
     fn try_get_work(&mut self) -> Result<Event> {
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            info!("id_{} received data block {:?}", self.id, data_block);
 
             if let Some(block_meta) = data_block
                 .take_meta()
                 .and_then(AggregateMeta::downcast_from)
             {
+                info!("Aggregate id_{} receive meta {:?}", self.id, block_meta);
                 if let AggregateMeta::BucketSpilled(payload) = block_meta {
                     self.state = LocalState::AsyncReading(payload);
                     return Ok(Event::Async);

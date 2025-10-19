@@ -192,21 +192,64 @@ impl<'de> serde::Deserialize<'de> for AggregateMeta {
 }
 
 impl Debug for AggregateMeta {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AggregateMeta::Partitioned { .. } => {
-                f.debug_struct("AggregateMeta::Partitioned").finish()
+            AggregateMeta::Serialized(serialized) => {
+                let group_by_type = serialized
+                    .data_block
+                    .columns()
+                    .last()
+                    .map(|entry| entry.data_type().to_string());
+                let mut debug = f.debug_struct("AggregateMeta::Serialized");
+                debug
+                    .field("bucket", &serialized.bucket)
+                    .field("max_partition_count", &serialized.max_partition_count)
+                    .field("rows", &serialized.data_block.num_rows())
+                    .field("columns", &serialized.data_block.num_columns())
+                    .field("group_by_type", &group_by_type);
+                debug.finish()
             }
-            AggregateMeta::Serialized { .. } => {
-                f.debug_struct("AggregateMeta::Serialized").finish()
+            AggregateMeta::AggregatePayload(inner) => {
+                let payload = &inner.payload;
+                let mut debug = f.debug_struct("AggregateMeta::AggregatePayload");
+                debug
+                    .field("bucket", &inner.bucket)
+                    .field("max_partition_count", &inner.max_partition_count)
+                    .field("rows", &payload.len())
+                    .field("pages", &payload.pages.len())
+                    .field("payload", payload);
+                debug.finish()
             }
-            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
-            AggregateMeta::BucketSpilled(_) => f.debug_struct("Aggregate::BucketSpilled").finish(),
-            AggregateMeta::AggregatePayload(_) => {
-                f.debug_struct("AggregateMeta:AggregatePayload").finish()
+            AggregateMeta::AggregateSpilling(payload) => {
+                let pretty = f.alternate();
+                let mut debug = f.debug_struct("AggregateMeta::AggregateSpilling");
+                debug
+                    .field("partition_count", &payload.partition_count())
+                    .field("total_rows", &payload.len());
+
+                if pretty {
+                    debug.field("payload", payload);
+                }
+
+                debug.finish()
             }
-            AggregateMeta::AggregateSpilling(_) => {
-                f.debug_struct("AggregateMeta:AggregateSpilling").finish()
+            AggregateMeta::BucketSpilled(spilled) => f
+                .debug_struct("AggregateMeta::BucketSpilled")
+                .field("payload", spilled)
+                .finish(),
+            AggregateMeta::Spilled(buckets) => f
+                .debug_struct("AggregateMeta::Spilled")
+                .field("bucket_count", &buckets.len())
+                .field("payloads", buckets)
+                .finish(),
+            AggregateMeta::Partitioned { bucket, data } => {
+                let pretty = f.alternate();
+                let mut debug = f.debug_struct("AggregateMeta::Partitioned");
+                debug.field("bucket", bucket).field("children", &data.len());
+                if pretty {
+                    debug.field("data", data);
+                }
+                debug.finish()
             }
             AggregateMeta::Wait => f.debug_struct("AggregateMeta::Wait").finish(),
         }
