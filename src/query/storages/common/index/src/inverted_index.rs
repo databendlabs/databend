@@ -111,15 +111,17 @@ use tantivy_fst::Streamer;
 // Index major version.
 const INDEX_MAJOR_VERSION: u32 = 0;
 // Index minor version.
-const INDEX_MINOR_VERSION: u32 = 22;
+const INDEX_MINOR_VERSION: u32 = 25;
 // Index patch version.
 const INDEX_PATCH_VERSION: u32 = 0;
 // Index format version.
-const INDEX_FORMAT_VERSION: u32 = 6;
+const INDEX_FORMAT_VERSION: u32 = 7;
 // The magic byte of the footer to identify corruption
 // or an old version of the footer.
 const FOOTER_MAGIC_NUMBER: u32 = 1337;
+
 type CrcHashU32 = u32;
+
 /// Structure version for the index.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Version {
@@ -134,6 +136,7 @@ struct Footer {
     version: Version,
     crc: CrcHashU32,
 }
+
 impl Footer {
     fn new(crc: CrcHashU32) -> Self {
         let version = Version {
@@ -144,6 +147,7 @@ impl Footer {
         };
         Footer { version, crc }
     }
+
     fn append_footer<W: std::io::Write>(&self, write: &mut W) -> Result<()> {
         let footer_payload_len = write.write(serde_json::to_string(&self)?.as_ref())?;
         BinarySerializable::serialize(&(footer_payload_len as u32), write)?;
