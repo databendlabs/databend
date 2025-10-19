@@ -41,7 +41,6 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
-use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -163,18 +162,18 @@ pub struct FuseTable {
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 impl FuseTable {
-    pub fn create_and_refresh_table_info(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        // TODO storage class is incorrect
-        Ok(Self::try_create(
-            table_info,
-            Some(S3StorageClass::Standard),
-            false,
-        )?)
+    pub fn create_and_refresh_table_info(
+        table_info: TableInfo,
+        s3storage_class: S3StorageClass,
+    ) -> Result<Box<dyn Table>> {
+        Ok(Self::try_create(table_info, Some(s3storage_class), false)?)
     }
 
-    pub fn create_without_refresh_table_info(table_info: TableInfo) -> Result<Box<FuseTable>> {
-        // TODO storage class is incorrect
-        Self::try_create(table_info, Some(S3StorageClass::Standard), true)
+    pub fn create_without_refresh_table_info(
+        table_info: TableInfo,
+        s3storage_class: S3StorageClass,
+    ) -> Result<Box<FuseTable>> {
+        Self::try_create(table_info, Some(s3storage_class), true)
     }
 
     pub fn try_create(
@@ -1149,13 +1148,11 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn navigate_to(
         &self,
+        ctx: &Arc<dyn TableContext>,
         navigation: &TimeNavigation,
-        abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         match navigation {
-            TimeNavigation::TimeTravel(point) => {
-                Ok(self.navigate_to_point(point, abort_checker).await?)
-            }
+            TimeNavigation::TimeTravel(point) => Ok(self.navigate_to_point(ctx, point).await?),
             TimeNavigation::Changes {
                 append_only,
                 at,
@@ -1163,15 +1160,12 @@ impl Table for FuseTable {
                 desc,
             } => {
                 let mut end_point = if let Some(end) = end {
-                    self.navigate_to_point(end, abort_checker.clone())
-                        .await?
-                        .as_ref()
-                        .clone()
+                    self.navigate_to_point(ctx, end).await?.as_ref().clone()
                 } else {
                     self.clone()
                 };
                 let changes_desc = end_point
-                    .get_change_descriptor(*append_only, desc.clone(), Some(at), abort_checker)
+                    .get_change_descriptor(ctx, *append_only, desc.clone(), Some(at))
                     .await?;
                 end_point.changes_desc = Some(changes_desc);
                 Ok(Arc::new(end_point))

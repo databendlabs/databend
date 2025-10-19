@@ -289,7 +289,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
         let time_point = now - Duration::hours(12);
         let snapshot_loc = fuse_table.snapshot_loc().unwrap();
         let table = fuse_table
-            .navigate_to_time_point(snapshot_loc, time_point, ctx.clone().get_abort_checker())
+            .navigate_to_time_point(&table_ctx, snapshot_loc, time_point)
             .await?;
         let keep_last_snapshot = true;
         table

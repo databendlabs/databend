@@ -579,6 +579,7 @@ impl QueryContextShared {
                                     &source_database_name,
                                     &source_table_name,
                                     max_batch_size,
+                                    self.get_settings().get_s3_storage_class()?,
                                 )
                                 .await?;
                             catalog.cache_stream_source_table(

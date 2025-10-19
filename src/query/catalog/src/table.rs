@@ -58,7 +58,6 @@ use crate::plan::ReclusterParts;
 use crate::plan::StreamColumn;
 use crate::statistics::BasicColumnStatistics;
 use crate::table_args::TableArgs;
-use crate::table_context::AbortChecker;
 use crate::table_context::TableContext;
 
 #[async_trait::async_trait]
@@ -352,11 +351,11 @@ pub trait Table: Sync + Send {
     #[async_backtrace::framed]
     async fn navigate_to(
         &self,
+        ctx: &Arc<dyn TableContext>,
         navigation: &TimeNavigation,
-        abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         let _ = navigation;
-        let _ = abort_checker;
+        let _ = ctx;
 
         Err(ErrorCode::Unimplemented(format!(
             "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",

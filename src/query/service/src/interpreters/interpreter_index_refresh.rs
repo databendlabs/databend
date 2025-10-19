@@ -246,8 +246,10 @@ impl Interpreter for RefreshIndexInterpreter {
             }
         };
 
-        let fuse_table =
-            FuseTable::create_without_refresh_table_info(self.plan.table_info.clone())?;
+        let fuse_table = FuseTable::create_without_refresh_table_info(
+            self.plan.table_info.clone(),
+            self.ctx.get_settings().get_s3_storage_class()?,
+        )?;
         let fuse_table: Arc<FuseTable> = fuse_table.into();
 
         // generate new `DataSourcePlan` that skip refreshed parts.

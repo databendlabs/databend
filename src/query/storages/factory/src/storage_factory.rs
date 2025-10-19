@@ -48,21 +48,20 @@ where
 
 #[derive(Default, Clone)]
 pub struct FuseTableCreator {
-    // TODO doc the meaning of None
-    storage_class_spec: Option<S3StorageClass>,
+    s3_storage_class_spec: Option<S3StorageClass>,
 }
 
 impl FuseTableCreator {
     fn with_storage_class_spec(storage_class_spec: S3StorageClass) -> FuseTableCreator {
         Self {
-            storage_class_spec: Some(storage_class_spec),
+            s3_storage_class_spec: Some(storage_class_spec),
         }
     }
 }
 
 impl StorageCreator for FuseTableCreator {
     fn try_create(&self, table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>> {
-        let tbl = FuseTable::try_create(table_info, self.storage_class_spec, disable_refresh)?;
+        let tbl = FuseTable::try_create(table_info, self.s3_storage_class_spec, disable_refresh)?;
         Ok(tbl)
     }
 }
@@ -94,7 +93,6 @@ pub struct StorageFactory {
 
 impl StorageFactory {
     pub fn with_storage_class_specs(&self, storage_class: S3StorageClass) -> Self {
-        eprintln!("set_s3_storage_class {:?}", storage_class);
         let mut new_creators = self.storages.clone();
         new_creators.insert("FUSE".to_string(), Storage {
             creator: Arc::new(FuseTableCreator::with_storage_class_spec(storage_class)),
