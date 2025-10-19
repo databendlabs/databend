@@ -14,6 +14,8 @@
 
 use std::any::Any;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -52,7 +54,7 @@ pub struct SharedRestoreState {
     aggregate_queues: Vec<ConcurrentQueue<AggregateMeta>>,
 
     // Restore phase finished flag
-    pub bucket_finished: AtomicBool,
+    pub bucket_finished: AtomicUsize,
 
     pub restored_finished: AtomicBool,
     barrier: Barrier,
@@ -67,7 +69,7 @@ impl SharedRestoreState {
 
         Arc::new(SharedRestoreState {
             aggregate_queues,
-            bucket_finished: AtomicBool::new(false),
+            bucket_finished: AtomicUsize::new(0),
             barrier: Barrier::new(partition_count),
             restored_finished: AtomicBool::new(false),
         })
@@ -75,6 +77,7 @@ impl SharedRestoreState {
 }
 
 // Local state for each processor
+#[derive(Debug)]
 enum LocalState {
     Idle,
     AsyncReading(BucketSpilledPayload),
@@ -142,6 +145,7 @@ impl NewTransformAggregateFinal {
     fn try_get_work(&mut self) -> Result<Event> {
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
+            info!("id_{} received data block {:?}", self.id, data_block);
 
             if let Some(block_meta) = data_block
                 .take_meta()
@@ -179,7 +183,7 @@ impl NewTransformAggregateFinal {
             self.output.finish();
             return Ok(Event::Finished);
         }
-
+        info!("id_{} flag need data", self.id);
         self.input.set_need_data();
         Ok(Event::NeedData)
     }
@@ -339,7 +343,6 @@ impl NewTransformAggregateFinal {
                 }
             }
         }
-        info!("Aggregate id_{} finished aggregating", self.id,);
 
         // Generate output block
         let output_block = if let Some(mut ht) = agg_hashtable {
@@ -369,6 +372,7 @@ impl NewTransformAggregateFinal {
 
         // Set state to OutputReady
         self.aggregated = true;
+        info!("flag id_{} as aggregated finish", self.id);
         self.state = LocalState::OutputReady(output_block);
         Ok(())
     }
@@ -425,6 +429,7 @@ impl Processor for NewTransformAggregateFinal {
             self.input.set_not_need_data();
             return Ok(Event::NeedConsume);
         }
+        info!("id_{} current before event {:?}", self.id, self.state);
 
         match &self.state {
             LocalState::Deserializing(_, _) | LocalState::Aggregating => Ok(Event::Sync),
@@ -467,9 +472,14 @@ impl Processor for NewTransformAggregateFinal {
             LocalState::AsyncReading(payload) => self.async_reading(payload).await?,
             LocalState::AsyncWait => {
                 info!("Aggregate id_{} enter barrier wait", self.id);
+                if self.aggregated {
+                    info!("aggregated, let +1");
+                    self.shared_state
+                        .bucket_finished
+                        .fetch_add(1, Ordering::SeqCst);
+                }
                 // Wait for all processors to finish AsyncReading and Deserializing works
                 self.shared_state.barrier.wait().await;
-                // Restore phase finished, begin aggregating phase
                 if self.aggregated {
                     // if aggregated this round, we enter next round
                     self.state = LocalState::Idle;

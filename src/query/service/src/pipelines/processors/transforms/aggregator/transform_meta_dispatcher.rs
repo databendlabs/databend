@@ -14,8 +14,10 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -50,7 +52,7 @@ pub struct TransformMetaDispatcher {
     waiting_outputs: VecDeque<usize>,
     queue: VecDeque<AggregateMeta>,
     shared_state: Arc<SharedRestoreState>,
-    wait_counts: Vec<usize>,
+    data_ready: bool,
 }
 
 impl TransformMetaDispatcher {
@@ -77,7 +79,7 @@ impl TransformMetaDispatcher {
             initialized: false,
             finished_outputs: 0,
             waiting_outputs: VecDeque::new(),
-            wait_counts: vec![0; output_num],
+            data_ready: false,
         })
     }
 
@@ -89,158 +91,138 @@ impl TransformMetaDispatcher {
         self.outputs.iter().map(|x| x.port.clone()).collect()
     }
 
-    // Extract Partitioned meta into internal queue
-    fn extract_partitioned(&mut self, meta: AggregateMeta) {
+    // Extract Partitioned aggregate meta and push all items into the waiting queue
+    fn extract_partitioned(&mut self, mut data_block: DataBlock) -> Result<()> {
+        let Some(meta) = data_block
+            .take_meta()
+            .and_then(AggregateMeta::downcast_from)
+        else {
+            return Err(ErrorCode::Internal(
+                "TransformMetaDispatcher expects AggregateMeta",
+            ));
+        };
         if let AggregateMeta::Partitioned { data, .. } = meta {
             for item in data {
                 self.queue.push_back(item);
             }
-            // Reset wait counts when we extract new data
-            for count in &mut self.wait_counts {
-                *count = 0;
+        }
+        Ok(())
+    }
+
+    fn bucket_finished(&self) -> bool {
+        self.shared_state.bucket_finished.load(Ordering::SeqCst) == self.outputs.len()
+    }
+
+    fn debug_event(&mut self, cause: EventCause) -> Result<Event> {
+        info!(
+            "dispatcher event cause: {:?}, queue {}",
+            cause,
+            self.queue.len()
+        );
+        if let EventCause::Output(output_index) = &cause {
+            let output = &mut self.outputs[*output_index];
+
+            if output.port.is_finished() {
+                if output.status != PortStatus::Finished {
+                    self.finished_outputs += 1;
+                    output.status = PortStatus::Finished;
+                }
+            } else if output.port.can_push() {
+                if output.status != PortStatus::NeedData {
+                    info!("dispatcher output {} can push", output_index);
+                    output.status = PortStatus::NeedData;
+                    self.waiting_outputs.push_back(*output_index);
+                }
             }
         }
-    }
 
-    // Check if all output ports have received two Wait messages
-    fn all_ports_received_two_waits(&self) -> bool {
-        self.wait_counts.iter().all(|&count| count == 2)
-    }
+        if !self.initialized && !self.waiting_outputs.is_empty() {
+            self.initialized = true;
+            self.input.port.set_need_data();
+        }
 
-    fn process_events(&mut self) -> Result<Event> {
-        // Check if all outputs are finished
-        let all_outputs_finished = self
-            .outputs
-            .iter()
-            .all(|output| output.status == PortStatus::Finished);
-
-        if all_outputs_finished {
+        if self.finished_outputs == self.outputs.len() {
             self.input.port.finish();
             return Ok(Event::Finished);
         }
 
-        // Check if input is finished and queue is empty
-        if self.input.status == PortStatus::Finished && self.queue.is_empty() {
-            // Finish all output ports
-            for output in &mut self.outputs {
-                if output.status != PortStatus::Finished {
-                    output.port.finish();
-                    output.status = PortStatus::Finished;
-                }
-            }
-            return Ok(Event::Finished);
-        }
-
-        // Check if any output needs data
-        for output in &self.outputs {
-            if output.port.is_need_data() && output.status != PortStatus::Finished {
-                return Ok(Event::NeedConsume);
-            }
-        }
-
-        // Check if we need to pull from input
-        if self.input.status == PortStatus::NeedData {
-            self.input.port.set_need_data();
-            return Ok(Event::NeedData);
-        }
-
-        Ok(Event::NeedConsume)
-    }
-
-    fn debug_event(&mut self, cause: EventCause) -> Result<Event> {
-        // Handle initialization
-        if !self.initialized {
-            self.initialized = true;
-            self.input.status = PortStatus::NeedData;
-            self.input.port.set_need_data();
-            return Ok(Event::NeedData);
-        }
-
-        // Handle output port events
-        if let EventCause::Output(output_index) = cause {
-            let output = &self.outputs[output_index];
-
-            // Skip if this output is already finished
-            if output.status == PortStatus::Finished {
-                return self.process_events();
-            }
-
-            // Check if output port needs data
-            if output.port.is_need_data() {
-                if !self.queue.is_empty() {
-                    // Have data in queue, dispatch it
-                    let meta = self.queue.pop_front().unwrap();
-                    let data_block = DataBlock::empty_with_meta(Box::new(meta));
-                    output.port.push_data(Ok(data_block));
-                    info!("Dispatch meta to output {} data", output_index);
-                    return self.process_events();
-                } else {
-                    // Queue is empty
-                    // If input is waiting for data (NeedData state), don't send Wait yet
-                    // Wait until we actually have data from upstream
-                    if self.input.status == PortStatus::NeedData {
-                        info!(
-                            "Output {} needs data but input is pulling, wait for upstream data",
-                            output_index
-                        );
-                        return Ok(Event::NeedData);
-                    }
-
-                    // Input is Idle, send Wait
-                    let meta = AggregateMeta::Wait;
-                    let data_block = DataBlock::empty_with_meta(Box::new(meta));
-                    output.port.push_data(Ok(data_block));
-
-                    // Increment wait count for this port
-                    self.wait_counts[output_index] += 1;
-
-                    info!(
-                        "Dispatch Wait to output {}, wait_count: {}",
-                        output_index, self.wait_counts[output_index]
-                    );
-
-                    // Check if all ports have received two waits
-                    if self.all_ports_received_two_waits() {
-                        // Time to pull from upstream
-                        info!("All outputs received 2 waits, triggering upstream pull");
-                        self.input.status = PortStatus::NeedData;
-                    }
-
-                    return self.process_events();
-                }
-            }
-        }
-
-        // Handle input port events
-        if let EventCause::Input(_) = cause {
-            if self.input.port.has_data() {
-                info!("TransformMetaDispatcher: Pulling data from input port");
-                // Pull data from input
-                let mut data_block = self.input.port.pull_data().unwrap()?;
-                self.input.status = PortStatus::Idle;
-
-                // Extract meta from data block
-                if let Some(block_meta) = data_block
-                    .get_meta()
-                    .and_then(AggregateMeta::downcast_ref_from)
-                {
-                    if matches!(block_meta, AggregateMeta::Partitioned { .. }) {
-                        // Take ownership of meta and extract it
-                        let meta = data_block.take_meta().unwrap();
-                        let aggregate_meta = AggregateMeta::downcast_from(meta).unwrap();
-                        self.extract_partitioned(aggregate_meta);
-                        return self.process_events();
-                    }
-                }
-            }
-
-            if self.input.port.is_finished() {
+        if self.input.port.is_finished() {
+            info!("flag input finished");
+            if self.input.status != PortStatus::Finished {
                 self.input.status = PortStatus::Finished;
-                return self.process_events();
+            }
+        } else if self.input.port.has_data() {
+            if self.input.status != PortStatus::HasData {
+                info!("dispatcher input get data, set ready to true");
+                self.data_ready = true;
+                self.input.status = PortStatus::HasData;
+                let data_block = self.input.port.pull_data().unwrap()?;
+                debug_assert!(self.queue.is_empty());
+                self.extract_partitioned(data_block)?;
+
+                if self.input.port.is_finished() {
+                    info!("flag input finished after pull data");
+                    if self.input.status != PortStatus::Finished {
+                        self.input.status = PortStatus::Finished;
+                        // todo: wo may not need this?
+                    }
+                } else {
+                    self.input.port.set_need_data();
+                }
             }
         }
 
-        self.process_events()
+        if self.bucket_finished() {
+            info!("this bucket finished, set data ready to false");
+            self.input.status = PortStatus::Idle;
+            // we cannot begin next round until all aggregate work finished
+            self.shared_state.bucket_finished.store(0, Ordering::SeqCst);
+            self.data_ready = false;
+            if self.input.port.is_finished() {
+                info!("finish all output port");
+                for output in &self.outputs {
+                    output.port.finish();
+                }
+                return Ok(Event::Finished);
+            }
+        }
+
+        info!("{:?} {:?}", self.waiting_outputs, self.data_ready);
+
+        while !self.waiting_outputs.is_empty() && self.data_ready {
+            let output_index = self
+                .waiting_outputs
+                .pop_front()
+                .ok_or_else(|| ErrorCode::Internal("Waiting outputs queue should not be empty"))?;
+
+            if let Some(meta) = self.queue.pop_front() {
+                let output = &mut self.outputs[output_index];
+                output
+                    .port
+                    .push_data(Ok(DataBlock::empty_with_meta(Box::new(meta))));
+                output.status = PortStatus::Idle;
+                info!("send meta to output {}", output_index);
+                continue;
+            }
+            info!(
+                "aggregate finished: {}",
+                self.shared_state.bucket_finished.load(Ordering::SeqCst)
+            );
+
+            info!("send wait to output {}", output_index);
+            let output = &mut self.outputs[output_index];
+            output
+                .port
+                .push_data(Ok(DataBlock::empty_with_meta(Box::new(
+                    AggregateMeta::Wait,
+                ))));
+            output.status = PortStatus::Idle;
+        }
+
+        match self.waiting_outputs.is_empty() {
+            true => Ok(Event::NeedConsume),
+            false => Ok(Event::NeedData),
+        }
     }
 }
 
