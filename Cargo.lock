@@ -3535,7 +3535,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-exception",
- "display-more",
+ "display-more 0.2.1",
  "jwt-simple",
  "serde",
  "serde_json",
@@ -3592,7 +3592,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
- "display-more",
+ "display-more 0.2.1",
  "fastrace",
  "futures",
  "itertools 0.13.0",
@@ -3625,7 +3625,7 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
  "derive_more",
- "display-more",
+ "display-more 0.2.1",
  "enumflags2",
  "hex",
  "itertools 0.13.0",
@@ -3696,7 +3696,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-version",
  "derive_more",
- "display-more",
+ "display-more 0.2.1",
  "fastrace",
  "futures",
  "itertools 0.13.0",
@@ -3748,7 +3748,7 @@ dependencies = [
  "async-trait",
  "databend-common-meta-app-types",
  "databend-common-meta-types",
- "display-more",
+ "display-more 0.2.1",
  "futures-util",
  "log",
  "serde",
@@ -3762,7 +3762,7 @@ dependencies = [
  "anyhow",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
- "display-more",
+ "display-more 0.2.1",
  "fastrace",
  "log",
  "state-machine-api",
@@ -3805,7 +3805,7 @@ dependencies = [
  "databend-common-meta-types",
  "deepsize",
  "derive_more",
- "display-more",
+ "display-more 0.2.1",
  "fastrace",
  "fs_extra",
  "futures",
@@ -3844,7 +3844,7 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
- "display-more",
+ "display-more 0.2.1",
  "futures",
  "itertools 0.13.0",
  "log",
@@ -3919,7 +3919,7 @@ dependencies = [
  "databend-common-tracing",
  "deepsize",
  "derive_more",
- "display-more",
+ "display-more 0.2.1",
  "futures-util",
  "log",
  "map-api",
@@ -5077,7 +5077,7 @@ dependencies = [
  "databend-common-version",
  "deepsize",
  "derive_more",
- "display-more",
+ "display-more 0.2.1",
  "env_logger 0.11.8",
  "fastrace",
  "feature-set",
@@ -5139,7 +5139,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta",
- "display-more",
+ "display-more 0.2.1",
  "fastrace",
  "futures",
  "log",
@@ -5940,6 +5940,16 @@ dependencies = [
 name = "display-more"
 version = "0.2.0"
 source = "git+https://github.com/databendlabs/display-more?tag=v0.2.0#8a3e8351a72b9c6ac30f6ac4f6948abfd2c8c0b3"
+dependencies = [
+ "chrono",
+ "chrono-tz 0.8.6",
+]
+
+[[package]]
+name = "display-more"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8d32fe955894a62bb05d57f62036afaa0723bea31c4ff7b2f158ef0a3c94198"
 dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
@@ -12581,13 +12591,13 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "raft-log"
-version = "0.2.9"
+version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81c367dae1b209da86ab7fe42139db9652eabddbe4dabacf5c76137cd709521c"
+checksum = "f0165867dff6247addcaa9569e4cb4b6b401305fc6319f3c4bd7c87f7a748911"
 dependencies = [
  "byteorder",
- "clap",
  "codeq",
+ "display-more 0.2.1",
  "fs2",
  "log",
  "thiserror 1.0.69",
@@ -14583,7 +14593,7 @@ version = "0.3.4"
 source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.3.4#d5bfbe8dc459ba7a68eaa1526cacffcf4c9f1982"
 dependencies = [
  "async-trait",
- "display-more",
+ "display-more 0.2.0",
  "map-api",
  "serde",
 ]
