@@ -659,7 +659,7 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.2.0" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "425aae9" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
-openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.11" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "d82aa6d" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }

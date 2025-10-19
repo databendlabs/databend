@@ -10994,7 +10994,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.10.0"
-source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.9#a529931e633e641cac09d078ed815a0d7c15a3c3"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.11#6847fd3e341da8b8cf1a2bbacd593554081ad363"
 dependencies = [
  "anyerror",
  "byte-unit",
@@ -11016,7 +11016,7 @@ dependencies = [
 [[package]]
 name = "openraft-macros"
 version = "0.10.0"
-source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.9#a529931e633e641cac09d078ed815a0d7c15a3c3"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.11#6847fd3e341da8b8cf1a2bbacd593554081ad363"
 dependencies = [
  "chrono",
  "proc-macro2",
