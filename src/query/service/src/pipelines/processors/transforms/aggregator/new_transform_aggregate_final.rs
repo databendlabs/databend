@@ -21,11 +21,14 @@ use std::time::Instant;
 
 use bumpalo::Bump;
 use concurrent_queue::ConcurrentQueue;
+use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
+use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockPartitionStream;
@@ -39,6 +42,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
+use log::info;
 use opendal::Operator;
 use parking_lot::Mutex;
 use tokio::sync::Barrier;
@@ -51,6 +55,9 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Bucket
 use crate::pipelines::processors::transforms::aggregator::final_aggregate_spiller::FinalAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::sessions::QueryContext;
+use crate::spillers::Spiller;
+use crate::spillers::SpillerConfig;
+use crate::spillers::SpillerType;
 
 const SPILL_ROWS_THRESHOLD: usize = 65535;
 const SPILL_BYTES_THRESHOLD: usize = 50 * 1024 * 1024; // 50 MB
@@ -70,11 +77,16 @@ pub struct SharedRestoreState {
 
     pub spill_occurred: Arc<AtomicBool>,
 
-    pub spiller: Mutex<FinalAggregateSpiller>,
+    pub final_spiller: Mutex<FinalAggregateSpiller>,
+    pub spill_writer: Arc<Spiller>,
 }
 
 impl SharedRestoreState {
-    pub fn new(partition_count: usize) -> Arc<Self> {
+    pub fn try_new(
+        ctx: Arc<QueryContext>,
+        operator: Operator,
+        partition_count: usize,
+    ) -> Result<Arc<Self>> {
         // Create aggregate queues for each partition
         let aggregate_queues = (0..partition_count)
             .map(|_| ConcurrentQueue::unbounded())
@@ -86,16 +98,25 @@ impl SharedRestoreState {
             partition_count,
         );
 
-        let spiller = Mutex::new(FinalAggregateSpiller::new(stream_partition));
+        let final_spiller = Mutex::new(FinalAggregateSpiller::new(stream_partition));
 
-        Arc::new(SharedRestoreState {
+        let config = SpillerConfig {
+            spiller_type: SpillerType::Aggregation,
+            location_prefix: ctx.query_id_spill_prefix(),
+            disk_spill: None,
+            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+        };
+        let spill_writer = Arc::new(Spiller::create(ctx, operator, config)?);
+
+        Ok(Arc::new(SharedRestoreState {
             partition_count,
             aggregate_queues,
             bucket_finished: AtomicUsize::new(0),
             barrier: Barrier::new(partition_count),
-            spiller,
+            final_spiller,
+            spill_writer,
             spill_occurred: Arc::new(AtomicBool::new(false)),
-        })
+        }))
     }
 }
 
@@ -117,6 +138,7 @@ pub struct NewTransformAggregateFinal {
     // used for debug
     id: usize,
 
+    ctx: Arc<QueryContext>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     operator: Operator,
@@ -146,6 +168,7 @@ impl NewTransformAggregateFinal {
     ) -> Result<ProcessorPtr> {
         let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
         Ok(ProcessorPtr::create(Box::new(NewTransformAggregateFinal {
+            ctx,
             input,
             output,
             operator,
@@ -163,9 +186,17 @@ impl NewTransformAggregateFinal {
     }
 
     fn try_get_work(&mut self) -> Result<Event> {
-        if self.shared_state.spill_occurred.load(Ordering::SeqCst) {
+        if !self.should_spill && self.shared_state.spill_occurred.load(Ordering::SeqCst) {
             self.state = LocalState::AsyncWait;
             return Ok(Event::Async);
+        }
+
+        if self.should_spill {
+            if let Some((id, data_block)) = self.shared_state.final_spiller.lock().get_ready_block()
+            {
+                self.state = LocalState::Spill(id, data_block);
+                return Ok(Event::Async);
+            }
         }
 
         if self.input.has_data() {
@@ -290,6 +321,16 @@ impl NewTransformAggregateFinal {
 
     fn process_aggregating(&mut self) -> Result<()> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
+
+        if self.should_spill {
+            let queue = self.shared_state.aggregate_queues[self.id]
+                .try_iter()
+                .collect();
+            self.shared_state
+                .final_spiller
+                .lock()
+                .add_pending_bucket(queue);
+        }
 
         while let Ok(meta) = self.shared_state.aggregate_queues[self.id].pop() {
             match meta {
@@ -430,9 +471,75 @@ impl NewTransformAggregateFinal {
         }
 
         if !ready_blocks.is_empty() {
-            let mut spiller = self.shared_state.spiller.lock();
-            spiller.add_ready_blocks(ready_blocks);
+            let ids = vec![self.id; ready_blocks.len()];
+            let mut spiller = self.shared_state.final_spiller.lock();
+            spiller.add_ready_blocks(ids, ready_blocks);
         }
+
+        Ok(())
+    }
+
+    async fn process_spill(&self, id: usize, data_block: DataBlock) -> Result<()> {
+        if data_block.is_empty() {
+            return Ok(());
+        }
+
+        let rows = data_block.num_rows();
+        let mut columns_layout = Vec::with_capacity(data_block.num_columns());
+        let mut columns_data = Vec::with_capacity(data_block.num_columns());
+
+        for entry in data_block.columns() {
+            let column = entry.as_column().ok_or_else(|| {
+                ErrorCode::Internal("Unexpected scalar when spilling aggregate data")
+            })?;
+            let column_data = serialize_column(column);
+            columns_layout.push(column_data.len() as u64);
+            columns_data.push(column_data);
+        }
+
+        if columns_data.is_empty() {
+            return Ok(());
+        }
+
+        let instant = Instant::now();
+        let (location, write_bytes) = self
+            .shared_state
+            .spill_writer
+            .spill_stream_aggregate_buffer(None, vec![columns_data])
+            .await?;
+
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, write_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RemoteSpillWriteTime,
+            instant.elapsed().as_millis() as usize,
+        );
+
+        let progress_val = ProgressValues {
+            rows,
+            bytes: write_bytes,
+        };
+        self.ctx.get_aggregate_spill_progress().incr(&progress_val);
+
+        info!(
+            "Write aggregate spill {} successfully, elapsed: {:?}",
+            location,
+            instant.elapsed()
+        );
+
+        let payload = BucketSpilledPayload {
+            bucket: id as isize,
+            location,
+            data_range: 0..write_bytes as u64,
+            columns_layout,
+            max_partition_count: self.partition_count,
+        };
+
+        self.shared_state.aggregate_queues[id]
+            .push(AggregateMeta::BucketSpilled(payload))
+            .map_err(|_| {
+                ErrorCode::Internal("Failed to push spilled payload into aggregate queue")
+            })?;
 
         Ok(())
     }
@@ -460,7 +567,10 @@ impl Processor for NewTransformAggregateFinal {
         }
         match &self.state {
             LocalState::Deserializing(_, _) | LocalState::Aggregating => Ok(Event::Sync),
-            LocalState::AsyncReading(_) | LocalState::AsyncWait | LocalState::Repartition(..) => {
+            LocalState::AsyncReading(_)
+            | LocalState::AsyncWait
+            | LocalState::Repartition(..)
+            | LocalState::Spill(..) => {
                 // handled in try_get_work
                 unreachable!("Logic error")
             }
@@ -485,11 +595,10 @@ impl Processor for NewTransformAggregateFinal {
             LocalState::Repartition(meta) => self.repartition_and_push(meta),
             LocalState::Aggregating => self.process_aggregating(),
 
-            LocalState::Idle
-            | LocalState::AsyncReading(_)
-            | LocalState::OutputReady(_)
-            | LocalState::AsyncWait => {
-                unreachable!("Logic error: only Deserializing, Aggregating can enter process");
+            _ => {
+                unreachable!(
+                    "Logic error: only Deserializing, Repartition, Aggregating can enter process"
+                );
             }
         }
     }
@@ -498,7 +607,7 @@ impl Processor for NewTransformAggregateFinal {
     async fn async_process(&mut self) -> Result<()> {
         let state = std::mem::replace(&mut self.state, LocalState::Idle);
         match state {
-            LocalState::AsyncReading(payload) => self.async_reading(payload).await?,
+            LocalState::AsyncReading(payload) => self.async_reading(payload).await,
             LocalState::AsyncWait => {
                 if self.aggregated {
                     self.shared_state
@@ -517,14 +626,14 @@ impl Processor for NewTransformAggregateFinal {
                 } else {
                     self.state = LocalState::Aggregating;
                 }
+                Ok(())
             }
+            LocalState::Spill(id, data_block) => self.process_spill(id, data_block).await,
             _ => {
                 unreachable!(
                     "Logic error: only AsyncReading and AsyncWait can enter async_process"
                 );
             }
         }
-
-        Ok(())
     }
 }

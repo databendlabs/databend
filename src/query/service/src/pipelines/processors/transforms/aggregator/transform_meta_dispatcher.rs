@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::EventCause;
@@ -132,7 +131,12 @@ impl Processor for TransformMetaDispatcher {
         if self.bucket_finished() {
             // first get aggregate meta from inner queue
             // only when inner queue is empty, we try to get new data from upstream
-            if !self.shared_state.spiller.lock().refill_working_bucket() {
+            if !self
+                .shared_state
+                .final_spiller
+                .lock()
+                .refill_working_bucket()
+            {
                 self.input.status = PortStatus::Idle;
                 self.data_ready = false;
             }
@@ -154,7 +158,10 @@ impl Processor for TransformMetaDispatcher {
                 self.data_ready = true;
                 self.input.status = PortStatus::HasData;
                 let data_block = self.input.port.pull_data().unwrap()?;
-                self.shared_state.spiller.lock().add_bucket(data_block)?;
+                self.shared_state
+                    .final_spiller
+                    .lock()
+                    .add_bucket(data_block)?;
                 if !self.input.port.is_finished() {
                     self.input.port.set_need_data();
                 }
@@ -167,7 +174,7 @@ impl Processor for TransformMetaDispatcher {
                 .pop_front()
                 .ok_or_else(|| ErrorCode::Internal("Waiting outputs queue should not be empty"))?;
 
-            if let Some(meta) = self.shared_state.spiller.lock().get_meta() {
+            if let Some(meta) = self.shared_state.final_spiller.lock().get_meta() {
                 let output = &mut self.outputs[output_index];
                 output
                     .port

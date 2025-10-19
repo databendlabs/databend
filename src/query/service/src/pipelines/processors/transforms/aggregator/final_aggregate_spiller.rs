@@ -23,30 +23,41 @@ use databend_common_expression::DataBlock;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 
 pub struct FinalAggregateSpiller {
+    // bucket lifecycle:
     working_bucket: VecDeque<AggregateMeta>,
     pending_buckets: Vec<Vec<AggregateMeta>>,
-    partition_stream: BlockPartitionStream,
+
+    // spill and restore:
+    // partition_stream: BlockPartitionStream,
     ready_blocks: Vec<(usize, DataBlock)>,
-    repartition_level: usize,
+    // repartition_level: usize,
 }
 
 impl FinalAggregateSpiller {
-    pub fn new(partition_stream: BlockPartitionStream) -> Self {
+    pub fn new(_partition_stream: BlockPartitionStream) -> Self {
         Self {
             working_bucket: VecDeque::new(),
             pending_buckets: Vec::new(),
-            partition_stream,
+            // partition_stream,
             ready_blocks: Vec::new(),
-            repartition_level: 0,
+            // repartition_level: 0,
         }
     }
 
-    pub fn add_ready_blocks(&mut self, partition_id: Vec<usize>, blocks: Vec<DataBlock>) {
-        debug_assert_eq!(partition_id.len(), blocks.len());
+    pub fn add_ready_blocks(&mut self, partition_ids: Vec<usize>, blocks: Vec<DataBlock>) {
+        debug_assert_eq!(partition_ids.len(), blocks.len());
 
-        for (pid, block) in partition_id.into_iter().zip(blocks.into_iter()) {
+        for (pid, block) in partition_ids.into_iter().zip(blocks.into_iter()) {
             self.ready_blocks.push((pid, block));
         }
+    }
+
+    pub fn get_ready_block(&mut self) -> Option<(usize, DataBlock)> {
+        self.ready_blocks.pop()
+    }
+
+    pub fn add_pending_bucket(&mut self, metas: Vec<AggregateMeta>) {
+        self.pending_buckets.push(metas);
     }
 
     pub fn add_bucket(&mut self, mut data_block: DataBlock) -> Result<()> {

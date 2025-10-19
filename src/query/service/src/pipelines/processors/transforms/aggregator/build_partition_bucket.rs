@@ -67,7 +67,8 @@ pub fn build_partition_bucket(
             partition_count = MAX_PARTITION_COUNT;
         }
 
-        let shared_state = SharedRestoreState::new(partition_count);
+        let shared_state =
+            SharedRestoreState::try_new(ctx.clone(), operator.clone(), partition_count)?;
 
         let dispatcher = TransformMetaDispatcher::create(partition_count, shared_state.clone())?;
         let dispatcher_input = dispatcher.input_port();

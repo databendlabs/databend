@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -51,7 +50,6 @@ use crate::pipelines::processors::transforms::aggregator::build_partition_bucket
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
 use crate::pipelines::PipelineBuilder;
-use crate::sessions::QueryContext;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
@@ -64,7 +62,6 @@ pub struct AggregateFinal {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
-    ctx: Arc<QueryContext>,
 }
 
 #[typetag::serde]
@@ -141,7 +138,6 @@ impl IPhysicalPlan for AggregateFinal {
             before_group_by_schema: self.before_group_by_schema.clone(),
             group_by_display: self.group_by_display.clone(),
             stat_info: self.stat_info.clone(),
-            ctx: self.ctx.clone(),
         })
     }
 
@@ -206,7 +202,7 @@ impl IPhysicalPlan for AggregateFinal {
             max_restore_worker,
             after_group_parallel,
             experiment_aggregate_final,
-            self.ctx.clone(),
+            builder.ctx.clone(),
         )
     }
 }
@@ -650,7 +646,6 @@ impl PhysicalPlanBuilder {
                         group_by: group_items,
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
-                        ctx: self.ctx.clone(),
                     })
                 } else {
                     let Some(exchange) = Exchange::from_physical_plan(&input) else {
@@ -679,7 +674,6 @@ impl PhysicalPlanBuilder {
                         group_by: group_items,
                         stat_info: Some(stat_info),
                         meta: PhysicalPlanMeta::new("AggregateFinal"),
-                        ctx: self.ctx.clone(),
                     })
                 }
             }
