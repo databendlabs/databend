@@ -295,3 +295,10 @@ pub struct KeysLayoutArgs {
     #[clap(long)]
     pub depth: Option<u32>,
 }
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct DumpRaftLogWalArgs {
+    /// The dir to store persisted meta state, e.g., `.databend/meta1`
+    #[clap(long)]
+    pub raft_dir: String,
+}

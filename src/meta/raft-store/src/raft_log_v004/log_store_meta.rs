@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::io;
 
 use databend_common_meta_types::raft_types;
@@ -23,6 +24,12 @@ use serde::Serialize;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LogStoreMeta {
     pub node_id: Option<raft_types::NodeId>,
+}
+
+impl fmt::Display for LogStoreMeta {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "LogStoreMeta{{ node_id: {:?} }}", self.node_id)
+    }
 }
 
 impl raft_log::codeq::Encode for LogStoreMeta {
