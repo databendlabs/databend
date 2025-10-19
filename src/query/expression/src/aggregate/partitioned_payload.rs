@@ -313,11 +313,7 @@ impl fmt::Debug for PartitionedPayload {
             .iter()
             .map(|func| func.name().to_string())
             .collect();
-        let arena_strong_counts: Vec<usize> = self
-            .arenas
-            .iter()
-            .map(|arena| Arc::strong_count(arena))
-            .collect();
+        let arena_strong_counts: Vec<usize> = self.arenas.iter().map(Arc::strong_count).collect();
 
         let mut debug = f.debug_struct("PartitionedPayload");
         debug
