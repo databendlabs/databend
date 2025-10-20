@@ -279,7 +279,7 @@ impl StringColumnBuilder {
     }
 
     pub fn memory_size(&self) -> usize {
-        self.data.total_buffer_len
+        self.data.memory_size()
     }
 
     pub fn put_char(&mut self, item: char) {
