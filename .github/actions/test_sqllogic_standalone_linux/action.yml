@@ -29,12 +29,12 @@ runs:
       with:
         artifacts: sqllogictests,meta,query
 
-    - uses: actions/github-script@v7
-      id: ext-args
-      env:
-        DIRS: ${{ inputs.dirs }}
-      with:
-        script: require('.github/actions/test_sqllogic_standalone_linux/script.js')(core)
+    # - uses: actions/github-script@v7
+    #   id: ext-args
+    #   env:
+    #     DIRS: ${{ inputs.dirs }}
+    #   with:
+    #     script: require('.github/actions/test_sqllogic_standalone_linux/script.js')(core)
 
     - name: Run sqllogic Tests with Standalone mode
       if: inputs.storage-format == 'all' || inputs.storage-format == 'parquet'
@@ -42,7 +42,7 @@ runs:
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_PARALLEL: ${{ inputs.parallel }}
-        TEST_EXT_ARGS: ${{ steps.ext-args.outputs.parquet }}
+        # TEST_EXT_ARGS: ${{ steps.ext-args.outputs.parquet }}
         CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
 

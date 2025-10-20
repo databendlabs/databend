@@ -10,7 +10,6 @@ set max_memory_usage = 1024*1024*1024;
 # The io performance of the ci environment is very poor, especially in cluster mode, 
 # resulting in too much time consuming to run the entire tpcds.
 
-include ./Q9
 include ./Q34
 include ./Q35
 include ./Q36
@@ -18,8 +17,7 @@ include ./Q37
 include ./Q38
 include ./Q39
 include ./Q40
-# Q41 fail in cluster mode
-# include ./Q41
+include ./Q41
 include ./Q42
 include ./Q43
 include ./Q44

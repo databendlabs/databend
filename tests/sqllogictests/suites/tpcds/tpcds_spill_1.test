@@ -32,7 +32,6 @@ include ./Q19
 include ./Q20
 include ./Q21
 include ./Q22
-# Q23 fail in cluster mode
 include ./Q23
 include ./Q24
 include ./Q25
