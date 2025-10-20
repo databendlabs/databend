@@ -311,6 +311,7 @@ pub struct SegmentCompactChecker {
 
     compacted_segment_cnt: usize,
     compacted_block_cnt: u64,
+    compacted_perfect_block_cnt: u64,
 }
 
 impl SegmentCompactChecker {
@@ -320,8 +321,9 @@ impl SegmentCompactChecker {
             total_block_count: 0,
             thresholds,
             cluster_key_id,
-            compacted_block_cnt: 0,
             compacted_segment_cnt: 0,
+            compacted_block_cnt: 0,
+            compacted_perfect_block_cnt: 0,
         }
     }
 
@@ -360,10 +362,13 @@ impl SegmentCompactChecker {
         }
 
         self.compacted_segment_cnt += segments.len();
-        self.compacted_block_cnt += segments
+        (self.compacted_block_cnt, self.compacted_perfect_block_cnt) = segments
             .iter()
-            .map(|(_, info)| (info.summary.block_count - info.summary.perfect_block_count))
-            .sum::<u64>();
+            .map(|(_, info)| (info.summary.block_count, info.summary.perfect_block_count))
+            .fold(
+                (self.compacted_block_cnt, self.compacted_perfect_block_cnt),
+                |(b_sum, p_sum), (b, p)| (b_sum + b, p_sum + p),
+            );
         true
     }
 
@@ -415,15 +420,29 @@ impl SegmentCompactChecker {
         self.generate_part(final_segments, parts);
     }
 
+    /// Check if compaction limit is reached.
     pub fn is_limit_reached(&self, num_segment_limit: usize, num_block_limit: usize) -> bool {
-        let residual_segment_cnt = self.segments.len();
-        let residual_block_cnt: u64 = self
+        let (compacted_block_cnt, compacted_perfect_block_cnt) = self
             .segments
             .iter()
-            .map(|(_, info)| (info.summary.block_count - info.summary.perfect_block_count))
-            .sum();
-        self.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
-            || self.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
+            .map(|(_, info)| (info.summary.block_count, info.summary.perfect_block_count))
+            .fold(
+                (self.compacted_block_cnt, self.compacted_perfect_block_cnt),
+                |(b_sum, p_sum), (b, p)| (b_sum + b, p_sum + p),
+            );
+        let compacted_imperfect_block_cnt = compacted_block_cnt - compacted_perfect_block_cnt;
+        // When the total number of *imperfect blocks* reaches (num_block_limit - 1)
+        // and total selected blocks reach num_block_limit, we trigger compaction.
+        //
+        // Because `compact_num_block_hint` was intentionally increased by +1 during its calculation,
+        // to slightly expand the compaction range and include previously un-compacted segments.
+        if compacted_imperfect_block_cnt >= num_block_limit.saturating_sub(1) as u64
+            && compacted_block_cnt >= num_block_limit as u64
+        {
+            return true;
+        }
+
+        self.compacted_segment_cnt + self.segments.len() >= num_segment_limit
     }
 }
 
