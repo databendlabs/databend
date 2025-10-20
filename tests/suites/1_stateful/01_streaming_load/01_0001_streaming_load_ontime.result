@@ -1,5 +1,5 @@
 --ontime_200.csv
-{"id":"ontime_200.csv","stats":{"rows":199,"bytes":94534}}
+{"id":"ontime_200.csv","stats":{"rows":199,"bytes":95724}}
 199	2020	769
 --ontime_200.csv.gz
 {"id":"ontime_200.csv.gz","stats":{"rows":199,"bytes":95724}}
@@ -11,7 +11,7 @@
 {"id":"ontime_200.csv.bz2","stats":{"rows":199,"bytes":95724}}
 199	2020	769
 --ontime_200.ndjson
-{"id":"ontime_200.ndjson","stats":{"rows":199,"bytes":221601}}
+{"id":"ontime_200.ndjson","stats":{"rows":199,"bytes":221492}}
 199	2020	769
 --ontime_200.parquet
 {"id":"ontime_200.parquet","stats":{"rows":199,"bytes":236685}}

@@ -279,7 +279,7 @@ query T
 show statistics from table db_09_0020.t4;
 ----
 db_09_0020 t4 a 5 4 4 0 1 4 4 (empty)
-db_09_0020 t4 b 5 4 3 0 a c 16 (empty)
+db_09_0020 t4 b 5 4 3 0 a c 21 (empty)
 
 statement ok
 alter table t4 set options(enable_auto_analyze = 1);
