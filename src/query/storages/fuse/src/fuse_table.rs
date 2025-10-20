@@ -34,6 +34,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
+use databend_common_catalog::table::is_temp_table_by_table_info;
 use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
 use databend_common_catalog::table::ColumnStatisticsProvider;
@@ -74,7 +75,6 @@ use databend_common_sql::plans::TruncateMode;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
-use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
@@ -189,8 +189,7 @@ impl FuseTable {
                 match storage_params {
                     // External or attached table.
                     Some(sp) => {
-
-                        let sp = apply_storage_class(sp, storage_class_specs);
+                        let sp = apply_storage_class(&table_info, sp, storage_class_specs);
                         let operator = init_operator(&sp)?;
 
                         let table_meta_options = &table_info.meta.options;
@@ -211,13 +210,17 @@ impl FuseTable {
                     }
                     // Normal table.
                     None => {
-                        let operator = if let Some(s3storage_class) = storage_class_specs {
-                            let mut sp = GlobalConfig::instance().storage.params.clone();
-                            patch_storage_parameter(&mut sp, s3storage_class);
-                            init_operator(&sp)?
-                        } else {
-                            DataOperator::instance().operator()
+                        let storage_params = {
+                            // Storage parameter is not specified, using the default one of config
+                            let default_storage_params =
+                                GlobalConfig::instance().storage.params.clone();
+                            apply_storage_class(
+                                &table_info,
+                                default_storage_params,
+                                storage_class_specs,
+                            )
                         };
+                        let operator = init_operator(&storage_params)?;
                         (operator, FuseTableType::Standard)
                     }
                 }
@@ -1342,19 +1345,24 @@ impl Table for FuseTable {
         op.remove_file_in_batch(files).await?;
         Ok(len)
     }
-
 }
 
-fn apply_storage_class(storage_params: StorageParams, storage_class_specs: Option<S3StorageClass>) -> StorageParams{
-    // TODO temp table
+fn apply_storage_class(
+    table_info: &TableInfo,
+    storage_params: StorageParams,
+    storage_class_specs: Option<S3StorageClass>,
+) -> StorageParams {
     let mut sp = storage_params;
-    if let Some(s3storage_class) = storage_class_specs {
+    if is_temp_table_by_table_info(table_info) {
+        // For temporary tables, always use the standard storage class
+        patch_storage_parameter(&mut sp, S3StorageClass::Standard);
+    } else if let Some(s3storage_class) = storage_class_specs {
         patch_storage_parameter(&mut sp, s3storage_class);
     }
     sp
 }
 
-fn patch_storage_parameter(storage_params: &mut StorageParams, s3_storage_class: S3StorageClass)  {
+fn patch_storage_parameter(storage_params: &mut StorageParams, s3_storage_class: S3StorageClass) {
     if let StorageParams::S3(config) = storage_params {
         config.storage_class = s3_storage_class;
     };

@@ -463,13 +463,7 @@ pub trait Table: Sync + Send {
     }
 
     fn is_temp(&self) -> bool {
-        let is_temp = self
-            .get_table_info()
-            .options()
-            .contains_key(OPT_KEY_TEMP_PREFIX);
-        let is_id_temp = is_temp_table_id(self.get_id());
-        assert_eq!(is_temp, is_id_temp);
-        is_temp
+        is_temp_table_by_table_info(self.get_table_info())
     }
 
     fn is_stream(&self) -> bool {
@@ -730,4 +724,11 @@ pub enum DistributionLevel {
     Local,
     Cluster,
     Warehouse,
+}
+
+pub fn is_temp_table_by_table_info(table_info: &TableInfo) -> bool {
+    let is_temp = table_info.options().contains_key(OPT_KEY_TEMP_PREFIX);
+    let is_id_temp = is_temp_table_id(table_info.ident.table_id);
+    assert_eq!(is_temp, is_id_temp);
+    is_temp
 }
