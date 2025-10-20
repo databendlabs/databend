@@ -1,5 +1,5 @@
 # Q43
-query I
+query TTRRRRRRR
 
 SELECT s_store_name,
        s_store_id,

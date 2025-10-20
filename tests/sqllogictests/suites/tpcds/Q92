@@ -1,5 +1,5 @@
 # Q92
-query I
+query R
 SELECT sum(ws_ext_discount_amt) AS "Excess Discount Amount"
 FROM web_sales,
      item,
