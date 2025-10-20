@@ -107,8 +107,8 @@ INSERT INTO t3 VALUES
 query II
 select block_size, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't3');
 ----
-193 867 NULL
-224 867 NULL
+209 867 NULL
+240 867 NULL
 
 statement ok
 CREATE NGRAM INDEX idx1 ON t3(content1, content2) gram_size = 5 bloom_size = 1048576

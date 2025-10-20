@@ -1,10 +1,10 @@
 >>>> drop table if exists t1 all
 >>>> CREATE TABLE t1 ( c0 string );
-{"id":"test","stats":{"rows":1000,"bytes":22125}}
+{"id":"test","stats":{"rows":1000,"bytes":16126}}
 >>>> select count(*) from t1
 1000
 <<<<
 >>>> select block_count from fuse_snapshot('default','t1')
-1
+4
 <<<<
 >>>> drop table if exists t1
