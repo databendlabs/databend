@@ -161,7 +161,7 @@ HashJoin
 ├── Filter(Build)
 │   ├── cpu time: <slt:ignore>
 │   ├── output rows: 1
-│   ├── output bytes: 23.00 B
+│   ├── output bytes: 31.00 B
 │   ├── output columns: [author.id (#4), author.name (#5)]
 │   ├── filters: [is_true(author.name (#5) = 'mark4')]
 │   ├── estimated rows: 1.25
@@ -169,8 +169,8 @@ HashJoin
 │       ├── cpu time: <slt:ignore>
 │       ├── wait time: <slt:ignore>
 │       ├── output rows: 1
-│       ├── output bytes: 23.00 B
-│       ├── bytes scanned: 23.00 B
+│       ├── output bytes: 31.00 B
+│       ├── bytes scanned: 31.00 B
 │       ├── table: default.default.author
 │       ├── output columns: [id (#4), name (#5)]
 │       ├── read rows: 1

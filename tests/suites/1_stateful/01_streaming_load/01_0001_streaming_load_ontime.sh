@@ -10,7 +10,7 @@ cat $TESTS_DATA_DIR/ddl/ontime.sql | sed 's/ontime/ontime_streaming_load/g' | $B
 
 function run() {
   echo "--$2"
-  curl -sS -H "x-databend-query-id:$2" -H "X-Databend-SQL:insert into ontime_streaming_load  from @_databend_load  file_format = ($1)" -F "upload=@/${TESTS_DATA_DIR}/$2" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"
+  curl -sS -H "x-databend-query-id:$2" -H "X-Databend-SQL:insert into ontime_streaming_load  from @_databend_load  file_format = ($1)" -F "upload=@/${TESTS_DATA_DIR}/$2" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | jq -r '.id, .stats.rows'
   echo
   echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_streaming_load;" | $BENDSQL_CLIENT_CONNECT
   echo "truncate table ontime_streaming_load" | $BENDSQL_CLIENT_CONNECT
