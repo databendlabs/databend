@@ -215,8 +215,8 @@ impl FuseTable {
                     }
                     // Normal table.
                     None => {
-                        let mut sp = GlobalConfig::instance().storage.params.clone();
                         let operator = if let Some(s3storage_class) = storage_class_specs {
+                            let mut sp = GlobalConfig::instance().storage.params.clone();
                             if let StorageParams::S3(config) = &mut sp {
                                 config.storage_class = s3storage_class
                             };
