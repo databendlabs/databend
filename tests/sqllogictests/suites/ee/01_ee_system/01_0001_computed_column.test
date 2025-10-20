@@ -295,16 +295,16 @@ statement ok
 drop table if exists t_variant;
 
 statement ok
-create table t_variant(id int, data variant, name string as (data:videoInfo:name::string) stored, duration int as(DATA:videoInfo:duration::int) stored);
+create table t_variant(id int, data variant, name string as (data:videoInfo:Name::string) stored, duration int as(DATA:videoInfo:Duration::int) stored);
 
 statement ok
-insert into t_variant values(1, '{"videoInfo":{"name":"H264","duration":10}}'),(2, '{"videoInfo":{"name":"H265","duration":20}}');
+insert into t_variant values(1, '{"videoInfo":{"Name":"H264","Duration":10}}'),(2, '{"videoInfo":{"Name":"H265","Duration":20}}');
 
 query ITTI
 select * from t_variant;
 ----
-1 {"videoInfo":{"duration":10,"name":"H264"}} H264 10
-2 {"videoInfo":{"duration":20,"name":"H265"}} H265 20
+1 {"videoInfo":{"Duration":10,"Name":"H264"}} H264 10
+2 {"videoInfo":{"Duration":20,"Name":"H265"}} H265 20
 
 statement ok
 DROP DATABASE test_computed_column
