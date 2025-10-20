@@ -876,7 +876,7 @@ impl ScalarRef<'_> {
             ScalarRef::Decimal(_) => n * self.memory_size(),
             ScalarRef::Boolean(_) => n.div_ceil(8),
             ScalarRef::Binary(s) => s.len() * n + (n + 1) * 8,
-            ScalarRef::String(s) => s.len() * n + n * 16,
+            ScalarRef::String(s) => n * 16 + if s.len() > 12 { s.len() } else { 0 },
             ScalarRef::Timestamp(_) => n * 8,
             ScalarRef::Date(_) => n * 4,
             ScalarRef::Interval(_) => n * 16,
