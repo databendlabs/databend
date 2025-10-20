@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -45,29 +44,6 @@ pub struct PartitionedPayload {
 
 unsafe impl Send for PartitionedPayload {}
 unsafe impl Sync for PartitionedPayload {}
-
-struct PartitionDebugSnapshot<'a> {
-    index: usize,
-    rows: usize,
-    pages: usize,
-    payload: Option<&'a Payload>,
-}
-
-impl fmt::Debug for PartitionDebugSnapshot<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug = f.debug_struct("Partition");
-        debug
-            .field("index", &self.index)
-            .field("rows", &self.rows)
-            .field("pages", &self.pages);
-
-        if let Some(payload) = self.payload {
-            debug.field("payload", payload);
-        }
-
-        debug.finish()
-    }
-}
 
 impl PartitionedPayload {
     pub fn new(
@@ -290,43 +266,6 @@ impl PartitionedPayload {
     #[allow(dead_code)]
     pub fn memory_size(&self) -> usize {
         self.payloads.iter().map(|x| x.memory_size()).sum()
-    }
-}
-
-impl fmt::Debug for PartitionedPayload {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let partitions: Vec<PartitionDebugSnapshot<'_>> = self
-            .payloads
-            .iter()
-            .enumerate()
-            .map(|(index, payload)| PartitionDebugSnapshot {
-                index,
-                rows: payload.len(),
-                pages: payload.pages.len(),
-                payload: if f.alternate() { Some(payload) } else { None },
-            })
-            .collect();
-
-        let group_types: Vec<String> = self.group_types.iter().map(|ty| ty.to_string()).collect();
-        let aggregate_functions: Vec<String> = self
-            .aggrs
-            .iter()
-            .map(|func| func.name().to_string())
-            .collect();
-        let arena_strong_counts: Vec<usize> = self.arenas.iter().map(Arc::strong_count).collect();
-
-        let mut debug = f.debug_struct("PartitionedPayload");
-        debug
-            .field("partition_count", &self.partition_count)
-            .field("mask", &self.mask_v)
-            .field("shift", &self.shift_v)
-            .field("total_rows", &self.len())
-            .field("group_types", &group_types)
-            .field("aggregate_functions", &aggregate_functions)
-            .field("partitions", &partitions)
-            .field("arena_strong_counts", &arena_strong_counts);
-
-        debug.finish()
     }
 }
 
