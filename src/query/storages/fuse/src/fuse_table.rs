@@ -188,16 +188,12 @@ impl FuseTable {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     // External or attached table.
-                    Some(mut sp) => {
-                        // TODO refactor
-                        if let Some(s3storage_class) = storage_class_specs {
-                            if let StorageParams::S3(config) = &mut sp {
-                                config.storage_class = s3storage_class
-                            };
-                        }
+                    Some(sp) => {
+
+                        let sp = apply_storage_class(sp, storage_class_specs);
+                        let operator = init_operator(&sp)?;
 
                         let table_meta_options = &table_info.meta.options;
-                        let operator = init_operator(&sp)?;
                         let table_type = if Self::is_table_attached(table_meta_options) {
                             if !disable_refresh {
                                 Self::refresh_table_info(
@@ -217,9 +213,7 @@ impl FuseTable {
                     None => {
                         let operator = if let Some(s3storage_class) = storage_class_specs {
                             let mut sp = GlobalConfig::instance().storage.params.clone();
-                            if let StorageParams::S3(config) = &mut sp {
-                                config.storage_class = s3storage_class
-                            };
+                            patch_storage_parameter(&mut sp, s3storage_class);
                             init_operator(&sp)?
                         } else {
                             DataOperator::instance().operator()
@@ -1348,6 +1342,22 @@ impl Table for FuseTable {
         op.remove_file_in_batch(files).await?;
         Ok(len)
     }
+
+}
+
+fn apply_storage_class(storage_params: StorageParams, storage_class_specs: Option<S3StorageClass>) -> StorageParams{
+    // TODO temp table
+    let mut sp = storage_params;
+    if let Some(s3storage_class) = storage_class_specs {
+        patch_storage_parameter(&mut sp, s3storage_class);
+    }
+    sp
+}
+
+fn patch_storage_parameter(storage_params: &mut StorageParams, s3_storage_class: S3StorageClass)  {
+    if let StorageParams::S3(config) = storage_params {
+        config.storage_class = s3_storage_class;
+    };
 }
 
 pub enum RetentionPolicy {
