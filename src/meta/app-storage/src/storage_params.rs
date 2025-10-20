@@ -415,6 +415,13 @@ pub struct StorageHdfsConfig {
 pub static STORAGE_S3_DEFAULT_ENDPOINT: &str = "https://s3.amazonaws.com";
 
 /// The S3 Storage Classes we utilizes
+///
+/// Applies to:
+/// - Fuse tables (including external fuse tables with S3 locations)
+///
+/// **Important:** Only effective for S3 object storage. Some S3-compatible storage systems
+/// (e.g., MinIO) do not support AWS S3 storage classes and will return errors during
+/// PutObject operations if IntelligentTiering is specified.
 #[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Debug, Copy, Default)]
 pub enum S3StorageClass {
     #[default]

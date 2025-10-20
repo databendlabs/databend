@@ -407,7 +407,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         .root(&cfg.root);
 
     if cfg.storage_class != S3StorageClass::Standard {
-        // TODO log?
+        // Apply S3 storage class to the operator.
+        // Note: Some S3-compatible storage systems (e.g., MinIO) may not support
+        // AWS S3 storage classes and will fail during PutObject operations.
         builder = builder.default_storage_class(cfg.storage_class.to_string().as_ref())
     }
 

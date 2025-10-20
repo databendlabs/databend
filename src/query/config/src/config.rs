@@ -961,7 +961,8 @@ pub struct S3StorageConfig {
         long = "storage-s3-storage-class",
         value_name = "standard|intelligent_tiering",
         value_enum,
-        default_value = "standard"
+        default_value = "standard",
+        help = "S3 storage class for Fuse tables (including external fuse tables). Warning: Some S3-compatible storage (e.g., MinIO) may not support intelligent_tiering."
     )]
     pub storage_class: S3StorageClass,
 }

@@ -156,7 +156,7 @@ use crate::storages::Table;
 /// - Database engines are free to save table meta in metastore or not
 #[derive(Clone)]
 pub struct MutableCatalog {
-    pub ctx: CatalogContext,
+    ctx: CatalogContext,
     tenant: Tenant,
     disable_table_info_refresh: bool,
 }

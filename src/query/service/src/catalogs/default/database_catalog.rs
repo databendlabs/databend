@@ -853,7 +853,6 @@ impl Catalog for DatabaseCatalog {
             .with_storage_class_spec(state.s3_storage_class);
 
         Arc::new(DatabaseCatalog {
-            // TODO replace the storage factory of self.mutable_catalog.inner()
             mutable_catalog: Arc::new(SessionCatalog::create(inner_mutable_cat, state)),
             immutable_catalog: self.immutable_catalog.clone(),
             table_function_factory: self.table_function_factory.clone(),
