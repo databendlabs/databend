@@ -19,6 +19,7 @@ use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::value;
 use nom::error::context;
+use nom::Slice;
 use nom_rule::rule;
 use pratt::Affix;
 use pratt::Associativity;
@@ -126,7 +127,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             }
         }
 
-        run_pratt_parser(ExprParser, &expr_elements.into_iter(), rest, i)
+        run_pratt_parser(ExprParser, expr_elements, rest, i)
     }
 }
 
@@ -1567,76 +1568,113 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     )(i)
 }
 
+#[inline]
+fn return_op<T>(i: Input, start: usize, op: T) -> IResult<T> {
+    Ok((i.slice(start..), op))
+}
+
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     // Plus and Minus are parsed as binary op at first.
-    alt((
-        value(UnaryOperator::Not, rule! { NOT }),
-        value(UnaryOperator::Factorial, rule! { Factorial }),
-        value(UnaryOperator::SquareRoot, rule! { SquareRoot }),
-        value(UnaryOperator::BitwiseNot, rule! { BitWiseNot }),
-        value(UnaryOperator::CubeRoot, rule! { CubeRoot }),
-        value(UnaryOperator::Abs, rule! { Abs }),
-    ))(i)
+    if let Some(token_0) = i.tokens.first() {
+        match token_0.kind {
+            TokenKind::NOT => return return_op(i, 1, UnaryOperator::Not),
+            TokenKind::Factorial => return return_op(i, 1, UnaryOperator::Factorial),
+            TokenKind::SquareRoot => return return_op(i, 1, UnaryOperator::SquareRoot),
+            TokenKind::BitWiseNot => return return_op(i, 1, UnaryOperator::BitwiseNot),
+            TokenKind::CubeRoot => return return_op(i, 1, UnaryOperator::CubeRoot),
+            TokenKind::Abs => return return_op(i, 1, UnaryOperator::Abs),
+            _ => (),
+        }
+    }
+    Err(nom::Err::Error(Error::from_error_kind(
+        i,
+        ErrorKind::Other("expecting `NOT`, '!', '|/', '~', '||/', '@', or more ..."),
+    )))
 }
 
 pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
-    alt((
-        alt((
-            value(BinaryOperator::Plus, rule! { "+" }),
-            value(BinaryOperator::Minus, rule! { "-" }),
-            value(BinaryOperator::Multiply, rule! { "*" }),
-            value(BinaryOperator::Divide, rule! { "/" }),
-            value(BinaryOperator::IntDiv, rule! { "//" }),
-            value(BinaryOperator::Div, rule! { DIV }),
-            value(BinaryOperator::Modulo, rule! { "%" }),
-            value(BinaryOperator::StringConcat, rule! { "||" }),
-            value(BinaryOperator::CosineDistance, rule! { "<=>" }),
-            value(BinaryOperator::L1Distance, rule! { "<+>" }),
-            value(BinaryOperator::L2Distance, rule! { "<->" }),
-            value(BinaryOperator::Gt, rule! { ">" }),
-            value(BinaryOperator::Lt, rule! { "<" }),
-            value(BinaryOperator::Gte, rule! { ">=" }),
-            value(BinaryOperator::Lte, rule! { "<=" }),
-            value(BinaryOperator::Eq, rule! { "=" }),
-            value(BinaryOperator::NotEq, rule! { "<>" | "!=" }),
-            value(BinaryOperator::Caret, rule! { "^" }),
-        )),
-        alt((
-            value(BinaryOperator::And, rule! { AND }),
-            value(BinaryOperator::Or, rule! { OR }),
-            value(BinaryOperator::Xor, rule! { XOR }),
-            value(BinaryOperator::LikeAny(None), rule! { LIKE ~ ANY }),
-            value(BinaryOperator::Like(None), rule! { LIKE }),
-            value(BinaryOperator::NotLike(None), rule! { NOT ~ LIKE }),
-            value(BinaryOperator::Regexp, rule! { REGEXP }),
-            value(BinaryOperator::NotRegexp, rule! { NOT ~ REGEXP }),
-            value(BinaryOperator::RLike, rule! { RLIKE }),
-            value(BinaryOperator::NotRLike, rule! { NOT ~ RLIKE }),
-            value(BinaryOperator::SoundsLike, rule! { SOUNDS ~ LIKE }),
-            value(BinaryOperator::BitwiseOr, rule! { BitWiseOr }),
-            value(BinaryOperator::BitwiseAnd, rule! { BitWiseAnd }),
-            value(BinaryOperator::BitwiseXor, rule! { BitWiseXor }),
-            value(BinaryOperator::BitwiseShiftLeft, rule! { ShiftLeft }),
-            value(BinaryOperator::BitwiseShiftRight, rule! { ShiftRight }),
-        )),
-    ))(i)
+    if let Some(token_0) = i.tokens.first() {
+        match token_0.kind {
+            TokenKind::Plus => return return_op(i, 1, BinaryOperator::Plus),
+            TokenKind::Minus => return return_op(i, 1, BinaryOperator::Minus),
+            TokenKind::Multiply => return return_op(i, 1, BinaryOperator::Multiply),
+            TokenKind::Divide => return return_op(i, 1, BinaryOperator::Divide),
+            TokenKind::IntDiv => return return_op(i, 1, BinaryOperator::IntDiv),
+            TokenKind::DIV => return return_op(i, 1, BinaryOperator::Div),
+            TokenKind::Modulo => return return_op(i, 1, BinaryOperator::Modulo),
+            TokenKind::StringConcat => return return_op(i, 1, BinaryOperator::StringConcat),
+            TokenKind::Spaceship => return return_op(i, 1, BinaryOperator::CosineDistance),
+            TokenKind::L1DISTANCE => return return_op(i, 1, BinaryOperator::L1Distance),
+            TokenKind::L2DISTANCE => return return_op(i, 1, BinaryOperator::L2Distance),
+            TokenKind::Gt => return return_op(i, 1, BinaryOperator::Gt),
+            TokenKind::Lt => return return_op(i, 1, BinaryOperator::Lt),
+            TokenKind::Gte => return return_op(i, 1, BinaryOperator::Gte),
+            TokenKind::Lte => return return_op(i, 1, BinaryOperator::Lte),
+            TokenKind::Eq => return return_op(i, 1, BinaryOperator::Eq),
+            TokenKind::NotEq => return return_op(i, 1, BinaryOperator::NotEq),
+            TokenKind::Caret => return return_op(i, 1, BinaryOperator::Caret),
+            TokenKind::AND => return return_op(i, 1, BinaryOperator::And),
+            TokenKind::OR => return return_op(i, 1, BinaryOperator::Or),
+            TokenKind::XOR => return return_op(i, 1, BinaryOperator::Xor),
+            TokenKind::REGEXP => return return_op(i, 1, BinaryOperator::Regexp),
+            TokenKind::RLIKE => return return_op(i, 1, BinaryOperator::RLike),
+            TokenKind::BitWiseOr => return return_op(i, 1, BinaryOperator::BitwiseOr),
+            TokenKind::BitWiseAnd => return return_op(i, 1, BinaryOperator::BitwiseAnd),
+            TokenKind::BitWiseXor => return return_op(i, 1, BinaryOperator::BitwiseXor),
+            TokenKind::ShiftLeft => return return_op(i, 1, BinaryOperator::BitwiseShiftLeft),
+            TokenKind::ShiftRight => return return_op(i, 1, BinaryOperator::BitwiseShiftRight),
+            TokenKind::LIKE => {
+                return if matches!(
+                    i.tokens.get(1).map(|first| first.kind == TokenKind::ANY),
+                    Some(true)
+                ) {
+                    return_op(i, 2, BinaryOperator::LikeAny(None))
+                } else {
+                    return_op(i, 1, BinaryOperator::Like(None))
+                }
+            }
+            TokenKind::NOT => match i.tokens.get(1).map(|first| first.kind) {
+                Some(TokenKind::LIKE) => {
+                    return return_op(i, 2, BinaryOperator::NotLike(None));
+                }
+                Some(TokenKind::REGEXP) => {
+                    return return_op(i, 2, BinaryOperator::NotRegexp);
+                }
+                Some(TokenKind::RLIKE) => {
+                    return return_op(i, 2, BinaryOperator::NotRLike);
+                }
+                _ => (),
+            },
+            TokenKind::SOUNDS => {
+                if let Some(TokenKind::LIKE) = i.tokens.get(1).map(|first| first.kind) {
+                    return return_op(i, 2, BinaryOperator::SoundsLike);
+                }
+            }
+            _ => (),
+        }
+    }
+    Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ..."))))
 }
 
-pub fn json_op(i: Input) -> IResult<JsonOperator> {
-    alt((
-        value(JsonOperator::Arrow, rule! { "->" }),
-        value(JsonOperator::LongArrow, rule! { "->>" }),
-        value(JsonOperator::HashArrow, rule! { "#>" }),
-        value(JsonOperator::HashLongArrow, rule! { "#>>" }),
-        value(JsonOperator::Question, rule! { "?" }),
-        value(JsonOperator::QuestionOr, rule! { "?|" }),
-        value(JsonOperator::QuestionAnd, rule! { "?&" }),
-        value(JsonOperator::AtArrow, rule! { "@>" }),
-        value(JsonOperator::ArrowAt, rule! { "<@" }),
-        value(JsonOperator::AtQuestion, rule! { "@?" }),
-        value(JsonOperator::AtAt, rule! { "@@" }),
-        value(JsonOperator::HashMinus, rule! { "#-" }),
-    ))(i)
+pub(crate) fn json_op(i: Input) -> IResult<JsonOperator> {
+    if let Some(token_0) = i.tokens.first() {
+        match token_0.kind {
+            TokenKind::RArrow => return return_op(i, 1, JsonOperator::Arrow),
+            TokenKind::LongRArrow => return return_op(i, 1, JsonOperator::LongArrow),
+            TokenKind::HashRArrow => return return_op(i, 1, JsonOperator::HashArrow),
+            TokenKind::HashLongRArrow => return return_op(i, 1, JsonOperator::HashLongArrow),
+            TokenKind::Placeholder => return return_op(i, 1, JsonOperator::Question),
+            TokenKind::QuestionOr => return return_op(i, 1, JsonOperator::QuestionOr),
+            TokenKind::QuestionAnd => return return_op(i, 1, JsonOperator::QuestionAnd),
+            TokenKind::AtArrow => return return_op(i, 1, JsonOperator::AtArrow),
+            TokenKind::ArrowAt => return return_op(i, 1, JsonOperator::ArrowAt),
+            TokenKind::AtQuestion => return return_op(i, 1, JsonOperator::AtQuestion),
+            TokenKind::AtAt => return return_op(i, 1, JsonOperator::AtAt),
+            TokenKind::HashMinus => return return_op(i, 1, JsonOperator::HashMinus),
+            _ => (),
+        }
+    }
+    Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `->`, '->>', '#>', '#>>', '?', '?|', '?&', '@>', '<@', '@?', '@@', '#-', or more ..."))))
 }
 
 pub fn literal(i: Input) -> IResult<Literal> {
