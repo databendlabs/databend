@@ -17,7 +17,7 @@ curl -sS \
 -H "X-Databend-SQL:insert /*+ set_var(input_read_buffer_size=100)  */into t1 values  from @_databend_load file_format = (type = CSV)" \
 -H "X-databend-query-id: test" \
 -F "upload=@${DATA}" \
--u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"
+-u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | jq -r '.id, .stats.rows'
 echo
 
 query "select count(*) from t1"

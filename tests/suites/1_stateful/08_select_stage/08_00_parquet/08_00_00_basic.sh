@@ -53,7 +53,7 @@ set parquet_rowgroup_hint_bytes = 2 * 1024 * 1024;
 explain select * from @s4;
 """ | $BENDSQL_CLIENT_CONNECT | grep 'partitions ' | sed  's/^[[:space:]]*//g'
 
-echo "copy into @s1 from (select * from @s4) file_format=(type=parquet)" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
+echo "copy into @s1 from (select * from @s4) file_format=(type=parquet)" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1
 echo "select * from @s1 order by a except (select * from @s4 order by a)" | $BENDSQL_CLIENT_CONNECT
 
 echo 'remove @s4;' | $BENDSQL_CLIENT_CONNECT

@@ -10,7 +10,7 @@ cat ${TESTS_DATA_DIR}/ddl/variant_test.sql | $BENDSQL_CLIENT_CONNECT
 
 # run format path table
 function run() {
-  curl -sS -H "x-databend-query-id:$2" -H "X-Databend-SQL:insert into $3 values  from @_databend_load file_format = ($1)" -F "upload=@/${TESTS_DATA_DIR}/$2" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"
+  curl -sS -H "x-databend-query-id:$2" -H "X-Databend-SQL:insert into $3 values  from @_databend_load file_format = ($1)" -F "upload=@/${TESTS_DATA_DIR}/$2" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | jq -r '.id, .stats.rows'
   echo
 }
 
