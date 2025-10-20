@@ -18382,7 +18382,14 @@ CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {
-        name: "system$test",
+        name: Identifier {
+            span: Some(
+                5..16,
+            ),
+            name: "system$test",
+            quote: None,
+            ident_type: None,
+        },
         args: [
             "a",
         ],
@@ -18397,7 +18404,14 @@ CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {
-        name: "system$test",
+        name: Identifier {
+            span: Some(
+                5..16,
+            ),
+            name: "system$test",
+            quote: None,
+            ident_type: None,
+        },
         args: [
             "a",
         ],
@@ -24293,7 +24307,14 @@ EXECUTE TASK MyTask
 ---------- AST ------------
 ExecuteTask(
     ExecuteTaskStmt {
-        name: "MyTask",
+        name: Identifier {
+            span: Some(
+                13..19,
+            ),
+            name: "MyTask",
+            quote: None,
+            ident_type: None,
+        },
     },
 )
 
@@ -24305,7 +24326,14 @@ DESCRIBE TASK MyTask
 ---------- AST ------------
 DescribeTask(
     DescribeTaskStmt {
-        name: "MyTask",
+        name: Identifier {
+            span: Some(
+                10..16,
+            ),
+            name: "MyTask",
+            quote: None,
+            ident_type: None,
+        },
     },
 )
 
@@ -27254,17 +27282,18 @@ BEGIN
 END;
 $$
 ---------- Output ---------
-EXECUTE IMMEDIATE $$
-BEGIN
-    LOOP
-        RETURN 1;
-    END LOOP;
-END;
-$$
+EXECUTE IMMEDIATE 'BEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;'
 ---------- AST ------------
 ExecuteImmediate(
     ExecuteImmediateStmt {
-        script: "BEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;",
+        script: Literal {
+            span: Some(
+                18..75,
+            ),
+            value: String(
+                "BEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;",
+            ),
+        },
     },
 )
 
@@ -27957,7 +27986,14 @@ CALL PROCEDURE p1()
 ---------- AST ------------
 CallProcedure(
     CallProcedureStmt {
-        name: "p1",
+        name: Identifier {
+            span: Some(
+                15..17,
+            ),
+            name: "p1",
+            quote: None,
+            ident_type: None,
+        },
         args: [],
     },
 )
@@ -27970,7 +28006,14 @@ CALL PROCEDURE p1(1, 'x', '2022-02-02'::DATE)
 ---------- AST ------------
 CallProcedure(
     CallProcedureStmt {
-        name: "p1",
+        name: Identifier {
+            span: Some(
+                15..17,
+            ),
+            name: "p1",
+            quote: None,
+            ident_type: None,
+        },
         args: [
             Literal {
                 span: Some(
