@@ -23,7 +23,7 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::deserialize_column;
-use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::{AggregateHashTable, BlockMetaInfoDowncast, HashTableConfig};
 use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::PayloadFlushState;
@@ -32,12 +32,14 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use opendal::BlockingOperator;
+use parking_lot::Mutex;
 use tokio::sync::Barrier;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::final_aggregate_shared_state::FinalAggregateSharedState;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 
 pub enum LocalState {
@@ -74,6 +76,7 @@ pub struct NewFinalAggregateTransform {
     partition_count: usize,
     repartitioned_queue: Vec<Vec<AggregateMeta>>,
     barrier: Arc<Barrier>,
+    shared_state: Arc<Mutex<FinalAggregateSharedState>>,
 }
 
 impl NewFinalAggregateTransform {
@@ -85,6 +88,7 @@ impl NewFinalAggregateTransform {
         operator: BlockingOperator,
         partition_count: usize,
         barrier: Arc<Barrier>,
+        shared_state: Arc<Mutex<FinalAggregateSharedState>>,
     ) -> Result<Box<dyn Processor>> {
         Ok(Box::new(NewFinalAggregateTransform {
             input,
@@ -98,6 +102,7 @@ impl NewFinalAggregateTransform {
             partition_count,
             repartitioned_queue: vec![vec![]; partition_count],
             barrier,
+            shared_state,
         }))
     }
 
@@ -201,6 +206,88 @@ impl NewFinalAggregateTransform {
             ))
         }
     }
+
+    fn final_aggregate(&mut self, mut queue: Vec<AggregateMeta>) -> Result<()> {
+        let mut agg_hashtable: Option<AggregateHashTable> = None;
+
+        while let Ok(meta) = queue.pop() {
+            match meta {
+                AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
+                    Some(ht) => {
+                        let payload = payload.convert_to_partitioned_payload(
+                            self.params.group_data_types.clone(),
+                            self.params.aggregate_functions.clone(),
+                            self.params.num_states(),
+                            0,
+                            Arc::new(Bump::new()),
+                        )?;
+                        ht.combine_payloads(&payload, &mut self.flush_state)?;
+                    }
+                    None => {
+                        agg_hashtable = Some(payload.convert_to_aggregate_table(
+                            self.params.group_data_types.clone(),
+                            self.params.aggregate_functions.clone(),
+                            self.params.num_states(),
+                            0,
+                            Arc::new(Bump::new()),
+                            true,
+                        )?);
+                    }
+                },
+                AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
+                    Some(ht) => {
+                        ht.combine_payload(&payload.payload, &mut self.flush_state)?;
+                    }
+                    None => {
+                        let capacity =
+                            AggregateHashTable::get_capacity_for_count(payload.payload.len());
+                        let mut hashtable = AggregateHashTable::new_with_capacity(
+                            self.params.group_data_types.clone(),
+                            self.params.aggregate_functions.clone(),
+                            HashTableConfig::default().with_initial_radix_bits(0),
+                            capacity,
+                            Arc::new(Bump::new()),
+                        );
+                        hashtable.combine_payload(&payload.payload, &mut self.flush_state)?;
+                        agg_hashtable = Some(hashtable);
+                    }
+                },
+                _ => {
+                    return Err(ErrorCode::Internal(
+                        "Unexpected meta type in aggregate queue when final aggregate",
+                    ));
+                }
+            }
+        }
+
+        let output_block = if let Some(mut ht) = agg_hashtable {
+            let mut blocks = vec![];
+            self.flush_state.clear();
+
+            loop {
+                if ht.merge_result(&mut self.flush_state)? {
+                    let mut entries = self.flush_state.take_aggregate_results();
+                    let group_columns = self.flush_state.take_group_columns();
+                    entries.extend_from_slice(&group_columns);
+                    let num_rows = entries[0].len();
+                    blocks.push(DataBlock::new(entries, num_rows));
+                } else {
+                    break;
+                }
+            }
+
+            if blocks.is_empty() {
+                self.params.empty_result_block()
+            } else {
+                DataBlock::concat(&blocks)?
+            }
+        } else {
+            self.params.empty_result_block()
+        };
+
+        self.state = LocalState::OutputReady(output_block);
+        Ok(())
+    }
 }
 
 impl Processor for NewFinalAggregateTransform {
@@ -244,6 +331,7 @@ impl Processor for NewFinalAggregateTransform {
             return Ok(Event::Sync);
         }
 
+        // TODO: first time should pass this check
         if self.working_queue.is_empty() {
             self.state = LocalState::AsyncWait;
             return Ok(Event::Async);
@@ -259,6 +347,7 @@ impl Processor for NewFinalAggregateTransform {
                 match block_meta {
                     AggregateMeta::Partitioned { data, .. } => {
                         self.working_queue.extend(data);
+                        // TODO: should immediately process the working queue instead of returning NeedData
                     }
                     _ => {
                         return Err(ErrorCode::Internal(
@@ -287,6 +376,10 @@ impl Processor for NewFinalAggregateTransform {
                 let serialized_payload = self.deserialize(spilled_payload, read_data);
                 self.repartition(serialized_payload)
             }
+            LocalState::Aggregate => {
+                let queue = self.shared_state.lock().take_aggregate_queue(self.id);
+                self.final_aggregate(queue)
+            }
             _ => Err(ErrorCode::Internal(format!(
                 "NewFinalAggregateTransform process called in {} state",
                 state
@@ -298,8 +391,14 @@ impl Processor for NewFinalAggregateTransform {
         let state = std::mem::replace(&mut self.state, LocalState::Idle);
         match state {
             LocalState::AsyncWait => {
-                // TODO: add to global queue
+                let queues = self
+                    .repartitioned_queue
+                    .drain(..)
+                    .map(|queue| queue)
+                    .collect::<Vec<_>>();
+                self.shared_state.lock().merge_aggregate_queues(queues);
                 self.barrier.wait().await;
+                self.state = LocalState::Aggregate;
                 Ok(())
             }
             _ => Err(ErrorCode::Internal(

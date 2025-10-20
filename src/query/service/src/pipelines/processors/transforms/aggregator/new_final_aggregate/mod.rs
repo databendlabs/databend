@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod final_aggregate_shared_state;
 mod new_transform_final_aggregate;
 mod transform_partition_bucket_scatter;
 
