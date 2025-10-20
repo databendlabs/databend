@@ -201,7 +201,6 @@ impl NewTransformAggregateFinal {
 
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
-            info!("id_{} received data block {:?}", self.id, data_block);
 
             if let Some(block_meta) = data_block
                 .take_meta()
