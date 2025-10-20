@@ -360,7 +360,7 @@ id 10 0 4 (empty)
 data['create'] 10 0 16 (empty)
 data['id'] 10 0 8 (empty)
 data['replies'] 7 3 8 (empty)
-data['text'] 8 0 13 (empty)
+data['text'] 8 0 16 (empty)
 data['user']['id'] 4 0 8 (empty)
 
 query TTTIIIITTIT
@@ -370,7 +370,7 @@ test_virtual_column tweets data 10 10 NULL NULL NULL NULL NULL (empty)
 test_virtual_column tweets data['create'] 10 10 10 0 1/08 6/07 16 (empty)
 test_virtual_column tweets data['id'] 10 10 10 0 1 10 8 (empty)
 test_virtual_column tweets data['replies'] 10 10 7 3 0 10 8 (empty)
-test_virtual_column tweets data['text'] 10 10 8 0 a z 13 (empty)
+test_virtual_column tweets data['text'] 10 10 8 0 a z 16 (empty)
 test_virtual_column tweets data['user']['id'] 10 10 4 0 1 7 8 (empty)
 test_virtual_column tweets id 10 10 10 0 1 10 4 (empty)
 

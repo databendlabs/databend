@@ -7,6 +7,6 @@ test
 1000
 <<<<
 >>>> select block_count from fuse_snapshot('default','t1')
-4
+1
 <<<<
 >>>> drop table if exists t1
