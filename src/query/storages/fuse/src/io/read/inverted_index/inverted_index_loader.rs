@@ -38,6 +38,7 @@ use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::table::TableCompression;
+use log::info;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::parquet_to_arrow_field_levels;
@@ -115,6 +116,7 @@ pub(crate) async fn legacy_load_inverted_index_files<'a>(
     operator: &'a Operator,
 ) -> Result<Vec<Arc<InvertedIndexFile>>> {
     let start = Instant::now();
+    info!("load inverted index directory version 2");
 
     let mut files = vec![];
     let mut ranges = vec![];
@@ -300,6 +302,7 @@ pub(crate) async fn load_inverted_index_directory<'a>(
     // 7. meta.json file
     // 8. .managed.json file
     if version == 1 {
+        info!("load inverted index directory version 1");
         let mut columns = Vec::with_capacity(inverted_index_meta_map.len());
         for (col_name, col_meta) in inverted_index_meta_map {
             let col_range = col_meta.offset..(col_meta.offset + col_meta.len);

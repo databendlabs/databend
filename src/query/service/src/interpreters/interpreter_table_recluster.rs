@@ -620,9 +620,7 @@ impl ReclusterTableInterpreter {
         let cluster_keys_len = ast_exprs.len();
         let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
         for mut ast in ast_exprs {
-            let mut normalizer = IdentifierNormalizer {
-                ctx: &name_resolution_ctx,
-            };
+            let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
             ast.drive_mut(&mut normalizer);
             cluster_key_strs.push(format!("{:#}", &ast));
         }

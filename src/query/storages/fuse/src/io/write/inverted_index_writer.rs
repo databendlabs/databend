@@ -42,6 +42,8 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::TableCompression;
 use jsonb::from_raw_jsonb;
 use jsonb::RawJsonb;
+use log::debug;
+use log::info;
 use tantivy::index::SegmentComponent;
 use tantivy::indexer::UserOperation;
 use tantivy::schema::Field;
@@ -106,6 +108,10 @@ pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedInd
         }
         // ignore invalid index
         if index_fields.len() != index.column_ids.len() {
+            debug!(
+                "Ignoring invalid inverted index: {}, missing columns",
+                index.name
+            );
             continue;
         }
         let index_schema = DataSchema::new(index_fields);
@@ -145,6 +151,19 @@ impl InvertedIndexState {
         inverted_index_builder: &InvertedIndexBuilder,
     ) -> Result<Self> {
         let start = Instant::now();
+
+        let inverted_index_location =
+            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+                &block_location.0,
+                &inverted_index_builder.name,
+                &inverted_index_builder.version,
+            );
+
+        info!(
+            "Start build inverted index for location: {}",
+            inverted_index_location
+        );
+
         let mut writer = InvertedIndexWriter::try_create(
             Arc::new(inverted_index_builder.schema.clone()),
             &inverted_index_builder.options,
@@ -153,18 +172,16 @@ impl InvertedIndexState {
         let data = writer.finalize()?;
 
         // Perf.
+        let size = data.len();
+        let elapsed_ms = start.elapsed().as_millis() as u64;
         {
-            metrics_inc_block_inverted_index_generate_milliseconds(
-                start.elapsed().as_millis() as u64
-            );
+            metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
         }
+        info!(
+            "Finish build inverted index: location={}, size={} bytes in {} ms",
+            inverted_index_location, size, elapsed_ms
+        );
 
-        let inverted_index_location =
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &block_location.0,
-                &inverted_index_builder.name,
-                &inverted_index_builder.version,
-            );
         Self::try_create(data, inverted_index_location)
     }
 }
@@ -183,7 +200,6 @@ impl InvertedIndexWriter {
         let (index_schema, _) = create_index_schema(schema.clone(), index_options)?;
 
         let index_settings = IndexSettings {
-            // sort_by_field: None,
             ..Default::default()
         };
 
@@ -320,7 +336,6 @@ impl InvertedIndexWriter {
             &mut data,
             // Zstd has the best compression ratio
             TableCompression::Zstd,
-            // Some(metadata),
             None,
         )?;
 

@@ -254,22 +254,22 @@ a1 a1-c1 c1
 a2 a2-c2 c2
 
 statement ok
-drop table if exists t_virtual;
+drop table if exists t_virtual_merge;
 
 statement ok
-create table t_virtual(a string null default 'a', b string null as (concat(a, '-', c)) virtual, c string null default 'c');
+create table t_virtual_merge(a string null default 'a', b string null as (concat(a, '-', c)) virtual, c string null default 'c');
 
 statement ok
-insert into t_virtual values ('a1', 'c1'), ('a2', 'c2');
+insert into t_virtual_merge values ('a1', 'c1'), ('a2', 'c2');
 
 statement ok
-insert into t_virtual (a) values ('a3'), ('a4');
+insert into t_virtual_merge (a) values ('a3'), ('a4');
 
 statement ok
-insert into t_virtual (c) values ('c5'), ('c6');
+insert into t_virtual_merge (c) values ('c5'), ('c6');
 
 query T
-select * from t_virtual order by a, c;
+select * from t_virtual_merge order by a, c;
 ----
 a a-c5 c5
 a a-c6 c6
@@ -279,10 +279,10 @@ a3 a3-c c
 a4 a4-c c
 
 statement ok
-merge into t_virtual target using t_virtual source on target.a = source.a when matched and source.a = 'a4' then update set target.a = 'aa', target.c = 'cc'; 
+merge into t_virtual_merge target using t_virtual_merge source on target.a = source.a when matched and source.a = 'a4' then update set target.a = 'aa', target.c = 'cc'; 
 
 query T
-select * from t_virtual order by a, c;
+select * from t_virtual_merge order by a, c;
 ----
 a a-c5 c5
 a a-c6 c6
@@ -292,4 +292,20 @@ a3 a3-c c
 aa aa-cc cc
 
 statement ok
+drop table if exists t_variant;
+
+statement ok
+create table t_variant(id int, data variant, name string as (data:videoInfo:name::string) stored, duration int as(DATA:videoInfo:duration::int) stored);
+
+statement ok
+insert into t_variant values(1, '{"videoInfo":{"name":"H264","duration":10}}'),(2, '{"videoInfo":{"name":"H265","duration":20}}');
+
+query ITTI
+select * from t_variant;
+----
+1 {"videoInfo":{"duration":10,"name":"H264"}} H264 10
+2 {"videoInfo":{"duration":20,"name":"H265"}} H265 20
+
+statement ok
 DROP DATABASE test_computed_column
+
