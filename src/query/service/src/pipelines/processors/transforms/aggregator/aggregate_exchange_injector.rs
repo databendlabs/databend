@@ -67,8 +67,7 @@ impl ExchangeSorting for AggregateExchangeSorting {
                     }
                     AggregateMeta::AggregateSpilling(_)
                     | AggregateMeta::Spilled(_)
-                    | AggregateMeta::BucketSpilled(_)
-                    | AggregateMeta::Wait => Ok(-1),
+                    | AggregateMeta::BucketSpilled(_) => Ok(-1),
                 },
             },
         }
@@ -200,7 +199,6 @@ impl FlightScatter for HashTableHashScatter {
                             ));
                         }
                     }
-                    AggregateMeta::Wait => unreachable!(),
                 };
 
                 return Ok(blocks);

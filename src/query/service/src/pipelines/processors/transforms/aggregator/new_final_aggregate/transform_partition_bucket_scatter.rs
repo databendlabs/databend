@@ -29,9 +29,9 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
-use super::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
+use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
@@ -42,9 +42,9 @@ struct InputPortState {
     bucket: isize,
     max_partition_count: usize,
 }
-pub struct TransformPartitionBucket {
-    output: Arc<OutputPort>,
+pub struct TransformPartitionBucketScatter {
     inputs: Vec<InputPortState>,
+    outputs: Vec<Arc<OutputPort>>,
     params: Arc<AggregatorParams>,
     working_bucket: isize,
     pushing_bucket: isize,
@@ -56,8 +56,12 @@ pub struct TransformPartitionBucket {
     max_partition_count: usize,
 }
 
-impl TransformPartitionBucket {
-    pub fn create(input_nums: usize, params: Arc<AggregatorParams>) -> Result<Self> {
+impl TransformPartitionBucketScatter {
+    pub fn create(
+        input_nums: usize,
+        output_nums: usize,
+        params: Arc<AggregatorParams>,
+    ) -> Result<Self> {
         let mut inputs = Vec::with_capacity(input_nums);
 
         for _index in 0..input_nums {
@@ -68,12 +72,17 @@ impl TransformPartitionBucket {
             });
         }
 
-        Ok(TransformPartitionBucket {
+        let mut outputs = Vec::with_capacity(output_nums);
+        for _index in 0..output_nums {
+            outputs.push(OutputPort::create());
+        }
+
+        Ok(TransformPartitionBucketScatter {
             params,
             inputs,
+            outputs,
             working_bucket: 0,
             pushing_bucket: 0,
-            output: OutputPort::create(),
             buckets_blocks: BTreeMap::new(),
             unpartitioned_blocks: vec![],
             flush_state: PayloadFlushState::default(),
@@ -93,8 +102,8 @@ impl TransformPartitionBucket {
         inputs
     }
 
-    pub fn get_output(&self) -> Arc<OutputPort> {
-        self.output.clone()
+    pub fn get_outputs(&self) -> Vec<Arc<OutputPort>> {
+        self.outputs.clone()
     }
 
     fn initialize_all_inputs(&mut self) -> Result<bool> {
@@ -324,8 +333,11 @@ impl TransformPartitionBucket {
     fn try_push_data_block(&mut self) -> bool {
         while self.pushing_bucket < self.working_bucket {
             if let Some(bucket_blocks) = self.buckets_blocks.remove(&self.pushing_bucket) {
-                let data_block = Self::convert_blocks(self.pushing_bucket, bucket_blocks);
-                self.output.push_data(Ok(data_block));
+                let data_blocks =
+                    Self::convert_blocks(self.pushing_bucket, bucket_blocks, self.outputs.len());
+                for (i, data_block) in data_blocks.into_iter().enumerate() {
+                    self.outputs[i].push_data(Ok(data_block));
+                }
                 self.pushing_bucket += 1;
                 return true;
             }
@@ -425,7 +437,11 @@ impl TransformPartitionBucket {
         Ok(blocks)
     }
 
-    fn convert_blocks(bucket: isize, data_blocks: Vec<DataBlock>) -> DataBlock {
+    fn convert_blocks(
+        bucket: isize,
+        data_blocks: Vec<DataBlock>,
+        outputs_len: usize,
+    ) -> Vec<DataBlock> {
         let mut data = Vec::with_capacity(data_blocks.len());
         for mut data_block in data_blocks.into_iter() {
             if let Some(block_meta) = data_block.take_meta() {
@@ -434,12 +450,34 @@ impl TransformPartitionBucket {
                 }
             }
         }
-        DataBlock::empty_with_meta(AggregateMeta::create_partitioned(bucket, data))
+
+        // divide data evenly into outputs_len portions
+        let total_len = data.len();
+        let base_chunk_size = total_len / outputs_len;
+        let remainder = total_len % outputs_len;
+
+        let mut result = Vec::with_capacity(outputs_len);
+        let mut data_iter = data.into_iter();
+
+        for i in 0..outputs_len {
+            let chunk_size = if i < remainder {
+                base_chunk_size + 1
+            } else {
+                base_chunk_size
+            };
+
+            let chunk: Vec<AggregateMeta> = data_iter.by_ref().take(chunk_size).collect();
+            result.push(DataBlock::empty_with_meta(
+                AggregateMeta::create_partitioned(bucket, chunk),
+            ));
+        }
+
+        result
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformPartitionBucket {
+impl Processor for TransformPartitionBucketScatter {
     fn name(&self) -> String {
         String::from("TransformPartitionBucket")
     }
@@ -449,7 +487,8 @@ impl Processor for TransformPartitionBucket {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
+        let all_finished = self.outputs.iter().all(|x| x.is_finished());
+        if all_finished {
             for input_state in &self.inputs {
                 input_state.port.finish();
             }
@@ -468,11 +507,10 @@ impl Processor for TransformPartitionBucket {
             return Ok(Event::Sync);
         }
 
-        if !self.output.can_push() {
+        if self.outputs.iter().any(|x| !x.can_push()) {
             for input_state in &self.inputs {
                 input_state.port.set_not_need_data();
             }
-
             return Ok(Event::NeedConsume);
         }
 
@@ -523,12 +561,17 @@ impl Processor for TransformPartitionBucket {
         }
 
         if let Some((bucket, bucket_blocks)) = self.buckets_blocks.pop_first() {
-            let data_block = Self::convert_blocks(bucket, bucket_blocks);
-            self.output.push_data(Ok(data_block));
+            let data_blocks = Self::convert_blocks(bucket, bucket_blocks, self.outputs.len());
+            for (i, data_block) in data_blocks.into_iter().enumerate() {
+                self.outputs[i].push_data(Ok(data_block));
+            }
             return Ok(Event::NeedConsume);
         }
 
-        self.output.finish();
+        for output in &self.outputs {
+            output.finish();
+        }
+
         Ok(Event::Finished)
     }
 

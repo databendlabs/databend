@@ -131,8 +131,6 @@ pub enum AggregateMeta {
     Spilled(Vec<BucketSpilledPayload>),
 
     Partitioned { bucket: isize, data: Vec<Self> },
-
-    Wait,
 }
 
 impl AggregateMeta {
@@ -208,7 +206,6 @@ impl Debug for AggregateMeta {
             AggregateMeta::AggregateSpilling(_) => {
                 f.debug_struct("AggregateMeta:AggregateSpilling").finish()
             }
-            AggregateMeta::Wait => f.debug_struct("AggregateMeta::Wait").finish(),
         }
     }
 }

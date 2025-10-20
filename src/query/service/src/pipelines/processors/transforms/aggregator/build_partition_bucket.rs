@@ -25,11 +25,10 @@ use databend_common_pipeline_core::TransformPipeBuilder;
 use databend_common_storage::DataOperator;
 use tokio::sync::Semaphore;
 
-use crate::pipelines::processors::transforms::aggregator::transform_meta_dispatcher::TransformMetaDispatcher;
+use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::NewFinalAggregateTransform;
+use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::TransformPartitionBucketScatter;
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::NewTransformAggregateFinal;
-use crate::pipelines::processors::transforms::aggregator::SharedRestoreState;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregate;
 use crate::sessions::QueryContext;
@@ -42,65 +41,65 @@ pub fn build_partition_bucket(
     experiment_aggregate_final: bool,
     ctx: Arc<QueryContext>,
 ) -> Result<()> {
-    let input_nums = pipeline.output_len();
-    let transform = TransformPartitionBucket::create(input_nums, params.clone())?;
-
-    let output = transform.get_output();
-    let inputs_port = transform.get_inputs();
-
-    pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
-        ProcessorPtr::create(Box::new(transform)),
-        inputs_port,
-        vec![output],
-    )]));
-
     let operator = DataOperator::instance().spill_operator();
 
     if experiment_aggregate_final {
         let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
 
         // PartitionedPayload only accept power of two partitions
-        let normalized = std::cmp::max(1, after_worker);
-        let mut partition_count = normalized.next_power_of_two();
+        let mut output_num = after_worker.next_power_of_two();
         const MAX_PARTITION_COUNT: usize = 128;
-        if partition_count > MAX_PARTITION_COUNT {
-            partition_count = MAX_PARTITION_COUNT;
+        if output_num > MAX_PARTITION_COUNT {
+            output_num = MAX_PARTITION_COUNT;
         }
 
-        let shared_state =
-            SharedRestoreState::try_new(ctx.clone(), operator.clone(), partition_count)?;
+        let input_num = pipeline.output_len();
+        let scatter =
+            TransformPartitionBucketScatter::create(input_num, output_num, params.clone())?;
+        let scatter_inputs = scatter.get_inputs();
+        let scatter_outputs = scatter.get_outputs();
 
-        let dispatcher = TransformMetaDispatcher::create(partition_count, shared_state.clone())?;
-        let dispatcher_input = dispatcher.input_port();
-        let dispatcher_outputs: Vec<Arc<OutputPort>> = dispatcher.output_ports();
-
-        pipeline.add_pipe(Pipe::create(1, partition_count, vec![PipeItem::create(
-            ProcessorPtr::create(Box::new(dispatcher)),
-            vec![dispatcher_input],
-            dispatcher_outputs,
-        )]));
+        pipeline.add_pipe(Pipe::create(
+            scatter_inputs.len(),
+            scatter_outputs.len(),
+            vec![PipeItem::create(
+                ProcessorPtr::create(Box::new(scatter)),
+                scatter_inputs,
+                scatter_outputs,
+            )],
+        ));
 
         let mut builder = TransformPipeBuilder::create();
-        for id in 0..partition_count {
+        let block_operator = operator.blocking();
+        for id in 0..output_num {
             let input_port = InputPort::create();
             let output_port = OutputPort::create();
-            let processor = NewTransformAggregateFinal::create(
-                ctx.clone(),
+            let processor = NewFinalAggregateTransform::try_create(
                 input_port.clone(),
                 output_port.clone(),
-                operator.clone(),
-                semaphore.clone(),
-                params.clone(),
-                shared_state.clone(),
-                partition_count,
                 id,
+                params.clone(),
+                block_operator.clone(),
+                output_num,
             )?;
-            builder.add_transform(input_port, output_port, processor);
+            builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
         }
 
         pipeline.add_pipe(builder.finalize());
         pipeline.try_resize(after_worker)?;
     } else {
+        let input_nums = pipeline.output_len();
+        let transform = TransformPartitionBucket::create(input_nums, params.clone())?;
+
+        let output = transform.get_output();
+        let inputs_port = transform.get_inputs();
+
+        pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+            ProcessorPtr::create(Box::new(transform)),
+            inputs_port,
+            vec![output],
+        )]));
+
         pipeline.try_resize(std::cmp::min(input_nums, max_restore_worker as usize))?;
         let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
         pipeline.add_transform(|input, output| {
