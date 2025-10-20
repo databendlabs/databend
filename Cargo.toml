@@ -424,7 +424,7 @@ ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
 parquet = { version = "55", features = ["async"] }
-passwords = { version = "3.1.16", features = ["common-password"] }
+passwords = { version = "3.1.16" }
 paste = "1.0.15"
 percent-encoding = "2.3.1"
 petgraph = { version = "0.6.2", features = ["serde-1"] }
