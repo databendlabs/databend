@@ -294,8 +294,22 @@ impl NewTransformAggregateFinal {
         let repartitioned =
             single_partition_payload.repartition(self.partition_count, &mut flush_state);
 
+        let mut final_spiller = if self.should_spill {
+            Some(self.shared_state.final_spiller.lock())
+        } else {
+            None
+        };
+
         for (partition_id, payload) in repartitioned.payloads.into_iter().enumerate() {
             if payload.len() == 0 {
+                continue;
+            }
+
+            if let Some(spiller) = final_spiller.as_mut() {
+                let block = payload.aggregate_flush_all()?;
+                if !block.is_empty() {
+                    spiller.push_partition_block(partition_id, block);
+                }
                 continue;
             }
 

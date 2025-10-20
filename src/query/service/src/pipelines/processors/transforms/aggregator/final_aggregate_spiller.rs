@@ -28,17 +28,17 @@ pub struct FinalAggregateSpiller {
     pending_buckets: Vec<Vec<AggregateMeta>>,
 
     // spill and restore:
-    // partition_stream: BlockPartitionStream,
+    partition_stream: BlockPartitionStream,
     ready_blocks: Vec<(usize, DataBlock)>,
     // repartition_level: usize,
 }
 
 impl FinalAggregateSpiller {
-    pub fn new(_partition_stream: BlockPartitionStream) -> Self {
+    pub fn new(partition_stream: BlockPartitionStream) -> Self {
         Self {
             working_bucket: VecDeque::new(),
             pending_buckets: Vec::new(),
-            // partition_stream,
+            partition_stream,
             ready_blocks: Vec::new(),
             // repartition_level: 0,
         }
@@ -100,5 +100,20 @@ impl FinalAggregateSpiller {
             self.working_bucket = VecDeque::from(bucket);
         }
         false
+    }
+
+    pub fn push_partition_block(&mut self, partition_id: usize, block: DataBlock) {
+        if block.is_empty() {
+            return;
+        }
+
+        let scatter_indices = vec![partition_id as u64; block.num_rows()];
+        let ready_blocks = self
+            .partition_stream
+            .partition(scatter_indices, block, true);
+
+        for ready_block in ready_blocks {
+            self.ready_blocks.push(ready_block);
+        }
     }
 }
