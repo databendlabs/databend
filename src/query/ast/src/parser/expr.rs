@@ -1573,18 +1573,29 @@ fn return_op<T>(i: Input, start: usize, op: T) -> IResult<T> {
     Ok((i.slice(start..), op))
 }
 
+macro_rules! op_branch {
+    ($i:ident, $token_0:ident, $($kind:ident => $op:expr),+ $(,)?) => {
+        match $token_0.kind {
+            $(
+                TokenKind::$kind => return return_op($i, 1, $op),
+            )+
+            _ => (),
+        }
+    };
+}
+
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     // Plus and Minus are parsed as binary op at first.
     if let Some(token_0) = i.tokens.first() {
-        match token_0.kind {
-            TokenKind::NOT => return return_op(i, 1, UnaryOperator::Not),
-            TokenKind::Factorial => return return_op(i, 1, UnaryOperator::Factorial),
-            TokenKind::SquareRoot => return return_op(i, 1, UnaryOperator::SquareRoot),
-            TokenKind::BitWiseNot => return return_op(i, 1, UnaryOperator::BitwiseNot),
-            TokenKind::CubeRoot => return return_op(i, 1, UnaryOperator::CubeRoot),
-            TokenKind::Abs => return return_op(i, 1, UnaryOperator::Abs),
-            _ => (),
-        }
+        op_branch!(
+            i, token_0,
+            NOT => UnaryOperator::Not,
+            Factorial => UnaryOperator::Factorial,
+            SquareRoot => UnaryOperator::SquareRoot,
+            BitWiseNot => UnaryOperator::BitwiseNot,
+            CubeRoot => UnaryOperator::CubeRoot,
+            Abs => UnaryOperator::Abs,
+        );
     }
     Err(nom::Err::Error(Error::from_error_kind(
         i,
@@ -1594,35 +1605,38 @@ pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
 
 pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
     if let Some(token_0) = i.tokens.first() {
+        op_branch!(
+            i, token_0,
+            Plus => BinaryOperator::Plus,
+            Minus => BinaryOperator::Minus,
+            Multiply => BinaryOperator::Multiply,
+            Divide => BinaryOperator::Divide,
+            IntDiv => BinaryOperator::IntDiv,
+            DIV => BinaryOperator::Div,
+            Modulo => BinaryOperator::Modulo,
+            StringConcat => BinaryOperator::StringConcat,
+            Spaceship => BinaryOperator::CosineDistance,
+            L1DISTANCE => BinaryOperator::L1Distance,
+            L2DISTANCE => BinaryOperator::L2Distance,
+            Gt => BinaryOperator::Gt,
+            Lt => BinaryOperator::Lt,
+            Gte => BinaryOperator::Gte,
+            Lte => BinaryOperator::Lte,
+            Eq => BinaryOperator::Eq,
+            NotEq => BinaryOperator::NotEq,
+            Caret => BinaryOperator::Caret,
+            AND => BinaryOperator::And,
+            OR => BinaryOperator::Or,
+            XOR => BinaryOperator::Xor,
+            REGEXP => BinaryOperator::Regexp,
+            RLIKE => BinaryOperator::RLike,
+            BitWiseOr => BinaryOperator::BitwiseOr,
+            BitWiseAnd => BinaryOperator::BitwiseAnd,
+            BitWiseXor => BinaryOperator::BitwiseXor,
+            ShiftLeft => BinaryOperator::BitwiseShiftLeft,
+            ShiftRight => BinaryOperator::BitwiseShiftRight,
+        );
         match token_0.kind {
-            TokenKind::Plus => return return_op(i, 1, BinaryOperator::Plus),
-            TokenKind::Minus => return return_op(i, 1, BinaryOperator::Minus),
-            TokenKind::Multiply => return return_op(i, 1, BinaryOperator::Multiply),
-            TokenKind::Divide => return return_op(i, 1, BinaryOperator::Divide),
-            TokenKind::IntDiv => return return_op(i, 1, BinaryOperator::IntDiv),
-            TokenKind::DIV => return return_op(i, 1, BinaryOperator::Div),
-            TokenKind::Modulo => return return_op(i, 1, BinaryOperator::Modulo),
-            TokenKind::StringConcat => return return_op(i, 1, BinaryOperator::StringConcat),
-            TokenKind::Spaceship => return return_op(i, 1, BinaryOperator::CosineDistance),
-            TokenKind::L1DISTANCE => return return_op(i, 1, BinaryOperator::L1Distance),
-            TokenKind::L2DISTANCE => return return_op(i, 1, BinaryOperator::L2Distance),
-            TokenKind::Gt => return return_op(i, 1, BinaryOperator::Gt),
-            TokenKind::Lt => return return_op(i, 1, BinaryOperator::Lt),
-            TokenKind::Gte => return return_op(i, 1, BinaryOperator::Gte),
-            TokenKind::Lte => return return_op(i, 1, BinaryOperator::Lte),
-            TokenKind::Eq => return return_op(i, 1, BinaryOperator::Eq),
-            TokenKind::NotEq => return return_op(i, 1, BinaryOperator::NotEq),
-            TokenKind::Caret => return return_op(i, 1, BinaryOperator::Caret),
-            TokenKind::AND => return return_op(i, 1, BinaryOperator::And),
-            TokenKind::OR => return return_op(i, 1, BinaryOperator::Or),
-            TokenKind::XOR => return return_op(i, 1, BinaryOperator::Xor),
-            TokenKind::REGEXP => return return_op(i, 1, BinaryOperator::Regexp),
-            TokenKind::RLIKE => return return_op(i, 1, BinaryOperator::RLike),
-            TokenKind::BitWiseOr => return return_op(i, 1, BinaryOperator::BitwiseOr),
-            TokenKind::BitWiseAnd => return return_op(i, 1, BinaryOperator::BitwiseAnd),
-            TokenKind::BitWiseXor => return return_op(i, 1, BinaryOperator::BitwiseXor),
-            TokenKind::ShiftLeft => return return_op(i, 1, BinaryOperator::BitwiseShiftLeft),
-            TokenKind::ShiftRight => return return_op(i, 1, BinaryOperator::BitwiseShiftRight),
             TokenKind::LIKE => {
                 return if matches!(
                     i.tokens.get(1).map(|first| first.kind == TokenKind::ANY),
@@ -1658,21 +1672,21 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
 
 pub(crate) fn json_op(i: Input) -> IResult<JsonOperator> {
     if let Some(token_0) = i.tokens.first() {
-        match token_0.kind {
-            TokenKind::RArrow => return return_op(i, 1, JsonOperator::Arrow),
-            TokenKind::LongRArrow => return return_op(i, 1, JsonOperator::LongArrow),
-            TokenKind::HashRArrow => return return_op(i, 1, JsonOperator::HashArrow),
-            TokenKind::HashLongRArrow => return return_op(i, 1, JsonOperator::HashLongArrow),
-            TokenKind::Placeholder => return return_op(i, 1, JsonOperator::Question),
-            TokenKind::QuestionOr => return return_op(i, 1, JsonOperator::QuestionOr),
-            TokenKind::QuestionAnd => return return_op(i, 1, JsonOperator::QuestionAnd),
-            TokenKind::AtArrow => return return_op(i, 1, JsonOperator::AtArrow),
-            TokenKind::ArrowAt => return return_op(i, 1, JsonOperator::ArrowAt),
-            TokenKind::AtQuestion => return return_op(i, 1, JsonOperator::AtQuestion),
-            TokenKind::AtAt => return return_op(i, 1, JsonOperator::AtAt),
-            TokenKind::HashMinus => return return_op(i, 1, JsonOperator::HashMinus),
-            _ => (),
-        }
+        op_branch!(
+            i, token_0,
+            RArrow => JsonOperator::Arrow,
+            LongRArrow => JsonOperator::LongArrow,
+            HashRArrow => JsonOperator::HashArrow,
+            HashLongRArrow => JsonOperator::HashLongArrow,
+            Placeholder => JsonOperator::Question,
+            QuestionOr => JsonOperator::QuestionOr,
+            QuestionAnd => JsonOperator::QuestionAnd,
+            AtArrow => JsonOperator::AtArrow,
+            ArrowAt => JsonOperator::ArrowAt,
+            AtQuestion => JsonOperator::AtQuestion,
+            AtAt => JsonOperator::AtAt,
+            HashMinus => JsonOperator::HashMinus,
+        );
     }
     Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `->`, '->>', '#>', '#>>', '?', '?|', '?&', '@>', '<@', '@?', '@@', '#-', or more ..."))))
 }
