@@ -9,11 +9,28 @@ import os
 import platform
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import time
 import urllib.request
 from pathlib import Path
+
+
+def wait_tcp_port(port: int, timeout: int = 20) -> None:
+    """Wait for TCP port to become available."""
+    print(f" === Waiting for port {port} (timeout: {timeout}s)")
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1)
+                sock.connect(("127.0.0.1", port))
+                print(f" === Port {port} is ready")
+                return
+        except (socket.error, socket.timeout):
+            time.sleep(0.5)
+    raise TimeoutError(f"Port {port} did not become available within {timeout} seconds")
 
 
 class TestContext:
@@ -65,9 +82,7 @@ class TestContext:
         print(f" === Running: {' '.join(cmd)}")
         subprocess.Popen(cmd)
 
-        wait_cmd = ["python3", str(self.root_dir / "scripts/ci/wait_tcp.py"), "--timeout", "20", "--port", str(11000 + node_id)]
-        print(f" === Running: {' '.join(wait_cmd)}")
-        subprocess.run(wait_cmd, check=True)
+        wait_tcp_port(11000 + node_id, timeout=20)
         print(f" === databend-meta ver={version} id={node_id} started")
 
     def feed_data(self, node_id: int, number: int = 10) -> None:
