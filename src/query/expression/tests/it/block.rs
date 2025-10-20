@@ -90,7 +90,7 @@ fn test_block_entry_memory_size() {
     assert_eq!(3, entry.memory_size());
 
     let col = StringType::from_data((0..10).map(|x| x.to_string()).collect::<Vec<_>>());
-    assert_eq!(col.memory_size(), 10 + 10 * 12);
+    assert_eq!(col.memory_size(), 10 + 10 * 16);
 
     let array = ArrayColumn::<Int64Type>::new(
         Buffer::from_iter(0..10i64),
