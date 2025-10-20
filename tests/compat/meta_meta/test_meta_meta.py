@@ -218,8 +218,8 @@ def download_binary(ctx: TestContext, version: str) -> None:
 
     print(f" === Downloading databend version {version}")
     arch = get_arch()
-    tarball = f"databend-{version}-{arch}.tar.gz"
-    url = f"https://github.com/datafuselabs/databend/releases/download/v{version}/{tarball}"
+    tarball = f"databend-v{version}-nightly-{arch}.tar.gz"
+    url = f"https://github.com/datafuselabs/databend/releases/download/v{version}-nightly/{tarball}"
 
     target_dir.mkdir(parents=True, exist_ok=True)
     tarball_path = target_dir / tarball
