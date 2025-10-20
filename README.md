@@ -50,7 +50,7 @@ Databend has expanded from analytics into a unified multimodal database: **one S
 **Cost**: [90% Cost Reduction](https://docs.databend.com/guides/benchmark/data-ingest)
 
 
-![Databend Architecture](https://github.com/user-attachments/assets/ee9c19e7-f9a1-4de3-943c-21f03abbd3c5)
+![Databend Architecture](https://github.com/user-attachments/assets/4eae9968-39a1-4334-953b-e5f3074c3dfd)
 
 
 ## Use Cases
