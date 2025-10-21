@@ -365,7 +365,7 @@ impl Processor for AnalyzeCollectNDVSource {
 
                 let joint = futures::future::try_join_all(handlers).await.map_err(|e| {
                     ErrorCode::StorageOther(format!(
-                        "[BLOCK-COMPACT] Failed to deserialize segment blocks: {}",
+                        "[ANALYZE-TABLE] Failed to build NDV statistics: {}",
                         e
                     ))
                 })?;
