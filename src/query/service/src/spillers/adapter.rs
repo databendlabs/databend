@@ -40,7 +40,8 @@ use super::block_writer::BlocksWriter;
 use super::inner::*;
 use super::row_group_encoder::*;
 use super::serialize::*;
-use super::{Location, SpillsBufferPool};
+use super::Location;
+use super::SpillsBufferPool;
 use crate::sessions::QueryContext;
 
 #[derive(Clone)]

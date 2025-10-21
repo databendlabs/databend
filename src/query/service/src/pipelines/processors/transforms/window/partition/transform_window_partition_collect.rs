@@ -38,11 +38,12 @@ use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
 use crate::pipelines::processors::transforms::DataProcessorStrategy;
 use crate::sessions::QueryContext;
-use crate::spillers::{BackpressureSpiller, SpillsBufferPool};
+use crate::spillers::BackpressureSpiller;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
+use crate::spillers::SpillsBufferPool;
 
 enum WindowBuffer {
     V1(WindowPartitionBuffer),

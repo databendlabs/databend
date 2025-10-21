@@ -52,8 +52,9 @@ use parquet::file::writer::SerializedRowGroupWriter;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::async_buffer::BufferWriter;
-use super::{Location, SpillsBufferPool};
+use super::Location;
 use super::SpillerInner;
+use super::SpillsBufferPool;
 
 pub struct Properties {
     schema: Arc<Schema>,
