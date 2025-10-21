@@ -1092,4 +1092,7 @@ impl Binder {
         }
         Ok(s_expr)
     }
+
+    // Masking policy methods have been removed - now handled uniformly in TypeChecker::resolve()
+    // This eliminates ~200 lines of duplicated logic across SELECT/WHERE/HAVING
 }
