@@ -19,12 +19,37 @@ use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::PoisonError;
 
+use arrow_schema::Schema;
 use bytes::Bytes;
 use bytes::BytesMut;
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::TableSchemaRef;
+use databend_common_storages_parquet::read_all;
+use databend_common_storages_parquet::InMemoryRowGroup;
+use databend_common_storages_parquet::ReadSettings;
 use opendal::Metadata;
+use opendal::Operator;
 use opendal::Writer;
+use parquet::arrow::parquet_to_arrow_field_levels;
+use parquet::arrow::parquet_to_arrow_schema;
+use parquet::arrow::ArrowWriter;
+use parquet::arrow::FieldLevels;
+use parquet::arrow::ProjectionMask;
+use parquet::basic::Compression;
+use parquet::file::metadata::RowGroupMetaData;
+use parquet::file::properties::EnabledStatistics;
+use parquet::file::properties::WriterProperties;
+
+use crate::spillers::serialize::fake_data_schema;
 
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
@@ -79,15 +104,27 @@ const CHUNK_SIZE: usize = 4 * 1024 * 1024;
 /// - Buffer reuse minimizes GC pressure during intensive spill operations
 /// - Automatic flow control matches spill rate to storage bandwidth
 /// - Works with any OpenDAL-supported storage (local disk, S3, etc.)
-pub struct BufferPool {
+pub struct SpillsBufferPool {
     working_queue: async_channel::Sender<BufferOperator>,
     available_write_buffers: async_channel::Receiver<BytesMut>,
     available_write_buffers_tx: async_channel::Sender<BytesMut>,
 }
 
-impl BufferPool {
-    #[allow(dead_code)]
-    pub fn create(executor: Arc<Runtime>, memory: usize, workers: usize) -> Arc<BufferPool> {
+impl SpillsBufferPool {
+    pub fn init() {
+        // TODO: config
+        GlobalInstance::set(SpillsBufferPool::create(
+            GlobalIORuntime::instance(),
+            200 * 1024 * 1024,
+            2,
+        ))
+    }
+
+    pub fn instance() -> Arc<SpillsBufferPool> {
+        GlobalInstance::get()
+    }
+
+    pub fn create(executor: Arc<Runtime>, memory: usize, workers: usize) -> Arc<SpillsBufferPool> {
         let (working_tx, working_rx) = async_channel::unbounded();
         let (buffers_tx, buffers_rx) = async_channel::unbounded();
 
@@ -113,17 +150,17 @@ impl BufferPool {
             });
         }
 
-        Arc::new(BufferPool {
+        Arc::new(SpillsBufferPool {
             working_queue: working_tx,
             available_write_buffers: buffers_rx,
             available_write_buffers_tx: buffers_tx,
         })
     }
-    pub fn try_alloc_buffer(&self) -> Option<BytesMut> {
+    pub(crate) fn try_alloc_buffer(&self) -> Option<BytesMut> {
         self.available_write_buffers.try_recv().ok()
     }
 
-    pub fn alloc_buffer(&self) -> std::io::Result<BytesMut> {
+    pub(crate) fn alloc_buffer(&self) -> std::io::Result<BytesMut> {
         match self.available_write_buffers.recv_blocking() {
             Ok(buf) => Ok(buf),
             Err(_) => Err(std::io::Error::new(
@@ -133,7 +170,7 @@ impl BufferPool {
         }
     }
 
-    pub fn write(&self, op: BufferWriteOperator) {
+    pub(crate) fn write(&self, op: BufferWriteOperator) {
         if self
             .working_queue
             .try_send(BufferOperator::Write(op))
@@ -143,7 +180,7 @@ impl BufferPool {
         }
     }
 
-    pub fn close(&self, op: BufferCloseOperator) {
+    pub(crate) fn close(&self, op: BufferCloseOperator) {
         if self
             .working_queue
             .try_send(BufferOperator::Close(op))
@@ -153,12 +190,59 @@ impl BufferPool {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn buffer_write(self: &Arc<BufferPool>, writer: Writer) -> BufferWriter {
+    pub(crate) fn read(&self, op: ReadRowGroupOperator) {
+        if self
+            .working_queue
+            .try_send(BufferOperator::ReadRowGroup(op))
+            .is_err()
+        {
+            unreachable!("Buffer pool working queue need unbounded.");
+        }
+    }
+
+    pub fn buffer_write(self: &Arc<SpillsBufferPool>, writer: Writer) -> BufferWriter {
         BufferWriter::new(writer, self.clone())
     }
 
-    pub fn release_buffer(&self, buffer: BytesMut) {
+    pub fn writer(self: &Arc<Self>, op: Operator, path: String) -> Result<SpillsDataWriter> {
+        let pending_response = Arc::new(BufferOperatorResp {
+            mutex: Mutex::new(None),
+            condvar: Default::default(),
+        });
+
+        let operator = BufferOperator::CreateWriter(CreateWriterOperator {
+            op,
+            path,
+            response: pending_response.clone(),
+        });
+
+        if self.working_queue.try_send(operator).is_err() {
+            unreachable!("Buffer pool working queue need unbounded.");
+        }
+
+        let locked = pending_response.mutex.lock();
+        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        if locked.is_none() {
+            let waited = pending_response.condvar.wait(locked);
+            locked = waited.unwrap_or_else(PoisonError::into_inner);
+        }
+
+        Ok(SpillsDataWriter::Uninitialize(Some(
+            self.buffer_write(locked.take().unwrap()?),
+        )))
+    }
+
+    pub fn parquet_reader(
+        self: &Arc<Self>,
+        op: Operator,
+        path: String,
+        row_groups: Vec<RowGroupMetaData>,
+    ) -> Result<SpillsDataReader> {
+        SpillsDataReader::create(path, op, row_groups, self.clone())
+    }
+
+    pub(crate) fn release_buffer(&self, buffer: BytesMut) {
         if self.available_write_buffers_tx.try_send(buffer).is_err() {
             unreachable!("Buffer pool available_write_buffers need unbounded.");
         }
@@ -170,13 +254,13 @@ pub struct BufferWriter {
 
     current_bytes: Option<BytesMut>,
 
-    buffer_pool: Arc<BufferPool>,
+    buffer_pool: Arc<SpillsBufferPool>,
     pending_buffers: VecDeque<Bytes>,
     pending_response: Option<Arc<BufferOperatorResp<BufferWriteResp>>>,
 }
 
 impl BufferWriter {
-    pub fn new(writer: Writer, buffer_pool: Arc<BufferPool>) -> BufferWriter {
+    pub fn new(writer: Writer, buffer_pool: Arc<SpillsBufferPool>) -> BufferWriter {
         BufferWriter {
             buffer_pool,
             writer: Some(writer),
@@ -231,7 +315,6 @@ impl BufferWriter {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn close(mut self) -> std::io::Result<Metadata> {
         self.flush()?;
 
@@ -372,6 +455,168 @@ impl Drop for BufferWriter {
     }
 }
 
+pub struct InitializedBlocksStreamWriter {
+    table_schema: TableSchemaRef,
+    writer: ArrowWriter<BufferWriter>,
+}
+
+pub enum SpillsDataWriter {
+    Uninitialize(Option<BufferWriter>),
+    Initialized(InitializedBlocksStreamWriter),
+}
+
+impl SpillsDataWriter {
+    pub fn create(writer: BufferWriter) -> Self {
+        Self::Uninitialize(Some(writer))
+    }
+
+    pub fn write(&mut self, block: DataBlock) -> Result<()> {
+        match self {
+            SpillsDataWriter::Uninitialize(writer) => {
+                let data_schema = fake_data_schema(&block);
+                let table_schema = infer_table_schema(&data_schema)?;
+
+                let props = WriterProperties::builder()
+                    .set_compression(Compression::LZ4_RAW)
+                    .set_statistics_enabled(EnabledStatistics::None)
+                    .set_bloom_filter_enabled(false)
+                    .build();
+
+                let arrow_schema = Arc::new(Schema::from(table_schema.as_ref()));
+                let buffer_writer = writer.take().unwrap();
+                let mut writer = ArrowWriter::try_new(buffer_writer, arrow_schema, Some(props))?;
+                let record_batch = block.to_record_batch(&table_schema)?;
+                writer.write(&record_batch)?;
+                *self = SpillsDataWriter::Initialized(InitializedBlocksStreamWriter {
+                    writer,
+                    table_schema,
+                });
+
+                Ok(())
+            }
+            SpillsDataWriter::Initialized(writer) => {
+                let record_batch = block.to_record_batch(&writer.table_schema)?;
+                Ok(writer.writer.write(&record_batch)?)
+            }
+        }
+    }
+
+    pub fn flush(&mut self) -> Result<()> {
+        match self {
+            SpillsDataWriter::Uninitialize(_) => Err(ErrorCode::Internal(
+                "Bad state, BlockStreamWriter is uninitialized",
+            )),
+            SpillsDataWriter::Initialized(writer) => Ok(writer.writer.flush()?),
+        }
+    }
+
+    pub fn close(self) -> Result<Vec<RowGroupMetaData>> {
+        match self {
+            SpillsDataWriter::Uninitialize(mut writer) => {
+                if let Some(writer) = writer.take() {
+                    writer.close()?;
+                }
+
+                Ok(vec![])
+            }
+            SpillsDataWriter::Initialized(mut writer) => {
+                writer.writer.flush()?;
+                let row_groups = writer.writer.flushed_row_groups().to_vec();
+                writer.writer.into_inner()?.close()?;
+                Ok(row_groups)
+            }
+        }
+    }
+}
+
+pub struct SpillsDataReader {
+    location: String,
+    operator: Operator,
+    row_groups: VecDeque<RowGroupMetaData>,
+    spills_buffer_pool: Arc<SpillsBufferPool>,
+    data_schema: DataSchemaRef,
+    field_levels: FieldLevels,
+}
+
+impl SpillsDataReader {
+    pub fn create(
+        location: String,
+        operator: Operator,
+        row_groups: Vec<RowGroupMetaData>,
+        spills_buffer_pool: Arc<SpillsBufferPool>,
+    ) -> Result<Self> {
+        if row_groups.is_empty() {
+            return Err(ErrorCode::Internal(
+                "Parquet reader cannot read empty row groups.",
+            ));
+        }
+
+        let arrow_schema = parquet_to_arrow_schema(row_groups[0].schema_descr(), None)?;
+        let data_schema = DataSchemaRef::new(DataSchema::try_from(&arrow_schema)?);
+
+        let field_levels = parquet_to_arrow_field_levels(
+            row_groups[0].schema_descr(),
+            ProjectionMask::all(),
+            None,
+        )?;
+
+        Ok(SpillsDataReader {
+            location,
+            operator,
+            spills_buffer_pool,
+            data_schema,
+            field_levels,
+            row_groups: VecDeque::from(row_groups),
+        })
+    }
+
+    #[allow(clippy::missing_transmute_annotations)]
+    pub fn read(&mut self, settings: ReadSettings) -> Result<Option<DataBlock>> {
+        let Some(row_group) = self.row_groups.pop_front() else {
+            return Ok(None);
+        };
+
+        let row_group = InMemoryRowGroup::new(
+            self.location.as_str(),
+            self.operator.clone(),
+            &row_group,
+            None,
+            settings,
+        );
+
+        let pending_response = Arc::new(BufferOperatorResp {
+            condvar: Default::default(),
+            mutex: Mutex::new(None),
+        });
+
+        self.spills_buffer_pool.read(ReadRowGroupOperator {
+            in_memory_row_group: unsafe { std::mem::transmute(row_group) },
+            response: pending_response.clone(),
+        });
+
+        let locked = pending_response.mutex.lock();
+        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        if locked.is_none() {
+            let waited = pending_response.condvar.wait(locked);
+            locked = waited.unwrap_or_else(PoisonError::into_inner);
+        }
+
+        let fetched_row_group = locked.take().unwrap()?;
+
+        let num_rows = fetched_row_group.row_count();
+
+        Ok(Some(read_all(
+            &self.data_schema,
+            &fetched_row_group,
+            &self.field_levels,
+            None,
+            &None,
+            num_rows,
+        )?))
+    }
+}
+
 pub struct BufferWriteResp {
     writer: Writer,
     error: Option<std::io::Error>,
@@ -393,6 +638,18 @@ pub struct BufferCloseOperator {
     response: Arc<BufferOperatorResp<BufferCloseResp>>,
 }
 
+pub struct CreateWriterOperator {
+    op: Operator,
+    path: String,
+    response: Arc<BufferOperatorResp<opendal::Result<Writer>>>,
+}
+
+pub struct ReadRowGroupOperator {
+    in_memory_row_group: InMemoryRowGroup<'static>,
+    response: Arc<BufferOperatorResp<Result<InMemoryRowGroup<'static>>>>,
+}
+
+#[derive(Default)]
 pub struct BufferOperatorResp<T> {
     condvar: Condvar,
     mutex: Mutex<Option<T>>,
@@ -401,6 +658,8 @@ pub struct BufferOperatorResp<T> {
 pub enum BufferOperator {
     Write(BufferWriteOperator),
     Close(BufferCloseOperator),
+    CreateWriter(CreateWriterOperator),
+    ReadRowGroup(ReadRowGroupOperator),
 }
 
 pub struct Background {
@@ -463,6 +722,24 @@ impl Background {
 
                 op.response.condvar.notify_one();
             }
+            BufferOperator::CreateWriter(op) => {
+                let writer = op.op.writer(&op.path).await;
+                let locked = op.response.mutex.lock();
+                let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
+                *locked = Some(writer);
+
+                op.response.condvar.notify_one();
+            }
+            BufferOperator::ReadRowGroup(mut op) => {
+                let projection_mask = ProjectionMask::all();
+                let res = op.in_memory_row_group.fetch(&projection_mask, None).await;
+
+                let locked = op.response.mutex.lock();
+                let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
+                *locked = Some(res.map(|_| op.in_memory_row_group));
+
+                op.response.condvar.notify_one();
+            }
         }
     }
 }
@@ -491,7 +768,7 @@ mod tests {
         let memory = 16 * 1024 * 1024; // 16MB
         let workers = 2;
 
-        let pool = BufferPool::create(runtime.clone(), memory, workers);
+        let pool = SpillsBufferPool::create(runtime.clone(), memory, workers);
 
         // Should be able to allocate buffers
         let buffer1 = pool.try_alloc_buffer();
@@ -506,7 +783,7 @@ mod tests {
     #[tokio::test]
     async fn test_buffer_writer_basic_write() {
         let runtime = Arc::new(Runtime::with_worker_threads(2, None).unwrap());
-        let pool = BufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
+        let pool = SpillsBufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("test_file").await.unwrap();
 
@@ -524,7 +801,7 @@ mod tests {
     #[tokio::test]
     async fn test_buffer_writer_large_write() {
         let runtime = Arc::new(Runtime::with_worker_threads(2, None).unwrap());
-        let pool = BufferPool::create(runtime.clone(), 16 * 1024 * 1024, 2);
+        let pool = SpillsBufferPool::create(runtime.clone(), 16 * 1024 * 1024, 2);
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("large_file").await.unwrap();
 
@@ -543,7 +820,7 @@ mod tests {
     #[tokio::test]
     async fn test_buffer_writer_multiple_writes() {
         let runtime = Arc::new(Runtime::with_worker_threads(2, None).unwrap());
-        let pool = BufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
+        let pool = SpillsBufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("multi_write_file").await.unwrap();
 
@@ -565,7 +842,7 @@ mod tests {
     async fn test_buffer_pool_exhaustion_and_backpressure() {
         let runtime = Arc::new(Runtime::with_worker_threads(2, None).unwrap());
         // Create pool with only 1 buffer to test backpressure
-        let pool = BufferPool::create(runtime.clone(), CHUNK_SIZE, 1);
+        let pool = SpillsBufferPool::create(runtime.clone(), CHUNK_SIZE, 1);
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("backpressure_test").await.unwrap();
 
@@ -587,7 +864,7 @@ mod tests {
     #[tokio::test]
     async fn test_buffer_reuse() {
         let runtime = Arc::new(Runtime::with_worker_threads(2, None).unwrap());
-        let pool = BufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
+        let pool = SpillsBufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
 
         // Allocate all buffers
         let mut buffers = Vec::new();
@@ -618,7 +895,7 @@ mod tests {
     #[tokio::test]
     async fn test_empty_write() {
         let runtime = Arc::new(Runtime::with_worker_threads(2, None).unwrap());
-        let pool = BufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
+        let pool = SpillsBufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("empty_test").await.unwrap();
 
@@ -635,7 +912,7 @@ mod tests {
     #[tokio::test]
     async fn test_close_without_writes() {
         let runtime = Arc::new(Runtime::with_worker_threads(2, None).unwrap());
-        let pool = BufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
+        let pool = SpillsBufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("no_write_test").await.unwrap();
 
@@ -649,7 +926,7 @@ mod tests {
     #[tokio::test]
     async fn test_concurrent_writers() {
         let runtime = Arc::new(Runtime::with_worker_threads(2, None).unwrap());
-        let pool = BufferPool::create(runtime.clone(), 16 * 1024 * 1024, 4);
+        let pool = SpillsBufferPool::create(runtime.clone(), 16 * 1024 * 1024, 4);
         let operator = create_test_operator().unwrap();
 
         let write_count = Arc::new(AtomicUsize::new(0));
@@ -691,7 +968,7 @@ mod tests {
     #[tokio::test]
     async fn test_writer_close_error_handling() {
         let runtime = Arc::new(Runtime::with_worker_threads(2, None).unwrap());
-        let pool = BufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
+        let pool = SpillsBufferPool::create(runtime.clone(), 8 * 1024 * 1024, 1);
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("error_test").await.unwrap();
 

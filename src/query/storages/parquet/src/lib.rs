@@ -6,7 +6,7 @@
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
-// Unless required by applicable law or agreed to in writing, software
+// Unless required by applicable law or ageed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
@@ -49,6 +49,8 @@ pub use parquet_part::DeleteTask;
 pub use parquet_part::DeleteType;
 pub use parquet_part::ParquetFilePart;
 pub use parquet_part::ParquetPart;
+pub use parquet_reader::read_all;
+pub use parquet_reader::InMemoryRowGroup;
 pub use parquet_reader::InmMemoryFile;
 pub use parquet_reader::ParquetFileReader;
 pub use parquet_reader::ParquetReaderBuilder;
@@ -57,5 +59,6 @@ pub use parquet_table::ParquetTable;
 pub use parquet_variant_table::ParquetVariantTable;
 // for it test
 pub use pruning::ParquetPruner;
+pub use read_settings::ReadSettings;
 pub use source::ParquetSource;
 pub use source::ParquetSourceType;

@@ -46,12 +46,12 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
 pub struct OuterLeftHashJoin {
-    basic_hash_join: BasicHashJoin,
+    pub(crate) basic_hash_join: BasicHashJoin,
 
-    desc: Arc<HashJoinDesc>,
-    function_ctx: FunctionContext,
-    basic_state: Arc<BasicHashJoinState>,
-    performance_context: PerformanceContext,
+    pub(crate) desc: Arc<HashJoinDesc>,
+    pub(crate) function_ctx: FunctionContext,
+    pub(crate) basic_state: Arc<BasicHashJoinState>,
+    pub(crate) performance_context: PerformanceContext,
 }
 
 impl OuterLeftHashJoin {

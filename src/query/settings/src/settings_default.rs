@@ -1486,8 +1486,7 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
-                }),
-
+                })
             ]);
 
             Ok(Arc::new(DefaultSettings {

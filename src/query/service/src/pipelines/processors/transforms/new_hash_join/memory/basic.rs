@@ -39,12 +39,12 @@ use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
 pub struct BasicHashJoin {
-    desc: Arc<HashJoinDesc>,
-    squash_block: SquashBlocks,
+    pub(crate) desc: Arc<HashJoinDesc>,
+    pub(crate) squash_block: SquashBlocks,
 
-    method: HashMethodKind,
-    function_ctx: FunctionContext,
-    state: Arc<BasicHashJoinState>,
+    pub(crate) method: HashMethodKind,
+    pub(crate) function_ctx: FunctionContext,
+    pub(crate) state: Arc<BasicHashJoinState>,
 }
 
 impl BasicHashJoin {

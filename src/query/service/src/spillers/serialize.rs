@@ -113,7 +113,7 @@ pub(super) fn deserialize_block(columns_layout: &Layout, data: Buffer) -> Result
     }
 }
 
-fn fake_data_schema(block: &DataBlock) -> DataSchema {
+pub fn fake_data_schema(block: &DataBlock) -> DataSchema {
     let fields = block
         .columns()
         .iter()
