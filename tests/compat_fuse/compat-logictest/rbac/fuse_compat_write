@@ -11,9 +11,6 @@ statement ok
 create function a as (a) -> (a+1);
 
 statement ok
-set global enable_experimental_procedure=1;
-
-statement ok
 drop procedure if exists p1(int);
 
 statement ok
@@ -58,5 +55,4 @@ GRANT create sequence on *.* to role 'role1';
 
 statement ok
 GRANT create procedure on *.* to role 'role1';
-
 

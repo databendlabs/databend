@@ -1,7 +1,4 @@
 statement ok
-set global enable_experimental_procedure=1;
-
-statement ok
 drop procedure if exists p1(int);
 
 statement ok
@@ -206,5 +203,4 @@ call procedure p3('x');
 
 statement ok
 drop procedure p3(string);
-
 
