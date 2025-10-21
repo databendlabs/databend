@@ -1,7 +1,4 @@
 statement ok
-set global enable_experimental_procedure=1;
-
-statement ok
 CREATE OR REPLACE PROCEDURE p1() RETURNS int not null LANGUAGE SQL AS $$
 BEGIN
     RETURN 1;
