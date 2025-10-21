@@ -25,6 +25,7 @@ use databend_common_pipeline_core::TransformPipeBuilder;
 use databend_common_storage::DataOperator;
 use tokio::sync::Semaphore;
 
+use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::FinalAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::NewFinalAggregateTransform;
 use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::TransformPartitionBucketScatter;
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
@@ -70,8 +71,9 @@ pub fn build_partition_bucket(
         ));
 
         let mut builder = TransformPipeBuilder::create();
-        let block_operator = operator.blocking();
+
         for id in 0..output_num {
+            let spiller = FinalAggregateSpiller::try_create(ctx.clone(), operator.clone())?;
             let input_port = InputPort::create();
             let output_port = OutputPort::create();
             let processor = NewFinalAggregateTransform::try_create(
@@ -79,8 +81,8 @@ pub fn build_partition_bucket(
                 output_port.clone(),
                 id,
                 params.clone(),
-                block_operator.clone(),
                 output_num,
+                ctx.clone(),
             )?;
             builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
         }

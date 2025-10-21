@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod final_aggregate_shared_state;
+mod final_aggregate_state;
 mod new_transform_final_aggregate;
 mod transform_partition_bucket_scatter;
 
+pub use final_aggregate_state::FinalAggregateSpiller;
 pub use new_transform_final_aggregate::NewFinalAggregateTransform;
 pub use transform_partition_bucket_scatter::TransformPartitionBucketScatter;

@@ -15,48 +15,41 @@
 use std::any::Any;
 use std::fmt::Display;
 use std::sync::Arc;
-use std::time::Instant;
 
+use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::final_aggregate_state::FinalAggregateSharedState;
+use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::final_aggregate_state::FinalAggregateSpiller;
+use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::sessions::QueryContext;
 use bumpalo::Bump;
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::arrow::deserialize_column;
-use databend_common_expression::{AggregateHashTable, BlockMetaInfoDowncast, HashTableConfig};
-use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::PayloadFlushState;
+use databend_common_expression::{AggregateHashTable, BlockMetaInfoDowncast, HashTableConfig};
+use databend_common_expression::{BlockPartitionStream, DataBlock};
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use opendal::BlockingOperator;
 use parking_lot::Mutex;
 use tokio::sync::Barrier;
 
-use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
-use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::final_aggregate_shared_state::FinalAggregateSharedState;
-use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
-
 pub enum LocalState {
     Idle,
-    Payload(AggregateMeta),
-    SpilledPayload(AggregateMeta),
+    NewTask(AggregateMeta),
     OutputReady(DataBlock),
     Aggregate,
     AsyncWait,
 }
 
-impl std::fmt::Display for LocalState {
+impl Display for LocalState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LocalState::Idle => write!(f, "Idle"),
-            LocalState::Payload(_) => write!(f, "Payload"),
-            LocalState::SpilledPayload(_) => write!(f, "SpilledPayload"),
+            LocalState::NewTask(_) => write!(f, "NewTask"),
             LocalState::OutputReady(_) => write!(f, "OutputReady"),
             LocalState::AsyncWait => write!(f, "AsyncWait"),
             LocalState::Aggregate => write!(f, "Aggregate"),
@@ -72,11 +65,13 @@ pub struct NewFinalAggregateTransform {
     flush_state: PayloadFlushState,
     working_queue: Vec<AggregateMeta>,
     state: LocalState,
-    operator: BlockingOperator,
     partition_count: usize,
     repartitioned_queue: Vec<Vec<AggregateMeta>>,
     barrier: Arc<Barrier>,
     shared_state: Arc<Mutex<FinalAggregateSharedState>>,
+    data_ready: bool,
+    spiller: FinalAggregateSpiller,
+    block_partition_stream: BlockPartitionStream,
 }
 
 impl NewFinalAggregateTransform {
@@ -85,11 +80,15 @@ impl NewFinalAggregateTransform {
         output: Arc<OutputPort>,
         id: usize,
         params: Arc<AggregatorParams>,
-        operator: BlockingOperator,
         partition_count: usize,
         barrier: Arc<Barrier>,
         shared_state: Arc<Mutex<FinalAggregateSharedState>>,
+        spiller: FinalAggregateSpiller,
+        ctx: Arc<QueryContext>,
     ) -> Result<Box<dyn Processor>> {
+        let block_bytes = ctx.get_settings().get_max_block_bytes()? as usize;
+        let block_partition_stream = BlockPartitionStream::create(0, block_bytes, partition_count);
+
         Ok(Box::new(NewFinalAggregateTransform {
             input,
             output,
@@ -98,53 +97,18 @@ impl NewFinalAggregateTransform {
             flush_state: PayloadFlushState::default(),
             working_queue: vec![],
             state: LocalState::Idle,
-            operator,
             partition_count,
             repartitioned_queue: vec![vec![]; partition_count],
             barrier,
             shared_state,
+            data_ready: false,
+            spiller,
+            block_partition_stream,
         }))
     }
 
-    fn read(&mut self, spilled_payload: &BucketSpilledPayload) -> Result<Vec<u8>> {
-        let instant = Instant::now();
-
-        let data = self
-            .operator
-            .read_with(&spilled_payload.location)
-            .range(spilled_payload.data_range.clone())
-            .call()?
-            .to_vec();
-
-        {
-            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, data.len());
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillReadTime,
-                instant.elapsed().as_millis() as usize,
-            );
-        }
-
-        Ok(data)
-    }
-
-    fn deserialize(&self, payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta {
-        let mut begin = 0;
-        let mut columns = Vec::with_capacity(payload.columns_layout.len());
-
-        for column_layout in &payload.columns_layout {
-            columns
-                .push(deserialize_column(&data[begin..begin + *column_layout as usize]).unwrap());
-            begin += *column_layout as usize;
-        }
-
-        AggregateMeta::Serialized(SerializedPayload {
-            bucket: payload.bucket,
-            data_block: DataBlock::new_from_columns(columns),
-            max_partition_count: payload.max_partition_count,
-        })
-    }
-
+    /// Repartition the given AggregateMeta into `partition_count` partitions
+    /// in aggregate stage, `partition_count` processors will handle each partition respectively.
     fn repartition(&self, meta: AggregateMeta) -> Result<()> {
         let mut flush_state = PayloadFlushState::default();
 
@@ -288,6 +252,53 @@ impl NewFinalAggregateTransform {
         self.state = LocalState::OutputReady(output_block);
         Ok(())
     }
+
+    pub fn spill(&mut self) -> Result<()> {
+        let mut ready_blocks: Vec<Vec<DataBlock>> = vec![vec![]; self.partition_count];
+
+        for (id, queue) in self.repartitioned_queue.iter_mut().enumerate() {
+            while let Some(meta) = queue.pop() {
+                match meta {
+                    AggregateMeta::AggregatePayload(AggregatePayload { payload, .. }) => {
+                        let data_block = payload.aggregate_flush_all()?;
+                        let indices = vec![id as u64; data_block.num_rows()];
+                        let blocks = self
+                            .block_partition_stream
+                            .partition(indices, data_block, true);
+                        for (part_id, block) in blocks.into_iter() {
+                            ready_blocks[part_id].push(block);
+                        }
+                    }
+                    _ => {
+                        return Err(ErrorCode::Internal(
+                            "FinalAggregateSpiller expects AggregatePayload in repartitioned queue",
+                        ));
+                    }
+                }
+            }
+        }
+
+        for (partition_id, blocks) in ready_blocks.into_iter().enumerate() {
+            if blocks.is_empty() {
+                continue;
+            }
+            for block in blocks {
+                let bucket_spilled_payload = self.spiller.spill(partition_id, block)?;
+                self.repartitioned_queue[partition_id]
+                    .push(AggregateMeta::BucketSpilled(bucket_spilled_payload));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn spill_if_memory_pressure(&mut self) -> Result<()> {
+        if self.spiller.is_spilled {}
+
+        if self.spiller.memory_settings.check_spill() {}
+
+        Ok(())
+    }
 }
 
 impl Processor for NewFinalAggregateTransform {
@@ -315,26 +326,15 @@ impl Processor for NewFinalAggregateTransform {
             _ => {}
         }
 
-        if let Some(aggregate_meta) = self.working_queue.pop() {
-            match &aggregate_meta{
-                AggregateMeta::AggregatePayload(_)=>{
-                    self.state = LocalState::Payload(aggregate_meta);
-                }
-                AggregateMeta::BucketSpilled(_)=>{
-                    self.state = LocalState::SpilledPayload(aggregate_meta);
-
-                }
-                _ => return Err(ErrorCode::Internal(
-                    "NewFinalAggregateTransform expects AggregatePayload or BucketSpilled from working queue",
-                ))
-            }
-            return Ok(Event::Sync);
-        }
-
-        // TODO: first time should pass this check
-        if self.working_queue.is_empty() {
+        if self.working_queue.is_empty() && self.data_ready {
+            self.data_ready = false;
             self.state = LocalState::AsyncWait;
             return Ok(Event::Async);
+        }
+
+        if let Some(aggregate_meta) = self.working_queue.pop() {
+            self.state = LocalState::NewTask(aggregate_meta);
+            return Ok(Event::Sync);
         }
 
         if self.input.has_data() {
@@ -344,10 +344,10 @@ impl Processor for NewFinalAggregateTransform {
                 .take_meta()
                 .and_then(AggregateMeta::downcast_from)
             {
+                self.data_ready = true;
                 match block_meta {
                     AggregateMeta::Partitioned { data, .. } => {
                         self.working_queue.extend(data);
-                        // TODO: should immediately process the working queue instead of returning NeedData
                     }
                     _ => {
                         return Err(ErrorCode::Internal(
@@ -355,6 +355,11 @@ impl Processor for NewFinalAggregateTransform {
                         ));
                     }
                 }
+            }
+
+            if let Some(aggregate_meta) = self.working_queue.pop() {
+                self.state = LocalState::NewTask(aggregate_meta);
+                return Ok(Event::Sync);
             }
         }
 
@@ -365,16 +370,12 @@ impl Processor for NewFinalAggregateTransform {
     fn process(&mut self) -> Result<()> {
         let state = std::mem::replace(&mut self.state, LocalState::Idle);
         match state {
-            LocalState::Payload(payload) => self.repartition(payload),
-            LocalState::SpilledPayload(meta) => {
-                let AggregateMeta::BucketSpilled(spilled_payload) = meta else {
-                    return Err(ErrorCode::Internal(
-                        "NewFinalAggregateTransform expects BucketSpilledPayload in SpilledPayload state",
-                    ));
+            LocalState::NewTask(meta) => {
+                let meta = match meta {
+                    AggregateMeta::BucketSpilled(p) => self.spiller.restore(p)?,
+                    other => other,
                 };
-                let read_data = self.read(&spilled_payload)?;
-                let serialized_payload = self.deserialize(spilled_payload, read_data);
-                self.repartition(serialized_payload)
+                self.repartition(meta)
             }
             LocalState::Aggregate => {
                 let queue = self.shared_state.lock().take_aggregate_queue(self.id);
