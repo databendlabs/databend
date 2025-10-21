@@ -37,8 +37,8 @@ analyze table t1;
 query IIT
 select * from fuse_statistic('issue_17314', 't1') order by column_name;
 ----
-a 3 0 14 [bucket id: 0, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "3", max: "3", ndv: 1.0, count: 1.0]
-b 3 0 15 [bucket id: 0, min: "11", max: "11", ndv: 1.0, count: 1.0], [bucket id: 1, min: "22", max: "22", ndv: 1.0, count: 1.0], [bucket id: 2, min: "33", max: "33", ndv: 1.0, count: 1.0]
+a 3 0 17 [bucket id: 0, min: "1", max: "1", ndv: 1.0, count: 1.0], [bucket id: 1, min: "2", max: "2", ndv: 1.0, count: 1.0], [bucket id: 2, min: "3", max: "3", ndv: 1.0, count: 1.0]
+b 3 0 17 [bucket id: 0, min: "11", max: "11", ndv: 1.0, count: 1.0], [bucket id: 1, min: "22", max: "22", ndv: 1.0, count: 1.0], [bucket id: 2, min: "33", max: "33", ndv: 1.0, count: 1.0]
 
 statement ok
 drop table t1 all;

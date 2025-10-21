@@ -1,9 +1,9 @@
 2
 --- named internal stage
-2	45
+2	61
 1	2	3
 4	5	6
-2	45
+2	61
 --- external stage
 1	2	3
 4	5	6
@@ -16,7 +16,7 @@
 1	[1,2,3]
 2	{"k":"v"}
 --- large parquet file should be worked on parallel by rowgroups
-5000000	173888890
+5000000	160000000
 ├── partitions total: 6
 ├── partitions scanned: 6
-5000000	173888890
+5000000

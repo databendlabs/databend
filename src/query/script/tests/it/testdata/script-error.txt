@@ -103,7 +103,7 @@ error:
   |
 1 | LET x := 1;
 2 | FOR r IN x DO
-  |          ^ `x` is not a set
+  |          ^ `x` is not a resultset or cursor
 
 
 ---------- Input ----------

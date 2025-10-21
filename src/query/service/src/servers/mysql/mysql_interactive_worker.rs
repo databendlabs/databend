@@ -426,7 +426,11 @@ impl InteractiveWorkerBase {
                 let has_result_set = plan.has_result_set();
 
                 let (blocks, extra_info) = Self::exec_query(interpreter.clone(), &context).await?;
-                let schema = plan.schema();
+                let mut schema = plan.schema();
+                if let Some(real_schema) = interpreter.get_dynamic_schema().await {
+                    schema = real_schema;
+                }
+
                 let format = context.get_format_settings()?;
                 Ok((
                     QueryResult::create(
