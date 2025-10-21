@@ -165,34 +165,6 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
-    pub(crate) fn closed(query_id: &str, close_reason: CloseReason) -> impl IntoResponse {
-        let id = query_id.to_string();
-        let state = match close_reason {
-            CloseReason::Finalized => ExecuteStateKind::Succeeded,
-            _ => ExecuteStateKind::Failed,
-        };
-        Json(QueryResponse {
-            id: query_id.to_string(),
-            session_id: None,
-            node_id: GlobalConfig::instance().query.node_id.clone(),
-            state,
-            session: None,
-            error: None,
-            warnings: vec![],
-            has_result_set: None,
-            schema: vec![],
-            data: Arc::new(BlocksSerializer::empty()),
-            affect: None,
-            result_timeout_secs: None,
-            stats: Default::default(),
-            stats_uri: None,
-            final_uri: None,
-            next_uri: None,
-            kill_uri: None,
-        })
-        .with_header(HEADER_QUERY_ID, id.clone())
-        .with_header(HEADER_QUERY_STATE, state.to_string())
-    }
     pub(crate) fn from_internal(
         id: String,
         r: HttpQueryResponseInternal,
@@ -269,6 +241,56 @@ impl QueryResponse {
         .with_header(HEADER_QUERY_ID, id.clone())
         .with_header(HEADER_QUERY_STATE, state.state.to_string())
         .with_header(HEADER_QUERY_PAGE_ROWS, rows)
+    }
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct StateResponse {
+    pub state: ExecuteStateKind,
+    pub error: Option<QueryError>,
+    pub warnings: Vec<String>,
+    pub stats: QueryStats,
+}
+
+impl StateResponse {
+    pub(crate) fn from_internal(id: String, r: HttpQueryResponseInternal) -> impl IntoResponse {
+        let state = r.state.clone();
+
+        if let Some(err) = &r.state.error {
+            metrics_incr_http_response_errors_count(err.name(), err.code());
+        }
+
+        let stats = QueryStats {
+            progresses: state.progresses.clone(),
+            running_time_ms: state.running_time_ms,
+        };
+        let rows = r.data.map(|d| d.page.data.num_rows()).unwrap_or_default();
+
+        Json(StateResponse {
+            state: state.state,
+            stats,
+            warnings: r.state.warnings,
+            error: r.state.error.map(QueryError::from_error_code),
+        })
+        .with_header(HEADER_QUERY_ID, id.clone())
+        .with_header(HEADER_QUERY_STATE, state.state.to_string())
+        .with_header(HEADER_QUERY_PAGE_ROWS, rows)
+    }
+
+    pub(crate) fn closed(query_id: &str, close_reason: CloseReason) -> impl IntoResponse {
+        let id = query_id.to_string();
+        let state = match close_reason {
+            CloseReason::Finalized => ExecuteStateKind::Succeeded,
+            _ => ExecuteStateKind::Failed,
+        };
+        Json(StateResponse {
+            state,
+            error: None,
+            warnings: vec![],
+            stats: Default::default(),
+        })
+        .with_header(HEADER_QUERY_ID, id.clone())
+        .with_header(HEADER_QUERY_STATE, state.to_string())
     }
 }
 
@@ -368,12 +390,12 @@ async fn query_state_handler(
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
                 if let Some(reason) = query.check_closed() {
-                    Ok(QueryResponse::closed(&query_id, reason.reason).into_response())
+                    Ok(StateResponse::closed(&query_id, reason.reason).into_response())
                 } else {
                     let response = query
                         .get_response_state_only()
                         .map_err(HttpErrorCode::server_error)?;
-                    Ok(QueryResponse::from_internal(query_id, response, false).into_response())
+                    Ok(StateResponse::from_internal(query_id, response).into_response())
                 }
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),

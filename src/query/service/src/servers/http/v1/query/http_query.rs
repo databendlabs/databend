@@ -937,7 +937,7 @@ impl HttpQuery {
             }
             ClientState::Closed(st) => {
                 let to = match st.reason {
-                    CloseReason::Finalized => 30,
+                    CloseReason::Finalized => self.result_timeout_secs.min(30),
                     _ => self.result_timeout_secs,
                 };
                 let expire_at = st.ts + Duration::from_secs(to);
