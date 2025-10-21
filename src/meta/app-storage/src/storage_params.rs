@@ -429,6 +429,12 @@ pub enum S3StorageClass {
     IntelligentTiering,
 }
 
+pub fn set_s3_storage_class(storage_params: &mut StorageParams, s3_storage_class: S3StorageClass) {
+    if let StorageParams::S3(config) = storage_params {
+        config.storage_class = s3_storage_class;
+    };
+}
+
 const S3_STORAGE_CLASS_STANDARD: &str = "STANDARD";
 const S3_STORAGE_CLASS_INTELLIGENT_TIERING: &str = "INTELLIGENT_TIERING";
 impl Display for S3StorageClass {

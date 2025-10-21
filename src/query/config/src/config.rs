@@ -3574,6 +3574,9 @@ pub struct SpillConfig {
     /// - "azblob": Azure blob remote spill
     /// - etc.
     ///   If not configured, uses main data storage with _spill prefix (default)
+    ///
+    /// Note: Spill operator created based on this config will only use Standard S3 storage class,
+    /// regardless of any other configured storage class
     #[clap(skip)]
     pub storage: Option<StorageConfig>,
 

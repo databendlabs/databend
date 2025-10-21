@@ -26,6 +26,7 @@ use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
+use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig;
@@ -527,7 +528,7 @@ impl RetryInterceptor for DatabendRetryInterceptor {
 #[derive(Clone, Debug)]
 pub struct DataOperator {
     operator: Operator,
-    spill_operator: Option<Operator>,
+    spill_operator: Operator,
     params: StorageParams,
     spill_params: Option<StorageParams>,
 }
@@ -539,10 +540,7 @@ impl DataOperator {
     }
 
     pub fn spill_operator(&self) -> Operator {
-        match &self.spill_operator {
-            Some(op) => op.clone(),
-            None => self.operator.clone(),
-        }
+        self.spill_operator.clone()
     }
 
     pub fn spill_params(&self) -> Option<&StorageParams> {
@@ -571,14 +569,12 @@ impl DataOperator {
         let operator = init_operator(&conf.params)?;
         check_operator(&operator, &conf.params).await?;
 
-        let spill_operator = match &spill_params {
-            Some(params) => {
-                let op = init_operator(params)?;
-                check_operator(&op, params).await?;
-                Some(op)
-            }
-            None => None,
-        };
+        // Init spill operator
+        let mut params = spill_params.as_ref().unwrap_or(&conf.params).clone();
+        // Always use Standard storage class if spill to s3 object storage
+        set_s3_storage_class(&mut params, S3StorageClass::Standard);
+        let spill_operator = init_operator(&params)?;
+        check_operator(&spill_operator, &params).await?;
 
         Ok(DataOperator {
             operator,

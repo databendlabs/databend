@@ -66,7 +66,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
-use databend_common_meta_app::storage::S3StorageClass;
+use databend_common_meta_app::storage::{set_s3_storage_class, S3StorageClass};
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
@@ -1355,17 +1355,11 @@ fn apply_storage_class(
     let mut sp = storage_params;
     if is_temp_table_by_table_info(table_info) {
         // For temporary tables, always use the standard storage class
-        patch_storage_parameter(&mut sp, S3StorageClass::Standard);
+        set_s3_storage_class(&mut sp, S3StorageClass::Standard);
     } else if let Some(s3storage_class) = storage_class_specs {
-        patch_storage_parameter(&mut sp, s3storage_class);
+        set_s3_storage_class(&mut sp, s3storage_class);
     }
     sp
-}
-
-fn patch_storage_parameter(storage_params: &mut StorageParams, s3_storage_class: S3StorageClass) {
-    if let StorageParams::S3(config) = storage_params {
-        config.storage_class = s3_storage_class;
-    };
 }
 
 pub enum RetentionPolicy {
