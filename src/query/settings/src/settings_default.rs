@@ -408,6 +408,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_experimental_common_subexpression_elimination", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables experimental common subexpression elimination optimization.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_dio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables Direct IO.",

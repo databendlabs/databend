@@ -342,6 +342,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_cbo")? != 0)
     }
 
+    pub fn get_enable_experimental_common_subexpression_elimination(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_common_subexpression_elimination")? != 0)
+    }
+
     pub fn get_enable_dio(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_dio")? != 0)
     }

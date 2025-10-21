@@ -263,7 +263,10 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             RuleID::SplitAggregate,
         ]))
         // 10. Apply CSE optimization to reduce redundant computations
-        .add(CommonSubexpressionOptimizer::new(opt_ctx.clone()))
+        .add_if(
+            opt_ctx.get_enable_experimental_common_subexpression_elimination(),
+            CommonSubexpressionOptimizer::new(opt_ctx.clone()),
+        )
         // 11. Apply DPhyp algorithm for cost-based join reordering
         .add(DPhpyOptimizer::new(opt_ctx.clone()))
         // 12. After join reorder, Convert some single join to inner join.
