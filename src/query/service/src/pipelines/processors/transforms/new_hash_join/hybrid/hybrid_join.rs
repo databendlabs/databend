@@ -11,24 +11,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// use std::sync::Arc;
-//
-// use databend_common_base::base::ProgressValues;
-// use databend_common_exception::Result;
-// use databend_common_expression::DataBlock;
-// use databend_common_pipeline_transforms::MemorySettings;
-//
-// use crate::pipelines::processors::transforms::new_hash_join::grace::GraceMemoryJoin;
-// use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
-// use crate::pipelines::processors::transforms::new_hash_join::hash_join_factory::HashJoinFactory;
-// use crate::pipelines::processors::transforms::Join;
-//
-// struct MemoryHashJoin {
-//     inner: Box<dyn Join>,
-//     memory_setting: MemorySettings,
-// }
-//
+
+use databend_common_pipeline_transforms::MemorySettings;
+
+use crate::pipelines::processors::transforms::Join;
+
+#[allow(dead_code)]
+struct MemoryHashJoin {
+    inner: Box<dyn Join>,
+    memory_setting: MemorySettings,
+}
 // pub struct HybridHashJoin<T: GraceMemoryJoin> {
 //     inner: Box<dyn Join>,
 //     memory_settings: MemorySettings,
