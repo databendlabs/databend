@@ -96,8 +96,10 @@ use tantivy::query::Query;
 use tantivy::query::QueryClone;
 use tantivy::query::TermQuery;
 use tantivy::schema::Field;
+use tantivy::version;
 use tantivy::Directory;
 use tantivy::Term;
+use tantivy::Version;
 use tantivy_common::BinarySerializable;
 use tantivy_common::HasLen;
 use tantivy_common::VInt;
@@ -108,28 +110,12 @@ use tantivy_fst::Streamer;
 
 // tantivy version is used to generate the footer data
 
-// Index major version.
-const INDEX_MAJOR_VERSION: u32 = 0;
-// Index minor version.
-const INDEX_MINOR_VERSION: u32 = 25;
-// Index patch version.
-const INDEX_PATCH_VERSION: u32 = 0;
-// Index format version.
-const INDEX_FORMAT_VERSION: u32 = 7;
 // The magic byte of the footer to identify corruption
 // or an old version of the footer.
 const FOOTER_MAGIC_NUMBER: u32 = 1337;
 
 type CrcHashU32 = u32;
 
-/// Structure version for the index.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct Version {
-    major: u32,
-    minor: u32,
-    patch: u32,
-    index_format_version: u32,
-}
 /// A Footer is appended every part of data, like tantivy file.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 struct Footer {
@@ -139,12 +125,7 @@ struct Footer {
 
 impl Footer {
     fn new(crc: CrcHashU32) -> Self {
-        let version = Version {
-            major: INDEX_MAJOR_VERSION,
-            minor: INDEX_MINOR_VERSION,
-            patch: INDEX_PATCH_VERSION,
-            index_format_version: INDEX_FORMAT_VERSION,
-        };
+        let version = version().clone();
         Footer { version, crc }
     }
 

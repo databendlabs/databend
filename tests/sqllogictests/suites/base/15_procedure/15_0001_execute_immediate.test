@@ -7,7 +7,7 @@ use test_procedure;
 query I
 EXECUTE IMMEDIATE $$
 BEGIN
-    RETURN;
+    RETURN NULL;
 END;
 $$;
 ----

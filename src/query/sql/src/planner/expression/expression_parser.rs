@@ -303,9 +303,7 @@ pub fn parse_computed_expr_to_string(
         )));
     }
     let mut ast = ast.clone();
-    let mut normalizer = IdentifierNormalizer {
-        ctx: &name_resolution_ctx,
-    };
+    let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
     ast.drive_mut(&mut normalizer);
     Ok(format!("{:#}", ast))
 }
@@ -492,9 +490,7 @@ pub fn analyze_cluster_keys(
         exprs.push(expr);
 
         let mut cluster_by = ast.clone();
-        let mut normalizer = IdentifierNormalizer {
-            ctx: &name_resolution_ctx,
-        };
+        let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
         cluster_by.drive_mut(&mut normalizer);
         cluster_keys.push(format!("{:#}", &cluster_by));
     }

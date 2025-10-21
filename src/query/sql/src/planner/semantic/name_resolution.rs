@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
+use databend_common_ast::ast::MapAccessor;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -110,15 +111,38 @@ pub fn compare_table_name(
 }
 
 #[derive(VisitorMut)]
-#[visitor(Identifier(enter))]
+#[visitor(Identifier(enter), MapAccessor)]
 pub struct IdentifierNormalizer<'a> {
-    pub ctx: &'a NameResolutionContext,
+    ctx: &'a NameResolutionContext,
+    in_map_accessor: bool,
 }
 
-impl IdentifierNormalizer<'_> {
+impl<'a> IdentifierNormalizer<'a> {
+    pub fn new(ctx: &'a NameResolutionContext) -> Self {
+        Self {
+            ctx,
+            in_map_accessor: false,
+        }
+    }
+
     fn enter_identifier(&mut self, ident: &mut Identifier) {
-        let normalized_ident = normalize_identifier(ident, self.ctx);
-        *ident = normalized_ident;
+        // Skip normalization if inside a MapAccessor,
+        // because MapAccessor is used to extract internal fields of nested types,
+        // altering the case may prevent the desired data from being retrieved.
+        if !self.in_map_accessor {
+            let normalized_ident = normalize_identifier(ident, self.ctx);
+            *ident = normalized_ident;
+        }
+    }
+
+    fn enter_map_accessor(&mut self, _accessor: &mut MapAccessor) {
+        // Set flag to true before processing the identifier inside the accessor
+        self.in_map_accessor = true;
+    }
+
+    fn exit_map_accessor(&mut self, _accessor: &mut MapAccessor) {
+        // Reset the flag after processing
+        self.in_map_accessor = false;
     }
 }
 
