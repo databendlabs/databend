@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -580,20 +583,61 @@ pub fn transform_span(tokens: &[Token]) -> Span {
     })
 }
 
-pub fn run_pratt_parser<'a, I, P, E>(
+pub(crate) trait IterProvider<'a> {
+    type Item;
+    type Iter: Iterator<Item = Self::Item> + ExactSizeIterator;
+
+    fn create_iter(self, span: Rc<RefCell<Option<Input<'a>>>>) -> Self::Iter;
+}
+
+impl<'a, T> IterProvider<'a> for Vec<WithSpan<'a, T>>
+where T: Clone
+{
+    type Item = WithSpan<'a, T>;
+    type Iter = ErrorSpan<'a, T, std::vec::IntoIter<WithSpan<'a, T>>>;
+
+    fn create_iter(self, span: Rc<RefCell<Option<Input<'a>>>>) -> Self::Iter {
+        ErrorSpan::new(self.into_iter(), span)
+    }
+}
+
+pub(crate) struct ErrorSpan<'a, T, I: Iterator<Item = WithSpan<'a, T>>> {
+    iter: I,
+    span: Rc<RefCell<Option<Input<'a>>>>,
+}
+
+impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> ErrorSpan<'a, T, I> {
+    fn new(iter: I, span: Rc<RefCell<Option<Input<'a>>>>) -> Self {
+        Self { iter, span }
+    }
+}
+
+impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> Iterator for ErrorSpan<'a, T, I> {
+    type Item = WithSpan<'a, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter
+            .next()
+            .inspect(|item| *self.span.borrow_mut() = Some(item.span))
+    }
+}
+
+impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> ExactSizeIterator for ErrorSpan<'a, T, I> {}
+
+pub fn run_pratt_parser<'a, I, P, E, T>(
     mut parser: P,
-    iter: &I,
+    parsers: T,
     rest: Input<'a>,
     input: Input<'a>,
 ) -> IResult<'a, P::Output>
 where
     E: std::fmt::Debug,
     P: PrattParser<I, Input = WithSpan<'a, E>, Error = &'static str>,
-    I: Iterator<Item = P::Input> + ExactSizeIterator + Clone,
+    I: Iterator<Item = P::Input> + ExactSizeIterator,
+    T: IterProvider<'a, Item = P::Input, Iter = I>,
 {
-    let mut iter_cloned = iter.clone();
-    let mut iter = iter.clone().peekable();
-    let len = iter.len();
+    let span = Rc::new(RefCell::new(None));
+    let mut iter = parsers.create_iter(span.clone()).peekable();
     let expr = parser
         .parse_input(&mut iter, Precedence(0))
         .map_err(|err| {
@@ -602,22 +646,27 @@ where
 
             let err_kind = match err {
                 PrattError::EmptyInput => ErrorKind::Other("expecting an operand"),
-                PrattError::UnexpectedNilfix(_) => ErrorKind::Other("unable to parse the element"),
-                PrattError::UnexpectedPrefix(_) => {
+                PrattError::UnexpectedNilfix(i) => {
+                    *span.borrow_mut() = Some(i.span);
+                    ErrorKind::Other("unable to parse the element")
+                }
+                PrattError::UnexpectedPrefix(i) => {
+                    *span.borrow_mut() = Some(i.span);
                     ErrorKind::Other("unable to parse the prefix operator")
                 }
-                PrattError::UnexpectedInfix(_) => {
+                PrattError::UnexpectedInfix(i) => {
+                    *span.borrow_mut() = Some(i.span);
                     ErrorKind::Other("missing lhs or rhs for the binary operator")
                 }
-                PrattError::UnexpectedPostfix(_) => {
+                PrattError::UnexpectedPostfix(i) => {
+                    *span.borrow_mut() = Some(i.span);
                     ErrorKind::Other("unable to parse the postfix operator")
                 }
                 PrattError::UserError(err) => ErrorKind::Other(err),
             };
 
-            let span = iter_cloned
-                .nth(len - iter.len() - 1)
-                .map(|elem| elem.span)
+            let span = span
+                .take()
                 // It's safe to slice one more token because input must contain EOI.
                 .unwrap_or_else(|| rest.slice(..1));
 
