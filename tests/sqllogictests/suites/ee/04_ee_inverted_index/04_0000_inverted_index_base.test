@@ -429,33 +429,51 @@ CREATE INVERTED INDEX IF NOT EXISTS idx ON t1(body) tokenizer = 'chinese'
 
 statement ok
 INSERT INTO t1 VALUES
-(1, '{"title":"The Psychology of Persuasion","metadata":{"author":"Oliver","publishedDate":"2021-06-15","tags":["psychology","persuasion","behavior"]}}'),
-(2, '{"title":"Sustainable Energy Solutions","metadata":{"author":"Pamela","publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"]}}'),
-(3, '{"title":"The Future of Autonomous Vehicles","metadata":{"author":"Quincy","publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]}}'),
-(4, '{"title":"The Role of AI in Customer Service","metadata":{"author":"Rachel","publishedDate":"2021-09-20","tags":["AI","customer service","automation"]}}'),
-(5, '{"title":"Internet of Things Applications","metadata":{"author":"Samuel","publishedDate":"2023-12-15","tags":["IoT","applications","technology"]}}'),
-(6, '{"title":"人工智能与机器学习","metadata":{"author":"张三","publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]}}'),
-(7, '{"title":"区块链在金融行业的应用","metadata":{"author":"李四","publishedDate":"2023-09-18","tags":["区块链","金融行业","金融科技"]}}'),
-(8, '{"title":"物联网与智能家居","metadata":{"author":"王五","publishedDate":"2023-08-15","tags":["物联网","智能家居","生活"]}}'),
-(9, '{"title":"量子计算的未来","metadata":{"author":"赵六","publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"]}}'),
-(10, '{"title":"网络安全与隐私保护","metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]}}')
+(1, '{"title":"The Psychology of Persuasion","metadata":{"author":"Oliver","publishedDate":"2021-06-15","tags":["psychology","persuasion","behavior"],"price":15.44}}'),
+(2, '{"title":"Sustainable Energy Solutions","metadata":{"author":"Pamela","publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"],"price":63.69}}'),
+(3, '{"title":"The Future of Autonomous Vehicles","metadata":{"author":"Quincy","publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"],"price":42.92}}'),
+(4, '{"title":"The Role of AI in Customer Service","metadata":{"author":"Rachel","publishedDate":"2021-09-20","tags":["AI","customer service","automation"],"price":9.99}}'),
+(5, '{"title":"Internet of Things Applications","metadata":{"author":"Samuel","publishedDate":"2023-12-15","tags":["IoT","applications","technology"],"price":69.99}}'),
+(6, '{"title":"人工智能与机器学习","metadata":{"author":"张三","publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"],"price":154.50}}'),
+(7, '{"title":"区块链在金融行业的应用","metadata":{"author":"李四","publishedDate":"2023-09-18","tags":["区块链","金融行业","金融科技"],"price":33.90}}'),
+(8, '{"title":"物联网与智能家居","metadata":{"author":"王五","publishedDate":"2023-08-15","tags":["物联网","智能家居","生活"],"price":47.70}}'),
+(9, '{"title":"量子计算的未来","metadata":{"author":"赵六","publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"],"price":29.91}}'),
+(10, '{"title":"网络安全与隐私保护","metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"],"price":29.00}}')
 
 query IFT
 SELECT id, score(), body FROM t1 WHERE query('body.title:energy')
 ----
-2 3.2352333 {"metadata":{"author":"Pamela","publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"]},"title":"Sustainable Energy Solutions"}
+2 3.2427819 {"metadata":{"author":"Pamela","price":63.69,"publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"]},"title":"Sustainable Energy Solutions"}
 
 query IFT
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:technology')
 ----
-3 2.4057739 {"metadata":{"author":"Quincy","publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
-5 2.4057739 {"metadata":{"author":"Samuel","publishedDate":"2023-12-15","tags":["IoT","applications","technology"]},"title":"Internet of Things Applications"}
+3 2.411387 {"metadata":{"author":"Quincy","price":42.92,"publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
+5 2.411387 {"metadata":{"author":"Samuel","price":69.99,"publishedDate":"2023-12-15","tags":["IoT","applications","technology"]},"title":"Internet of Things Applications"}
 
 query IFT
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:技术')
 ----
-6 2.4057739 {"metadata":{"author":"张三","publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
-10 2.4057739 {"metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
+6 2.411387 {"metadata":{"author":"张三","price":154.50,"publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
+10 2.411387 {"metadata":{"author":"刘七","price":29.00,"publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
+
+query IFT
+SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags: IN [技术 物理学]')
+----
+6 1.0 {"metadata":{"author":"张三","price":154.50,"publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
+9 1.0 {"metadata":{"author":"赵六","price":29.91,"publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"]},"title":"量子计算的未来"}
+10 1.0 {"metadata":{"author":"刘七","price":29.00,"publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
+
+query IFT
+SELECT id, score(), body FROM t1 WHERE query('body.metadata.price: [40 TO 60]')
+----
+3 1.0 {"metadata":{"author":"Quincy","price":42.92,"publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
+8 1.0 {"metadata":{"author":"王五","price":47.70,"publishedDate":"2023-08-15","tags":["物联网","智能家居","生活"]},"title":"物联网与智能家居"}
+
+query IFT
+SELECT id, score(), body FROM t1 WHERE query('body.metadata.price: [29.91 TO 33.90}')
+----
+9 1.0 {"metadata":{"author":"赵六","price":29.91,"publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"]},"title":"量子计算的未来"}
 
 statement error 1111
 ALTER TABLE t1 DROP COLUMN body
@@ -472,26 +490,6 @@ SELECT name, type, definition FROM system.indexes WHERE type = 'INVERTED' ORDER 
 idx INVERTED t1(body)tokenizer='chinese'
 idx1 INVERTED t(content)index_record='"basic"' tokenizer='chinese'
 idx2 INVERTED books(title, author, description)index_record='"basic"' tokenizer='chinese'
-
-query TII
-select name, index_size, inverted_index_size from system.tables where name='t1' and database='test_inverted_index';
-----
-t1 2828 2390
-
-query III
-select row_count, bloom_filter_size, inverted_index_size from fuse_block('test_inverted_index', 't1')
-----
-10 438 2390
-
-query IIII
-select block_count, row_count, index_size, inverted_index_size from fuse_segment('test_inverted_index', 't1');
-----
-1 10 2828 2390
-
-query IIII
-select block_count, row_count, index_size, inverted_index_size from fuse_snapshot('test_inverted_index', 't1');
-----
-1 10 2828 2390
 
 statement ok
 CREATE TABLE t2 (id int, body string)

@@ -876,7 +876,7 @@ impl ScalarRef<'_> {
             ScalarRef::Decimal(_) => n * self.memory_size(),
             ScalarRef::Boolean(_) => n.div_ceil(8),
             ScalarRef::Binary(s) => s.len() * n + (n + 1) * 8,
-            ScalarRef::String(s) => s.len() * n + n * 12,
+            ScalarRef::String(s) => n * 16 + if s.len() > 12 && n > 0 { s.len() } else { 0 },
             ScalarRef::Timestamp(_) => n * 8,
             ScalarRef::Date(_) => n * 4,
             ScalarRef::Interval(_) => n * 16,
@@ -1665,7 +1665,7 @@ impl Column {
                 }
                 Column::Vector(builder.build())
             }
-            DataType::Generic(_) => unreachable!(),
+            DataType::Generic(_) | DataType::StageLocation => unreachable!(),
             DataType::Opaque(size) => {
                 with_opaque_size!(|N| match *size {
                     N => {
@@ -2179,6 +2179,9 @@ impl ColumnBuilder {
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
             }
+            DataType::StageLocation => {
+                unreachable!("unable to initialize column builder for stage location type")
+            }
         }
     }
 
@@ -2252,6 +2255,9 @@ impl ColumnBuilder {
             }
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
+            }
+            DataType::StageLocation => {
+                unreachable!("unable to initialize column builder for stage location type")
             }
         }
     }

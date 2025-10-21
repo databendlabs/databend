@@ -77,6 +77,7 @@ impl FromToProto for mt::UDFServer {
             headers: p.headers,
             language: p.language,
             immutable: p.immutable,
+            arg_names: p.arg_names,
         })
     }
 
@@ -112,6 +113,7 @@ impl FromToProto for mt::UDFServer {
             arg_types,
             return_type: Some(return_type),
             immutable: self.immutable,
+            arg_names: self.arg_names.clone(),
         })
     }
 }

@@ -108,6 +108,8 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
@@ -117,6 +119,7 @@ use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
@@ -137,6 +140,7 @@ use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
+use crate::binder::resolve_stage_location;
 use crate::binder::resolve_stage_locations;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
@@ -1207,6 +1211,9 @@ impl<'a> TypeChecker<'a> {
                     "Hole or Placeholder expression is impossible in trivial query".to_string(),
                 )
                 .set_span(*span))
+            }
+            Expr::StageLocation { span, location } => {
+                self.resolve_stage_location(*span, location)?
             }
         };
         Ok(Box::new((scalar, data_type)))
@@ -2369,7 +2376,7 @@ impl<'a> TypeChecker<'a> {
     /// multiple fields can have a optional per-field boosting that
     /// gives preferential weight to fields being searched in.
     /// For example: title^5, content^1.2
-    /// The scond argument is the query text without query syntax.
+    /// The second argument is the query text without query syntax.
     fn resolve_match_search_function(
         &mut self,
         span: Span,
@@ -4872,8 +4879,15 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         name: String,
         arguments: &[Expr],
-        udf_definition: UDFServer,
+        mut udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct StageLocationParam {
+            param_name: String,
+            relative_path: String,
+            stage_info: StageInfo,
+        }
+
         UDFValidator::is_udf_server_allowed(&udf_definition.address)?;
         if arguments.len() != udf_definition.arg_types.len() {
             return Err(ErrorCode::InvalidArgument(format!(
@@ -4886,17 +4900,74 @@ impl<'a> TypeChecker<'a> {
 
         let mut all_args_const = true;
         let mut args = Vec::with_capacity(arguments.len());
-        for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
+        let mut stage_locations = Vec::new();
+        for (i, (argument, dest_type)) in arguments
+            .iter()
+            .zip(udf_definition.arg_types.iter())
+            .enumerate()
+        {
             let box (arg, ty) = self.resolve(argument)?;
             // TODO: support cast constant
-            if !matches!(arg, ScalarExpr::ConstantExpr(_)) || ty != dest_type.remove_nullable() {
+            if !matches!(arg, ScalarExpr::ConstantExpr(_))
+                || (ty != dest_type.remove_nullable()
+                    && dest_type.remove_nullable() != DataType::StageLocation)
+            {
                 all_args_const = false;
+            }
+            if dest_type.remove_nullable() == DataType::StageLocation {
+                if udf_definition.arg_names.is_empty() {
+                    return Err(ErrorCode::InvalidArgument(
+                        "StageLocation must have a corresponding variable name",
+                    ));
+                }
+                let expr = arg.as_expr()?;
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let Ok(Some(location)) =
+                    expr.into_constant().map(|c| c.scalar.as_string().cloned())
+                else {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "invalid parameter {argument} for udf function, expected constant string",
+                    ))
+                    .set_span(span));
+                };
+                let (stage_info, relative_path) = databend_common_base::runtime::block_on(
+                    resolve_stage_location(self.ctx.as_ref(), &location),
+                )?;
+
+                if !matches!(stage_info.stage_type, StageType::External) {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "stage {} type is {}, UDF only support External Stage",
+                        stage_info.stage_name, stage_info.stage_type,
+                    ))
+                    .set_span(span));
+                }
+                if let StorageParams::S3(config) = &stage_info.stage_params.storage {
+                    if !config.security_token.is_empty() || !config.role_arn.is_empty() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "StageLocation: @{} must use a separate credential",
+                            location
+                        )));
+                    }
+                }
+
+                stage_locations.push(StageLocationParam {
+                    param_name: udf_definition.arg_names[i].clone(),
+                    relative_path,
+                    stage_info,
+                });
+                continue;
             }
             if ty != *dest_type {
                 args.push(wrap_cast(&arg, dest_type));
             } else {
                 args.push(arg);
             }
+        }
+        if !stage_locations.is_empty() {
+            let stage_location_value = serde_json::to_string(&stage_locations)?;
+            udf_definition
+                .headers
+                .insert("databend-stage-mapping".to_string(), stage_location_value);
         }
         let immutable = udf_definition.immutable.unwrap_or_default();
         if immutable && all_args_const {
@@ -4953,7 +5024,15 @@ impl<'a> TypeChecker<'a> {
         udf_definition: UDFServer,
     ) -> Result<Scalar> {
         let mut block_entries = Vec::with_capacity(args.len());
-        for (arg, dest_type) in args.into_iter().zip(udf_definition.arg_types.iter()) {
+        for (arg, dest_type) in args.into_iter().zip(
+            udf_definition
+                .arg_types
+                .iter()
+                .filter(|ty| ty.remove_nullable() != DataType::StageLocation),
+        ) {
+            if matches!(dest_type, DataType::StageLocation) {
+                continue;
+            }
             let entry = BlockEntry::new_const_column(dest_type.clone(), arg, 1);
             block_entries.push(entry);
         }
@@ -6055,6 +6134,20 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
+    fn resolve_stage_location(
+        &mut self,
+        span: Span,
+        location: &str,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        Ok(Box::new((
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                span,
+                value: Scalar::String(location.to_string()),
+            }),
+            DataType::String,
+        )))
+    }
+
     #[allow(clippy::only_used_in_recursion)]
     pub fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
     where F: Fn(&Expr) -> Result<Option<Expr>> {
@@ -6212,6 +6305,7 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
             let data_type = resolve_type_name(inner_type, not_null)?;
             data_type.remove_nullable()
         }
+        TypeName::StageLocation => TableDataType::StageLocation,
     };
     if !matches!(type_name, TypeName::Nullable(_) | TypeName::NotNull(_)) && !not_null {
         return Ok(data_type.wrap_nullable());

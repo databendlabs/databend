@@ -67,7 +67,8 @@ end
 
     # Normalize output by removing proposed_at_ms field
     import re
-    normalized_output = re.sub(r',"meta"=\{"proposed_at_ms"=\d+\}', '', output)
+
+    normalized_output = re.sub(r',"meta"=\{"proposed_at_ms"=\d+\}', "", output)
     print("normalized:", normalized_output)
 
     expected_output = """Upsert result:\t{"result"={"data"="test_value","seq"=1}}

@@ -229,7 +229,7 @@ impl Domain {
             | DataType::Geography
             | DataType::Vector(_)
             | DataType::Opaque(_) => Domain::Undefined,
-            DataType::Generic(_) => unreachable!(),
+            DataType::Generic(_) | DataType::StageLocation => unreachable!(),
         }
     }
 

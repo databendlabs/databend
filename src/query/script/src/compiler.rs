@@ -25,6 +25,7 @@ use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::Indirection;
+use databend_common_ast::ast::IterableItem;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::ReturnItem;
@@ -104,6 +105,56 @@ impl Compiler {
                     )?);
                     self.declare_ref(&declare.name, RefItem::Set(to_set))?;
                 }
+                ScriptStatement::LetCursor { declare } => {
+                    if let Some(stmt) = &declare.stmt {
+                        // LET cursor CURSOR FOR statement
+                        let to_set = SetRef::new(
+                            declare.name.span,
+                            &declare.name.name,
+                            &mut self.ref_allocator,
+                        );
+                        output.append(&mut self.compile_sql_statement(
+                            declare.span,
+                            stmt,
+                            to_set.clone(),
+                        )?);
+                        self.declare_ref(&declare.name, RefItem::Cursor(to_set))?;
+                    } else if let Some(resultset) = &declare.resultset {
+                        // LET cursor CURSOR FOR resultset
+                        let resultset_ref = self.lookup_set(resultset)?;
+                        self.declare_ref(&declare.name, RefItem::Cursor(resultset_ref))?;
+                    }
+                }
+                ScriptStatement::OpenCursor { cursor, .. } => {
+                    let cursor_set = self.lookup_cursor(cursor)?;
+                    let cursor_iter =
+                        IterRef::new(cursor.span, &cursor.name, &mut self.ref_allocator);
+                    output.push(ScriptIR::Iter {
+                        set: cursor_set,
+                        to_iter: cursor_iter.clone(),
+                    });
+                    self.declare_ref(cursor, RefItem::Iter(cursor_iter))?;
+                }
+                ScriptStatement::FetchCursor {
+                    cursor, into_var, ..
+                } => {
+                    let cursor_iter = self.lookup_iter(cursor)?;
+                    let to_var =
+                        VarRef::new(into_var.span, &into_var.name, &mut self.ref_allocator);
+                    output.push(ScriptIR::Read {
+                        iter: cursor_iter.clone(),
+                        column: ColumnAccess::Position(0),
+                        to_var: to_var.clone(),
+                    });
+                    output.push(ScriptIR::Next { iter: cursor_iter });
+                    self.declare_ref(into_var, RefItem::Var(to_var))?;
+                }
+                ScriptStatement::CloseCursor { cursor, .. } => {
+                    // CLOSE cursor - verify the cursor has an active iterator and remove it
+                    let _cursor_iter = self.lookup_iter(cursor)?;
+                    // Remove the iterator from the current scope, keeping the cursor (SetRef) for re-opening
+                    self.remove_cursor_iter(cursor)?;
+                }
                 ScriptStatement::RunStatement { span, stmt } => {
                     let to_set =
                         SetRef::new_internal(*span, "unused_result", &mut self.ref_allocator);
@@ -162,11 +213,30 @@ impl Compiler {
                 ScriptStatement::ForInSet {
                     span,
                     variable,
-                    resultset,
+                    iterable,
                     body,
                     label,
                 } => {
-                    let set = self.lookup_set(resultset)?;
+                    let set = match iterable {
+                        IterableItem::Resultset(name) => {
+                            // Try to look up as a resultset first, then as a cursor
+                            if let Ok(set) = self.lookup_set(name) {
+                                set
+                            } else if let Ok(cursor_set) = self.lookup_cursor(name) {
+                                cursor_set
+                            } else {
+                                return Err(ErrorCode::ScriptSemanticError(format!(
+                                    "`{}` is not a resultset or cursor",
+                                    name.name
+                                ))
+                                .set_span(name.span));
+                            }
+                        }
+                        IterableItem::Cursor(cursor) => {
+                            // Explicitly specified as cursor
+                            self.lookup_cursor(cursor)?
+                        }
+                    };
                     output.append(&mut self.compile_for_in(*span, variable, set, body, label)?);
                 }
                 ScriptStatement::ForInStatement {
@@ -774,7 +844,7 @@ impl Compiler {
                     let index = self.compiler.lookup_var(ident);
                     match index {
                         Ok(index) => {
-                            *ident = Identifier::from_name(ident.span, index.to_string());
+                            *ident = Identifier::from_name(ident.span, index.index.to_string());
                             ident.ident_type = IdentifierType::Hole;
                         }
                         Err(e) => {
@@ -937,6 +1007,34 @@ impl Compiler {
         Err(ErrorCode::ScriptSemanticError(format!("`{name}` is not defined")).set_span(ident.span))
     }
 
+    fn lookup_cursor(&self, ident: &Identifier) -> Result<SetRef> {
+        let RefItem::Cursor(cursor) = self.lookup_ref(ident)? else {
+            let name = self.normalize_ident(ident);
+            return Err(
+                ErrorCode::ScriptSemanticError(format!("`{name}` is not a cursor"))
+                    .set_span(ident.span),
+            );
+        };
+        Ok(cursor)
+    }
+
+    fn remove_cursor_iter(&mut self, cursor_name: &Identifier) -> Result<()> {
+        let name = self.normalize_ident(cursor_name);
+        // Find and remove the iterator from the current scope
+        for scope in self.scopes.iter_mut().rev() {
+            if scope.items.contains_key(&name)
+                && matches!(scope.items.get(&name), Some(RefItem::Iter(_)))
+            {
+                scope.items.remove(&name);
+                return Ok(());
+            }
+        }
+        Err(
+            ErrorCode::ScriptSemanticError(format!("cursor `{}` is not open", name))
+                .set_span(cursor_name.span),
+        )
+    }
+
     fn current_loop(&self, span: Span) -> Result<LoopItem> {
         for scope in self.scopes.iter().rev() {
             if let Some(loop_item) = &scope.loop_item {
@@ -1080,6 +1178,7 @@ enum RefItem {
     Var(VarRef),
     Set(SetRef),
     Iter(IterRef),
+    Cursor(SetRef),
 }
 
 #[derive(Debug, Clone)]

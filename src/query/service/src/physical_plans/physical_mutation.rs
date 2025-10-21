@@ -433,7 +433,7 @@ impl PhysicalPlanBuilder {
             DUMMY_COLUMN_INDEX
         };
 
-        // For distributed merge, we shuffle data blocks by block_id (drived from row_id) to avoid
+        // For distributed merge, we shuffle data blocks by block_id (derived from row_id) to avoid
         // different nodes update the same physical block simultaneously, data blocks that are needed
         // to insert just keep in local node.
         if *distributed && *row_id_shuffle && !is_not_matched_only {

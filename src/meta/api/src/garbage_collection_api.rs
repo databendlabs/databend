@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::ops::Range;
 
 use chrono::DateTime;
@@ -27,6 +28,7 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
@@ -40,6 +42,7 @@ use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdHistoryIdent;
 use databend_common_meta_app::schema::TableIdToName;
+use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -47,6 +50,7 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use display_more::DisplaySliceExt;
 use fastrace::func_name;
@@ -60,6 +64,7 @@ use log::warn;
 use crate::index_api::IndexApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
@@ -101,6 +106,48 @@ where
         }
         Ok(num_meta_key_removed)
     }
+
+    /// Fetch and conditionally set the vacuum retention timestamp.
+    ///
+    /// This method implements the monotonic timestamp update semantics:
+    /// - Only updates the timestamp if the new value is greater than the current one
+    /// - Returns the OLD timestamp value
+    /// - Ensures atomicity using compare-and-swap operations
+    #[fastrace::trace]
+    async fn fetch_set_vacuum_timestamp(
+        &self,
+        tenant: &Tenant,
+        new_timestamp: DateTime<Utc>,
+    ) -> Result<Option<VacuumWatermark>, KVAppError> {
+        let ident = VacuumWatermarkIdent::new_global(tenant.clone());
+
+        // Use crud_upsert_with for atomic compare-and-swap semantics
+        let transition = self
+            .crud_upsert_with::<Infallible>(&ident, |current: Option<SeqV<VacuumWatermark>>| {
+                let current_retention: Option<VacuumWatermark> = current.map(|v| v.data);
+
+                // Check if we should update based on monotonic property
+                let should_update = match current_retention {
+                    None => true, // Never set before, always update
+                    Some(existing) => new_timestamp > existing.time, // Only update if new timestamp is greater
+                };
+
+                if should_update {
+                    let new_retention = VacuumWatermark::new(new_timestamp);
+                    Ok(Some(new_retention))
+                } else {
+                    // Return None to indicate no update needed
+                    Ok(None)
+                }
+            })
+            .await?
+            // Safe to unwrap: type of business logic error is `Infallible`
+            .unwrap();
+
+        // Extract the old value to return
+        let old_retention = transition.prev.map(|v| v.data);
+        Ok(old_retention)
+    }
 }
 
 #[async_trait::async_trait]
@@ -129,7 +176,7 @@ async fn remove_copied_files_for_dropped_table(
     // Loop until:
     // - all cleaned
     // - or table is removed from meta-service
-    // - or is no longer in `droppped` state.
+    // - or is no longer in `dropped` state.
     for i in 0..usize::MAX {
         let mut txn = TxnRequest::default();
 

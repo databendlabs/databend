@@ -17,7 +17,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use bytes::Bytes;
+use databend_storages_common_io::BufferReader;
+use opendal::Buffer;
 use parquet::arrow::arrow_reader::RowGroups;
 use parquet::basic::Compression;
 use parquet::column::page::PageIterator;
@@ -29,7 +30,7 @@ use parquet::schema::types::SchemaDescriptor;
 
 pub struct RowGroupImplBuilder<'a> {
     num_rows: usize,
-    column_chunks: HashMap<usize, Bytes>,
+    column_chunks: HashMap<usize, Buffer>,
     column_chunk_metadatas: HashMap<usize, ColumnChunkMetaData>,
     schema_descriptor: &'a SchemaDescriptor,
     compression: Compression,
@@ -50,7 +51,7 @@ impl<'a> RowGroupImplBuilder<'a> {
         }
     }
 
-    pub fn add_column_chunk(&mut self, dfs_id: usize, column_chunk: Bytes) {
+    pub fn add_column_chunk(&mut self, dfs_id: usize, column_chunk: Buffer) {
         let column_chunk_metadata =
             ColumnChunkMetaData::builder(self.schema_descriptor.column(dfs_id))
                 .set_compression(self.compression)
@@ -75,7 +76,7 @@ impl<'a> RowGroupImplBuilder<'a> {
 // A single row group
 pub struct RowGroupImpl {
     num_rows: usize,
-    column_chunks: HashMap<usize, Bytes>,
+    column_chunks: HashMap<usize, Buffer>,
     column_chunk_metadatas: HashMap<usize, ColumnChunkMetaData>,
 }
 
@@ -87,7 +88,7 @@ impl RowGroups for RowGroupImpl {
 
     /// Returns a [`PageIterator`] for the column chunk with the given leaf column index
     fn column_chunks(&self, i: usize) -> ParquetResult<Box<dyn PageIterator>> {
-        let column_chunk = Arc::new(self.column_chunks.get(&i).unwrap().clone());
+        let column_chunk = Arc::new(BufferReader(self.column_chunks.get(&i).unwrap().clone()));
         let column_chunk_meta = self.column_chunk_metadatas.get(&i).unwrap();
         let page_reader = Box::new(SerializedPageReader::new(
             column_chunk,

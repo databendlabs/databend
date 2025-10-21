@@ -21,14 +21,18 @@ ctx = databend.SessionContext()
 ctx.create_s3_connection(
     name="s3_conn",
     access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-    secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+    secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
 )
 
-# Create table on S3 
-ctx.sql("create or replace table products (id int, name string, price float, category string) 's3://bohu/pybend/tables/' CONNECTION = (connection_name = 's3_conn')").collect()
+# Create table on S3
+ctx.sql(
+    "create or replace table products (id int, name string, price float, category string) 's3://bohu/pybend/tables/' CONNECTION = (connection_name = 's3_conn')"
+).collect()
 
 # Insert sample data
-ctx.sql("insert into products values (1, 'Laptop', 1299.99, 'Electronics'), (2, 'Coffee Mug', 12.50, 'Kitchen'), (3, 'Notebook', 5.99, 'Office')").collect()
+ctx.sql(
+    "insert into products values (1, 'Laptop', 1299.99, 'Electronics'), (2, 'Coffee Mug', 12.50, 'Kitchen'), (3, 'Notebook', 5.99, 'Office')"
+).collect()
 
 # Show all data
 ctx.sql("select * from products").show()

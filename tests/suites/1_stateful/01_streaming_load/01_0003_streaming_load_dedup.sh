@@ -13,7 +13,7 @@ function run() {
   -H "X-Databend-SQL:insert /*+ set_var(deduplicate_label='$3') */ into t1  from @_databend_load file_format = ($1)" \
   -F "upload=@/${TESTS_DATA_DIR}/$2" \
   -u root: -XPUT \
-  "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"
+  "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | jq -r '.id, .stats.rows'
   echo
   echo "<<<<"
 }

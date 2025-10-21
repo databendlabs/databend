@@ -24,7 +24,7 @@ use databend_common_pipeline_transforms::traits::Location;
 use opendal::Buffer;
 use opendal::Writer;
 
-use crate::spillers::serialize::BlocksEncoder;
+use super::serialize::BlocksEncoder;
 
 pub struct BlocksWriter {
     writer: Writer,
@@ -42,6 +42,7 @@ impl BlocksWriter {
             offsets: vec![],
         }
     }
+
     pub async fn write(&mut self, block: DataBlock) -> Result<()> {
         assert!(!block.is_empty());
 

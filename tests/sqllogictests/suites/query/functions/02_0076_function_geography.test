@@ -25,9 +25,6 @@ statement ok
 DROP TABLE IF EXISTS t1
 
 statement ok
-SET enable_geo_create_table=1
-
-statement ok
 CREATE TABLE t1 (a int, g geography)
 
 statement ok

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::TimeZone;
@@ -253,6 +254,7 @@ fn test_decode_v129_table_meta() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
+        column_mask_policy_columns_ids: BTreeMap::new(),
         row_access_policy: None,
         row_access_policy_columns_ids: None,
         indexes: btreemap! {s("v") => TableIndex {

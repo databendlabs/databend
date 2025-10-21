@@ -10,8 +10,6 @@ export USER_ADMIN_USER_CONNECT="bendsql --user=admin_user --password=123 --host=
 export USER_DEV_USER_CONNECT="bendsql --user=dev_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 export USER_TEST_USER_CONNECT="bendsql --user=test_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-echo "set global enable_experimental_procedure=1;" | $BENDSQL_CLIENT_CONNECT
-
 # Create roles
 echo "=== Creating roles ==="
 echo "DROP ROLE IF EXISTS admin_role;" | $BENDSQL_CLIENT_CONNECT

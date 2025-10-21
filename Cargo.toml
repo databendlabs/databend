@@ -294,7 +294,7 @@ defer = "0.2"
 deltalake = "0.26"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = { version = "1.0.0", features = ["full"] }
-display-more = { version = "0.2.0" }
+display-more = { version = "0.2.1" }
 divan = "0.1.21"
 dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "30e28ca" }
 dyn-clone = "1.0.9"
@@ -424,7 +424,7 @@ ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
 parquet = { version = "55", features = ["async"] }
-passwords = { version = "3.1.16", features = ["common-password"] }
+passwords = { version = "3.1.16" }
 paste = "1.0.15"
 percent-encoding = "2.3.1"
 petgraph = { version = "0.6.2", features = ["serde-1"] }
@@ -443,7 +443,7 @@ proptest = { version = "1", default-features = false, features = ["std"] }
 prost = { version = "0.13" }
 prost-build = { version = "0.13" }
 prqlc = "0.11.3"
-raft-log = { version = "0.2.9" }
+raft-log = { version = "0.2.11" }
 rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 rand_distr = "0.4.3"
 rayon = "1.9.0"
@@ -506,10 +506,10 @@ strum = "0.24.1"
 sub-cache = "0.2.1"
 sys-info = "0.9"
 sysinfo = "0.34.2"
-tantivy = "0.22.0"
-tantivy-common = "0.7.0"
+tantivy = "0.25.0"
+tantivy-common = "0.10.0"
 tantivy-fst = "0.5"
-tantivy-jieba = "0.11.0"
+tantivy-jieba = "0.17.0"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
 terminal_size = "0.4.2"
@@ -656,17 +656,16 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
-display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.2.0" }
 jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "425aae9" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
-openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.11" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "d82aa6d" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
-tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
-tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
-tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
+tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d" }
+tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d", package = "tantivy-common" }
+tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "ac27464" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

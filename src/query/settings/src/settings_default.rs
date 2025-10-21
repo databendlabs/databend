@@ -228,6 +228,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=500)),
                 }),
+                ("enable_backpressure_spiller", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Use new backpressure spiller.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("max_spill_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_spill_io_requests),
                     desc: "Sets the maximum number of concurrent spill I/O requests.",
@@ -803,16 +810,9 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_experimental_merge_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Deprecated setting",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_experimental_procedure", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables the experimental feature for 'PROCEDURE'. In default disable the experimental feature",
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables the experimental feature for 'PROCEDURE'. In default enable the experimental feature",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1144,7 +1144,7 @@ impl DefaultSettings {
                 }),
                 // this setting will be removed when geometry type stable.
                 ("enable_geo_create_table", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Create and alter table with geometry/geography type",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1446,7 +1446,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("enable_experimental_virtual_column", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables experimental virtual column",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

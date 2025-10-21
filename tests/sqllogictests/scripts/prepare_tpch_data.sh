@@ -120,6 +120,7 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.lineitem
 #import data
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 python $CURDIR/prepare_duckdb_tpch_data.py 1
+ls -lh /tmp/tpch_1/*
 
 stmt "drop stage if exists s1"
 stmt "create stage s1 url='fs:///tmp/tpch_1/'"

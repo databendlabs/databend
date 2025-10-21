@@ -1,18 +1,30 @@
 --ontime_200.csv
-{"id":"ontime_200.csv","stats":{"rows":199,"bytes":95793}}
+ontime_200.csv
+199
+
 199	2020	769
 --ontime_200.csv.gz
-{"id":"ontime_200.csv.gz","stats":{"rows":199,"bytes":95793}}
+ontime_200.csv.gz
+199
+
 199	2020	769
 --ontime_200.csv.zst
-{"id":"ontime_200.csv.zst","stats":{"rows":199,"bytes":95793}}
+ontime_200.csv.zst
+199
+
 199	2020	769
 --ontime_200.csv.bz2
-{"id":"ontime_200.csv.bz2","stats":{"rows":199,"bytes":95793}}
+ontime_200.csv.bz2
+199
+
 199	2020	769
 --ontime_200.ndjson
-{"id":"ontime_200.ndjson","stats":{"rows":199,"bytes":190906}}
+ontime_200.ndjson
+199
+
 199	2020	769
 --ontime_200.parquet
-{"id":"ontime_200.parquet","stats":{"rows":199,"bytes":192109}}
+ontime_200.parquet
+199
+
 199	2020	769

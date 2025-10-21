@@ -38,6 +38,7 @@ message UDFServer {
   DataType return_type = 5;
   map<string, string> headers = 6;
   optional bool immutable = 7;
+  repeated string arg_names = 8;
 }
 
 message UDFScript {

@@ -11,6 +11,26 @@ BEGIN
 END;
 $$;
 ----
+NULL
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    LET RES RESULTSET := select  number % 3 a, number % 4 b from numbers(10);
+    LET SUM := 0;
+    CREATE OR REPLACE TABLE abc(a int, b int);
+    for x in RES do
+        LET A := x.a;
+        LET B := x.b;
+        INSERT INTO abc VALUES (:A, :B);
+        SUM := SUM + A;
+        SUM := SUM + B;
+    end for;
+    return SUM;
+END;
+$$;
+----
+22
 
 query I
 EXECUTE IMMEDIATE $$
@@ -63,7 +83,7 @@ BEGIN
 END;
 $$;
 
-query I
+query IRT
 EXECUTE IMMEDIATE $$
 BEGIN
     CREATE OR REPLACE TABLE t1 (a INT, b FLOAT, c STRING);
@@ -72,12 +92,7 @@ BEGIN
 END;
 $$;
 ----
-┌─────────────────────────────────────────┐
-│      a     │       b      │      c      │
-│ Int32 NULL │ Float32 NULL │ String NULL │
-├────────────┼──────────────┼─────────────┤
-│ 1          │ 2            │ '3'         │
-└─────────────────────────────────────────┘
+1 2.0 3
 
 query I
 EXECUTE IMMEDIATE $$
@@ -89,12 +104,7 @@ BEGIN
 END;
 $$;
 ----
-┌───────┐
-│ 2 + 1 │
-│ UInt8 │
-├───────┤
-│     3 │
-└───────┘
+3
 
 query I
 EXECUTE IMMEDIATE $$
@@ -104,12 +114,7 @@ BEGIN
 END;
 $$;
 ----
-┌───────┐
-│ 1 + 1 │
-│ UInt8 │
-├───────┤
-│     2 │
-└───────┘
+2
 
 query error divided by zero
 EXECUTE IMMEDIATE $$
@@ -156,6 +161,62 @@ $$;
 ----
 100
 
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+    let x RESULTSET :=  EXECUTE IMMEDIATE 'select 333';
+    RETURN TABLE(x);
+END;
+$$;
+----
+333
+
+## cursors
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+  LET c1 CURSOR FOR SELECT number + 10 FROM numbers(10);
+  OPEN c1;
+  FETCH c1 INTO var_for_column_value;
+  FETCH c1 INTO var_for_column_value;
+  CLOSE c1;
+  RETURN var_for_column_value;
+END;
+$$;
+----
+11
+
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+  LET S RESULTSET := (select number + 10 a, number + 20 b FROM numbers(10));
+  LET c1 CURSOR FOR S;
+  OPEN c1;
+  FETCH c1 INTO var_for_column_value;
+  FETCH c1 INTO var_for_column_value;
+  CLOSE c1;
+  RETURN var_for_column_value;
+END;
+$$;
+----
+11
+
+query I
+EXECUTE IMMEDIATE $$
+BEGIN
+  LET S RESULTSET := (select number + 10 a, number + 20 b FROM numbers(10));
+  LET c1 CURSOR FOR S;
+  LET sum := 0;
+  for c in c1 do
+    sum := sum + c.a + c.b;
+  end for;
+  RETURN sum;
+END;
+$$;
+----
+390
 
 statement ok
 drop database test_procedure;

@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TypeName;
+use databend_common_ast::ast::UDFArgs;
 use databend_common_ast::ast::UDFDefinition;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -24,7 +26,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_sql::normalize_identifier;
 use databend_common_sql::resolve_type_name_udf;
+use databend_common_sql::NameResolutionContext;
 use log::error;
 
 pub struct BuiltinUDFs {
@@ -52,9 +56,33 @@ impl BuiltinUDFs {
                     language,
                     immutable,
                 } => {
+                    let mut arg_names = Vec::with_capacity(arg_types.len());
                     let mut arg_datatypes = Vec::with_capacity(arg_types.len());
-                    for arg_type in arg_types {
-                        arg_datatypes.push(DataType::from(&resolve_type_name_udf(&arg_type)?));
+                    match &arg_types {
+                        UDFArgs::Types(types) => {
+                            for arg_type in types {
+                                if matches!(arg_type, TypeName::StageLocation) {
+                                    return Err(ErrorCode::InvalidArgument(
+                                        "StageLocation must have a corresponding variable name",
+                                    ));
+                                }
+                                arg_datatypes
+                                    .push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                            }
+                        }
+                        UDFArgs::NameWithTypes(name_with_types) => {
+                            for (arg_name, arg_type) in name_with_types {
+                                arg_names.push(
+                                    normalize_identifier(
+                                        arg_name,
+                                        &NameResolutionContext::default(),
+                                    )
+                                    .name,
+                                );
+                                arg_datatypes
+                                    .push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                            }
+                        }
                     }
                     let return_type = DataType::from(&resolve_type_name_udf(&return_type)?);
                     let udf = UserDefinedFunction::create_udf_server(
@@ -63,6 +91,7 @@ impl BuiltinUDFs {
                         &handler,
                         &headers,
                         &language,
+                        arg_names,
                         arg_datatypes,
                         return_type,
                         "Built-in UDF",

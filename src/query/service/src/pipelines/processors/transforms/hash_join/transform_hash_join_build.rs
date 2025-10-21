@@ -390,7 +390,7 @@ impl TransformHashJoinBuild {
     }
 
     fn has_unrestored_data(&self) -> bool {
-        if self.build_state.join_type() == JoinType::Cross {
+        if matches!(self.build_state.join_type(), JoinType::Cross) {
             self.spiller.has_next_restore_file()
         } else {
             !self

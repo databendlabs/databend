@@ -29,7 +29,7 @@ error:
   --> SQL:1:14
   |
 1 | CAST(col1 AS foo)
-  | ----         ^^^ unexpected `foo`, expecting `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `BLOB`, `JSON`, `DOUBLE`, `VECTOR`, `LONGBLOB`, `GEOMETRY`, `GEOGRAPHY`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `REAL`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `MEDIUMBLOB`, `TINYBLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, or `NULLABLE`
+  | ----         ^^^ unexpected `foo`, expecting `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `BLOB`, `JSON`, `DOUBLE`, `VECTOR`, `LONGBLOB`, `GEOMETRY`, `GEOGRAPHY`, `STAGE_LOCATION`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `REAL`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `MEDIUMBLOB`, `TINYBLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, or `NULLABLE`
   | |             
   | while parsing `CAST(... AS ...)`
   | while parsing expression
@@ -52,7 +52,7 @@ error:
   --> SQL:1:10
   |
 1 | CAST(col1)
-  | ----     ^ unexpected `)`, expecting `AS`, `,`, `(`, `IS`, `NOT`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `::`, `POSITION`, or 48 more ...
+  | ----     ^ expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ...
   | |         
   | while parsing `CAST(... AS ...)`
   | while parsing expression
@@ -81,7 +81,7 @@ error:
 1 | $ abc + 3
   | ^
   | |
-  | unexpected `$`, expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `::`, `POSITION`, `IdentVariable`, `DATEADD`, `DATE_ADD`, or 46 more ...
+  | expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ...
   | while parsing expression
 
 

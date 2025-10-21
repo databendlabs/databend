@@ -244,10 +244,12 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'level'                           | 'system'             | 'settings'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'license'                         | 'system'             | 'credits'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'location'                        | 'system'             | 'query_cache'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'max'                             | 'system'             | 'statistics'             | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'memory_usage'                    | 'system'             | 'processes'              | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       |
 | 'message'                         | 'system'             | 'notification_history'   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'message_source'                  | 'system'             | 'notification_history'   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'metric'                          | 'system'             | 'metrics'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'min'                             | 'system'             | 'statistics'             | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'miss'                            | 'system'             | 'caches'                 | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'mode'                            | 'system'             | 'streams'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'mode'                            | 'system'             | 'streams_terse'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

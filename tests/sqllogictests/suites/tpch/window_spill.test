@@ -1,0 +1,57 @@
+# TPC-H spill test
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpch_test;
+
+query I
+SELECT SUM(a)
+FROM (
+    SELECT rank(l_orderkey) OVER (PARTITION BY l_orderkey % 16 ORDER BY l_orderkey + 1) AS a FROM lineitem
+);
+----
+2250908738650
+
+statement ok
+SET force_window_data_spill = 1;
+
+query I
+SELECT SUM(a)
+FROM (
+    SELECT rank(l_orderkey) OVER (PARTITION BY l_orderkey % 16 ORDER BY l_orderkey + 1) AS a FROM lineitem
+);
+----
+2250908738650
+
+statement ok
+set max_threads = 1;
+
+query I
+SELECT SUM(a)
+FROM (
+    SELECT rank(l_orderkey) OVER (PARTITION BY l_orderkey % 16 ORDER BY l_orderkey + 1) AS a FROM lineitem
+);
+----
+2250908738650
+
+statement ok
+set enable_backpressure_spiller = 1
+
+query I
+SELECT SUM(a)
+FROM (
+    SELECT rank(l_orderkey) OVER (PARTITION BY l_orderkey % 16 ORDER BY l_orderkey + 1) AS a FROM lineitem
+);
+----
+2250908738650
+
+statement ok
+unset force_window_data_spill;
+
+statement ok
+unset max_threads;
+
+statement ok
+unset enable_backpressure_spiller;
+

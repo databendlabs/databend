@@ -15,6 +15,7 @@
 use std::alloc::Allocator;
 use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::hints::assume;
@@ -102,18 +103,31 @@ pub fn hash_bits() -> u32 {
     }
 }
 
-pub struct HashJoinHashTable<K: Keyable, A: Allocator + Clone = DefaultAllocator> {
+pub struct HashJoinHashTable<
+    K: Keyable,
+    const SKIP_DUPLICATES: bool = false,
+    A: Allocator + Clone = DefaultAllocator,
+> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
     pub(crate) phantom: PhantomData<K>,
+    pub(crate) count: AtomicUsize,
 }
 
-unsafe impl<K: Keyable + Send, A: Allocator + Clone + Send> Send for HashJoinHashTable<K, A> {}
+unsafe impl<K: Keyable + Send, A: Allocator + Clone + Send, const SKIP_DUPLICATES: bool> Send
+    for HashJoinHashTable<K, SKIP_DUPLICATES, A>
+{
+}
 
-unsafe impl<K: Keyable + Sync, A: Allocator + Clone + Sync> Sync for HashJoinHashTable<K, A> {}
+unsafe impl<K: Keyable + Sync, A: Allocator + Clone + Sync, const SKIP_DUPLICATES: bool> Sync
+    for HashJoinHashTable<K, SKIP_DUPLICATES, A>
+{
+}
 
-impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
+impl<K: Keyable, A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES: bool>
+    HashJoinHashTable<K, SKIP_DUPLICATES, A>
+{
     pub fn with_build_row_num(row_num: usize) -> Self {
         let capacity = std::cmp::max((row_num * 2).next_power_of_two(), 1 << 10);
         let mut hashtable = Self {
@@ -123,6 +137,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
             atomic_pointers: std::ptr::null_mut(),
             hash_shift: (hash_bits() - capacity.trailing_zeros()) as usize,
             phantom: PhantomData,
+            count: Default::default(),
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -138,6 +153,12 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
         // `index` is less than the capacity of hash table.
         let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
+            if SKIP_DUPLICATES
+                && early_filtering(old_header, hash)
+                && self.next_contains(&key, remove_header_tag(old_header))
+            {
+                return;
+            }
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
                     old_header,
@@ -151,11 +172,13 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
                 Err(x) => old_header = x,
             };
         }
+        self.count.fetch_add(1, Ordering::Relaxed);
         unsafe { (*entry_ptr).next = remove_header_tag(old_header) };
     }
 }
 
-impl<K, A> HashJoinHashtableLike for HashJoinHashTable<K, A>
+impl<K, A, const SKIP_DUPLICATES: bool> HashJoinHashtableLike
+    for HashJoinHashTable<K, SKIP_DUPLICATES, A>
 where
     K: Keyable,
     A: Allocator + Clone + 'static,
@@ -372,5 +395,9 @@ where
             ptr = raw_entry.next;
         }
         0
+    }
+
+    fn len(&self) -> usize {
+        self.count.load(Ordering::Relaxed)
     }
 }

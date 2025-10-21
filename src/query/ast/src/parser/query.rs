@@ -48,8 +48,7 @@ pub fn query(i: Input) -> IResult<Query> {
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
     let (rest, set_operation_elements) = rule! { #set_operation_element+ }(i)?;
-    let iter = &mut set_operation_elements.into_iter();
-    run_pratt_parser(SetOperationParser, iter, rest, i)
+    run_pratt_parser(SetOperationParser, set_operation_elements, rest, i)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -671,11 +670,14 @@ pub fn table_alias_without_as(i: Input) -> IResult<TableAlias> {
 
 pub fn join_operator(i: Input) -> IResult<JoinOperator> {
     alt((
+        value(JoinOperator::InnerAny, rule! { INNER ~ ANY }),
         value(JoinOperator::Inner, rule! { INNER }),
         value(JoinOperator::LeftSemi, rule! { LEFT? ~ SEMI }),
         value(JoinOperator::RightSemi, rule! { RIGHT ~ SEMI }),
         value(JoinOperator::LeftAnti, rule! { LEFT? ~ ANTI }),
         value(JoinOperator::RightAnti, rule! { RIGHT ~ ANTI }),
+        value(JoinOperator::LeftAny, rule! { LEFT ~ ANY }),
+        value(JoinOperator::RightAny, rule! { RIGHT ~ ANY }),
         value(JoinOperator::LeftOuter, rule! { LEFT ~ OUTER? }),
         value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
         value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),
@@ -708,8 +710,7 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
     let (rest, table_reference_elements) = rule! { #table_reference_element+ }(i)?;
-    let iter = &mut table_reference_elements.into_iter();
-    run_pratt_parser(TableReferenceParser, iter, rest, i)
+    run_pratt_parser(TableReferenceParser, table_reference_elements, rest, i)
 }
 
 #[derive(Debug, Clone, PartialEq)]

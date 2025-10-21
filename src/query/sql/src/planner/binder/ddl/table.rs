@@ -369,6 +369,8 @@ impl Binder {
             .with_column("actual_row_count")
             .with_column("distinct_count")
             .with_column("null_count")
+            .with_column("min")
+            .with_column("max")
             .with_column("avg_size")
             .with_column("histogram");
 

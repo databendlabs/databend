@@ -28,13 +28,25 @@ use crate::ast::Identifier;
 use crate::ast::TypeName;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum UDFArgs {
+    Types(Vec<TypeName>),
+    NameWithTypes(Vec<(Identifier, TypeName)>),
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum LambdaUDFParams {
+    Names(Vec<Identifier>),
+    NameWithTypes(Vec<(Identifier, TypeName)>),
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum UDFDefinition {
     LambdaUDF {
-        parameters: Vec<Identifier>,
+        parameters: LambdaUDFParams,
         definition: Box<Expr>,
     },
     UDFServer {
-        arg_types: Vec<TypeName>,
+        arg_types: UDFArgs,
         return_type: TypeName,
         address: String,
         handler: String,
@@ -43,7 +55,7 @@ pub enum UDFDefinition {
         immutable: Option<bool>,
     },
     UDFScript {
-        arg_types: Vec<TypeName>,
+        arg_types: UDFArgs,
         return_type: TypeName,
         code: String,
         imports: Vec<String>,
@@ -54,7 +66,7 @@ pub enum UDFDefinition {
         immutable: Option<bool>,
     },
     UDAFServer {
-        arg_types: Vec<TypeName>,
+        arg_types: UDFArgs,
         state_fields: Vec<UDAFStateField>,
         return_type: TypeName,
         address: String,
@@ -62,7 +74,7 @@ pub enum UDFDefinition {
         language: String,
     },
     UDAFScript {
-        arg_types: Vec<TypeName>,
+        arg_types: UDFArgs,
         state_fields: Vec<UDAFStateField>,
         return_type: TypeName,
         imports: Vec<String>,
@@ -83,6 +95,77 @@ pub enum UDFDefinition {
     },
 }
 
+impl LambdaUDFParams {
+    pub fn names_iter(&self) -> Box<dyn Iterator<Item = &Identifier> + '_> {
+        match self {
+            LambdaUDFParams::Names(names) => Box::new(names.iter()),
+            LambdaUDFParams::NameWithTypes(name_with_types) => {
+                Box::new(name_with_types.iter().map(|(name, _)| name))
+            }
+        }
+    }
+}
+
+impl UDFArgs {
+    pub fn len(&self) -> usize {
+        match self {
+            UDFArgs::Types(types) => types.len(),
+            UDFArgs::NameWithTypes(name_with_types) => name_with_types.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn types_iter(&self) -> Box<dyn Iterator<Item = &TypeName> + '_> {
+        match self {
+            UDFArgs::Types(types) => Box::new(types.iter()),
+            UDFArgs::NameWithTypes(name_with_types) => {
+                Box::new(name_with_types.iter().map(|(_, ty)| ty))
+            }
+        }
+    }
+}
+
+impl Display for LambdaUDFParams {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LambdaUDFParams::Names(names) => {
+                write_comma_separated_list(f, names)?;
+            }
+            LambdaUDFParams::NameWithTypes(name_with_types) => {
+                write_comma_separated_list(
+                    f,
+                    name_with_types
+                        .iter()
+                        .map(|(name, ty)| format!("{name} {ty}")),
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Display for UDFArgs {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UDFArgs::Types(types) => {
+                write_comma_separated_list(f, types)?;
+            }
+            UDFArgs::NameWithTypes(name_with_types) => {
+                write_comma_separated_list(
+                    f,
+                    name_with_types
+                        .iter()
+                        .map(|(name, ty)| format!("{name} {ty}")),
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Display for UDFDefinition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -90,8 +173,7 @@ impl Display for UDFDefinition {
                 parameters,
                 definition,
             } => {
-                write!(f, "AS (")?;
-                write_comma_separated_list(f, parameters)?;
+                write!(f, "AS ({parameters}")?;
                 write!(f, ") -> {definition}")?;
             }
             UDFDefinition::UDFServer {
@@ -103,8 +185,7 @@ impl Display for UDFDefinition {
                 language,
                 immutable,
             } => {
-                write!(f, "( ")?;
-                write_comma_separated_list(f, arg_types)?;
+                write!(f, "( {arg_types}")?;
                 write!(f, " ) RETURNS {return_type} LANGUAGE {language}")?;
                 if let Some(immutable) = immutable {
                     if *immutable {
@@ -137,8 +218,7 @@ impl Display for UDFDefinition {
                 packages,
                 immutable,
             } => {
-                write!(f, "( ")?;
-                write_comma_separated_list(f, arg_types)?;
+                write!(f, "( {arg_types}")?;
                 let imports = imports
                     .iter()
                     .map(|s| QuotedString(s, '\'').to_string())
@@ -169,8 +249,7 @@ impl Display for UDFDefinition {
                 headers,
                 language,
             } => {
-                write!(f, "( ")?;
-                write_comma_separated_list(f, arg_types)?;
+                write!(f, "( {arg_types}")?;
                 write!(f, " ) STATE {{ ")?;
                 write_comma_separated_list(f, state_types)?;
                 write!(f, " }} RETURNS {return_type} LANGUAGE {language}")?;
@@ -234,8 +313,7 @@ impl Display for UDFDefinition {
                     .map(|s| QuotedString(s, '\'').to_string())
                     .join(",");
 
-                write!(f, "( ")?;
-                write_comma_separated_list(f, arg_types)?;
+                write!(f, "( {arg_types}")?;
                 write!(f, " ) STATE {{ ")?;
                 write_comma_separated_list(f, state_types)?;
                 write!(

@@ -29,6 +29,7 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::StageAttachment;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -51,8 +52,8 @@ use serde::Serialize;
 use serde::Serializer;
 
 use super::execute_state::ExecutionError;
+use super::CloseReason;
 use super::HttpQueryContext;
-use super::StopReason;
 use crate::servers::http::error::QueryError;
 use crate::servers::http::v1::http_query_handlers::QueryResponseField;
 use crate::servers::http::v1::query::blocks_serializer::BlocksSerializer;
@@ -72,7 +73,6 @@ use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
-use crate::sessions::TableContext;
 
 fn default_as_true() -> bool {
     true
@@ -406,14 +406,11 @@ impl HttpSessionConf {
             }
             if let Some(id) = state.last_query_ids.first() {
                 if let Some(last_query) = http_query_manager.get_query(id) {
-                    let state = *last_query.state.lock();
-                    if !matches!(
-                        state,
-                        HttpQueryState::Stopped(StopReason::Finished | StopReason::Canceled)
-                    ) {
+                    let state = *last_query.client_state.lock();
+                    if !matches!(state, ClientState::Closed(_)) {
                         warn!(
-                            "[HTTP-QUERY] Last query id not finished yet, id = {}, state = {:?}, is_data_drained={}",
-                            id, state, last_query.is_data_drained.load(Ordering::Relaxed)
+                            "[HTTP-QUERY] Last query id not finished yet, id = {}, state = {:?}",
+                            id, state
                         );
                     }
                 }
@@ -509,39 +506,76 @@ pub struct HttpQueryResponseInternal {
     pub result_timeout_secs: u64,
 }
 
+impl HttpQueryResponseInternal {
+    pub fn is_data_drained(&self) -> bool {
+        self.data
+            .as_ref()
+            .map(|d| d.next_page_no.is_none())
+            .unwrap_or(true)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
-pub enum HttpQueryState {
-    ExpireAt(Instant),
-    Stopped(StopReason),
+pub enum ClientState {
+    LastAccess {
+        ts: Instant,
+        is_polling: bool,
+        // if is_drained (exec should be stopped):
+        // 1. no longer update ts.
+        // 2. heartbeat_handler should notify client that no need for heartbeat anymore.
+        is_drained: bool,
+    },
+    // closed by client or server(timeout)
+    Closed(ClientStateClosed),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ClientStateClosed {
+    ts: Instant,
+    pub reason: CloseReason,
+    is_drained: bool,
+}
+
+impl ClientStateClosed {
+    pub(crate) fn error_code(&self, timeout: u64) -> ErrorCode {
+        match self.reason {
+            CloseReason::Finalized => ErrorCode::ClosedQuery("closed by client"),
+            CloseReason::Canceled => ErrorCode::AbortedQuery("canceled by client"),
+            CloseReason::TimedOut => ErrorCode::AbortedQuery(format!(
+                "timed out after {timeout} secs, drained = {}",
+                self.is_drained
+            )),
+        }
+    }
 }
 
 #[derive(Debug)]
-pub enum ExpireResult {
-    Expired,
+pub enum TimeoutResult {
     Sleep(Duration),
-    Stopped,
+    TimedOut,
+    Remove,
 }
 
 pub struct HttpQuery {
     pub(crate) id: String,
     pub(crate) user_name: String,
     pub(crate) client_session_id: Option<String>,
-    pub(crate) node_id: String,
-    request: HttpQueryRequest,
-    executor: Arc<Mutex<Executor>>,
-    page_manager: Arc<TokioMutex<PageManager>>,
-    state: Arc<Mutex<HttpQueryState>>,
-    is_data_drained: AtomicBool,
-    /// The timeout for the query result polling. In the normal case, the client driver
-    /// should fetch the paginated result in a timely manner, and the interval should not
-    /// exceed this result_timeout_secs.
-    pub(crate) result_timeout_secs: u64,
+    pagination: PaginationConf,
 
-    pub(crate) is_txn_mgr_saved: AtomicBool,
-
+    // refs
     pub(crate) temp_tbl_mgr: TempTblMgrRef,
     pub(crate) query_mem_stat: Option<Arc<MemStat>>,
+
+    // cache only
+    pub(crate) result_timeout_secs: u64,
+
+    execute_state: Arc<Mutex<Executor>>,
+
+    // client states
+    client_state: Arc<Mutex<ClientState>>,
+    page_manager: Arc<TokioMutex<PageManager>>,
     last_session_conf: Arc<Mutex<Option<HttpSessionConf>>>,
+    pub(crate) is_txn_mgr_saved: AtomicBool,
 }
 
 fn try_set_txn(
@@ -592,8 +626,8 @@ impl HttpQuery {
             .await?;
         let query_id = http_ctx.query_id.clone();
         let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
-        let node_id = ctx.get_cluster().local_id.clone();
         let sql = &req.sql;
+        let node_id = &GlobalConfig::instance().query.node_id;
         info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = sql; "[HTTP-QUERY] Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
@@ -623,25 +657,25 @@ impl HttpQuery {
 
         let settings = session.get_settings();
         let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
-        let deadline = Instant::now()
-            + Duration::from_secs(result_timeout_secs + req.pagination.wait_time_secs as u64);
 
         Ok(HttpQuery {
             id: query_id,
             user_name: http_ctx.user_name.clone(),
             client_session_id: http_ctx.client_session_id.clone(),
-            node_id,
-            request: req,
-            executor,
+            pagination: req.pagination,
+            execute_state: executor,
             page_manager: Arc::new(TokioMutex::new(page_manager)),
             result_timeout_secs,
 
-            state: Arc::new(Mutex::new(HttpQueryState::ExpireAt(deadline))),
+            client_state: Arc::new(Mutex::new(ClientState::LastAccess {
+                ts: Instant::now(),
+                is_drained: false,
+                is_polling: true,
+            })),
             temp_tbl_mgr: session.temp_tbl_mgr().clone(),
             query_mem_stat: ctx.get_query_memory_tracking(),
             is_txn_mgr_saved: Default::default(),
             last_session_conf: Default::default(),
-            is_data_drained: AtomicBool::new(false),
         })
     }
 
@@ -665,7 +699,7 @@ impl HttpQuery {
             data,
             state,
             session,
-            node_id: self.node_id.clone(),
+            node_id: HttpQueryManager::instance().server_info.id.clone(),
             session_id: self.client_session_id.clone().unwrap_or_default(),
             result_timeout_secs: self.result_timeout_secs,
         })
@@ -677,7 +711,7 @@ impl HttpQuery {
         Ok(HttpQueryResponseInternal {
             data: None,
             session_id: self.client_session_id.clone().unwrap_or_default(),
-            node_id: self.node_id.clone(),
+            node_id: HttpQueryManager::instance().server_info.id.clone(),
             state,
             session: None,
             result_timeout_secs: self.result_timeout_secs,
@@ -685,7 +719,7 @@ impl HttpQuery {
     }
 
     fn get_state(&self) -> ResponseState {
-        let state = self.executor.lock();
+        let state = self.execute_state.lock();
         state.get_response_state()
     }
 
@@ -699,7 +733,7 @@ impl HttpQuery {
         // - query cache: last_query_id and result_scan
 
         let (session_state, is_stopped) = {
-            let executor = self.executor.lock();
+            let executor = self.execute_state.lock();
 
             let session_state = executor.get_session_state();
             let is_stopped = matches!(executor.state, ExecuteState::Stopped(_));
@@ -731,7 +765,6 @@ impl HttpQuery {
 
         if is_stopped
             && txn_state == TxnState::Active
-            && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
             && self
                 .is_txn_mgr_saved
                 .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
@@ -767,7 +800,7 @@ impl HttpQuery {
     async fn get_page(&self, page_no: usize) -> Result<ResponseData> {
         let mut page_manager = self.page_manager.lock().await;
         let page = page_manager
-            .get_a_page(page_no, &self.request.pagination.get_wait_type())
+            .get_a_page(page_no, &self.pagination.get_wait_type())
             .await?;
         let response = ResponseData {
             page,
@@ -778,7 +811,7 @@ impl HttpQuery {
 
     pub async fn start_query(&mut self, sql: String) -> Result<()> {
         let (block_sender, query_context) = {
-            let state = &mut self.executor.lock().state;
+            let state = &mut self.execute_state.lock().state;
             let ExecuteState::Starting(state) = state else {
                 return Err(ErrorCode::Internal(
                     "[HTTP-QUERY] Invalid query state: expected Starting state",
@@ -790,7 +823,7 @@ impl HttpQuery {
 
         let query_session = query_context.get_current_session();
 
-        let query_state = self.executor.clone();
+        let query_state = self.execute_state.clone();
 
         GlobalQueryRuntime::instance().runtime().try_spawn(
             async move {
@@ -841,41 +874,45 @@ impl HttpQuery {
 
     #[async_backtrace::framed]
     pub async fn kill(&self, reason: ErrorCode) {
-        // the query will be removed from the query manager before the session is dropped.
-        self.page_manager.lock().await.detach().await;
-
-        Executor::stop(&self.executor, Err(reason));
+        // stop execution first to avoid page_handler get wrong EOF
+        Executor::stop(&self.execute_state, Err(reason));
+        self.page_manager.lock().await.close().await;
     }
 
     #[async_backtrace::framed]
-    pub async fn update_expire_time(&self, before_wait: bool) {
-        let mut to = Duration::from_secs(self.result_timeout_secs);
-        if before_wait {
-            to += Duration::from_secs(self.request.pagination.wait_time_secs as u64)
-        };
-        let deadline = Instant::now() + to;
-        let mut t = self.state.lock();
-        *t = HttpQueryState::ExpireAt(deadline);
-    }
-
-    pub fn mark_stopped(&self, remove_reason: StopReason) -> bool {
-        let mut t = self.state.lock();
-        if !matches!(*t, HttpQueryState::Stopped(_)) {
-            *t = HttpQueryState::Stopped(remove_reason);
-            true
-        } else {
-            false
+    pub async fn update_expire_time(&self, is_polling: bool, drained: bool) {
+        let now = Instant::now();
+        let mut t = self.client_state.lock();
+        if let ClientState::LastAccess { is_drained, .. } = *t {
+            if !is_drained {
+                *t = ClientState::LastAccess {
+                    is_drained: drained,
+                    is_polling,
+                    ts: now,
+                }
+            }
         }
     }
 
-    pub fn set_data_drained(&self) {
-        self.is_data_drained.store(true, Ordering::Relaxed);
+    pub fn mark_closed(&self, reason: CloseReason) -> Option<ClientStateClosed> {
+        let mut t = self.client_state.lock();
+        match *t {
+            ClientState::Closed(_) => None,
+            ClientState::LastAccess { is_drained, .. } => {
+                let st = ClientStateClosed {
+                    ts: Instant::now(),
+                    is_drained,
+                    reason,
+                };
+                *t = ClientState::Closed(st);
+                Some(st)
+            }
+        }
     }
-
-    pub fn check_removed(&self) -> Option<StopReason> {
-        let t = self.state.lock();
-        if let HttpQueryState::Stopped(r) = *t {
-            Some(r)
+    pub fn check_closed(&self) -> Option<ClientStateClosed> {
+        let t = self.client_state.lock();
+        if let ClientState::Closed(st) = *t {
+            Some(st)
         } else {
             None
         }
@@ -883,33 +920,49 @@ impl HttpQuery {
 
     // return Duration to sleep
     #[async_backtrace::framed]
-    pub async fn check_expire(&self) -> ExpireResult {
-        let expire_state = self.state.lock();
+    pub async fn check_timeout(&self) -> TimeoutResult {
+        let now = Instant::now();
+        let expire_state = self.client_state.lock();
         match *expire_state {
-            HttpQueryState::ExpireAt(expire_at) => {
-                let now = Instant::now();
+            ClientState::LastAccess { ts, is_polling, .. } => {
+                let mut expire_at = ts + Duration::from_secs(self.result_timeout_secs);
+                if is_polling {
+                    expire_at += Duration::from_secs(self.pagination.wait_time_secs as u64);
+                }
                 if now >= expire_at {
-                    ExpireResult::Expired
+                    TimeoutResult::TimedOut
                 } else {
-                    ExpireResult::Sleep(expire_at - now)
+                    TimeoutResult::Sleep(expire_at - now)
                 }
             }
-            HttpQueryState::Stopped(_) => ExpireResult::Stopped,
+            ClientState::Closed(st) => {
+                let to = match st.reason {
+                    CloseReason::Finalized => 30,
+                    _ => self.result_timeout_secs,
+                };
+                let expire_at = st.ts + Duration::from_secs(to);
+                if now >= expire_at {
+                    TimeoutResult::Remove
+                } else {
+                    TimeoutResult::Sleep(expire_at - now)
+                }
+            }
         }
     }
 
+    /// return true if no need to send heartbeat anymore
     #[async_backtrace::framed]
     #[fastrace::trace(name = "HttpQuery::on_heartbeat")]
     pub fn on_heartbeat(&self) -> bool {
-        let mut expire_state = self.state.lock();
-        match *expire_state {
-            HttpQueryState::ExpireAt(_) => {
-                let duration = Duration::from_secs(self.result_timeout_secs);
-                let deadline = Instant::now() + duration;
-                *expire_state = HttpQueryState::ExpireAt(deadline);
-                true
+        let mut client_state = self.client_state.lock();
+        match &mut *client_state {
+            ClientState::LastAccess { is_drained, ts, .. } => {
+                if !(*is_drained) {
+                    *ts = Instant::now()
+                }
+                *is_drained
             }
-            HttpQueryState::Stopped(_) => false,
+            ClientState::Closed { .. } => true,
         }
     }
 

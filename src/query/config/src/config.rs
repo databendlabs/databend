@@ -2413,7 +2413,7 @@ pub struct FileLogConfig {
         value_name = "VALUE",
         default_value = "4294967296"
     )]
-    #[serde(rename = "max-size")]
+    #[serde(rename = "max_size")]
     pub file_max_size: usize,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -3318,7 +3318,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-inverted-index-meta-count",
         value_name = "VALUE",
-        default_value = "3000"
+        default_value = "30000"
     )]
     pub inverted_index_meta_count: u64,
 
@@ -3326,7 +3326,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-inverted-index-filter-size",
         value_name = "VALUE",
-        default_value = "2147483648"
+        default_value = "64424509440"
     )]
     pub inverted_index_filter_size: u64,
 

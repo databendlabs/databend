@@ -34,11 +34,11 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::P
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
 
-impl SerializerHashJoinHashTable {
+impl<const SKIP_DUPLICATES: bool> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
     pub fn new(
-        hash_table: BinaryHashJoinHashMap,
+        hash_table: BinaryHashJoinHashMap<SKIP_DUPLICATES>,
         hash_method: HashMethodSerializer,
-    ) -> SerializerHashJoinHashTable {
+    ) -> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
         SerializerHashJoinHashTable {
             hash_table,
             hash_method,

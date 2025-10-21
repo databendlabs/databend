@@ -55,7 +55,7 @@ pub fn load_can_auto_cast_to(from_type: &DataType, to_type: &DataType) -> bool {
     // we mainly care about which types can/cannot cast to to_type.
     // the match branches is grouped in a way to make it easier to read this info.
     match (from_type, to_type) {
-        (_, Null | EmptyArray | EmptyMap | Generic(_)) => unreachable!(),
+        (_, Null | EmptyArray | EmptyMap | Generic(_) | StageLocation) => unreachable!(),
 
         // ====  remove null first, all trivial
         (Null, Nullable(_)) => true,
