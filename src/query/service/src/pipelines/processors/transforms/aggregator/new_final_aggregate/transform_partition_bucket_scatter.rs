@@ -29,6 +29,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
+use super::divide_partitioned_meta_into_blocks;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
@@ -451,28 +452,7 @@ impl TransformPartitionBucketScatter {
             }
         }
 
-        // divide data evenly into outputs_len portions
-        let total_len = data.len();
-        let base_chunk_size = total_len / outputs_len;
-        let remainder = total_len % outputs_len;
-
-        let mut result = Vec::with_capacity(outputs_len);
-        let mut data_iter = data.into_iter();
-
-        for i in 0..outputs_len {
-            let chunk_size = if i < remainder {
-                base_chunk_size + 1
-            } else {
-                base_chunk_size
-            };
-
-            let chunk: Vec<AggregateMeta> = data_iter.by_ref().take(chunk_size).collect();
-            result.push(DataBlock::empty_with_meta(
-                AggregateMeta::create_partitioned(bucket, chunk),
-            ));
-        }
-
-        result
+        divide_partitioned_meta_into_blocks(bucket, data, outputs_len)
     }
 }
 

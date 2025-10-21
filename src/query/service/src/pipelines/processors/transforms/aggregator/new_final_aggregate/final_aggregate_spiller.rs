@@ -37,38 +37,11 @@ use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
-pub struct FinalAggregateSharedState {
-    pub aggregate_queues: Vec<Vec<AggregateMeta>>,
-}
-
-impl FinalAggregateSharedState {
-    pub fn create(partition_count: usize) -> Self {
-        let mut aggregate_queues = Vec::with_capacity(partition_count);
-        for _ in 0..partition_count {
-            aggregate_queues.push(Vec::new());
-        }
-
-        FinalAggregateSharedState { aggregate_queues }
-    }
-
-    pub fn merge_aggregate_queues(&mut self, metas: Vec<Vec<AggregateMeta>>) {
-        debug_assert_eq!(self.aggregate_queues.len(), metas.len());
-        for (i, meta_queue) in metas.into_iter().enumerate() {
-            self.aggregate_queues[i].extend(meta_queue);
-        }
-    }
-
-    pub fn take_aggregate_queue(&mut self, index: usize) -> Vec<AggregateMeta> {
-        std::mem::take(&mut self.aggregate_queues[index])
-    }
-}
-
 pub struct FinalAggregateSpiller {
     pub spiller: Spiller,
     pub blocking_operator: BlockingOperator,
     pub memory_settings: MemorySettings,
     pub ctx: Arc<QueryContext>,
-    pub is_spilled: bool,
 }
 
 impl FinalAggregateSpiller {
@@ -92,7 +65,6 @@ impl FinalAggregateSpiller {
             blocking_operator,
             memory_settings,
             ctx,
-            is_spilled: false,
         })
     }
 
@@ -160,18 +132,7 @@ impl FinalAggregateSpiller {
         self.spiller
             .add_aggregate_spill_file(&location, write_bytes);
 
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, write_bytes);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::RemoteSpillWriteTime,
-            instant.elapsed().as_millis() as usize,
-        );
-
-        let progress_val = ProgressValues {
-            rows,
-            bytes: write_bytes,
-        };
-        self.ctx.get_aggregate_spill_progress().incr(&progress_val);
+        self.record_write_profile(&instant, rows, write_bytes);
 
         info!(
             "Write aggregate spill {} successfully, elapsed: {:?}",
@@ -197,5 +158,20 @@ impl FinalAggregateSpiller {
             ProfileStatisticsName::RemoteSpillReadTime,
             instant.elapsed().as_millis() as usize,
         );
+    }
+
+    fn record_write_profile(&self, instant: &Instant, rows: usize, write_bytes: usize) {
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, write_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RemoteSpillWriteTime,
+            instant.elapsed().as_millis() as usize,
+        );
+
+        let progress_val = ProgressValues {
+            rows,
+            bytes: write_bytes,
+        };
+        self.ctx.get_aggregate_spill_progress().incr(&progress_val);
     }
 }
