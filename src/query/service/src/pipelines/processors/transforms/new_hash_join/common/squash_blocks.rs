@@ -111,7 +111,7 @@ impl SquashBlocks {
 
             let max_bytes_rows = match block.avg_bytes {
                 0 => block.block.num_rows(),
-                _ => (self.squash_bytes - current_bytes) / block.avg_bytes,
+                _ => self.squash_bytes.saturating_sub(current_bytes) / block.avg_bytes,
             };
 
             slice_rows = std::cmp::min(max_bytes_rows, slice_rows);
@@ -120,7 +120,9 @@ impl SquashBlocks {
                 let compact_block = block.block.slice(0..slice_rows);
                 let remain_block = block.block.slice(slice_rows..block.block.num_rows());
 
-                blocks.push(compact_block);
+                if !compact_block.is_empty() {
+                    blocks.push(compact_block);
+                }
 
                 if !remain_block.is_empty() {
                     let mut columns = Vec::with_capacity(block.block.num_columns());
