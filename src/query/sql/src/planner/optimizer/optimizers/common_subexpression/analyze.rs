@@ -26,7 +26,7 @@ use crate::plans::MaterializedCTERef;
 use crate::plans::RelOperator;
 pub fn analyze_common_subexpression(
     s_expr: &SExpr,
-    metadata: &Metadata,
+    metadata: &mut Metadata,
 ) -> Result<(Vec<SExprReplacement>, Vec<SExpr>)> {
     // Skip CSE optimization if the expression contains recursive CTE
     if contains_recursive_cte(s_expr) {
@@ -46,7 +46,7 @@ fn process_candidate_expressions(
     candidates: &[(Vec<usize>, SExpr)],
     replacements: &mut Vec<SExprReplacement>,
     materialized_ctes: &mut Vec<SExpr>,
-    _metadata: &Metadata,
+    metadata: &mut Metadata,
 ) -> Result<()> {
     if candidates.len() < 2 {
         return Ok(());
@@ -60,6 +60,7 @@ fn process_candidate_expressions(
         new_scan.push_down_predicates = None;
         new_scan.limit = None;
         new_scan.order_by = None;
+        new_scan.scan_id = metadata.next_scan_id();
         Arc::new(SExpr::create_leaf(Arc::new(RelOperator::Scan(new_scan))))
     } else {
         Arc::new(cte_def.clone())

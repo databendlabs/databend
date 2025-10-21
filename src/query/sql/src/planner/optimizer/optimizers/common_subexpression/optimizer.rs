@@ -31,8 +31,9 @@ pub struct CommonSubexpressionOptimizer {
 impl Optimizer for CommonSubexpressionOptimizer {
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let metadata = self._opt_ctx.get_metadata();
-        let metadata = metadata.read();
-        let (replacements, materialized_ctes) = analyze_common_subexpression(s_expr, &metadata)?;
+        let mut metadata = metadata.write();
+        let (replacements, materialized_ctes) =
+            analyze_common_subexpression(s_expr, &mut metadata)?;
         rewrite_sexpr(s_expr, replacements, materialized_ctes)
     }
 
