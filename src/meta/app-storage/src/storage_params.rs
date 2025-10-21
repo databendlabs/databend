@@ -450,7 +450,10 @@ impl std::str::FromStr for S3StorageClass {
         match s.to_uppercase().as_str() {
             S3_STORAGE_CLASS_STANDARD => Ok(S3StorageClass::Standard),
             S3_STORAGE_CLASS_INTELLIGENT_TIERING => Ok(S3StorageClass::IntelligentTiering),
-            _ => Err(format!("Invalid s3 storage class: {}", s)),
+            _ => Err(format!(
+                "Unsupported S3 storage class '{}'. Supported values: 'standard', 'intelligent_tiering'",
+                s
+            )),
         }
     }
 }

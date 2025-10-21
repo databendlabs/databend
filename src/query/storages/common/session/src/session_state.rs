@@ -21,8 +21,13 @@ use crate::TxnManagerRef;
 
 #[derive(Clone, Debug)]
 pub struct SessionState {
+    /// Transaction manager for the session
     pub txn_mgr: TxnManagerRef,
+    /// Temporary table manager for the session
     pub temp_tbl_mgr: TempTblMgrRef,
+    /// S3 storage class configuration for Fuse tables (including external fuse tables)
+    /// This setting applies to all table operations within this session that use S3 storage.
+    /// Note: Only effective for AWS S3 and compatible storage that supports S3 storage classes.
     pub s3_storage_class: S3StorageClass,
 }
 
