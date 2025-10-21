@@ -263,6 +263,7 @@ impl Binder {
                     )?;
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
+                    // Masking policy is now handled uniformly in TypeChecker::resolve()
                     let mut scalar_binder = ScalarBinder::new(
                         input_context,
                         self.ctx.clone(),
@@ -348,10 +349,13 @@ impl Binder {
                 let (scalar, _) = scalar_binder.bind(&expr)?;
                 scalar
             }
-            None => ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span,
-                column: column_binding.clone(),
-            }),
+            None => {
+                // Masking policy is now handled uniformly in TypeChecker::resolve()
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span,
+                    column: column_binding.clone(),
+                })
+            }
         };
 
         Ok(SelectItem {
