@@ -142,6 +142,12 @@ impl AnalyzeCollectNDVSource {
         let block_reader =
             table.create_block_reader(ctx.clone(), projection, false, false, false)?;
 
+        // Rebuild `ndv_columns_map` so that keys correspond to the column order in the projection.
+        //
+        // The original `BTreeMap<FieldIndex, TableField>` is ordered by field index (ascending),
+        // but after projection, columns are loaded in that order and accessed by *position*.
+        // Therefore, we re-index it with `enumerate()` to align with block column offsets (0..N).
+        let ndv_columns_map = ndv_columns_map.values().cloned().enumerate().collect();
         let dal = table.get_operator();
         let settings = ReadSettings::from_ctx(&ctx)?;
         let segment_reader = MetaReaders::segment_info_reader(dal.clone(), table_schema.clone());
