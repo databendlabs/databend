@@ -220,16 +220,16 @@ statement ok
 DROP TABLE t2;
 
 statement ok
-CREATE TABLE t3(a int, b string) approx_distinct_columns = '';
+CREATE TABLE t3(a int, b string, c int) approx_distinct_columns = '';
 
 statement ok
-insert into t3 values(1, 'a'), (2, 'b');
+insert into t3 values(1, 'a', 1), (2, 'b', 2);
 
 statement ok
 alter table t3 set options(approx_distinct_columns = 'a, b');
 
 statement ok
-insert into t3 values(4, 'c'), (3, 'b');
+insert into t3 values(4, 'c', 4), (3, 'b', 4);
 
 query B
 select segment_stats_size is null from fuse_segment('db_09_0020','t3') order by file_location;
@@ -251,6 +251,10 @@ select column_name, distinct_count from fuse_statistic('db_09_0020', 't3') order
 ----
 a 4
 b 3
+c 3
+
+statement ok
+alter table t3 set options(approx_distinct_columns = 'a, c');
 
 statement ok
 analyze table t3;
@@ -259,6 +263,14 @@ query I
 select count() from fuse_snapshot('db_09_0020', 't3');
 ----
 4
+
+statement ok
+analyze table t3;
+
+query I
+select count() from fuse_snapshot('db_09_0020', 't3');
+----
+5
 
 statement ok
 DROP TABLE t3;
