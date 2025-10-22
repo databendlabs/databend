@@ -20,6 +20,7 @@ use bytesize::ByteSize;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use rand::Rng;
 
 #[derive(Clone)]
 #[non_exhaustive]
@@ -35,6 +36,8 @@ pub struct MemorySettings {
     pub enable_query_level_spill: bool,
     pub max_query_memory_usage: usize,
     pub query_memory_tracking: Option<Arc<MemStat>>,
+
+    pub random_spill_percentage: u64,
 }
 
 impl Debug for MemorySettings {
@@ -85,6 +88,7 @@ pub struct MemorySettingsBuilder {
     query_memory_tracking: Option<Arc<MemStat>>,
 
     spill_unit_size: Option<usize>,
+    random_spill_percentage: u64,
 }
 
 impl MemorySettingsBuilder {
@@ -115,6 +119,11 @@ impl MemorySettingsBuilder {
         self
     }
 
+    pub fn with_random_spill_percentage(mut self, percentage: u64) -> Self {
+        self.random_spill_percentage = percentage;
+        self
+    }
+
     pub fn build(self) -> MemorySettings {
         MemorySettings {
             enable_group_spill: self.enable_group_spill,
@@ -125,6 +134,7 @@ impl MemorySettingsBuilder {
             max_query_memory_usage: self.max_query_memory_usage.unwrap_or(usize::MAX),
             query_memory_tracking: self.query_memory_tracking,
             spill_unit_size: self.spill_unit_size.unwrap_or(0),
+            random_spill_percentage: self.random_spill_percentage,
         }
     }
 }
@@ -142,6 +152,7 @@ impl MemorySettings {
             query_memory_tracking: None,
 
             spill_unit_size: None,
+            random_spill_percentage: 0,
         }
     }
 
@@ -163,12 +174,20 @@ impl MemorySettings {
             }
         }
 
-        let Some(query_memory_tracking) = self.query_memory_tracking.as_ref() else {
-            return false;
-        };
+        if let Some(query_memory_tracking) = self.query_memory_tracking.as_ref() {
+            if self.enable_query_level_spill
+                && query_memory_tracking.get_memory_usage() >= self.max_query_memory_usage
+            {
+                return true;
+            }
+        }
 
-        self.enable_query_level_spill
-            && query_memory_tracking.get_memory_usage() >= self.max_query_memory_usage
+        if self.random_spill_percentage > 0 {
+            let random_value = rand::thread_rng().gen_range(0..100);
+            return random_value < self.random_spill_percentage;
+        }
+
+        false
     }
 
     fn check_global(&self) -> Option<isize> {
@@ -248,6 +267,7 @@ mod tests {
                 query_memory_tracking: None,
                 enable_query_level_spill: false,
                 spill_unit_size: 4096,
+                random_spill_percentage: 0,
             }
         }
     }

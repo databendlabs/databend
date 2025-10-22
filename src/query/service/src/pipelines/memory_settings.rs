@@ -57,6 +57,9 @@ impl MemorySettingsExt for MemorySettings {
             );
         }
 
+        let random_spill_percentage = settings.get_random_spill_percentage()?;
+        builder = builder.with_random_spill_percentage(random_spill_percentage);
+
         Ok(builder.build())
     }
 
@@ -92,6 +95,9 @@ impl MemorySettingsExt for MemorySettings {
             );
         }
 
+        let random_spill_percentage = settings.get_random_spill_percentage()?;
+        builder = builder.with_random_spill_percentage(random_spill_percentage);
+
         Ok(builder.build())
     }
 
@@ -123,6 +129,9 @@ impl MemorySettingsExt for MemorySettings {
             );
         }
 
+        let random_spill_percentage = settings.get_random_spill_percentage()?;
+        builder = builder.with_random_spill_percentage(random_spill_percentage);
+
         Ok(builder.build())
     }
 
@@ -152,6 +161,9 @@ impl MemorySettingsExt for MemorySettings {
                 ctx.get_query_memory_tracking(),
             );
         }
+
+        let random_spill_percentage = settings.get_random_spill_percentage()?;
+        builder = builder.with_random_spill_percentage(random_spill_percentage);
 
         Ok(builder.build())
     }
