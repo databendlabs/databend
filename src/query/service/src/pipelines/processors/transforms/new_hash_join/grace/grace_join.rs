@@ -330,6 +330,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         for id in ready_partitions_id {
             if let Some(data_block) = self.probe_partition_stream.finalize_partition(id) {
                 self.partitions[id].writer.write(data_block)?;
+                self.partitions[id].writer.flush()?;
             }
         }
 

@@ -142,13 +142,15 @@ impl SpillsBufferPool {
         for _ in 0..workers {
             let working_queue: async_channel::Receiver<BufferOperator> = working_rx.clone();
             let available_write_buffers = buffers_tx.clone();
-            executor.spawn(async move {
-                let mut background = Background::create(available_write_buffers);
-                while let Ok(op) = working_queue.recv().await {
-                    let span = Span::enter_with_parent("Background::recv", op.span());
-                    background.recv(op).in_span(span).await;
-                }
-            });
+            executor.spawn(
+                async_backtrace::location!(String::from("async_buffer")).frame(async move {
+                    let mut background = Background::create(available_write_buffers);
+                    while let Ok(op) = working_queue.recv().await {
+                        let span = Span::enter_with_parent("Background::recv", op.span());
+                        background.recv(op).in_span(span).await;
+                    }
+                }),
+            );
         }
 
         Arc::new(SpillsBufferPool {
@@ -172,22 +174,10 @@ impl SpillsBufferPool {
         }
     }
 
-    pub(crate) fn write(&self, op: BufferWriteOperator) {
+    pub(crate) fn operator(&self, op: BufferOperator) {
         self.working_queue
-            .try_send(BufferOperator::Write(op))
+            .try_send(op)
             .expect("Buffer pool working queue need unbounded.");
-    }
-
-    pub(crate) fn close(&self, op: BufferCloseOperator) {
-        self.working_queue
-            .try_send(BufferOperator::Close(op))
-            .expect("Buffer pool working queue need unbounded.");
-    }
-
-    pub(crate) fn read(&self, op: ReadRowGroupOperator) {
-        self.working_queue
-            .try_send(BufferOperator::ReadRowGroup(op))
-            .expect("Buffer pool working queue need unbounded.")
     }
 
     pub fn buffer_write(self: &Arc<SpillsBufferPool>, writer: Writer) -> BufferWriter {
@@ -296,12 +286,14 @@ impl BufferWriter {
 
             self.pending_response = Some(pending_response.clone());
 
-            self.buffer_pool.write(BufferWriteOperator {
+            let operator = BufferOperator::Write(BufferWriteOperator {
                 span: Span::enter_with_local_parent("BufferWriteOperator"),
                 writer,
                 response: pending_response,
                 buffers: std::mem::take(&mut self.pending_buffers),
             });
+
+            self.buffer_pool.operator(operator);
         }
 
         Ok(())
@@ -316,11 +308,13 @@ impl BufferWriter {
                 condvar: Default::default(),
             });
 
-            self.buffer_pool.close(BufferCloseOperator {
+            let close_operator = BufferOperator::Close(BufferCloseOperator {
                 span: Span::enter_with_local_parent("BufferCloseOperator"),
                 writer,
                 response: pending_response.clone(),
             });
+
+            self.buffer_pool.operator(close_operator);
 
             let locked = pending_response.mutex.lock();
             let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
@@ -508,7 +502,10 @@ impl SpillsDataWriter {
             SpillsDataWriter::Uninitialize(_) => Err(ErrorCode::Internal(
                 "Bad state, BlockStreamWriter is uninitialized",
             )),
-            SpillsDataWriter::Initialized(writer) => Ok(writer.writer.flush()?),
+            SpillsDataWriter::Initialized(writer) => {
+                writer.writer.flush()?;
+                Ok(writer.writer.inner_mut().flush()?)
+            }
         }
     }
 
@@ -592,11 +589,13 @@ impl SpillsDataReader {
             mutex: Mutex::new(None),
         });
 
-        self.spills_buffer_pool.read(ReadRowGroupOperator {
+        let operator = BufferOperator::ReadRowGroup(ReadRowGroupOperator {
             span: Span::enter_with_local_parent("ReadRowGroupOperator"),
             in_memory_row_group: unsafe { std::mem::transmute(row_group) },
             response: pending_response.clone(),
         });
+
+        self.spills_buffer_pool.operator(operator);
 
         let locked = pending_response.mutex.lock();
         let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
