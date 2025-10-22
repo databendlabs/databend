@@ -26,8 +26,7 @@ mod transform_branched_cast_schema;
 mod transform_cache_scan;
 mod transform_dictionary;
 mod transform_expression_scan;
-mod transform_filter;
-mod transform_limit;
+
 mod transform_recursive_cte_scan;
 mod transform_recursive_cte_source;
 mod transform_resort_addon;
@@ -57,8 +56,6 @@ pub use transform_cache_scan::HashJoinCacheState;
 pub use transform_cache_scan::NewHashJoinCacheState;
 pub use transform_cache_scan::TransformCacheScan;
 pub use transform_expression_scan::TransformExpressionScan;
-pub use transform_filter::TransformFilter;
-pub use transform_limit::TransformLimit;
 pub use transform_recursive_cte_scan::TransformRecursiveCteScan;
 pub use transform_recursive_cte_source::TransformRecursiveCteSource;
 pub use transform_resort_addon::TransformResortAddOn;

@@ -23,13 +23,13 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_transforms::processors::BlockingTransform;
-use databend_common_pipeline_transforms::processors::BlockingTransformer;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
 use databend_common_sql::ColumnSet;
 
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::Processor;
+use crate::BlockingTransform;
+use crate::BlockingTransformer;
 
 /// Filter the input [`DataBlock`] with the predicate `expr`.
 pub struct TransformFilter {

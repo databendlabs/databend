@@ -17,11 +17,10 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-
-use crate::pipelines::processors::Event;
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::Processor;
+use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
 
 pub struct TransformLimit;
 

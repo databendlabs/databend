@@ -25,6 +25,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::columns::TransformCastSchema;
+use databend_common_pipeline_transforms::filters::TransformFilter;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 use databend_common_pipeline_transforms::processors::BlockCompactBuilder;
@@ -44,7 +45,6 @@ use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::Statistics;
 use meta::TableMetaTimestamps;
 
-use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::transforms::TransformResortAddOn;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
