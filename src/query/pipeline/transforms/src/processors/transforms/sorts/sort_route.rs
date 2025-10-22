@@ -24,10 +24,10 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_transforms::Transform;
 
 use super::SortBound;
 use super::SortBoundNext;
+use crate::Transform;
 
 pub struct TransformSortRoute {
     inputs: Vec<Input>,
@@ -100,7 +100,7 @@ impl Debug for Input {
 }
 
 impl TransformSortRoute {
-    pub(super) fn new(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>) -> Self {
+    pub fn new(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>) -> Self {
         Self {
             inputs: inputs
                 .into_iter()

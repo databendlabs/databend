@@ -16,7 +16,6 @@ use std::cmp::Ordering;
 use std::collections::VecDeque;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 
@@ -26,6 +25,7 @@ use super::list_domain::List;
 use super::list_domain::Partition;
 use super::Rows;
 use super::SortedStream;
+use crate::sorts::SortTaskMeta;
 
 pub struct KWaySortPartitioner<R, S>
 where
@@ -236,13 +236,3 @@ impl<R: Rows> List for Option<R> {
         rows.row(i)
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct SortTaskMeta {
-    pub id: usize,
-    pub total: usize,
-    pub input: usize,
-}
-
-#[typetag::serde(name = "sort_task")]
-impl BlockMetaInfo for SortTaskMeta {}

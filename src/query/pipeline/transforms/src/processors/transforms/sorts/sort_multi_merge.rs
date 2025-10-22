@@ -30,16 +30,16 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 
-use super::sort::algorithm::HeapSort;
-use super::sort::algorithm::LoserTreeSort;
-use super::sort::algorithm::SortAlgorithm;
-use super::sort::select_row_type;
-use super::sort::utils::ORDER_COL_NAME;
-use super::sort::Merger;
-use super::sort::RowConverter;
-use super::sort::Rows;
-use super::sort::RowsTypeVisitor;
-use super::sort::SortedStream;
+use super::core::algorithm::HeapSort;
+use super::core::algorithm::LoserTreeSort;
+use super::core::algorithm::SortAlgorithm;
+use super::core::select_row_type;
+use super::core::Merger;
+use super::core::RowConverter;
+use super::core::Rows;
+use super::core::RowsTypeVisitor;
+use super::core::SortedStream;
+use super::utils::ORDER_COL_NAME;
 
 pub fn try_add_multi_sort_merge(
     pipeline: &mut Pipeline,

@@ -19,9 +19,10 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_transforms::sort::LoserTreeMerger;
-use databend_common_pipeline_transforms::sort::Rows;
-use databend_common_pipeline_transforms::sort::SortedStream;
+
+use super::LoserTreeMerger;
+use super::Rows;
+use super::SortedStream;
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Bounds(
@@ -206,10 +207,10 @@ impl SortedStream for Bounds {
 mod tests {
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::FromData;
-    use databend_common_pipeline_transforms::sort::SimpleRowsAsc;
-    use databend_common_pipeline_transforms::sort::SimpleRowsDesc;
 
     use super::*;
+    use crate::sorts::core::SimpleRowsAsc;
+    use crate::sorts::core::SimpleRowsDesc;
 
     fn int32_columns<T>(data: T) -> Vec<Column>
     where T: IntoIterator<Item = Vec<i32>> {

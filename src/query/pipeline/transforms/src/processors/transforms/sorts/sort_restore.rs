@@ -22,18 +22,18 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
-use databend_common_pipeline_transforms::traits::DataBlockSpill;
-use databend_common_pipeline_transforms::HookTransform;
-use databend_common_pipeline_transforms::HookTransformer;
-use databend_common_pipeline_transforms::MemorySettings;
 
+use super::core::algorithm::SortAlgorithm;
 use super::sort_spill::OutputData;
 use super::sort_spill::SortSpill;
 use super::Base;
 use super::SortBound;
 use super::SortBoundNext;
 use super::SortCollectedMeta;
+use crate::traits::DataBlockSpill;
+use crate::HookTransform;
+use crate::HookTransformer;
+use crate::MemorySettings;
 
 pub struct TransformSortRestore<A: SortAlgorithm, S: DataBlockSpill> {
     input: Vec<SortCollectedMeta>,
@@ -53,7 +53,7 @@ where
     A: SortAlgorithm + Send + 'static,
     S: DataBlockSpill,
 {
-    pub(super) fn create(
+    pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         base: Base<S>,

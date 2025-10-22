@@ -32,7 +32,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::DynTransformBuilder;
 use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
-use databend_common_pipeline_transforms::TransformSortPartial;
+use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::ColumnSet;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_common_storages_fuse::FuseTable;

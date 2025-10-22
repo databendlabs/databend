@@ -22,8 +22,8 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
-use crate::processors::transforms::Transform;
-use crate::processors::transforms::Transformer;
+use crate::Transform;
+use crate::Transformer;
 
 pub struct TransformSortPartial {
     limit: LimitType,

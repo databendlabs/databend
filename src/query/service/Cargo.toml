@@ -121,7 +121,6 @@ databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
 dyn-clone = { workspace = true }
 either = { workspace = true }
-enum-as-inner = { workspace = true }
 ethnum = { workspace = true }
 fastrace = { workspace = true }
 flatbuffers = { workspace = true }

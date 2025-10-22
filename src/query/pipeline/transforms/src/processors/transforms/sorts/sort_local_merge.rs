@@ -28,21 +28,21 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
-use databend_common_pipeline_transforms::sort::RowConverter;
-use databend_common_pipeline_transforms::sort::Rows;
-use databend_common_pipeline_transforms::traits::DataBlockSpill;
-use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_pipeline_transforms::MergeSort;
-use databend_common_pipeline_transforms::SortSpillParams;
-use databend_common_pipeline_transforms::TransformSortMergeLimit;
 
-use super::sort_spill::create_memory_merger;
-use super::sort_spill::MemoryMerger;
-use super::sort_spill::OutputData;
-use super::sort_spill::SortSpill;
+use super::core::algorithm::SortAlgorithm;
+use super::core::RowConverter;
+use super::core::Rows;
+use super::create_memory_merger;
 use super::Base;
+use super::MemoryMerger;
+use super::MergeSort;
+use super::OutputData;
 use super::RowsStat;
+use super::SortSpill;
+use super::SortSpillParams;
+use super::TransformSortMergeLimit;
+use crate::traits::DataBlockSpill;
+use crate::MemorySettings;
 
 #[derive(Debug)]
 enum State {
@@ -54,6 +54,7 @@ enum State {
     Finish,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum Inner<A: SortAlgorithm, S: DataBlockSpill> {
     Collect(Vec<DataBlock>),
     Limit(TransformSortMergeLimit<A::Rows>),
@@ -94,7 +95,7 @@ where
     C: RowConverter<A::Rows>,
     S: DataBlockSpill,
 {
-    pub(super) fn new(
+    pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,

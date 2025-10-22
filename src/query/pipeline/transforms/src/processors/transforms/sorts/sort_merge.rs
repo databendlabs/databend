@@ -26,17 +26,17 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
-use super::sort::algorithm::HeapSort;
-use super::sort::algorithm::LoserTreeSort;
-use super::sort::algorithm::SortAlgorithm;
-use super::sort::utils::has_order_field;
-use super::sort::Rows;
-use super::sort::SortedStream;
-use super::sort::VariableRowConverter;
-use super::sort::VariableRows;
-use super::transform_sort_merge_base::MergeSort;
-use super::transform_sort_merge_base::TransformSortMergeBase;
-use crate::processors::sort::Merger;
+use super::core::algorithm::HeapSort;
+use super::core::algorithm::LoserTreeSort;
+use super::core::algorithm::SortAlgorithm;
+use super::core::Merger;
+use super::core::Rows;
+use super::core::SortedStream;
+use super::core::VariableRowConverter;
+use super::core::VariableRows;
+use super::sort_merge_base::MergeSort;
+use super::sort_merge_base::TransformSortMergeBase;
+use super::utils::has_order_field;
 
 /// Merge sort blocks without limit.
 ///

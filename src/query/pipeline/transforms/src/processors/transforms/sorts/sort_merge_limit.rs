@@ -22,10 +22,10 @@ use databend_common_base::containers::FixedHeap;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
-use super::sort::Cursor;
-use super::sort::CursorOrder;
-use super::sort::Rows;
-use super::transform_sort_merge_base::MergeSort;
+use super::core::Cursor;
+use super::core::CursorOrder;
+use super::core::Rows;
+use super::sort_merge_base::MergeSort;
 
 /// This is a specific version of [`super::transform_sort_merge::TransformSortMerge`] which sort blocks with limit.
 pub struct TransformSortMergeLimit<R: Rows> {

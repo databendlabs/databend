@@ -26,11 +26,11 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_transforms::sort::algorithm::SortAlgorithm;
-use databend_common_pipeline_transforms::sort::Merger;
-use databend_common_pipeline_transforms::sort::Rows;
-use databend_common_pipeline_transforms::sort::SortedStream;
 
+use super::core::algorithm::SortAlgorithm;
+use super::core::Merger;
+use super::core::Rows;
+use super::core::SortedStream;
 use super::SortBound;
 use super::SortBoundNext;
 
@@ -296,9 +296,9 @@ mod tests {
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::FromData;
     use databend_common_pipeline_core::processors::connect;
-    use databend_common_pipeline_transforms::sort::SimpleRowsAsc;
 
     use super::*;
+    use crate::sorts::core::SimpleRowsAsc;
 
     fn create_block(empty: bool, index: u32, next: u32) -> DataBlock {
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]);

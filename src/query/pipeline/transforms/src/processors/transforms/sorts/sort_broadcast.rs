@@ -26,13 +26,13 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_transforms::processors::sort::Rows;
-use databend_common_pipeline_transforms::HookTransform;
-use databend_common_pipeline_transforms::HookTransformer;
 
-use super::bounds::Bounds;
+use super::core::Bounds;
+use super::core::Rows;
 use super::SortCollectedMeta;
 use super::SortExchangeMeta;
+use crate::HookTransform;
+use crate::HookTransformer;
 
 pub struct TransformSortBoundBroadcast<R: Rows, C: BroadcastChannel> {
     state: SortSampleState<C>,

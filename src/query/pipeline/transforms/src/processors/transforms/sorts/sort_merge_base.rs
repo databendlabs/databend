@@ -21,8 +21,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
-use super::sort::RowConverter;
-use super::sort::Rows;
+use super::core::RowConverter;
+use super::core::Rows;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SortSpillParams {

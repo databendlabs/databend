@@ -30,23 +30,23 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
-use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
-use databend_common_pipeline_transforms::processors::sort::Merger;
-use databend_common_pipeline_transforms::processors::sort::Rows;
-use databend_common_pipeline_transforms::processors::sort::SortedStream;
-use databend_common_pipeline_transforms::processors::SortSpillParams;
-use databend_common_pipeline_transforms::traits::DataBlockSpill;
-use databend_common_pipeline_transforms::traits::Location;
-use databend_common_pipeline_transforms::MemorySettings;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
-use super::bounds::Bounds;
+use super::core::algorithm::SortAlgorithm;
+use super::core::Bounds;
+use super::core::Merger;
+use super::core::Rows;
+use super::core::SortedStream;
 use super::Base;
 use super::RowsStat;
 use super::SortCollectedMeta;
+use super::SortSpillParams;
+use crate::traits::DataBlockSpill;
+use crate::traits::Location;
+use crate::MemorySettings;
 
-pub(super) struct SortSpill<A: SortAlgorithm, S: DataBlockSpill> {
+pub struct SortSpill<A: SortAlgorithm, S: DataBlockSpill> {
     base: Base<S>,
     step: Step<A, S>,
 }
@@ -98,7 +98,7 @@ where
         Self { base, step }
     }
 
-    pub fn from_meta(base: Base<S>, meta: SortCollectedMeta) -> Self {
+    pub(super) fn from_meta(base: Base<S>, meta: SortCollectedMeta) -> Self {
         let SortCollectedMeta {
             params,
             bounds,
@@ -194,12 +194,11 @@ where
         }
     }
 
-    #[expect(unused)]
     pub fn format_memory_usage(&self) -> FmtMemoryUsage<'_, A, S> {
         FmtMemoryUsage(self)
     }
 
-    pub fn dump_collect(self) -> Result<SortCollectedMeta> {
+    pub(super) fn dump_collect(self) -> Result<SortCollectedMeta> {
         let Self {
             base,
             step: Step::Collect(mut collect),
@@ -324,7 +323,7 @@ impl<A: SortAlgorithm, S: DataBlockSpill> StepCollect<A, S> {
     }
 }
 
-pub(super) struct OutputData {
+pub struct OutputData {
     pub block: Option<DataBlock>,
     pub bound: (u32, Option<Scalar>),
     pub finish: bool,
@@ -608,7 +607,6 @@ impl<S: DataBlockSpill> Base<S> {
         }
     }
 
-    #[expect(dead_code)]
     pub async fn scatter_stream<R: Rows>(
         &self,
         mut blocks: VecDeque<SpillableBlock>,
@@ -987,11 +985,11 @@ mod tests {
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
     use databend_common_expression::SortColumnDescription;
-    use databend_common_pipeline_transforms::processors::sort::convert_rows;
-    use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
-    use databend_common_pipeline_transforms::sort::SimpleRowsDesc;
 
     use super::*;
+    use crate::sorts::core::convert_rows;
+    use crate::sorts::core::SimpleRowsAsc;
+    use crate::sorts::core::SimpleRowsDesc;
 
     fn test_data() -> (DataSchemaRef, DataBlock) {
         let col1 = Int32Type::from_data(vec![7, 7, 8, 11, 3, 5, 10, 11]);

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod algorithm;
+mod bounds;
 mod cursor;
 mod k_way_merge_sort_partition;
 mod list_domain;
@@ -22,9 +23,9 @@ mod row_convert;
 mod rows;
 pub mod utils;
 
+pub use bounds::*;
 pub use cursor::*;
 pub use k_way_merge_sort_partition::KWaySortPartitioner;
-pub use k_way_merge_sort_partition::SortTaskMeta;
 pub use merger::*;
 pub use row_convert::*;
 pub use rows::*;

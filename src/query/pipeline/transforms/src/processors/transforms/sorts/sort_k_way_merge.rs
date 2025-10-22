@@ -34,18 +34,18 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 
-use super::sort::algorithm::HeapSort;
-use super::sort::algorithm::LoserTreeSort;
-use super::sort::algorithm::SortAlgorithm;
-use super::sort::select_row_type;
-use super::sort::KWaySortPartitioner;
-use super::sort::Merger;
-use super::sort::RowConverter;
-use super::sort::Rows;
-use super::sort::RowsTypeVisitor;
-use super::sort::SortTaskMeta;
-use super::sort::SortedStream;
-use super::transform_multi_sort_merge::InputBlockStream;
+use super::core::algorithm::HeapSort;
+use super::core::algorithm::LoserTreeSort;
+use super::core::algorithm::SortAlgorithm;
+use super::core::select_row_type;
+use super::core::KWaySortPartitioner;
+use super::core::Merger;
+use super::core::RowConverter;
+use super::core::Rows;
+use super::core::RowsTypeVisitor;
+use super::core::SortedStream;
+use super::InputBlockStream;
+use super::SortTaskMeta;
 
 pub fn add_k_way_merge_sort(
     pipeline: &mut Pipeline,
