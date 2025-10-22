@@ -42,6 +42,9 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UpdateDatabaseOptionsReply;
+use databend_common_meta_app::schema::UpdateDatabaseOptionsReq;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_kvapi::kvapi;
@@ -65,6 +68,7 @@ use crate::error_util::db_has_to_not_exist;
 use crate::fetch_id;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::kv_pb_crud_api::KVPbCrudApi;
 use crate::serialize_struct;
 use crate::serialize_u64;
 use crate::txn_backoff::txn_backoff;
@@ -492,6 +496,37 @@ where
                 return Ok(RenameDatabaseReply {});
             }
         }
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn update_database_options(
+        &self,
+        req: UpdateDatabaseOptionsReq,
+    ) -> Result<UpdateDatabaseOptionsReply, KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+
+        let db_id = req.db_id;
+        let new_options = req.options.clone();
+        let db_key = DatabaseId::new(db_id);
+
+        self.crud_upsert_with(&db_key, move |seq_meta| {
+            let Some(seq_meta) = seq_meta else {
+                return Err(AppError::UnknownDatabaseId(UnknownDatabaseId::new(
+                    db_id,
+                    "update_database_options",
+                )));
+            };
+
+            let mut meta = seq_meta.data;
+            meta.options = new_options.clone();
+            meta.updated_on = Utc::now();
+
+            Ok(Some(meta))
+        })
+        .await??;
+
+        Ok(UpdateDatabaseOptionsReply {})
     }
 
     #[logcall::logcall]

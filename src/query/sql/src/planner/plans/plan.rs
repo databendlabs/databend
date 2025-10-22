@@ -38,6 +38,7 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AddWarehouseClusterPlan;
+use crate::plans::AlterDatabasePlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::AlterPasswordPolicyPlan;
@@ -267,6 +268,7 @@ pub enum Plan {
     RenameDatabase(Box<RenameDatabasePlan>),
     UseDatabase(Box<UseDatabasePlan>),
     RefreshDatabaseCache(Box<RefreshDatabaseCachePlan>),
+    AlterDatabase(Box<AlterDatabasePlan>),
 
     // Tables
     ShowCreateTable(Box<ShowCreateTablePlan>),

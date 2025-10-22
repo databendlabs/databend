@@ -2098,6 +2098,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RenameWorkloadGroup(_) => {}
             Plan::SetWorkloadGroupQuotas(_) => {}
             Plan::UnsetWorkloadGroupQuotas(_) => {}
+            Plan::AlterDatabase(plan) => {
+                self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Alter, false).await?;
+            }
         }
 
         Ok(())

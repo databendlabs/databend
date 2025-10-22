@@ -115,6 +115,7 @@ use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouse
 use crate::interpreters::interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
+use crate::interpreters::AlterDatabaseInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
@@ -661,6 +662,9 @@ impl InterpreterFactory {
             )?)),
             Plan::RefreshDatabaseCache(refresh_database_cache) => Ok(Arc::new(
                 RefreshDatabaseCacheInterpreter::try_create(ctx, *refresh_database_cache.clone())?,
+            )),
+            Plan::AlterDatabase(alter_database) => Ok(Arc::new(
+                AlterDatabaseInterpreter::try_create(ctx, *alter_database.clone())?,
             )),
             Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
 

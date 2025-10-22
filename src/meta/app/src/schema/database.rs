@@ -266,6 +266,21 @@ pub struct DropDatabaseReply {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpdateDatabaseOptionsReq {
+    pub db_id: u64,
+    pub options: BTreeMap<String, String>,
+}
+
+impl Display for UpdateDatabaseOptionsReq {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "update_db_options:{}={:?}", self.db_id, self.options)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpdateDatabaseOptionsReply {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabaseReq {
     pub name_ident: DatabaseNameIdent,
 }
