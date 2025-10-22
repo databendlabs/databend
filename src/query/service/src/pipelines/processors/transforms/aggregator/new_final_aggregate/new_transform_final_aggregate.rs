@@ -93,6 +93,7 @@ impl Display for LocalState {
 
 pub struct FinalAggregateSharedState {
     is_spilled: bool,
+    last_round_is_spilled: bool,
     finished_count: usize,
     repartitioned_queues: RepartitionedQueues,
     next_round: Vec<DataBlock>,
@@ -104,6 +105,7 @@ impl FinalAggregateSharedState {
     pub fn new(partition_count: usize) -> Self {
         Self {
             is_spilled: false,
+            last_round_is_spilled: false,
             finished_count: 0,
             repartitioned_queues: RepartitionedQueues::create(partition_count),
             next_round: Vec::with_capacity(partition_count),
@@ -118,8 +120,10 @@ impl FinalAggregateSharedState {
         self.finished_count += 1;
         if self.finished_count == self.partition_count {
             self.finished_count = 0;
+            self.last_round_is_spilled = self.is_spilled;
             if self.is_spilled {
                 self.is_spilled = false;
+                info!("FinalAggregateSharedState begin flush spilled repartitioned queues to pending queues");
                 // flush all repartitioned queues to pending queues
                 let queues = self.repartitioned_queues.take_queues();
                 for queue in queues.0.into_iter() {
@@ -132,6 +136,7 @@ impl FinalAggregateSharedState {
 
             // pop a queue and repartition in datablock level
             if let Some(queue) = self.pending_queues.pop() {
+                info!("FinalAggregateSharedState prepare next round datablocks from pending queues {:?}", queue);
                 self.next_round =
                     split_partitioned_meta_into_datablocks(0, queue, self.partition_count);
             }
@@ -260,10 +265,13 @@ impl NewFinalAggregateTransform {
         // merge new produced repartitioned queues into local repartitioned queues
         self.repartitioned_queues.merge_queues(new_produced);
 
-        // TODO: let's first run test on no spill scenario
-        // if self.spiller.memory_settings.check_spill() {
-        //     self.shared_state.lock().is_spilled = true;
-        // }
+        if self.spiller.memory_settings.check_spill() {
+            info!(
+                "NewFinalAggregateTransform[{}] trigger spill due to memory limit",
+                self.id
+            );
+            self.shared_state.lock().is_spilled = true;
+        }
 
         // if other processor or itself trigger spill, this processor will need spill its local repartitioned queue out
         if self.shared_state.lock().is_spilled && !self.is_spilled && !self.working_queue.is_empty()
@@ -583,8 +591,8 @@ impl Processor for NewFinalAggregateTransform {
 
                 self.barrier.wait().await;
 
-                // we can only begin aggregate when no processor spills
-                if !self.shared_state.lock().is_spilled {
+                // we can only begin aggregate when last round no processor spills
+                if !self.shared_state.lock().last_round_is_spilled {
                     self.state = LocalState::Aggregate;
                 }
                 Ok(())
