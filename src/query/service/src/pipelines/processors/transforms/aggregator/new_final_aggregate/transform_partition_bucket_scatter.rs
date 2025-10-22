@@ -28,6 +28,7 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use log::info;
 
 use super::split_partitioned_meta_into_datablocks;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -336,6 +337,8 @@ impl TransformPartitionBucketScatter {
             if let Some(bucket_blocks) = self.buckets_blocks.remove(&self.pushing_bucket) {
                 let data_blocks =
                     Self::convert_blocks(self.pushing_bucket, bucket_blocks, self.outputs.len());
+
+                info!("TransformPartitionBucketScatter push data to outputs");
                 for (i, data_block) in data_blocks.into_iter().enumerate() {
                     self.outputs[i].push_data(Ok(data_block));
                 }
@@ -545,6 +548,7 @@ impl Processor for TransformPartitionBucketScatter {
             for (i, data_block) in data_blocks.into_iter().enumerate() {
                 self.outputs[i].push_data(Ok(data_block));
             }
+            info!("TransformPartitionBucketScatter push data to outputs");
             return Ok(Event::NeedConsume);
         }
 
