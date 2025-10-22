@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::borrow::BorrowMut;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -31,6 +32,7 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use log::info;
 use parking_lot::Mutex;
 use tokio::sync::Barrier;
 
@@ -153,10 +155,11 @@ pub struct NewFinalAggregateTransform {
     repartitioned_queues: RepartitionedQueues,
     barrier: Arc<Barrier>,
     shared_state: Arc<Mutex<FinalAggregateSharedState>>,
-    data_ready: bool,
+    first_data_ready: bool,
     spiller: FinalAggregateSpiller,
     block_partition_stream: BlockPartitionStream,
     is_spilled: bool,
+    is_reported: bool,
 }
 
 impl NewFinalAggregateTransform {
@@ -186,10 +189,11 @@ impl NewFinalAggregateTransform {
             repartitioned_queues: RepartitionedQueues::create(partition_count),
             barrier,
             shared_state,
-            data_ready: false,
+            first_data_ready: false,
             spiller,
             block_partition_stream,
             is_spilled: false,
+            is_reported: false,
         }))
     }
 
@@ -417,7 +421,6 @@ impl NewFinalAggregateTransform {
 
     fn enqueue_partitioned_meta(&mut self, datablock: &mut DataBlock) -> Result<()> {
         if let Some(block_meta) = datablock.take_meta().and_then(AggregateMeta::downcast_from) {
-            self.data_ready = true;
             match block_meta {
                 AggregateMeta::Partitioned { data, .. } => {
                     self.working_queue.extend(data);
@@ -438,18 +441,8 @@ impl NewFinalAggregateTransform {
             Event::Sync
         })
     }
-}
 
-#[async_trait::async_trait]
-impl Processor for NewFinalAggregateTransform {
-    fn name(&self) -> String {
-        "NewFinalAggregateTransform".to_string()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-    fn event(&mut self) -> Result<Event> {
+    fn debug_event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
             return Ok(Event::Finished);
@@ -466,43 +459,85 @@ impl Processor for NewFinalAggregateTransform {
             _ => {}
         }
 
-        if self.working_queue.is_empty() && self.data_ready {
-            // reset
-            self.is_spilled = false;
-
-            // get task from shared state
-            if let Some(mut datablock) = {
-                let mut guard = self.shared_state.lock();
-                guard.get_next_datablock()
-            } {
-                self.enqueue_partitioned_meta(&mut datablock)?;
-                if let Some(event) = self.try_schedule_next_task() {
-                    return Ok(event);
-                }
-            }
-
-            // no more task for this round, we can wait for final aggregation
-            self.data_ready = false;
-            self.state = LocalState::AsyncWait;
-            return Ok(Event::Async);
-        }
-
+        // schedule a task from local working queue first
         if let Some(event) = self.try_schedule_next_task() {
             return Ok(event);
         }
 
-        if self.input.has_data() {
-            let mut data_block = self.input.pull_data().unwrap()?;
+        // no more task in local working queue, means we need report repartitioned queues to shared state
+        if !self.is_reported && self.first_data_ready {
+            self.is_reported = true;
+            self.state = LocalState::AsyncWait;
+            return Ok(Event::Async);
+        }
 
-            self.enqueue_partitioned_meta(&mut data_block)?;
+        self.is_reported = false;
 
+        // after reported, try get datablock from shared state
+        let datablock_opt = self.shared_state.lock().borrow_mut().get_next_datablock();
+        if let Some(mut datablock) = datablock_opt {
+            // begin a new round, reset spill flag
+            self.is_spilled = false;
+
+            self.enqueue_partitioned_meta(&mut datablock)?;
+            if self.working_queue.is_empty() {
+                self.is_reported = true;
+                self.state = LocalState::AsyncWait;
+                return Ok(Event::Async);
+            }
             if let Some(event) = self.try_schedule_next_task() {
                 return Ok(event);
             }
         }
 
+        // no more work from shared state, try pull data from input
+        if self.input.has_data() {
+            // begin a new round, reset spill flag
+            self.is_spilled = false;
+
+            self.first_data_ready = true;
+
+            let mut data_block = self.input.pull_data().unwrap()?;
+            self.enqueue_partitioned_meta(&mut data_block)?;
+
+            if self.working_queue.is_empty() {
+                self.is_reported = true;
+                self.state = LocalState::AsyncWait;
+                return Ok(Event::Async);
+            }
+            if let Some(event) = self.try_schedule_next_task() {
+                return Ok(event);
+            }
+        }
+
+        if self.input.is_finished() {
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
         self.input.set_need_data();
         Ok(Event::NeedData)
+    }
+}
+
+#[async_trait::async_trait]
+impl Processor for NewFinalAggregateTransform {
+    fn name(&self) -> String {
+        "NewFinalAggregateTransform".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+    fn event(&mut self) -> Result<Event> {
+        let before_state = self.state.to_string();
+        let event = self.debug_event()?;
+        let after_state = self.state.to_string();
+        info!(
+            "NewFinalAggregateTransform[{}] return event: {:?}, state: {} -> {}",
+            self.id, event, before_state, after_state
+        );
+        Ok(event)
     }
 
     fn process(&mut self) -> Result<()> {
@@ -536,6 +571,7 @@ impl Processor for NewFinalAggregateTransform {
         let state = std::mem::replace(&mut self.state, LocalState::Idle);
         match state {
             LocalState::AsyncWait => {
+                // report local repartitioned queues to shared state
                 let queues = self.repartitioned_queues.take_queues();
                 self.shared_state.lock().add_repartitioned_queue(queues);
 
