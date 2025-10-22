@@ -214,8 +214,16 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
 
         if self.state.restore_partition.is_none() {
             let Some((id, data)) = self.state.build_row_groups.as_mut().pop_first() else {
-                *self.state.finished.as_mut() = true;
-                return false;
+                let Some((id, data)) = self.state.probe_row_groups.as_mut().pop_first() else {
+                    *self.state.finished.as_mut() = true;
+                    return false;
+                };
+
+                // Only left join?
+                *self.state.restore_partition.as_mut() = Some(id);
+                self.state.restore_build_queue.as_mut().clear();
+                *self.state.restore_probe_queue.as_mut() = VecDeque::from(data);
+                return true;
             };
 
             *self.state.restore_partition.as_mut() = Some(id);

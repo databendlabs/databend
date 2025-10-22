@@ -121,18 +121,15 @@ impl SquashBlocks {
 
             if slice_rows != block.block.num_rows() {
                 let compact_block = block.block.slice(0..slice_rows).maybe_gc();
-
-                // Calculate the correct number of rows and bytes.
-                self.current_rows += block.block.num_rows();
-                self.current_bytes += block.block.memory_size();
-                self.current_rows -= compact_block.num_rows();
-                self.current_bytes -= compact_block.memory_size();
                 blocks.push(compact_block);
 
                 let remain_block = block
                     .block
                     .slice(slice_rows..block.block.num_rows())
                     .maybe_gc();
+
+                self.current_rows += remain_block.num_rows();
+                self.current_bytes += remain_block.memory_size();
 
                 if !remain_block.is_empty() {
                     block.block = remain_block;
