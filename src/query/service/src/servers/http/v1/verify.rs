@@ -39,10 +39,9 @@ pub async fn verify_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoRespo
         .session
         .get_current_user()
         .map_err(HttpErrorCode::server_error)?;
-    let is_configured = match UserApiProvider::instance().get_configured_user(&user.name) {
-        Some(_) => true,
-        None => false,
-    };
+    let is_configured = UserApiProvider::instance()
+        .get_configured_user(&user.name)
+        .is_some();
     let auth_type = user.auth_info.get_type().to_str().to_string();
     let default_role = user.option.default_role().cloned().unwrap_or_default();
     let roles = ctx
