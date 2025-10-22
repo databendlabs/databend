@@ -25,6 +25,7 @@ use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
 
@@ -37,6 +38,8 @@ use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
+use crate::spillers::Layout;
+use crate::spillers::SpillAdapter;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataReader;
 use crate::spillers::SpillsDataWriter;
@@ -91,9 +94,14 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
 
         for (id, partition) in ready_partitions.into_iter().enumerate() {
             let path = partition.path;
-            let metadata = partition.writer.close()?;
-            if !metadata.is_empty() {
-                partitions_meta.push((id, SpillMetadata { path, metadata }));
+            let (written, row_groups) = partition.writer.close()?;
+
+            self.state
+                .ctx
+                .add_spill_file(Location::Remote(path.clone()), Layout::Parquet, written);
+
+            if !row_groups.is_empty() {
+                partitions_meta.push((id, SpillMetadata { path, row_groups }));
             }
         }
 
@@ -135,8 +143,6 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
                 Ok(Some(Box::new(EmptyJoinStream)))
             }
             RestoreStage::RestoreBuild => {
-                self.memory_hash_join.reset_memory();
-
                 if !self.advance_restore_partition() {
                     return Ok(None);
                 }
@@ -154,8 +160,12 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
                 self.stage = RestoreStage::RestoreProbeFinal;
                 Ok(Some(RestoreProbeStream::create(self)))
             }
-            RestoreStage::RestoreProbeFinal => {
-                if let Some(stream) = self.memory_hash_join.final_probe()? {
+            RestoreStage::RestoreProbeFinal => unsafe {
+                // Note that this is safe: we are not violating the uniqueness of mutable references,
+                // as the reuse of join always waits for the stream to be fully consumed.
+                // However, it seems impossible to express this without using unsafe code.
+                let join: &mut T = &mut *(&mut self.memory_hash_join as *mut _);
+                if let Some(stream) = join.final_probe()? {
                     return Ok(Some(stream));
                 }
 
@@ -164,8 +174,9 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
 
                 self.stage = RestoreStage::RestoreBuild;
                 *self.state.restore_partition.as_mut() = None;
+                self.memory_hash_join.reset_memory();
                 Ok(Some(Box::new(EmptyJoinStream)))
-            }
+            },
         }
     }
 }
@@ -250,7 +261,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         while let Some(data) = self.steal_restore_build_task() {
             let buffer_pool = SpillsBufferPool::instance();
             let mut reader =
-                buffer_pool.parquet_reader(operator.clone(), data.path, data.metadata)?;
+                buffer_pool.parquet_reader(operator.clone(), data.path, data.row_groups)?;
 
             while let Some(data_block) = reader.read(self.read_settings)? {
                 self.memory_hash_join.add_block(Some(data_block))?;
@@ -327,9 +338,14 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
 
         for (id, partition) in ready_partitions.into_iter().enumerate() {
             let path = partition.path;
-            let metadata = partition.writer.close()?;
-            if !metadata.is_empty() {
-                partitions_meta.push((id, SpillMetadata { path, metadata }));
+            let (written, row_groups) = partition.writer.close()?;
+
+            self.state
+                .ctx
+                .add_spill_file(Location::Remote(path.clone()), Layout::Parquet, written);
+
+            if !row_groups.is_empty() {
+                partitions_meta.push((id, SpillMetadata { path, row_groups }));
             }
         }
 
@@ -437,13 +453,14 @@ impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
         loop {
             if self.spills_reader.is_none() {
                 while let Some(data) = self.steal_restore_probe_task() {
-                    if data.metadata.is_empty() {
+                    if data.row_groups.is_empty() {
                         continue;
                     }
 
                     let operator = DataOperator::instance().spill_operator();
                     let buffer_pool = SpillsBufferPool::instance();
-                    let reader = buffer_pool.parquet_reader(operator, data.path, data.metadata)?;
+                    let reader =
+                        buffer_pool.parquet_reader(operator, data.path, data.row_groups)?;
                     self.spills_reader = Some(reader);
                     break;
                 }

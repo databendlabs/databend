@@ -26,7 +26,7 @@ use crate::sessions::QueryContext;
 #[derive(Debug)]
 pub struct SpillMetadata {
     pub path: String,
-    pub metadata: Vec<RowGroupMetaData>,
+    pub row_groups: Vec<RowGroupMetaData>,
 }
 
 pub struct GraceHashJoinState {

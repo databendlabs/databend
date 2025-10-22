@@ -512,20 +512,21 @@ impl SpillsDataWriter {
         }
     }
 
-    pub fn close(self) -> Result<Vec<RowGroupMetaData>> {
+    pub fn close(self) -> Result<(usize, Vec<RowGroupMetaData>)> {
         match self {
             SpillsDataWriter::Uninitialize(mut writer) => {
                 if let Some(writer) = writer.take() {
                     writer.close()?;
                 }
 
-                Ok(vec![])
+                Ok((0, vec![]))
             }
             SpillsDataWriter::Initialized(mut writer) => {
                 writer.writer.flush()?;
                 let row_groups = writer.writer.flushed_row_groups().to_vec();
+                let bytes_written = writer.writer.bytes_written();
                 writer.writer.into_inner()?.close()?;
-                Ok(row_groups)
+                Ok((bytes_written, row_groups))
             }
         }
     }
