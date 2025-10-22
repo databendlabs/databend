@@ -53,6 +53,7 @@ pub type ShareDatabaseParams = (ShareNameIdent, Identifier);
 #[derive(Clone)]
 pub enum CreateDatabaseOption {
     DatabaseEngine(DatabaseEngine),
+    Options(Vec<SQLProperty>),
 }
 
 fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
@@ -814,28 +815,24 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( DATABASE | SCHEMA )
             ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #database_ref
-            ~ #create_database_option?
+            ~ ( ENGINE ~ ^"=" ~ ^#database_engine )?
+            ~ ( OPTIONS ~ ^"(" ~ ^#sql_property_list ~ ^")" )?
         },
-        |(_, opt_or_replace, _, opt_if_not_exists, database, create_database_option)| {
+        |(_, opt_or_replace, _, opt_if_not_exists, database, engine_opt, options_opt)| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
-            let statement = match create_database_option {
-                Some(CreateDatabaseOption::DatabaseEngine(engine)) => {
-                    Statement::CreateDatabase(CreateDatabaseStmt {
-                        create_option,
-                        database,
-                        engine: Some(engine),
-                        options: vec![],
-                    })
-                }
-                None => Statement::CreateDatabase(CreateDatabaseStmt {
-                    create_option,
-                    database,
-                    engine: None,
-                    options: vec![],
-                }),
-            };
+            let engine = engine_opt.map(|(_, _, engine)| engine);
+            let options = options_opt
+                .map(|(_, _, options, _)| options)
+                .unwrap_or_default();
+
+            let statement = Statement::CreateDatabase(CreateDatabaseStmt {
+                create_option,
+                database,
+                engine,
+                options,
+            });
 
             Ok(statement)
         },
@@ -4336,9 +4333,17 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
         |(_, _)| AlterDatabaseAction::RefreshDatabaseCache,
     );
 
+    let set_options = map(
+        rule! {
+            SET ~ OPTIONS ~ "(" ~ #sql_property_list ~ ")"
+        },
+        |(_, _, _, options, _)| AlterDatabaseAction::SetOptions { options },
+    );
+
     rule!(
         #rename_database
         | #refresh_cache
+        | #set_options
     )
     .parse(i)
 }
@@ -5359,10 +5364,32 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     ));
 
+    let create_db_options = map(
+        rule! {
+            OPTIONS ~ "(" ~ #sql_property_list ~ ")"
+        },
+        |(_, _, options, _)| CreateDatabaseOption::Options(options),
+    );
+
     rule!(
         #create_db_engine
+        | #create_db_options
     )
     .parse(i)
+}
+
+pub fn sql_property_list(i: Input) -> IResult<Vec<SQLProperty>> {
+    let property = map(
+        rule! {
+           #ident ~ "=" ~ #option_to_string
+        },
+        |(name, _, value)| SQLProperty {
+            name: name.name,
+            value,
+        },
+    );
+
+    comma_separated_list1(property)(i)
 }
 
 pub fn catalog_type(i: Input) -> IResult<CatalogType> {

@@ -550,7 +550,59 @@ impl Binder {
 
         let catalog = self.ctx.get_catalog(&catalog).await?;
 
+        let mut options: BTreeMap<String, String> = BTreeMap::new();
+
+        // FUSE tables can inherit database connection defaults for external storage
         let engine = engine.unwrap_or(catalog.default_table_engine());
+
+        // Construct a UriLocation from database defaults if table doesn't have explicit location
+        let uri_location_to_use: Option<UriLocation> = if uri_location.is_none()
+            && matches!(engine, Engine::Fuse)
+        {
+            if let Ok(database_info) = catalog
+                .get_database(&self.ctx.get_tenant(), &database)
+                .await
+            {
+                // Extract database-level default connection options
+                let default_connection_name =
+                    database_info.options().get("DEFAULT_STORAGE_CONNECTION");
+                let default_path = database_info.options().get("DEFAULT_STORAGE_PATH");
+
+                // If both database defaults exist, construct UriLocation
+                if let (Some(connection_name), Some(path)) = (default_connection_name, default_path)
+                {
+                    // Get the connection object to access its storage_params
+                    match self.ctx.get_connection(connection_name).await {
+                        Ok(connection) => {
+                            // Construct UriLocation using the database defaults
+                            match UriLocation::from_uri(path.clone(), connection.storage_params) {
+                                Ok(uri) => Some(uri),
+                                Err(e) => {
+                                    return Err(ErrorCode::BadArguments(format!(
+                                        "Failed to parse database default storage path '{}': {}",
+                                        path, e
+                                    )));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            return Err(ErrorCode::BadArguments(format!(
+                                "Database default connection '{}' does not exist: {}",
+                                connection_name, e
+                            )));
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            // Use the provided uri_location by cloning it
+            uri_location.clone()
+        };
+
         if catalog.support_partition() != (engine == Engine::Iceberg) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
                 "Catalog '{}' engine type is {:?} but table {} engine type is {}",
@@ -561,8 +613,8 @@ impl Binder {
             )));
         }
 
-        let mut options: BTreeMap<String, String> = BTreeMap::new();
         let mut engine_options: BTreeMap<String, String> = BTreeMap::new();
+        // Table-specific options override database defaults
         for table_option in table_options.iter() {
             self.insert_table_option_with_validation(
                 &mut options,
@@ -593,7 +645,7 @@ impl Binder {
                 .collect::<Vec<String>>()
         });
 
-        let mut storage_params = match (uri_location, engine) {
+        let mut storage_params = match (uri_location_to_use.as_ref(), engine) {
             (Some(uri), Engine::Fuse) => {
                 let mut uri = UriLocation {
                     protocol: uri.protocol.clone(),
@@ -2287,7 +2339,7 @@ const VERIFICATION_KEY_DEL: &str = "_v_d77aa11285c22e0e1d4593a035c98c0d_del";
 //
 // The permission check might fail for reasons other than the permissions themselves,
 // such as network communication issues.
-async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
+pub async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
     let verification_task = async move {
         // verify privilege to put
         let mut errors = Vec::new();
