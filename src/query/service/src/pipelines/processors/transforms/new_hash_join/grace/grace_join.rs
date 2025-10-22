@@ -27,10 +27,8 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
-use petgraph::matrix_graph::Nullable;
 
 use crate::pipelines::processors::transforms::get_hashes;
-use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_memory::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::GraceHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::SpillMetadata;
