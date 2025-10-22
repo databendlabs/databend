@@ -1,0 +1,97 @@
+# Test database-level default connection options
+
+statement ok
+DROP DATABASE IF EXISTS test_db_options
+
+statement ok
+CREATE DATABASE test_db_options OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_s3_connection',
+    DEFAULT_STORAGE_PATH = 's3://mybucket/data/'
+)
+
+# Verify database was created with options
+query II
+SELECT name, options FROM system.databases WHERE name = 'test_db_options'
+----
+test_db_options {"DEFAULT_STORAGE_CONNECTION":"my_s3_connection","DEFAULT_STORAGE_PATH":"s3://mybucket/data/"}
+
+# Test ALTER DATABASE SET OPTIONS with valid paired options
+statement ok
+ALTER DATABASE test_db_options SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'updated_connection',
+    DEFAULT_STORAGE_PATH = 's3://updated/path'
+)
+
+# Test ALTER DATABASE with incomplete options - should fail
+statement error 1006
+ALTER DATABASE test_db_options SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'only_connection'
+)
+
+# Cleanup
+statement ok
+DROP DATABASE test_db_options
+
+# Test CREATE DATABASE with both ENGINE and OPTIONS
+statement ok
+CREATE DATABASE test_db_mixed ENGINE = DEFAULT OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_connection'
+)
+
+# Verify database creation with mixed options
+query II
+SELECT name, options FROM system.databases WHERE name = 'test_db_mixed'
+----
+test_db_mixed {"DEFAULT_STORAGE_CONNECTION":"my_connection"}
+
+statement ok
+DROP DATABASE test_db_mixed
+
+# Test empty options
+statement ok
+CREATE DATABASE test_db_empty OPTIONS ()
+
+query II
+SELECT name, options FROM system.databases WHERE name = 'test_db_empty'
+----
+test_db_empty {}
+
+statement ok
+DROP DATABASE test_db_empty
+
+# Test invalid database option - should fail
+statement error 1006
+CREATE DATABASE test_db_invalid OPTIONS (
+    invalid_option = 'test'
+)
+
+# Test multiple invalid options - should fail
+statement error 1006
+CREATE DATABASE test_db_invalid2 OPTIONS (
+    conn = 'test',
+    path = '/data'
+)
+
+# Test incomplete options - DEFAULT_STORAGE_CONNECTION without DEFAULT_STORAGE_PATH
+statement error 1006
+CREATE DATABASE test_db_incomplete1 OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_conn'
+)
+
+# Test incomplete options - DEFAULT_STORAGE_PATH without DEFAULT_STORAGE_CONNECTION
+statement error 1006
+CREATE DATABASE test_db_incomplete2 OPTIONS (
+    DEFAULT_STORAGE_PATH = 's3://bucket/path'
+)
+
+# Test ALTER DATABASE with incomplete options
+statement ok
+CREATE DATABASE temp_db OPTIONS (DEFAULT_STORAGE_CONNECTION = 'test', DEFAULT_STORAGE_PATH = 's3://test')
+
+statement error 1006
+ALTER DATABASE temp_db SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'only_connection'
+)
+
+statement ok
+DROP DATABASE temp_db

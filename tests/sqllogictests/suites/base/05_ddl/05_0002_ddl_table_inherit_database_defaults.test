@@ -1,0 +1,46 @@
+# Test table creation inheriting database default connection options
+
+statement ok
+DROP DATABASE IF EXISTS test_db_inherit
+
+# Create database with default connection options
+statement ok
+CREATE DATABASE test_db_inherit OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'default_conn',
+    DEFAULT_STORAGE_PATH = 's3://default-bucket/path/'
+)
+
+# Create a table without explicit connection options
+# This table should inherit the database defaults
+statement ok
+CREATE TABLE test_db_inherit.table_with_defaults (
+    id INT,
+    name VARCHAR(100)
+) ENGINE = Fuse
+
+# Verify table was created (basic check - full verification would require storage inspection)
+query I
+SELECT COUNT(*) FROM system.tables WHERE database = 'test_db_inherit' AND name = 'table_with_defaults'
+----
+1
+
+# Create a table with explicit connection options
+# These should override the database defaults
+statement ok
+CREATE TABLE test_db_inherit.table_with_explicit (
+    id INT,
+    name VARCHAR(100)
+) ENGINE = Fuse OPTIONS (
+    connection = 'explicit_conn',
+    location = 's3://explicit-bucket/path/'
+)
+
+# Verify second table was created
+query I
+SELECT COUNT(*) FROM system.tables WHERE database = 'test_db_inherit' AND name = 'table_with_explicit'
+----
+1
+
+# Cleanup
+statement ok
+DROP DATABASE test_db_inherit

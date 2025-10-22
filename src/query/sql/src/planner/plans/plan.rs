@@ -133,6 +133,7 @@ use crate::plans::OptimizePurgePlan;
 use crate::plans::PresignPlan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshDatabaseCachePlan;
+use crate::plans::AlterDatabasePlan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableCachePlan;
 use crate::plans::RefreshTableIndexPlan;
@@ -261,6 +262,7 @@ pub enum Plan {
     RenameDatabase(Box<RenameDatabasePlan>),
     UseDatabase(Box<UseDatabasePlan>),
     RefreshDatabaseCache(Box<RefreshDatabaseCachePlan>),
+    AlterDatabase(Box<AlterDatabasePlan>),
 
     // Tables
     ShowCreateTable(Box<ShowCreateTablePlan>),

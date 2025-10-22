@@ -67,6 +67,7 @@ use crate::interpreters::interpreter_procedure_call::CallProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_create::CreateProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
 use crate::interpreters::interpreter_refresh_database_cache::RefreshDatabaseCacheInterpreter;
+use crate::interpreters::AlterDatabaseInterpreter;
 use crate::interpreters::interpreter_refresh_table_cache::RefreshTableCacheInterpreter;
 use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterpreter;
 use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
@@ -631,6 +632,9 @@ impl InterpreterFactory {
             )?)),
             Plan::RefreshDatabaseCache(refresh_database_cache) => Ok(Arc::new(
                 RefreshDatabaseCacheInterpreter::try_create(ctx, *refresh_database_cache.clone())?,
+            )),
+            Plan::AlterDatabase(alter_database) => Ok(Arc::new(
+                AlterDatabaseInterpreter::try_create(ctx, *alter_database.clone())?,
             )),
             Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
 

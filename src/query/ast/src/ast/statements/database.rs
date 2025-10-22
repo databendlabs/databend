@@ -109,7 +109,17 @@ impl Display for CreateDatabaseStmt {
             write!(f, " ENGINE = {engine}")?;
         }
 
-        // TODO(leiysky): display rest information
+        if !self.options.is_empty() {
+            write!(f, " OPTIONS (")?;
+            for (i, option) in self.options.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{} = '{}'", option.name, option.value)?;
+            }
+            write!(f, ")")?;
+        }
+
         Ok(())
     }
 }
@@ -169,6 +179,16 @@ impl Display for AlterDatabaseStmt {
             AlterDatabaseAction::RefreshDatabaseCache => {
                 write!(f, " REFRESH CACHE")?;
             }
+            AlterDatabaseAction::SetOptions { options } => {
+                write!(f, " SET OPTIONS (")?;
+                for (i, option) in options.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{} = '{}'", option.name, option.value)?;
+                }
+                write!(f, ")")?;
+            }
         }
 
         Ok(())
@@ -179,6 +199,7 @@ impl Display for AlterDatabaseStmt {
 pub enum AlterDatabaseAction {
     RenameDatabase { new_db: Identifier },
     RefreshDatabaseCache,
+    SetOptions { options: Vec<SQLProperty> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]

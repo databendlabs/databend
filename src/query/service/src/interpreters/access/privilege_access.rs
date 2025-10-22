@@ -1693,6 +1693,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RenameWorkloadGroup(_) => {}
             Plan::SetWorkloadGroupQuotas(_) => {}
             Plan::UnsetWorkloadGroupQuotas(_) => {}
+            Plan::AlterDatabase(_) => {todo!()}
         }
 
         Ok(())
