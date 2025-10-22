@@ -48,13 +48,16 @@ pub async fn verify_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoRespo
         .session
         .get_all_effective_roles()
         .await
-        .map_err(HttpErrorCode::server_error)?;
+        .map_err(HttpErrorCode::server_error)?
+        .into_iter()
+        .map(|r| r.name)
+        .collect();
     Ok(Json(VerifyResponse {
         tenant: tenant.tenant_name().to_string(),
         user: user.name,
         is_configured,
         auth_type,
         default_role,
-        roles: roles.into_iter().map(|r| r.name).collect(),
+        roles,
     }))
 }
