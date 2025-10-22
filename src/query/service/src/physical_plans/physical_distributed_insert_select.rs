@@ -18,7 +18,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_transforms::columns::TransformCastSchema;
+use databend_common_pipeline_transforms::blocks::TransformCastSchema;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::ColumnBinding;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;

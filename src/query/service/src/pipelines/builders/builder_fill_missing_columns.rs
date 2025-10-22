@@ -20,8 +20,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::blocks::TransformCastSchema;
 use databend_common_pipeline_transforms::columns::TransformAddComputedColumns;
-use databend_common_pipeline_transforms::columns::TransformCastSchema;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::DefaultExprBinder;
 

@@ -20,16 +20,15 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::SourceSchemaIndex;
-use databend_common_pipeline_transforms::columns::cast_schema;
-use databend_common_pipeline_transforms::Transform;
-use databend_common_storages_fuse::TableContext;
 
-use crate::sessions::QueryContext;
+use super::cast_schema;
+use crate::Transform;
 
 /// The key of branches is `SourceSchemaIndex`, see `TransformResortAddOnWithoutSourceSchema`.
 pub struct TransformBranchedCastSchema {
-    pub ctx: Arc<QueryContext>,
+    pub func_ctx: FunctionContext,
     pub branches: Arc<HashMap<SourceSchemaIndex, CastSchemaBranch>>,
 }
 
@@ -65,7 +64,7 @@ impl Transform for TransformBranchedCastSchema {
             from_schema.clone(),
             to_schema.clone(),
             exprs,
-            &self.ctx.get_function_context()?,
+            &self.func_ctx,
         )?;
         let source_schema_idx: SourceSchemaIndex = input_schema_idx;
         block.add_meta(Some(Box::new(source_schema_idx)))

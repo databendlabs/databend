@@ -24,7 +24,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
-use databend_common_pipeline_transforms::columns::TransformCastSchema;
+use databend_common_pipeline_transforms::blocks::TransformCastSchema;
 use databend_common_pipeline_transforms::filters::TransformFilter;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;

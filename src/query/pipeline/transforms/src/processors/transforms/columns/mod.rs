@@ -16,12 +16,10 @@ mod column_add_computed;
 mod column_add_const;
 mod column_add_internal;
 mod column_add_stream;
-mod column_cast;
 mod column_nullif;
 
 pub use column_add_computed::*;
 pub use column_add_const::*;
 pub use column_add_internal::*;
 pub use column_add_stream::*;
-pub use column_cast::*;
 pub use column_nullif::*;

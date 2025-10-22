@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_branched_cast;
+mod block_cast;
 mod block_operator;
 
+pub use block_branched_cast::*;
+pub use block_cast::*;
 pub use block_operator::*;
