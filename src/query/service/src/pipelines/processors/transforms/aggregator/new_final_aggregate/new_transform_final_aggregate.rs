@@ -435,11 +435,17 @@ impl NewFinalAggregateTransform {
         Ok(())
     }
 
-    fn try_schedule_next_task(&mut self) -> Option<Event> {
+    fn schedule_next_task(&mut self) -> Option<Event> {
         self.working_queue.pop().map(|aggregate_meta| {
             self.state = LocalState::NewTask(aggregate_meta);
             Event::Sync
         })
+    }
+
+    fn schedule_async_wait(&mut self) -> Event {
+        self.is_reported = true;
+        self.state = LocalState::AsyncWait;
+        Event::Async
     }
 
     fn debug_event(&mut self) -> Result<Event> {
@@ -460,53 +466,48 @@ impl NewFinalAggregateTransform {
         }
 
         // schedule a task from local working queue first
-        if let Some(event) = self.try_schedule_next_task() {
+        if let Some(event) = self.schedule_next_task() {
             return Ok(event);
         }
 
         // no more task in local working queue, means we need report repartitioned queues to shared state
         if !self.is_reported && self.first_data_ready {
-            self.is_reported = true;
-            self.state = LocalState::AsyncWait;
-            return Ok(Event::Async);
+            return Ok(self.schedule_async_wait());
         }
-
-        self.is_reported = false;
 
         // after reported, try get datablock from shared state
         let datablock_opt = self.shared_state.lock().borrow_mut().get_next_datablock();
         if let Some(mut datablock) = datablock_opt {
-            // begin a new round, reset spill flag
+            // begin a new round, reset spilled flag and reported flag
             self.is_spilled = false;
+            self.is_reported = false;
 
             self.enqueue_partitioned_meta(&mut datablock)?;
-            if self.working_queue.is_empty() {
-                self.is_reported = true;
-                self.state = LocalState::AsyncWait;
-                return Ok(Event::Async);
-            }
-            if let Some(event) = self.try_schedule_next_task() {
+
+            // schedule next task from working queue, if empty, begin to wait other processors
+            if let Some(event) = self.schedule_next_task() {
                 return Ok(event);
+            } else {
+                return Ok(self.schedule_async_wait());
             }
         }
 
         // no more work from shared state, try pull data from input
         if self.input.has_data() {
-            // begin a new round, reset spill flag
+            // begin a new round, reset spilled flag and reported flag
             self.is_spilled = false;
+            self.is_reported = false;
 
             self.first_data_ready = true;
 
             let mut data_block = self.input.pull_data().unwrap()?;
             self.enqueue_partitioned_meta(&mut data_block)?;
 
-            if self.working_queue.is_empty() {
-                self.is_reported = true;
-                self.state = LocalState::AsyncWait;
-                return Ok(Event::Async);
-            }
-            if let Some(event) = self.try_schedule_next_task() {
+            // schedule next task from working queue, if empty, begin to wait other processors
+            if let Some(event) = self.schedule_next_task() {
                 return Ok(event);
+            } else {
+                return Ok(self.schedule_async_wait());
             }
         }
 
