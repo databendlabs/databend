@@ -1,5 +1,5 @@
 # Q21
-query I
+query TTII
 SELECT *
 FROM
   (SELECT w_warehouse_name,

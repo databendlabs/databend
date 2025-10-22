@@ -1,5 +1,5 @@
 # Q88
-query I
+query IIIIIIII
 SELECT *
 FROM
   (SELECT count(*) h8_30_to_9

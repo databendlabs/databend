@@ -1,5 +1,5 @@
 # Q83
-query I
+query TIRIRIRR
 WITH sr_items AS
   (SELECT i_item_id item_id,
           sum(sr_return_quantity) sr_item_qty

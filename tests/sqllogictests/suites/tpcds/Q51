@@ -1,5 +1,5 @@
 # Q51
-query I
+query I?RRRR
 WITH web_v1 AS
   (SELECT ws_item_sk item_sk,
           d_date,

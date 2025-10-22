@@ -1,5 +1,5 @@
 # Q22
-query I
+query TTTTR
 SELECT i_product_name ,
        i_brand ,
        i_class ,

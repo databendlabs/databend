@@ -1,5 +1,5 @@
 # Q39
-query I
+query IIIRRIIIRR
 
 WITH inv AS
   (SELECT w_warehouse_name,

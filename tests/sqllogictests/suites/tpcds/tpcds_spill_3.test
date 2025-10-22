@@ -5,44 +5,56 @@ statement ok
 use tpcds;
 
 statement ok
-set max_memory_usage = 1024*1024*1024;
+set max_memory_usage = 100*1024*1024;
+
+statement ok
+set max_query_memory_usage = 100*1024*1024;
+
+statement ok
+set query_out_of_memory_behavior = 'spilling';
 
 # The io performance of the ci environment is very poor, especially in cluster mode, 
 # resulting in too much time consuming to run the entire tpcds.
 
-include ./Q67
-include ./Q68
-include ./Q69
-include ./Q70
-include ./Q71
-include ./Q72
-include ./Q73
-include ./Q74
-include ./Q75
-include ./Q76
-include ./Q77
-include ./Q78
-include ./Q79
-include ./Q80
-include ./Q81
-include ./Q82
-include ./Q83
-include ./Q84
-include ./Q85
-include ./Q86
-include ./Q87
-include ./Q88
-include ./Q89
-include ./Q90
-include ./Q91
-include ./Q92
-include ./Q93
-include ./Q94
-include ./Q95
-include ./Q96
-include ./Q97
-include ./Q98
-include ./Q99
+include Q67
+include Q68
+include Q69
+include Q70
+include Q71
+include Q72
+include Q73
+include Q74
+include Q75
+include Q76
+include Q77
+include Q78
+include Q79
+include Q80
+include Q81
+include Q82
+include Q83
+include Q84
+include Q85
+include Q86
+include Q87
+include Q88
+include Q89
+include Q90
+include Q91
+include Q92
+include Q93
+include Q94
+include Q95
+include Q96
+include Q97
+include Q98
+include Q99
 
 statement ok
-UNSET max_memory_usage;
+unset max_memory_usage;
+
+statement ok
+unset max_query_memory_usage;
+
+statement ok
+unset query_out_of_memory_behavior;

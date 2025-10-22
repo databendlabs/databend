@@ -1,5 +1,5 @@
 # Q95
-query I
+query IRR
 WITH ws_wh AS
   (SELECT ws1.ws_order_number,
           ws1.ws_warehouse_sk wh1,

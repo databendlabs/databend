@@ -1,5 +1,5 @@
 # Q45
-query I
+query TTR
 SELECT ca_zip,
        ca_city,
        sum(ws_sales_price)

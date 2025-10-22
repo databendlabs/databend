@@ -1,5 +1,5 @@
 # Q59
-query I
+query TTIRRRRRRR
 WITH wss AS
   (SELECT d_week_seq,
           ss_store_sk,

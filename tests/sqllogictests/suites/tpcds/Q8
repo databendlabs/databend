@@ -1,5 +1,5 @@
 # Q8
-query I
+query TR
 SELECT s_store_name,
        sum(ss_net_profit)
 FROM store_sales,
