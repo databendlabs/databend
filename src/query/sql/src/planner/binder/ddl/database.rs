@@ -36,6 +36,7 @@ use log::debug;
 
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
+use crate::plans::AlterDatabasePlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::Plan;
@@ -214,6 +215,25 @@ impl Binder {
                     database,
                 },
             ))),
+
+            AlterDatabaseAction::SetOptions { options } => {
+                // Validate database options before processing
+                // For ALTER DATABASE, allow modifying single option (the other already exists)
+                self.validate_database_options(options, false).await?;
+
+                // Convert SQLProperty to BTreeMap for database options
+                let db_options = options
+                    .iter()
+                    .map(|property| (property.name.clone(), property.value.clone()))
+                    .collect::<BTreeMap<String, String>>();
+
+                Ok(Plan::AlterDatabase(Box::new(AlterDatabasePlan {
+                    tenant,
+                    catalog,
+                    database,
+                    options: db_options,
+                })))
+            }
         }
     }
 
@@ -283,6 +303,10 @@ impl Binder {
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
 
+        // Validate database options (connection, URI, storage access)
+        // For CREATE DATABASE, require both options to be specified together
+        self.validate_database_options(options, true).await?;
+
         let meta = self.database_meta(engine, options)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
@@ -294,11 +318,159 @@ impl Binder {
         })))
     }
 
+    /// Validate database options including connection existence, URI location, and storage access
+    ///
+    /// # Arguments
+    /// * `options` - The database options to validate
+    /// * `require_both` - If true (CREATE), both options must be present together.
+    ///                    If false (ALTER), allows modifying single option.
+    #[async_backtrace::framed]
+    async fn validate_database_options(
+        &self,
+        options: &[SQLProperty],
+        require_both: bool,
+    ) -> Result<()> {
+        // Validate database options - only allow specific connection-related options
+        const VALID_DATABASE_OPTIONS: &[&str] =
+            &["DEFAULT_STORAGE_CONNECTION", "DEFAULT_STORAGE_PATH"];
+
+        // Check for duplicate options
+        let mut seen_options = std::collections::HashSet::new();
+        for property in options {
+            if !seen_options.insert(&property.name) {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Duplicate database option '{}' is not allowed",
+                    property.name
+                )));
+            }
+
+            if !VALID_DATABASE_OPTIONS.contains(&property.name.as_str()) {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Invalid database option '{}'. Valid options are: {}",
+                    property.name,
+                    VALID_DATABASE_OPTIONS.join(", ")
+                )));
+            }
+        }
+
+        // Validate pairing requirement based on operation type
+        let has_connection = options
+            .iter()
+            .any(|p| p.name == "DEFAULT_STORAGE_CONNECTION");
+        let has_path = options.iter().any(|p| p.name == "DEFAULT_STORAGE_PATH");
+
+        if require_both {
+            // For CREATE DATABASE: both options must be specified together
+            if has_connection && !has_path {
+                return Err(ErrorCode::BadArguments(
+                    "DEFAULT_STORAGE_CONNECTION requires DEFAULT_STORAGE_PATH to be specified"
+                        .to_string(),
+                ));
+            }
+
+            if has_path && !has_connection {
+                return Err(ErrorCode::BadArguments(
+                    "DEFAULT_STORAGE_PATH requires DEFAULT_STORAGE_CONNECTION to be specified"
+                        .to_string(),
+                ));
+            }
+        }
+        // For ALTER DATABASE: allow modifying single option (the other one already exists in database)
+
+        // Validate that the specified connection exists
+        if let Some(connection_property) = options
+            .iter()
+            .find(|p| p.name == "DEFAULT_STORAGE_CONNECTION")
+        {
+            let connection_name = &connection_property.value;
+
+            // Check if the connection exists by trying to get it through the context
+            match self.ctx.get_connection(connection_name).await {
+                Ok(_) => {
+                    // Connection exists, continue
+                }
+                Err(_) => {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Connection '{}' does not exist. Please create the connection first using CREATE CONNECTION",
+                        connection_name
+                    )));
+                }
+            }
+        }
+
+        // Validate storage path accessibility when both connection and path are specified
+        if let (Some(connection_prop), Some(path_prop)) = (
+            options
+                .iter()
+                .find(|p| p.name == "DEFAULT_STORAGE_CONNECTION"),
+            options.iter().find(|p| p.name == "DEFAULT_STORAGE_PATH"),
+        ) {
+            // Validate the storage path is accessible
+            let connection = self.ctx.get_connection(&connection_prop.value).await?;
+            let mut uri_location = databend_common_ast::ast::UriLocation::from_uri(
+                path_prop.value.clone(),
+                connection.storage_params,
+            )?;
+
+            // Parse and validate the URI location using parse_storage_params_from_uri
+            // This enforces that the path must end with '/' (directory requirement)
+            let storage_params = crate::binder::parse_storage_params_from_uri(
+                &mut uri_location,
+                Some(&*self.ctx),
+                "when setting database DEFAULT_STORAGE_PATH",
+            )
+            .await
+            .map_err(|e| {
+                ErrorCode::BadArguments(format!(
+                    "Invalid storage path '{}': {}",
+                    path_prop.value, e
+                ))
+            })?;
+
+            // Check if storage is secure when required
+            if !storage_params.is_secure()
+                && !databend_common_config::GlobalConfig::instance()
+                    .storage
+                    .allow_insecure
+            {
+                return Err(ErrorCode::StorageInsecure(
+                    "Database default storage path points to insecure storage, which is not allowed"
+                ));
+            }
+
+            // Verify essential privileges for the external storage location
+            // Similar to table creation, we test basic storage operations
+            let operator =
+                databend_common_storage::init_operator(&storage_params).map_err(|e| {
+                    ErrorCode::BadArguments(format!(
+                        "Failed to access storage location '{}': {}",
+                        path_prop.value, e
+                    ))
+                })?;
+
+            // Test storage accessibility with basic operations
+            // Reuse the existing verify_external_location_privileges function from table.rs
+            crate::binder::verify_external_location_privileges(operator)
+                .await
+                .map_err(|e| {
+                    ErrorCode::BadArguments(format!(
+                    "Failed to verify permissions for database default storage location '{}': {}",
+                    path_prop.value, e
+                ))
+                })?;
+        }
+
+        Ok(())
+    }
+
     fn database_meta(
         &self,
         engine: &Option<DatabaseEngine>,
         options: &[SQLProperty],
     ) -> Result<DatabaseMeta> {
+        // Note: Options validation is done in validate_database_options()
+        // This function only creates the DatabaseMeta structure
+
         let options = options
             .iter()
             .map(|property| (property.name.clone(), property.value.clone()))
