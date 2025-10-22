@@ -22,9 +22,10 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::StreamContext;
+
+use crate::Transform;
+use crate::Transformer;
 
 pub struct TransformAddStreamColumns {
     stream_ctx: StreamContext,

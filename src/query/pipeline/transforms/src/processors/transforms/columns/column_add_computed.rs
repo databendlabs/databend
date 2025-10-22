@@ -25,12 +25,11 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
-use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::parse_computed_expr;
 
-use crate::sessions::QueryContext;
+use crate::blocks::CompoundBlockOperator;
+use crate::Transform;
 
 pub struct TransformAddComputedColumns {
     expression_transform: CompoundBlockOperator,
@@ -41,7 +40,7 @@ impl TransformAddComputedColumns
 where Self: Transform
 {
     pub fn try_new(
-        ctx: Arc<QueryContext>,
+        ctx: Arc<dyn TableContext>,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
     ) -> Result<Self> {

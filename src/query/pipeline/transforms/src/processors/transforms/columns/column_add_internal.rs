@@ -21,7 +21,8 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
-use databend_common_pipeline_transforms::processors::Transform;
+
+use crate::Transform;
 
 pub struct TransformAddInternalColumns {
     internal_columns: BTreeMap<FieldIndex, InternalColumn>,

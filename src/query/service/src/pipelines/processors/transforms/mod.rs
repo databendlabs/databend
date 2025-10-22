@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod aggregator;
-#[allow(dead_code)]
 mod broadcast;
 mod hash_join;
 mod materialized_cte;
@@ -21,9 +20,6 @@ mod new_hash_join;
 pub(crate) mod range_join;
 mod runtime_pool;
 pub mod sort;
-mod transform_add_computed_columns;
-mod transform_add_internal_columns;
-mod transform_add_stream_columns;
 mod transform_async_function;
 mod transform_branched_async_function;
 mod transform_branched_cast_schema;
@@ -52,9 +48,6 @@ pub use new_hash_join::Join;
 pub use new_hash_join::TransformHashJoin;
 pub use new_hash_join::*;
 pub use sort::*;
-pub use transform_add_computed_columns::TransformAddComputedColumns;
-pub use transform_add_internal_columns::TransformAddInternalColumns;
-pub use transform_add_stream_columns::TransformAddStreamColumns;
 pub use transform_async_function::SequenceCounters;
 pub use transform_async_function::TransformAsyncFunction;
 pub use transform_branched_async_function::AsyncFunctionBranch;
