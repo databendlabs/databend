@@ -29,6 +29,7 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::columns::TransformAddConstColumns;
+use databend_common_pipeline_transforms::columns::TransformCastSchema;
 use databend_common_pipeline_transforms::columns::TransformNullIf;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::plans::CopyIntoTableMode;
@@ -37,7 +38,6 @@ use log::debug;
 use log::info;
 
 use crate::physical_plans::CopyIntoTable;
-use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 

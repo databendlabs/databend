@@ -21,10 +21,10 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
 use databend_common_expression::SourceSchemaIndex;
+use databend_common_pipeline_transforms::columns::cast_schema;
 use databend_common_pipeline_transforms::Transform;
 use databend_common_storages_fuse::TableContext;
 
-use super::transform_cast_schema::cast_schema;
 use crate::sessions::QueryContext;
 
 /// The key of branches is `SourceSchemaIndex`, see `TransformResortAddOnWithoutSourceSchema`.

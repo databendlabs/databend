@@ -24,6 +24,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::processors::create_resize_item;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_transforms::columns::build_cast_exprs;
 use databend_common_pipeline_transforms::columns::TransformAddComputedColumns;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
@@ -35,7 +36,6 @@ use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::operations::UnMatchedExprs;
 use databend_common_storages_fuse::FuseTable;
 
-use crate::pipelines::processors::transforms::build_cast_exprs;
 use crate::pipelines::processors::transforms::build_expression_transform;
 use crate::pipelines::processors::transforms::AsyncFunctionBranch;
 use crate::pipelines::processors::transforms::CastSchemaBranch;

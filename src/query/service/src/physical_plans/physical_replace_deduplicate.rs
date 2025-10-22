@@ -28,6 +28,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_transforms::build_compact_block_pipeline;
+use databend_common_pipeline_transforms::columns::TransformCastSchema;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_common_sql::ColumnBinding;
@@ -39,7 +40,6 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

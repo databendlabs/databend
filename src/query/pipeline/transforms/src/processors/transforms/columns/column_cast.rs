@@ -24,12 +24,12 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::ProcessorPtr;
+use crate::Transform;
+use crate::Transformer;
 
 pub struct TransformCastSchema {
     func_ctx: FunctionContext,
