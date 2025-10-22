@@ -249,7 +249,7 @@ error:
   --> SQL:1:23
   |
 1 | alter database system x rename to db
-  | -----                 ^ unexpected `x`, expecting `RENAME`, `REFRESH`, or `.`
+  | -----                 ^ unexpected `x`, expecting `RENAME`, `REFRESH`, `SET`, or `.`
   | |                      
   | while parsing `ALTER DATABASE [IF EXISTS] <action>`
 

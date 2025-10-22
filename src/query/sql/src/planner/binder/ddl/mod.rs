@@ -30,7 +30,7 @@ mod row_access_policy;
 mod sequence;
 mod stage;
 mod stream;
-mod table;
+pub mod table;
 mod task;
 mod view;
 mod warehouse;
