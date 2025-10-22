@@ -260,9 +260,10 @@ impl NewFinalAggregateTransform {
         // merge new produced repartitioned queues into local repartitioned queues
         self.repartitioned_queues.merge_queues(new_produced);
 
-        if self.spiller.memory_settings.check_spill() {
-            self.shared_state.lock().is_spilled = true;
-        }
+        // TODO: let's first run test on no spill scenario
+        // if self.spiller.memory_settings.check_spill() {
+        //     self.shared_state.lock().is_spilled = true;
+        // }
 
         // if other processor or itself trigger spill, this processor will need spill its local repartitioned queue out
         if self.shared_state.lock().is_spilled && !self.is_spilled && !self.working_queue.is_empty()
