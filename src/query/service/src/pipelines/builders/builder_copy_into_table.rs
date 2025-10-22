@@ -28,6 +28,7 @@ use databend_common_meta_app::principal::ParquetFileFormatParams;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::columns::TransformAddConstColumns;
 use databend_common_pipeline_transforms::columns::TransformNullIf;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::plans::CopyIntoTableMode;
@@ -36,7 +37,6 @@ use log::debug;
 use log::info;
 
 use crate::physical_plans::CopyIntoTable;
-use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
@@ -207,8 +207,9 @@ impl PipelineBuilder {
         const_values: &[Scalar],
     ) -> Result<()> {
         pipeline.try_add_transformer(|| {
+            let ctx = ctx.get_function_context()?;
             TransformAddConstColumns::try_new(
-                ctx.clone(),
+                ctx,
                 input_schema.clone(),
                 output_schema.clone(),
                 const_values.to_vec(),

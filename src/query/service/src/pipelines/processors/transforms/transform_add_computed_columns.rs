@@ -25,9 +25,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::parse_computed_expr;
 
 use crate::sessions::QueryContext;

@@ -12,20 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar as DataScalar;
-use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::evaluator::CompoundBlockOperator;
 
-use crate::sessions::QueryContext;
+use crate::blocks::CompoundBlockOperator;
+use crate::Transform;
 
 pub struct TransformAddConstColumns {
     expression_transform: CompoundBlockOperator,
@@ -41,7 +38,7 @@ where Self: Transform
     /// input_schema has columns (a, c) to load data from attachment,
     /// const_values contains a scalar 1
     pub fn try_new(
-        ctx: Arc<QueryContext>,
+        ctx: FunctionContext,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
         mut const_values: Vec<DataScalar>,
@@ -71,9 +68,8 @@ where Self: Transform
             })
             .collect();
 
-        let func_ctx = ctx.get_function_context()?;
         let expression_transform = CompoundBlockOperator {
-            ctx: func_ctx,
+            ctx,
             operators: vec![BlockOperator::Map {
                 exprs,
                 projections: None,

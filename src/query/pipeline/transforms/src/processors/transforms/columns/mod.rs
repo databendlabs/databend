@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod column_add_const;
 mod column_nullif;
 
+pub use column_add_const::*;
 pub use column_nullif::*;

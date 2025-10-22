@@ -25,12 +25,10 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_users::Object;
 
 use crate::binder::wrap_cast;
 use crate::evaluator::BlockOperator;
-use crate::evaluator::CompoundBlockOperator;
 use crate::plans::walk_expr_mut;
 use crate::plans::ConstantExpr;
 use crate::plans::VisitorMut;
@@ -180,20 +178,15 @@ impl BindContext {
             map_exprs.push(expr);
         }
 
-        let operators = vec![BlockOperator::Map {
+        let op = BlockOperator::Map {
             exprs: map_exprs,
             projections: None,
-        }];
-
+        };
         let one_row_chunk =
             DataBlock::new(vec![BlockEntry::new_const_column_arg::<UInt8Type>(1, 1)], 1);
         let func_ctx = ctx.get_function_context()?;
-        let mut expression_transform = CompoundBlockOperator {
-            operators,
-            ctx: func_ctx,
-        };
-        let res = expression_transform.transform(one_row_chunk)?;
-        let scalars: Vec<Scalar> = res
+        let scalars = op
+            .execute(&func_ctx, one_row_chunk)?
             .columns()
             .iter()
             .skip(1)
