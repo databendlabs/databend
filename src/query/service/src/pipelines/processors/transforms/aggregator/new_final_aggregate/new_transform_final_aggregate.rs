@@ -57,7 +57,7 @@ impl RepartitionedQueues {
     }
 
     pub fn take_queue(&mut self, partition_idx: usize) -> Vec<AggregateMeta> {
-        std::mem::replace(&mut self.0[partition_idx], vec![])
+        std::mem::take(&mut self.0[partition_idx])
     }
 
     pub fn merge_queues(&mut self, other: Self) {
@@ -397,9 +397,13 @@ impl NewFinalAggregateTransform {
         }
 
         if finalize {
-            for id in 0..self.partition_count {
+            for (id, ready_block) in ready_blocks
+                .iter_mut()
+                .enumerate()
+                .take(self.partition_count)
+            {
                 if let Some(block) = self.block_partition_stream.finalize_partition(id) {
-                    ready_blocks[id].push(block);
+                    ready_block.push(block);
                 }
             }
         }

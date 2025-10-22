@@ -40,6 +40,7 @@ use crate::spillers::SpillerType;
 pub struct FinalAggregateSpiller {
     pub spiller: Spiller,
     pub blocking_operator: BlockingOperator,
+    #[allow(dead_code)]
     pub memory_settings: MemorySettings,
     pub ctx: Arc<QueryContext>,
 }
