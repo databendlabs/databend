@@ -117,6 +117,7 @@ impl FinalAggregateSharedState {
         if self.finished_count == self.partition_count {
             self.finished_count = 0;
             if self.is_spilled {
+                self.is_spilled = false;
                 // flush all repartitioned queues to pending queues
                 let queues = self.repartitioned_queues.take_queues();
                 for queue in queues.0.into_iter() {
@@ -225,7 +226,7 @@ impl NewFinalAggregateTransform {
         };
 
         let repartitioned = partition_payload.repartition(self.partition_count, &mut flush_state);
-        let mut queues = RepartitionedQueues::create(self.partition_count);
+        let mut new_produced = RepartitionedQueues::create(self.partition_count);
         for (partition_id, payload) in repartitioned.payloads.into_iter().enumerate() {
             if payload.len() == 0 {
                 continue;
@@ -237,16 +238,34 @@ impl NewFinalAggregateTransform {
                 max_partition_count: self.partition_count,
             });
 
-            queues.push_to_queue(partition_id, meta);
+            new_produced.push_to_queue(partition_id, meta);
         }
 
+        // if spill already triggered, local repartition queue is all spilled out
+        // we only need to spill the new produced repartitioned queues out
         if self.is_spilled {
-            self.spill(queues)?;
-        } else {
-            self.repartitioned_queues.merge_queues(queues);
-            if self.spiller.memory_settings.check_spill() {
-                self.shared_state.lock().is_spilled = true;
+            // when no more task, we need to finalize the partition stream
+            if self.working_queue.is_empty() {
+                self.spill(new_produced, true)?;
+            } else {
+                self.spill(new_produced, false)?;
             }
+            return Ok(());
+        }
+
+        // merge new produced repartitioned queues into local repartitioned queues
+        self.repartitioned_queues.merge_queues(new_produced);
+
+        if self.spiller.memory_settings.check_spill() {
+            self.shared_state.lock().is_spilled = true;
+        }
+
+        // if other processor or itself trigger spill, this processor will need spill its local repartitioned queue out
+        if self.shared_state.lock().is_spilled && !self.is_spilled && !self.working_queue.is_empty()
+        {
+            self.is_spilled = true;
+            let queues = self.repartitioned_queues.take_queues();
+            self.spill(queues, false)?;
         }
 
         Ok(())
@@ -347,7 +366,7 @@ impl NewFinalAggregateTransform {
         Ok(())
     }
 
-    pub fn spill(&mut self, mut queues: RepartitionedQueues) -> Result<()> {
+    pub fn spill(&mut self, mut queues: RepartitionedQueues, finalize: bool) -> Result<()> {
         let mut ready_blocks: Vec<Vec<DataBlock>> = vec![vec![]; self.partition_count];
 
         for (id, queue) in queues.0.iter_mut().enumerate() {
@@ -368,6 +387,14 @@ impl NewFinalAggregateTransform {
                             "FinalAggregateSpiller expects AggregatePayload in repartitioned queue",
                         ));
                     }
+                }
+            }
+        }
+
+        if finalize {
+            for id in 0..self.partition_count {
+                if let Some(block) = self.block_partition_stream.finalize_partition(id) {
+                    ready_blocks[id].push(block);
                 }
             }
         }
@@ -440,6 +467,10 @@ impl Processor for NewFinalAggregateTransform {
         }
 
         if self.working_queue.is_empty() && self.data_ready {
+            // reset
+            self.is_spilled = false;
+
+            // get task from shared state
             if let Some(mut datablock) = {
                 let mut guard = self.shared_state.lock();
                 guard.get_next_datablock()
@@ -449,6 +480,8 @@ impl Processor for NewFinalAggregateTransform {
                     return Ok(event);
                 }
             }
+
+            // no more task for this round, we can wait for final aggregation
             self.data_ready = false;
             self.state = LocalState::AsyncWait;
             return Ok(Event::Async);
@@ -482,11 +515,6 @@ impl Processor for NewFinalAggregateTransform {
                 };
                 self.repartition(meta)?;
 
-                if self.shared_state.lock().is_spilled && !self.is_spilled {
-                    self.is_spilled = true;
-                    let queues = self.repartitioned_queues.take_queues();
-                    self.spill(queues)?;
-                }
                 Ok(())
             }
             LocalState::Aggregate => {
