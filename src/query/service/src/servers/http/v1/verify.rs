@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_users::UserApiProvider;
 use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
@@ -24,6 +25,9 @@ use crate::servers::http::v1::HttpQueryContext;
 pub struct VerifyResponse {
     tenant: String,
     user: String,
+    auth_type: String,
+    is_configured: bool,
+    default_role: String,
     roles: Vec<String>,
 }
 
@@ -35,6 +39,12 @@ pub async fn verify_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoRespo
         .session
         .get_current_user()
         .map_err(HttpErrorCode::server_error)?;
+    let is_configured = match UserApiProvider::instance().get_configured_user(&user.name) {
+        Some(_) => true,
+        None => false,
+    };
+    let auth_type = user.auth_info.get_type().to_str().to_string();
+    let default_role = user.option.default_role().cloned().unwrap_or_default();
     let roles = ctx
         .session
         .get_all_effective_roles()
@@ -43,6 +53,9 @@ pub async fn verify_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoRespo
     Ok(Json(VerifyResponse {
         tenant: tenant.tenant_name().to_string(),
         user: user.name,
+        is_configured,
+        auth_type,
+        default_role,
         roles: roles.into_iter().map(|r| r.name).collect(),
     }))
 }
