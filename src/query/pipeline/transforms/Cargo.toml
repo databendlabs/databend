@@ -21,6 +21,7 @@ databend-common-license = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-storages-common-cache = { workspace = true }
+futures = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }

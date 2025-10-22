@@ -14,6 +14,7 @@
 
 pub mod blocks;
 pub mod columns;
+pub mod sets;
 pub mod sort;
 mod transform;
 mod transform_accumulating;
