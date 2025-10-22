@@ -97,7 +97,11 @@ impl SquashBlocks {
         let mut current_rows = 0;
         let mut current_bytes = 0;
 
-        while let Some(mut block) = self.blocks.pop_front() {
+        while current_rows < self.squash_rows && current_bytes < self.squash_bytes {
+            let Some(mut block) = self.blocks.pop_front() else {
+                return DataBlock::concat(&blocks);
+            };
+
             if block.block.is_empty() {
                 continue;
             }
@@ -106,7 +110,6 @@ impl SquashBlocks {
             self.current_bytes -= block.block.memory_size();
 
             let mut slice_rows = block.block.num_rows();
-
             slice_rows = std::cmp::min(slice_rows, self.squash_rows - current_rows);
 
             let max_bytes_rows = match block.avg_bytes {
@@ -117,25 +120,22 @@ impl SquashBlocks {
             slice_rows = std::cmp::min(max_bytes_rows, slice_rows);
 
             if slice_rows != block.block.num_rows() {
-                let compact_block = block.block.slice(0..slice_rows);
-                let remain_block = block.block.slice(slice_rows..block.block.num_rows());
+                let compact_block = block.block.slice(0..slice_rows).maybe_gc();
 
-                if !compact_block.is_empty() {
-                    blocks.push(compact_block);
-                }
+                // Calculate the correct number of rows and bytes.
+                self.current_rows += block.block.num_rows();
+                self.current_bytes += block.block.memory_size();
+                self.current_rows -= compact_block.num_rows();
+                self.current_bytes -= compact_block.memory_size();
+                blocks.push(compact_block);
+
+                let remain_block = block
+                    .block
+                    .slice(slice_rows..block.block.num_rows())
+                    .maybe_gc();
 
                 if !remain_block.is_empty() {
-                    let mut columns = Vec::with_capacity(block.block.num_columns());
-
-                    for block_entry in remain_block.take_columns() {
-                        let column = block_entry.to_column();
-                        drop(block_entry);
-                        columns.push(column.maybe_gc());
-                    }
-
-                    block.block = DataBlock::new_from_columns(columns);
-                    self.current_rows += block.block.num_rows();
-                    self.current_bytes += block.block.memory_size();
+                    block.block = remain_block;
                     self.blocks.push_front(block);
                 }
 

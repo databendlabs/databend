@@ -27,8 +27,10 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
+use petgraph::matrix_graph::Nullable;
 
 use crate::pipelines::processors::transforms::get_hashes;
+use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_memory::GraceMemoryJoin;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::GraceHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state::SpillMetadata;
@@ -159,7 +161,11 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
                     return Ok(Some(stream));
                 }
 
+                let locked = self.state.mutex.lock();
+                let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
                 self.stage = RestoreStage::RestoreBuild;
+                *self.state.restore_partition.as_mut() = None;
                 Ok(Some(Box::new(EmptyJoinStream)))
             }
         }
@@ -208,12 +214,13 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-        if self.state.restore_build_queue.is_empty() {
+        if self.state.restore_partition.is_none() {
             let Some((id, data)) = self.state.build_row_groups.as_mut().pop_first() else {
                 *self.state.finished.as_mut() = true;
                 return false;
             };
 
+            *self.state.restore_partition.as_mut() = Some(id);
             *self.state.restore_build_queue.as_mut() = VecDeque::from(data);
 
             self.state.restore_probe_queue.as_mut().clear();
