@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::VecDeque;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -33,11 +32,10 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use parking_lot::Mutex;
-use poem::web::Data;
 use tokio::sync::Barrier;
 
-use super::divide_partitioned_meta_into_blocks;
 use super::final_aggregate_spiller::FinalAggregateSpiller;
+use super::split_partitioned_meta_into_datablocks;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
@@ -47,12 +45,13 @@ pub struct RepartitionedQueues(Vec<Vec<AggregateMeta>>);
 
 impl RepartitionedQueues {
     pub fn create(partition_count: usize) -> Self {
-        Self(vec![vec![]; partition_count])
+        let queues = (0..partition_count).map(|_| Vec::new()).collect();
+        Self(queues)
     }
 
     pub fn take_queues(&mut self) -> Self {
         let partition_count = self.0.len();
-        std::mem::replace(&mut self, Self::create(partition_count))
+        std::mem::replace(self, Self::create(partition_count))
     }
 
     pub fn take_queue(&mut self, partition_idx: usize) -> Vec<AggregateMeta> {
@@ -63,6 +62,10 @@ impl RepartitionedQueues {
         for (idx, mut queue) in other.0.into_iter().enumerate() {
             self.0[idx].append(&mut queue);
         }
+    }
+
+    pub fn push_to_queue(&mut self, partition_idx: usize, meta: AggregateMeta) {
+        self.0[partition_idx].push(meta);
     }
 }
 
@@ -86,7 +89,7 @@ impl Display for LocalState {
     }
 }
 
-struct FinalAggregateSharedState {
+pub struct FinalAggregateSharedState {
     is_spilled: bool,
     finished_count: usize,
     repartitioned_queues: RepartitionedQueues,
@@ -107,8 +110,8 @@ impl FinalAggregateSharedState {
         }
     }
 
-    pub fn add_repartitioned_queue(&mut self, id: usize, queue: Vec<AggregateMeta>) {
-        self.repartitioned_queues.0[id].extend(queue);
+    pub fn add_repartitioned_queue(&mut self, queues: RepartitionedQueues) {
+        self.repartitioned_queues.merge_queues(queues);
 
         self.finished_count += 1;
         if self.finished_count == self.partition_count {
@@ -127,7 +130,7 @@ impl FinalAggregateSharedState {
             // pop a queue and repartition in datablock level
             if let Some(queue) = self.pending_queues.pop() {
                 self.next_round =
-                    divide_partitioned_meta_into_blocks(0, queue, self.partition_count);
+                    split_partitioned_meta_into_datablocks(0, queue, self.partition_count);
             }
         }
     }
@@ -234,7 +237,7 @@ impl NewFinalAggregateTransform {
                 max_partition_count: self.partition_count,
             });
 
-            queues[partition_id].push(meta);
+            queues.push_to_queue(partition_id, meta);
         }
 
         if self.is_spilled {
@@ -265,7 +268,7 @@ impl NewFinalAggregateTransform {
     fn final_aggregate(&mut self, mut queue: Vec<AggregateMeta>) -> Result<()> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
 
-        while let Ok(meta) = queue.pop() {
+        while let Some(meta) = queue.pop() {
             match meta {
                 AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
                     Some(ht) => {
@@ -375,8 +378,10 @@ impl NewFinalAggregateTransform {
             }
             for block in blocks {
                 let bucket_spilled_payload = self.spiller.spill(partition_id, block)?;
-                self.repartitioned_queues[partition_id]
-                    .push(AggregateMeta::BucketSpilled(bucket_spilled_payload));
+                self.repartitioned_queues.push_to_queue(
+                    partition_id,
+                    AggregateMeta::BucketSpilled(bucket_spilled_payload),
+                );
             }
         }
 
@@ -408,6 +413,7 @@ impl NewFinalAggregateTransform {
     }
 }
 
+#[async_trait::async_trait]
 impl Processor for NewFinalAggregateTransform {
     fn name(&self) -> String {
         "NewFinalAggregateTransform".to_string()
@@ -434,7 +440,10 @@ impl Processor for NewFinalAggregateTransform {
         }
 
         if self.working_queue.is_empty() && self.data_ready {
-            if let Some(mut datablock) = self.shared_state.lock().get_next_datablock() {
+            if let Some(mut datablock) = {
+                let mut guard = self.shared_state.lock();
+                guard.get_next_datablock()
+            } {
                 self.enqueue_partitioned_meta(&mut datablock)?;
                 if let Some(event) = self.try_schedule_next_task() {
                     return Ok(event);
@@ -475,7 +484,8 @@ impl Processor for NewFinalAggregateTransform {
 
                 if self.shared_state.lock().is_spilled && !self.is_spilled {
                     self.is_spilled = true;
-                    self.spill(self.repartitioned_queues.take_queues())?;
+                    let queues = self.repartitioned_queues.take_queues();
+                    self.spill(queues)?;
                 }
                 Ok(())
             }
@@ -499,10 +509,7 @@ impl Processor for NewFinalAggregateTransform {
         match state {
             LocalState::AsyncWait => {
                 let queues = self.repartitioned_queues.take_queues();
-                self.shared_state
-                    .lock()
-                    .repartitioned_queues
-                    .merge_queues(queues);
+                self.shared_state.lock().add_repartitioned_queue(queues);
 
                 self.barrier.wait().await;
 

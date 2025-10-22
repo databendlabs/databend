@@ -29,7 +29,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
-use super::divide_partitioned_meta_into_blocks;
+use super::split_partitioned_meta_into_datablocks;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
@@ -452,7 +452,7 @@ impl TransformPartitionBucketScatter {
             }
         }
 
-        divide_partitioned_meta_into_blocks(bucket, data, outputs_len)
+        split_partitioned_meta_into_datablocks(bucket, data, outputs_len)
     }
 }
 

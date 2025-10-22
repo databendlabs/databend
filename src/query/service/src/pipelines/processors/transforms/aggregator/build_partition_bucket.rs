@@ -23,8 +23,11 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::TransformPipeBuilder;
 use databend_common_storage::DataOperator;
+use parking_lot::Mutex;
+use tokio::sync::Barrier;
 use tokio::sync::Semaphore;
 
+use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::FinalAggregateSharedState;
 use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::FinalAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::NewFinalAggregateTransform;
 use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::TransformPartitionBucketScatter;
@@ -45,8 +48,6 @@ pub fn build_partition_bucket(
     let operator = DataOperator::instance().spill_operator();
 
     if experiment_aggregate_final {
-        let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
-
         // PartitionedPayload only accept power of two partitions
         let mut output_num = after_worker.next_power_of_two();
         const MAX_PARTITION_COUNT: usize = 128;
@@ -71,6 +72,8 @@ pub fn build_partition_bucket(
         ));
 
         let mut builder = TransformPipeBuilder::create();
+        let barrier = Arc::new(Barrier::new(output_num));
+        let shared_state = Arc::new(Mutex::new(FinalAggregateSharedState::new(output_num)));
 
         for id in 0..output_num {
             let spiller = FinalAggregateSpiller::try_create(ctx.clone(), operator.clone())?;
@@ -82,6 +85,9 @@ pub fn build_partition_bucket(
                 id,
                 params.clone(),
                 output_num,
+                barrier.clone(),
+                shared_state.clone(),
+                spiller,
                 ctx.clone(),
             )?;
             builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
