@@ -36,7 +36,8 @@ use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::SyncReceiverSource;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_pipeline_transforms::columns::TransformNullIf;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_storages_parquet::InmMemoryFile;
 use parking_lot::Mutex;
 
@@ -50,7 +51,6 @@ use crate::transform_generating::DataBlockIterator;
 use crate::transform_generating::DataBlockIteratorBuilder;
 use crate::transform_generating::GeneratingTransformer;
 use crate::BytesBatch;
-use crate::TransformNullIf;
 
 pub fn build_streaming_load_pipeline(
     ctx: Arc<dyn TableContext>,

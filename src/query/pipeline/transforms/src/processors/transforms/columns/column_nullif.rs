@@ -37,8 +37,9 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
+
+use crate::processors::Transform;
+use crate::processors::Transformer;
 
 pub struct TransformNullIf {
     func_ctx: Arc<FunctionContext>,

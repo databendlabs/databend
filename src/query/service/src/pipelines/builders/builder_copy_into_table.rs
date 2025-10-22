@@ -28,10 +28,10 @@ use databend_common_meta_app::principal::ParquetFileFormatParams;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_pipeline_transforms::columns::TransformNullIf;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::plans::CopyIntoTableMode;
 use databend_common_storage::StageFileInfo;
-use databend_common_storages_stage::TransformNullIf;
 use log::debug;
 use log::info;
 
