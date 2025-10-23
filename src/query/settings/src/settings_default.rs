@@ -1510,7 +1510,7 @@ impl DefaultSettings {
                 }),
 
                 ("random_spill_percentage", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Random percentage of check_spill return to true, default is 0, 100 for 100%",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
