@@ -100,7 +100,7 @@ async fn do_hook_compact(
                         return Ok(());
                     }
                     CompactionLimits {
-                        segment_limit: Some(compaction_num_block_hint as usize),
+                        segment_limit: None,
                         block_limit: Some(compaction_num_block_hint as usize),
                     }
                 }
