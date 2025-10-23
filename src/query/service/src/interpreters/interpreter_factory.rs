@@ -67,7 +67,6 @@ use crate::interpreters::interpreter_procedure_call::CallProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_create::CreateProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
 use crate::interpreters::interpreter_refresh_database_cache::RefreshDatabaseCacheInterpreter;
-use crate::interpreters::AlterDatabaseInterpreter;
 use crate::interpreters::interpreter_refresh_table_cache::RefreshTableCacheInterpreter;
 use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterpreter;
 use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
@@ -104,6 +103,7 @@ use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouse
 use crate::interpreters::interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
+use crate::interpreters::AlterDatabaseInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
 use crate::interpreters::DescUserInterpreter;

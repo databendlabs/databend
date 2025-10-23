@@ -805,7 +805,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
             let engine = engine_opt.map(|(_, _, engine)| engine);
-            let options = options_opt.map(|(_, _, options, _)| options).unwrap_or_default();
+            let options = options_opt
+                .map(|(_, _, options, _)| options)
+                .unwrap_or_default();
 
             let statement = Statement::CreateDatabase(CreateDatabaseStmt {
                 create_option,

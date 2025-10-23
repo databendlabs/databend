@@ -14,10 +14,11 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::plans::AlterDatabasePlan;
 use log::debug;
-use databend_common_catalog::table_context::TableContext;
+
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -56,7 +57,7 @@ impl Interpreter for AlterDatabaseInterpreter {
 
         if has_connection != has_path {
             return Err(databend_common_exception::ErrorCode::BadArguments(
-                "DEFAULT_STORAGE_CONNECTION and DEFAULT_STORAGE_PATH options must be used together"
+                "DEFAULT_STORAGE_CONNECTION and DEFAULT_STORAGE_PATH options must be used together",
             ));
         }
 
