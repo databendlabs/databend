@@ -49,6 +49,17 @@ impl Interpreter for AlterDatabaseInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_database_execute");
 
+        // Validate options before proceeding
+        // Validate that DEFAULT_STORAGE_CONNECTION and DEFAULT_STORAGE_PATH are used together
+        let has_connection = self.plan.options.contains_key("DEFAULT_STORAGE_CONNECTION");
+        let has_path = self.plan.options.contains_key("DEFAULT_STORAGE_PATH");
+
+        if has_connection != has_path {
+            return Err(databend_common_exception::ErrorCode::BadArguments(
+                "DEFAULT_STORAGE_CONNECTION and DEFAULT_STORAGE_PATH options must be used together"
+            ));
+        }
+
         // Get the catalog and database
         let _catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 

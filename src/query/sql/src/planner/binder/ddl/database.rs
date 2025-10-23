@@ -336,13 +336,13 @@ impl Binder {
         let has_path = options.iter().any(|p| p.name == "DEFAULT_STORAGE_PATH");
 
         if has_connection && !has_path {
-            return Err(ErrorCode::InvalidArgument(
+            return Err(ErrorCode::BadArguments(
                 "DEFAULT_STORAGE_CONNECTION requires DEFAULT_STORAGE_PATH to be specified".to_string()
             ));
         }
 
         if has_path && !has_connection {
-            return Err(ErrorCode::InvalidArgument(
+            return Err(ErrorCode::BadArguments(
                 "DEFAULT_STORAGE_PATH requires DEFAULT_STORAGE_CONNECTION to be specified".to_string()
             ));
         }

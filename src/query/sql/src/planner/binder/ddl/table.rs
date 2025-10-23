@@ -549,17 +549,21 @@ impl Binder {
 
         // Get database defaults for connection options
         let mut options: BTreeMap<String, String> = BTreeMap::new();
-        if let Ok(database_info) = catalog.get_database(&self.ctx.get_tenant(), &database).await {
-            // Extract database-level default connection options
-            if let Some(default_connection) = database_info.options().get("DEFAULT_STORAGE_CONNECTION") {
-                options.insert("connection".to_string(), default_connection.clone());
-            }
-            if let Some(default_path) = database_info.options().get("DEFAULT_STORAGE_PATH") {
-                options.insert("location".to_string(), default_path.clone());
+
+        // FUSE tables can inherit database connection defaults for external storage
+        let engine = engine.unwrap_or(catalog.default_table_engine());
+        if matches!(engine, Engine::Fuse) {
+            if let Ok(database_info) = catalog.get_database(&self.ctx.get_tenant(), &database).await {
+                // Extract database-level default connection options
+                if let Some(default_connection) = database_info.options().get("DEFAULT_STORAGE_CONNECTION") {
+                    options.insert("connection".to_string(), default_connection.clone());
+                }
+                if let Some(default_path) = database_info.options().get("DEFAULT_STORAGE_PATH") {
+                    options.insert("location".to_string(), default_path.clone());
+                }
             }
         }
 
-        let engine = engine.unwrap_or(catalog.default_table_engine());
         if catalog.support_partition() != (engine == Engine::Iceberg) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
                 "Catalog '{}' engine type is {:?} but table {} engine type is {}",
