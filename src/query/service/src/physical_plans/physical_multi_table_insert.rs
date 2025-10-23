@@ -786,7 +786,7 @@ impl IPhysicalPlan for ChunkCommitInsert {
 
         let catalog = CatalogManager::instance().build_catalog(
             self.targets[0].target_catalog_info.clone(),
-            builder.ctx.session_state(),
+            builder.ctx.session_state()?,
         )?;
 
         builder.main_pipeline.add_sink(|input| {

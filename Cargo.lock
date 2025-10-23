@@ -4351,7 +4351,6 @@ dependencies = [
 name = "databend-common-storages-factory"
 version = "0.1.0"
 dependencies = [
- "dashmap 6.1.0",
  "databend-common-catalog",
  "databend-common-config",
  "databend-common-exception",
@@ -4382,6 +4381,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-column",
+ "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
@@ -4847,6 +4847,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "databend-common-base",
+ "databend-common-catalog",
  "databend-common-exception",
  "databend-common-meta-app",
 ]

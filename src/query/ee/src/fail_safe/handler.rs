@@ -16,12 +16,11 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_storage::init_operator;
-use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_fail_safe::FailSafeHandler;
@@ -40,13 +39,16 @@ impl RealFailSafeHandler {}
 
 #[async_trait::async_trait]
 impl FailSafeHandler for RealFailSafeHandler {
-    async fn recover_table_data(&self, table_info: TableInfo) -> Result<()> {
-        let op = match &table_info.meta.storage_params {
-            Some(sp) => init_operator(sp)?,
-            None => DataOperator::instance().operator(),
-        };
-
-        let fuse_table = FuseTable::do_create(table_info)?;
+    async fn recover_table_data(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        table_info: TableInfo,
+    ) -> Result<()> {
+        let fuse_table = FuseTable::create_without_refresh_table_info(
+            table_info,
+            ctx.get_settings().get_s3_storage_class()?,
+        )?;
+        let op = fuse_table.get_operator();
 
         let amender = Amender::new(op);
         amender.recover_snapshot(fuse_table).await?;

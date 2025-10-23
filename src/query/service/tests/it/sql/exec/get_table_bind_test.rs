@@ -1032,7 +1032,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn session_state(&self) -> SessionState {
+    fn session_state(&self) -> Result<SessionState> {
         todo!()
     }
 

@@ -34,6 +34,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
+use databend_common_catalog::table::is_temp_table_by_table_info;
 use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
 use databend_common_catalog::table::ColumnStatisticsProvider;
@@ -41,8 +42,8 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
-use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -65,6 +66,9 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_meta_app::storage::set_s3_storage_class;
+use databend_common_meta_app::storage::S3StorageClass;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
@@ -72,7 +76,6 @@ use databend_common_sql::plans::TruncateMode;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
-use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
@@ -160,21 +163,23 @@ pub struct FuseTable {
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 impl FuseTable {
-    // TODO rename these creators
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Self::do_create_table_ext(table_info, false)?)
+    pub fn create_and_refresh_table_info(
+        table_info: TableInfo,
+        s3storage_class: S3StorageClass,
+    ) -> Result<Box<dyn Table>> {
+        Ok(Self::try_create(table_info, Some(s3storage_class), false)?)
     }
 
-    pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
-        Self::do_create_table_ext(table_info, true)
+    pub fn create_without_refresh_table_info(
+        table_info: TableInfo,
+        s3storage_class: S3StorageClass,
+    ) -> Result<Box<FuseTable>> {
+        Self::try_create(table_info, Some(s3storage_class), true)
     }
 
-    pub fn try_create_ext(table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>> {
-        Ok(Self::do_create_table_ext(table_info, disable_refresh)?)
-    }
-
-    pub fn do_create_table_ext(
+    pub fn try_create(
         mut table_info: TableInfo,
+        storage_class_specs: Option<S3StorageClass>,
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
@@ -185,8 +190,10 @@ impl FuseTable {
                 match storage_params {
                     // External or attached table.
                     Some(sp) => {
-                        let table_meta_options = &table_info.meta.options;
+                        let sp = apply_storage_class(&table_info, sp, storage_class_specs);
                         let operator = init_operator(&sp)?;
+
+                        let table_meta_options = &table_info.meta.options;
                         let table_type = if Self::is_table_attached(table_meta_options) {
                             if !disable_refresh {
                                 Self::refresh_table_info(
@@ -204,7 +211,17 @@ impl FuseTable {
                     }
                     // Normal table.
                     None => {
-                        let operator = DataOperator::instance().operator();
+                        let storage_params = {
+                            // Storage parameter is not specified, using the default one of config
+                            let default_storage_params =
+                                GlobalConfig::instance().storage.params.clone();
+                            apply_storage_class(
+                                &table_info,
+                                default_storage_params,
+                                storage_class_specs,
+                            )
+                        };
+                        let operator = init_operator(&storage_params)?;
                         (operator, FuseTableType::Standard)
                     }
                 }
@@ -268,13 +285,18 @@ impl FuseTable {
         }))
     }
 
-    pub fn from_table_meta(id: u64, seq: u64, table_meta: TableMeta) -> Result<Box<FuseTable>> {
+    pub fn from_table_meta(
+        id: u64,
+        seq: u64,
+        table_meta: TableMeta,
+        storage_class: S3StorageClass,
+    ) -> Result<Box<FuseTable>> {
         let table_info = TableInfo {
             ident: TableIdent { table_id: id, seq },
             meta: table_meta,
             ..Default::default()
         };
-        let table = Self::do_create_table_ext(table_info, false)?;
+        let table = Self::try_create(table_info, Some(storage_class), false)?;
         Ok(table)
     }
 
@@ -1124,13 +1146,11 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn navigate_to(
         &self,
+        ctx: &Arc<dyn TableContext>,
         navigation: &TimeNavigation,
-        abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         match navigation {
-            TimeNavigation::TimeTravel(point) => {
-                Ok(self.navigate_to_point(point, abort_checker).await?)
-            }
+            TimeNavigation::TimeTravel(point) => Ok(self.navigate_to_point(ctx, point).await?),
             TimeNavigation::Changes {
                 append_only,
                 at,
@@ -1138,15 +1158,12 @@ impl Table for FuseTable {
                 desc,
             } => {
                 let mut end_point = if let Some(end) = end {
-                    self.navigate_to_point(end, abort_checker.clone())
-                        .await?
-                        .as_ref()
-                        .clone()
+                    self.navigate_to_point(ctx, end).await?.as_ref().clone()
                 } else {
                     self.clone()
                 };
                 let changes_desc = end_point
-                    .get_change_descriptor(*append_only, desc.clone(), Some(at), abort_checker)
+                    .get_change_descriptor(ctx, *append_only, desc.clone(), Some(at))
                     .await?;
                 end_point.changes_desc = Some(changes_desc);
                 Ok(Arc::new(end_point))
@@ -1329,6 +1346,21 @@ impl Table for FuseTable {
         op.remove_file_in_batch(files).await?;
         Ok(len)
     }
+}
+
+fn apply_storage_class(
+    table_info: &TableInfo,
+    storage_params: StorageParams,
+    storage_class_specs: Option<S3StorageClass>,
+) -> StorageParams {
+    let mut sp = storage_params;
+    if is_temp_table_by_table_info(table_info) {
+        // For temporary tables, always use the standard storage class
+        set_s3_storage_class(&mut sp, S3StorageClass::Standard);
+    } else if let Some(s3storage_class) = storage_class_specs {
+        set_s3_storage_class(&mut sp, s3storage_class);
+    }
+    sp
 }
 
 pub enum RetentionPolicy {
