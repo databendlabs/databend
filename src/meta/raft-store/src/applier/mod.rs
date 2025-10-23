@@ -151,7 +151,7 @@ where SM: StateMachineApi<SysData> + 'static
 
         // Send queued change events to subscriber
         for event in self.changes.drain(..) {
-            debug!("send to EventSender: {:?}", event);
+            info!("send to EventSender: {:?}", event);
             self.sm.on_change_applied(event);
         }
 
