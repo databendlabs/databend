@@ -67,7 +67,7 @@ alter table t ADD ROW ACCESS POLICY rap_it ON (id);
 statement ok
 insert into t values(1,'x');
 
-query T
+query I
 select id from t;
 ----
 1
@@ -78,7 +78,7 @@ create or replace table t_1(id int, cc string);
 statement ok
 insert into t_1 values(1,'account_admin'),(2,'x');
 
-query T
+query I
 select id from t_1 order by id;
 ----
 1
@@ -95,7 +95,7 @@ statement ok
 alter table t_1 ADD ROW ACCESS POLICY rap_it1 ON (cc);
 
 ## t_1 apply row access policy rpa_it1(means if current role == empl_id value account_admin will return false)
-query T
+query I
 select id from t_1;
 ----
 2
@@ -110,7 +110,7 @@ statement ok
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
 
 ## t apply row access policy rpa_it(means if current role == account_admin will return false)
-query T
+query I
 select id from t;
 ----
 
@@ -120,12 +120,12 @@ create or replace table t1(id int, empl_id string);
 statement ok
 insert into t1 values(100,'x');
 
-query T
+query I
 select id from t1;
 ----
 100
 
-query T
+query I
 select id from t1 union select id from t;
 ----
 100
@@ -155,17 +155,17 @@ ALTER TABLE t drop row access policy rap_it;
 statement ok
 ALTER TABLE t drop all row access policies;
 
-query T
+query I
 select id from t;
 ----
 1
 
-query T
+query I
 select id from t1;
 ----
 100
 
-query T
+query I
 select id from (select id from t1 union select id from t) order by id;
 ----
 1
@@ -248,7 +248,7 @@ create or replace table data_mask_test(a int not null, b string not null, c stri
 statement ok
 insert into table data_mask_test(a,b,c) values(1, 'abc','xyz');
 
-query T
+query ITT
 select * from data_mask_test;
 ----
 1 abc xyz
@@ -265,7 +265,7 @@ CREATE MASKING POLICY maskc AS (val int) RETURNS int -> CASE WHEN current_role()
 statement ok
 alter table data_mask_test modify column b set masking policy maskb;
 
-query T
+query ITT
 select * from data_mask_test;
 ----
 1 ********* xyz
@@ -273,7 +273,7 @@ select * from data_mask_test;
 statement ok
 alter table data_mask_test modify column a set masking policy maska;
 
-query T
+query ITT
 select * from data_mask_test;
 ----
 200 ********* xyz
@@ -281,7 +281,7 @@ select * from data_mask_test;
 statement ok
 alter table data_mask_test modify column a unset masking policy;
 
-query T
+query ITT
 select * from data_mask_test;
 ----
 1 ********* xyz
@@ -289,7 +289,7 @@ select * from data_mask_test;
 statement ok
 alter table data_mask_test modify column a set masking policy maska;
 
-query T
+query ITT
 select * from data_mask_test;
 ----
 200 ********* xyz
@@ -359,7 +359,7 @@ statement ok
 alter table employees modify column ssn set masking policy mask_ssn_conditional using (ssn, role);
 
 ## Query should mask SSN for all rows since current_role() won't match
-query ITTTI
+query ITTIT
 select id, name, ssn, salary, department from employees order by id;
 ----
 1 Alice ***-**-**** 100000 Engineering
@@ -371,7 +371,7 @@ statement ok
 alter table employees modify column ssn unset masking policy;
 
 ## SSN should be visible now
-query ITTTI
+query ITTIT
 select id, name, ssn, salary, department from employees order by id;
 ----
 1 Alice 123-45-6789 100000 Engineering
@@ -391,7 +391,7 @@ statement ok
 alter table employees modify column salary set masking policy mask_salary_conditional using (salary, department);
 
 ## Only Engineering department salaries should be visible
-query ITTTI
+query ITTIT
 select id, name, ssn, salary, department from employees order by id;
 ----
 1 Alice 123-45-6789 100000 Engineering
@@ -443,7 +443,7 @@ CREATE MASKING POLICY mask_simple AS (val STRING) RETURNS STRING -> '***';
 statement ok
 alter table employees modify column name set masking policy mask_simple;
 
-query ITTTI
+query ITTIT
 select id, name, ssn, salary, department from employees order by id;
 ----
 1 *** 123-45-6789 100000 Engineering
@@ -474,7 +474,7 @@ create table departments(dept_name string, budget int);
 statement ok
 insert into departments values ('Engineering', 1000000), ('Sales', 500000);
 
-query ITTI
+query ITII
 select e.id, e.name, e.salary, d.budget
 from employees e
 join departments d on e.department = d.dept_name
@@ -555,7 +555,7 @@ alter table employees modify column salary set masking policy mask_nested_case u
 ## - Engineering + hr_admin: 100000 (full)
 ## - Engineering + regular_user: 60000 (120000 / 2)
 ## - Sales + regular_user: 0
-query ITTTI
+query ITTFT
 select id, name, ssn, salary, department from employees order by id;
 ----
 1 Alice ***-**-**** 100000.0 Engineering
@@ -563,7 +563,7 @@ select id, name, ssn, salary, department from employees order by id;
 3 Charlie ***-**-**** 60000.0 Engineering
 
 ## Test 18: GROUP BY with nested CASE masked column
-query TI
+query TF
 select department, avg(salary) as avg_salary
 from employees
 group by department
@@ -573,7 +573,7 @@ Engineering 80000.0
 Sales 0.0
 
 ## Test 19: Complex aggregation with HAVING on masked column
-query TII
+query TIF
 select department, count(*) as cnt, max(salary) as max_sal
 from employees
 group by department
@@ -583,7 +583,7 @@ order by department;
 Engineering 2 100000.0
 
 ## Test 20: Subquery with masked columns in HAVING
-query TI
+query TF
 select department, sum(salary) as total
 from employees
 group by department
@@ -593,7 +593,7 @@ order by department;
 Engineering 160000.0
 
 ## Test 21: Multiple aggregations with masked columns
-query TIIII
+query TIFFF
 select
   department,
   count(*) as cnt,
@@ -648,7 +648,7 @@ alter table employees modify column ssn set masking policy mask_triple_nested us
 ## - Alice (Engineering + hr_admin): full SSN
 ## - Charlie (Engineering + regular_user): 123-XX-XXXX
 ## - Bob (Sales): ***-**-****
-query ITTTI
+query ITTFT
 select id, name, ssn, salary, department from employees order by id;
 ----
 1 Alice 123-45-6789 100000.0 Engineering
@@ -656,7 +656,7 @@ select id, name, ssn, salary, department from employees order by id;
 3 Charlie 456-XX-XXXX 60000.0 Engineering
 
 ## Test 24: GROUP BY with triple nested masked column
-query T
+query TI
 select substring(ssn, 1, 3) as ssn_prefix, count(*) as cnt
 from employees
 group by substring(ssn, 1, 3)
@@ -668,7 +668,7 @@ order by ssn_prefix;
 456 1
 
 ## Test 25: Window function with masked columns
-query ITTII
+query ITTFF
 select
   id,
   name,
@@ -683,7 +683,7 @@ order by id;
 3 Charlie Engineering 60000.0 160000.0
 
 ## Test 26: CTE with masked columns and GROUP BY
-query TI
+query TF
 with dept_stats as (
   select department, sum(salary) as total_salary
   from employees
@@ -750,7 +750,7 @@ CREATE MASKING POLICY mask_simple AS (val INT) RETURNS INT -> CASE WHEN current_
 statement ok
 ALTER TABLE t_test MODIFY COLUMN sensitive SET MASKING POLICY mask_simple;
 
-query T
+query IAII
 select * from t_test;
 ----
 1 [1,2,3] -1 10

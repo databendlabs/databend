@@ -31,6 +31,7 @@ use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnId;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
@@ -357,35 +358,77 @@ impl Binder {
                     .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
                     .is_ok()
                 {
-                    // Create column ref and apply masking policy if needed
-                    let column_ref = Expr::ColumnRef {
-                        span,
-                        column: ColumnRef {
-                            database: column_binding
-                                .database_name
-                                .as_ref()
-                                .map(|db| Identifier::from_name(span, db.clone())),
-                            table: column_binding
-                                .table_name
-                                .as_ref()
-                                .map(|tbl| Identifier::from_name(span, tbl.clone())),
-                            column: ColumnID::Name(Identifier::from_name(
-                                span,
-                                column_binding.column_name.clone(),
-                            )),
-                        },
+                    let column_ref = ColumnRef {
+                        database: column_binding
+                            .database_name
+                            .as_ref()
+                            .map(|db| Identifier::from_name(span, db.clone())),
+                        table: column_binding
+                            .table_name
+                            .as_ref()
+                            .map(|tbl| Identifier::from_name(span, tbl.clone())),
+                        column: ColumnID::Name(Identifier::from_name(
+                            span,
+                            column_binding.column_name.clone(),
+                        )),
                     };
 
-                    let mut bind_context = input_context.clone();
-                    let mut scalar_binder = ScalarBinder::new(
-                        &mut bind_context,
-                        self.ctx.clone(),
-                        &self.name_resolution_ctx,
-                        self.metadata.clone(),
-                        &[],
-                    );
-                    let (scalar, _) = scalar_binder.bind(&column_ref)?;
-                    scalar
+                    let table_index = column_binding.table_index;
+                    if let Some(table_index) = table_index {
+                        let metadata = self.metadata.read();
+                        let table = metadata.table(table_index);
+                        let table_ref = table.table();
+                        let table_info_ref = table_ref.get_table_info();
+
+                        // Use column ID from ColumnRef
+                        if let ColumnID::Name(ident) = &column_ref.column {
+                            // Can not find the field by name to get column_id
+                            let masked_column_ids_set: HashSet<&ColumnId> = table_info_ref
+                                .meta
+                                .column_mask_policy_columns_ids
+                                .keys()
+                                .collect();
+
+                            let masked_column_names: HashSet<String> = table_info_ref
+                                .meta
+                                .schema
+                                .fields()
+                                .iter()
+                                .filter(|f| masked_column_ids_set.contains(&f.column_id))
+                                .map(|f| f.name().to_owned())
+                                .collect();
+                            if !masked_column_names.contains(&ident.name) {
+                                return Ok(SelectItem {
+                                    select_target,
+                                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                        span,
+                                        column: column_binding.clone(),
+                                    }),
+                                    alias: column_binding.column_name.clone(),
+                                });
+                            }
+                        }
+                        let column_ref = Expr::ColumnRef {
+                            span,
+                            column: column_ref,
+                        };
+
+                        let mut bind_context = input_context.clone();
+                        let mut scalar_binder = ScalarBinder::new(
+                            &mut bind_context,
+                            self.ctx.clone(),
+                            &self.name_resolution_ctx,
+                            self.metadata.clone(),
+                            &[],
+                        );
+                        let (scalar, _) = scalar_binder.bind(&column_ref)?;
+                        scalar
+                    } else {
+                        ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span,
+                            column: column_binding.clone(),
+                        })
+                    }
                 } else {
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span,

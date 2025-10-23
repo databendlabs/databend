@@ -6639,7 +6639,10 @@ impl<'a> TypeChecker<'a> {
                     // Replace parameters in the expression
                     let expr = Self::clone_expr_with_replacement(&ast_expr, |nest_expr| {
                         if let Expr::ColumnRef { column, .. } = nest_expr {
-                            if let Some(arg) = args_map.get(column.column.name()) {
+                            // args in masking policy always lowercase
+                            if let Some(arg) =
+                                args_map.get(column.column.name().to_lowercase().as_str())
+                            {
                                 return Ok(Some(arg.clone()));
                             }
                         }
