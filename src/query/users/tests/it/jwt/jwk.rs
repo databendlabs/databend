@@ -46,30 +46,29 @@ async fn test_jwk_store_with_random_keys() -> Result<()> {
         .with_retry_interval(0);
 
     mock_jwks_loader.reset_keys(&["key1", "key2"]);
-    let key = jwk_store.get_key(&None).await?;
+    let key = jwk_store.get_key("key1", true).await?;
     assert!(key.is_some());
-    let key = jwk_store.get_key(&Some("key1".to_string())).await?;
-    assert!(key.is_some());
-    let key = jwk_store.get_key(&Some("key3".to_string())).await?;
+    let key = jwk_store.get_key("key3", true).await?;
     assert!(key.is_none());
 
     mock_jwks_loader.reset_keys(&["key3", "key4"]);
-    let key = jwk_store.get_key(&Some("key3".to_string())).await?;
+    let key = jwk_store.get_key("key3", true).await?;
     assert!(key.is_some());
-    let key = jwk_store.get_key(&Some("key4".to_string())).await?;
+    let key = jwk_store.get_key("key4", true).await?;
     assert!(key.is_some());
-    let key = jwk_store.get_key(&Some("key5".to_string())).await?;
+    let key = jwk_store.get_key("key5", true).await?;
     assert!(key.is_none());
-    let key = jwk_store.get_key(&Some("key1".to_string())).await?;
+    let key = jwk_store.get_key("key1", true).await?;
     assert!(key.is_some());
 
     mock_jwks_loader.reset_keys(&["key5", "key6"]);
-    let key = jwk_store.get_key(&Some("key5".to_string())).await?;
+    let key = jwk_store.get_key("key5", true).await?;
     assert!(key.is_some());
-    let key = jwk_store.get_key(&Some("key6".to_string())).await?;
+    let key = jwk_store.get_key("key6", true).await?;
     assert!(key.is_some());
-    let key = jwk_store.get_key(&Some("key1".to_string())).await?;
+    let key = jwk_store.get_key("key1", true).await?;
     assert!(key.is_none());
+
     Ok(())
 }
 
@@ -83,17 +82,15 @@ async fn test_jwk_store_with_random_keys_and_long_retry_interval() -> Result<()>
         .with_retry_interval(3600);
 
     mock_jwks_loader.reset_keys(&["key1", "key2"]);
-    let key = jwk_store.get_key(&None).await?;
+    let key = jwk_store.get_key("key1", true).await?;
     assert!(key.is_some());
-    let key = jwk_store.get_key(&Some("key1".to_string())).await?;
-    assert!(key.is_some());
-    let key = jwk_store.get_key(&Some("key3".to_string())).await?;
+    let key = jwk_store.get_key("key3", true).await?;
     assert!(key.is_none());
 
     mock_jwks_loader.reset_keys(&["key3", "key4"]);
-    let key = jwk_store.get_key(&Some("key3".to_string())).await?;
+    let key = jwk_store.get_key("key3", true).await?;
     assert!(key.is_none());
-    let key = jwk_store.get_key(&Some("key4".to_string())).await?;
+    let key = jwk_store.get_key("key4", true).await?;
     assert!(key.is_none());
 
     Ok(())

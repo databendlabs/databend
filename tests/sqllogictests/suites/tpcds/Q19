@@ -1,5 +1,5 @@
 # Q19
-query I
+query ITITR
 SELECT i_brand_id brand_id,
        i_brand brand,
        i_manufact_id,

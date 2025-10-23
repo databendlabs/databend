@@ -17,6 +17,7 @@ use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskId;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 
@@ -39,5 +40,11 @@ pub trait DatamaskApi: Send + Sync {
     async fn get_data_mask(
         &self,
         name_ident: &DataMaskNameIdent,
+    ) -> Result<Option<SeqV<DatamaskMeta>>, MetaError>;
+
+    async fn get_data_mask_by_id(
+        &self,
+        tenant: &Tenant,
+        policy_id: u64,
     ) -> Result<Option<SeqV<DatamaskMeta>>, MetaError>;
 }

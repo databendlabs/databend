@@ -62,14 +62,12 @@ impl AsyncSource for BroadcastSourceProcessor {
 }
 
 pub struct BroadcastSinkProcessor {
-    received: Vec<BlockMetaInfoPtr>,
     sender: Sender<BlockMetaInfoPtr>,
 }
 
 impl BroadcastSinkProcessor {
     pub fn create(input: Arc<InputPort>, sender: Sender<BlockMetaInfoPtr>) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(input, Self {
-            received: vec![],
             sender,
         })))
     }

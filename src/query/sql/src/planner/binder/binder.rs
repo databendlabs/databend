@@ -862,6 +862,25 @@ impl Binder {
         normalize_identifier(ident, &self.name_resolution_ctx)
     }
 
+    /// Bind an expr to a scalar expression.
+    /// Used to fold expr to a constant expr.
+    pub(crate) fn bind_expr(
+        &mut self,
+        expr: &databend_common_ast::ast::Expr,
+    ) -> Result<ScalarExpr> {
+        let mut temp_ctx = BindContext::new();
+        let mut type_checker = TypeChecker::try_create(
+            &mut temp_ctx,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            false,
+        )?;
+        let (scalar, _) = *type_checker.resolve(expr)?;
+        Ok(scalar)
+    }
+
     pub(crate) fn opt_hints_set_var(
         &mut self,
         bind_context: &mut BindContext,

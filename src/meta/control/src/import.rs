@@ -41,6 +41,7 @@ use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::LogEntry;
 use databend_meta::store::RaftStore;
+use display_more::display_option::DisplayOptionExt;
 use raft_log::api::raft_log_writer::RaftLogWriter;
 use url::Url;
 
@@ -129,6 +130,8 @@ async fn import_from_stdin_or_file(args: &ImportArgs) -> anyhow::Result<Option<L
     let raft_config: RaftConfig = args.clone().into();
     upgrade::upgrade(&raft_config).await?;
 
+    eprintln!("Finished import, max_log_id: '{}'", max_log_id.display());
+
     Ok(max_log_id)
 }
 
@@ -206,7 +209,6 @@ async fn init_new_cluster(
     };
 
     let last_log_id = std::cmp::max(last_applied, max_log_id);
-    let mut log_id = last_log_id.unwrap_or(new_log_id(0, 0, 0));
 
     let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
     let membership = Membership::new_with_defaults(vec![node_ids], []);
@@ -230,7 +232,12 @@ async fn init_new_cluster(
     // Update logs: add nodes and override membership
     {
         // insert membership log
-        log_id.index += 1;
+        let mut log_id = last_log_id
+            .map(|mut log_id| {
+                log_id.index += 1;
+                log_id
+            })
+            .unwrap_or(new_log_id(0, 0, 0));
 
         let entry: Entry = Entry {
             log_id,

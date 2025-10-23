@@ -1,5 +1,5 @@
 # Q35
-query I
+query TTTIIIIRIIIIRIIIIR
 SELECT ca_state,
        cd_gender,
        cd_marital_status,

@@ -439,17 +439,18 @@ def stage_summary(data_stage: StageLocation, value: int) -> str:
     result_type="INT",
 )
 def multi_stage_process(
-        input_stage: StageLocation, output_stage: StageLocation, value: int
+    input_stage: StageLocation, output_stage: StageLocation, value: int
 ) -> int:
     assert input_stage.storage and output_stage.storage
     assert input_stage.stage_type.lower() == "external"
     assert output_stage.stage_type.lower() == "external"
     # Simple deterministic behaviour for testing
     return (
-            value
-            + len(input_stage.storage.get("bucket", ""))
-            + len(output_stage.storage.get("bucket", ""))
+        value
+        + len(input_stage.storage.get("bucket", ""))
+        + len(output_stage.storage.get("bucket", ""))
     )
+
 
 @udf(
     stage_refs=["input_stage", "output_stage"],
@@ -457,17 +458,18 @@ def multi_stage_process(
     result_type="INT",
 )
 def immutable_multi_stage_process(
-        input_stage: StageLocation, output_stage: StageLocation, value: str
+    input_stage: StageLocation, output_stage: StageLocation, value: str
 ) -> int:
     assert input_stage.storage and output_stage.storage
     assert input_stage.stage_type.lower() == "external"
     assert output_stage.stage_type.lower() == "external"
     # Simple deterministic behaviour for testing
     return (
-            len(value)
-            + len(input_stage.storage.get("bucket", ""))
-            + len(output_stage.storage.get("bucket", ""))
+        len(value)
+        + len(input_stage.storage.get("bucket", ""))
+        + len(output_stage.storage.get("bucket", ""))
     )
+
 
 if __name__ == "__main__":
     udf_server = CheckHeadersServer(

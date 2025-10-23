@@ -369,6 +369,8 @@ impl Binder {
             .with_column("actual_row_count")
             .with_column("distinct_count")
             .with_column("null_count")
+            .with_column("min")
+            .with_column("max")
             .with_column("avg_size")
             .with_column("histogram");
 
@@ -2168,9 +2170,7 @@ impl Binder {
             }
 
             let mut cluster_expr = cluster_expr.clone();
-            let mut normalizer = IdentifierNormalizer {
-                ctx: &self.name_resolution_ctx,
-            };
+            let mut normalizer = IdentifierNormalizer::new(&self.name_resolution_ctx);
             cluster_expr.drive_mut(&mut normalizer);
             cluster_keys.push(format!("{:#}", &cluster_expr));
         }

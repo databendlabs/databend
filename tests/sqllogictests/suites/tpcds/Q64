@@ -1,5 +1,5 @@
 # Q64
-query I
+query TTTTTTTTTTTIIRRRRRRII
 WITH cs_ui AS
   (SELECT cs_item_sk,
           sum(cs_ext_list_price) AS sale,

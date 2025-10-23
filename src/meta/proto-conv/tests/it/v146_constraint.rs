@@ -66,6 +66,7 @@ fn test_decode_v146_constraint() -> anyhow::Result<()> {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: None,
+        column_mask_policy_columns_ids: BTreeMap::new(),
         row_access_policy: None,
         row_access_policy_columns_ids: None,
         indexes: BTreeMap::default(),

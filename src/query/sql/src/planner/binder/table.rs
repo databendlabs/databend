@@ -39,7 +39,6 @@ use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
-use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -58,7 +57,7 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
-use databend_common_meta_app::schema::RowAccessPolicyColumnMap;
+use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::StageFileInfo;
@@ -494,7 +493,7 @@ impl Binder {
         table_index: IndexType,
         bind_context: &mut BindContext,
         scan_s_expr: SExpr,
-        policy: &RowAccessPolicyColumnMap,
+        policy: &SecurityPolicyColumnMap,
         fields: &[TableField],
     ) -> Result<SExpr> {
         LicenseManagerSwitch::instance()
@@ -580,12 +579,12 @@ impl Binder {
 
     pub fn resolve_data_source(
         &self,
+        ctx: &Arc<dyn TableContext>,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
         navigation: Option<&TimeNavigation>,
         max_batch_size: Option<u64>,
-        abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         databend_common_base::runtime::block_on(async move {
             // Resolve table with ctx
@@ -598,7 +597,7 @@ impl Binder {
                 .await?;
 
             if let Some(desc) = navigation {
-                table_meta = table_meta.navigate_to(desc, abort_checker).await?;
+                table_meta = table_meta.navigate_to(ctx, desc).await?;
             }
             Ok(table_meta)
         })
@@ -750,7 +749,11 @@ impl Binder {
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         let catalog = self
             .catalogs
-            .get_catalog(tenant.tenant_name(), catalog_name, self.ctx.session_state())
+            .get_catalog(
+                tenant.tenant_name(),
+                catalog_name,
+                self.ctx.session_state()?,
+            )
             .await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))

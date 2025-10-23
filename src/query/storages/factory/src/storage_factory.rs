@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use dashmap::mapref::one::Ref;
-use dashmap::DashMap;
 pub use databend_common_catalog::catalog::StorageDescription;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_storages_basic::view_table::ViewTable;
 use databend_common_storages_basic::MemoryTable;
 use databend_common_storages_basic::NullTable;
@@ -46,11 +46,23 @@ where
     }
 }
 
-pub struct FuseTableCreator {}
+#[derive(Default, Clone)]
+pub struct FuseTableCreator {
+    s3_storage_class_spec: Option<S3StorageClass>,
+}
+
+impl FuseTableCreator {
+    fn with_storage_class_spec(storage_class_spec: S3StorageClass) -> FuseTableCreator {
+        Self {
+            s3_storage_class_spec: Some(storage_class_spec),
+        }
+    }
+}
 
 impl StorageCreator for FuseTableCreator {
     fn try_create(&self, table_info: TableInfo, disable_refresh: bool) -> Result<Box<dyn Table>> {
-        FuseTable::try_create_ext(table_info, disable_refresh)
+        let tbl = FuseTable::try_create(table_info, self.s3_storage_class_spec, disable_refresh)?;
+        Ok(tbl)
     }
 }
 
@@ -68,19 +80,31 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct Storage {
     creator: Arc<dyn StorageCreator>,
     descriptor: Arc<dyn StorageDescriptor>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct StorageFactory {
-    storages: DashMap<String, Storage>,
+    storages: HashMap<String, Storage>,
 }
 
 impl StorageFactory {
+    pub fn with_storage_class_specs(&self, storage_class: S3StorageClass) -> Self {
+        let mut new_creators = self.storages.clone();
+        new_creators.insert("FUSE".to_string(), Storage {
+            creator: Arc::new(FuseTableCreator::with_storage_class_spec(storage_class)),
+            descriptor: Arc::new(FuseTable::description),
+        });
+
+        Self {
+            storages: new_creators,
+        }
+    }
     pub fn create(conf: InnerConfig) -> Self {
-        let creators: DashMap<String, Storage> = Default::default();
+        let mut creators: HashMap<String, Storage> = Default::default();
 
         // Register memory table engine.
         if conf.query.table_engine_memory_enabled {
@@ -98,7 +122,8 @@ impl StorageFactory {
 
         // Register FUSE table engine.
         creators.insert("FUSE".to_string(), Storage {
-            creator: Arc::new(FuseTableCreator {}),
+            // TODO should get default storage specs
+            creator: Arc::new(FuseTableCreator::default()),
             descriptor: Arc::new(FuseTable::description),
         });
 
@@ -148,7 +173,7 @@ impl StorageFactory {
         Ok(table)
     }
 
-    fn get_storage_factory(&self, table_info: &TableInfo) -> Result<Ref<String, Storage>> {
+    fn get_storage_factory(&self, table_info: &TableInfo) -> Result<&Storage> {
         let engine = table_info.engine().to_uppercase();
         self.storages.get(&engine).ok_or_else(|| {
             ErrorCode::UnknownTableEngine(format!("Unknown table engine {}", engine))
@@ -157,9 +182,9 @@ impl StorageFactory {
 
     pub fn get_storage_descriptors(&self) -> Vec<StorageDescription> {
         let mut descriptors = Vec::with_capacity(self.storages.len());
-        let it = self.storages.iter();
+        let it = self.storages.values();
         for entry in it {
-            descriptors.push(entry.value().descriptor.description())
+            descriptors.push(entry.descriptor.description())
         }
         descriptors
     }

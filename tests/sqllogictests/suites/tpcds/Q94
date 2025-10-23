@@ -1,5 +1,5 @@
 # Q94
-query I
+query IRR
 
 SELECT count(DISTINCT ws_order_number) AS "order count" ,
        sum(ws_ext_ship_cost) AS "total shipping cost" ,

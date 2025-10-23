@@ -528,7 +528,7 @@ impl QueryContextShared {
             .get_catalog(
                 tenant.tenant_name(),
                 catalog_name,
-                self.session.session_ctx.session_state(),
+                self.session.session_ctx.session_state()?,
             )
             .await?;
         let cache_table = catalog.get_table(&tenant, database, table).await?;
@@ -579,6 +579,7 @@ impl QueryContextShared {
                                     &source_database_name,
                                     &source_table_name,
                                     max_batch_size,
+                                    self.get_settings().get_s3_storage_class()?,
                                 )
                                 .await?;
                             catalog.cache_stream_source_table(

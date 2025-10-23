@@ -21,7 +21,6 @@ use chrono::TimeDelta;
 use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -207,11 +206,11 @@ pub async fn do_vacuum2(
 
     let start = std::time::Instant::now();
     let Some((gc_root, snapshots_to_gc, gc_root_meta_ts)) = select_gc_root(
+        &ctx,
         fuse_table,
         &snapshots_before_lvt,
         is_vacuum_all,
         respect_flash_back_with_lvt,
-        ctx.clone().get_abort_checker(),
     )
     .await?
     else {
@@ -628,11 +627,11 @@ async fn read_snapshot_from_location(
 }
 
 async fn select_gc_root(
+    ctx: &Arc<dyn TableContext>,
     fuse_table: &FuseTable,
     snapshots_before_lvt: &[Entry],
     is_vacuum_all: bool,
     respect_flash_back: Option<DateTime<Utc>>,
-    abort_checker: AbortChecker,
 ) -> Result<Option<(Arc<TableSnapshot>, Vec<String>, DateTime<Utc>)>> {
     let gc_root_path = if is_vacuum_all {
         // safe to unwrap, or we should have stopped vacuuming in set_lvt()
@@ -640,7 +639,7 @@ async fn select_gc_root(
     } else if let Some(lvt) = respect_flash_back {
         let latest_location = fuse_table.snapshot_loc().unwrap();
         let gc_root = fuse_table
-            .find(latest_location, abort_checker, |snapshot| {
+            .find(ctx, latest_location, |snapshot| {
                 snapshot.timestamp.is_some_and(|ts| ts <= lvt)
             })
             .await?

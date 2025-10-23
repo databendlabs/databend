@@ -1,5 +1,5 @@
 # Q36
-query I
+query RTTII
 WITH results AS
   (SELECT sum(ss_net_profit) AS ss_net_profit,
           sum(ss_ext_sales_price) AS ss_ext_sales_price,

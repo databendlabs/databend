@@ -1,5 +1,5 @@
 # Q67
-query I
+query TTTTIIITRI
 SELECT *
 FROM
   (SELECT i_category,

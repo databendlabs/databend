@@ -49,10 +49,11 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
+use databend_common_pipeline_transforms::columns::TransformAddInternalColumns;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::plans::FunctionCall;
@@ -82,7 +83,6 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::AddStreamColumn;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::pipelines::processors::transforms::TransformAddInternalColumns;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -530,7 +530,7 @@ impl PhysicalPlanBuilder {
     pub async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
-            .get_default_catalog(self.ctx.session_state())?
+            .get_default_catalog(self.ctx.session_state()?)?
             .get_table(&self.ctx.get_tenant(), "system", "one")
             .await?;
 

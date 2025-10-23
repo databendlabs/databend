@@ -1,5 +1,5 @@
 # Q28
-query I
+query RIIRIIRIIRIIRIIRII
 SELECT *
 FROM
   (SELECT avg(ss_list_price) B1_LP,

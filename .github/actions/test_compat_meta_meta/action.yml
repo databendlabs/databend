@@ -10,11 +10,11 @@ runs:
 
     - name: Test compatibility
       shell: bash
-      # test-*.sh <leader-meta-ver> <follower-meta-ver>
+      # test-*.py <leader-meta-ver> <follower-meta-ver>
       # 1.2.288 is the first version after 1.2.212 that has built a binary.
       run: |
-        bash ./tests/compat/meta_meta/test_meta_meta.sh         1.2.547  current
-        bash ./tests/compat/meta_meta/test_meta_meta.sh         current  1.2.547
+        python ./tests/compat/meta_meta/test_meta_meta.py         1.2.547  current
+        python ./tests/compat/meta_meta/test_meta_meta.py         current  1.2.547
 
     - name: Upload failure
       if: failure()

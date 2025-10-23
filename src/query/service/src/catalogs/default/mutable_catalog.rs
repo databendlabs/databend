@@ -129,6 +129,7 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::UnknownError;
 use databend_common_meta_app::KeyWithTenant;
@@ -222,6 +223,21 @@ impl MutableCatalog {
             tenant,
             disable_table_info_refresh: false,
         })
+    }
+
+    pub fn with_storage_class_spec(self, storage_class: S3StorageClass) -> Self {
+        let storage_factor = self
+            .ctx
+            .storage_factory
+            .with_storage_class_specs(storage_class);
+
+        Self {
+            ctx: CatalogContext {
+                storage_factory: Arc::new(storage_factor),
+                ..self.ctx
+            },
+            ..self
+        }
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
@@ -739,10 +755,12 @@ impl Catalog for MutableCatalog {
             .collect();
 
         info!(
-            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}], req={:?}",
+            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}], copied_files_len={}, deduplicated_labels_len={}, update_temp_tables_len={}",
             table_updates.join("; "),
             stream_updates.join("; "),
-            req
+            req.copied_files.len(),
+            req.deduplicated_labels.len(),
+            req.update_temp_tables.len()
         );
         let begin = Instant::now();
         let res = self.ctx.meta.update_multi_table_meta(req).await;

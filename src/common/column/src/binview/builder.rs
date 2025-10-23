@@ -124,6 +124,10 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
         self.views.capacity()
     }
 
+    pub fn memory_size(&self) -> usize {
+        self.views.len() * 16 + self.total_buffer_len
+    }
+
     /// # Safety
     /// - caller must allocate enough capacity
     /// - caller must ensure the view and buffers match.

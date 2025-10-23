@@ -22,9 +22,6 @@ statement ok
 USE test_virtual_column
 
 statement ok
-set enable_experimental_virtual_column = 1;
-
-statement ok
 drop table if exists t1
 
 statement ok
@@ -329,11 +326,26 @@ id 10 0 4 (empty)
 data['create'] 10 0 16 (empty)
 data['id'] 10 0 8 (empty)
 data['replies'] 7 3 8 (empty)
-data['text'] 7 0 13 (empty)
+data['text'] 7 0 16 (empty)
 data['user']['id'] 6 0 8 (empty)
 data['likes'] 2 0 1 (empty)
 data['tags'][0] 2 0 3 (empty)
-data['tags'][1] 2 0 4 (empty)
+data['tags'][1] 2 0 3 (empty)
+
+query TTTIIIITTIT
+SHOW STATISTICS FROM TABLE test_virtual_column.tweets;
+----
+test_virtual_column tweets data 10 10 NULL NULL NULL NULL NULL (empty)
+test_virtual_column tweets data['create'] 10 10 10 0 1/08 6/07 16 (empty)
+test_virtual_column tweets data['id'] 10 10 10 0 1 10 8 (empty)
+test_virtual_column tweets data['likes'] 10 10 2 0 10 25 1 (empty)
+test_virtual_column tweets data['replies'] 10 10 7 3 0 9 8 (empty)
+test_virtual_column tweets data['tags'][0] 10 10 2 0 good new 3 (empty)
+test_virtual_column tweets data['tags'][1] 10 10 2 0 interesting popular 3 (empty)
+test_virtual_column tweets data['text'] 10 10 7 0 a z 16 (empty)
+test_virtual_column tweets data['user']['id'] 10 10 6 0 1 7 8 (empty)
+test_virtual_column tweets id 10 10 10 0 1 10 4 (empty)
+
 
 statement ok
 UPDATE tweets SET data = '{"id":4, "create": "1/08", "text": "aa", "user": {"id": 1}, "replies": 10}' WHERE id = 4;
@@ -345,8 +357,19 @@ id 10 0 4 (empty)
 data['create'] 10 0 16 (empty)
 data['id'] 10 0 8 (empty)
 data['replies'] 7 3 8 (empty)
-data['text'] 8 0 13 (empty)
+data['text'] 8 0 16 (empty)
 data['user']['id'] 4 0 8 (empty)
+
+query TTTIIIITTIT
+SHOW STATISTICS FROM TABLE test_virtual_column.tweets;
+----
+test_virtual_column tweets data 10 10 NULL NULL NULL NULL NULL (empty)
+test_virtual_column tweets data['create'] 10 10 10 0 1/08 6/07 16 (empty)
+test_virtual_column tweets data['id'] 10 10 10 0 1 10 8 (empty)
+test_virtual_column tweets data['replies'] 10 10 7 3 0 10 8 (empty)
+test_virtual_column tweets data['text'] 10 10 8 0 a z 16 (empty)
+test_virtual_column tweets data['user']['id'] 10 10 4 0 1 7 8 (empty)
+test_virtual_column tweets id 10 10 10 0 1 10 4 (empty)
 
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
@@ -760,4 +783,3 @@ set enable_experimental_virtual_column = 0;
 
 statement ok
 DROP DATABASE test_virtual_column
-

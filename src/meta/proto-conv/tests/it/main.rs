@@ -144,3 +144,5 @@ mod v149_field_auto_increment;
 mod v150_role_comment;
 mod v151_row_access_column_map;
 mod v152_external_udf;
+mod v153_security_column_map;
+mod v154_vacuum_watermark;

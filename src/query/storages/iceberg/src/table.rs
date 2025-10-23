@@ -35,7 +35,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -604,8 +603,8 @@ impl Table for IcebergTable {
     #[async_backtrace::framed]
     async fn navigate_to(
         &self,
+        _ctx: &Arc<dyn TableContext>,
         navigation: &TimeNavigation,
-        _abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         let snapshot_id = match navigation {
             TimeNavigation::TimeTravel(np) => match np {

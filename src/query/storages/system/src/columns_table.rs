@@ -73,7 +73,7 @@ impl AsyncSystemTable for ColumnsTable {
             .get_catalog(
                 ctx.get_tenant().tenant_name(),
                 self.get_table_info().catalog(),
-                ctx.session_state(),
+                ctx.session_state()?,
             )
             .await?;
         let rows = self.dump_table_columns(ctx, push_downs, &catalog).await?;

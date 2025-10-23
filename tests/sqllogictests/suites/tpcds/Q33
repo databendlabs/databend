@@ -1,5 +1,5 @@
 # Q33
-query I
+query IR
 WITH ss AS
   ( SELECT i_manufact_id,
            sum(ss_ext_sales_price) total_sales

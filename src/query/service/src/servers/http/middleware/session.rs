@@ -447,7 +447,7 @@ impl<E> HTTPSessionEndpoint<E> {
             let sid = s.header.id.clone();
             session.set_client_session_id(sid.clone());
             login_history.session_id = sid.clone();
-            if !s.is_new_session {
+            if !s.is_new_session || is_worksheet {
                 // if session enabled by client:
                 //     log for the first request of the session.
                 // else:

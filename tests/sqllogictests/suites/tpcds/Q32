@@ -1,5 +1,5 @@
 # Q32
-query I
+query R
 SELECT sum(cs_ext_discount_amt) AS "excess discount amount"
 FROM catalog_sales ,
      item ,

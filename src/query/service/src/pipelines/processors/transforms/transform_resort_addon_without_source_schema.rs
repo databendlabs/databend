@@ -27,9 +27,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::SourceSchemaIndex;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::parse_exprs;
 use databend_common_storages_factory::Table;
 

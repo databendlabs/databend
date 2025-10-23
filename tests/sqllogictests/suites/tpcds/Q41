@@ -1,5 +1,5 @@
 # Q41
-query I
+query T
 SELECT distinct(i_product_name)
 FROM item i1
 WHERE i_manufact_id BETWEEN 738 AND 738+40

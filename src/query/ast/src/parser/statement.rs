@@ -226,22 +226,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             EXECUTE ~ TASK ~ #ident
         },
-        |(_, _, task)| {
-            Statement::ExecuteTask(ExecuteTaskStmt {
-                name: task.to_string(),
-            })
-        },
+        |(_, _, task)| Statement::ExecuteTask(ExecuteTaskStmt { name: task }),
     );
 
     let desc_task = map(
         rule! {
             ( DESC | DESCRIBE ) ~ TASK ~ #ident
         },
-        |(_, _, task)| {
-            Statement::DescribeTask(DescribeTaskStmt {
-                name: task.to_string(),
-            })
-        },
+        |(_, _, task)| Statement::DescribeTask(DescribeTaskStmt { name: task }),
     );
 
     let merge = map(
@@ -2005,12 +1997,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
         },
-        |(_, name, _, args, _)| {
-            Statement::Call(CallStmt {
-                name: name.to_string(),
-                args,
-            })
-        },
+        |(_, name, _, args, _)| Statement::Call(CallStmt { name, args }),
     );
 
     let vacuum_temporary_tables = map(
@@ -2019,7 +2006,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, _, opt_limit)| {
             Statement::Call(CallStmt {
-                name: "fuse_vacuum_temporary_table".to_string(),
+                name: Identifier::from_name(None, "fuse_vacuum_temporary_table"),
                 args: opt_limit.map(|v| v.1.to_string()).into_iter().collect(),
             })
         },
@@ -2418,7 +2405,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let execute_immediate = map(
         rule! {
-            EXECUTE ~ IMMEDIATE ~ #code_string
+            EXECUTE ~ IMMEDIATE ~ #expr
         },
         |(_, _, script)| Statement::ExecuteImmediate(ExecuteImmediateStmt { script }),
     );
@@ -2556,7 +2543,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, name, _, opt_args, _)| {
             Statement::CallProcedure(CallProcedureStmt {
-                name: name.to_string(),
+                name,
                 args: opt_args.unwrap_or_default(),
             })
         },
@@ -5317,10 +5304,10 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
     let lambda_udf = map(
         rule! {
-            AS ~ "(" ~ #comma_separated_list0(ident) ~ ")"
+            AS ~ #lambda_udf_params
             ~ "->" ~ #expr
         },
-        |(_, _, parameters, _, _, definition)| UDFDefinition::LambdaUDF {
+        |(_, parameters, _, definition)| UDFDefinition::LambdaUDF {
             parameters,
             definition: Box::new(definition),
         },
@@ -5354,11 +5341,6 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             address_or_code,
         )| {
             if address_or_code.1 {
-                let UDFArgs::Types(arg_types) = arg_types else {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
-                        "UDFScript parameters can only be of type",
-                    )));
-                };
                 Ok(UDFDefinition::UDFScript {
                     arg_types,
                     return_type,
@@ -5439,11 +5421,6 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             address_or_code,
         )| {
             if address_or_code.1 {
-                let UDFArgs::Types(arg_types) = arg_types else {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
-                        "UDAFScript parameters can only be of type",
-                    )));
-                };
                 Ok(UDFDefinition::UDAFScript {
                     arg_types,
                     state_fields: state_types,
@@ -5476,10 +5453,30 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
     );
 
     rule!(
-        #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
-        | #udaf: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
-        | #udf: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
-        | #scalar_udf_or_udtf: "(<arg_type>, ...) RETURNS <return body> AS <sql> }"
+        #lambda_udf: "AS (<parameter [parameter type]>, ...) -> <definition expr>"
+        | #udaf: "(<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+        | #udf: "(<[arg_name] arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+        | #scalar_udf_or_udtf: "(<arg_name arg_type>, ...) RETURNS <return body> AS <sql> }"
+    )(i)
+}
+
+fn lambda_udf_params(i: Input) -> IResult<LambdaUDFParams> {
+    let names = map(
+        rule! {
+            "(" ~ #comma_separated_list0(ident) ~ ")"
+        },
+        |(_, names, _)| LambdaUDFParams::Names(names),
+    );
+    let name_with_types = map(
+        rule! {
+            "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
+        },
+        |(_, name_with_types, _)| LambdaUDFParams::NameWithTypes(name_with_types),
+    );
+
+    rule!(
+        #names: "(<arg_name>, ...)"
+        | #name_with_types: "(<arg_name arg_type>, ...)"
     )(i)
 }
 

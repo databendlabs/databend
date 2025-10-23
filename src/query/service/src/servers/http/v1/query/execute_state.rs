@@ -251,6 +251,15 @@ impl Executor {
         }
     }
 
+    pub fn update_schema(this: &Arc<Mutex<Executor>>, schema: DataSchemaRef) {
+        let mut guard = this.lock();
+        match &mut guard.state {
+            Starting(_) => {}
+            Running(r) => r.schema = QueryResponseField::from_schema(schema),
+            Stopped(f) => f.schema = QueryResponseField::from_schema(schema),
+        }
+    }
+
     pub fn get_query_duration_ms(&self) -> i64 {
         match &self.state {
             Starting(ExecuteStarting { ctx, .. }) | Running(ExecuteRunning { ctx, .. }) => {
@@ -375,12 +384,15 @@ impl ExecuteState {
             .await
             .with_context(make_error)?;
         let has_result_set = plan.has_result_set();
-        let schema = if has_result_set {
+        // For dynamic schema, we just return empty schema and update it later.
+        let is_dynamic_schema = plan.is_dynamic_schema();
+        let schema = if has_result_set && !is_dynamic_schema {
             // check has_result_set first for safety
             QueryResponseField::from_schema(plan.schema())
         } else {
             vec![]
         };
+
         let running_state = ExecuteRunning {
             session,
             ctx: ctx.clone(),
@@ -397,6 +409,7 @@ impl ExecuteState {
 
         let res = Self::pull_and_send(
             interpreter,
+            is_dynamic_schema,
             plan.schema(),
             ctx_clone,
             block_sender,
@@ -420,6 +433,7 @@ impl ExecuteState {
     #[fastrace::trace(name = "ExecuteState::pull_and_send")]
     async fn pull_and_send(
         interpreter: Arc<dyn Interpreter>,
+        is_dynamic_schema: bool,
         schema: DataSchemaRef,
         ctx: Arc<QueryContext>,
         mut sender: Sender,
@@ -444,6 +458,15 @@ impl ExecuteState {
                 sender.abort();
             }
             Some(Ok(block)) => {
+                if is_dynamic_schema {
+                    if let Some(schema) = interpreter.get_dynamic_schema().await {
+                        info!(
+                            "[HTTP-QUERY] Dynamic schema detected, updating schema to have {} fields",
+                            schema.fields().len()
+                        );
+                        Executor::update_schema(&executor, schema);
+                    }
+                }
                 Self::send_data_block(&mut sender, &executor, block)
                     .await
                     .with_context(make_error)?;
