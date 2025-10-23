@@ -32,7 +32,6 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use log::info;
 use parking_lot::Mutex;
 use tokio::sync::Barrier;
 
@@ -123,7 +122,6 @@ impl FinalAggregateSharedState {
             self.last_round_is_spilled = self.is_spilled;
             if self.is_spilled {
                 self.is_spilled = false;
-                info!("FinalAggregateSharedState begin flush spilled repartitioned queues to pending queues");
                 // flush all repartitioned queues to pending queues
                 let queues = self.repartitioned_queues.take_queues();
                 for queue in queues.0.into_iter() {
@@ -136,7 +134,6 @@ impl FinalAggregateSharedState {
 
             // pop a queue and repartition in datablock level
             if let Some(queue) = self.pending_queues.pop() {
-                info!("FinalAggregateSharedState prepare next round datablocks from pending queues {:?}", queue);
                 self.next_round =
                     split_partitioned_meta_into_datablocks(0, queue, self.partition_count);
             }
@@ -375,7 +372,12 @@ impl NewFinalAggregateTransform {
             self.params.empty_result_block()
         };
 
-        self.state = LocalState::OutputReady(output_block);
+        if output_block.is_empty() {
+            self.state = LocalState::Idle;
+        } else {
+            self.state = LocalState::OutputReady(output_block);
+        }
+
         Ok(())
     }
 
@@ -544,13 +546,13 @@ impl Processor for NewFinalAggregateTransform {
         self
     }
     fn event(&mut self) -> Result<Event> {
-        let before_state = self.state.to_string();
+        let _before_state = self.state.to_string();
         let event = self.debug_event()?;
-        let after_state = self.state.to_string();
-        info!(
-            "NewFinalAggregateTransform[{}] return event: {:?}, state: {} -> {}",
-            self.id, event, before_state, after_state
-        );
+        let _after_state = self.state.to_string();
+        // info!(
+        //     "NewFinalAggregateTransform[{}] return event: {:?}, state: {} -> {}",
+        //     self.id, event, before_state, after_state
+        // );
         Ok(event)
     }
 
