@@ -399,6 +399,7 @@ opendal = { version = "0.53.2", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
+    "layers-blocking",
     "services-s3",
     "services-fs",
     "services-gcs",

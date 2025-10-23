@@ -26,6 +26,7 @@ use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::MemorySettings;
 use log::info;
+use opendal::layers::BlockingLayer;
 use opendal::BlockingOperator;
 use opendal::Operator;
 
@@ -59,7 +60,7 @@ impl FinalAggregateSpiller {
         };
         let spiller = Spiller::create(ctx.clone(), operator.clone(), config)?;
 
-        let blocking_operator = operator.blocking();
+        let blocking_operator = operator.layer(BlockingLayer::create()?).blocking();
 
         Ok(Self {
             spiller,
