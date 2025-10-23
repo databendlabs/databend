@@ -761,6 +761,75 @@ statement ok
 drop masking policy mask_triple_nested;
 
 statement ok
+DROP MASKING POLICY IF EXISTS mask_simple;
+
+statement ok
+DROP MASKING POLICY IF EXISTS mask_conditional;
+
+statement ok
+DROP TABLE IF EXISTS t_test;
+
+statement ok
+CREATE TABLE t_test(
+   id INT,
+   arr ARRAY(INT NULL) NULL,
+   sensitive INT NULL,
+   public INT NULL
+ );
+
+statement ok
+INSERT INTO t_test VALUES (1, [1,2,3], 100, 10),(2, [4,5], 200, 20),(3, [4,5], 200, 400);
+
+statement ok
+CREATE MASKING POLICY mask_simple AS (val INT) RETURNS INT -> CASE WHEN current_role() = 'admin' THEN val ELSE -1 END;
+
+statement ok
+ALTER TABLE t_test MODIFY COLUMN sensitive SET MASKING POLICY mask_simple;
+
+query T
+select * from t_test;
+----
+1 [1,2,3] -1 10
+2 [4,5] -1 20
+3 [4,5] -1 400
+
+query T
+SELECT array_transform(arr, x -> x * 2) FROM t_test;
+----
+[2,4,6]
+[8,10]
+[8,10]
+
+query T
+SELECT array_transform(arr, x -> x + sensitive) FROM t_test;
+----
+[0,1,2]
+[3,4]
+[3,4]
+
+statement ok
+CREATE MASKING POLICY mask_conditional AS (val INT, threshold INT) RETURNS INT -> CASE WHEN val > threshold THEN val ELSE -999 END;
+
+statement ok
+ALTER TABLE t_test MODIFY COLUMN sensitive SET MASKING POLICY mask_conditional USING (sensitive, public);
+
+query T
+SELECT array_transform(arr, x -> x + sensitive) FROM t_test;
+----
+[101,102,103]
+[204,205]
+[-995,-994]
+
+statement ok
+drop table t_test;
+
+statement ok
+drop MASKING POLICY mask_simple;
+
+statement ok
+DROP MASKING POLICY mask_conditional;
+
+statement ok
 unset global enable_planner_cache;
 
 statement ok
