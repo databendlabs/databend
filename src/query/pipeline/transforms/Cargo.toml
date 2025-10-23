@@ -8,17 +8,27 @@ edition = { workspace = true }
 
 [dependencies]
 async-backtrace = { workspace = true }
+async-channel = { workspace = true }
 async-trait = { workspace = true }
 bytesize = { workspace = true }
+databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
 databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-common-license = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
+databend-common-sql = { workspace = true }
 databend-storages-common-cache = { workspace = true }
+enum-as-inner = { workspace = true }
+fastrace = { workspace = true }
+futures = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }

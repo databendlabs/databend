@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_pipeline_transforms::processors::add_k_way_merge_sort;
+use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
 
 use super::*;
 

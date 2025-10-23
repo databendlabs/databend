@@ -623,21 +623,10 @@ version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "435a87a52755b8f27fcf321ac4f04b2802e337c8c4872923137471ec39c37532"
 dependencies = [
- "event-listener 5.4.0",
+ "event-listener",
  "event-listener-strategy",
  "futures-core",
  "pin-project-lite",
-]
-
-[[package]]
-name = "async-channel"
-version = "1.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81953c529336010edd6d8e358f886d9581267795c61b19475b71314bffa46d35"
-dependencies = [
- "concurrent-queue",
- "event-listener 2.5.3",
- "futures-core",
 ]
 
 [[package]]
@@ -705,7 +694,7 @@ version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff6e472cdea888a4bd64f342f09b3f50e1886d32afe8df3d663c01140b811b18"
 dependencies = [
- "event-listener 5.4.0",
+ "event-listener",
  "event-listener-strategy",
  "pin-project-lite",
 ]
@@ -1571,7 +1560,7 @@ version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "703f41c54fc768e63e091340b424302bb1c29ef4aa0c7f10fe849dfb114d29ea"
 dependencies = [
- "async-channel 2.3.1",
+ "async-channel",
  "async-task",
  "futures-io",
  "futures-lite",
@@ -4092,14 +4081,23 @@ dependencies = [
  "arrow-ord",
  "arrow-schema",
  "async-backtrace",
+ "async-channel",
  "async-trait",
  "bytesize 2.0.1",
+ "databend-common-ast",
  "databend-common-base",
+ "databend-common-catalog",
  "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-functions",
+ "databend-common-license",
  "databend-common-pipeline-core",
+ "databend-common-sql",
  "databend-storages-common-cache",
+ "enum-as-inner",
+ "fastrace",
+ "futures",
  "itertools 0.13.0",
  "jsonb",
  "log",
@@ -4215,7 +4213,6 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-pipeline-core",
- "databend-common-pipeline-transforms",
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-storages-basic",
@@ -4377,7 +4374,7 @@ dependencies = [
  "arrow-ipc",
  "arrow-schema",
  "async-backtrace",
- "async-channel 1.9.0",
+ "async-channel",
  "async-trait",
  "backoff",
  "bytes",
@@ -4726,7 +4723,7 @@ dependencies = [
  "anyhow",
  "arrow-array",
  "arrow-schema",
- "async-channel 1.9.0",
+ "async-channel",
  "backtrace",
  "concurrent-queue",
  "databend-common-base",
@@ -5229,7 +5226,7 @@ dependencies = [
  "arrow-select",
  "arrow-udf-runtime",
  "async-backtrace",
- "async-channel 1.9.0",
+ "async-channel",
  "async-compat",
  "async-recursion",
  "async-stream",
@@ -5320,7 +5317,6 @@ dependencies = [
  "derive-visitor",
  "dyn-clone",
  "either",
- "enum-as-inner",
  "ethnum",
  "fastrace",
  "flatbuffers",
@@ -6433,12 +6429,6 @@ dependencies = [
 
 [[package]]
 name = "event-listener"
-version = "2.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
-
-[[package]]
-name = "event-listener"
 version = "5.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3492acde4c3fc54c845eaab3eed8bd00c7a7d881f78bfc801e43a93dec1331ae"
@@ -6454,7 +6444,7 @@ version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
- "event-listener 5.4.0",
+ "event-listener",
  "pin-project-lite",
 ]
 
@@ -10453,7 +10443,7 @@ dependencies = [
  "crossbeam-channel",
  "crossbeam-epoch",
  "crossbeam-utils",
- "event-listener 5.4.0",
+ "event-listener",
  "futures-util",
  "loom 0.7.2",
  "parking_lot 0.12.3",
@@ -14514,7 +14504,7 @@ dependencies = [
  "crc",
  "crossbeam-queue",
  "either",
- "event-listener 5.4.0",
+ "event-listener",
  "futures-core",
  "futures-intrusive",
  "futures-io",
