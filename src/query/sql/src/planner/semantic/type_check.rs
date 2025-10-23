@@ -308,21 +308,44 @@ impl<'a> TypeChecker<'a> {
                             // BUT: skip masking policy application if we're already resolving a masking policy expression
                             // to prevent infinite recursion (e.g., policy references the masked column itself)
                             let has_masking_policy = !self.in_masking_policy
+                                // First check: is DataMask feature enabled? (cheapest check)
+                                && LicenseManagerSwitch::instance()
+                                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
+                                    .is_ok()
+                                // Second check: does this column reference a table with masking policy?
                                 && column
                                     .table_index
                                     .and_then(|table_index| {
                                         let metadata = self.metadata.read();
-                                        let table_entry = metadata.table(table_index);
+
+                                        // Try to get table by index
+                                        let table_entry = match metadata.tables().get(table_index) {
+                                            Some(entry) => entry,
+                                            None => {
+                                                // table_index invalid - try fallback by name
+                                                // This can happen in complex queries (e.g., REPLACE INTO with source columns)
+                                                // where metadata context differs between binding phases
+                                                if let (Some(db), Some(tbl)) = (&column.database_name, &column.table_name) {
+                                                    // Try to re-resolve the table index by name
+                                                    if let Some(new_idx) = metadata.get_table_index(Some(db), tbl) {
+                                                        metadata.tables().get(new_idx)?
+                                                    } else {
+                                                        // Table not found by name either This is likely a temporary/derived table with no masking policy
+                                                        return None;
+                                                    }
+                                                } else {
+                                                    return None;
+                                                }
+                                            }
+                                        };
+
                                         let table_ref = table_entry.table();
                                         let table_info = table_ref.get_table_info();
 
-                                        // Quick check: if no columns have masking policies, skip async call
                                         if table_info.meta.column_mask_policy_columns_ids.is_empty()
                                         {
                                             return None;
                                         }
-
-                                        // Further check: does THIS specific column have a policy?
                                         table_info
                                             .meta
                                             .schema
@@ -2190,6 +2213,14 @@ impl<'a> TypeChecker<'a> {
             &mut lambda_context,
             &lambda_columns,
             &lambda.expr,
+            if LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
+                .is_ok()
+            {
+                Some(self.metadata.clone())
+            } else {
+                None
+            },
         )?;
 
         let return_type = if func_name == "array_filter" || func_name == "map_filter" {

@@ -35,6 +35,8 @@ use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use itertools::Itertools;
@@ -351,10 +353,45 @@ impl Binder {
             }
             None => {
                 // Masking policy is now handled uniformly in TypeChecker::resolve()
-                ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span,
-                    column: column_binding.clone(),
-                })
+                if LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
+                    .is_ok()
+                {
+                    // Create column ref and apply masking policy if needed
+                    let column_ref = Expr::ColumnRef {
+                        span,
+                        column: ColumnRef {
+                            database: column_binding
+                                .database_name
+                                .as_ref()
+                                .map(|db| Identifier::from_name(span, db.clone())),
+                            table: column_binding
+                                .table_name
+                                .as_ref()
+                                .map(|tbl| Identifier::from_name(span, tbl.clone())),
+                            column: ColumnID::Name(Identifier::from_name(
+                                span,
+                                column_binding.column_name.clone(),
+                            )),
+                        },
+                    };
+
+                    let mut bind_context = input_context.clone();
+                    let mut scalar_binder = ScalarBinder::new(
+                        &mut bind_context,
+                        self.ctx.clone(),
+                        &self.name_resolution_ctx,
+                        self.metadata.clone(),
+                        &[],
+                    );
+                    let (scalar, _) = scalar_binder.bind(&column_ref)?;
+                    scalar
+                } else {
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span,
+                        column: column_binding.clone(),
+                    })
+                }
             }
         };
 
