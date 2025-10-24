@@ -3552,12 +3552,10 @@ dependencies = [
  "databend-common-storage",
  "databend-common-tracing",
  "log",
- "pretty_assertions",
  "serde",
  "serde_ignored",
  "serde_with",
  "serfig",
- "tempfile",
  "toml 0.8.22",
 ]
 
@@ -3615,7 +3613,6 @@ dependencies = [
  "arrow-data 56.2.0",
  "arrow-flight",
  "arrow-ipc 56.2.0",
- "arrow-ord 56.2.0",
  "arrow-schema 56.2.0",
  "arrow-select 56.2.0",
  "async-backtrace",
@@ -3729,7 +3726,6 @@ dependencies = [
  "bstr",
  "bumpalo",
  "comfy-table",
- "crc32fast",
  "ctor",
  "databend-common-ast",
  "databend-common-base",
@@ -3749,11 +3745,9 @@ dependencies = [
  "databend-functions-scalar-numeric-basic-arithmetic",
  "divan",
  "geo",
- "geohash",
  "geozero",
  "glob",
  "goldenfile",
- "h3o",
  "hex",
  "itertools 0.13.0",
  "jaq-core",
@@ -3762,15 +3756,12 @@ dependencies = [
  "jaq-std",
  "jiff",
  "jsonb",
- "lexical-core",
  "libm",
  "log",
  "match-template",
  "md-5",
  "naive-cityhash",
  "num-traits",
- "once_cell",
- "proj4rs",
  "proptest",
  "rand 0.8.5",
  "regex",
@@ -3782,7 +3773,6 @@ dependencies = [
  "simdutf8",
  "simple_hll",
  "siphasher 0.3.11",
- "strength_reduce",
  "stringslice",
  "twox-hash 1.6.3",
  "unicase",
@@ -3991,7 +3981,6 @@ dependencies = [
 name = "databend-common-meta-app-types"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "num-derive",
  "prost",
  "serde",
@@ -4001,14 +3990,12 @@ dependencies = [
 name = "databend-common-meta-cache"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "databend-common-base",
  "databend-common-meta-client",
  "databend-common-meta-types",
  "futures",
  "log",
- "pretty_assertions",
  "sub-cache",
  "tonic 0.13.1",
 ]
@@ -4023,7 +4010,6 @@ dependencies = [
  "async-backtrace",
  "chrono",
  "databend-common-base",
- "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-api",
  "databend-common-meta-kvapi",
@@ -4040,7 +4026,6 @@ dependencies = [
  "logcall",
  "once_cell",
  "parking_lot 0.12.3",
- "pretty_assertions",
  "prost",
  "rand 0.8.5",
  "semver",
@@ -4495,7 +4480,6 @@ dependencies = [
  "num-traits",
  "opendal",
  "parking_lot 0.12.3",
- "pretty_assertions",
  "prqlc",
  "recursive",
  "regex",
@@ -4691,7 +4675,6 @@ dependencies = [
  "tantivy-common",
  "tantivy-fst",
  "tantivy-jieba",
- "tempfile",
  "thrift",
  "typetag",
  "uuid",
@@ -4973,7 +4956,6 @@ name = "databend-common-timezone"
 version = "0.1.0"
 dependencies = [
  "jiff",
- "rand 0.8.5",
 ]
 
 [[package]]
@@ -5134,7 +5116,6 @@ dependencies = [
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
- "databend-common-functions",
  "databend-common-io",
  "databend-common-license",
  "databend-common-management",
@@ -5160,6 +5141,7 @@ dependencies = [
  "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-storage-encryption",
  "databend-enterprise-stream-handler",
+ "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
  "databend-query",
@@ -5173,10 +5155,8 @@ dependencies = [
  "log",
  "opendal",
  "serde",
- "tantivy",
  "tempfile",
  "typetag",
- "uuid",
  "walkdir",
 ]
 
@@ -5223,6 +5203,18 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-meta-app",
+ "databend-common-sql",
+]
+
+[[package]]
+name = "databend-enterprise-table-ref-handler"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
  "databend-common-sql",
 ]
 
@@ -5480,7 +5472,6 @@ dependencies = [
  "dashmap 6.1.0",
  "databend-common-ast",
  "databend-common-base",
- "databend-common-building",
  "databend-common-cache",
  "databend-common-catalog",
  "databend-common-cloud-control",
@@ -5534,6 +5525,7 @@ dependencies = [
  "databend-enterprise-resources-management",
  "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-stream-handler",
+ "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
  "databend-storages-common-blocks",

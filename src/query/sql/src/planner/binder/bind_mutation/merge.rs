@@ -46,6 +46,7 @@ impl Binder {
             &stmt.catalog,
             &stmt.database,
             &stmt.table_ident,
+            &None,
             &stmt.target_alias,
         );
 
@@ -54,6 +55,7 @@ impl Binder {
             catalog: stmt.catalog.clone(),
             database: stmt.database.clone(),
             table: stmt.table_ident.clone(),
+            ref_name: None,
             alias: stmt.target_alias.clone(),
             temporal: None,
             with_options: None,

@@ -87,6 +87,7 @@ async fn test_fuse_navigate() -> Result<()> {
             loc.clone(),
             version,
             fuse_table.meta_location_generator().clone(),
+            None,
         )
         .try_collect()
         .await?;
@@ -214,6 +215,7 @@ async fn test_navigate_for_purge() -> Result<()> {
             loc.clone(),
             version,
             fuse_table.meta_location_generator().clone(),
+            None,
         )
         .try_collect()
         .await?;

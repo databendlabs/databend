@@ -74,6 +74,14 @@ impl StreamHandler for RealStreamHandler {
                 plan.table_database, plan.table_name
             )));
         }
+        if table_info.engine() != "FUSE" {
+            return Err(ErrorCode::IllegalStream(format!(
+                "The table '{}.{}' uses engine '{}', only FUSE tables support stream creation",
+                plan.table_database,
+                plan.table_name,
+                table_info.engine()
+            )));
+        }
 
         let table_id = table_info.ident.table_id;
         if !table.change_tracking_enabled() {

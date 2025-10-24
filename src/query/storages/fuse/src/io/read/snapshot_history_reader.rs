@@ -39,18 +39,26 @@ pub trait SnapshotHistoryReader {
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
+        branch_name: Option<String>,
     ) -> TableSnapshotStream;
 }
+
 impl SnapshotHistoryReader for TableSnapshotReader {
     fn snapshot_history(
         self,
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
+        branch_name: Option<String>,
     ) -> TableSnapshotStream {
         let stream = stream::try_unfold(
-            (self, location_gen, Some((location, format_version))),
-            |(reader, gen, next)| async move {
+            (
+                self,
+                location_gen,
+                branch_name,
+                Some((location, format_version)),
+            ),
+            |(reader, gen, branch_name, next)| async move {
                 if let Some((loc, ver)) = next {
                     let load_params = LoadParams {
                         location: loc,
@@ -77,14 +85,22 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                         Ok(Some(snapshot)) => {
                             if let Some((prev_id, prev_version)) = snapshot.prev_snapshot_id {
                                 let new_ver = prev_version;
-                                let new_loc =
-                                    gen.snapshot_location_from_uuid(&prev_id, prev_version)?;
+                                // Use branch-specific location if we're on a branch
+                                let new_loc = if let Some(ref name) = branch_name {
+                                    gen.ref_snapshot_location_from_uuid(
+                                        name,
+                                        &prev_id,
+                                        prev_version,
+                                    )?
+                                } else {
+                                    gen.snapshot_location_from_uuid(&prev_id, prev_version)?
+                                };
                                 Ok(Some((
                                     (snapshot, ver),
-                                    (reader, gen, Some((new_loc, new_ver))),
+                                    (reader, gen, branch_name, Some((new_loc, new_ver))),
                                 )))
                             } else {
-                                Ok(Some(((snapshot, ver), (reader, gen, None))))
+                                Ok(Some(((snapshot, ver), (reader, gen, branch_name, None))))
                             }
                         }
                         Ok(None) => Ok(None),
