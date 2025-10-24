@@ -24,7 +24,10 @@ mod serialize;
 mod test_memory;
 
 pub use adapter::*;
-pub use async_buffer::BufferPool;
+pub use async_buffer::BufferWriter;
+pub use async_buffer::SpillsBufferPool;
+pub use async_buffer::SpillsDataReader;
+pub use async_buffer::SpillsDataWriter;
 pub use block_writer::*;
 pub use databend_common_pipeline_transforms::traits::Location;
 pub use inner::*;

@@ -35,13 +35,13 @@ use opendal::Buffer;
 use opendal::Operator;
 use parquet::file::metadata::RowGroupMetaDataPtr;
 
-use super::async_buffer::BufferPool;
 use super::block_reader::BlocksReader;
 use super::block_writer::BlocksWriter;
 use super::inner::*;
 use super::row_group_encoder::*;
 use super::serialize::*;
 use super::Location;
+use super::SpillsBufferPool;
 use crate::sessions::QueryContext;
 
 #[derive(Clone)]
@@ -357,7 +357,7 @@ impl Spiller {
 #[derive(Clone)]
 pub struct BackpressureAdapter {
     ctx: Arc<QueryContext>,
-    buffer_pool: Arc<BufferPool>,
+    buffer_pool: Arc<SpillsBufferPool>,
     chunk_size: usize,
 }
 
@@ -382,7 +382,7 @@ impl BackpressureSpiller {
         ctx: Arc<QueryContext>,
         operator: Operator,
         config: SpillerConfig,
-        buffer_pool: Arc<BufferPool>,
+        buffer_pool: Arc<SpillsBufferPool>,
         chunk_size: usize,
     ) -> Result<Self> {
         Self::new(

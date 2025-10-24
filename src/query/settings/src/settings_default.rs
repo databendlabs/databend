@@ -1501,7 +1501,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),
                 }),
-
             ]);
 
             Ok(Arc::new(DefaultSettings {
