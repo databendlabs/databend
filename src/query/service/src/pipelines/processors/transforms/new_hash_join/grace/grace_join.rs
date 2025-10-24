@@ -260,8 +260,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
 
         while let Some(data) = self.steal_restore_build_task() {
             let buffer_pool = SpillsBufferPool::instance();
-            let mut reader =
-                buffer_pool.parquet_reader(operator.clone(), data.path, data.row_groups)?;
+            let mut reader = buffer_pool.reader(operator.clone(), data.path, data.row_groups)?;
 
             while let Some(data_block) = reader.read(self.read_settings)? {
                 self.memory_hash_join.add_block(Some(data_block))?;
@@ -460,8 +459,7 @@ impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
 
                     let operator = DataOperator::instance().spill_operator();
                     let buffer_pool = SpillsBufferPool::instance();
-                    let reader =
-                        buffer_pool.parquet_reader(operator, data.path, data.row_groups)?;
+                    let reader = buffer_pool.reader(operator, data.path, data.row_groups)?;
                     self.spills_reader = Some(reader);
                     break;
                 }

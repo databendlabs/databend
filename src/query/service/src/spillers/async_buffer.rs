@@ -214,7 +214,7 @@ impl SpillsBufferPool {
         )))
     }
 
-    pub fn parquet_reader(
+    pub fn reader(
         self: &Arc<Self>,
         op: Operator,
         path: String,
