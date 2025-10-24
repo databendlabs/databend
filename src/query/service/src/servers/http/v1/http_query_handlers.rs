@@ -31,6 +31,7 @@ use databend_common_expression::DataSchema;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use fastrace::prelude::*;
+use headers::Header;
 use http::HeaderMap;
 use http::HeaderValue;
 use http::StatusCode;
@@ -499,12 +500,15 @@ async fn query_page_handler(
 
 #[poem::handler]
 #[async_backtrace::framed]
-#[fastrace::trace]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(mut req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
     let session = ctx.session.clone();
+
+    // poem::http::Request
+
+    // poem::web::TypedHeader;
 
     let query_handle = async {
         let agent_info = ctx
@@ -939,4 +943,37 @@ pub(crate) fn get_http_tracing_span(
     let trace_id = query_id_to_trace_id(query_id);
     Span::root(name, SpanContext::new(trace_id, SpanId(rand::random())))
         .with_properties(|| ctx.to_fastrace_properties())
+}
+
+enum BodyFormat {
+    Json,
+    Arrow,
+}
+
+impl Header for BodyFormat {
+    fn name() -> &'static http::HeaderName {
+        &http::header::ACCEPT
+    }
+
+    fn decode<'i, I>(values: &mut I) -> Result<Self, headers::Error>
+    where
+        Self: Sized,
+        I: Iterator<Item = &'i HeaderValue>,
+    {
+        if let Some(v) = values.next() {
+            match v.to_str() {
+                Ok("application/vnd.apache.arrow.file") => return Ok(BodyFormat::Arrow),
+                Err(_) => return Err(headers::Error::invalid()),
+                _ => {}
+            };
+        }
+        Ok(BodyFormat::Json)
+    }
+
+    fn encode<E: Extend<HeaderValue>>(&self, values: &mut E) {
+        values.extend([match self {
+            BodyFormat::Json => HeaderValue::from_static("application/json"),
+            BodyFormat::Arrow => HeaderValue::from_static("application/vnd.apache.arrow.file"),
+        }]);
+    }
 }
