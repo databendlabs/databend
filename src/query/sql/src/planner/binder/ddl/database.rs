@@ -36,6 +36,7 @@ use log::debug;
 
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
+use crate::plans::AlterDatabasePlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::Plan;
@@ -214,6 +215,21 @@ impl Binder {
                     database,
                 },
             ))),
+
+            AlterDatabaseAction::SetOptions { options } => {
+                // Convert SQLProperty to BTreeMap for database options
+                let db_options = options
+                    .iter()
+                    .map(|property| (property.name.clone(), property.value.clone()))
+                    .collect::<BTreeMap<String, String>>();
+
+                Ok(Plan::AlterDatabase(Box::new(AlterDatabasePlan {
+                    tenant,
+                    catalog,
+                    database,
+                    options: db_options,
+                })))
+            }
         }
     }
 
@@ -299,6 +315,40 @@ impl Binder {
         engine: &Option<DatabaseEngine>,
         options: &[SQLProperty],
     ) -> Result<DatabaseMeta> {
+        // Validate database options - only allow specific connection-related options
+        const VALID_DATABASE_OPTIONS: &[&str] =
+            &["DEFAULT_STORAGE_CONNECTION", "DEFAULT_STORAGE_PATH"];
+
+        for property in options {
+            if !VALID_DATABASE_OPTIONS.contains(&property.name.as_str()) {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Invalid database option '{}'. Valid options are: {}",
+                    property.name,
+                    VALID_DATABASE_OPTIONS.join(", ")
+                )));
+            }
+        }
+
+        // Validate that DEFAULT_STORAGE_CONNECTION and DEFAULT_STORAGE_PATH are used together
+        let has_connection = options
+            .iter()
+            .any(|p| p.name == "DEFAULT_STORAGE_CONNECTION");
+        let has_path = options.iter().any(|p| p.name == "DEFAULT_STORAGE_PATH");
+
+        if has_connection && !has_path {
+            return Err(ErrorCode::BadArguments(
+                "DEFAULT_STORAGE_CONNECTION requires DEFAULT_STORAGE_PATH to be specified"
+                    .to_string(),
+            ));
+        }
+
+        if has_path && !has_connection {
+            return Err(ErrorCode::BadArguments(
+                "DEFAULT_STORAGE_PATH requires DEFAULT_STORAGE_CONNECTION to be specified"
+                    .to_string(),
+            ));
+        }
+
         let options = options
             .iter()
             .map(|property| (property.name.clone(), property.value.clone()))
