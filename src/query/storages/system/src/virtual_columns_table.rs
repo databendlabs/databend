@@ -53,7 +53,7 @@ impl AsyncSystemTable for VirtualColumnsTable {
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-        let session_state = ctx.session_state();
+        let session_state = ctx.session_state()?;
 
         let catalog_mgr = CatalogManager::instance();
         let catalog = catalog_mgr.get_default_catalog(session_state)?;

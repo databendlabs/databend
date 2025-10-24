@@ -392,6 +392,7 @@ impl ExecuteState {
         } else {
             vec![]
         };
+
         let running_state = ExecuteRunning {
             session,
             ctx: ctx.clone(),
@@ -459,6 +460,10 @@ impl ExecuteState {
             Some(Ok(block)) => {
                 if is_dynamic_schema {
                     if let Some(schema) = interpreter.get_dynamic_schema().await {
+                        info!(
+                            "[HTTP-QUERY] Dynamic schema detected, updating schema to have {} fields",
+                            schema.fields().len()
+                        );
                         Executor::update_schema(&executor, schema);
                     }
                 }

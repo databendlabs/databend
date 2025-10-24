@@ -7,7 +7,6 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-dashmap = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }

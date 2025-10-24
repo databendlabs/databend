@@ -118,6 +118,7 @@ impl BlockCompactMutator {
 
         let mut segment_idx = 0;
         let mut is_end = false;
+        let mut stop_after_next = false;
         let mut parts = Vec::new();
         let chunk_size = max_threads * 4;
         for chunk in segment_locations.chunks(chunk_size) {
@@ -154,9 +155,24 @@ impl BlockCompactMutator {
                     checker.generate_part(segments, &mut parts);
                 }
 
-                if checker.is_limit_reached(num_segment_limit, num_block_limit) {
+                if stop_after_next {
                     is_end = true;
                     break;
+                }
+
+                match checker.is_limit_reached(num_segment_limit, num_block_limit) {
+                    CompactLimitState::Continue => {}
+                    CompactLimitState::ReachedBlockLimit => {
+                        // When the block limit is reached, we allow one more iteration
+                        // to include the next segment in compaction.
+                        // This "+1" behavior ensures that previously un-compacted segments
+                        // near the boundary are not skipped due to strict block counting.
+                        stop_after_next = true;
+                    }
+                    CompactLimitState::ReachedSegmentLimit => {
+                        is_end = true;
+                        break;
+                    }
                 }
             }
 
@@ -303,6 +319,16 @@ impl BlockCompactMutator {
     }
 }
 
+// CompactLimitState indicates the current compaction progress state.
+pub enum CompactLimitState {
+    /// Continue collecting more segments and blocks.
+    Continue,
+    /// Hit the block threshold — take one more segment before stopping.
+    ReachedBlockLimit,
+    /// Hit the segment threshold — stop immediately.
+    ReachedSegmentLimit,
+}
+
 pub struct SegmentCompactChecker {
     thresholds: BlockThresholds,
     segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
@@ -310,7 +336,7 @@ pub struct SegmentCompactChecker {
     cluster_key_id: Option<u32>,
 
     compacted_segment_cnt: usize,
-    compacted_block_cnt: u64,
+    compacted_imperfect_block_cnt: u64,
 }
 
 impl SegmentCompactChecker {
@@ -320,8 +346,8 @@ impl SegmentCompactChecker {
             total_block_count: 0,
             thresholds,
             cluster_key_id,
-            compacted_block_cnt: 0,
             compacted_segment_cnt: 0,
+            compacted_imperfect_block_cnt: 0,
         }
     }
 
@@ -360,9 +386,9 @@ impl SegmentCompactChecker {
         }
 
         self.compacted_segment_cnt += segments.len();
-        self.compacted_block_cnt += segments
+        self.compacted_imperfect_block_cnt += segments
             .iter()
-            .map(|(_, info)| info.summary.block_count)
+            .map(|(_, info)| info.summary.block_count - info.summary.perfect_block_count)
             .sum::<u64>();
         true
     }
@@ -415,15 +441,31 @@ impl SegmentCompactChecker {
         self.generate_part(final_segments, parts);
     }
 
-    pub fn is_limit_reached(&self, num_segment_limit: usize, num_block_limit: usize) -> bool {
-        let residual_segment_cnt = self.segments.len();
-        let residual_block_cnt: u64 = self
-            .segments
-            .iter()
-            .map(|(_, info)| info.summary.block_count)
-            .sum();
-        self.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
-            || self.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
+    /// Check if compaction limit is reached.
+    pub fn is_limit_reached(
+        &self,
+        num_segment_limit: usize,
+        num_block_limit: usize,
+    ) -> CompactLimitState {
+        // Stop immediately if the number of compacted segments reaches limit
+        if self.compacted_segment_cnt + self.segments.len() >= num_segment_limit {
+            return CompactLimitState::ReachedSegmentLimit;
+        }
+
+        // Count the total number of imperfect blocks (those that still need compaction).
+        let compacted_imperfect_block_cnt =
+            self.segments
+                .iter()
+                .fold(self.compacted_imperfect_block_cnt, |mut acc, (_, info)| {
+                    acc += info.summary.block_count - info.summary.perfect_block_count;
+                    acc
+                });
+        // If the imperfect block count exceeds the limit, signal "take one more".
+        if compacted_imperfect_block_cnt >= num_block_limit as u64 {
+            CompactLimitState::ReachedBlockLimit
+        } else {
+            CompactLimitState::Continue
+        }
     }
 }
 

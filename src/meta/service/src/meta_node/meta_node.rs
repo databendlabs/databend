@@ -1506,6 +1506,26 @@ impl MetaNode {
         let stream = {
             let sm = mn.raft_store.get_sm_v003();
 
+            // Acquire exclusive writer permit to ensure atomicity of the entire operation:
+            //
+            // 1. Register the watcher to dispatcher
+            // 2. Read the snapshot of the key range
+            // 3. Queue the initialization data for forwarding
+            //
+            // This permit blocks all state machine writes (Raft log application) during this block,
+            // preventing the race condition where:
+            // - A write is applied to state machine after snapshot read but before watcher registration
+            // - The watcher would miss events for that write
+            //
+            // The permit is held until the end of this scope (line 1575), which includes:
+            // - Creating and registering the watch sender
+            // - Reading the snapshot (if flush=true)
+            // - Queuing the initialization future to dispatcher
+            //
+            // Since watch ranges are typically small and snapshot reads are fast,
+            // the blocking duration is acceptable for maintaining correctness.
+            let _permit = sm.acquire_writer_permit().await;
+
             let sender = mn.new_watch_sender(watch, tx.clone())?;
             let sender_str = sender.to_string();
             let weak_sender = mn.insert_watch_sender(sender);

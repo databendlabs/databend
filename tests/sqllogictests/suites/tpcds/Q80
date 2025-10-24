@@ -1,5 +1,5 @@
 # Q80
-query I
+query TTRRR
 WITH ssr AS
   (SELECT s_store_id AS store_id,
           sum(ss_ext_sales_price) AS sales,

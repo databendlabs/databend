@@ -1,5 +1,5 @@
 # Q99
-query I
+query TTTIIIII
 SELECT w_substr ,
        sm_type ,
        LOWER(cc_name) cc_name_lower ,

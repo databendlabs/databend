@@ -1,5 +1,5 @@
 # Q56
-query I
+query TR
 WITH ss AS
   (SELECT i_item_id,
           sum(ss_ext_sales_price) total_sales

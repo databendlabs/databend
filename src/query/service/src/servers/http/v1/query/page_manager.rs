@@ -127,7 +127,7 @@ impl PageManager {
                 .clone())
         } else {
             let message = format!(
-                "[HTTP-QUERY] Invalid page number: requested {}, current page is {}",
+                "Invalid page number: requested {}, current page is {}",
                 page_no, next_no
             );
             Err(ErrorCode::HttpNotFound(message))

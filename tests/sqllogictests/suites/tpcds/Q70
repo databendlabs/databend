@@ -1,5 +1,5 @@
 # Q70
-query I
+query RTTII
 SELECT sum(ss_net_profit) AS total_sum,
        s_state,
        s_county,

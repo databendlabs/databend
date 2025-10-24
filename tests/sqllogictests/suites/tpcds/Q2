@@ -1,5 +1,5 @@
 # Q2
-query I
+query IRRRRRRR
 WITH wscs AS
   (SELECT sold_date_sk,
           sales_price

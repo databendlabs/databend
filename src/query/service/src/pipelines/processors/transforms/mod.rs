@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod aggregator;
-#[allow(dead_code)]
 mod broadcast;
 mod hash_join;
 mod materialized_cte;
@@ -21,20 +20,12 @@ mod new_hash_join;
 pub(crate) mod range_join;
 mod runtime_pool;
 pub mod sort;
-mod transform_add_computed_columns;
-mod transform_add_const_columns;
-mod transform_add_internal_columns;
-mod transform_add_stream_columns;
 mod transform_async_function;
 mod transform_branched_async_function;
-mod transform_branched_cast_schema;
 mod transform_cache_scan;
-mod transform_cast_schema;
-mod transform_create_sets;
 mod transform_dictionary;
 mod transform_expression_scan;
-mod transform_filter;
-mod transform_limit;
+
 mod transform_recursive_cte_scan;
 mod transform_recursive_cte_source;
 mod transform_resort_addon;
@@ -53,26 +44,15 @@ pub use new_hash_join::Join;
 pub use new_hash_join::TransformHashJoin;
 pub use new_hash_join::*;
 pub use sort::*;
-pub use transform_add_computed_columns::TransformAddComputedColumns;
-pub use transform_add_const_columns::TransformAddConstColumns;
-pub use transform_add_internal_columns::TransformAddInternalColumns;
-pub use transform_add_stream_columns::TransformAddStreamColumns;
 pub use transform_async_function::SequenceCounters;
 pub use transform_async_function::TransformAsyncFunction;
 pub use transform_branched_async_function::AsyncFunctionBranch;
 pub use transform_branched_async_function::TransformBranchedAsyncFunction;
-pub use transform_branched_cast_schema::CastSchemaBranch;
-pub use transform_branched_cast_schema::TransformBranchedCastSchema;
 pub use transform_cache_scan::CacheSourceState;
 pub use transform_cache_scan::HashJoinCacheState;
 pub use transform_cache_scan::NewHashJoinCacheState;
 pub use transform_cache_scan::TransformCacheScan;
-pub use transform_cast_schema::build_cast_exprs;
-pub use transform_cast_schema::TransformCastSchema;
-pub use transform_create_sets::TransformCreateSets;
 pub use transform_expression_scan::TransformExpressionScan;
-pub use transform_filter::TransformFilter;
-pub use transform_limit::TransformLimit;
 pub use transform_recursive_cte_scan::TransformRecursiveCteScan;
 pub use transform_recursive_cte_source::TransformRecursiveCteSource;
 pub use transform_resort_addon::TransformResortAddOn;

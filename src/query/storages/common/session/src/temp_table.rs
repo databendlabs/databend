@@ -343,8 +343,9 @@ impl TempTblMgr {
     }
 }
 
-/// Get the appropriate operator for a table based on its storage configuration
-fn get_table_operator(table_meta: &TableMeta) -> Result<Operator> {
+/// Get the appropriate operator for a table based on its storage configuration for vacuum dropped table operations.
+/// Note that this operator is NOT storage class setting aware, DO NOT use it for put object operations
+fn get_table_operator_for_drop_operation(table_meta: &TableMeta) -> Result<Operator> {
     // Check if the table has custom storage parameters
     if let Some(storage_params) = &table_meta.storage_params {
         // Use the custom storage parameters to create an operator
@@ -390,7 +391,7 @@ pub async fn drop_table_by_id(
                     }
                 }
             };
-            let op = get_table_operator(&table_meta)?;
+            let op = get_table_operator_for_drop_operation(&table_meta)?;
             op.remove_all(&dir).await?;
         }
         "MEMORY" => {
@@ -473,7 +474,7 @@ pub async fn drop_all_temp_tables(
     // Clean up each fuse table directory individually with the correct operator
     for (dir, table_meta) in fuse_table_data {
         // Get the operator for this specific table's storage location
-        match get_table_operator(&table_meta) {
+        match get_table_operator_for_drop_operation(&table_meta) {
             Ok(op) => {
                 if let Err(e) = op.remove_all(&dir).await {
                     // Log the error but continue with other tables

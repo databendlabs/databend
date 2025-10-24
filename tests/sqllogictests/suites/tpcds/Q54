@@ -1,5 +1,5 @@
 # Q54
-query I
+query III
 WITH my_customers AS
   (SELECT DISTINCT c_customer_sk,
                    c_current_addr_sk

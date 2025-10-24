@@ -1,5 +1,5 @@
 # Q76
-query I
+query TTIITIR
 SELECT channel,
        col_name,
        d_year,

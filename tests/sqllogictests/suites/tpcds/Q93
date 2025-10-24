@@ -1,5 +1,5 @@
 # Q93
-query I
+query IR
 SELECT ss_customer_sk,
        sum(act_sales) sumsales
 FROM

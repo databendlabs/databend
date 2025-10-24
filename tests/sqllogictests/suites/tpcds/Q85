@@ -1,5 +1,5 @@
 # Q85
-query I
+query TRRR
 
 SELECT SUBSTRING(r_reason_desc,1,20) ,
        avg(ws_quantity) avg1,

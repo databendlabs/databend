@@ -106,7 +106,7 @@ fn test_normalize_identifiers_in_expr() {
     let mut expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
 
     let ctx = NameResolutionContext::default();
-    let mut normalizer = IdentifierNormalizer { ctx: &ctx };
+    let mut normalizer = IdentifierNormalizer::new(&ctx);
 
     expr.drive_mut(&mut normalizer);
 

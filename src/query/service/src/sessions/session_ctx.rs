@@ -385,11 +385,12 @@ impl SessionContext {
         *self.variables.write() = variables
     }
 
-    pub fn session_state(&self) -> SessionState {
-        SessionState {
+    pub fn session_state(&self) -> Result<SessionState> {
+        Ok(SessionState {
             txn_mgr: self.txn_mgr(),
             temp_tbl_mgr: self.temp_tbl_mgr(),
-        }
+            s3_storage_class: self.get_settings().get_s3_storage_class()?,
+        })
     }
 
     pub fn get_client_session_id(&self) -> Option<String> {

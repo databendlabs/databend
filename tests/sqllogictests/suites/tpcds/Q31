@@ -1,5 +1,5 @@
 # Q31
-query I
+query TIRRRR
 WITH ss AS
   (SELECT ca_county,
           d_qoy,

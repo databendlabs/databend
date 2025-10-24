@@ -348,16 +348,6 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.data.len(), 10, "{:?}", result);
     assert_eq!(result.schema.len(), 31, "{:?}", result);
 
-    // get state
-    let uri = result.stats_uri.unwrap();
-    let (status, result) = get_uri_checked(&ep, &uri).await?;
-    assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(result.error.is_none(), "{:?}", result);
-    assert_eq!(result.data.len(), 0, "{:?}", result);
-    assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
-    // assert!(result.schema.is_empty(), "{:?}", result);
-    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
-
     // get page, support retry
     let page_0_uri = make_page_uri(query_id, 0);
     for _ in 1..3 {
@@ -385,7 +375,7 @@ async fn test_simple_sql() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":404,"message":"[HTTP-QUERY] [HTTP-QUERY] Invalid page number: requested 2, current page is 1"}}"#
+        r#"{"error":{"code":404,"message":"[HTTP-QUERY] Invalid page number: requested 2, current page is 1"}}"#
     );
 
     // final
@@ -667,7 +657,7 @@ async fn test_pagination() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":404,"message":"[HTTP-QUERY] [HTTP-QUERY] Invalid page number: requested 6, current page is 1"}}"#
+        r#"{"error":{"code":404,"message":"[HTTP-QUERY] Invalid page number: requested 6, current page is 1"}}"#
     );
 
     let mut next_uri = result.next_uri.clone().unwrap();
@@ -679,11 +669,6 @@ async fn test_pagination() -> Result<()> {
         assert!(result.error.is_none(), "{:?}", msg());
         assert!(!result.schema.is_empty(), "{:?}", result);
         if page == 5 {
-            // get state
-            let uri = result.stats_uri.clone().unwrap();
-            let (status, _state_result) = get_uri_checked(&ep, &uri).await?;
-            assert_eq!(status, StatusCode::OK);
-
             expect_end(&ep, result).await?;
         } else {
             assert_eq!(result.data.len(), 2, "{:?}", msg());

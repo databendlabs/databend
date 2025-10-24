@@ -1,5 +1,5 @@
 # Q57
-query I
+query TTTIIRRRR
 WITH v1 AS
   (SELECT i_category,
           i_brand,

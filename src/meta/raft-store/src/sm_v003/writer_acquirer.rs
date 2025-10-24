@@ -52,7 +52,15 @@ impl WriterAcquirer {
     }
 }
 
-/// ApplierPermit is used to acquire a permit for applying changes to the state machine.
+/// Exclusive writer permit for state machine operations.
+///
+/// This permit is backed by a semaphore with capacity 1, ensuring exclusive access.
+/// When held, no other writers can modify the state machine, guaranteeing:
+/// - Serialization of Raft log application
+/// - Atomicity of multi-step operations (e.g., watch registration + snapshot read)
+/// - Prevention of MVCC isolation issues from concurrent writes
+///
+/// The permit is automatically released when dropped.
 pub struct WriterPermit {
     _permit: OwnedSemaphorePermit,
     _drop: DropCallback,

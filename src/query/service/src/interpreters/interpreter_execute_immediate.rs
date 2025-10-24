@@ -62,7 +62,10 @@ impl ProcedureState {
 
     pub async fn set_null_schema(&self) {
         let mut w = self.schema.lock().await;
-        *w = None;
+        *w = Some(DataSchemaRefExt::create(vec![DataField::new(
+            "Result",
+            DataType::String.wrap_nullable(),
+        )]));
     }
 
     pub fn null_result() -> DataBlock {

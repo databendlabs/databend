@@ -1,5 +1,5 @@
 # Q55
-query I
+query ITR
 SELECT i_brand_id brand_id,
        i_brand brand,
        sum(ss_ext_sales_price) ext_price

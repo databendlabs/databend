@@ -766,7 +766,10 @@ pub(crate) async fn build_select_insert_plan(
     };
 
     // 3. define select schema and insert schema of DistributedInsertSelect plan
-    let new_table = FuseTable::try_create(table_info)?;
+    let new_table = FuseTable::create_and_refresh_table_info(
+        table_info,
+        ctx.get_settings().get_s3_storage_class()?,
+    )?;
 
     // 4. build DistributedInsertSelect plan
     let mut insert_plan = PhysicalPlan::new(DistributedInsertSelect {

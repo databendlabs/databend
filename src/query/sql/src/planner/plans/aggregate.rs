@@ -98,6 +98,27 @@ impl Aggregate {
         }
     }
 
+    fn get_distribution(&self, ctx: Arc<dyn TableContext>) -> Result<Distribution> {
+        let settings = ctx.get_settings();
+
+        // Group aggregation, enforce `Hash` distribution
+        let mut group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+
+        // Grouping set must be merged before_merge
+        if self.grouping_sets.is_some() {
+            group_by_shuffle_mode = "before_merge".to_string();
+        }
+
+        match group_by_shuffle_mode.as_str() {
+            "before_partial" => Ok(Distribution::Hash(self.get_distribution_keys(true)?)),
+            "before_merge" => Ok(Distribution::Hash(self.get_distribution_keys(false)?)),
+            value => Err(ErrorCode::Internal(format!(
+                "Bad settings value group_by_shuffle_mode = {:?}",
+                value
+            ))),
+        }
+    }
+
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
         for group_item in self.group_items.iter() {
@@ -243,21 +264,7 @@ impl Operator for Aggregate {
                     // Scalar aggregation
                     required.distribution = Distribution::Any;
                 } else {
-                    let settings = ctx.get_settings();
-
-                    // Group aggregation, enforce `Hash` distribution
-                    required.distribution = match settings.get_group_by_shuffle_mode()?.as_str() {
-                        "before_partial" => {
-                            Ok(Distribution::Hash(self.get_distribution_keys(true)?))
-                        }
-                        "before_merge" => {
-                            Ok(Distribution::Hash(self.get_distribution_keys(false)?))
-                        }
-                        value => Err(ErrorCode::Internal(format!(
-                            "Bad settings value group_by_shuffle_mode = {:?}",
-                            value
-                        ))),
-                    }?;
+                    required.distribution = self.get_distribution(ctx)?;
                 }
             }
 
@@ -336,36 +343,9 @@ impl Operator for Aggregate {
                         distribution: Distribution::Serial,
                     }]);
                 } else {
-                    let settings = ctx.get_settings();
-
-                    // Group aggregation, enforce `Hash` distribution
-                    let mut group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
-
-                    // Grouping set must be merged before_merge
-                    if self.grouping_sets.is_some() {
-                        group_by_shuffle_mode = "before_merge".to_string();
-                    }
-
-                    match group_by_shuffle_mode.as_str() {
-                        "before_partial" => {
-                            children_required.push(vec![RequiredProperty {
-                                distribution: Distribution::Hash(self.get_distribution_keys(true)?),
-                            }]);
-                        }
-                        "before_merge" => {
-                            children_required.push(vec![RequiredProperty {
-                                distribution: Distribution::Hash(
-                                    self.get_distribution_keys(false)?,
-                                ),
-                            }]);
-                        }
-                        value => {
-                            return Err(ErrorCode::Internal(format!(
-                                "Bad settings value group_by_shuffle_mode = {:?}",
-                                value
-                            )));
-                        }
-                    }
+                    children_required.push(vec![RequiredProperty {
+                        distribution: self.get_distribution(ctx)?,
+                    }]);
                 }
             }
 

@@ -1,5 +1,5 @@
 # Q6
-query I
+query TI
 SELECT a.ca_state state,
        count(*) cnt
 FROM customer_address a ,

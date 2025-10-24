@@ -52,6 +52,7 @@ use opendal::Operator;
 
 use crate::io::MetaReaders;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
+use crate::operations::mutation::mutator::block_compact_mutator::CompactLimitState;
 use crate::operations::mutation::SegmentCompactChecker;
 use crate::operations::BlockCompactMutator;
 use crate::operations::CompactLazyPartInfo;
@@ -413,7 +414,7 @@ impl ReclusterMutator {
         let mut parts = Vec::new();
         let mut checker =
             SegmentCompactChecker::new(self.block_thresholds, Some(self.cluster_key_id));
-
+        let mut stop_after_next = false;
         for (loc, compact_segment) in compact_segments.into_iter() {
             recluster_blocks_count += compact_segment.summary.block_count;
             let segments_vec = checker.add(loc.segment_idx, compact_segment);
@@ -421,8 +422,18 @@ impl ReclusterMutator {
                 checker.generate_part(segments, &mut parts);
             }
 
-            if checker.is_limit_reached(num_segment_limit, num_block_limit) {
+            if stop_after_next {
                 break;
+            }
+
+            match checker.is_limit_reached(num_segment_limit, num_block_limit) {
+                CompactLimitState::Continue => {}
+                CompactLimitState::ReachedBlockLimit => {
+                    stop_after_next = true;
+                }
+                CompactLimitState::ReachedSegmentLimit => {
+                    break;
+                }
             }
         }
         // finalize the compaction.
