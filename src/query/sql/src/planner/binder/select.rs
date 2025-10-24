@@ -78,7 +78,6 @@ impl Binder {
         let last_expr_context = bind_context.expr_context.clone();
         bind_context.set_expr_context(ExprContext::WhereClause);
 
-        // Masking policy is now handled uniformly in TypeChecker::resolve()
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),

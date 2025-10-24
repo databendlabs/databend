@@ -43,7 +43,6 @@ impl Binder {
     ) -> Result<ScalarExpr> {
         bind_context.set_expr_context(ExprContext::HavingClause);
 
-        // Masking policy is now handled uniformly in TypeChecker::resolve()
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),

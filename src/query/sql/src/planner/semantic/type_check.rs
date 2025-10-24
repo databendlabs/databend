@@ -6666,20 +6666,11 @@ impl<'a> TypeChecker<'a> {
                         return Ok(Some(expr));
                     }
                     Err(err) => {
-                        // Log warning when masking policy cannot be loaded
-                        // This can happen if:
-                        // 1. Policy was deleted after being attached to a column
-                        // 2. Meta service is temporarily unavailable
-                        // 3. Permission issues
-                        log::warn!(
-                            "Failed to load masking policy (id: {}) for column '{}': {}. \
-                             Column will be returned unmasked. \
-                             This may be a security issue - please verify the policy still exists.",
-                            policy_id,
-                            column_binding.column_name,
-                            err
-                        );
-                        // Fall through to return None - column will not be masked
+                        // Error when masking policy cannot be loaded
+                        return Err(ErrorCode::UnknownMaskPolicy(format!(
+                            "Failed to load masking policy (id: {}) for column '{}': {}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
+                            policy_id, column_binding.column_name, err
+                        )));
                     }
                 }
             }
