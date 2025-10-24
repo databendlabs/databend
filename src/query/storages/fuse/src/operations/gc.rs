@@ -17,16 +17,18 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ScalarRef;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIndex;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_io::Files;
@@ -38,13 +40,16 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use futures::TryStreamExt;
 use log::error;
 use log::info;
 use log::warn;
+use opendal::Entry;
 
 use crate::index::InvertedIndexFile;
 use crate::io::read::ColumnOrientedSegmentReader;
 use crate::io::read::RowOrientedSegmentReader;
+use crate::io::read::SnapshotHistoryReader;
 use crate::io::InvertedIndexReader;
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
@@ -52,7 +57,10 @@ use crate::io::SnapshotLiteExtended;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::FuseTable;
+use crate::RetentionPolicy;
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
+
+const DEFAULT_REF_NUM_SNAPSHOT_LIMIT: usize = 100;
 
 impl FuseTable {
     pub async fn do_purge(
@@ -60,18 +68,23 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         snapshot_files: Vec<String>,
         num_snapshot_limit: Option<usize>,
-        keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         let mut counter = PurgeCounter::new();
+
+        // Step 1: Process snapshot refs (branches and tags) before main purge
+        let ref_protected_segments = self
+            .process_refs_for_purge(ctx, &mut counter, dry_run)
+            .await?;
+
         let res = self
             .execute_purge(
                 ctx,
                 snapshot_files,
                 num_snapshot_limit,
-                keep_last_snapshot,
                 &mut counter,
                 dry_run,
+                ref_protected_segments,
             )
             .await;
         info!("purge counter {:?}", counter);
@@ -84,18 +97,14 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         snapshot_files: Vec<String>,
         num_snapshot_limit: Option<usize>,
-        keep_last_snapshot: bool,
         counter: &mut PurgeCounter,
         dry_run: bool,
+        ref_protected_segments: HashSet<Location>,
     ) -> Result<Option<Vec<String>>> {
         // 1. Read the root snapshot.
-        let root_snapshot_info_opt = self.read_root_snapshot(ctx, keep_last_snapshot).await?;
+        let root_snapshot_info_opt = self.read_root_snapshot(ctx, ref_protected_segments).await?;
         if root_snapshot_info_opt.is_none() {
-            if dry_run {
-                return Ok(Some(vec![]));
-            } else {
-                return Ok(None);
-            }
+            return if dry_run { Ok(Some(vec![])) } else { Ok(None) };
         }
 
         let root_snapshot_info = root_snapshot_info_opt.unwrap();
@@ -282,27 +291,13 @@ impl FuseTable {
             return Ok(Some(dry_run_purge_files));
         }
 
-        // 3. purge root snapshots
-        if !keep_last_snapshot {
-            self.purge_root_snapshot(
-                ctx,
-                counter,
-                root_snapshot_info.snapshot_lite,
-                root_snapshot_info.referenced_locations,
-                root_snapshot_info.snapshot_location,
-                &table_agg_index_ids,
-                inverted_indexes,
-            )
-            .await?;
-        }
-
         Ok(None)
     }
 
     async fn read_root_snapshot(
         &self,
         ctx: &Arc<dyn TableContext>,
-        put_cache: bool,
+        ref_protected_segments: HashSet<Location>,
     ) -> Result<Option<RootSnapshotInfo>> {
         let root_snapshot_location_op = self.snapshot_loc();
         if root_snapshot_location_op.is_none() {
@@ -310,36 +305,26 @@ impl FuseTable {
         }
 
         let snapshot_location = root_snapshot_location_op.unwrap();
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
-        let params = LoadParams {
-            location: snapshot_location.clone(),
-            len_hint: None,
-            ver,
-            put_cache,
-        };
-        let root_snapshot = match reader.read(&params).await {
-            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
-                // concurrent gc: someone else has already collected this snapshot, ignore it
-                warn!(
-                    "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
-                    snapshot_location, self.table_info.desc, self.table_info.ident,
-                );
-                return Ok(None);
-            }
-            Err(e) => return Err(e),
-            Ok(v) => v,
+        let Some(root_snapshot) =
+            SnapshotsIO::read_snapshot_for_vacuum(self.get_operator(), &snapshot_location).await?
+        else {
+            return Ok(None);
         };
 
         // root snapshot cannot ignore storage not find error.
+        let mut segments =
+            HashSet::with_capacity(ref_protected_segments.len() + root_snapshot.segments.len());
+        segments.extend(ref_protected_segments);
+        segments.extend(root_snapshot.segments.clone());
+        let segment_refs: Vec<&Location> = segments.iter().collect();
         let referenced_locations = self
-            .get_block_locations(ctx.clone(), &root_snapshot.segments, put_cache, false)
+            .get_block_locations(ctx.clone(), &segment_refs, true, false)
             .await?;
         let snapshot_lite = Arc::new(SnapshotLiteExtended {
-            format_version: ver,
+            format_version: root_snapshot.format_version,
             snapshot_id: root_snapshot.snapshot_id,
             timestamp: root_snapshot.timestamp,
-            segments: HashSet::from_iter(root_snapshot.segments.clone()),
+            segments,
             table_statistics_location: root_snapshot.table_statistics_location(),
         });
         Ok(Some(RootSnapshotInfo {
@@ -365,8 +350,9 @@ impl FuseTable {
         let segment_locations = Vec::from_iter(segments_to_be_purged);
         for chunk in segment_locations.chunks(chunk_size) {
             // since we are purging files, the ErrorCode::STORAGE_NOT_FOUND error can be safely ignored.
+            let chunk_refs: Vec<&Location> = chunk.iter().collect();
             let locations = self
-                .get_block_locations(ctx.clone(), chunk, false, true)
+                .get_block_locations(ctx.clone(), &chunk_refs, false, true)
                 .await?;
 
             for loc in &locations.block_location {
@@ -416,8 +402,9 @@ impl FuseTable {
         let segment_locations = Vec::from_iter(segments_to_be_purged);
         for chunk in segment_locations.chunks(chunk_size) {
             // since we are purging files, the ErrorCode::STORAGE_NOT_FOUND error can be safely ignored.
+            let chunk_refs: Vec<&Location> = chunk.iter().collect();
             let locations = self
-                .get_block_locations(ctx.clone(), chunk, false, true)
+                .get_block_locations(ctx.clone(), &chunk_refs, false, true)
                 .await?;
 
             let mut blocks_to_be_purged = HashSet::new();
@@ -497,75 +484,6 @@ impl FuseTable {
 
         self.purge_ts_snapshots(ctx, counter, ts_to_be_purged, snapshots_to_be_purged)
             .await
-    }
-
-    async fn purge_root_snapshot(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        counter: &mut PurgeCounter,
-        root_snapshot: Arc<SnapshotLiteExtended>,
-        root_location_tuple: LocationTuple,
-        root_snapshot_location: String,
-        table_agg_index_ids: &[u64],
-        inverted_indexes: &BTreeMap<String, TableIndex>,
-    ) -> Result<()> {
-        let segment_locations_to_be_purged = HashSet::from_iter(
-            root_snapshot
-                .segments
-                .iter()
-                .map(|loc| loc.0.clone())
-                .collect::<Vec<_>>(),
-        );
-
-        let mut agg_indexes_to_be_purged = HashSet::new();
-        let mut inverted_indexes_to_be_purged = HashSet::new();
-        for index_id in table_agg_index_ids {
-            agg_indexes_to_be_purged.extend(root_location_tuple.block_location.iter().map(|loc| {
-                TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                    loc, *index_id,
-                )
-            }));
-        }
-
-        // Collect the inverted index files accompanying blocks
-        // NOTE:  For a block, and one index of it, there might be multiple inverted index files,
-        // such as, different versions of same (in the sense of name) inverted index.
-        // we do not handle this one block multiple inverted indexes case now.
-        for idx in inverted_indexes.values() {
-            inverted_indexes_to_be_purged.extend(root_location_tuple.block_location.iter().map(
-                |loc| {
-                    TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                        loc,
-                        idx.name.as_str(),
-                        idx.version.as_str(),
-                    )
-                },
-            ));
-        }
-
-        self.purge_block_segments(
-            ctx,
-            counter,
-            root_location_tuple.block_location,
-            agg_indexes_to_be_purged,
-            inverted_indexes_to_be_purged,
-            root_location_tuple.bloom_location,
-            root_location_tuple.hll_location,
-            segment_locations_to_be_purged,
-        )
-        .await?;
-
-        let mut ts_to_be_purged = HashSet::new();
-        if let Some(ts) = root_snapshot.table_statistics_location.clone() {
-            ts_to_be_purged.insert(ts);
-        }
-        self.purge_ts_snapshots(
-            ctx,
-            counter,
-            ts_to_be_purged,
-            HashSet::from([root_snapshot_location]),
-        )
-        .await
     }
 
     async fn purge_block_segments(
@@ -728,7 +646,7 @@ impl FuseTable {
     pub async fn get_block_locations(
         &self,
         ctx: Arc<dyn TableContext>,
-        segment_locations: &[Location],
+        segment_locations: &[&Location],
         put_cache: bool,
         ignore_err: bool,
     ) -> Result<LocationTuple> {
@@ -738,9 +656,10 @@ impl FuseTable {
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
-        let mut projection = HashSet::new();
-        projection.insert(LOCATION.to_string());
-        projection.insert(BLOOM_FILTER_INDEX_LOCATION.to_string());
+        let projection = HashSet::from([
+            LOCATION.to_string(),
+            BLOOM_FILTER_INDEX_LOCATION.to_string(),
+        ]);
         for chunk in segment_locations.chunks(chunk_size) {
             let results = match self.is_column_oriented() {
                 true => {
@@ -787,7 +706,7 @@ impl FuseTable {
             for (idx, location_tuple) in results.into_iter().enumerate() {
                 let location_tuple = match location_tuple {
                     Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND && ignore_err => {
-                        let location = &segment_locations[idx];
+                        let location = chunk[idx];
                         // concurrent gc: someone else has already collected this segment, ignore it
                         warn!(
                             "concurrent gc: segment of location {} already collected. table: {}, ident {}",
@@ -818,6 +737,242 @@ impl FuseTable {
             FUSE_TBL_SNAPSHOT_PREFIX,
         );
         SnapshotsIO::list_files(self.get_operator(), &prefix, None).await
+    }
+
+    /// Design note:
+    /// Branches are vacuumed using a timestamp-based retention policy to simplify data lifecycle management.
+    /// For inactive branches, the snapshot root timestamp may remain very old.
+    /// If we apply snapshot-count based cleanup, this old timestamp could unnecessarily retain data
+    pub fn get_refs_retention_policy(
+        &self,
+        ctx: &dyn TableContext,
+        now: DateTime<Utc>,
+    ) -> Result<(DateTime<Utc>, usize)> {
+        // referenced by the main branch and delay garbage collection.
+        let retention_policy = self.get_data_retention_policy(ctx)?;
+        let (delta_duration, num_snapshots_to_keep) = match retention_policy {
+            RetentionPolicy::ByNumOfSnapshotsToKeep(n) => {
+                let duration = self.get_data_retention_period(ctx)?;
+                (duration, n)
+            }
+            RetentionPolicy::ByTimePeriod(delta_duration) => {
+                (delta_duration, DEFAULT_REF_NUM_SNAPSHOT_LIMIT)
+            }
+        };
+        let retention_time = now - delta_duration;
+        Ok((retention_time, num_snapshots_to_keep))
+    }
+
+    /// List snapshots for branch with fallback strategy:
+    /// 1. First try to list by timestamp (retention_time)
+    /// 2. If empty, fallback to list all and truncate by num_snapshots_to_keep
+    #[async_backtrace::framed]
+    pub async fn list_branch_snapshots_with_fallback(
+        &self,
+        ref_name: &str,
+        head: &str,
+        retention_time: DateTime<Utc>,
+        num_snapshots_to_keep: usize,
+    ) -> Result<Vec<Entry>> {
+        let ref_snapshot_location_prefix = self
+            .meta_location_generator()
+            .ref_snapshot_location_prefix();
+        let ref_prefix = format!("{}{}/", ref_snapshot_location_prefix, ref_name);
+        // First attempt: list by timestamp
+        let mut snapshots = self
+            .list_files_until_timestamp(&ref_prefix, retention_time, true, None)
+            .await?;
+
+        // If no snapshots found by timestamp, fallback to count-based strategy
+        let len = snapshots.len();
+        if len == 0 {
+            snapshots = self
+                .list_files_until_prefix(&ref_prefix, head, true, None)
+                .await?;
+            if len > num_snapshots_to_keep {
+                let num_candidates = len - num_snapshots_to_keep + 2;
+                snapshots.truncate(num_candidates);
+            } else {
+                snapshots.clear();
+            }
+        }
+        Ok(snapshots)
+    }
+
+    /// Find the earliest snapshot via snapshot history traversal
+    #[async_backtrace::framed]
+    pub async fn find_earliest_snapshot_via_history(
+        &self,
+        ref_name: &str,
+        head_location: &str,
+    ) -> Result<Arc<TableSnapshot>> {
+        let snapshot_version = TableMetaLocationGenerator::snapshot_version(head_location);
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let mut snapshot_stream = reader.snapshot_history(
+            head_location.to_string(),
+            snapshot_version,
+            self.meta_location_generator().clone(),
+            Some(ref_name.to_string()),
+        );
+
+        let mut last_snapshot = None;
+        while let Some((snapshot, _version)) = snapshot_stream.try_next().await? {
+            last_snapshot = Some(snapshot);
+        }
+
+        last_snapshot.ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Failed to find any snapshot in history for branch {}",
+                ref_name
+            ))
+        })
+    }
+
+    /// Process gc_root from last snapshot and collect snapshots to purge
+    ///
+    /// Returns gc_root snapshot if found
+    async fn select_branch_gc_root(
+        &self,
+        ref_name: &str,
+        snapshots_before_retention: &[Entry],
+        ref_snapshots_to_purge: &mut Vec<String>,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        if snapshots_before_retention.len() < 2 {
+            return Ok(None);
+        }
+
+        let last_snapshot_path = snapshots_before_retention.last().unwrap().path();
+        let op = self.get_operator();
+        let (last_snapshot, _) =
+            SnapshotsIO::read_snapshot(last_snapshot_path.to_string(), op.clone(), false).await?;
+
+        // Get its prev_snapshot_id as gc_root
+        let Some((gc_root_id, gc_root_ver)) = last_snapshot.prev_snapshot_id else {
+            return Ok(None);
+        };
+        let gc_root_path = self
+            .meta_location_generator()
+            .ref_snapshot_location_from_uuid(ref_name, &gc_root_id, gc_root_ver)?;
+        // Try to read gc_root snapshot
+        match SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await {
+            Ok((gc_root_snap, _)) => {
+                // Collect snapshots_to_purge
+                let mut gc_candidates = Vec::with_capacity(snapshots_before_retention.len());
+                for snapshot in snapshots_before_retention.iter() {
+                    gc_candidates.push(snapshot.path().to_owned());
+                }
+
+                // Find gc_root position in candidates
+                let gc_root_idx = gc_candidates.binary_search(&gc_root_path).map_err(|_| {
+                    ErrorCode::Internal(format!(
+                        "gc root path {} should be one of the candidates, candidates: {:?}",
+                        gc_root_path, gc_candidates
+                    ))
+                })?;
+                ref_snapshots_to_purge.extend_from_slice(&gc_candidates[..gc_root_idx]);
+
+                Ok(Some(gc_root_snap))
+            }
+            Err(e) => {
+                // Log the error but continue processing
+                warn!(
+                    "Failed to read gc_root snapshot at {}: {}, using anchor instead",
+                    gc_root_path, e
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    /// Process snapshot refs (branches and tags) for purge.
+    /// Return the protected segments from ref gc roots (tags and branches).
+    #[async_backtrace::framed]
+    async fn process_refs_for_purge(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        counter: &mut PurgeCounter,
+        dry_run: bool,
+    ) -> Result<HashSet<Location>> {
+        let now = Utc::now();
+        let table_info = self.get_table_info();
+        let op = self.get_operator();
+        let (retention_time, num_snapshots_to_keep) =
+            self.get_refs_retention_policy(ctx.as_ref(), now)?;
+
+        let mut ref_protected_segments = HashSet::new();
+        let mut ref_snapshots_to_purge = Vec::new();
+        let mut expired_refs = HashSet::new();
+
+        // First pass: process refs, identify expired refs, and collect anchor updates
+        for (ref_name, snapshot_ref) in table_info.meta.refs.iter() {
+            // Check if ref is expired
+            if snapshot_ref.expire_at.is_some_and(|v| v < now) {
+                expired_refs.insert(ref_name);
+                continue;
+            }
+
+            match &snapshot_ref.typ {
+                SnapshotRefType::Tag => {
+                    // Tag: read head snapshot as gc root to protect its segments
+                    let (tag_snapshot, _) =
+                        SnapshotsIO::read_snapshot(snapshot_ref.loc.clone(), op.clone(), true)
+                            .await?;
+
+                    // Collect segments from tag
+                    for seg_loc in &tag_snapshot.segments {
+                        ref_protected_segments.insert(seg_loc.clone());
+                    }
+                }
+                SnapshotRefType::Branch => {
+                    let snapshots_before_lvt = self
+                        .list_branch_snapshots_with_fallback(
+                            ref_name,
+                            &snapshot_ref.loc,
+                            retention_time,
+                            num_snapshots_to_keep,
+                        )
+                        .await?;
+
+                    let gc_root_snap = if let Some(gc_root_snap) = self
+                        .select_branch_gc_root(
+                            ref_name,
+                            &snapshots_before_lvt,
+                            &mut ref_snapshots_to_purge,
+                        )
+                        .await?
+                    {
+                        gc_root_snap
+                    } else {
+                        self.find_earliest_snapshot_via_history(ref_name, &snapshot_ref.loc)
+                            .await?
+                    };
+                    // Collect segments from gc_root
+                    for seg_loc in &gc_root_snap.segments {
+                        ref_protected_segments.insert(seg_loc.clone());
+                    }
+                }
+            }
+        }
+
+        if dry_run {
+            return Ok(ref_protected_segments);
+        }
+
+        // Cleanup expired ref directories
+        if !expired_refs.is_empty() {
+            let _ = self.update_table_refs_meta(ctx, &expired_refs).await?;
+        }
+
+        // Purge ref snapshots if not dry_run
+        if !ref_snapshots_to_purge.is_empty() {
+            counter.snapshots += ref_snapshots_to_purge.len();
+            let fuse_file = Files::create(ctx.clone(), op);
+            fuse_file
+                .remove_file_in_batch(ref_snapshots_to_purge)
+                .await?;
+        }
+
+        Ok(ref_protected_segments)
     }
 }
 

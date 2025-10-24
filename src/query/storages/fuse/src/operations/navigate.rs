@@ -62,6 +62,11 @@ impl FuseTable {
                     .await
             }
             NavigationPoint::StreamInfo(info) => self.navigate_to_stream(ctx, info).await,
+            NavigationPoint::TableRef { typ, name } => {
+                let table_ref = self.table_info.get_table_ref(Some(typ), name)?;
+                self.load_table_by_location(ctx, Some(table_ref.loc.clone()))
+                    .await
+            }
         }
     }
 
@@ -82,8 +87,17 @@ impl FuseTable {
                 stream_info.desc, self.table_info.desc
             )));
         }
+        let location = options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned();
+        self.load_table_by_location(ctx, location).await
+    }
 
-        let Some(snapshot_loc) = options.get(OPT_KEY_SNAPSHOT_LOCATION) else {
+    #[async_backtrace::framed]
+    async fn load_table_by_location(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        location: Option<String>,
+    ) -> Result<Arc<FuseTable>> {
+        let Some(snapshot_loc) = location else {
             let mut table_info = self.table_info.clone();
             table_info.meta.options.remove(OPT_KEY_SNAPSHOT_LOCATION);
             table_info.meta.statistics = TableStatistics::default();
@@ -94,7 +108,7 @@ impl FuseTable {
             return Ok(table.into());
         };
         let (snapshot, format_version) =
-            SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator()).await?;
+            SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator(), true).await?;
         self.load_table_by_snapshot(
             snapshot.as_ref(),
             format_version,
@@ -175,6 +189,7 @@ impl FuseTable {
             location,
             snapshot_version,
             self.meta_location_generator().clone(),
+            self.get_table_branch_name(),
         );
 
         // Find the instant which matches the given `time_point`.
@@ -222,9 +237,17 @@ impl FuseTable {
         table_info.meta.schema = Arc::new(snapshot.schema.clone());
 
         // 2. the table option `snapshot_location`
-        let loc = self
-            .meta_location_generator
-            .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?;
+        let loc = if let Some(branch_name) = self.get_table_branch_name() {
+            self.meta_location_generator
+                .ref_snapshot_location_from_uuid(
+                    &branch_name,
+                    &snapshot.snapshot_id,
+                    format_version,
+                )?
+        } else {
+            self.meta_location_generator
+                .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?
+        };
         table_info
             .meta
             .options
@@ -284,6 +307,7 @@ impl FuseTable {
                     Some(NavigationPoint::StreamInfo(info)) => {
                         self.list_by_stream(info, time_point).await
                     }
+                    Some(NavigationPoint::TableRef { .. }) => unreachable!(),
                     None => self.list_by_time_point(time_point).await,
                 }?;
 
@@ -454,5 +478,112 @@ impl FuseTable {
         file_list.sort_by(|(_, m1), (_, m2)| m2.cmp(m1));
 
         Ok(file_list.into_iter().map(|v| v.0).collect())
+    }
+
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    pub async fn navigate_to_location(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        point: &NavigationPoint,
+    ) -> Result<Option<String>> {
+        match point {
+            NavigationPoint::SnapshotID(snapshot_id) => {
+                // Because the user explicitly asked for a specific snapshot,
+                // we treat "not found" as an error instead of silently returning None.
+                let Some(location) = self.snapshot_loc() else {
+                    return Err(ErrorCode::TableHistoricalDataNotFound(
+                        "Empty Table has no historical data",
+                    ));
+                };
+                let loc = self
+                    .find_location(&ctx, location, |snapshot| {
+                        snapshot
+                            .snapshot_id
+                            .simple()
+                            .to_string()
+                            .as_str()
+                            .starts_with(snapshot_id)
+                    })
+                    .await?;
+                Ok(Some(loc))
+            }
+            NavigationPoint::TimePoint(time_point) => {
+                // This allows users to query historical states gracefully even if
+                // the table was created *after* the given time.
+                let Some(location) = self.snapshot_loc() else {
+                    return Ok(None);
+                };
+                let loc = self
+                    .find_location(&ctx, location, |snapshot| {
+                        if let Some(ts) = snapshot.timestamp {
+                            ts <= *time_point
+                        } else {
+                            false
+                        }
+                    })
+                    .await
+                    .ok();
+                Ok(loc)
+            }
+            NavigationPoint::StreamInfo(stream_info) => {
+                let options = stream_info.options();
+                let stream_table_id = options
+                    .get(OPT_KEY_SOURCE_TABLE_ID)
+                    .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
+                    .parse::<u64>()?;
+                if stream_table_id != self.table_info.ident.table_id {
+                    return Err(ErrorCode::IllegalStream(format!(
+                        "The stream '{}' is not match the table '{}'",
+                        stream_info.desc, self.table_info.desc
+                    )));
+                }
+                Ok(options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned())
+            }
+            NavigationPoint::TableRef { typ, name } => {
+                let table_ref = self.table_info.get_table_ref(Some(typ), name)?;
+                Ok(Some(table_ref.loc.clone()))
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn find_location<P>(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        location: String,
+        mut pred: P,
+    ) -> Result<String>
+    where
+        P: FnMut(&TableSnapshot) -> bool,
+    {
+        let abort_checker = ctx.clone().get_abort_checker();
+        let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        // grab the table history as stream
+        // snapshots are order by timestamp DESC.
+        let mut snapshot_stream = reader.snapshot_history(
+            location,
+            snapshot_version,
+            self.meta_location_generator().clone(),
+            self.get_table_branch_name(),
+        );
+
+        // Find the snapshot which matches the given `time_point`.
+        while let Some((snapshot, format_version)) = snapshot_stream.try_next().await? {
+            abort_checker
+                .try_check_aborting()
+                .with_context(|| "failed to find snapshot")?;
+            if pred(snapshot.as_ref()) {
+                let snapshot_location = self
+                    .meta_location_generator
+                    .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?;
+                return Ok(snapshot_location);
+            }
+        }
+
+        Err(ErrorCode::TableHistoricalDataNotFound(
+            "No historical data found at given point",
+        ))
     }
 }

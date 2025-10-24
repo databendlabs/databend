@@ -77,10 +77,7 @@ pub(crate) async fn purge(
     // check mutability
     table.check_mutable()?;
 
-    let keep_latest = true;
-    let res = table
-        .purge(ctx, instant, num_snapshot_limit, keep_latest, false)
-        .await?;
+    let res = table.purge(ctx, instant, num_snapshot_limit, false).await?;
     assert!(res.is_none());
     Ok(())
 }

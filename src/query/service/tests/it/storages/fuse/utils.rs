@@ -25,9 +25,9 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
-pub fn new_empty_snapshot(schema: TableSchema, prev_table_seq: Option<u64>) -> TableSnapshot {
+pub fn new_empty_snapshot(schema: TableSchema) -> TableSnapshot {
     TableSnapshot::try_new(
-        prev_table_seq,
+        None,
         None,
         schema,
         Statistics::default(),
@@ -71,7 +71,7 @@ pub async fn do_purge_test(
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     let table_ctx: Arc<dyn TableContext> = fixture.new_query_ctx().await?;
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, None, true, false)
+        .do_purge(&table_ctx, snapshot_files, None, false)
         .await?;
 
     check_data_dir(

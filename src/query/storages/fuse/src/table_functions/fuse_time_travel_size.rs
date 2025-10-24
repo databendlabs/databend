@@ -254,7 +254,7 @@ async fn calc_tbl_size(tbl: &FuseTable) -> Result<(u64, Result<u64>)> {
         Some(snapshot_location) => {
             let start = std::time::Instant::now();
             info!("fuse_time_travel_size will read: {}", snapshot_location);
-            let snapshot = SnapshotsIO::read_snapshot(snapshot_location, operator).await;
+            let snapshot = SnapshotsIO::read_snapshot(snapshot_location, operator, true).await;
             info!("read_snapshot cost: {:?}", start.elapsed());
             snapshot.map(|(snapshot, _)| {
                 snapshot.summary.compressed_byte_size + snapshot.summary.index_size

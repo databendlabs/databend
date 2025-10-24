@@ -510,6 +510,7 @@ impl QueryContext {
         catalog: &str,
         database: &str,
         table: &str,
+        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         let table = self
@@ -532,6 +533,12 @@ impl QueryContext {
                 DeltaTable::try_create(info.to_owned())?.into()
             }
             _ => table,
+        };
+
+        let table = if let Some(branch) = branch {
+            table.with_branch(branch)?
+        } else {
+            table
         };
         Ok(table)
     }
@@ -1441,7 +1448,7 @@ impl TableContext for QueryContext {
         }
 
         let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
-        self.get_table_from_shared(catalog, database, table, batch_size)
+        self.get_table_from_shared(catalog, database, table, None, batch_size)
             .await
     }
 
@@ -1455,6 +1462,7 @@ impl TableContext for QueryContext {
         catalog: &str,
         database: &str,
         table: &str,
+        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         let max_batch_size = {
@@ -1475,8 +1483,9 @@ impl TableContext for QueryContext {
         };
 
         let table = self
-            .get_table_from_shared(catalog, database, table, max_batch_size)
+            .get_table_from_shared(catalog, database, table, branch, max_batch_size)
             .await?;
+
         if table.is_stream() {
             let stream = StreamTable::try_from_table(table.as_ref())?;
             let actual_batch_limit = stream.max_batch_size();
