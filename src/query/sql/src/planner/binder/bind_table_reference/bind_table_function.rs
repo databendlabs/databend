@@ -297,6 +297,7 @@ impl Binder {
             CATALOG_DEFAULT.to_string(),
             "system".to_string(),
             table.as_table(),
+            None,
             table_alias_name,
             false,
             false,
@@ -358,6 +359,7 @@ impl Binder {
                 CATALOG_DEFAULT.to_string(),
                 "system".to_string(),
                 table.clone(),
+                None,
                 table_alias_name,
                 false,
                 false,
@@ -571,8 +573,7 @@ impl Binder {
                     Err(ErrorCode::InvalidArgument(format!(
                         "The function '{}' is not supported for lateral joins. Lateral joins currently support only Set Returning Functions (SRFs).",
                         func_name
-                    ))
-                    .set_span(*span))
+                    )).set_span(*span))
                 }
             }
             _ => unreachable!(),

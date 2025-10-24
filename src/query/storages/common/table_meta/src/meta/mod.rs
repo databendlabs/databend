@@ -38,15 +38,16 @@ pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only
 pub(crate) use testing::*;
+pub(crate) use utils::monotonically_increased_timestamp;
 pub use utils::parse_storage_prefix;
 pub use utils::trim_object_prefix;
+pub(crate) use utils::trim_timestamp_to_milli_second;
 pub use utils::try_extract_uuid_str_from_path;
 pub use utils::uuid_from_date_time;
 pub use utils::SnapshotTimestampValidationContext;
 pub use utils::TableMetaTimestamps;
 pub use utils::TEMP_TABLE_STORAGE_PREFIX;
 pub use utils::VACUUM2_OBJECT_KEY_PREFIX;
-pub(crate) use utils::*;
 pub use v0::ColumnMeta as ColumnMetaV0;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;

@@ -12,7 +12,6 @@ prost = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["num-derive", "prost"]

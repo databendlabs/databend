@@ -136,7 +136,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);
     // unused snapshot.
-    let snapshot = new_empty_snapshot(schema.as_ref().clone(), None);
+    let snapshot = new_empty_snapshot(schema.as_ref().clone());
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(test_segment_locations, None);

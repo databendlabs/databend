@@ -110,6 +110,8 @@ impl Plan {
             Plan::DropAllTableRowAccessPolicies(_) => {
                 Ok("DropAllTableRowAccessPolicies".to_string())
             }
+            Plan::CreateTableRef(_) => Ok("CreateTableRef".to_string()),
+            Plan::DropTableRef(_) => Ok("DropTableRef".to_string()),
 
             // Views
             Plan::CreateView(_) => Ok("CreateView".to_string()),

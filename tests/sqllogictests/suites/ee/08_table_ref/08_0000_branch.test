@@ -1,0 +1,144 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+DROP DATABASE IF EXISTS test_branch
+
+statement ok
+CREATE DATABASE test_branch
+
+statement ok
+USE test_branch
+
+statement ok
+set data_retention_time_in_days = 0;
+
+## Test basic branch creation and query
+statement ok
+CREATE OR REPLACE TABLE t1(a INT, b STRING)
+
+statement ok
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c')
+
+query IT
+SELECT * FROM t1 ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement ok
+optimize table t1 compact
+
+## Create branch from current state
+statement ok
+ALTER TABLE t1 CREATE BRANCH dev
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement ok
+INSERT INTO t1 VALUES (10, 'x')
+
+## Test branch creation with AT clause - BRANCH
+statement ok
+ALTER TABLE t1 CREATE BRANCH from_dev AT (BRANCH => dev)
+
+query IT
+SELECT * FROM t1/from_dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+## Test branch with RETAIN
+statement ok
+ALTER TABLE t1 CREATE BRANCH temp_branch RETAIN 2 SECONDS
+
+query IT
+SELECT * FROM t1/temp_branch ORDER BY a
+----
+1 a
+2 b
+3 c
+10 x
+
+## Test type mismatch error (drop tag when it's a branch)
+statement error 2748
+ALTER TABLE t1 DROP TAG temp_branch
+
+## Wait for branch to expire
+statement ok
+SELECT SLEEP(2)
+
+## Query expired branch should fail
+statement error 2749
+SELECT * FROM t1/temp_branch
+
+## Do compact and purge.
+statement ok
+optimize table t1 all;
+
+## temp_branch was purged.
+statement error 2745
+SELECT * FROM t1/temp_branch
+
+query I
+select count() from fuse_snapshot('test_branch','t1');
+----
+1
+
+query IT
+SELECT * FROM t1/from_dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+## Test duplicate branch name
+statement error 2746
+ALTER TABLE t1 CREATE BRANCH dev
+
+## Test drop branch
+statement ok
+ALTER TABLE t1 DROP BRANCH dev
+
+## Query dropped branch should fail
+statement error 2745
+SELECT * FROM t1/dev
+
+## Test drop non-existent branch
+statement error 2745
+ALTER TABLE t1 DROP BRANCH non_existent
+
+## Test branch on non-FUSE table (should fail)
+statement ok
+CREATE TABLE t_memory(a INT) ENGINE = Memory
+
+statement error 2747
+ALTER TABLE t_memory CREATE BRANCH test
+
+## Test branch on temporary table (should fail)
+statement ok
+CREATE TEMPORARY TABLE t_temp(a INT)
+
+statement error 2747
+ALTER TABLE t_temp CREATE BRANCH test
+
+statement ok
+DROP DATABASE test_branch
