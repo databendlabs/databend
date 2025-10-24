@@ -59,7 +59,7 @@ impl Display for UpdateStmt {
                 .chain(Some(&self.table)),
         )?;
         if let Some(alias) = &self.table_alias {
-            write!(f, " AS {}", alias.name)?;
+            write!(f, " AS {}", alias)?;
         }
         write!(f, " SET ")?;
         write_comma_separated_list(f, &self.update_list)?;

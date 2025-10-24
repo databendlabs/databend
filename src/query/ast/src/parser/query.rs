@@ -566,6 +566,21 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
     .parse(i)
 }
 
+pub fn at_table_ref(i: Input) -> IResult<TimeTravelPoint> {
+    map(
+        rule! { "(" ~ ( BRANCH | TAG ) ~ "=>" ~  #ident ~ ")" },
+        |(_, token, _, name, _)| {
+            let typ = match token.kind {
+                TokenKind::BRANCH => SnapshotRefType::Branch,
+                TokenKind::TAG => SnapshotRefType::Tag,
+                _ => unreachable!(),
+            };
+            TimeTravelPoint::TableRef { typ, name }
+        },
+    )
+    .parse(i)
+}
+
 pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
     let at_snapshot = map(
         rule! { "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
@@ -753,6 +768,7 @@ pub enum TableReferenceElement {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
+        ref_name: Option<Identifier>,
         alias: Option<TableAlias>,
         temporal: Option<TemporalClause>,
         with_options: Option<WithOptions>,
@@ -796,10 +812,10 @@ pub enum TableReferenceElement {
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ #temporal_clause? ~ #with_options? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (BLOCK ~ "(" ~ #expr ~ ")")? ~ (ROW ~ "(" ~ #expr ~ ROWS? ~ ")")?
+            #dot_separated_idents_with_ref ~ #temporal_clause? ~ #with_options? ~ #table_alias? ~ #pivot? ~ #unpivot? ~ SAMPLE? ~ (BLOCK ~ "(" ~ #expr ~ ")")? ~ (ROW ~ "(" ~ #expr ~ ROWS? ~ ")")?
         },
         |(
-            (catalog, database, table),
+            (catalog, database, table, ref_name),
             temporal,
             with_options,
             alias,
@@ -814,6 +830,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
                 catalog,
                 database,
                 table,
+                ref_name,
                 alias,
                 temporal,
                 with_options,
@@ -1026,6 +1043,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 catalog,
                 database,
                 table,
+                ref_name,
                 alias,
                 temporal,
                 with_options,
@@ -1037,6 +1055,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 catalog,
                 database,
                 table,
+                ref_name,
                 alias,
                 temporal,
                 with_options,

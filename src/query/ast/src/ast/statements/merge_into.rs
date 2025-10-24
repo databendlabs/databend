@@ -205,6 +205,7 @@ impl MutationSource {
                 catalog: catalog.clone(),
                 database: database.clone(),
                 table: table.clone(),
+                ref_name: None,
                 alias: alias.clone(),
                 temporal: None,
                 with_options: with_options.clone(),

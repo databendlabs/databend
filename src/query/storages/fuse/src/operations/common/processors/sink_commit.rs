@@ -55,7 +55,6 @@ use opendal::Operator;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::set_backoff;
-use crate::operations::vacuum::vacuum_table;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::MutationGenerator;
@@ -342,7 +341,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
         if let Some(vacuum_handler) = &self.vacuum_handler {
             let respect_flash_back = true;
-            vacuum_table(tbl, self.ctx.clone(), vacuum_handler, respect_flash_back).await;
+            tbl.vacuum_table(self.ctx.clone(), vacuum_handler, respect_flash_back)
+                .await;
         } else {
             info!("[SINK-COMMIT] No vacuum handler available for auto vacuuming, please verify your license");
         }

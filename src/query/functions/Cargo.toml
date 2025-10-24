@@ -12,7 +12,6 @@ blake3 = { workspace = true }
 borsh = { workspace = true }
 bstr = { workspace = true }
 bumpalo = { workspace = true }
-crc32fast = { workspace = true }
 ctor = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
@@ -30,10 +29,8 @@ databend-functions-scalar-integer-basic-arithmetic = { workspace = true }
 databend-functions-scalar-math = { workspace = true }
 databend-functions-scalar-numeric-basic-arithmetic = { workspace = true }
 geo = { workspace = true }
-geohash = { workspace = true }
 geozero = { workspace = true }
 glob = { workspace = true }
-h3o = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
 jaq-core = { workspace = true }
@@ -42,15 +39,12 @@ jaq-parse = { workspace = true }
 jaq-std = { workspace = true }
 jiff = { workspace = true }
 jsonb = { workspace = true }
-lexical-core = { workspace = true }
 libm = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 md-5 = { workspace = true }
 naive-cityhash = { workspace = true }
 num-traits = { workspace = true }
-once_cell = { workspace = true }
-proj4rs = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
@@ -62,7 +56,6 @@ sha2 = { workspace = true }
 simdutf8 = { workspace = true }
 simple_hll = { workspace = true }
 siphasher = { workspace = true }
-strength_reduce = { workspace = true }
 stringslice = { workspace = true }
 twox-hash = { workspace = true }
 unicase = { workspace = true }

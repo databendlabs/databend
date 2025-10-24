@@ -61,6 +61,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::SnapshotRef;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -157,6 +158,7 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
+    pub(crate) table_branch: Option<(String, SnapshotRef)>,
 
     pub pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
@@ -282,6 +284,7 @@ impl FuseTable {
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
+            table_branch: None,
             pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
     }
@@ -432,6 +435,10 @@ impl FuseTable {
     }
 
     pub fn snapshot_loc(&self) -> Option<String> {
+        if let Some((_, snapshot_ref)) = self.table_branch.as_ref() {
+            return Some(snapshot_ref.head().clone());
+        }
+
         let options = self.table_info.options();
         options
             .get(OPT_KEY_SNAPSHOT_LOCATION)
@@ -942,13 +949,12 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
         num_snapshot_limit: Option<usize>,
-        keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         match self.navigate_for_purge(&ctx, instant).await {
             Ok((table, files)) => {
                 table
-                    .do_purge(&ctx, files, num_snapshot_limit, keep_last_snapshot, dry_run)
+                    .do_purge(&ctx, files, num_snapshot_limit, dry_run)
                     .await
             }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
@@ -1174,6 +1180,13 @@ impl Table for FuseTable {
                 Ok(Arc::new(end_point))
             }
         }
+    }
+
+    fn with_branch(&self, branch_name: &str) -> Result<Arc<dyn Table>> {
+        let snapshot_ref = self.table_info.get_table_ref(None, branch_name)?;
+        let mut new_table = self.clone();
+        new_table.table_branch = Some((branch_name.to_string(), snapshot_ref.clone()));
+        Ok(Arc::new(new_table))
     }
 
     #[async_backtrace::framed]

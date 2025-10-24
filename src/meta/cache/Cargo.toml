@@ -31,8 +31,6 @@ sub-cache = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
-pretty_assertions = { workspace = true }
 
 [lints]
 workspace = true

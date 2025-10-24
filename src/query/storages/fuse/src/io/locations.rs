@@ -23,6 +23,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
@@ -39,6 +40,7 @@ use crate::index::InvertedIndexFile;
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
+use crate::FUSE_TBL_REF_PREFIX;
 use crate::FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
 use crate::FUSE_TBL_VECTOR_INDEX_PREFIX;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
@@ -70,6 +72,7 @@ pub struct TableMetaLocationGenerator {
     inverted_index_location_prefix: String,
     vector_index_location_prefix: String,
     segment_statistics_location_prefix: String,
+    ref_snapshot_location_prefix: String,
 }
 
 impl TableMetaLocationGenerator {
@@ -85,6 +88,7 @@ impl TableMetaLocationGenerator {
         let vector_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_VECTOR_INDEX_PREFIX);
         let segment_statistics_location_prefix =
             format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_STATISTICS_PREFIX);
+        let ref_snapshot_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_REF_PREFIX);
         Self {
             prefix,
             block_location_prefix,
@@ -95,6 +99,7 @@ impl TableMetaLocationGenerator {
             inverted_index_location_prefix,
             vector_index_location_prefix,
             segment_statistics_location_prefix,
+            ref_snapshot_location_prefix,
         }
     }
 
@@ -193,6 +198,16 @@ impl TableMetaLocationGenerator {
     pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
         let snapshot_version = SnapshotVersion::try_from(version)?;
         Ok(snapshot_version.create(id, &self.prefix))
+    }
+
+    pub fn gen_ref_snapshot_location(&self, name: &str, uuid: &Uuid) -> String {
+        format!(
+            "{}/{name}/{}{}_v{}.mpk",
+            &self.ref_snapshot_location_prefix,
+            VACUUM2_OBJECT_KEY_PREFIX,
+            uuid.simple(),
+            TableSnapshot::VERSION,
+        )
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {

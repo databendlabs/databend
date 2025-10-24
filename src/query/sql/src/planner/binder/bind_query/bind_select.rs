@@ -716,6 +716,7 @@ impl SelectRewriter {
                         catalog,
                         database,
                         table,
+                        ref_name,
                         alias,
                         temporal,
                         with_options,
@@ -732,6 +733,10 @@ impl SelectRewriter {
                             source_query.push('.');
                         }
                         source_query.push_str(&table.name);
+                        if let Some(ref_name) = ref_name {
+                            source_query.push('@');
+                            source_query.push_str(&ref_name.name);
+                        }
 
                         if let Some(temporal) = temporal {
                             source_query.push(' ');
