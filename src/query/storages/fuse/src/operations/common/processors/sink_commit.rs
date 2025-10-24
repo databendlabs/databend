@@ -68,7 +68,6 @@ use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
 use crate::operations::set_backoff;
 use crate::operations::set_compaction_num_block_hint;
-use crate::operations::vacuum::vacuum_table;
 use crate::statistics::TableStatsGenerator;
 
 enum State {
@@ -346,7 +345,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
         if let Some(vacuum_handler) = &self.vacuum_handler {
             let respect_flash_back = true;
-            vacuum_table(tbl, self.ctx.clone(), vacuum_handler, respect_flash_back).await;
+            tbl.vacuum_table(self.ctx.clone(), vacuum_handler, respect_flash_back)
+                .await;
         } else {
             info!("No vacuum handler available for auto vacuuming, please verify your license");
         }

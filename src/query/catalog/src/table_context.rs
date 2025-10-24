@@ -301,6 +301,7 @@ pub trait TableContext: Send + Sync {
         catalog: &str,
         database: &str,
         table: &str,
+        branch: Option<&str>,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>>;
 

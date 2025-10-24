@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use backoff::backoff::Backoff;
 use chrono::Utc;
@@ -328,10 +327,9 @@ impl FuseTable {
         base_segments: &[Location],
         base_summary: Statistics,
         table_meta_timestamps: TableMetaTimestamps,
-        max_retry_elapsed: Option<Duration>,
     ) -> Result<()> {
         let mut retries = 0;
-        let mut backoff = set_backoff(None, None, max_retry_elapsed);
+        let mut backoff = set_backoff(None, None, None);
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;

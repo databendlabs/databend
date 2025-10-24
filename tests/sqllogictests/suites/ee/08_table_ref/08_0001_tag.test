@@ -1,0 +1,155 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+DROP DATABASE IF EXISTS test_tag
+
+statement ok
+CREATE DATABASE test_tag
+
+statement ok
+USE test_tag
+
+statement ok
+set data_retention_time_in_days = 0;
+
+## Test basic tag creation and query
+statement ok
+CREATE OR REPLACE TABLE t1(a INT, b STRING)
+
+statement ok
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c')
+
+query IT
+SELECT * FROM t1 ORDER BY a
+----
+1 a
+2 b
+3 c
+
+## Create tag from current state
+statement ok
+ALTER TABLE t1 CREATE TAG v1_0
+
+query IT
+SELECT * FROM t1/v1_0 ORDER BY a
+----
+1 a
+2 b
+3 c
+
+## Insert more data to main table
+statement ok
+INSERT INTO t1 VALUES (4, 'd'), (5, 'e')
+
+query I
+SELECT COUNT(*) FROM t1
+----
+5
+
+## Tag should still point to original snapshot
+query I
+SELECT COUNT(*) FROM t1/v1_0
+----
+3
+
+## Test tag creation with AT clause - TAG
+statement ok
+ALTER TABLE t1 CREATE TAG v1_0_copy AT (TAG => v1_0)
+
+query IT
+SELECT * FROM t1/v1_0_copy ORDER BY a
+----
+1 a
+2 b
+3 c
+
+## Test tag with RETAIN
+statement ok
+ALTER TABLE t1 CREATE TAG temp_tag RETAIN 2 SECONDS
+
+query IT
+SELECT * FROM t1/temp_tag ORDER BY a
+----
+1 a
+2 b
+3 c
+4 d
+5 e
+
+## Wait for tag to expire
+statement ok
+SELECT SLEEP(2)
+
+## Query expired tag should fail
+statement error 2749
+SELECT * FROM t1/temp_tag
+
+statement ok
+optimize table t1 compact
+
+statement ok
+select * from fuse_vacuum2('test_tag', 't1') ignore_result;
+
+## temp_tag was purged.
+statement error 2745
+SELECT * FROM t1/temp_tag
+
+query IT
+SELECT * FROM t1/v1_0 ORDER BY a
+----
+1 a
+2 b
+3 c
+
+## Test duplicate tag name
+statement error 2746
+ALTER TABLE t1 CREATE TAG v1_0
+
+## Test drop tag
+statement ok
+ALTER TABLE t1 DROP TAG v1_0_copy
+
+## Query dropped tag should fail
+statement error 2745
+SELECT * FROM t1/v1_0_copy
+
+## Test drop non-existent tag
+statement error 2745
+ALTER TABLE t1 DROP TAG non_existent
+
+## Test tag on non-FUSE table (should fail)
+statement ok
+CREATE TABLE t_memory(a INT) ENGINE = Memory
+
+statement error 2747
+ALTER TABLE t_memory CREATE TAG test
+
+## Test tag on temporary table (should fail)
+statement ok
+CREATE TEMPORARY TABLE t_temp(a INT)
+
+statement error 2747
+ALTER TABLE t_temp CREATE TAG test
+
+## Test type mismatch error (drop branch when it's a tag)
+statement error 2748
+ALTER TABLE t1 DROP BRANCH v1_0
+
+## Cleanup
+statement ok
+ALTER TABLE t1 DROP TAG v1_0
+
+statement ok
+DROP DATABASE test_tag
