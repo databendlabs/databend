@@ -17,8 +17,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
+use std::sync::Weak;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
@@ -40,8 +42,8 @@ pub struct HashJoinFactory {
     desc: Arc<HashJoinDesc>,
     hash_method: HashMethodKind,
     function_ctx: FunctionContext,
-    grace_state: CStyleCell<HashMap<usize, Arc<GraceHashJoinState>>>,
-    basic_state: CStyleCell<HashMap<usize, Arc<BasicHashJoinState>>>,
+    grace_state: CStyleCell<HashMap<usize, Weak<GraceHashJoinState>>>,
+    basic_state: CStyleCell<HashMap<usize, Weak<BasicHashJoinState>>>,
 }
 
 impl HashJoinFactory {
@@ -62,28 +64,44 @@ impl HashJoinFactory {
         })
     }
 
-    pub fn create_grace_state(self: &Arc<Self>, id: usize) -> Arc<GraceHashJoinState> {
+    pub fn create_grace_state(self: &Arc<Self>, id: usize) -> Result<Arc<GraceHashJoinState>> {
         let locked = self.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
         let ctx = self.ctx.clone();
         match self.grace_state.as_mut().entry(id) {
-            Entry::Occupied(v) => v.get().clone(),
-            Entry::Vacant(v) => v
-                .insert(GraceHashJoinState::create(ctx, id, self.clone()))
-                .clone(),
+            Entry::Occupied(v) => match v.get().upgrade() {
+                Some(v) => Ok(v),
+                None => Err(ErrorCode::Internal(format!(
+                    "Error state: The level {} grace hash state has been destroyed.",
+                    id
+                ))),
+            },
+            Entry::Vacant(v) => {
+                let grace_state = GraceHashJoinState::create(ctx, id, self.clone());
+                v.insert(Arc::downgrade(&grace_state));
+                Ok(grace_state)
+            }
         }
     }
 
-    pub fn create_basic_state(self: &Arc<Self>, id: usize) -> Arc<BasicHashJoinState> {
+    pub fn create_basic_state(self: &Arc<Self>, id: usize) -> Result<Arc<BasicHashJoinState>> {
         let locked = self.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
         match self.basic_state.as_mut().entry(id) {
-            Entry::Occupied(v) => v.get().clone(),
-            Entry::Vacant(v) => v
-                .insert(Arc::new(BasicHashJoinState::create(id, self.clone())))
-                .clone(),
+            Entry::Occupied(v) => match v.get().upgrade() {
+                Some(v) => Ok(v),
+                None => Err(ErrorCode::Internal(format!(
+                    "Error state: The level {} basic hash state has been destroyed.",
+                    id
+                ))),
+            },
+            Entry::Vacant(v) => {
+                let basic_hash_state = Arc::new(BasicHashJoinState::create(id, self.clone()));
+                v.insert(Arc::downgrade(&basic_hash_state));
+                Ok(basic_hash_state)
+            }
         }
     }
 
@@ -113,14 +131,14 @@ impl HashJoinFactory {
                 self.function_ctx.clone(),
                 self.hash_method.clone(),
                 self.desc.clone(),
-                self.create_basic_state(id),
+                self.create_basic_state(id)?,
             )?)),
             JoinType::Left => Ok(Box::new(OuterLeftHashJoin::create(
                 &self.ctx,
                 self.function_ctx.clone(),
                 self.hash_method.clone(),
                 self.desc.clone(),
-                self.create_basic_state(id),
+                self.create_basic_state(id)?,
             )?)),
             _ => unreachable!(),
         }
@@ -134,7 +152,7 @@ impl HashJoinFactory {
                     self.function_ctx.clone(),
                     self.hash_method.clone(),
                     self.desc.clone(),
-                    self.create_basic_state(id),
+                    self.create_basic_state(id)?,
                 )?;
 
                 Ok(Box::new(GraceHashJoin::create(
@@ -142,7 +160,7 @@ impl HashJoinFactory {
                     self.function_ctx.clone(),
                     self.hash_method.clone(),
                     self.desc.clone(),
-                    self.create_grace_state(id + 1),
+                    self.create_grace_state(id + 1)?,
                     inner_hash_join,
                     0,
                 )?))
@@ -153,7 +171,7 @@ impl HashJoinFactory {
                     self.function_ctx.clone(),
                     self.hash_method.clone(),
                     self.desc.clone(),
-                    self.create_basic_state(id),
+                    self.create_basic_state(id)?,
                 )?;
 
                 Ok(Box::new(GraceHashJoin::create(
@@ -161,7 +179,7 @@ impl HashJoinFactory {
                     self.function_ctx.clone(),
                     self.hash_method.clone(),
                     self.desc.clone(),
-                    self.create_grace_state(id + 1),
+                    self.create_grace_state(id + 1)?,
                     left_hash_join,
                     0,
                 )?))

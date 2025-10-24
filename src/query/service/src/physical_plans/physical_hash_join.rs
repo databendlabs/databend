@@ -401,7 +401,7 @@ impl HashJoin {
 
         // After common subexpression elimination is completed, we can delete this type of code.
         {
-            let state = factory.create_basic_state(0);
+            let state = factory.create_basic_state(0)?;
 
             if let Some((build_cache_index, _)) = self.build_side_cache_info {
                 builder.hash_join_states.insert(
