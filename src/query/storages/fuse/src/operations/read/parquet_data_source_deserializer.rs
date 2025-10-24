@@ -140,7 +140,7 @@ impl DeserializeDataTransform {
     fn runtime_filter(&mut self, data_block: DataBlock) -> Result<Option<Bitmap>> {
         // Check if already cached runtime filters
         if self.cached_runtime_filter.is_none() {
-            let bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.table_index);
+            let bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.scan_id);
             let bloom_filters = bloom_filters
                 .into_iter()
                 .filter_map(|filter| {

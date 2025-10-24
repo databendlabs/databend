@@ -160,23 +160,24 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         udf_plan: &databend_common_sql::plans::Udf,
-        mut required: ColumnSet,
+        required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let mut used = vec![];
         for item in udf_plan.items.iter() {
             if required.contains(&item.index) {
-                required.extend(item.scalar.used_columns());
                 used.push(item.clone());
             }
         }
 
+        let child_required = self.derive_single_child_required_columns(s_expr, &required)?;
+
         // 2. Build physical plan.
         if used.is_empty() {
-            return self.build(s_expr.child(0)?, required).await;
+            return self.build(s_expr.child(0)?, child_required).await;
         }
-        let input = self.build(s_expr.child(0)?, required).await?;
+        let input = self.build(s_expr.child(0)?, child_required).await?;
         let input_schema = input.output_schema()?;
 
         let udf_funcs = used
