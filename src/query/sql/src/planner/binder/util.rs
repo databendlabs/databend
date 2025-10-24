@@ -85,6 +85,7 @@ pub struct TableIdentifier {
     catalog: Identifier,
     database: Identifier,
     table: Identifier,
+    table_ref: Option<Identifier>,
     table_alias: Option<TableAlias>,
     dialect: Dialect,
     name_resolution_ctx: NameResolutionContext,
@@ -96,6 +97,7 @@ impl TableIdentifier {
         catalog: &Option<Identifier>,
         database: &Option<Identifier>,
         table: &Identifier,
+        table_ref: &Option<Identifier>,
         table_alias: &Option<TableAlias>,
     ) -> TableIdentifier {
         // Use the common normalization logic to handle MySQL-style identifiers.
@@ -152,6 +154,7 @@ impl TableIdentifier {
             catalog,
             database,
             table,
+            table_ref: table_ref.clone(),
             table_alias: table_alias.clone(),
             dialect: *dialect,
             name_resolution_ctx: name_resolution_ctx.clone(),
@@ -168,6 +171,12 @@ impl TableIdentifier {
 
     pub fn table_name(&self) -> String {
         normalize_identifier(&self.table, &self.name_resolution_ctx).name
+    }
+
+    pub fn table_ref_name(&self) -> Option<String> {
+        self.table_ref
+            .as_ref()
+            .map(|v| normalize_identifier(v, &self.name_resolution_ctx).name)
     }
 
     pub fn table_name_alias(&self) -> Option<String> {

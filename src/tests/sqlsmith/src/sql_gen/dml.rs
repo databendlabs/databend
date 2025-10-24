@@ -128,12 +128,17 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
 
     fn gen_delete(&mut self) -> DeleteStmt {
         let hints = self.gen_hints();
-        let (_table, table_reference) = self.random_select_table();
+        let (table, _) = self.random_select_table();
         let selection = Some(self.gen_expr(&DataType::Boolean));
 
         DeleteStmt {
             hints,
-            table: table_reference,
+            catalog: None,
+            database: table
+                .db_name
+                .map(|name| Identifier::from_name(None, name.name)),
+            table: Identifier::from_name(None, table.name.name.clone()),
+            table_alias: None,
             selection,
             with: None,
         }
@@ -340,6 +345,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             catalog: None,
             database: table.db_name.clone(),
             table: table.name.clone(),
+            ref_name: None,
             alias: None,
             temporal: None,
             with_options: None,
@@ -544,6 +550,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             catalog: None,
             database: table.db_name.clone(),
             table: table.name.clone(),
+            ref_name: None,
             alias: None,
             temporal: None,
             with_options: None,
