@@ -829,6 +829,113 @@ drop MASKING POLICY mask_simple;
 statement ok
 DROP MASKING POLICY mask_conditional;
 
+## ========================================
+## Test Case Sensitivity in Masking Policy Parameters
+## Regression test for parameter name normalization bug
+## ========================================
+
+statement ok
+drop table if exists case_test;
+
+statement ok
+drop masking policy if exists mask_uppercase;
+
+statement ok
+drop masking policy if exists mask_mixedcase;
+
+## Test 1: UPPERCASE parameter name
+## This would fail before the fix: HashMap key "SSN" vs lookup "ssn"
+statement ok
+CREATE MASKING POLICY mask_uppercase AS (SSN string)
+RETURNS string ->
+  CASE
+    WHEN current_role() = 'admin' THEN SSN
+    ELSE '***-**-****'
+  END;
+
+statement ok
+create table case_test(id int, ssn string, name string);
+
+statement ok
+insert into case_test values(1, '123-45-6789', 'Alice');
+
+statement ok
+alter table case_test modify column ssn set masking policy mask_uppercase;
+
+## Verify uppercase parameter works (after normalization fix)
+query ITT
+select * from case_test;
+----
+1 ***-**-**** Alice
+
+statement ok
+alter table case_test modify column ssn unset masking policy;
+
+## Test 2: MixedCase parameter name
+statement ok
+CREATE MASKING POLICY mask_mixedcase AS (SocialSecurityNumber string)
+RETURNS string ->
+  CASE
+    WHEN current_role() = 'hr_admin' THEN SocialSecurityNumber
+    ELSE 'XXX-XX-' || substring(SocialSecurityNumber, 8, 4)
+  END;
+
+statement ok
+alter table case_test modify column ssn set masking policy mask_mixedcase;
+
+## Verify mixed case parameter works
+query ITT
+select * from case_test;
+----
+1 XXX-XX-6789 Alice
+
+## Test 3: Multi-parameter with mixed case
+statement ok
+drop masking policy if exists mask_multi_case;
+
+statement ok
+CREATE MASKING POLICY mask_multi_case AS (Value int, Threshold int)
+RETURNS int ->
+  CASE
+    WHEN Value > Threshold THEN -1
+    ELSE Value
+  END;
+
+statement ok
+drop table if exists multi_case_test;
+
+statement ok
+create table multi_case_test(id int, value int, threshold int);
+
+statement ok
+insert into multi_case_test values(1, 100, 50), (2, 30, 50);
+
+statement ok
+alter table multi_case_test modify column value set masking policy mask_multi_case using (value, threshold);
+
+## Verify multi-parameter with mixed case works
+query III
+select * from multi_case_test order by id;
+----
+1 -1 50
+2 30 50
+
+## Cleanup case sensitivity tests
+statement ok
+drop table if exists case_test;
+
+statement ok
+drop table if exists multi_case_test;
+
+statement ok
+drop masking policy if exists mask_uppercase;
+
+statement ok
+drop masking policy if exists mask_mixedcase;
+
+statement ok
+drop masking policy if exists mask_multi_case;
+
 statement ok
 unset global enable_planner_cache;
 

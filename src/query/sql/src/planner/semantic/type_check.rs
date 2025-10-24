@@ -316,49 +316,59 @@ impl<'a> TypeChecker<'a> {
                                 && column
                                     .table_index
                                     .and_then(|table_index| {
-                                        let metadata = self.metadata.read();
+                                        // IMPORTANT: Extract all needed data before releasing the lock
+                                        // to avoid holding the lock during fallback resolution
+                                        let (table_entry_opt, db_name, tbl_name) = {
+                                            let metadata = self.metadata.read();
+                                            let entry = metadata.tables().get(table_index);
+                                            (
+                                                entry.is_some(),
+                                                column.database_name.clone(),
+                                                column.table_name.clone(),
+                                            )
+                                        }; // metadata lock is released here
 
-                                        // Try to get table by index
-                                        let table_entry = match metadata.tables().get(table_index) {
-                                            Some(entry) => entry,
-                                            None => {
-                                                // table_index invalid - try fallback by name
-                                                // This can happen in complex queries (e.g., REPLACE INTO with source columns)
-                                                // where metadata context differs between binding phases
-                                                if let (Some(db), Some(tbl)) = (&column.database_name, &column.table_name) {
-                                                    // Try to re-resolve the table index by name
-                                                    if let Some(new_idx) = metadata.get_table_index(Some(db), tbl) {
-                                                        metadata.tables().get(new_idx)?
-                                                    } else {
-                                                        // Table not found by name either This is likely a temporary/derived table with no masking policy
-                                                        return None;
-                                                    }
-                                                } else {
-                                                    return None;
-                                                }
+                                        // Now handle the fallback case without holding the lock
+                                        let final_table_index = if table_entry_opt {
+                                            Some(table_index)
+                                        } else {
+                                            // table_index invalid - try fallback by name
+                                            // This can happen in complex queries (e.g., REPLACE INTO with source columns)
+                                            // where metadata context differs between binding phases
+                                            if let (Some(db), Some(tbl)) = (db_name.as_ref(), tbl_name.as_ref()) {
+                                                // Re-acquire lock for lookup
+                                                let metadata = self.metadata.read();
+                                                metadata.get_table_index(Some(db), tbl)
+                                            } else {
+                                                None
                                             }
                                         };
 
-                                        let table_ref = table_entry.table();
-                                        let table_info = table_ref.get_table_info();
+                                        // Re-acquire lock to get table info
+                                        final_table_index.and_then(|idx| {
+                                            let metadata = self.metadata.read();
+                                            let table_entry = metadata.tables().get(idx)?;
+                                            let table_ref = table_entry.table();
+                                            let table_info = table_ref.get_table_info();
 
-                                        if table_info.meta.column_mask_policy_columns_ids.is_empty()
-                                        {
-                                            return None;
-                                        }
-                                        table_info
-                                            .meta
-                                            .schema
-                                            .fields()
-                                            .iter()
-                                            .find(|f| f.name == column.column_name)
-                                            .and_then(|field| {
-                                                table_info
-                                                    .meta
-                                                    .column_mask_policy_columns_ids
-                                                    .contains_key(&field.column_id)
-                                                    .then_some(())
-                                            })
+                                            if table_info.meta.column_mask_policy_columns_ids.is_empty()
+                                            {
+                                                return None;
+                                            }
+                                            table_info
+                                                .meta
+                                                .schema
+                                                .fields()
+                                                .iter()
+                                                .find(|f| f.name == column.column_name)
+                                                .and_then(|field| {
+                                                    table_info
+                                                        .meta
+                                                        .column_mask_policy_columns_ids
+                                                        .contains_key(&field.column_id)
+                                                        .then_some(())
+                                                })
+                                        })
                                     })
                                     .is_some();
 
@@ -6580,76 +6590,97 @@ impl<'a> TypeChecker<'a> {
                 let handler = get_datamask_handler();
 
                 // Get the policy (now safe to await without holding the lock)
-                if let Ok(policy) = handler
+                match handler
                     .get_data_mask_by_id(meta_api.clone(), &tenant, policy_id)
                     .await
                 {
-                    let policy = policy.data;
-                    let body = &policy.body;
-                    let args = &policy.args;
+                    Ok(policy) => {
+                        let policy = policy.data;
+                        let body = &policy.body;
+                        let args = &policy.args;
 
-                    // Parse the policy body
-                    let tokens = tokenize_sql(body)?;
-                    let settings = self.ctx.get_settings();
-                    let ast_expr = parse_expr(&tokens, settings.get_sql_dialect()?)?;
+                        // Parse the policy body
+                        let tokens = tokenize_sql(body)?;
+                        let settings = self.ctx.get_settings();
+                        let ast_expr = parse_expr(&tokens, settings.get_sql_dialect()?)?;
 
-                    // Create arguments based on USING clause
-                    let arguments: Result<Vec<Expr>> = args
-                        .iter()
-                        .enumerate()
-                        .map(|(param_idx, _)| {
-                            let column_id = using_columns.get(param_idx).ok_or_else(|| {
-                                ErrorCode::Internal(format!(
-                                    "Masking policy metadata is corrupted: policy requires {} parameters, \
-                                     but only {} columns are configured in USING clause. \
-                                     Please drop and recreate the masking policy attachment.",
-                                    args.len(),
-                                    using_columns.len()
-                                ))
-                            })?;
+                        // Create arguments based on USING clause
+                        let arguments: Result<Vec<Expr>> = args
+                            .iter()
+                            .enumerate()
+                            .map(|(param_idx, _)| {
+                                let column_id = using_columns.get(param_idx).ok_or_else(|| {
+                                    ErrorCode::Internal(format!(
+                                        "Masking policy metadata is corrupted: policy requires {} parameters, \
+                                         but only {} columns are configured in USING clause. \
+                                         Please drop and recreate the masking policy attachment.",
+                                        args.len(),
+                                        using_columns.len()
+                                    ))
+                                })?;
 
-                            let field_name = table_schema
-                                .fields()
-                                .iter()
-                                .find(|f| f.column_id == *column_id)
-                                .map(|f| f.name.clone())
-                                .unwrap_or_else(|| format!("column_{}", column_id));
+                                let field_name = table_schema
+                                    .fields()
+                                    .iter()
+                                    .find(|f| f.column_id == *column_id)
+                                    .map(|f| f.name.clone())
+                                    .unwrap_or_else(|| format!("column_{}", column_id));
 
-                            Ok(Expr::ColumnRef {
-                                span: None,
-                                column: ast::ColumnRef {
-                                    database: database.map(|d| Identifier::from_name(None, d.to_string())),
-                                    table: table.map(|t| Identifier::from_name(None, t.to_string())),
-                                    column: ast::ColumnID::Name(Identifier::from_name(
-                                        None, field_name,
-                                    )),
-                                },
+                                Ok(Expr::ColumnRef {
+                                    span: None,
+                                    column: ast::ColumnRef {
+                                        database: database.map(|d| Identifier::from_name(None, d.to_string())),
+                                        table: table.map(|t| Identifier::from_name(None, t.to_string())),
+                                        column: ast::ColumnID::Name(Identifier::from_name(
+                                            None, field_name,
+                                        )),
+                                    },
+                                })
                             })
-                        })
-                        .collect();
-                    let arguments = arguments?;
+                            .collect();
+                        let arguments = arguments?;
 
-                    // Create parameter mapping
-                    let args_map: HashMap<_, _> = args
-                        .iter()
-                        .map(|(param_name, _)| param_name.as_str())
-                        .zip(arguments.iter().cloned())
-                        .collect();
+                        // Create parameter mapping
+                        // Since parameter names are normalized to lowercase at policy creation time (see data_mask.rs),
+                        // we use them directly as keys.
+                        let args_map: HashMap<_, _> = args
+                            .iter()
+                            .map(|(param_name, _)| param_name.as_str())
+                            .zip(arguments.iter().cloned())
+                            .collect();
 
-                    // Replace parameters in the expression
-                    let expr = Self::clone_expr_with_replacement(&ast_expr, |nest_expr| {
-                        if let Expr::ColumnRef { column, .. } = nest_expr {
-                            // args in masking policy always lowercase
-                            if let Some(arg) =
-                                args_map.get(column.column.name().to_lowercase().as_str())
-                            {
-                                return Ok(Some(arg.clone()));
+                        // Replace parameters in the expression
+                        let expr = Self::clone_expr_with_replacement(&ast_expr, |nest_expr| {
+                            if let Expr::ColumnRef { column, .. } = nest_expr {
+                                // Parameter names are already lowercase in args_map (normalized at creation).
+                                // Lookup also needs to be lowercase for consistent matching.
+                                if let Some(arg) =
+                                    args_map.get(column.column.name().to_lowercase().as_str())
+                                {
+                                    return Ok(Some(arg.clone()));
+                                }
                             }
-                        }
-                        Ok(None)
-                    })?;
+                            Ok(None)
+                        })?;
 
-                    return Ok(Some(expr));
+                        return Ok(Some(expr));
+                    }
+                    Err(err) => {
+                        // Log warning when masking policy cannot be loaded
+                        // This can happen if:
+                        // 1. Policy was deleted after being attached to a column
+                        // 2. Meta service is temporarily unavailable
+                        // 3. Permission issues
+                        log::warn!(
+                            "Failed to load masking policy (id: {}) for column '{}': {}. \
+                             Column will be returned unmasked. \
+                             This may be a security issue - please verify the policy still exists.",
+                            policy_id,
+                            column_binding.column_name,
+                            err
+                        );
+                        // Fall through to return None - column will not be masked
+                    }
                 }
             }
         }
