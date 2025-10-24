@@ -36,12 +36,20 @@ impl FromToProto for mt::DatamaskMeta {
     fn from_pb(p: pb::DatamaskMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
+        // Prioritize args_v2 (preserves order), fallback to args (backward compatibility)
+        let args: Vec<(String, String)> = if !p.args_v2.is_empty() {
+            p.args_v2
+                .into_iter()
+                .map(|arg| (arg.name, arg.r#type))
+                .collect()
+        } else {
+            // Backward compatibility: read from old args map
+            // Note: BTreeMap sorts keys alphabetically, so order may be lost for old data
+            p.args.into_iter().collect()
+        };
+
         let v = Self {
-            args: p
-                .args
-                .iter()
-                .map(|(arg_name, arg_type)| (arg_name.clone(), arg_type.clone()))
-                .collect::<Vec<_>>(),
+            args,
             return_type: p.return_type,
             body: p.body,
             comment: p.comment.clone(),
@@ -55,14 +63,21 @@ impl FromToProto for mt::DatamaskMeta {
     }
 
     fn to_pb(&self) -> Result<pb::DatamaskMeta, Incompatible> {
-        let mut args = BTreeMap::new();
-        for (arg_name, arg_type) in &self.args {
-            args.insert(arg_name.to_string(), arg_type.to_string());
-        }
+        // Write to args_v2 (new format that preserves order)
+        let args_v2: Vec<pb::DataMaskArg> = self
+            .args
+            .iter()
+            .map(|(arg_name, arg_type)| pb::DataMaskArg {
+                name: arg_name.clone(),
+                r#type: arg_type.clone(),
+            })
+            .collect();
+
         let p = pb::DatamaskMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            args,
+            args: BTreeMap::new(),
+            args_v2,
             return_type: self.return_type.clone(),
             body: self.body.clone(),
             comment: self.comment.clone(),

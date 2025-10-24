@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 
 use databend_common_expression::FieldIndex;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 
@@ -42,9 +41,6 @@ pub struct DataSourcePlan {
     pub base_block_ids: Option<Scalar>,
     // used for recluster to update stream columns
     pub update_stream_columns: bool,
-
-    // data mask policy for `output_schema` columns
-    pub data_mask_policy: Option<BTreeMap<FieldIndex, RemoteExpr>>,
 
     pub table_index: usize,
     pub scan_id: usize,

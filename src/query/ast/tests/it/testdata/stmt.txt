@@ -14510,6 +14510,73 @@ AlterTable(
                     ident_type: None,
                 },
                 "mask",
+                None,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask USING (b, c1);
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask USING (b, c1)
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: ModifyColumn {
+            action: SetMaskingPolicy(
+                Identifier {
+                    span: Some(
+                        28..29,
+                    ),
+                    name: "b",
+                    quote: None,
+                    ident_type: None,
+                },
+                "mask",
+                Some(
+                    [
+                        Identifier {
+                            span: Some(
+                                61..62,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        Identifier {
+                            span: Some(
+                                64..66,
+                            ),
+                            name: "c1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ],
+                ),
             ),
         },
     },

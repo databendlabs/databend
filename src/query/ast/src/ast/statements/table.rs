@@ -1099,9 +1099,20 @@ impl Display for ColumnComment {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ModifyColumnAction {
-    // (column name id, masking policy name)
-    SetMaskingPolicy(Identifier, String),
-    // column name id
+    // Set masking policy on a column with optional USING clause
+    // Syntax: ALTER TABLE ... MODIFY COLUMN <column> SET MASKING POLICY <policy_name> [USING (<columns>)]
+    //
+    // Fields:
+    // - Identifier: The column name to apply the masking policy to
+    // - String: The masking policy name
+    // - Option<Vec<Identifier>>: Optional USING clause columns
+    //
+    // USING clause behavior (follows Snowflake semantics):
+    // - First column: The column to mask/tokenize (must match the target column)
+    // - Additional columns: Condition columns to evaluate for conditional masking
+    // - If USING is omitted: Treats as normal (non-conditional) masking policy
+    SetMaskingPolicy(Identifier, String, Option<Vec<Identifier>>),
+    // Unset masking policy from a column
     UnsetMaskingPolicy(Identifier),
     // vec<ColumnDefinition>
     SetDataType(Vec<ColumnDefinition>),
@@ -1114,8 +1125,14 @@ pub enum ModifyColumnAction {
 impl Display for ModifyColumnAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
-            ModifyColumnAction::SetMaskingPolicy(column, name) => {
-                write!(f, "{} SET MASKING POLICY {}", column, name)?
+            ModifyColumnAction::SetMaskingPolicy(column, name, using_columns) => {
+                if let Some(using_columns) = using_columns {
+                    write!(f, "{} SET MASKING POLICY {} USING (", column, name)?;
+                    write_comma_separated_list(f, using_columns)?;
+                    write!(f, ")")?
+                } else {
+                    write!(f, "{} SET MASKING POLICY {}", column, name)?
+                }
             }
             ModifyColumnAction::UnsetMaskingPolicy(column) => {
                 write!(f, "{} UNSET MASKING POLICY", column)?

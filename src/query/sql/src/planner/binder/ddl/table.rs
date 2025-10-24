@@ -1165,9 +1165,37 @@ impl Binder {
             AlterTableAction::ModifyColumn { action } => {
                 let mut lock_guard = None;
                 let action_in_plan = match action {
-                    ModifyColumnAction::SetMaskingPolicy(column, name) => {
+                    ModifyColumnAction::SetMaskingPolicy(column, name, using_columns) => {
                         let column = self.normalize_object_identifier(column);
-                        ModifyColumnActionInPlan::SetMaskingPolicy(column, name.to_string())
+                        if let Some(columns) = using_columns {
+                            if columns.len() < 2 {
+                                return Err(ErrorCode::InvalidArgument(format!(
+                                    "Invalid number of arguments for attaching policy '{}' to '{}': \
+                                     expected at least 2 arguments (masked column + condition columns), \
+                                     got {} argument(s)",
+                                    name, table, columns.len()
+                                )));
+                            }
+
+                            let first_column = self.normalize_object_identifier(&columns[0]);
+                            if first_column != column {
+                                return Err(ErrorCode::InvalidArgument(format!(
+                                    "First column argument to masking policy does not match the masked column '{}'. \
+                                     The first column in USING clause must be the column being masked.",
+                                    column
+                                )));
+                            }
+
+                            let cols = columns
+                                .iter()
+                                .map(|col| self.normalize_object_identifier(col))
+                                .collect();
+                            ModifyColumnActionInPlan::SetMaskingPolicy(name.to_string(), cols)
+                        } else {
+                            ModifyColumnActionInPlan::SetMaskingPolicy(name.to_string(), vec![
+                                column,
+                            ])
+                        }
                     }
                     ModifyColumnAction::UnsetMaskingPolicy(column) => {
                         let column = self.normalize_object_identifier(column);

@@ -103,7 +103,7 @@ alter table t ADD ROW ACCESS POLICY rap_it ON (id);
 statement ok
 insert into t values(1,'x');
 
-query T
+query I
 select id from t;
 ----
 1
@@ -114,7 +114,7 @@ create or replace table t_1(id int, cc string);
 statement ok
 insert into t_1 values(1,'account_admin'),(2,'x');
 
-query T
+query I
 select id from t_1 order by id;
 ----
 1
@@ -131,7 +131,7 @@ statement ok
 alter table t_1 ADD ROW ACCESS POLICY rap_it1 ON (cc);
 
 ## t_1 apply row access policy rpa_it1(means if current role == empl_id value account_admin will return false)
-query T
+query I
 select id from t_1;
 ----
 2
@@ -146,7 +146,7 @@ statement ok
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
 
 ## t apply row access policy rpa_it(means if current role == account_admin will return false)
-query T
+query I
 select id from t;
 ----
 
@@ -156,12 +156,12 @@ create or replace table t1(id int, empl_id string);
 statement ok
 insert into t1 values(100,'x');
 
-query T
+query I
 select id from t1;
 ----
 100
 
-query T
+query I
 select id from t1 union select id from t;
 ----
 100
@@ -191,17 +191,17 @@ ALTER TABLE t drop row access policy rap_it;
 statement ok
 ALTER TABLE t drop all row access policies;
 
-query T
+query I
 select id from t;
 ----
 1
 
-query T
+query I
 select id from t1;
 ----
 100
 
-query T
+query I
 select id from (select id from t1 union select id from t) order by id;
 ----
 1
@@ -284,7 +284,7 @@ create or replace table data_mask_test(a int not null, b string not null, c stri
 statement ok
 insert into table data_mask_test(a,b,c) values(1, 'abc','xyz');
 
-query T
+query ITT
 select * from data_mask_test;
 ----
 1 abc xyz
@@ -301,7 +301,7 @@ CREATE MASKING POLICY maskc AS (val int) RETURNS int -> CASE WHEN current_role()
 statement ok
 alter table data_mask_test modify column b set masking policy maskb;
 
-query T
+query ITT
 select * from data_mask_test;
 ----
 1 ********* xyz
@@ -309,7 +309,7 @@ select * from data_mask_test;
 statement ok
 alter table data_mask_test modify column a set masking policy maska;
 
-query T
+query ITT
 select * from data_mask_test;
 ----
 200 ********* xyz
@@ -317,7 +317,7 @@ select * from data_mask_test;
 statement ok
 alter table data_mask_test modify column a unset masking policy;
 
-query T
+query ITT
 select * from data_mask_test;
 ----
 1 ********* xyz
@@ -325,7 +325,7 @@ select * from data_mask_test;
 statement ok
 alter table data_mask_test modify column a set masking policy maska;
 
-query T
+query ITT
 select * from data_mask_test;
 ----
 200 ********* xyz
@@ -347,6 +347,597 @@ drop MASKING POLICY if exists maskc;
 
 statement ok
 drop table if exists data_mask_test;
+
+statement ok
+drop table if exists employees;
+
+statement ok
+drop masking policy if exists mask_ssn_conditional;
+
+statement ok
+drop masking policy if exists mask_salary_conditional;
+
+statement ok
+drop role if exists hr_admin;
+
+statement ok
+drop role if exists regular_user;
+
+## Create test table with employee data
+statement ok
+create table employees(
+    id int,
+    name string,
+    ssn string,
+    salary int,
+    department string,
+    role string
+);
+
+statement ok
+insert into employees values
+    (1, 'Alice', '123-45-6789', 100000, 'Engineering', 'hr_admin'),
+    (2, 'Bob', '987-65-4321', 80000, 'Sales', 'regular_user'),
+    (3, 'Charlie', '456-78-9012', 120000, 'Engineering', 'regular_user');
+
+## Test 1: Basic conditional masking policy with USING clause
+## The policy masks SSN unless the user's role matches the employee's role column
+statement ok
+CREATE MASKING POLICY mask_ssn_conditional AS (val STRING, user_role STRING) RETURNS STRING ->
+  CASE
+    WHEN user_role = current_role() THEN val
+    ELSE '***-**-****'
+  END
+COMMENT = 'Mask SSN conditionally based on role';
+
+## Test 2: Apply policy with USING clause - basic syntax
+statement ok
+alter table employees modify column ssn set masking policy mask_ssn_conditional using (ssn, role);
+
+## Query should mask SSN for all rows since current_role() won't match
+query ITTIT
+select id, name, ssn, salary, department from employees order by id;
+----
+1 Alice ***-**-**** 100000 Engineering
+2 Bob ***-**-**** 80000 Sales
+3 Charlie ***-**-**** 120000 Engineering
+
+## Test 3: Unset the policy
+statement ok
+alter table employees modify column ssn unset masking policy;
+
+## SSN should be visible now
+query ITTIT
+select id, name, ssn, salary, department from employees order by id;
+----
+1 Alice 123-45-6789 100000 Engineering
+2 Bob 987-65-4321 80000 Sales
+3 Charlie 456-78-9012 120000 Engineering
+
+## Test 4: Conditional salary masking based on department
+statement ok
+CREATE MASKING POLICY mask_salary_conditional AS (salary INT, dept STRING) RETURNS INT ->
+  CASE
+    WHEN dept = 'Engineering' THEN salary
+    ELSE 0
+  END
+COMMENT = 'Show salary only for Engineering department';
+
+statement ok
+alter table employees modify column salary set masking policy mask_salary_conditional using (salary, department);
+
+## Only Engineering department salaries should be visible
+query ITTIT
+select id, name, ssn, salary, department from employees order by id;
+----
+1 Alice 123-45-6789 100000 Engineering
+2 Bob 987-65-4321 0 Sales
+3 Charlie 456-78-9012 120000 Engineering
+
+## Test 5: Error - USING clause with fewer than 2 arguments
+statement error 2004
+alter table employees modify column name set masking policy mask_ssn_conditional using (name);
+
+## Test 6: Error - First column in USING must match the masked column
+statement error 2004
+alter table employees modify column ssn set masking policy mask_ssn_conditional using (name, role);
+
+## Test 7: Error - Column count mismatch with policy parameters
+statement ok
+drop masking policy if exists mask_three_param;
+
+statement ok
+CREATE MASKING POLICY mask_three_param AS (val STRING, col1 STRING, col2 STRING) RETURNS STRING ->
+  CASE
+    WHEN col1 = col2 THEN val
+    ELSE '***'
+  END;
+
+## Should fail - policy requires 3 parameters but only 2 columns provided
+statement error 1114
+alter table employees modify column name set masking policy mask_three_param using (name, role);
+
+## Test 8: Error - Column type mismatch
+statement ok
+drop masking policy if exists mask_int_policy;
+
+statement ok
+CREATE MASKING POLICY mask_int_policy AS (val STRING, num INT) RETURNS STRING -> val;
+
+## Should fail - department is STRING, not INT
+statement error 1114
+alter table employees modify column name set masking policy mask_int_policy using (name, department);
+
+## Test 9: Backward compatibility - without USING clause
+statement ok
+drop masking policy if exists mask_simple;
+
+statement ok
+CREATE MASKING POLICY mask_simple AS (val STRING) RETURNS STRING -> '***';
+
+## Should work - old style without USING clause
+statement ok
+alter table employees modify column name set masking policy mask_simple;
+
+query ITTIT
+select id, name, ssn, salary, department from employees order by id;
+----
+1 *** 123-45-6789 100000 Engineering
+2 *** 987-65-4321 0 Sales
+3 *** 456-78-9012 120000 Engineering
+
+statement ok
+alter table employees modify column name unset masking policy;
+
+## Test 10: WHERE clause with masked columns
+statement ok
+alter table employees modify column ssn set masking policy mask_ssn_conditional using (ssn, role);
+
+## WHERE clause should work with masked columns
+query IT
+select id, name from employees where department = 'Engineering' order by id;
+----
+1 Alice
+3 Charlie
+
+statement ok
+drop table if exists departments;
+
+## Test 11: JOIN with masked columns
+statement ok
+create table departments(dept_name string, budget int);
+
+statement ok
+insert into departments values ('Engineering', 1000000), ('Sales', 500000);
+
+query ITII
+select e.id, e.name, e.salary, d.budget
+from employees e
+join departments d on e.department = d.dept_name
+order by e.id;
+----
+1 Alice 100000 1000000
+2 Bob 0 500000
+3 Charlie 120000 1000000
+
+## Test 12: Aggregation with masked columns
+query I
+select count(*) from employees where ssn = '***-**-****';
+----
+3
+
+## Test 13: Complex expression in WHERE with masked column
+query I
+select count(*) from employees where length(ssn) > 0;
+----
+3
+
+## Test 14: GROUP BY with masked columns
+query TII
+select department, count(*), sum(salary) from employees group by department order by department;
+----
+Engineering 2 220000
+Sales 1 0
+
+## Test 15: HAVING clause with masked columns
+query TI
+select department, sum(salary) as total_salary
+from employees
+group by department
+having sum(salary) > 50000
+order by department;
+----
+Engineering 220000
+
+## Test 16: GROUP BY + HAVING with aggregation on masked column
+query TI
+select department, count(*) as emp_count
+from employees
+group by department
+having count(*) >= 1
+order by department;
+----
+Engineering 2
+Sales 1
+
+## Test 17: Nested CASE WHEN in masking policy
+statement ok
+drop masking policy if exists mask_nested_case;
+
+statement ok
+CREATE MASKING POLICY mask_nested_case AS (val INT, dept STRING, role_col STRING) RETURNS INT ->
+  CASE
+    WHEN dept = 'Engineering' THEN
+      CASE
+        WHEN role_col = 'hr_admin' THEN val
+        ELSE val / 2
+      END
+    WHEN dept = 'Sales' THEN
+      CASE
+        WHEN role_col = 'hr_admin' THEN val
+        ELSE 0
+      END
+    ELSE -1
+  END
+COMMENT = 'Nested CASE WHEN for complex conditional masking';
+
+statement ok
+alter table employees modify column salary unset masking policy;
+
+statement ok
+alter table employees modify column salary set masking policy mask_nested_case using (salary, department, role);
+
+## Verify nested CASE WHEN logic:
+## - Engineering + hr_admin: 100000 (full)
+## - Engineering + regular_user: 60000 (120000 / 2)
+## - Sales + regular_user: 0
+query ITTFT
+select id, name, ssn, salary, department from employees order by id;
+----
+1 Alice ***-**-**** 100000.0 Engineering
+2 Bob ***-**-**** 0.0 Sales
+3 Charlie ***-**-**** 60000.0 Engineering
+
+## Test 18: GROUP BY with nested CASE masked column
+query TF
+select department, avg(salary) as avg_salary
+from employees
+group by department
+order by department;
+----
+Engineering 80000.0
+Sales 0.0
+
+## Test 19: Complex aggregation with HAVING on masked column
+query TIF
+select department, count(*) as cnt, max(salary) as max_sal
+from employees
+group by department
+having max(salary) > 0
+order by department;
+----
+Engineering 2 100000.0
+
+## Test 20: Subquery with masked columns in HAVING
+query TF
+select department, sum(salary) as total
+from employees
+group by department
+having sum(salary) > (select avg(salary) from employees)
+order by department;
+----
+Engineering 160000.0
+
+## Test 21: Multiple aggregations with masked columns
+query TIFFF
+select
+  department,
+  count(*) as cnt,
+  sum(salary) as total,
+  avg(salary) as avg,
+  max(salary) as max_sal
+from employees
+group by department
+order by department;
+----
+Engineering 2 160000.0 80000.0 100000.0
+Sales 1 0.0 0.0 0.0
+
+## Test 22: HAVING with complex condition on masked column
+query TI
+select department, count(*) as cnt
+from employees
+group by department
+having count(*) > 1 and sum(salary) > 100000
+order by department;
+----
+Engineering 2
+
+## Test 23: Nested masking policy with three-level CASE WHEN
+statement ok
+drop masking policy if exists mask_triple_nested;
+
+statement ok
+CREATE MASKING POLICY mask_triple_nested AS (val STRING, dept STRING, role_col STRING) RETURNS STRING ->
+  CASE
+    WHEN dept = 'Engineering' THEN
+      CASE
+        WHEN role_col = 'hr_admin' THEN val
+        WHEN role_col = 'regular_user' THEN
+          CASE
+            WHEN length(val) > 10 THEN substring(val, 1, 3) || '-XX-XXXX'
+            ELSE '***'
+          END
+        ELSE 'UNKNOWN'
+      END
+    ELSE '***-**-****'
+  END
+COMMENT = 'Triple nested CASE WHEN';
+
+statement ok
+alter table employees modify column ssn unset masking policy;
+
+statement ok
+alter table employees modify column ssn set masking policy mask_triple_nested using (ssn, department, role);
+
+## Verify triple nested CASE WHEN:
+## - Alice (Engineering + hr_admin): full SSN
+## - Charlie (Engineering + regular_user): 123-XX-XXXX
+## - Bob (Sales): ***-**-****
+query ITTFT
+select id, name, ssn, salary, department from employees order by id;
+----
+1 Alice 123-45-6789 100000.0 Engineering
+2 Bob ***-**-**** 0.0 Sales
+3 Charlie 456-XX-XXXX 60000.0 Engineering
+
+## Test 24: GROUP BY with triple nested masked column
+query TI
+select substring(ssn, 1, 3) as ssn_prefix, count(*) as cnt
+from employees
+group by substring(ssn, 1, 3)
+having count(*) >= 1
+order by ssn_prefix;
+----
+*** 1
+123 1
+456 1
+
+## Test 25: Window function with masked columns
+query ITTFF
+select
+  id,
+  name,
+  department,
+  salary,
+  sum(salary) over (partition by department) as dept_total
+from employees
+order by id;
+----
+1 Alice Engineering 100000.0 160000.0
+2 Bob Sales 0.0 0.0
+3 Charlie Engineering 60000.0 160000.0
+
+## Test 26: CTE with masked columns and GROUP BY
+query TF
+with dept_stats as (
+  select department, sum(salary) as total_salary
+  from employees
+  group by department
+)
+select department, total_salary
+from dept_stats
+where total_salary > 0
+order by department;
+----
+Engineering 160000.0
+
+## Cleanup
+statement ok
+drop table employees;
+
+statement ok
+drop table departments;
+
+statement ok
+drop masking policy mask_ssn_conditional;
+
+statement ok
+drop masking policy mask_salary_conditional;
+
+statement ok
+drop masking policy mask_three_param;
+
+statement ok
+drop masking policy mask_int_policy;
+
+statement ok
+drop masking policy mask_simple;
+
+statement ok
+drop masking policy mask_nested_case;
+
+statement ok
+drop masking policy mask_triple_nested;
+
+statement ok
+DROP MASKING POLICY IF EXISTS mask_simple;
+
+statement ok
+DROP MASKING POLICY IF EXISTS mask_conditional;
+
+statement ok
+DROP TABLE IF EXISTS t_test;
+
+statement ok
+CREATE TABLE t_test(
+   id INT,
+   arr ARRAY(INT NULL) NULL,
+   sensitive INT NULL,
+   public INT NULL
+ );
+
+statement ok
+INSERT INTO t_test VALUES (1, [1,2,3], 100, 10),(2, [4,5], 200, 20),(3, [4,5], 200, 400);
+
+statement ok
+CREATE MASKING POLICY mask_simple AS (val INT) RETURNS INT -> CASE WHEN current_role() = 'admin' THEN val ELSE -1 END;
+
+statement ok
+ALTER TABLE t_test MODIFY COLUMN sensitive SET MASKING POLICY mask_simple;
+
+query IAII
+select * from t_test;
+----
+1 [1,2,3] -1 10
+2 [4,5] -1 20
+3 [4,5] -1 400
+
+query T
+SELECT array_transform(arr, x -> x * 2) FROM t_test;
+----
+[2,4,6]
+[8,10]
+[8,10]
+
+query T
+SELECT array_transform(arr, x -> x + sensitive) FROM t_test;
+----
+[0,1,2]
+[3,4]
+[3,4]
+
+statement ok
+CREATE MASKING POLICY mask_conditional AS (val INT, threshold INT) RETURNS INT -> CASE WHEN val > threshold THEN val ELSE -999 END;
+
+statement ok
+ALTER TABLE t_test MODIFY COLUMN sensitive SET MASKING POLICY mask_conditional USING (sensitive, public);
+
+query T
+SELECT array_transform(arr, x -> x + sensitive) FROM t_test;
+----
+[101,102,103]
+[204,205]
+[-995,-994]
+
+statement ok
+drop table t_test;
+
+statement ok
+drop MASKING POLICY mask_simple;
+
+statement ok
+DROP MASKING POLICY mask_conditional;
+
+## ========================================
+## Test Case Sensitivity in Masking Policy Parameters
+## Regression test for parameter name normalization bug
+## ========================================
+
+statement ok
+drop table if exists case_test;
+
+statement ok
+drop masking policy if exists mask_uppercase;
+
+statement ok
+drop masking policy if exists mask_mixedcase;
+
+## Test 1: UPPERCASE parameter name
+## This would fail before the fix: HashMap key "SSN" vs lookup "ssn"
+statement ok
+CREATE MASKING POLICY mask_uppercase AS (SSN string)
+RETURNS string ->
+  CASE
+    WHEN current_role() = 'admin' THEN SSN
+    ELSE '***-**-****'
+  END;
+
+statement ok
+create table case_test(id int, ssn string, name string);
+
+statement ok
+insert into case_test values(1, '123-45-6789', 'Alice');
+
+statement ok
+alter table case_test modify column ssn set masking policy mask_uppercase;
+
+## Verify uppercase parameter works (after normalization fix)
+query ITT
+select * from case_test;
+----
+1 ***-**-**** Alice
+
+statement ok
+alter table case_test modify column ssn unset masking policy;
+
+## Test 2: MixedCase parameter name
+statement ok
+CREATE MASKING POLICY mask_mixedcase AS (SocialSecurityNumber string)
+RETURNS string ->
+  CASE
+    WHEN current_role() = 'hr_admin' THEN SocialSecurityNumber
+    ELSE 'XXX-XX-' || substring(SocialSecurityNumber, 8, 4)
+  END;
+
+statement ok
+alter table case_test modify column ssn set masking policy mask_mixedcase;
+
+## Verify mixed case parameter works
+query ITT
+select * from case_test;
+----
+1 XXX-XX-6789 Alice
+
+## Test 3: Multi-parameter with mixed case
+statement ok
+drop masking policy if exists mask_multi_case;
+
+statement ok
+CREATE MASKING POLICY mask_multi_case AS (Value int, Threshold int)
+RETURNS int ->
+  CASE
+    WHEN Value > Threshold THEN -1
+    ELSE Value
+  END;
+
+statement ok
+drop table if exists multi_case_test;
+
+statement ok
+create table multi_case_test(id int, value int, threshold int);
+
+statement ok
+insert into multi_case_test values(1, 100, 50), (2, 30, 50);
+
+statement ok
+alter table multi_case_test modify column value set masking policy mask_multi_case using (value, threshold);
+
+## Verify multi-parameter with mixed case works
+query III
+select * from multi_case_test order by id;
+----
+1 -1 50
+2 30 50
+
+## Cleanup case sensitivity tests
+statement ok
+drop table if exists case_test;
+
+statement ok
+drop table if exists multi_case_test;
+
+statement ok
+drop masking policy if exists mask_uppercase;
+
+statement ok
+drop masking policy if exists mask_mixedcase;
+
+statement ok
+drop masking policy if exists mask_multi_case;
+
+statement ok
+unset global enable_planner_cache;
 
 statement ok
 unset global enable_experimental_row_access_policy;

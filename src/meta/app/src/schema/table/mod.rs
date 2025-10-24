@@ -173,6 +173,8 @@ pub struct TableMeta {
     pub shared_by: BTreeSet<u64>,
     // should be discard
     pub column_mask_policy: Option<BTreeMap<String, String>>,
+    // ColumnId always equals the first value in SecurityPolicyColumnMap::columns_ids
+    // One table can have multiple masking policies
     pub column_mask_policy_columns_ids: BTreeMap<ColumnId, SecurityPolicyColumnMap>,
     // One table only has an unique row access policy
     // should be discard
@@ -794,7 +796,6 @@ pub struct SetTableColumnMaskPolicyReq {
     pub tenant: Tenant,
     pub table_id: u64,
     pub seq: MatchSeq,
-    pub column: String,
     pub action: SetSecurityPolicyAction,
 }
 

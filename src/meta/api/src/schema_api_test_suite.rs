@@ -3238,7 +3238,6 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
-                column: "number".to_string(),
                 action: SetSecurityPolicyAction::Set(mask1_id, vec![column_id]),
             };
             mt.set_table_column_mask_policy(req).await?;
@@ -3299,7 +3298,6 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id,
-                column: "number".to_string(),
                 action: SetSecurityPolicyAction::Set(mask1_id, vec![column_id]),
             };
             mt.set_table_column_mask_policy(req).await?;
@@ -3353,12 +3351,10 @@ impl SchemaApiTestSuite {
                 .find(|f| f.name == "c1")
                 .unwrap()
                 .column_id;
-            println!("fields is {:?}", res.meta.schema.fields);
             let req = SetTableColumnMaskPolicyReq {
                 tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
-                column: "c1".to_string(),
                 action: SetSecurityPolicyAction::Set(mask2_id, vec![column_id]),
             };
             mt.set_table_column_mask_policy(req).await?;
@@ -3410,7 +3406,6 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 seq: MatchSeq::Exact(res.ident.seq),
                 table_id: table_id_1,
-                column: "number".to_string(),
                 action: SetSecurityPolicyAction::Unset(mask2_id),
             };
             mt.set_table_column_mask_policy(req).await?;
