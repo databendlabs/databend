@@ -27,7 +27,7 @@ use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::GlobalConfig;
-use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchema;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use fastrace::prelude::*;
@@ -60,6 +60,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
+use super::query::ResponseState;
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::QueryError;
@@ -123,7 +124,7 @@ pub struct QueryResponseField {
 }
 
 impl QueryResponseField {
-    pub fn from_schema(schema: DataSchemaRef) -> Vec<Self> {
+    pub fn from_schema(schema: &DataSchema) -> Vec<Self> {
         schema
             .fields()
             .iter()
@@ -167,15 +168,31 @@ pub struct QueryResponse {
 impl QueryResponse {
     pub(crate) fn from_internal(
         id: String,
-        r: HttpQueryResponseInternal,
+        HttpQueryResponseInternal {
+            data,
+            session_id,
+            session,
+            node_id,
+            result_timeout_secs,
+            state:
+                ResponseState {
+                    has_result_set,
+                    schema,
+                    running_time_ms,
+                    progresses,
+                    state,
+                    affect,
+                    error,
+                    warnings,
+                },
+        }: HttpQueryResponseInternal,
         is_final: bool,
     ) -> impl IntoResponse {
-        let state = r.state.clone();
         let (data, next_uri) = if is_final {
             (Arc::new(BlocksSerializer::empty()), None)
         } else {
-            match state.state {
-                ExecuteStateKind::Running | ExecuteStateKind::Starting => match r.data {
+            match state {
+                ExecuteStateKind::Running | ExecuteStateKind::Starting => match data {
                     None => (
                         Arc::new(BlocksSerializer::empty()),
                         Some(make_state_uri(&id)),
@@ -192,7 +209,7 @@ impl QueryResponse {
                     Arc::new(BlocksSerializer::empty()),
                     Some(make_final_uri(&id)),
                 ),
-                ExecuteStateKind::Succeeded => match r.data {
+                ExecuteStateKind::Succeeded => match data {
                     None => (
                         Arc::new(BlocksSerializer::empty()),
                         Some(make_final_uri(&id)),
@@ -208,38 +225,37 @@ impl QueryResponse {
             }
         };
 
-        if let Some(err) = &r.state.error {
+        if let Some(err) = &error {
             metrics_incr_http_response_errors_count(err.name(), err.code());
         }
 
-        let session_id = r.session_id.clone();
         let stats = QueryStats {
-            progresses: state.progresses.clone(),
-            running_time_ms: state.running_time_ms,
+            progresses,
+            running_time_ms,
         };
         let rows = data.num_rows();
 
         Json(QueryResponse {
             data,
-            state: state.state,
-            schema: state.schema.clone(),
+            state,
+            schema: QueryResponseField::from_schema(&schema),
             session_id: Some(session_id),
-            node_id: r.node_id,
-            session: r.session,
+            node_id,
+            session,
             stats,
-            affect: state.affect,
-            warnings: r.state.warnings,
+            affect,
+            warnings,
             id: id.clone(),
             next_uri,
             stats_uri: Some(make_state_uri(&id)),
             final_uri: Some(make_final_uri(&id)),
             kill_uri: Some(make_kill_uri(&id)),
-            error: r.state.error.map(QueryError::from_error_code),
-            has_result_set: r.state.has_result_set,
-            result_timeout_secs: Some(r.result_timeout_secs),
+            error: error.map(QueryError::from_error_code),
+            has_result_set,
+            result_timeout_secs: Some(result_timeout_secs),
         })
-        .with_header(HEADER_QUERY_ID, id.clone())
-        .with_header(HEADER_QUERY_STATE, state.state.to_string())
+        .with_header(HEADER_QUERY_ID, id)
+        .with_header(HEADER_QUERY_STATE, state.to_string())
         .with_header(HEADER_QUERY_PAGE_ROWS, rows)
     }
 }

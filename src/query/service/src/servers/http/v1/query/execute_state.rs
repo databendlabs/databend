@@ -38,13 +38,12 @@ use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
 
+use super::http_query::ResponseState;
+use super::sized_spsc::SizedChannelSender;
 use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
-use crate::servers::http::v1::http_query_handlers::QueryResponseField;
-use crate::servers::http::v1::query::http_query::ResponseState;
-use crate::servers::http::v1::query::sized_spsc::SizedChannelSender;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
@@ -129,14 +128,14 @@ pub struct ExecuteRunning {
     session: Arc<Session>,
     // mainly used to get progress for now
     pub(crate) ctx: Arc<QueryContext>,
-    schema: Vec<QueryResponseField>,
+    schema: DataSchemaRef,
     has_result_set: bool,
     #[allow(dead_code)]
     queue_guard: AcquireQueueGuard,
 }
 
 pub struct ExecuteStopped {
-    pub schema: Vec<QueryResponseField>,
+    pub schema: DataSchemaRef,
     pub has_result_set: Option<bool>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
@@ -192,6 +191,12 @@ impl ExecutorSessionState {
 impl Executor {
     pub fn get_response_state(&self) -> ResponseState {
         let (exe_state, err) = self.state.extract();
+        let schema = match &self.state {
+            Starting(_) => Default::default(),
+            Running(r) => r.schema.clone(),
+            Stopped(f) => f.schema.clone(),
+        };
+
         ResponseState {
             running_time_ms: self.get_query_duration_ms(),
             progresses: self.get_progress(),
@@ -199,15 +204,8 @@ impl Executor {
             error: err,
             warnings: self.get_warnings(),
             affect: self.get_affect(),
-            schema: self.get_schema(),
+            schema,
             has_result_set: self.has_result_set(),
-        }
-    }
-    pub fn get_schema(&self) -> Vec<QueryResponseField> {
-        match &self.state {
-            Starting(_) => Default::default(),
-            Running(r) => r.schema.clone(),
-            Stopped(f) => f.schema.clone(),
         }
     }
 
@@ -252,11 +250,10 @@ impl Executor {
     }
 
     pub fn update_schema(this: &Arc<Mutex<Executor>>, schema: DataSchemaRef) {
-        let mut guard = this.lock();
-        match &mut guard.state {
+        match &mut this.lock().state {
             Starting(_) => {}
-            Running(r) => r.schema = QueryResponseField::from_schema(schema),
-            Stopped(f) => f.schema = QueryResponseField::from_schema(schema),
+            Running(r) => r.schema = schema,
+            Stopped(f) => f.schema = schema,
         }
     }
 
@@ -311,7 +308,7 @@ impl Executor {
                 }
                 ExecuteStopped {
                     stats: Default::default(),
-                    schema: vec![],
+                    schema: Default::default(),
                     has_result_set: None,
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
@@ -388,9 +385,9 @@ impl ExecuteState {
         let is_dynamic_schema = plan.is_dynamic_schema();
         let schema = if has_result_set && !is_dynamic_schema {
             // check has_result_set first for safety
-            QueryResponseField::from_schema(plan.schema())
+            plan.schema()
         } else {
-            vec![]
+            Default::default()
         };
 
         let running_state = ExecuteRunning {
