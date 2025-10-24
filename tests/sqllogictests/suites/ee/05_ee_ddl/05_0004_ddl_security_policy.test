@@ -19,6 +19,42 @@ statement ok
 set global enable_planner_cache = 0;
 
 statement ok
+drop row access policy if exists rap_multi_case;
+
+statement ok
+drop table if exists rap_multi_test;
+
+statement ok
+CREATE ROW ACCESS POLICY rap_multi_case AS (UserId string, Department string) RETURNS boolean ->
+  CASE
+    WHEN current_role() = 'admin' THEN true
+    WHEN Department = 'Engineering' THEN true
+    ELSE false
+  END;
+
+statement ok
+create table rap_multi_test(id int, user_id string, department string);
+
+statement ok
+insert into rap_multi_test values (1, 'alice', 'Engineering'),  (2, 'bob', 'Sales'),  (3, 'charlie', 'Engineering');
+
+statement ok
+alter table rap_multi_test add row access policy rap_multi_case on (user_id, department);
+
+## Should only see Engineering department rows
+query ITT
+select * from rap_multi_test order by id;
+----
+1 alice Engineering
+3 charlie Engineering
+
+statement ok
+drop table if exists rap_case_test;
+
+statement ok
+drop row access policy if exists rap_multi_case;
+
+statement ok
 drop row access policy if exists rap1;
 
 statement ok
