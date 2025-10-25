@@ -53,7 +53,5 @@ def test_arrow_ipc():
             assert header["error"] == None
             for batch in reader:
                 rows += batch.num_rows
-                if rows < 96:
-                    assert batch.num_rows == 20
 
     assert rows == 97

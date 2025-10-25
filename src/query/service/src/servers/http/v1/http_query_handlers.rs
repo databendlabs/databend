@@ -33,6 +33,7 @@ use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use fastrace::prelude::*;
 use headers::Header;
+use headers::HeaderMapExt;
 use http::HeaderMap;
 use http::HeaderValue;
 use http::StatusCode;
@@ -48,10 +49,11 @@ use poem::post;
 use poem::put;
 use poem::web::Json;
 use poem::web::Path;
-use poem::web::TypedHeader;
 use poem::EndpointExt;
+use poem::FromRequest;
 use poem::IntoResponse;
 use poem::Request;
+use poem::RequestBody;
 use poem::Response;
 use poem::Route;
 use serde::Deserialize;
@@ -271,9 +273,7 @@ impl QueryResponse {
                 let buf: Result<_, ErrorCode> = try {
                     const META_KEY: &str = "response_header";
                     let json_res = serde_json::to_string(&res)?;
-                    let mut schema = arrow_schema::Schema::from(&*schema);
-                    schema.metadata.insert(META_KEY.to_string(), json_res);
-                    data.to_arrow_ipc(schema)?
+                    data.to_arrow_ipc(&schema, vec![(META_KEY.to_string(), json_res)])?
                 };
 
                 match buf {
@@ -355,7 +355,7 @@ impl StateResponse {
 #[poem::handler]
 async fn query_final_handler(
     ctx: &HttpQueryContext,
-    TypedHeader(body_format): TypedHeader<BodyFormat>,
+    body_format: BodyFormat,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
@@ -462,7 +462,7 @@ async fn query_state_handler(
 #[poem::handler]
 async fn query_page_handler(
     ctx: &HttpQueryContext,
-    TypedHeader(body_format): TypedHeader<BodyFormat>,
+    body_format: BodyFormat,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
@@ -545,7 +545,7 @@ async fn query_page_handler(
 #[async_backtrace::framed]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
-    TypedHeader(body_format): TypedHeader<BodyFormat>,
+    body_format: BodyFormat,
     Json(mut req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
     let session = ctx.session.clone();
@@ -1024,5 +1024,14 @@ impl BodyFormat {
             BodyFormat::Json => "application/json",
             BodyFormat::Arrow => "application/vnd.apache.arrow.stream",
         }
+    }
+}
+
+impl<'a> FromRequest<'a> for BodyFormat {
+    async fn from_request(req: &'a Request, _body: &mut RequestBody) -> Result<Self, PoemError> {
+        Ok(req
+            .headers()
+            .typed_get::<Self>()
+            .unwrap_or(BodyFormat::Json))
     }
 }
