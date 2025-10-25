@@ -107,6 +107,7 @@ impl SerializedPayload {
     }
 }
 
+#[derive(Debug)]
 pub struct BucketSpilledPayload {
     pub bucket: isize,
     pub location: String,

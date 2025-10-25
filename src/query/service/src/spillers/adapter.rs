@@ -343,6 +343,14 @@ impl Spiller {
         Ok((location, write_bytes))
     }
 
+    pub fn add_aggregate_spill_file(&self, location: &str, size: usize) {
+        self.adapter.add_spill_file(
+            Location::Remote(location.to_string()),
+            Layout::Aggregate,
+            size,
+        );
+    }
+
     pub(crate) fn private_spilled_files(&self) -> Vec<Location> {
         self.adapter
             .private_spilled_files
