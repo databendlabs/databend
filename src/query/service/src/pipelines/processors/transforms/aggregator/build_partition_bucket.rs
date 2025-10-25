@@ -94,7 +94,7 @@ pub fn build_partition_bucket(
         }
 
         pipeline.add_pipe(builder.finalize());
-        pipeline.try_resize(after_worker)?;
+        pipeline.resize(after_worker, true)?;
     } else {
         let input_nums = pipeline.output_len();
         let transform = TransformPartitionBucket::create(input_nums, params.clone())?;
