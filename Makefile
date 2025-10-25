@@ -20,7 +20,7 @@ lint:
 	# Cargo.toml file formatter(make setup to install)
 	taplo fmt
 	# Python file formatter(make setup to install)
-	ruff format tests/
+	# ruff format tests/
 	# Bash file formatter(make setup to install)
 	shfmt -l -w scripts/*
 
