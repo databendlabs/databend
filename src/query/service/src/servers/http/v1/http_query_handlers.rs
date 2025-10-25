@@ -1005,7 +1005,7 @@ impl Header for BodyFormat {
     {
         if let Some(v) = values.next() {
             match v.to_str() {
-                Ok("application/vnd.apache.arrow.file") => return Ok(BodyFormat::Arrow),
+                Ok(s) if s == BodyFormat::Arrow.content_type() => return Ok(BodyFormat::Arrow),
                 Err(_) => return Err(headers::Error::invalid()),
                 _ => {}
             };
@@ -1019,7 +1019,7 @@ impl Header for BodyFormat {
 }
 
 impl BodyFormat {
-    pub fn content_type(&self) -> &'static str {
+    pub const fn content_type(&self) -> &'static str {
         match self {
             BodyFormat::Json => "application/json",
             BodyFormat::Arrow => "application/vnd.apache.arrow.stream",

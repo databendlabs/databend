@@ -15,7 +15,10 @@
 use std::cell::RefCell;
 use std::ops::DerefMut;
 
+use arrow_ipc::writer::IpcWriteOptions;
 use arrow_ipc::writer::StreamWriter;
+use arrow_ipc::CompressionType;
+use arrow_ipc::MetadataVersion;
 use databend_common_exception::Result;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::interval::interval_to_string;
@@ -105,7 +108,9 @@ impl BlocksSerializer {
 
     pub fn to_arrow_ipc(&self, schema: arrow_schema::Schema) -> Result<Vec<u8>> {
         let mut buf = Vec::new();
-        let mut writer = StreamWriter::try_new(&mut buf, &schema)?;
+        let opts = IpcWriteOptions::try_new(8, false, MetadataVersion::V5)?
+            .try_with_compression(Some(CompressionType::LZ4_FRAME))?;
+        let mut writer = StreamWriter::try_new_with_options(&mut buf, &schema, opts)?;
 
         let mut data_schema = None;
         for (block, _) in &self.columns {

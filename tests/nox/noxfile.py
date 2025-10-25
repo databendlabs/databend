@@ -61,7 +61,7 @@ def run_jdbc_test(session, driver_version, main_version):
 
 @nox.session
 def test_suites(session):
-    session.install("pytest", "requests", "pytest-asyncio")
+    session.install("pytest", "requests", "pytest-asyncio", "pyarrow")
     # Usage: nox -s test_suites -- suites/1_stateful/09_http_handler/test_09_0007_session.py::test_session
     session.run("pytest", *session.posargs)
 
