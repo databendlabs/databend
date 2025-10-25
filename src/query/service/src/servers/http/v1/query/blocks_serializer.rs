@@ -15,6 +15,8 @@
 use std::cell::RefCell;
 use std::ops::DerefMut;
 
+use arrow_ipc::writer::StreamWriter;
+use databend_common_exception::Result;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::timestamp::timestamp_to_string;
@@ -99,6 +101,21 @@ impl BlocksSerializer {
 
     pub fn num_rows(&self) -> usize {
         self.columns.iter().map(|(_, num_rows)| *num_rows).sum()
+    }
+
+    pub fn to_arrow_ipc(&self, schema: arrow_schema::Schema) -> Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        let mut writer = StreamWriter::try_new(&mut buf, &schema)?;
+
+        let mut data_schema = None;
+        for (block, _) in &self.columns {
+            let block = DataBlock::new_from_columns(block.clone());
+            let data_schema = data_schema.get_or_insert_with(|| block.infer_schema());
+            let batch = block.to_record_batch_with_dataschema(data_schema)?;
+            writer.write(&batch)?;
+        }
+        writer.finish()?;
+        Ok(buf)
     }
 }
 

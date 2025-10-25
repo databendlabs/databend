@@ -27,6 +27,7 @@ use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::GlobalConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchema;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
@@ -47,6 +48,7 @@ use poem::post;
 use poem::put;
 use poem::web::Json;
 use poem::web::Path;
+use poem::web::TypedHeader;
 use poem::EndpointExt;
 use poem::IntoResponse;
 use poem::Request;
@@ -167,7 +169,7 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
-    pub(crate) fn from_internal(
+    fn from_internal(
         id: String,
         HttpQueryResponseInternal {
             data,
@@ -188,7 +190,8 @@ impl QueryResponse {
                 },
         }: HttpQueryResponseInternal,
         is_final: bool,
-    ) -> impl IntoResponse {
+        body_format: BodyFormat,
+    ) -> Response {
         let (data, next_uri) = if is_final {
             (Arc::new(BlocksSerializer::empty()), None)
         } else {
@@ -230,23 +233,21 @@ impl QueryResponse {
             metrics_incr_http_response_errors_count(err.name(), err.code());
         }
 
-        let stats = QueryStats {
-            progresses,
-            running_time_ms,
-        };
         let rows = data.num_rows();
-
-        Json(QueryResponse {
-            data,
-            state,
-            schema: QueryResponseField::from_schema(&schema),
+        let mut res = QueryResponse {
+            id: id.clone(),
             session_id: Some(session_id),
             node_id,
+            state,
             session,
-            stats,
+            stats: QueryStats {
+                progresses,
+                running_time_ms,
+            },
+            schema: vec![],
+            data: Arc::new(BlocksSerializer::empty()),
             affect,
             warnings,
-            id: id.clone(),
             next_uri,
             stats_uri: Some(make_state_uri(&id)),
             final_uri: Some(make_final_uri(&id)),
@@ -254,10 +255,40 @@ impl QueryResponse {
             error: error.map(QueryError::from_error_code),
             has_result_set,
             result_timeout_secs: Some(result_timeout_secs),
-        })
-        .with_header(HEADER_QUERY_ID, id)
-        .with_header(HEADER_QUERY_STATE, state.to_string())
-        .with_header(HEADER_QUERY_PAGE_ROWS, rows)
+        };
+
+        match body_format {
+            BodyFormat::Json => {
+                res.data = data;
+                res.schema = QueryResponseField::from_schema(&schema);
+                Json(res)
+                    .with_header(HEADER_QUERY_ID, id)
+                    .with_header(HEADER_QUERY_STATE, state.to_string())
+                    .with_header(HEADER_QUERY_PAGE_ROWS, rows)
+                    .into_response()
+            }
+            BodyFormat::Arrow => {
+                let buf: Result<_, ErrorCode> = try {
+                    const META_KEY: &str = "response_header";
+                    let json_res = serde_json::to_string(&res)?;
+                    let mut schema = arrow_schema::Schema::from(&*schema);
+                    schema.metadata.insert(META_KEY.to_string(), json_res);
+                    data.to_arrow_ipc(schema)?
+                };
+
+                match buf {
+                    Ok(buf) => Response::builder()
+                        .header(HEADER_QUERY_ID, id)
+                        .header(HEADER_QUERY_STATE, state.to_string())
+                        .header(HEADER_QUERY_PAGE_ROWS, rows)
+                        .content_type(body_format.content_type())
+                        .body(buf),
+                    Err(err) => Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(err.to_string()),
+                }
+            }
+        }
     }
 }
 
@@ -324,6 +355,7 @@ impl StateResponse {
 #[poem::handler]
 async fn query_final_handler(
     ctx: &HttpQueryContext,
+    TypedHeader(body_format): TypedHeader<BodyFormat>,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
@@ -352,7 +384,12 @@ async fn query_final_handler(
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
-                Ok(QueryResponse::from_internal(query_id, response, true))
+                Ok(QueryResponse::from_internal(
+                    query_id,
+                    response,
+                    true,
+                    body_format,
+                ))
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
@@ -425,6 +462,7 @@ async fn query_state_handler(
 #[poem::handler]
 async fn query_page_handler(
     ctx: &HttpQueryContext,
+    TypedHeader(body_format): TypedHeader<BodyFormat>,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
@@ -476,7 +514,12 @@ async fn query_page_handler(
                 query
                     .update_expire_time(false, resp.is_data_drained())
                     .await;
-                Ok(QueryResponse::from_internal(query_id, resp, false))
+                Ok(QueryResponse::from_internal(
+                    query_id,
+                    resp,
+                    false,
+                    body_format,
+                ))
             }
         }
     };
@@ -502,14 +545,10 @@ async fn query_page_handler(
 #[async_backtrace::framed]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
+    TypedHeader(body_format): TypedHeader<BodyFormat>,
     Json(mut req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
     let session = ctx.session.clone();
-
-    // poem::http::Request
-
-    // poem::web::TypedHeader;
-
     let query_handle = async {
         let agent_info = ctx
             .user_agent
@@ -573,7 +612,10 @@ pub(crate) async fn query_handler(
                 query
                     .update_expire_time(false, resp.is_data_drained())
                     .await;
-                Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
+                Ok(
+                    QueryResponse::from_internal(query.id.to_string(), resp, false, body_format)
+                        .into_response(),
+                )
             }
         }
     };
@@ -945,6 +987,7 @@ pub(crate) fn get_http_tracing_span(
         .with_properties(|| ctx.to_fastrace_properties())
 }
 
+#[derive(Debug, Clone, Copy)]
 enum BodyFormat {
     Json,
     Arrow,
@@ -971,9 +1014,15 @@ impl Header for BodyFormat {
     }
 
     fn encode<E: Extend<HeaderValue>>(&self, values: &mut E) {
-        values.extend([match self {
-            BodyFormat::Json => HeaderValue::from_static("application/json"),
-            BodyFormat::Arrow => HeaderValue::from_static("application/vnd.apache.arrow.file"),
-        }]);
+        values.extend([HeaderValue::from_static(self.content_type())]);
+    }
+}
+
+impl BodyFormat {
+    pub fn content_type(&self) -> &'static str {
+        match self {
+            BodyFormat::Json => "application/json",
+            BodyFormat::Arrow => "application/vnd.apache.arrow.stream",
+        }
     }
 }
