@@ -127,6 +127,16 @@ fn read_nested_column<R: NativeReadBuf>(
                 page_metas.pop().unwrap(),
             )?
         }
+        TimestampTimezone => {
+            init.push(InitNested::Primitive(is_nullable));
+
+            read_nested_timestamp_timezone::<_>(
+                &mut readers.pop().unwrap(),
+                data_type.clone(),
+                init,
+                page_metas.pop().unwrap(),
+            )?
+        }
         Timestamp => {
             init.push(InitNested::Primitive(is_nullable));
             read_nested_integer::<TimestampType, _, _>(

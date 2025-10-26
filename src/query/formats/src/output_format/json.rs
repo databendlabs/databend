@@ -106,6 +106,7 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             let dt = DateConverter::to_timestamp(&v, format.jiff_timezone.clone());
             serde_json::to_value(strtime::format("%Y-%m-%d %H:%M:%S", &dt).unwrap()).unwrap()
         }
+        ScalarRef::TimestampTimezone(v) => serde_json::to_value(v.to_string()).unwrap(),
         ScalarRef::EmptyArray => JsonValue::Array(vec![]),
         ScalarRef::EmptyMap => JsonValue::Object(JsonMap::new()),
         ScalarRef::Binary(x) => JsonValue::String(hex::encode_upper(x)),

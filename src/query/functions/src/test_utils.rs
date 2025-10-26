@@ -691,6 +691,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         }
         databend_common_ast::ast::TypeName::NotNull(inner_type) => transform_data_type(*inner_type),
         databend_common_ast::ast::TypeName::StageLocation => DataType::StageLocation,
+        databend_common_ast::ast::TypeName::TimestampTimezone => DataType::TimestampTimezone,
     }
 }
 

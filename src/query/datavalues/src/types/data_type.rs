@@ -24,6 +24,7 @@ use super::type_string::StringType;
 use super::type_struct::StructType;
 use super::type_timestamp::TimestampType;
 use crate::prelude::*;
+use crate::types::type_timestamp_timezone::TimestampTimezoneType;
 
 pub const ARROW_EXTENSION_NAME: &str = "ARROW:extension:databend_name";
 pub const ARROW_EXTENSION_META: &str = "ARROW:extension:databend_metadata";
@@ -48,6 +49,7 @@ pub enum DataTypeImpl {
     Float64(PrimitiveDataType<f64>),
     Date(DateType),
     Timestamp(TimestampType),
+    TimestampTimezone(TimestampTimezoneType),
     String(StringType),
     Struct(StructType),
     Array(ArrayType),

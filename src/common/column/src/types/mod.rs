@@ -87,6 +87,8 @@ pub enum PrimitiveType {
     DaysMs,
     /// months_days_micros(i32, i32, i64)
     MonthDayMicros,
+    /// timestamp_timezone(i32, i64)
+    TimestampTimezone,
 }
 
 mod private {
@@ -115,5 +117,6 @@ mod private {
     impl Sealed for OrderedFloat<f64> {}
     impl Sealed for super::days_ms {}
     impl Sealed for super::months_days_micros {}
+    impl Sealed for super::timestamp_timezone {}
     impl Sealed for View {}
 }

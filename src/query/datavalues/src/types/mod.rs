@@ -29,6 +29,7 @@ pub mod type_variant_object;
 
 pub mod eq;
 pub mod type_id;
+mod type_timestamp_timezone;
 
 pub use data_type::*;
 pub use eq::*;

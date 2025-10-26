@@ -22,6 +22,7 @@ use chrono::Datelike;
 use chrono::NaiveDate;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_timezone;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
 use databend_common_expression::serialize::EPOCH_DAYS_FROM_CE;
@@ -46,6 +47,8 @@ use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
+use databend_common_expression::types::timestamp_timezone::string_to_timestamp_timezone;
+use databend_common_expression::types::timestamp_timezone::TimestampTimezoneType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -339,6 +342,37 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                         format!("cannot parse to type `TIMESTAMP`. {}", e),
                     );
                     output.push(0);
+                }
+            }
+        })(val, ctx)
+    }
+
+    registry.register_passthrough_nullable_1_arg::<StringType, TimestampTimezoneType, _, _>(
+        "to_timestamp_timezone",
+        |_, _| FunctionDomain::Full,
+        eval_string_to_timestamp_timezone,
+    );
+    registry.register_combine_nullable_1_arg::<StringType, TimestampTimezoneType, _, _>(
+        "try_to_timestamp_timezone",
+        |_, _| FunctionDomain::Full,
+        error_to_null(eval_string_to_timestamp_timezone),
+    );
+
+    fn eval_string_to_timestamp_timezone(
+        val: Value<StringType>,
+        ctx: &mut EvalContext,
+    ) -> Value<TimestampTimezoneType> {
+        vectorize_with_builder_1_arg::<StringType, TimestampTimezoneType>(|val, output, ctx| {
+            let result = string_to_timestamp_timezone(val.as_bytes(), || &ctx.func_ctx.tz);
+
+            match result {
+                Ok(ts_tz) => output.push(ts_tz),
+                Err(e) => {
+                    ctx.set_error(
+                        output.len(),
+                        format!("cannot parse to type `TIMESTAMP WITH TIMEZONE`. {}", e),
+                    );
+                    output.push(timestamp_timezone::new(0, 0));
                 }
             }
         })(val, ctx)
@@ -816,6 +850,15 @@ fn register_to_string(registry: &mut FunctionRegistry) {
                 timestamp_to_string(val, &ctx.func_ctx.tz)
             )
             .unwrap();
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<TimestampTimezoneType, StringType, _, _>(
+        "to_string",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<TimestampTimezoneType, StringType>(|val, output, _ctx| {
+            write!(output.row_buffer, "{}", val).unwrap();
             output.commit_row();
         }),
     );
@@ -1873,7 +1916,13 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
         FunctionProperty::default().non_deterministic(),
     );
 
-    for name in &["to_timestamp", "to_date", "to_yyyymm", "to_yyyymmdd"] {
+    for name in &[
+        "to_timestamp",
+        "to_timestamp_timezone",
+        "to_date",
+        "to_yyyymm",
+        "to_yyyymmdd",
+    ] {
         registry
             .properties
             .insert(name.to_string(), FunctionProperty::default().monotonicity());

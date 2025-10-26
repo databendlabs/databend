@@ -29,6 +29,7 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_timezone;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_frozen_api::frozen_api;
@@ -89,6 +90,7 @@ use crate::types::string::StringDomain;
 use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
+use crate::types::timestamp_timezone::TimestampTimezoneType;
 use crate::types::variant::JSONB_NULL;
 use crate::types::vector::VectorColumn;
 use crate::types::vector::VectorColumnBuilder;
@@ -117,7 +119,7 @@ pub enum Value<T: AccessType> {
 
 /// Note:
 /// We must modify IndexScalar if we modify Scalar
-#[frozen_api("15c9e299")]
+#[frozen_api("5a1f8936")]
 #[derive(
     Debug,
     Clone,
@@ -136,6 +138,7 @@ pub enum Scalar {
     Number(NumberScalar),
     Decimal(DecimalScalar),
     Timestamp(i64),
+    TimestampTimezone(timestamp_timezone),
     Date(i32),
     Interval(months_days_micros),
     Boolean(bool),
@@ -164,6 +167,7 @@ pub enum ScalarRef<'a> {
     Binary(&'a [u8]),
     String(&'a str),
     Timestamp(i64),
+    TimestampTimezone(timestamp_timezone),
     Date(i32),
     Interval(months_days_micros),
     Array(Column),
@@ -188,6 +192,7 @@ pub enum Column {
     Binary(BinaryColumn),
     String(StringColumn),
     Timestamp(Buffer<i64>),
+    TimestampTimezone(Buffer<timestamp_timezone>),
     Date(Buffer<i32>),
     Interval(Buffer<months_days_micros>),
     Array(Box<ArrayColumn<AnyType>>),
@@ -232,6 +237,7 @@ pub enum ColumnVec {
     Binary(Vec<BinaryColumn>),
     String(Vec<StringColumn>),
     Timestamp(Vec<Buffer<i64>>),
+    TimestampTimezone(Vec<Buffer<timestamp_timezone>>),
     Date(Vec<Buffer<i32>>),
     Interval(Vec<Buffer<months_days_micros>>),
     Array(Vec<ArrayColumn<AnyType>>),
@@ -257,6 +263,7 @@ pub enum ColumnBuilder {
     Binary(BinaryColumnBuilder),
     String(StringColumnBuilder),
     Timestamp(Vec<i64>),
+    TimestampTimezone(Vec<timestamp_timezone>),
     Date(Vec<i32>),
     Interval(Vec<months_days_micros>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
@@ -425,6 +432,7 @@ impl Scalar {
             Scalar::Binary(s) => ScalarRef::Binary(s.as_slice()),
             Scalar::String(s) => ScalarRef::String(s.as_str()),
             Scalar::Timestamp(t) => ScalarRef::Timestamp(*t),
+            Scalar::TimestampTimezone(t) => ScalarRef::TimestampTimezone(*t),
             Scalar::Date(d) => ScalarRef::Date(*d),
             Scalar::Interval(d) => ScalarRef::Interval(*d),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
@@ -469,6 +477,7 @@ impl Scalar {
                 )
             }
             DataType::Timestamp => Scalar::Timestamp(0),
+            DataType::TimestampTimezone => Scalar::TimestampTimezone(timestamp_timezone::new(0, 0)),
             DataType::Date => Scalar::Date(0),
             DataType::Interval => Scalar::Interval(months_days_micros(0)),
             DataType::Nullable(_) => Scalar::Null,
@@ -500,6 +509,7 @@ impl Scalar {
             | Scalar::Number(_)
             | Scalar::Decimal(_)
             | Scalar::Timestamp(_)
+            | Scalar::TimestampTimezone(_)
             | Scalar::Date(_)
             | Scalar::Interval(_)
             | Scalar::Boolean(_)
@@ -570,6 +580,7 @@ impl ScalarRef<'_> {
             ScalarRef::Binary(s) => Scalar::Binary(s.to_vec()),
             ScalarRef::String(s) => Scalar::String(s.to_string()),
             ScalarRef::Timestamp(t) => Scalar::Timestamp(*t),
+            ScalarRef::TimestampTimezone(t) => Scalar::TimestampTimezone(*t),
             ScalarRef::Date(d) => Scalar::Date(*d),
             ScalarRef::Interval(i) => Scalar::Interval(*i),
             ScalarRef::Array(col) => Scalar::Array(col.clone()),
@@ -619,6 +630,9 @@ impl ScalarRef<'_> {
                 max: Some(s.to_string()),
             }),
             ScalarRef::Timestamp(t) => Domain::Timestamp(SimpleDomain { min: *t, max: *t }),
+            ScalarRef::TimestampTimezone(t) => {
+                Domain::TimestampTimezone(SimpleDomain { min: *t, max: *t })
+            }
             ScalarRef::Date(d) => Domain::Date(SimpleDomain { min: *d, max: *d }),
             ScalarRef::Interval(i) => Domain::Interval(SimpleDomain { min: *i, max: *i }),
             ScalarRef::Array(array) => {
@@ -692,6 +706,7 @@ impl ScalarRef<'_> {
             ScalarRef::Binary(s) => s.len(),
             ScalarRef::String(s) => s.len(),
             ScalarRef::Timestamp(_) => 8,
+            ScalarRef::TimestampTimezone(_) => 16,
             ScalarRef::Date(_) => 4,
             ScalarRef::Interval(_) => 16,
             ScalarRef::Array(col) => col.memory_size(),
@@ -722,6 +737,7 @@ impl ScalarRef<'_> {
             ScalarRef::Binary(_) => DataType::Binary,
             ScalarRef::String(_) => DataType::String,
             ScalarRef::Timestamp(_) => DataType::Timestamp,
+            ScalarRef::TimestampTimezone(_) => DataType::TimestampTimezone,
             ScalarRef::Date(_) => DataType::Date,
             ScalarRef::Interval(_) => DataType::Interval,
             ScalarRef::Array(array) => DataType::Array(Box::new(array.data_type())),
@@ -786,6 +802,9 @@ impl ScalarRef<'_> {
             (ScalarRef::Binary(_), ScalarRef::Binary(_)) => Some(DataType::Binary),
             (ScalarRef::String(_), ScalarRef::String(_)) => Some(DataType::String),
             (ScalarRef::Timestamp(_), ScalarRef::Timestamp(_)) => Some(DataType::Timestamp),
+            (ScalarRef::TimestampTimezone(_), ScalarRef::TimestampTimezone(_)) => {
+                Some(DataType::TimestampTimezone)
+            }
             (ScalarRef::Date(_), ScalarRef::Date(_)) => Some(DataType::Date),
             (ScalarRef::Array(s1), ScalarRef::Array(s2)) if s1.data_type() == s2.data_type() => {
                 Some(DataType::Array(Box::new(s1.data_type())))
@@ -827,6 +846,7 @@ impl ScalarRef<'_> {
                 (ScalarRef::Binary(_), DataType::Binary) => true,
                 (ScalarRef::String(_), DataType::String) => true,
                 (ScalarRef::Timestamp(_), DataType::Timestamp) => true,
+                (ScalarRef::TimestampTimezone(_), DataType::TimestampTimezone) => true,
                 (ScalarRef::Interval(_), DataType::Interval) => true,
                 (ScalarRef::Date(_), DataType::Date) => true,
                 (ScalarRef::Bitmap(_), DataType::Bitmap) => true,
@@ -878,6 +898,7 @@ impl ScalarRef<'_> {
             ScalarRef::Binary(s) => s.len() * n + (n + 1) * 8,
             ScalarRef::String(s) => n * 16 + if s.len() > 12 && n > 0 { s.len() } else { 0 },
             ScalarRef::Timestamp(_) => n * 8,
+            ScalarRef::TimestampTimezone(_) => n * 16,
             ScalarRef::Date(_) => n * 4,
             ScalarRef::Interval(_) => n * 16,
             ScalarRef::Array(col) => col.memory_size() * n + (n + 1) * 8,
@@ -1022,6 +1043,7 @@ impl Hash for ScalarRef<'_> {
             ScalarRef::Binary(v) => v.hash(state),
             ScalarRef::String(v) => v.hash(state),
             ScalarRef::Timestamp(v) => v.hash(state),
+            ScalarRef::TimestampTimezone(v) => v.hash(state),
             ScalarRef::Date(v) => v.hash(state),
             ScalarRef::Interval(v) => v.0.hash(state),
             ScalarRef::Array(v) => {
@@ -1135,6 +1157,7 @@ impl Column {
             Column::Binary(col) => col.len(),
             Column::String(col) => col.len(),
             Column::Timestamp(col) => col.len(),
+            Column::TimestampTimezone(col) => col.len(),
             Column::Date(col) => col.len(),
             Column::Interval(col) => col.len(),
             Column::Array(col) => col.len(),
@@ -1161,6 +1184,9 @@ impl Column {
             Column::Binary(col) => Some(ScalarRef::Binary(col.index(index)?)),
             Column::String(col) => Some(ScalarRef::String(col.value(index))),
             Column::Timestamp(col) => Some(ScalarRef::Timestamp(col.get(index).cloned()?)),
+            Column::TimestampTimezone(col) => {
+                Some(ScalarRef::TimestampTimezone(col.get(index).cloned()?))
+            }
             Column::Date(col) => Some(ScalarRef::Date(col.get(index).cloned()?)),
             Column::Interval(col) => Some(ScalarRef::Interval(col.get(index).cloned()?)),
             Column::Array(col) => Some(ScalarRef::Array(col.index(index)?)),
@@ -1195,6 +1221,9 @@ impl Column {
             Column::Binary(col) => ScalarRef::Binary(col.index_unchecked(index)),
             Column::String(col) => ScalarRef::String(col.index_unchecked(index)),
             Column::Timestamp(col) => ScalarRef::Timestamp(*col.get_unchecked(index)),
+            Column::TimestampTimezone(col) => {
+                ScalarRef::TimestampTimezone(*col.get_unchecked(index))
+            }
             Column::Date(col) => ScalarRef::Date(*col.get_unchecked(index)),
             Column::Interval(col) => ScalarRef::Interval(*col.get_unchecked(index)),
             Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
@@ -1249,6 +1278,9 @@ impl Column {
             }
             Column::Timestamp(col) => {
                 Column::Timestamp(col.clone().sliced(range.start, range.end - range.start))
+            }
+            Column::TimestampTimezone(col) => {
+                Column::TimestampTimezone(col.clone().sliced(range.start, range.end - range.start))
             }
             Column::Date(col) => {
                 Column::Date(col.clone().sliced(range.start, range.end - range.start))
@@ -1317,6 +1349,13 @@ impl Column {
             Column::Timestamp(col) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
                 Domain::Timestamp(SimpleDomain {
+                    min: *min,
+                    max: *max,
+                })
+            }
+            Column::TimestampTimezone(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::TimestampTimezone(SimpleDomain {
                     min: *min,
                     max: *max,
                 })
@@ -1393,6 +1432,7 @@ impl Column {
             Column::Binary(_) => DataType::Binary,
             Column::String(_) => DataType::String,
             Column::Timestamp(_) => DataType::Timestamp,
+            Column::TimestampTimezone(_) => DataType::TimestampTimezone,
             Column::Date(_) => DataType::Date,
             Column::Interval(_) => DataType::Interval,
             Column::Array(array) => {
@@ -1533,6 +1573,14 @@ impl Column {
                 (0..len)
                     .map(|_| rng.gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX))
                     .collect::<Vec<i64>>(),
+            ),
+            DataType::TimestampTimezone => TimestampTimezoneType::from_data(
+                (0..len)
+                    .map(|_| {
+                        let i = rng.gen_range(TIMESTAMP_MIN..=TIMESTAMP_MAX);
+                        timestamp_timezone::new(i, 0)
+                    })
+                    .collect::<Vec<timestamp_timezone>>(),
             ),
             DataType::Date => DateType::from_data(
                 (0..len)
@@ -1731,6 +1779,7 @@ impl Column {
             Column::Binary(col) => col.memory_size(),
             Column::String(col) => col.memory_size(),
             Column::Timestamp(col) => col.len() * 8,
+            Column::TimestampTimezone(col) => col.len() * 16,
             Column::Date(col) => col.len() * 4,
             Column::Interval(col) => col.len() * 16,
             Column::Array(col) => col.memory_size(),
@@ -1759,6 +1808,7 @@ impl Column {
             Column::Number(NumberColumn::Int16(col)) => col.len() * 2,
             Column::Number(NumberColumn::Int32(col)) | Column::Date(col) => col.len() * 4,
             Column::Number(NumberColumn::Int64(col)) | Column::Timestamp(col) => col.len() * 8,
+            Column::TimestampTimezone(col) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal64(col, _)) => col.len() * 8,
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
@@ -1880,6 +1930,9 @@ impl ColumnBuilder {
             Column::Binary(col) => ColumnBuilder::Binary(BinaryColumnBuilder::from_column(col)),
             Column::String(col) => ColumnBuilder::String(StringColumnBuilder::from_column(col)),
             Column::Timestamp(col) => ColumnBuilder::Timestamp(buffer_into_mut(col)),
+            Column::TimestampTimezone(col) => {
+                ColumnBuilder::TimestampTimezone(buffer_into_mut(col))
+            }
             Column::Date(col) => ColumnBuilder::Date(buffer_into_mut(col)),
             Column::Interval(col) => ColumnBuilder::Interval(buffer_into_mut(col)),
             Column::Array(box col) => {
@@ -1943,6 +1996,7 @@ impl ColumnBuilder {
             ScalarRef::Binary(s) => ColumnBuilder::Binary(BinaryColumnBuilder::repeat(s, n)),
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
+            ScalarRef::TimestampTimezone(d) => ColumnBuilder::TimestampTimezone(vec![*d; n]),
             ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
             ScalarRef::Interval(i) => ColumnBuilder::Interval(vec![*i; n]),
             ScalarRef::Array(col) => {
@@ -1989,6 +2043,7 @@ impl ColumnBuilder {
             ColumnBuilder::Binary(builder) => builder.len(),
             ColumnBuilder::String(builder) => builder.len(),
             ColumnBuilder::Timestamp(builder) => builder.len(),
+            ColumnBuilder::TimestampTimezone(builder) => builder.len(),
             ColumnBuilder::Date(builder) => builder.len(),
             ColumnBuilder::Interval(builder) => builder.len(),
             ColumnBuilder::Array(builder) => builder.len(),
@@ -2032,6 +2087,7 @@ impl ColumnBuilder {
             ColumnBuilder::Binary(col) => col.memory_size(),
             ColumnBuilder::String(col) => col.memory_size(),
             ColumnBuilder::Timestamp(col) => col.len() * 8,
+            ColumnBuilder::TimestampTimezone(col) => col.len() * 16,
             ColumnBuilder::Date(col) => col.len() * 4,
             ColumnBuilder::Interval(col) => col.len() * 16,
             ColumnBuilder::Array(b) => b.builder.memory_size() + b.offsets.len() * 8,
@@ -2062,6 +2118,7 @@ impl ColumnBuilder {
             ColumnBuilder::Binary(_) => DataType::Binary,
             ColumnBuilder::String(_) => DataType::String,
             ColumnBuilder::Timestamp(_) => DataType::Timestamp,
+            ColumnBuilder::TimestampTimezone(_) => DataType::TimestampTimezone,
             ColumnBuilder::Date(_) => DataType::Date,
             ColumnBuilder::Interval(_) => DataType::Interval,
             ColumnBuilder::Array(col) => {
@@ -2114,6 +2171,9 @@ impl ColumnBuilder {
             }
             DataType::String => ColumnBuilder::String(StringColumnBuilder::with_capacity(capacity)),
             DataType::Timestamp => ColumnBuilder::Timestamp(Vec::with_capacity(capacity)),
+            DataType::TimestampTimezone => {
+                ColumnBuilder::TimestampTimezone(Vec::with_capacity(capacity))
+            }
             DataType::Date => ColumnBuilder::Date(Vec::with_capacity(capacity)),
             DataType::Interval => ColumnBuilder::Interval(Vec::with_capacity(capacity)),
             DataType::Nullable(ty) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
@@ -2206,6 +2266,9 @@ impl ColumnBuilder {
                 ColumnBuilder::Decimal(DecimalColumnBuilder::repeat_default(&(*size).into(), len))
             }
             DataType::Timestamp => ColumnBuilder::Timestamp(vec![0; len]),
+            DataType::TimestampTimezone => {
+                ColumnBuilder::TimestampTimezone(vec![timestamp_timezone::new(0, 0); len])
+            }
             DataType::Date => ColumnBuilder::Date(vec![0; len]),
             DataType::Interval => {
                 ColumnBuilder::Interval(vec![months_days_micros::new(0, 0, 0); len])
@@ -2281,6 +2344,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Timestamp(builder), ScalarRef::Timestamp(value)) => {
                 TimestampType::push_item(builder, value)
             }
+            (ColumnBuilder::TimestampTimezone(builder), ScalarRef::TimestampTimezone(value)) => {
+                TimestampTimezoneType::push_item(builder, value)
+            }
             (ColumnBuilder::Date(builder), ScalarRef::Date(value)) => {
                 DateType::push_item(builder, value)
             }
@@ -2350,6 +2416,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Timestamp(builder), ScalarRef::Timestamp(value)) => {
                 TimestampType::push_item_repeat(builder, *value, n);
             }
+            (ColumnBuilder::TimestampTimezone(builder), ScalarRef::TimestampTimezone(value)) => {
+                TimestampTimezoneType::push_item_repeat(builder, *value, n);
+            }
             (ColumnBuilder::Interval(builder), ScalarRef::Interval(value)) => {
                 IntervalType::push_item_repeat(builder, *value, n);
             }
@@ -2408,6 +2477,9 @@ impl ColumnBuilder {
             ColumnBuilder::Binary(builder) => builder.commit_row(),
             ColumnBuilder::String(builder) => builder.commit_row(),
             ColumnBuilder::Timestamp(builder) => builder.push(0),
+            ColumnBuilder::TimestampTimezone(builder) => {
+                builder.push(timestamp_timezone::new(0, 0))
+            }
             ColumnBuilder::Date(builder) => builder.push(0),
             ColumnBuilder::Interval(builder) => builder.push(months_days_micros::new(0, 0, 0)),
             ColumnBuilder::Array(builder) => builder.push_default(),
@@ -2482,6 +2554,10 @@ impl ColumnBuilder {
             ColumnBuilder::Timestamp(builder) => {
                 let mut value: i64 = reader.read_scalar()?;
                 clamp_timestamp(&mut value);
+                builder.push(value);
+            }
+            ColumnBuilder::TimestampTimezone(builder) => {
+                let value = timestamp_timezone(i128::de_binary(reader));
                 builder.push(value);
             }
             ColumnBuilder::Date(builder) => {
@@ -2609,6 +2685,12 @@ impl ColumnBuilder {
                     builder.push(value);
                 }
             }
+            ColumnBuilder::TimestampTimezone(builder) => {
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    builder.push(timestamp_timezone(i128::de_binary(&mut reader)));
+                }
+            }
             ColumnBuilder::Date(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
@@ -2719,6 +2801,9 @@ impl ColumnBuilder {
             ColumnBuilder::Binary(builder) => builder.pop().map(Scalar::Binary),
             ColumnBuilder::String(builder) => builder.pop().map(Scalar::String),
             ColumnBuilder::Timestamp(builder) => builder.pop().map(Scalar::Timestamp),
+            ColumnBuilder::TimestampTimezone(builder) => {
+                builder.pop().map(Scalar::TimestampTimezone)
+            }
             ColumnBuilder::Date(builder) => builder.pop().map(Scalar::Date),
             ColumnBuilder::Interval(builder) => builder.pop().map(Scalar::Interval),
             ColumnBuilder::Array(builder) => builder.pop().map(Scalar::Array),
@@ -2785,6 +2870,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Timestamp(builder), Column::Timestamp(other)) => {
                 builder.extend_from_slice(other);
             }
+            (ColumnBuilder::TimestampTimezone(builder), Column::TimestampTimezone(other)) => {
+                builder.extend_from_slice(other);
+            }
             (ColumnBuilder::Date(builder), Column::Date(other)) => {
                 builder.extend_from_slice(other);
             }
@@ -2833,6 +2921,7 @@ impl ColumnBuilder {
             T = [
                 Date => DateType,
                 Timestamp => TimestampType,
+                TimestampTimezone => TimestampTimezoneType,
                 Interval => IntervalType,
                 Boolean => BooleanType,
                 Binary => BinaryType,
@@ -2887,6 +2976,9 @@ impl ColumnBuilder {
             ColumnBuilder::Binary(b) => Scalar::Binary(BinaryType::build_scalar(b)),
             ColumnBuilder::String(b) => Scalar::String(StringType::build_scalar(b)),
             ColumnBuilder::Timestamp(b) => Scalar::Timestamp(TimestampType::build_scalar(b)),
+            ColumnBuilder::TimestampTimezone(b) => {
+                Scalar::TimestampTimezone(TimestampTimezoneType::build_scalar(b))
+            }
             ColumnBuilder::Date(b) => Scalar::Date(DateType::build_scalar(b)),
             ColumnBuilder::Interval(b) => Scalar::Interval(IntervalType::build_scalar(b)),
             ColumnBuilder::Bitmap(b) => Scalar::Bitmap(BitmapType::build_scalar(b)),

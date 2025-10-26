@@ -20,6 +20,7 @@ geozero = { workspace = true }
 gimli = { workspace = true }
 http = { workspace = true }
 hyper = { workspace = true }
+jiff = { workspace = true }
 libc = { workspace = true }
 object = { workspace = true }
 once_cell = { workspace = true }

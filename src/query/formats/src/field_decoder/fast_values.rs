@@ -23,6 +23,7 @@ use std::sync::LazyLock;
 use aho_corasick::AhoCorasick;
 use bstr::ByteSlice;
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_timezone;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -65,6 +66,7 @@ use lexical_core::FromLexical;
 use num_traits::NumCast;
 
 use crate::field_decoder::common::read_timestamp;
+use crate::field_decoder::common::read_timestamp_timezone;
 use crate::FieldDecoder;
 use crate::InputCommonSettings;
 
@@ -148,6 +150,9 @@ impl FastFieldDecoderValues {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader, positions),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, positions),
+            ColumnBuilder::TimestampTimezone(c) => {
+                self.read_timestamp_timezone(c, reader, positions)
+            }
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
@@ -328,6 +333,17 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         read_timestamp(column, &buf, self.common_settings())
+    }
+
+    fn read_timestamp_timezone<R: AsRef<[u8]>>(
+        &self,
+        column: &mut Vec<timestamp_timezone>,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        read_timestamp_timezone(column, &buf, self.common_settings())
     }
 
     fn read_array<R: AsRef<[u8]>>(

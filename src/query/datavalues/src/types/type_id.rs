@@ -40,6 +40,7 @@ pub enum TypeID {
     /// in microseconds, it's physical type is Int64
     /// store UTC timestamp
     Timestamp,
+    TimestampTimezone,
 
     /// Interval represents the time interval, e.g. the elapsed time between two date or timestamp.
     /// Underneath Interval is stored as int64, so it supports negative values.

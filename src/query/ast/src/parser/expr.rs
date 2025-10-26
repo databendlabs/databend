@@ -1466,6 +1466,19 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
+    let timestamp_tz_expr = map(
+        rule! {
+            TIMESTAMP_TZ ~ #consumed(literal_string)
+        },
+        |(_, (span, date))| ExprElement::Cast {
+            expr: Box::new(Expr::Literal {
+                span: transform_span(span.tokens),
+                value: Literal::String(date),
+            }),
+            target_type: TypeName::TimestampTimezone,
+        },
+    );
+
     let interval_expr = map(
         rule! {
             INTERVAL ~ #consumed(literal_string)
@@ -1535,6 +1548,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #next_day : "`NEXT_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
                 | #date_expr : "`DATE <str_literal>`"
                 | #timestamp_expr : "`TIMESTAMP <str_literal>`"
+                | #timestamp_tz_expr : "`TIMESTAMP_TZ <str_literal>`"
                 | #interval : "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
                 | #interval_expr : "`INTERVAL <str_literal>`"
                 | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
@@ -1978,6 +1992,11 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         |(_, _, dimension, _)| TypeName::Vector(dimension),
     );
     let ty_stage_location = value(TypeName::StageLocation, rule! { STAGE_LOCATION });
+    let ty_timestamp_timezone = value(
+        TypeName::TimestampTimezone,
+        rule! { TIMESTAMP ~ WITH ~ TIME ~ ZONE },
+    );
+    let ty_timestamp_timezone_simply = value(TypeName::TimestampTimezone, rule! { TIMESTAMP_TZ });
     map_res(
         alt((
             rule! {
@@ -2002,6 +2021,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             },
             rule! {
             ( #ty_date
+            | #ty_timestamp_timezone
+            | #ty_timestamp_timezone_simply
             | #ty_datetime
             | #ty_interval
             | #ty_numeric

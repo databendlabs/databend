@@ -12,31 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod decimal;
-mod integer;
-pub use decimal::*;
-pub use integer::*;
+use std::hash::Hash;
 
-mod double;
-pub use double::*;
-mod boolean;
-pub use boolean::*;
-mod binary;
-pub use binary::*;
+use crate::DataType;
+use crate::TypeID;
 
-mod view;
-pub use view::*;
+/// Timestamp type only stores UTC time in microseconds
+#[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
+pub struct TimestampTimezoneType;
 
-mod struct_;
-pub use struct_::*;
-mod list;
-pub use list::*;
-mod fixed_list;
-pub use fixed_list::*;
-mod interval;
-mod map;
-mod timestamp_timezone;
+impl DataType for TimestampTimezoneType {
+    fn data_type_id(&self) -> TypeID {
+        TypeID::TimestampTimezone
+    }
 
-pub use interval::*;
-pub use map::*;
-pub use timestamp_timezone::*;
+    fn name(&self) -> String {
+        "TimestampTimezone".to_string()
+    }
+}
+
+impl std::fmt::Debug for TimestampTimezoneType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "TimestampTimezone")
+    }
+}

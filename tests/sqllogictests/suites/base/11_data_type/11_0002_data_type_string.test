@@ -97,6 +97,16 @@ select count() from test_to_date where to_timestamp(col2) between  to_timestamp(
 0
 
 query I
+select count() from test_to_date where to_timestamp_timezone(col2) between to_timestamp_timezone('2024-01-01') and to_timestamp_timezone('2024-10-01');
+----
+20
+
+query I
+select count() from test_to_date where to_timestamp_timezone(col2) between to_timestamp_timezone('2026-01-01') and to_timestamp_timezone('2030-10-01');
+----
+0
+
+query I
 select count() from test_to_date where to_date(col1) between  to_date('2099-01-01') and to_date('9999-12-20');
 ----
 0

@@ -833,6 +833,8 @@ pub fn get_simple_cast_function(
     {
         // parse JSON string to variant instead of cast
         "parse_json".to_owned()
+    } else if dest_type.is_timestamp_timezone() {
+        "to_timestamp_timezone".to_owned()
     } else {
         format!("to_{}", dest_type.to_string().to_lowercase())
     };
@@ -859,6 +861,7 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "to_float32",
     "to_float64",
     "to_timestamp",
+    "to_timestamp_timezone",
     "to_interval",
     "to_date",
     "to_variant",
@@ -907,7 +910,9 @@ impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast {
                 Cow::Owned(call) => Ok(Some(call.into())),
             };
         }
-        if function.signature.name == "parse_json" {
+        if function.signature.name == "parse_json"
+            || function.signature.name == "to_timestamp_timezone"
+        {
             return Ok(Some(Expr::Cast(Cast {
                 span: *span,
                 is_try: false,

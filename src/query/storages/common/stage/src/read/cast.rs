@@ -149,5 +149,9 @@ pub fn load_can_auto_cast_to(from_type: &DataType, to_type: &DataType) -> bool {
         (_, Geography) => false,
         (_, Vector(..)) => false,
         (_, Opaque(_)) => false,
+
+        // [specificity]
+        (String | Variant, TimestampTimezone) => true,
+        (_, TimestampTimezone) => false,
     }
 }

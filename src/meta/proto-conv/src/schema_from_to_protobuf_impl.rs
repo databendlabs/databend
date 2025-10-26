@@ -313,6 +313,7 @@ impl FromToProto for ex::TableDataType {
                         ex::TableDataType::Vector(ex::types::VectorDataType::from_pb(v)?)
                     }
                     Dt24::StageLocationT(_) => ex::TableDataType::StageLocation,
+                    Dt24::TimestampTimezoneT(_) => ex::TableDataType::TimestampTimezone,
                 };
                 Ok(x)
             }
@@ -382,6 +383,7 @@ impl FromToProto for ex::TableDataType {
                 new_pb_dt24(Dt24::VectorT(x))
             }
             TableDataType::StageLocation => new_pb_dt24(Dt24::StageLocationT(pb::Empty {})),
+            TableDataType::TimestampTimezone => new_pb_dt24(Dt24::TimestampTimezoneT(pb::Empty {})),
         };
         Ok(x)
     }

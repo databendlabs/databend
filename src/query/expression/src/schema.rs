@@ -327,6 +327,7 @@ pub enum TableDataType {
     Number(NumberDataType),
     Decimal(DecimalDataType),
     Timestamp,
+    TimestampTimezone,
     Date,
     Nullable(Box<TableDataType>),
     Array(Box<TableDataType>),
@@ -1373,6 +1374,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Geography => DataType::Geography,
             TableDataType::Vector(ty) => DataType::Vector(*ty),
             TableDataType::StageLocation => DataType::StageLocation,
+            TableDataType::TimestampTimezone => DataType::TimestampTimezone,
         }
     }
 }
@@ -1524,6 +1526,7 @@ impl TableDataType {
                 | TableDataType::Opaque(_)
                 | TableDataType::Decimal(_)
                 | TableDataType::Timestamp
+                | TableDataType::TimestampTimezone
                 | TableDataType::Date
                 | TableDataType::Bitmap
                 | TableDataType::Variant
@@ -1716,6 +1719,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Generic(_) => Err(ErrorCode::SemanticError(format!(
             "Cannot create table with type: {data_type}",
         ))),
+        DataType::TimestampTimezone => Ok(TableDataType::TimestampTimezone),
     }
 }
 
