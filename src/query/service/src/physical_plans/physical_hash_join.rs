@@ -84,6 +84,15 @@ type ProjectionsResult = (
     Option<(usize, HashMap<IndexType, usize>)>,
 );
 
+/// Type alias for runtime filter expression result
+/// Contains: (Expr, scan_id, table_index, column_idx)
+type RuntimeFilterExpr = Option<(
+    databend_common_expression::Expr<String>,
+    usize,
+    usize,
+    IndexType,
+)>;
+
 type MergedFieldsResult = (
     Vec<DataField>,
     Vec<DataField>,
@@ -679,14 +688,7 @@ impl PhysicalPlanBuilder {
     fn prepare_runtime_filter_expr(
         &self,
         left_condition: &ScalarExpr,
-    ) -> Result<
-        Option<(
-            databend_common_expression::Expr<String>,
-            usize,
-            usize,
-            IndexType,
-        )>,
-    > {
+    ) -> Result<RuntimeFilterExpr> {
         // Runtime filter only supports columns in base tables
         if left_condition.used_columns().iter().all(|idx| {
             matches!(
