@@ -295,54 +295,49 @@ impl NewFinalAggregateTransform {
     }
 
     fn final_aggregate(&mut self, mut queue: Vec<AggregateMeta>) -> Result<()> {
-        let mut agg_hashtable: Option<AggregateHashTable> = None;
+        let total_row_count = queue
+            .iter()
+            .map(|meta| match meta {
+                AggregateMeta::Serialized(payload) => payload.data_block.num_rows(),
+                AggregateMeta::AggregatePayload(payload) => payload.payload.len(),
+                _ => 0,
+            })
+            .sum::<usize>();
 
-        while let Some(meta) = queue.pop() {
-            match meta {
-                AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
-                    Some(ht) => {
-                        let payload = payload.convert_to_partitioned_payload(
+        let mut agg_hashtable = if total_row_count > 0 {
+            let capacity = AggregateHashTable::get_capacity_for_count(total_row_count);
+            Some(AggregateHashTable::new_with_capacity(
+                self.params.group_data_types.clone(),
+                self.params.aggregate_functions.clone(),
+                HashTableConfig::default().with_initial_radix_bits(0),
+                capacity,
+                Arc::new(Bump::new()),
+            ))
+        } else {
+            None
+        };
+
+        if let Some(ht) = agg_hashtable.as_mut() {
+            while let Some(meta) = queue.pop() {
+                match meta {
+                    AggregateMeta::Serialized(payload) => {
+                        let partitioned = payload.convert_to_partitioned_payload(
                             self.params.group_data_types.clone(),
                             self.params.aggregate_functions.clone(),
                             self.params.num_states(),
                             0,
                             Arc::new(Bump::new()),
                         )?;
-                        ht.combine_payloads(&payload, &mut self.flush_state)?;
+                        ht.combine_payloads(&partitioned, &mut self.flush_state)?;
                     }
-                    None => {
-                        agg_hashtable = Some(payload.convert_to_aggregate_table(
-                            self.params.group_data_types.clone(),
-                            self.params.aggregate_functions.clone(),
-                            self.params.num_states(),
-                            0,
-                            Arc::new(Bump::new()),
-                            true,
-                        )?);
-                    }
-                },
-                AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
-                    Some(ht) => {
+                    AggregateMeta::AggregatePayload(payload) => {
                         ht.combine_payload(&payload.payload, &mut self.flush_state)?;
                     }
-                    None => {
-                        let capacity =
-                            AggregateHashTable::get_capacity_for_count(payload.payload.len());
-                        let mut hashtable = AggregateHashTable::new_with_capacity(
-                            self.params.group_data_types.clone(),
-                            self.params.aggregate_functions.clone(),
-                            HashTableConfig::default().with_initial_radix_bits(0),
-                            capacity,
-                            Arc::new(Bump::new()),
-                        );
-                        hashtable.combine_payload(&payload.payload, &mut self.flush_state)?;
-                        agg_hashtable = Some(hashtable);
+                    _ => {
+                        return Err(ErrorCode::Internal(
+                            "Unexpected meta type in aggregate queue when final aggregate",
+                        ));
                     }
-                },
-                _ => {
-                    return Err(ErrorCode::Internal(
-                        "Unexpected meta type in aggregate queue when final aggregate",
-                    ));
                 }
             }
         }
