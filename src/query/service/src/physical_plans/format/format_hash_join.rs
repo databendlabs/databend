@@ -43,11 +43,14 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
 
     #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        // Register runtime filters for all probe targets
         for rf in self.inner.runtime_filter.filters.iter() {
-            ctx.scan_id_to_runtime_filters
-                .entry(rf.scan_id)
-                .or_default()
-                .push(rf.clone());
+            for (_probe_key, scan_id) in &rf.probe_targets {
+                ctx.scan_id_to_runtime_filters
+                    .entry(*scan_id)
+                    .or_default()
+                    .push(rf.clone());
+            }
         }
 
         let build_keys = self
@@ -83,11 +86,25 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
 
         let mut build_runtime_filters = vec![];
         for rf in self.inner.runtime_filter.filters.iter() {
+            // Format all probe targets
+            let probe_targets_str = rf
+                .probe_targets
+                .iter()
+                .map(|(probe_key, scan_id)| {
+                    format!(
+                        "{}@scan{}",
+                        probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                        scan_id
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+
             let mut s = format!(
-                "filter id:{}, build key:{}, probe key:{}, filter type:",
+                "filter id:{}, build key:{}, probe targets:[{}], filter type:",
                 rf.id,
                 rf.build_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
-                rf.probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                probe_targets_str,
             );
             if rf.enable_bloom_runtime_filter {
                 s += "bloom,";

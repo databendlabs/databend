@@ -846,7 +846,10 @@ impl HashJoinBuildState {
 
         let mut wait_runtime_filter_table_indexes = HashSet::new();
         for rf in self.runtime_filter_desc() {
-            wait_runtime_filter_table_indexes.insert(rf.scan_id);
+            // Collect scan_id from all probe targets (since one filter can be pushed to multiple scans)
+            for (_probe_key, scan_id) in &rf.probe_targets {
+                wait_runtime_filter_table_indexes.insert(*scan_id);
+            }
         }
 
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
