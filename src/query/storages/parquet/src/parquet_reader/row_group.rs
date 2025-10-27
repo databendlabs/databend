@@ -104,7 +104,7 @@ pub struct InMemoryRowGroup<'a> {
     location: &'a str,
     op: Operator,
 
-    core: RowGroupCore<'a>,
+    core: RowGroupCore<&'a RowGroupMetaData>,
     read_settings: ReadSettings,
 }
 
@@ -113,7 +113,7 @@ impl<'a> InMemoryRowGroup<'a> {
         location: &'a str,
         op: Operator,
         rg: &'a RowGroupMetaData,
-        page_locations: Option<&'a [Vec<PageLocation>]>,
+        page_locations: Option<Vec<Vec<PageLocation>>>,
         read_settings: ReadSettings,
     ) -> Self {
         Self {
@@ -179,21 +179,18 @@ async fn get_ranges(
     ))
 }
 
-pub struct RowGroupCore<'a> {
-    metadata: &'a RowGroupMetaData,
-    page_locations: Option<&'a [Vec<PageLocation>]>,
+pub struct RowGroupCore<T> {
+    metadata: T,
+    page_locations: Option<Vec<Vec<PageLocation>>>,
     column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
 }
 
-impl<'a> RowGroupCore<'a> {
-    pub fn new(
-        meta: &'a RowGroupMetaData,
-        page_locations: Option<&'a [Vec<PageLocation>]>,
-    ) -> RowGroupCore<'a> {
+impl<T: AsMetaRef> RowGroupCore<T> {
+    pub fn new(meta: T, page_locations: Option<Vec<Vec<PageLocation>>>) -> RowGroupCore<T> {
         RowGroupCore {
+            column_chunks: vec![None; meta.meta().num_columns()],
             metadata: meta,
             page_locations,
-            column_chunks: vec![None; meta.num_columns()],
         }
     }
 
@@ -203,7 +200,7 @@ impl<'a> RowGroupCore<'a> {
         selection: Option<&RowSelection>,
         get_ranges: impl AsyncFnOnce(&[Range<u64>]) -> Result<Vec<Bytes>>,
     ) -> Result<()> {
-        if let Some((selection, page_locations)) = selection.zip(self.page_locations) {
+        if let Some((selection, page_locations)) = selection.zip(self.page_locations.as_ref()) {
             // If we have a `RowSelection` and an `OffsetIndex` then only fetch pages required for the
             // `RowSelection`
             let (fetch_ranges, page_start_offsets) =
@@ -231,7 +228,7 @@ impl<'a> RowGroupCore<'a> {
         selection: Option<&RowSelection>,
         get_ranges: impl Fn(&[Range<u64>]) -> Result<Vec<Bytes>>,
     ) -> Result<()> {
-        if let Some((selection, page_locations)) = selection.zip(self.page_locations) {
+        if let Some((selection, page_locations)) = selection.zip(self.page_locations.as_ref()) {
             // If we have a `RowSelection` and an `OffsetIndex` then only fetch pages required for the
             // `RowSelection`
             let (fetch_ranges, page_start_offsets) =
@@ -264,7 +261,7 @@ impl<'a> RowGroupCore<'a> {
         let fetch_ranges = self
             .column_chunks
             .iter()
-            .zip(self.metadata.columns())
+            .zip(self.metadata.meta().columns())
             .enumerate()
             .filter(|&(idx, (chunk, _chunk_meta))| chunk.is_none() && projection.leaf_included(idx))
             .flat_map(|(idx, (_chunk, chunk_meta))| {
@@ -314,7 +311,7 @@ impl<'a> RowGroupCore<'a> {
                 }
 
                 *chunk = Some(Arc::new(ColumnChunkData::Sparse {
-                    length: self.metadata.column(idx).byte_range().1 as usize,
+                    length: self.metadata.meta().column(idx).byte_range().1 as usize,
                     data: offsets.into_iter().zip(chunks.into_iter()).collect(),
                 }))
             }
@@ -327,7 +324,7 @@ impl<'a> RowGroupCore<'a> {
             .enumerate()
             .filter(|&(idx, chunk)| (chunk.is_none() && projection.leaf_included(idx)))
             .map(|(idx, _chunk)| {
-                let column = self.metadata.column(idx);
+                let column = self.metadata.meta().column(idx);
                 let (start, length) = column.byte_range();
                 start..(start + length)
             })
@@ -344,7 +341,7 @@ impl<'a> RowGroupCore<'a> {
 
             if let Some(data) = chunk_iter.next() {
                 *chunk = Some(Arc::new(ColumnChunkData::Dense {
-                    offset: self.metadata.column(idx).byte_range().0 as usize,
+                    offset: self.metadata.meta().column(idx).byte_range().0 as usize,
                     data,
                 }));
             }
@@ -352,9 +349,9 @@ impl<'a> RowGroupCore<'a> {
     }
 }
 
-impl<'a> RowGroups for RowGroupCore<'a> {
+impl<T: AsMetaRef> RowGroups for RowGroupCore<T> {
     fn num_rows(&self) -> usize {
-        self.metadata.num_rows() as _
+        self.metadata.meta().num_rows() as _
     }
 
     fn column_chunks(&self, i: usize) -> parquet::errors::Result<Box<dyn PageIterator>> {
@@ -363,10 +360,10 @@ impl<'a> RowGroups for RowGroupCore<'a> {
                 "Invalid column index {i}, column was not fetched"
             ))),
             Some(data) => {
-                let page_locations = self.page_locations.map(|index| index[i].clone());
+                let page_locations = self.page_locations.as_ref().map(|index| index[i].clone());
                 let page_reader: Box<dyn PageReader> = Box::new(SerializedPageReader::new(
                     data.clone(),
-                    self.metadata.column(i),
+                    self.metadata.meta().column(i),
                     self.num_rows(),
                     page_locations,
                 )?);
@@ -376,6 +373,22 @@ impl<'a> RowGroups for RowGroupCore<'a> {
                 }))
             }
         }
+    }
+}
+
+pub trait AsMetaRef {
+    fn meta(&self) -> &RowGroupMetaData;
+}
+
+impl AsMetaRef for &RowGroupMetaData {
+    fn meta(&self) -> &RowGroupMetaData {
+        self
+    }
+}
+
+impl AsMetaRef for Arc<RowGroupMetaData> {
+    fn meta(&self) -> &RowGroupMetaData {
+        self.as_ref()
     }
 }
 
