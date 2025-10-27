@@ -500,6 +500,12 @@ impl timestamp_tz {
     pub fn seconds_offset(&self) -> i32 {
         (self.0 >> 64) as i32
     }
+
+    #[inline]
+    pub fn micros_offset(&self) -> Option<i64> {
+        (self.seconds_offset() as i64).checked_mul(Self::MICROS_PER_SECOND)
+    }
+
     #[inline]
     pub fn hours_offset(&self) -> i8 {
         (self.seconds_offset() / 3600) as i8
@@ -519,7 +525,7 @@ impl timestamp_tz {
 
     #[inline]
     pub fn try_total_micros(&self) -> Option<i64> {
-        let offset_micros = (self.seconds_offset() as i64).checked_mul(Self::MICROS_PER_SECOND)?;
+        let offset_micros = self.micros_offset()?;
         self.timestamp().checked_sub(offset_micros)
     }
 }

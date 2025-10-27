@@ -177,7 +177,7 @@ build_exceptions! {
     StagePermissionDenied(2506),
 }
 
-// Data Format and Parsing Errors [1046, 1057, 1060, 1064, 1072, 1074-1081, 1090, 1201-1202, 2507-2510]
+// Data Format and Parsing Errors [1046, 1057, 1060, 1064, 1072, 1074-1081, 1090, 1201-1202, 2507-2509, 2513]
 build_exceptions! {
     /// Bad bytes
     BadBytes(1046),
@@ -216,7 +216,7 @@ build_exceptions! {
     /// File format already exists
     FileFormatAlreadyExists(2509),
     /// Jiff error
-    JiffError(2510),
+    JiffError(2513),
 }
 
 // Cluster and Resource Management Errors [1035, 1045, 1082, 1101, 2401-2410, 4013]

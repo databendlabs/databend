@@ -308,3 +308,8 @@ Charlie 1995-07-22 1995-07-22 00:00:00.000000 29 years 10 months 21 days 29 10 2
 
 statement ok
 unset timezone;
+
+query T
+select age(to_timestamp_tz(today()), '2022-02-02 01:00:00 +0800'::timestamp_tz)=age('2022-02-02 01:00:00 +0800'::timestamp_tz);
+----
+1

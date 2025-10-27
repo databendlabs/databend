@@ -187,6 +187,11 @@ SELECT to_date('2022-02-03T00:00:00+09:00') = to_date('2022-02-02'), to_date('20
 ----
 1 1
 
+query B
+SELECT to_date(to_timestamp_tz('2021-12-20T10:00:00+09:00')) = to_date('2021-12-20')
+----
+1
+
 statement error 1006
 SELECT to_date('2020.10.')
 
@@ -199,8 +204,9 @@ SELECT to_timestamp(1640019661000000) = to_timestamp('2021-12-20 17:01:01.000000
 statement error 1006
 SELECT to_timestamp('2020.10.')
 
+# FIXME: After Parser update then remove ::STRING
 query T
-select to_timestamp_tz(to_timestamp('2021-12-20 17:01:01.000000'))
+select to_timestamp_tz(to_timestamp('2021-12-20 17:01:01.000000'))::STRING
 ----
 2021-12-20 17:01:01.000000 +0000
 
@@ -208,7 +214,7 @@ statement ok
 set timezone='Asia/Shanghai'
 
 query T
-select to_timestamp_tz(to_timestamp('2021-12-20 17:01:01.000000'))
+select to_timestamp_tz(to_timestamp('2021-12-20 17:01:01.000000'))::STRING
 ----
 2021-12-20 17:01:01.000000 +0800
 

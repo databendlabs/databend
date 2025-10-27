@@ -77,6 +77,7 @@ use jiff::civil::date;
 use jiff::civil::Date;
 use jiff::civil::Weekday;
 use jiff::fmt::strtime::BrokenDownTime;
+use jiff::tz::Offset;
 use jiff::tz::TimeZone;
 use jiff::Timestamp;
 use jiff::Unit;
@@ -87,6 +88,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     // to_timestamp(xx)
     register_string_to_timestamp(registry);
     register_date_to_timestamp(registry);
+    register_date_to_timestamp_tz(registry);
     register_number_to_timestamp(registry);
     register_timestamp_to_timestamp_tz(registry);
     register_timestamp_tz_to_timestamp(registry);
@@ -95,6 +97,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     // to_date(xx)
     register_string_to_date(registry);
     register_timestamp_to_date(registry);
+    register_timestamp_tz_to_date(registry);
     register_number_to_date(registry);
 
     // cast([date | timestamp] AS string)
@@ -594,6 +597,59 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
     }
 }
 
+fn register_date_to_timestamp_tz(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_1_arg::<DateType, TimestampTzType, _, _>(
+        "to_timestamp_tz",
+        |_, domain| {
+            int32_domain_to_timestamp_domain(domain)
+                .and_then(|domain| timestamp_domain_to_timestamp_tz_domain(&domain))
+                .map(FunctionDomain::Domain)
+                .unwrap_or(FunctionDomain::MayThrow)
+        },
+        eval_date_to_timestamp_tz,
+    );
+    registry.register_combine_nullable_1_arg::<DateType, TimestampTzType, _, _>(
+        "try_to_timestamp_tz",
+        |_, domain| {
+            if let Some(domain) = int32_domain_to_timestamp_domain(domain)
+                .and_then(|domain| timestamp_domain_to_timestamp_tz_domain(&domain))
+            {
+                FunctionDomain::Domain(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(domain)),
+                })
+            } else {
+                FunctionDomain::Full
+            }
+        },
+        error_to_null(eval_date_to_timestamp_tz),
+    );
+
+    fn eval_date_to_timestamp_tz(
+        val: Value<DateType>,
+        ctx: &mut EvalContext,
+    ) -> Value<TimestampTzType> {
+        vectorize_with_builder_1_arg::<DateType, TimestampTzType>(|val, output, ctx| {
+            let (i, ts) = match calc_date_to_timestamp(val, ctx.func_ctx.tz.clone()).and_then(|i| {
+                Timestamp::from_microsecond(i)
+                    .map_err(|err| err.to_string())
+                    .map(|ts| (i, ts))
+            }) {
+                Ok(ts) => ts,
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(timestamp_tz::default());
+                    return;
+                }
+            };
+            let offset = ctx.func_ctx.tz.to_offset(ts);
+            let ts_tz = timestamp_tz::new(i, offset.seconds());
+
+            output.push(ts_tz)
+        })(val, ctx)
+    }
+}
+
 fn register_timestamp_to_timestamp_tz(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampTzType, _, _>(
         "to_timestamp_tz",
@@ -844,6 +900,68 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
             .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
             .unwrap()
             .get_days()
+    }
+}
+
+fn register_timestamp_tz_to_date(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_1_arg::<TimestampTzType, DateType, _, _>(
+        "to_date",
+        |_ctx, domain| {
+            let (Ok(min), Ok(max)) = (
+                calc_timestamp_tz_to_date(domain.min),
+                calc_timestamp_tz_to_date(domain.max),
+            ) else {
+                return FunctionDomain::MayThrow;
+            };
+
+            FunctionDomain::Domain(SimpleDomain { min, max })
+        },
+        eval_timestamp_tz_to_date,
+    );
+    registry.register_combine_nullable_1_arg::<TimestampTzType, DateType, _, _>(
+        "try_to_date",
+        |_ctx, domain| {
+            let (Ok(min), Ok(max)) = (
+                calc_timestamp_tz_to_date(domain.min),
+                calc_timestamp_tz_to_date(domain.max),
+            ) else {
+                return FunctionDomain::MayThrow;
+            };
+
+            FunctionDomain::Domain(NullableDomain {
+                has_null: false,
+                value: Some(Box::new(SimpleDomain { min, max })),
+            })
+        },
+        error_to_null(eval_timestamp_tz_to_date),
+    );
+
+    fn eval_timestamp_tz_to_date(
+        val: Value<TimestampTzType>,
+        ctx: &mut EvalContext,
+    ) -> Value<DateType> {
+        vectorize_with_builder_1_arg::<TimestampTzType, DateType>(|val, output, ctx| {
+            match calc_timestamp_tz_to_date(val) {
+                Ok(i) => {
+                    output.push(i);
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err);
+                }
+            }
+        })(val, ctx)
+    }
+
+    fn calc_timestamp_tz_to_date(val: timestamp_tz) -> Result<i32, String> {
+        let offset = Offset::from_seconds(val.seconds_offset()).map_err(|err| err.to_string())?;
+
+        Ok(val
+            .timestamp()
+            .to_timestamp(TimeZone::fixed(offset))
+            .date()
+            .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+            .unwrap()
+            .get_days())
     }
 }
 

@@ -236,3 +236,26 @@ SELECT TIMESTAMP '1992-01-01 10:00:00' - to_interval('1 day')
 ----
 1991-12-31 10:00:00.000000
 
+onlyif http
+query T
+SELECT TIMESTAMP_TZ '1992-01-01 10:00:00 +0800' + to_interval('1 day')
+----
+1992-01-02 10:00:00.000000 +0800
+
+onlyif http
+query T
+SELECT to_interval('1 day') + TIMESTAMP_TZ '1992-01-01 10:00:00 +0800'
+----
+1992-01-02 10:00:00.000000 +0800
+
+onlyif http
+query T
+SELECT TIMESTAMP_TZ '1992-01-01 10:00:05 +0800' + to_interval('17 years 3 months 1 day 2 hours 1 minute 57 seconds')
+----
+2009-04-02 12:02:02.000000 +0800
+
+onlyif http
+query T
+SELECT TIMESTAMP_TZ '1992-01-01 10:00:00 +0800' - to_interval('1 day')
+----
+1991-12-31 10:00:00.000000 +0800
