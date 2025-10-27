@@ -27,6 +27,8 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::filter_helper::FilterHelpers;
@@ -213,7 +215,7 @@ pub struct NativeDeserializeDataTransform {
 
     // Structures for the bloom runtime filter:
     ctx: Arc<dyn TableContext>,
-    bloom_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
+    bloom_runtime_filter: Option<Vec<BloomRuntimeFilterRef>>,
 
     // Structures for aggregating index:
     index_reader: Arc<Option<AggIndexReader>>,
@@ -229,6 +231,13 @@ pub struct NativeDeserializeDataTransform {
 
     // for merge_into target build.
     need_reserve_block_info: bool,
+}
+
+#[derive(Clone)]
+struct BloomRuntimeFilterRef {
+    column_index: FieldIndex,
+    filter: BinaryFuse16,
+    stats: Arc<RuntimeFilterStats>,
 }
 
 impl NativeDeserializeDataTransform {
@@ -634,28 +643,37 @@ impl NativeDeserializeDataTransform {
     fn read_and_check_bloom_runtime_filter(&mut self) -> Result<bool> {
         if let Some(bloom_runtime_filter) = self.bloom_runtime_filter.as_ref() {
             let mut bitmaps = Vec::with_capacity(bloom_runtime_filter.len());
-            for (idx, filter) in bloom_runtime_filter.iter() {
-                let column = if let Some((_, column)) =
-                    self.read_state.columns.iter().find(|(i, _)| i == idx)
+            for runtime_filter in bloom_runtime_filter.iter() {
+                let start = std::time::Instant::now();
+                let column = if let Some((_, column)) = self
+                    .read_state
+                    .columns
+                    .iter()
+                    .find(|(i, _)| i == &runtime_filter.column_index)
                 {
-                    (*idx, column.clone())
-                } else if !self.read_state.read_page(*idx)? {
+                    (runtime_filter.column_index, column.clone())
+                } else if !self.read_state.read_page(runtime_filter.column_index)? {
                     debug_assert!(self.read_state.is_finished());
                     return Ok(false);
                 } else {
                     // The runtime filter column must be the last column to read.
                     let (i, column) = self.read_state.columns.last().unwrap();
-                    debug_assert_eq!(i, idx);
-                    (*idx, column.clone())
+                    debug_assert_eq!(i, &runtime_filter.column_index);
+                    (runtime_filter.column_index, column.clone())
                 };
 
                 let probe_block = self.block_reader.build_block(&[column], None)?;
                 let mut bitmap = MutableBitmap::from_len_zeroed(probe_block.num_rows());
                 let probe_column = probe_block.get_last_column().clone();
                 // Apply the filter to the probe column.
-                ExprBloomFilter::new(filter.clone()).apply(probe_column, &mut bitmap)?;
+                ExprBloomFilter::new(runtime_filter.filter.clone())
+                    .apply(probe_column, &mut bitmap)?;
 
                 let unset_bits = bitmap.null_count();
+                let elapsed = start.elapsed();
+                runtime_filter
+                    .stats
+                    .record_bloom(elapsed.as_nanos() as u64, unset_bits as u64);
                 if unset_bits == bitmap.len() {
                     // skip current page.
                     return Ok(false);
@@ -732,16 +750,19 @@ impl NativeDeserializeDataTransform {
     /// Try to get bloom runtime filter from context.
     fn try_init_bloom_runtime_filter(&mut self) {
         if self.bloom_runtime_filter.is_none() {
-            let bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.table_index);
-            let bloom_filters = bloom_filters
+            let bloom_filters = self
+                .ctx
+                .get_runtime_filters(self.table_index)
                 .into_iter()
-                .filter_map(|filter| {
-                    let name = filter.0.as_str();
-                    // Some probe keys are not in the schema, they are derived from expressions.
-                    self.src_schema
-                        .index_of(name)
-                        .ok()
-                        .map(|idx| (idx, filter.1.clone()))
+                .filter_map(|entry| {
+                    let RuntimeFilterEntry { bloom, stats, .. } = entry;
+                    let bloom = bloom?;
+                    let column_index = self.src_schema.index_of(bloom.column_name.as_str()).ok()?;
+                    Some(BloomRuntimeFilterRef {
+                        column_index,
+                        filter: bloom.filter.clone(),
+                        stats,
+                    })
                 })
                 .collect::<Vec<_>>();
             if !bloom_filters.is_empty() {

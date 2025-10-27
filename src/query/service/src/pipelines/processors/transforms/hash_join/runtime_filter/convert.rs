@@ -14,8 +14,12 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
+use databend_common_catalog::runtime_filter_info::RuntimeFilterBloom;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
@@ -61,23 +65,47 @@ pub fn build_runtime_filter_infos(
         for (probe_key, scan_id) in &desc.probe_targets {
             let entry = filters.entry(*scan_id).or_default();
 
-            // Clone the filter data structures for each target scan
-            if let Some(ref inlist) = packet.inlist {
-                entry
-                    .inlist
-                    .push(build_inlist_filter(inlist.clone(), probe_key)?);
-            }
-            if let Some(ref min_max) = packet.min_max {
-                entry.min_max.push(build_min_max_filter(
-                    min_max.clone(),
-                    probe_key,
-                    &desc.build_key,
-                )?);
-            }
-            if let Some(ref bloom) = packet.bloom {
-                entry
-                    .bloom
-                    .push(build_bloom_filter(bloom.clone(), probe_key)?);
+            let mut runtime_entry = RuntimeFilterEntry {
+                id: desc.id,
+                probe_expr: probe_key.clone(),
+                bloom: if let Some(ref bloom) = packet.bloom {
+                    Some(build_bloom_filter(bloom.clone(), probe_key)?)
+                } else {
+                    None
+                },
+                inlist: if let Some(ref inlist) = packet.inlist {
+                    Some(build_inlist_filter(inlist.clone(), probe_key)?)
+                } else {
+                    None
+                },
+                min_max: if let Some(ref min_max) = packet.min_max {
+                    Some(build_min_max_filter(
+                        min_max.clone(),
+                        probe_key,
+                        &desc.build_key,
+                    )?)
+                } else {
+                    None
+                },
+                stats: Arc::new(RuntimeFilterStats::new()),
+            };
+
+            if let Some(existing) = entry
+                .filters
+                .iter_mut()
+                .find(|existing| existing.id == runtime_entry.id)
+            {
+                if runtime_entry.bloom.is_some() {
+                    existing.bloom = runtime_entry.bloom.take();
+                }
+                if runtime_entry.inlist.is_some() {
+                    existing.inlist = runtime_entry.inlist.take();
+                }
+                if runtime_entry.min_max.is_some() {
+                    existing.min_max = runtime_entry.min_max.take();
+                }
+            } else {
+                entry.filters.push(runtime_entry);
             }
         }
     }
@@ -213,14 +241,14 @@ fn build_min_max_filter(
     Ok(min_max_filter)
 }
 
-fn build_bloom_filter(
-    bloom: HashSet<u64>,
-    probe_key: &Expr<String>,
-) -> Result<(String, BinaryFuse16)> {
+fn build_bloom_filter(bloom: HashSet<u64>, probe_key: &Expr<String>) -> Result<RuntimeFilterBloom> {
     let probe_key = probe_key.as_column_ref().unwrap();
     let hashes_vec = bloom.into_iter().collect::<Vec<_>>();
     let filter = BinaryFuse16::try_from(&hashes_vec)?;
-    Ok((probe_key.id.to_string(), filter))
+    Ok(RuntimeFilterBloom {
+        column_name: probe_key.id.to_string(),
+        filter,
+    })
 }
 
 #[cfg(test)]

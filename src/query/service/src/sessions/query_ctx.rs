@@ -57,8 +57,10 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
@@ -1512,9 +1514,25 @@ impl TableContext for QueryContext {
         let mut runtime_filters = self.shared.runtime_filters.write();
         for (scan_id, filter) in filters {
             let entry = runtime_filters.entry(scan_id).or_default();
-            entry.inlist.extend(filter.inlist);
-            entry.min_max.extend(filter.min_max);
-            entry.bloom.extend(filter.bloom);
+            for mut new_filter in filter.filters {
+                if let Some(existing) = entry
+                    .filters
+                    .iter_mut()
+                    .find(|existing| existing.id == new_filter.id)
+                {
+                    if new_filter.bloom.is_some() {
+                        existing.bloom = new_filter.bloom.take();
+                    }
+                    if new_filter.inlist.is_some() {
+                        existing.inlist = new_filter.inlist.take();
+                    }
+                    if new_filter.min_max.is_some() {
+                        existing.min_max = new_filter.min_max.take();
+                    }
+                } else {
+                    entry.filters.push(new_filter);
+                }
+            }
         }
     }
 
@@ -1560,33 +1578,62 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
+    fn get_runtime_filters(&self, id: IndexType) -> Vec<RuntimeFilterEntry> {
         let runtime_filters = self.shared.runtime_filters.read();
-        match runtime_filters.get(&id) {
-            Some(v) => v.bloom.clone(),
-            None => vec![],
-        }
+        runtime_filters
+            .get(&id)
+            .map(|v| v.filters.clone())
+            .unwrap_or_default()
+    }
+
+    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
+        self.get_runtime_filters(id)
+            .into_iter()
+            .filter_map(|entry| entry.bloom.map(|bloom| (bloom.column_name, bloom.filter)))
+            .collect()
     }
 
     fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
-        let runtime_filters = self.shared.runtime_filters.read();
-        match runtime_filters.get(&id) {
-            Some(v) => v.inlist.clone(),
-            None => vec![],
-        }
+        self.get_runtime_filters(id)
+            .into_iter()
+            .filter_map(|entry| entry.inlist)
+            .collect()
     }
 
     fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+        self.get_runtime_filters(id)
+            .into_iter()
+            .filter_map(|entry| entry.min_max)
+            .collect()
+    }
+
+    fn runtime_filter_reports(&self) -> HashMap<IndexType, Vec<RuntimeFilterReport>> {
         let runtime_filters = self.shared.runtime_filters.read();
-        match runtime_filters.get(&id) {
-            Some(v) => v.min_max.clone(),
-            None => vec![],
-        }
+        runtime_filters
+            .iter()
+            .map(|(scan_id, info)| {
+                let reports = info
+                    .filters
+                    .iter()
+                    .map(|entry| RuntimeFilterReport {
+                        filter_id: entry.id,
+                        has_bloom: entry.bloom.is_some(),
+                        has_inlist: entry.inlist.is_some(),
+                        has_min_max: entry.min_max.is_some(),
+                        stats: entry.stats.snapshot(),
+                    })
+                    .collect();
+                (*scan_id, reports)
+            })
+            .collect()
     }
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool {
         if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
-            return !runtime_filter.bloom.is_empty();
+            return runtime_filter
+                .filters
+                .iter()
+                .any(|entry| entry.bloom.is_some());
         }
         false
     }

@@ -23,7 +23,9 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -74,11 +76,18 @@ pub struct DeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
-    cached_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
+    cached_runtime_filter: Option<Vec<BloomRuntimeFilterRef>>,
     // for merge_into target build.
     need_reserve_block_info: bool,
     need_wait_runtime_filter: bool,
     runtime_filter_ready: Option<Arc<RuntimeFilterReady>>,
+}
+
+#[derive(Clone)]
+struct BloomRuntimeFilterRef {
+    column_index: FieldIndex,
+    filter: BinaryFuse16,
+    stats: Arc<RuntimeFilterStats>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -140,18 +149,21 @@ impl DeserializeDataTransform {
     fn runtime_filter(&mut self, data_block: DataBlock) -> Result<Option<Bitmap>> {
         // Check if already cached runtime filters
         if self.cached_runtime_filter.is_none() {
-            let bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.table_index);
-            let bloom_filters = bloom_filters
+            let bloom_filters = self
+                .ctx
+                .get_runtime_filters(self.table_index)
                 .into_iter()
-                .filter_map(|filter| {
-                    let name = filter.0.as_str();
-                    // Some probe keys are not in the schema, they are derived from expressions.
-                    self.src_schema
-                        .index_of(name)
-                        .ok()
-                        .map(|idx| (idx, filter.1.clone()))
+                .filter_map(|entry| {
+                    let RuntimeFilterEntry { bloom, stats, .. } = entry;
+                    let bloom = bloom?;
+                    let column_index = self.src_schema.index_of(bloom.column_name.as_str()).ok()?;
+                    Some(BloomRuntimeFilterRef {
+                        column_index,
+                        filter: bloom.filter.clone(),
+                        stats,
+                    })
                 })
-                .collect::<Vec<(FieldIndex, BinaryFuse16)>>();
+                .collect::<Vec<_>>();
             if bloom_filters.is_empty() {
                 return Ok(None);
             }
@@ -159,13 +171,19 @@ impl DeserializeDataTransform {
         }
 
         let mut bitmaps = vec![];
-        for (idx, filter) in self.cached_runtime_filter.as_ref().unwrap().iter() {
+        for runtime_filter in self.cached_runtime_filter.as_ref().unwrap().iter() {
             let mut bitmap = MutableBitmap::from_len_zeroed(data_block.num_rows());
-            let probe_block_entry = data_block.get_by_offset(*idx);
+            let probe_block_entry = data_block.get_by_offset(runtime_filter.column_index);
             let probe_column = probe_block_entry.to_column();
 
             // Apply bloom filter
-            ExprBloomFilter::new(filter.clone()).apply(probe_column, &mut bitmap)?;
+            let start = Instant::now();
+            ExprBloomFilter::new(runtime_filter.filter.clone()).apply(probe_column, &mut bitmap)?;
+            let elapsed = start.elapsed();
+            let unset_bits = bitmap.null_count();
+            runtime_filter
+                .stats
+                .record_bloom(elapsed.as_nanos() as u64, unset_bits as u64);
             bitmaps.push(bitmap);
         }
         if !bitmaps.is_empty() {

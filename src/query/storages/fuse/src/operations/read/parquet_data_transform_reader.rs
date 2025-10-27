@@ -47,6 +47,7 @@ use crate::io::VirtualColumnReader;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
+use crate::pruning::RuntimeFilterExpr;
 
 pub struct ReadStats {
     pub blocks_total: AtomicU64,
@@ -141,11 +142,29 @@ impl Transform for ReadParquetDataTransform<true> {
                 debug_assert!(partitions.len() == 1);
                 let part = partitions.pop().unwrap();
                 let prune_start = Instant::now();
-                let mut filters = self.context.get_inlist_runtime_filter_with_id(self.scan_id);
-                filters.extend(
-                    self.context
-                        .get_min_max_runtime_filter_with_id(self.scan_id),
-                );
+                let filters = self
+                    .context
+                    .get_runtime_filters(self.scan_id)
+                    .into_iter()
+                    .flat_map(|entry| {
+                        let mut exprs = Vec::new();
+                        if let Some(expr) = entry.inlist.clone() {
+                            exprs.push(RuntimeFilterExpr {
+                                filter_id: entry.id,
+                                expr,
+                                stats: entry.stats.clone(),
+                            });
+                        }
+                        if let Some(expr) = entry.min_max.clone() {
+                            exprs.push(RuntimeFilterExpr {
+                                filter_id: entry.id,
+                                expr,
+                                stats: entry.stats.clone(),
+                            });
+                        }
+                        exprs
+                    })
+                    .collect::<Vec<_>>();
 
                 let exists_runtime_filter = !filters.is_empty();
 
@@ -246,14 +265,32 @@ impl AsyncTransform for ReadParquetDataTransform<false> {
                 let parts = block_part_meta.part_ptr.clone();
                 if !parts.is_empty() {
                     let mut chunks = Vec::with_capacity(parts.len());
-                    let mut filters = self.context.get_inlist_runtime_filter_with_id(self.scan_id);
-                    filters.extend(
-                        self.context
-                            .get_min_max_runtime_filter_with_id(self.scan_id),
-                    );
                     let mut fuse_part_infos = Vec::with_capacity(parts.len());
 
-                    let runtime_filter = ExprRuntimePruner::new(filters.clone());
+                    let runtime_filter = ExprRuntimePruner::new(
+                        self.context
+                            .get_runtime_filters(self.scan_id)
+                            .into_iter()
+                            .flat_map(|entry| {
+                                let mut exprs = Vec::new();
+                                if let Some(expr) = entry.inlist.clone() {
+                                    exprs.push(RuntimeFilterExpr {
+                                        filter_id: entry.id,
+                                        expr,
+                                        stats: entry.stats.clone(),
+                                    });
+                                }
+                                if let Some(expr) = entry.min_max.clone() {
+                                    exprs.push(RuntimeFilterExpr {
+                                        filter_id: entry.id,
+                                        expr,
+                                        stats: entry.stats.clone(),
+                                    });
+                                }
+                                exprs
+                            })
+                            .collect(),
+                    );
                     for part in parts.into_iter() {
                         let prune_start = Instant::now();
                         self.stats.blocks_total.fetch_add(1, Ordering::Relaxed);

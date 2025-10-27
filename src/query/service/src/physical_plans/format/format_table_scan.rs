@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -120,10 +122,84 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
         children.push(FormatTreeNode::new(push_downs));
 
         // runtime filters
-        let rf = ctx.scan_id_to_runtime_filters.get(&self.inner.scan_id);
-        if let Some(rf) = rf {
-            let rf = rf.iter().map(|rf| format!("#{:?}", rf.id)).join(", ");
-            children.push(FormatTreeNode::new(format!("apply join filters: [{rf}]")));
+        if let Some(filters) = ctx.scan_id_to_runtime_filters.get(&self.inner.scan_id) {
+            if !filters.is_empty() {
+                let reports = ctx.runtime_filter_reports.get(&self.inner.scan_id);
+                let mut filter_nodes = Vec::new();
+                for filter in filters.iter() {
+                    if let Some((probe_key, _)) = filter
+                        .probe_targets
+                        .iter()
+                        .find(|(_, scan_id)| scan_id == &self.inner.scan_id)
+                    {
+                        let build_expr = filter.build_key.as_expr(&BUILTIN_FUNCTIONS).sql_display();
+                        let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display();
+
+                        let mut types = Vec::new();
+                        if filter.enable_bloom_runtime_filter {
+                            types.push("bloom");
+                        }
+                        if filter.enable_inlist_runtime_filter {
+                            types.push("inlist");
+                        }
+                        if filter.enable_min_max_runtime_filter {
+                            types.push("min_max");
+                        }
+                        let type_text = if types.is_empty() {
+                            String::from("none")
+                        } else {
+                            types.join(",")
+                        };
+
+                        let mut detail_children =
+                            vec![FormatTreeNode::new(format!("type: [{}]", type_text))];
+
+                        if let Some(reports) = reports {
+                            if let Some(report) =
+                                reports.iter().find(|report| report.filter_id == filter.id)
+                            {
+                                if report.has_bloom {
+                                    detail_children.push(FormatTreeNode::new(format!(
+                                        "bloom rows filtered: {}",
+                                        report.stats.bloom_rows_filtered
+                                    )));
+                                    detail_children.push(FormatTreeNode::new(format!(
+                                        "bloom time: {:?}",
+                                        Duration::from_nanos(report.stats.bloom_time_ns)
+                                    )));
+                                }
+                                if report.has_inlist || report.has_min_max {
+                                    detail_children.push(FormatTreeNode::new(format!(
+                                        "inlist/min-max time: {:?}",
+                                        Duration::from_nanos(report.stats.inlist_min_max_time_ns)
+                                    )));
+                                    detail_children.push(FormatTreeNode::new(format!(
+                                        "min-max rows filtered: {}",
+                                        report.stats.min_max_rows_filtered
+                                    )));
+                                    detail_children.push(FormatTreeNode::new(format!(
+                                        "min-max partitions pruned: {}",
+                                        report.stats.min_max_partitions_pruned
+                                    )));
+                                }
+                            }
+                        }
+
+                        let header = format!(
+                            "filter id:{}, build:{}, probe:{}",
+                            filter.id, build_expr, probe_expr
+                        );
+                        filter_nodes.push(FormatTreeNode::with_children(header, detail_children));
+                    }
+                }
+
+                if !filter_nodes.is_empty() {
+                    children.push(FormatTreeNode::with_children(
+                        "runtime filters:".to_string(),
+                        filter_nodes,
+                    ));
+                }
+            }
         }
 
         // Virtual columns.
