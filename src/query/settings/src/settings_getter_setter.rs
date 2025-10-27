@@ -1106,4 +1106,8 @@ impl Settings {
             ))
         })
     }
+
+    pub fn get_enable_experiment_aggregate_final(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experiment_aggregate_final")? != 0)
+    }
 }
