@@ -23,6 +23,19 @@ def do_query(query, session, pagination):
     return requests.post(url, headers=headers, json=payload, auth=auth)
 
 
+def read_response(resp):
+    if resp.headers["Content-Type"] != "application/vnd.apache.arrow.stream":
+        header = resp.json()
+        assert len(header["data"]) == 0
+        assert header["error"] == None
+        return (header, None)
+    else:
+        reader = ipc.open_stream(resp.content)
+        header = json.loads(reader.schema.metadata[b"response_header"])
+        assert header["error"] == None
+        return (header, reader)
+
+
 def test_arrow_ipc():
     pagination = {
         "max_rows_per_page": 20,
@@ -33,12 +46,12 @@ def test_arrow_ipc():
     # IpcWriteOptions(alignment 64 compression None) content: 1672
     # IpcWriteOptions(alignment 8 compression lz4) content: 1448
 
+    (header, reader) = read_response(resp)
     rows = 0
-    with ipc.open_stream(resp.content) as reader:
-        header = json.loads(reader.schema.metadata[b"response_header"])
-        assert header["error"] == None
-        for batch in reader:
-            rows += batch.num_rows
+    if reader:
+        with reader:
+            for batch in reader:
+                rows += batch.num_rows
 
     for _ in range(30):
         if header.get("next_uri") == None:
@@ -48,10 +61,10 @@ def test_arrow_ipc():
         resp = requests.get(
             uri, auth=auth, headers={"Accept": "application/vnd.apache.arrow.stream"}
         )
-        with ipc.open_stream(resp.content) as reader:
-            header = json.loads(reader.schema.metadata[b"response_header"])
-            assert header["error"] == None
-            for batch in reader:
-                rows += batch.num_rows
+        (header, reader) = read_response(resp)
+        if reader:
+            with reader:
+                for batch in reader:
+                    rows += batch.num_rows
 
     assert rows == 97
