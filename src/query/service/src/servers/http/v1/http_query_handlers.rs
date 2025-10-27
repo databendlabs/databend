@@ -260,16 +260,7 @@ impl QueryResponse {
         };
 
         match body_format {
-            BodyFormat::Json => {
-                res.data = data;
-                res.schema = QueryResponseField::from_schema(&schema);
-                Json(res)
-                    .with_header(HEADER_QUERY_ID, id)
-                    .with_header(HEADER_QUERY_STATE, state.to_string())
-                    .with_header(HEADER_QUERY_PAGE_ROWS, rows)
-                    .into_response()
-            }
-            BodyFormat::Arrow => {
+            BodyFormat::Arrow if !schema.fields.is_empty() && !data.is_empty() => {
                 let buf: Result<_, ErrorCode> = try {
                     const META_KEY: &str = "response_header";
                     let json_res = serde_json::to_string(&res)?;
@@ -287,6 +278,15 @@ impl QueryResponse {
                         .status(StatusCode::INTERNAL_SERVER_ERROR)
                         .body(err.to_string()),
                 }
+            }
+            _ => {
+                res.data = data;
+                res.schema = QueryResponseField::from_schema(&schema);
+                Json(res)
+                    .with_header(HEADER_QUERY_ID, id)
+                    .with_header(HEADER_QUERY_STATE, state.to_string())
+                    .with_header(HEADER_QUERY_PAGE_ROWS, rows)
+                    .into_response()
             }
         }
     }
