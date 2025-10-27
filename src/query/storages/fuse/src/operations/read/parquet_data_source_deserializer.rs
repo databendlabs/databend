@@ -77,10 +77,9 @@ pub struct DeserializeDataTransform {
 
     base_block_ids: Option<Scalar>,
     cached_runtime_filter: Option<Vec<BloomRuntimeFilterRef>>,
-    // for merge_into target build.
     need_reserve_block_info: bool,
     need_wait_runtime_filter: bool,
-    runtime_filter_ready: Option<Arc<RuntimeFilterReady>>,
+    runtime_filter_ready: Vec<Arc<RuntimeFilterReady>>,
 }
 
 #[derive(Clone)]
@@ -103,8 +102,7 @@ impl DeserializeDataTransform {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let need_wait_runtime_filter =
-            !ctx.get_cluster().is_empty() && ctx.get_wait_runtime_filter(plan.scan_id);
+        let need_wait_runtime_filter = !ctx.get_cluster().is_empty();
 
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
         if let Some(virtual_reader) = virtual_reader.as_ref() {
@@ -142,7 +140,7 @@ impl DeserializeDataTransform {
             cached_runtime_filter: None,
             need_reserve_block_info,
             need_wait_runtime_filter,
-            runtime_filter_ready: None,
+            runtime_filter_ready: vec![],
         })))
     }
 
@@ -204,8 +202,8 @@ impl DeserializeDataTransform {
         }
         self.need_wait_runtime_filter = false;
         let runtime_filter_ready = self.ctx.get_runtime_filter_ready(self.scan_id);
-        if runtime_filter_ready.len() == 1 {
-            self.runtime_filter_ready = Some(runtime_filter_ready[0].clone());
+        if !runtime_filter_ready.is_empty() {
+            self.runtime_filter_ready = runtime_filter_ready;
             true
         } else {
             false
@@ -389,14 +387,32 @@ impl Processor for DeserializeDataTransform {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        let runtime_filter_ready = self.runtime_filter_ready.as_mut().unwrap();
-        let mut rx = runtime_filter_ready.runtime_filter_watcher.subscribe();
-        if (*rx.borrow()).is_some() {
-            return Ok(());
+        use std::time::Duration;
+
+        use databend_common_base::base::tokio::time::timeout;
+
+        let timeout_duration = Duration::from_secs(30);
+
+        for runtime_filter_ready in &self.runtime_filter_ready {
+            let mut rx = runtime_filter_ready.runtime_filter_watcher.subscribe();
+            if (*rx.borrow()).is_some() {
+                continue;
+            }
+
+            match timeout(timeout_duration, rx.changed()).await {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => {
+                    return Err(ErrorCode::TokioError("watcher's sender is dropped"));
+                }
+                Err(_) => {
+                    log::warn!(
+                        "Runtime filter wait timeout after {:?} for scan_id: {}",
+                        timeout_duration,
+                        self.scan_id
+                    );
+                }
+            }
         }
-        rx.changed()
-            .await
-            .map_err(|_| ErrorCode::TokioError("watcher's sender is dropped"))?;
         Ok(())
     }
 }
