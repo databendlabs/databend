@@ -250,91 +250,178 @@ impl BlockPartitionStream {
 }
 
 pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilder) {
-    match (to, from) {
-        (ColumnBuilder::Nullable(builder), Column::Null { .. }) => {
-            builder.push_repeat_null(indices.len());
-        }
-        (ColumnBuilder::Array(builder), Column::EmptyArray { .. }) => {
-            for _ in 0..indices.len() {
-                builder.commit_row();
-            }
-        }
-        (ColumnBuilder::Map(builder), Column::EmptyMap { .. }) => {
-            for _ in 0..indices.len() {
-                builder.commit_row();
-            }
-        }
-        (ColumnBuilder::Number(builder), Column::Number(number_column)) => {
-            with_number_mapped_type!(|NUM_TYPE| match (builder, number_column) {
-                (NumberColumnBuilder::NUM_TYPE(b), NumberColumn::NUM_TYPE(c)) => {
-                    copy_primitive_type(b, c, indices);
+    match to {
+        ColumnBuilder::EmptyArray { len } => match from {
+            Column::EmptyArray { .. } => *len += indices.len(),
+            Column::Array(column) => {
+                let capacity = *len + column.len();
+                match ColumnBuilder::with_capacity(&from.data_type(), capacity) {
+                    ColumnBuilder::Array(mut builder) => {
+                        builder.offsets.extend(vec![0; *len]);
+                        copy_array(&mut builder, column, indices);
+                        *to = ColumnBuilder::Array(builder);
+                    }
+                    _ => unreachable!(
+                        "ColumnBuilder::with_capacity for Array type should return ColumnBuilder::Array, \
+                     but got different variant. data_type: {}, capacity: {}",
+                        from.data_type(), capacity
+                    ),
                 }
-                _ => unreachable!(),
-            })
-        }
-        (ColumnBuilder::Decimal(builder), Column::Decimal(column)) => {
-            with_decimal_type!(|DECIMAL_TYPE| match (builder, column) {
-                (
-                    DecimalColumnBuilder::DECIMAL_TYPE(builder, _),
-                    DecimalColumn::DECIMAL_TYPE(column, _),
-                ) => {
-                    copy_primitive_type(builder, column, indices);
-                }
-                _ => unreachable!(),
-            });
-        }
-        (ColumnBuilder::Boolean(builder), Column::Boolean(column)) => {
-            copy_boolean(builder, column, indices)
-        }
-        (ColumnBuilder::Date(builder), Column::Date(column)) => {
-            copy_primitive_type(builder, column, indices);
-        }
-        (ColumnBuilder::Interval(builder), Column::Interval(column)) => {
-            copy_primitive_type(builder, column, indices);
-        }
-        (ColumnBuilder::Timestamp(builder), Column::Timestamp(column)) => {
-            copy_primitive_type(builder, column, indices);
-        }
-        (ColumnBuilder::Bitmap(builder), Column::Bitmap(column)) => {
-            copy_binary(builder, column, indices);
-        }
-        (ColumnBuilder::Binary(builder), Column::Binary(column)) => {
-            copy_binary(builder, column, indices);
-        }
-        (ColumnBuilder::Variant(builder), Column::Variant(column)) => {
-            copy_binary(builder, column, indices);
-        }
-        (ColumnBuilder::Geometry(builder), Column::Geometry(column)) => {
-            copy_binary(builder, column, indices);
-        }
-        (ColumnBuilder::Geography(builder), Column::Geography(column)) => {
-            copy_binary(builder, &column.0, indices);
-        }
-        (ColumnBuilder::String(builder), Column::String(column)) => {
-            copy_string(builder, column, indices);
-        }
-        (ColumnBuilder::Array(builder), Column::Array(column)) => {
-            copy_array(builder, column, indices);
-        }
-        (ColumnBuilder::Map(builder), Column::Map(column)) => {
-            copy_array(builder, column, indices);
-        }
-        (ColumnBuilder::Nullable(builder), Column::Nullable(column)) => {
-            copy_nullable(builder, column, indices);
-        }
-        (ColumnBuilder::Vector(builder), Column::Vector(column)) => {
-            copy_vector(indices, builder, column);
-        }
-        (ColumnBuilder::Opaque(builder), Column::Opaque(column)) => {
-            copy_opaque(indices, builder, column);
-        }
-        (ColumnBuilder::Tuple(builders), Column::Tuple(columns)) => {
-            for (builder, column) in builders.iter_mut().zip(columns.iter()) {
-                copy_column(indices, column, builder)
             }
-        }
-        _ => unreachable!(),
-    }
+            _ => unreachable!(
+                "EmptyArray builder can only copy from EmptyArray or Array, but got from type: {}",
+                from.data_type()
+            ),
+        },
+        ColumnBuilder::Array(builder) => match from {
+            Column::EmptyArray { .. } => {
+                for _ in 0..indices.len() {
+                    builder.commit_row();
+                }
+            }
+            Column::Array(column) => {
+                copy_array(builder, column, indices);
+            }
+            _ => unreachable!(
+                "Array builder can only copy from EmptyArray or Array, but got from type: {}",
+                from.data_type()
+            ),
+        },
+        ColumnBuilder::Null { len } => match from {
+            Column::Null { .. } => *len += indices.len(),
+            Column::Nullable(column) => {
+                let capacity = *len + column.len();
+
+                match ColumnBuilder::with_capacity(&from.data_type(), capacity) {
+                    ColumnBuilder::Nullable(mut builder) => {
+                        builder.push_repeat_null(*len);
+                        copy_nullable(&mut builder, column, indices);
+                        *to = ColumnBuilder::Nullable(builder);
+                    }
+                    _ => unreachable!("ColumnBuilder::with_capacity for Nullable type should return ColumnBuilder::Nullable, \
+                     but got different variant. data_type: {}, capacity: {}",
+                                      from.data_type(), capacity),
+                }
+            }
+            _ => unreachable!(
+                "Null builder can only copy from Null or Nullable, but got from type: {}",
+                from.data_type()
+            ),
+        },
+        ColumnBuilder::Nullable(builder) => match from {
+            Column::Null { .. } => {
+                builder.push_repeat_null(indices.len());
+            }
+            Column::Nullable(column) => {
+                copy_nullable(builder, column, indices);
+            }
+            _ => unreachable!(
+                "Nullable builder can only copy from Null or Nullable, but got from type: {}",
+                from.data_type()
+            ),
+        },
+        ColumnBuilder::EmptyMap { len } => match from {
+            Column::EmptyMap { .. } => *len += indices.len(),
+            Column::Map(column) => {
+                let capacity = *len + indices.len();
+                match ColumnBuilder::with_capacity(&from.data_type(), capacity) {
+                    ColumnBuilder::Map(mut builder) => {
+                        builder.offsets.extend(vec![0; *len]);
+                        copy_array(&mut builder, column, indices);
+                        *to = ColumnBuilder::Map(builder);
+                    }
+                    _ => unreachable!("ColumnBuilder::with_capacity for Map type should return ColumnBuilder::Map, \
+                     but got different variant. data_type: {}, capacity: {}",
+                                      from.data_type(), capacity),
+                }
+            }
+            _ => unreachable!(
+                "EmptyMap builder can only copy from EmptyMap or Map, but got from type: {}",
+                from.data_type()
+            ),
+        },
+        ColumnBuilder::Map(builder) => match from {
+            Column::Map(column) => {
+                copy_array(builder, column, indices);
+            }
+            Column::EmptyMap { .. } => {
+                for _ in 0..indices.len() {
+                    builder.commit_row();
+                }
+            }
+            _ => unreachable!(
+                "Map builder can only copy from EmptyMap or Map, but got from type: {}",
+                from.data_type()
+            ),
+        },
+        _ => match (to, from) {
+            (ColumnBuilder::Number(builder), Column::Number(number_column)) => {
+                with_number_mapped_type!(|NUM_TYPE| match (builder, number_column) {
+                    (NumberColumnBuilder::NUM_TYPE(b), NumberColumn::NUM_TYPE(c)) => {
+                        copy_primitive_type(b, c, indices);
+                    }
+                    _ => unreachable!(),
+                })
+            }
+            (ColumnBuilder::Decimal(builder), Column::Decimal(column)) => {
+                with_decimal_type!(|DECIMAL_TYPE| match (builder, column) {
+                    (
+                        DecimalColumnBuilder::DECIMAL_TYPE(builder, _),
+                        DecimalColumn::DECIMAL_TYPE(column, _),
+                    ) => {
+                        copy_primitive_type(builder, column, indices);
+                    }
+                    _ => unreachable!(),
+                });
+            }
+            (ColumnBuilder::Boolean(builder), Column::Boolean(column)) => {
+                copy_boolean(builder, column, indices)
+            }
+            (ColumnBuilder::Date(builder), Column::Date(column)) => {
+                copy_primitive_type(builder, column, indices);
+            }
+            (ColumnBuilder::Interval(builder), Column::Interval(column)) => {
+                copy_primitive_type(builder, column, indices);
+            }
+            (ColumnBuilder::Timestamp(builder), Column::Timestamp(column)) => {
+                copy_primitive_type(builder, column, indices);
+            }
+            (ColumnBuilder::Bitmap(builder), Column::Bitmap(column)) => {
+                copy_binary(builder, column, indices);
+            }
+            (ColumnBuilder::Binary(builder), Column::Binary(column)) => {
+                copy_binary(builder, column, indices);
+            }
+            (ColumnBuilder::Variant(builder), Column::Variant(column)) => {
+                copy_binary(builder, column, indices);
+            }
+            (ColumnBuilder::Geometry(builder), Column::Geometry(column)) => {
+                copy_binary(builder, column, indices);
+            }
+            (ColumnBuilder::Geography(builder), Column::Geography(column)) => {
+                copy_binary(builder, &column.0, indices);
+            }
+            (ColumnBuilder::String(builder), Column::String(column)) => {
+                copy_string(builder, column, indices);
+            }
+            (ColumnBuilder::Vector(builder), Column::Vector(column)) => {
+                copy_vector(indices, builder, column);
+            }
+            (ColumnBuilder::Opaque(builder), Column::Opaque(column)) => {
+                copy_opaque(indices, builder, column);
+            }
+            (ColumnBuilder::Tuple(builders), Column::Tuple(columns)) => {
+                for (builder, column) in builders.iter_mut().zip(columns.iter()) {
+                    copy_column(indices, column, builder)
+                }
+            }
+            (to, from) => unreachable!(
+                "Unsupported column builder type for copy_column. to type: {:?}, from type: {}",
+                to.data_type(),
+                from.data_type()
+            ),
+        },
+    };
 }
 
 fn copy_boolean<I: Index>(to: &mut MutableBitmap, from: &Bitmap, indices: &[I]) {
