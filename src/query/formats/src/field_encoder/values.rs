@@ -15,7 +15,7 @@
 use chrono_tz::Tz;
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::types::months_days_micros;
-use databend_common_column::types::timestamp_timezone;
+use databend_common_column::types::timestamp_tz;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
@@ -161,9 +161,7 @@ impl FieldEncoderValues {
             Column::Date(c) => self.write_date(c, row_index, out_buf, in_nested),
             Column::Interval(c) => self.write_interval(c, row_index, out_buf, in_nested),
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, in_nested),
-            Column::TimestampTimezone(c) => {
-                self.write_timestamp_timezone(c, row_index, out_buf, in_nested)
-            }
+            Column::TimestampTz(c) => self.write_timestamp_tz(c, row_index, out_buf, in_nested),
             Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, in_nested),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, in_nested),
             Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
@@ -308,9 +306,9 @@ impl FieldEncoderValues {
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
-    fn write_timestamp_timezone(
+    fn write_timestamp_tz(
         &self,
-        column: &Buffer<timestamp_timezone>,
+        column: &Buffer<timestamp_tz>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,

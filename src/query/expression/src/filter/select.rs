@@ -20,7 +20,7 @@ use crate::arrow::and_validities;
 use crate::filter::SelectOp;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
-use crate::types::timestamp_timezone::TimestampTimezoneType;
+use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::AnyType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -106,7 +106,7 @@ impl Selector<'_> {
             DataType::Timestamp => self.select_type_values_cmp::<TimestampType>(
                 &op, left, right, validity, buffers, has_false,
             ),
-            DataType::TimestampTimezone => self.select_type_values_cmp::<TimestampTimezoneType>(
+            DataType::TimestampTz => self.select_type_values_cmp::<TimestampTzType>(
                 &op, left, right, validity, buffers, has_false,
             ),
             DataType::String => self.select_type_values_cmp::<StringType>(

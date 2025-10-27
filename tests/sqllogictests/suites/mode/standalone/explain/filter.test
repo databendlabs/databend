@@ -127,23 +127,23 @@ statement ok
 create or replace table t2_tz(d timestamp with time zone not null, a varchar not null);
 
 statement ok
-insert into t1_tz select to_timestamp_timezone('2007-01-01'),  concat( '2006-01-0' ,(number % 6)::string)   from numbers(100);
+insert into t1_tz select to_timestamp_tz('2007-01-01'),  concat( '2006-01-0' ,(number % 6)::string)   from numbers(100);
 
 statement ok
-insert into t1_tz select to_timestamp_timezone('2007-01-01'),  concat( '2006-01-0' ,(number % 6 + 1)::string)   from numbers(100);
+insert into t1_tz select to_timestamp_tz('2007-01-01'),  concat( '2006-01-0' ,(number % 6 + 1)::string)   from numbers(100);
 
 statement ok
-insert into t2_tz select to_timestamp_timezone('2007-01-01'),  concat( '2006-01-0' ,(number % 6)::string)   from numbers(100);
+insert into t2_tz select to_timestamp_tz('2007-01-01'),  concat( '2006-01-0' ,(number % 6)::string)   from numbers(100);
 
 statement ok
-insert into t2_tz select to_timestamp_timezone('2007-01-01'),  concat( '2006-01-0' ,(number % 6 + 1)::string)   from numbers(100);
+insert into t2_tz select to_timestamp_tz('2007-01-01'),  concat( '2006-01-0' ,(number % 6 + 1)::string)   from numbers(100);
 
 query T
 explain select * from  t1_tz where d < a;
 ----
 Filter
 ├── output columns: [t1_tz.d (#0), t1_tz.a (#1)]
-├── filters: [is_true(t1_tz.d (#0) < CAST(t1_tz.a (#1) AS TimestampTimezone NULL))]
+├── filters: [is_true(t1_tz.d (#0) < CAST(t1_tz.a (#1) AS TimestampTz NULL))]
 ├── estimated rows: 40.00
 └── TableScan
     ├── table: default.default.t1_tz
@@ -153,7 +153,7 @@ Filter
     ├── partitions total: 2
     ├── partitions scanned: 2
     ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
-    ├── push downs: [filters: [is_true(t1_tz.d (#0) < CAST(t1_tz.a (#1) AS TimestampTimezone NULL))], limit: NONE]
+    ├── push downs: [filters: [is_true(t1_tz.d (#0) < CAST(t1_tz.a (#1) AS TimestampTz NULL))], limit: NONE]
     └── estimated rows: 200.00
 
 query T
@@ -161,7 +161,7 @@ explain select * from  t2_tz where d < a;
 ----
 Filter
 ├── output columns: [t2_tz.d (#0), t2_tz.a (#1)]
-├── filters: [t2_tz.d (#0) < CAST(t2_tz.a (#1) AS TimestampTimezone)]
+├── filters: [t2_tz.d (#0) < CAST(t2_tz.a (#1) AS TimestampTz)]
 ├── estimated rows: 40.00
 └── TableScan
     ├── table: default.default.t2_tz
@@ -171,5 +171,5 @@ Filter
     ├── partitions total: 2
     ├── partitions scanned: 2
     ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
-    ├── push downs: [filters: [t2_tz.d (#0) < CAST(t2_tz.a (#1) AS TimestampTimezone)], limit: NONE]
+    ├── push downs: [filters: [t2_tz.d (#0) < CAST(t2_tz.a (#1) AS TimestampTz)], limit: NONE]
     └── estimated rows: 200.00

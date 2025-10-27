@@ -35,8 +35,8 @@ mod fixed_list;
 pub use fixed_list::*;
 mod interval;
 mod map;
-mod timestamp_timezone;
+mod timestamp_tz;
 
 pub use interval::*;
 pub use map::*;
-pub use timestamp_timezone::*;
+pub use timestamp_tz::*;

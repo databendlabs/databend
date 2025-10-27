@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::boolean::TrueIdxIter;
-use databend_common_expression::types::timestamp_timezone::TimestampTimezoneType;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal;
@@ -67,7 +67,7 @@ pub enum ColumnStatisticsBuilder {
     String(CommonBuilder<StringType>),
     Date(CommonBuilder<DateType>),
     Timestamp(CommonBuilder<TimestampType>),
-    TimestampTimezone(CommonBuilder<TimestampTimezoneType>),
+    TimestampTz(CommonBuilder<TimestampTzType>),
     Decimal64(DecimalBuilder<Decimal64Type>),
     Decimal128(DecimalBuilder<Decimal128Type>),
     Decimal256(DecimalBuilder<Decimal256Type>),
@@ -127,11 +127,9 @@ pub fn create_column_stats_builder(data_type: &DataType) -> ColumnStatisticsBuil
         DataType::Timestamp => {
             ColumnStatisticsBuilder::Timestamp(CommonBuilder::<TimestampType>::create(inner_type))
         }
-        DataType::TimestampTimezone => {
-            ColumnStatisticsBuilder::TimestampTimezone(
-                CommonBuilder::<TimestampTimezoneType>::create(inner_type),
-            )
-        }
+        DataType::TimestampTz => ColumnStatisticsBuilder::TimestampTz(CommonBuilder::<
+            TimestampTzType,
+        >::create(inner_type)),
         DataType::Decimal(size) => {
             if size.can_carried_by_64() {
                 ColumnStatisticsBuilder::Decimal64(DecimalBuilder::<Decimal64Type>::create(

@@ -17,8 +17,8 @@ use std::io::Cursor;
 
 use databend_common_column::buffer::Buffer;
 use databend_common_column::error::Result;
-use databend_common_column::types::timestamp_timezone;
-use databend_common_expression::types::timestamp_timezone::TimestampTimezoneType;
+use databend_common_column::types::timestamp_tz;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
@@ -32,7 +32,7 @@ use crate::read::PageIterator;
 use crate::PageMeta;
 
 #[derive(Debug)]
-pub struct TimestampTimezoneNestedIter<I>
+pub struct TimestampTzNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     iter: I,
@@ -41,7 +41,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     scratch: Vec<u8>,
 }
 
-impl<I> TimestampTimezoneNestedIter<I>
+impl<I> TimestampTzNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     pub fn new(iter: I, data_type: TableDataType, init: Vec<InitNested>) -> Self {
@@ -54,7 +54,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     }
 }
 
-impl<I> TimestampTimezoneNestedIter<I>
+impl<I> TimestampTzNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     fn deserialize(&mut self, num_values: u64, buffer: Vec<u8>) -> Result<(NestedState, Column)> {
@@ -70,8 +70,8 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
         self.iter.swap_buffer(&mut buffer);
 
         let column: Buffer<i128> = values.into();
-        let column: Buffer<timestamp_timezone> = unsafe { std::mem::transmute(column) };
-        let mut col = TimestampTimezoneType::upcast_column(column);
+        let column: Buffer<timestamp_tz> = unsafe { std::mem::transmute(column) };
+        let mut col = TimestampTzType::upcast_column(column);
         if self.data_type.is_nullable() {
             col = col.wrap_nullable(validity);
         }
@@ -79,7 +79,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     }
 }
 
-impl<I> Iterator for TimestampTimezoneNestedIter<I>
+impl<I> Iterator for TimestampTzNestedIter<I>
 where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
 {
     type Item = Result<(NestedState, Column)>;
@@ -101,7 +101,7 @@ where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync
     }
 }
 
-pub fn read_nested_timestamp_timezone<R: NativeReadBuf>(
+pub fn read_nested_timestamp_tz<R: NativeReadBuf>(
     reader: &mut R,
     data_type: TableDataType,
     init: Vec<InitNested>,
@@ -117,8 +117,8 @@ pub fn read_nested_timestamp_timezone<R: NativeReadBuf>(
         decompress_integer(reader, num_values, &mut values, &mut scratch)?;
 
         let column: Buffer<i128> = values.into();
-        let column: Buffer<timestamp_timezone> = unsafe { std::mem::transmute(column) };
-        let mut col = TimestampTimezoneType::upcast_column(column);
+        let column: Buffer<timestamp_tz> = unsafe { std::mem::transmute(column) };
+        let mut col = TimestampTzType::upcast_column(column);
         if data_type.is_nullable() {
             col = col.wrap_nullable(validity);
         }

@@ -47,7 +47,6 @@ pub fn from_type(datatype: &DataTypeImpl) -> TableDataType {
         DataTypeImpl::Nullable(v) => TableDataType::Nullable(Box::new(from_type(v.inner_type()))),
         DataTypeImpl::Boolean(_) => TableDataType::Boolean,
         DataTypeImpl::Timestamp(_) => TableDataType::Timestamp,
-        DataTypeImpl::TimestampTimezone(_) => TableDataType::TimestampTimezone,
         DataTypeImpl::Date(_) => TableDataType::Date,
         DataTypeImpl::String(_) => TableDataType::String,
         DataTypeImpl::Struct(fields) => {

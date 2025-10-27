@@ -16,7 +16,7 @@
 // This crate keeps some Index codes for compatibility, it's locked by bincode of meta's v3 version
 
 use databend_common_column::types::months_days_micros;
-use databend_common_column::types::timestamp_timezone;
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
@@ -45,7 +45,7 @@ pub enum IndexScalar {
     Number(NumberScalar),
     Decimal(IndexDecimalScalar),
     Timestamp(i64),
-    TimestampTimezone(timestamp_timezone),
+    TimestampTz(timestamp_tz),
     Date(i32),
     Interval(months_days_micros),
     Boolean(bool),
@@ -80,7 +80,7 @@ impl TryFrom<IndexScalar> for Scalar {
                 }
             },
             IndexScalar::Timestamp(ts) => Scalar::Timestamp(ts),
-            IndexScalar::TimestampTimezone(ts_tz) => Scalar::TimestampTimezone(ts_tz),
+            IndexScalar::TimestampTz(ts_tz) => Scalar::TimestampTz(ts_tz),
             IndexScalar::Date(date) => Scalar::Date(date),
             IndexScalar::Interval(interval) => Scalar::Interval(interval),
             IndexScalar::Boolean(b) => Scalar::Boolean(b),
@@ -117,7 +117,7 @@ impl TryFrom<Scalar> for IndexScalar {
                 }
             }
             Scalar::Timestamp(ts) => IndexScalar::Timestamp(ts),
-            Scalar::TimestampTimezone(ts_tz) => IndexScalar::TimestampTimezone(ts_tz),
+            Scalar::TimestampTz(ts_tz) => IndexScalar::TimestampTz(ts_tz),
             Scalar::Date(date) => IndexScalar::Date(date),
             Scalar::Interval(interval) => IndexScalar::Interval(interval),
             Scalar::Boolean(b) => IndexScalar::Boolean(b),

@@ -21,7 +21,7 @@ use crate::types::decimal::*;
 use crate::types::geometry::GeometryType;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
-use crate::types::timestamp_timezone::TimestampTimezoneType;
+use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::*;
 use crate::Column;
 
@@ -66,7 +66,7 @@ impl_from_data! { BinaryType }
 impl_from_data! { StringType }
 impl_from_data! { DateType }
 impl_from_data! { TimestampType }
-impl_from_data! { TimestampTimezoneType }
+impl_from_data! { TimestampTzType }
 impl_from_data! { VariantType }
 impl_from_data! { BitmapType }
 impl_from_data! { GeometryType }

@@ -132,7 +132,7 @@ impl From<&TableField> for Field {
                 ArrowDataType::Decimal256(size.precision(), size.scale() as i8)
             }
             TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
-            TableDataType::TimestampTimezone => {
+            TableDataType::TimestampTz => {
                 metadata.insert(
                     EXTENSION_KEY.to_string(),
                     ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE.to_string(),
@@ -349,7 +349,7 @@ impl From<&Column> for ArrayData {
             }
             Column::String(col) => col.clone().into(),
             Column::Timestamp(col) => buffer_to_array_data((col.clone(), arrow_type)),
-            Column::TimestampTimezone(col) => buffer_to_array_data((col.clone(), arrow_type)),
+            Column::TimestampTz(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Date(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Interval(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Array(col) => {

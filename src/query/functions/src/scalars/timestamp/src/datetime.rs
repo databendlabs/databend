@@ -22,7 +22,7 @@ use chrono::Datelike;
 use chrono::NaiveDate;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_column::types::months_days_micros;
-use databend_common_column::types::timestamp_timezone;
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
 use databend_common_expression::serialize::EPOCH_DAYS_FROM_CE;
@@ -47,8 +47,8 @@ use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
-use databend_common_expression::types::timestamp_timezone::string_to_timestamp_timezone;
-use databend_common_expression::types::timestamp_timezone::TimestampTimezoneType;
+use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -78,6 +78,7 @@ use jiff::civil::Date;
 use jiff::civil::Weekday;
 use jiff::fmt::strtime::BrokenDownTime;
 use jiff::tz::TimeZone;
+use jiff::Timestamp;
 use jiff::Unit;
 use num_traits::AsPrimitive;
 
@@ -87,6 +88,8 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_string_to_timestamp(registry);
     register_date_to_timestamp(registry);
     register_number_to_timestamp(registry);
+    register_timestamp_to_timestamp_tz(registry);
+    register_timestamp_tz_to_timestamp(registry);
 
     // cast(xx AS date)
     // to_date(xx)
@@ -179,6 +182,24 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
     Some(SimpleDomain {
         min: calc_int64_to_timestamp_domain(domain.min.as_()),
         max: calc_int64_to_timestamp_domain(domain.max.as_()),
+    })
+}
+
+fn timestamp_domain_to_timestamp_tz_domain(
+    domain: &SimpleDomain<i64>,
+) -> Option<SimpleDomain<timestamp_tz>> {
+    Some(SimpleDomain {
+        min: timestamp_tz::new(domain.min, 0),
+        max: timestamp_tz::new(domain.max, 0),
+    })
+}
+
+fn timestamp_tz_domain_to_timestamp_domain(
+    domain: &SimpleDomain<timestamp_tz>,
+) -> Option<SimpleDomain<i64>> {
+    Some(SimpleDomain {
+        min: domain.min.timestamp(),
+        max: domain.max.timestamp(),
     })
 }
 
@@ -347,32 +368,32 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         })(val, ctx)
     }
 
-    registry.register_passthrough_nullable_1_arg::<StringType, TimestampTimezoneType, _, _>(
-        "to_timestamp_timezone",
+    registry.register_passthrough_nullable_1_arg::<StringType, TimestampTzType, _, _>(
+        "to_timestamp_tz",
         |_, _| FunctionDomain::Full,
-        eval_string_to_timestamp_timezone,
+        eval_string_to_timestamp_tz,
     );
-    registry.register_combine_nullable_1_arg::<StringType, TimestampTimezoneType, _, _>(
-        "try_to_timestamp_timezone",
+    registry.register_combine_nullable_1_arg::<StringType, TimestampTzType, _, _>(
+        "try_to_timestamp_tz",
         |_, _| FunctionDomain::Full,
-        error_to_null(eval_string_to_timestamp_timezone),
+        error_to_null(eval_string_to_timestamp_tz),
     );
 
-    fn eval_string_to_timestamp_timezone(
+    fn eval_string_to_timestamp_tz(
         val: Value<StringType>,
         ctx: &mut EvalContext,
-    ) -> Value<TimestampTimezoneType> {
-        vectorize_with_builder_1_arg::<StringType, TimestampTimezoneType>(|val, output, ctx| {
-            let result = string_to_timestamp_timezone(val.as_bytes(), || &ctx.func_ctx.tz);
+    ) -> Value<TimestampTzType> {
+        vectorize_with_builder_1_arg::<StringType, TimestampTzType>(|val, output, ctx| {
+            let result = string_to_timestamp_tz(val.as_bytes(), || &ctx.func_ctx.tz);
 
             match result {
                 Ok(ts_tz) => output.push(ts_tz),
                 Err(e) => {
                     ctx.set_error(
                         output.len(),
-                        format!("cannot parse to type `TIMESTAMP WITH TIMEZONE`. {}", e),
+                        format!("cannot parse to type `TIMESTAMP_TZ`. {}", e),
                     );
-                    output.push(timestamp_timezone::new(0, 0));
+                    output.push(timestamp_tz::new(0, 0));
                 }
             }
         })(val, ctx)
@@ -569,6 +590,73 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
                     output.push(0);
                 }
             }
+        })(val, ctx)
+    }
+}
+
+fn register_timestamp_to_timestamp_tz(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_1_arg::<TimestampType, TimestampTzType, _, _>(
+        "to_timestamp_tz",
+        |_, domain| {
+            timestamp_domain_to_timestamp_tz_domain(domain)
+                .map(FunctionDomain::Domain)
+                .unwrap_or(FunctionDomain::MayThrow)
+        },
+        eval_timestamp_to_timestamp_tz,
+    );
+    registry.register_combine_nullable_1_arg::<TimestampType, TimestampTzType, _, _>(
+        "try_to_timestamp_tz",
+        |_, domain| {
+            if let Some(domain) = timestamp_domain_to_timestamp_tz_domain(domain) {
+                FunctionDomain::Domain(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(domain)),
+                })
+            } else {
+                FunctionDomain::Full
+            }
+        },
+        error_to_null(eval_timestamp_to_timestamp_tz),
+    );
+
+    fn eval_timestamp_to_timestamp_tz(
+        val: Value<TimestampType>,
+        ctx: &mut EvalContext,
+    ) -> Value<TimestampTzType> {
+        vectorize_with_builder_1_arg::<TimestampType, TimestampTzType>(|val, output, ctx| {
+            let ts = match Timestamp::from_microsecond(val) {
+                Ok(ts) => ts,
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(timestamp_tz::default());
+                    return;
+                }
+            };
+            let offset = ctx.func_ctx.tz.to_offset(ts);
+            let ts_tz = timestamp_tz::new(val, offset.seconds());
+
+            output.push(ts_tz)
+        })(val, ctx)
+    }
+}
+
+fn register_timestamp_tz_to_timestamp(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_1_arg::<TimestampTzType, TimestampType, _, _>(
+        "to_timestamp",
+        |_, domain| {
+            timestamp_tz_domain_to_timestamp_domain(domain)
+                .map(FunctionDomain::Domain)
+                .unwrap_or(FunctionDomain::MayThrow)
+        },
+        eval_timestamp_tz_to_timestamp,
+    );
+
+    fn eval_timestamp_tz_to_timestamp(
+        val: Value<TimestampTzType>,
+        ctx: &mut EvalContext,
+    ) -> Value<TimestampType> {
+        vectorize_with_builder_1_arg::<TimestampTzType, TimestampType>(|val, output, _ctx| {
+            output.push(val.total_micros())
         })(val, ctx)
     }
 }
@@ -854,10 +942,10 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<TimestampTimezoneType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<TimestampTzType, StringType, _, _>(
         "to_string",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<TimestampTimezoneType, StringType>(|val, output, _ctx| {
+        vectorize_with_builder_1_arg::<TimestampTzType, StringType>(|val, output, _ctx| {
             write!(output.row_buffer, "{}", val).unwrap();
             output.commit_row();
         }),
@@ -1918,7 +2006,7 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
 
     for name in &[
         "to_timestamp",
-        "to_timestamp_timezone",
+        "to_timestamp_tz",
         "to_date",
         "to_yyyymm",
         "to_yyyymmdd",

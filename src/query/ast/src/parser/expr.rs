@@ -1475,7 +1475,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 span: transform_span(span.tokens),
                 value: Literal::String(date),
             }),
-            target_type: TypeName::TimestampTimezone,
+            target_type: TypeName::TimestampTz,
         },
     );
 
@@ -1992,11 +1992,11 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         |(_, _, dimension, _)| TypeName::Vector(dimension),
     );
     let ty_stage_location = value(TypeName::StageLocation, rule! { STAGE_LOCATION });
-    let ty_timestamp_timezone = value(
-        TypeName::TimestampTimezone,
+    let ty_timestamp_tz = value(
+        TypeName::TimestampTz,
         rule! { TIMESTAMP ~ WITH ~ TIME ~ ZONE },
     );
-    let ty_timestamp_timezone_simply = value(TypeName::TimestampTimezone, rule! { TIMESTAMP_TZ });
+    let ty_timestamp_tz_simply = value(TypeName::TimestampTz, rule! { TIMESTAMP_TZ });
     map_res(
         alt((
             rule! {
@@ -2021,8 +2021,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             },
             rule! {
             ( #ty_date
-            | #ty_timestamp_timezone
-            | #ty_timestamp_timezone_simply
+            | #ty_timestamp_tz
+            | #ty_timestamp_tz_simply
             | #ty_datetime
             | #ty_interval
             | #ty_numeric

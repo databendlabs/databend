@@ -330,7 +330,7 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
             span: None,
             value: Literal::String("1970-01-01 00:00:00".to_string()),
         },
-        TypeName::TimestampTimezone => Expr::Literal {
+        TypeName::TimestampTz => Expr::Literal {
             span: None,
             value: Literal::String("1970-01-01 00:00:00+0000".to_string()),
         },

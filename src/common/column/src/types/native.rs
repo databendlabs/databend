@@ -456,25 +456,25 @@ impl Neg for months_days_micros {
 )]
 #[allow(non_camel_case_types)]
 #[repr(C)]
-pub struct timestamp_timezone(pub i128);
+pub struct timestamp_tz(pub i128);
 
-impl Hash for timestamp_timezone {
+impl Hash for timestamp_tz {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.total_micros().hash(state)
     }
 }
-impl PartialEq for timestamp_timezone {
+impl PartialEq for timestamp_tz {
     fn eq(&self, other: &Self) -> bool {
         self.total_micros() == other.total_micros()
     }
 }
-impl PartialOrd for timestamp_timezone {
+impl PartialOrd for timestamp_tz {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for timestamp_timezone {
+impl Ord for timestamp_tz {
     fn cmp(&self, other: &Self) -> Ordering {
         let total_micros = self.total_micros();
         let other_micros = other.total_micros();
@@ -482,7 +482,7 @@ impl Ord for timestamp_timezone {
     }
 }
 
-impl timestamp_timezone {
+impl timestamp_tz {
     pub const MICROS_PER_SECOND: i64 = 1_000_000;
 
     pub fn new(timestamp: i64, offset: i32) -> Self {
@@ -524,7 +524,7 @@ impl timestamp_timezone {
     }
 }
 
-impl Display for timestamp_timezone {
+impl Display for timestamp_tz {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let timestamp = Timestamp::from_microsecond(self.timestamp()).unwrap();
 
@@ -538,8 +538,8 @@ impl Display for timestamp_timezone {
     }
 }
 
-impl NativeType for timestamp_timezone {
-    const PRIMITIVE: PrimitiveType = PrimitiveType::TimestampTimezone;
+impl NativeType for timestamp_tz {
+    const PRIMITIVE: PrimitiveType = PrimitiveType::TimestampTz;
     type Bytes = [u8; 16];
     #[inline]
     fn to_le_bytes(&self) -> Self::Bytes {

@@ -1191,7 +1191,7 @@ pub enum TypeName {
     },
     Date,
     Timestamp,
-    TimestampTimezone,
+    TimestampTz,
     Binary,
     String,
     Array(Box<TypeName>),
@@ -1347,7 +1347,7 @@ impl Display for TypeName {
             TypeName::StageLocation => {
                 write!(f, "STAGE_LOCATION")?;
             }
-            TypeName::TimestampTimezone => {
+            TypeName::TimestampTz => {
                 write!(f, "TIMESTAMP WITH TIME ZONE")?;
             }
         }

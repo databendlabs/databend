@@ -57,7 +57,7 @@ pub(super) fn rowformat_size(data_type: &DataType) -> usize {
             }
         }
         DataType::Timestamp => 8,
-        DataType::TimestampTimezone => 16,
+        DataType::TimestampTz => 16,
         DataType::Date => 4,
         DataType::Interval => 16,
         // use address instead

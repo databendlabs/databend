@@ -199,6 +199,37 @@ SELECT to_timestamp(1640019661000000) = to_timestamp('2021-12-20 17:01:01.000000
 statement error 1006
 SELECT to_timestamp('2020.10.')
 
+query T
+select to_timestamp_tz(to_timestamp('2021-12-20 17:01:01.000000'))
+----
+2021-12-20 17:01:01.000000 +0000
+
+statement ok
+set timezone='Asia/Shanghai'
+
+query T
+select to_timestamp_tz(to_timestamp('2021-12-20 17:01:01.000000'))
+----
+2021-12-20 17:01:01.000000 +0800
+
+query T
+select to_timestamp(to_timestamp_tz('2021-12-20 17:01:01.000000 +0000'))
+----
+2021-12-21 01:01:01.000000
+
+statement ok
+set timezone='UTC'
+
+query T
+select to_timestamp(to_timestamp_tz('2021-12-20 17:01:01.000000 +0000'))
+----
+2021-12-20 17:01:01.000000
+
+query T
+select to_timestamp(to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
+----
+2021-12-20 09:01:01.000000
+
 query B
 SELECT to_variant(true)::boolean
 ----

@@ -48,7 +48,7 @@ pub fn equal(lhs: &DataTypeImpl, rhs: &DataTypeImpl) -> bool {
     use crate::prelude::TypeID::*;
     match lhs.data_type_id() {
         Boolean | UInt8 | UInt16 | UInt32 | UInt64 | Int8 | Int16 | Int32 | Int64 | Float32
-        | Float64 | String | Date | Timestamp | TimestampTimezone | Interval | Null | Variant
+        | Float64 | String | Date | Timestamp | TimestampTz | Interval | Null | Variant
         | VariantArray | VariantObject => true,
 
         Nullable => {

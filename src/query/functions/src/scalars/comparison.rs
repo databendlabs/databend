@@ -20,7 +20,7 @@ use databend_common_expression::generate_like_pattern;
 use databend_common_expression::type_check;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::string::StringDomain;
-use databend_common_expression::types::timestamp_timezone::TimestampTimezoneType;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
@@ -76,7 +76,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_string_cmp(registry);
     register_date_cmp(registry);
     register_timestamp_cmp(registry);
-    register_timestamp_timezone_cmp(registry);
+    register_timestamp_tz_cmp(registry);
     register_number_cmp(registry);
     register_string_number_cmp(registry);
     register_boolean_cmp(registry);
@@ -257,8 +257,8 @@ fn register_timestamp_cmp(registry: &mut FunctionRegistry) {
     register_simple_domain_type_cmp!(registry, TimestampType);
 }
 
-fn register_timestamp_timezone_cmp(registry: &mut FunctionRegistry) {
-    register_simple_domain_type_cmp!(registry, TimestampTimezoneType);
+fn register_timestamp_tz_cmp(registry: &mut FunctionRegistry) {
+    register_simple_domain_type_cmp!(registry, TimestampTzType);
 }
 
 fn register_interval_cmp(registry: &mut FunctionRegistry) {

@@ -19,20 +19,20 @@ use crate::TypeID;
 
 /// Timestamp type only stores UTC time in microseconds
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
-pub struct TimestampTimezoneType;
+pub struct TimestampTzType;
 
-impl DataType for TimestampTimezoneType {
+impl DataType for TimestampTzType {
     fn data_type_id(&self) -> TypeID {
-        TypeID::TimestampTimezone
+        TypeID::TimestampTz
     }
 
     fn name(&self) -> String {
-        "TimestampTimezone".to_string()
+        "TimestampTz".to_string()
     }
 }
 
-impl std::fmt::Debug for TimestampTimezoneType {
+impl std::fmt::Debug for TimestampTzType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "TimestampTimezone")
+        write!(f, "TimestampTz")
     }
 }

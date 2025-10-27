@@ -35,7 +35,7 @@ pub mod opaque;
 pub mod simple_type;
 pub mod string;
 pub mod timestamp;
-pub mod timestamp_timezone;
+pub mod timestamp_tz;
 pub mod tuple;
 pub mod variant;
 pub mod vector;
@@ -122,7 +122,7 @@ pub enum DataType {
     Number(NumberDataType),
     Decimal(DecimalSize),
     Timestamp,
-    TimestampTimezone,
+    TimestampTz,
     Date,
     Nullable(Box<DataType>),
     Array(Box<DataType>),
@@ -208,7 +208,7 @@ impl DataType {
             | DataType::Number(_)
             | DataType::Decimal(_)
             | DataType::Timestamp
-            | DataType::TimestampTimezone
+            | DataType::TimestampTz
             | DataType::Date
             | DataType::Interval
             | DataType::Bitmap
@@ -236,7 +236,7 @@ impl DataType {
             | DataType::Number(_)
             | DataType::Decimal(_)
             | DataType::Timestamp
-            | DataType::TimestampTimezone
+            | DataType::TimestampTz
             | DataType::Date
             | DataType::Interval
             | DataType::Bitmap
@@ -433,7 +433,7 @@ impl DataType {
             DataType::String => Ok(TypeName::String),
             DataType::Date => Ok(TypeName::Date),
             DataType::Timestamp => Ok(TypeName::Timestamp),
-            DataType::TimestampTimezone => Ok(TypeName::TimestampTimezone),
+            DataType::TimestampTz => Ok(TypeName::TimestampTz),
             DataType::Interval => Ok(TypeName::Interval),
             DataType::Decimal(size) => {
                 let precision = size.precision();

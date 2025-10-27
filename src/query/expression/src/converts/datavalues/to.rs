@@ -38,8 +38,8 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
         Scalar::Opaque(_) => unimplemented!("opaque type datavalues conversion not supported"),
         Scalar::Decimal(_) => unimplemented!("decimal type datavalues conversion not supported"),
         Scalar::Timestamp(x) => DataValue::Int64(*x),
-        Scalar::TimestampTimezone(_) => {
-            unimplemented!("TimestampTimezone type datavalues conversion not supported")
+        Scalar::TimestampTz(_) => {
+            unimplemented!("TimestampTz type datavalues conversion not supported")
         }
         Scalar::Date(x) => DataValue::Int64(*x as i64),
         Scalar::Interval(_) => unimplemented!("Interval type datavalues conversion not supported"),

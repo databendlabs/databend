@@ -151,9 +151,9 @@ where
                 init,
             ))
         }
-        TableDataType::TimestampTimezone => {
+        TableDataType::TimestampTz => {
             init.push(InitNested::Primitive(is_nullable));
-            DynIter::new(TimestampTimezoneNestedIter::<_>::new(
+            DynIter::new(TimestampTzNestedIter::<_>::new(
                 readers.pop().unwrap(),
                 data_type.clone(),
                 init,

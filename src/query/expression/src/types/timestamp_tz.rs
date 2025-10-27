@@ -15,7 +15,7 @@
 use std::cmp::Ordering;
 
 use databend_common_column::buffer::Buffer;
-use databend_common_column::types::timestamp_timezone;
+use databend_common_column::types::timestamp_tz;
 use jiff::fmt;
 use jiff::tz;
 use jiff::tz::TimeZone;
@@ -34,57 +34,57 @@ use crate::Scalar;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoreTimestampTimezone;
+pub struct CoreTimestampTz;
 
-pub type TimestampTimezoneType = SimpleValueType<CoreTimestampTimezone>;
+pub type TimestampTzType = SimpleValueType<CoreTimestampTz>;
 
-impl SimpleType for CoreTimestampTimezone {
-    type Scalar = timestamp_timezone;
-    type Domain = SimpleDomain<timestamp_timezone>;
+impl SimpleType for CoreTimestampTz {
+    type Scalar = timestamp_tz;
+    type Domain = SimpleDomain<timestamp_tz>;
 
     fn downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::Scalar> {
         match scalar {
-            ScalarRef::TimestampTimezone(scalar) => Some(*scalar),
+            ScalarRef::TimestampTz(scalar) => Some(*scalar),
             _ => None,
         }
     }
 
     fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
-        debug_assert!(data_type.is_timestamp_timezone());
-        Scalar::TimestampTimezone(scalar)
+        debug_assert!(data_type.is_timestamp_tz());
+        Scalar::TimestampTz(scalar)
     }
 
     fn downcast_column(col: &Column) -> Option<Buffer<Self::Scalar>> {
         match col {
-            Column::TimestampTimezone(column) => Some(column.clone()),
+            Column::TimestampTz(column) => Some(column.clone()),
             _ => None,
         }
     }
 
     fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
-        debug_assert!(data_type.is_timestamp_timezone());
-        Column::TimestampTimezone(col)
+        debug_assert!(data_type.is_timestamp_tz());
+        Column::TimestampTz(col)
     }
 
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_timestamp_timezone().cloned()
+        domain.as_timestamp_tz().cloned()
     }
 
     fn upcast_domain(domain: Self::Domain, data_type: &DataType) -> Domain {
-        debug_assert!(data_type.is_timestamp_timezone());
-        Domain::TimestampTimezone(domain)
+        debug_assert!(data_type.is_timestamp_tz());
+        Domain::TimestampTz(domain)
     }
 
     fn downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {
         match builder {
-            ColumnBuilder::TimestampTimezone(builder) => Some(builder),
+            ColumnBuilder::TimestampTz(builder) => Some(builder),
             _ => None,
         }
     }
 
     fn downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self::Scalar>> {
         match builder {
-            ColumnBuilder::TimestampTimezone(builder) => Some(builder),
+            ColumnBuilder::TimestampTz(builder) => Some(builder),
             _ => None,
         }
     }
@@ -93,8 +93,8 @@ impl SimpleType for CoreTimestampTimezone {
         builder: Vec<Self::Scalar>,
         data_type: &DataType,
     ) -> Option<ColumnBuilder> {
-        debug_assert!(data_type.is_timestamp_timezone());
-        Some(ColumnBuilder::TimestampTimezone(builder))
+        debug_assert!(data_type.is_timestamp_tz());
+        Some(ColumnBuilder::TimestampTz(builder))
     }
 
     #[inline(always)]
@@ -123,30 +123,30 @@ impl SimpleType for CoreTimestampTimezone {
     }
 }
 
-impl ArgType for TimestampTimezoneType {
+impl ArgType for TimestampTzType {
     fn data_type() -> DataType {
-        DataType::TimestampTimezone
+        DataType::TimestampTz
     }
 
     fn full_domain() -> Self::Domain {
         SimpleDomain {
-            min: timestamp_timezone::new(TIMESTAMP_MIN, 0),
-            max: timestamp_timezone::new(TIMESTAMP_MAX, 0),
+            min: timestamp_tz::new(TIMESTAMP_MIN, 0),
+            max: timestamp_tz::new(TIMESTAMP_MAX, 0),
         }
     }
 }
 
 #[inline]
-pub fn string_to_timestamp_timezone<'a, F: FnOnce() -> &'a TimeZone>(
+pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a TimeZone>(
     ts_str: &[u8],
     fn_tz: F,
-) -> databend_common_exception::Result<timestamp_timezone> {
+) -> databend_common_exception::Result<timestamp_tz> {
     let time = fmt::strtime::parse("%Y-%m-%d", ts_str)
-        .or_else(|_| fmt::strtime::parse("%Y-%m-%dT%H:%M:%S%.f%z", ts_str))
-        .or_else(|_| fmt::strtime::parse("%Y-%m-%dT%H:%M:%S%.f%:z", ts_str))
+        .or_else(|_| fmt::strtime::parse("%Y-%m-%dT%H:%M:%S%.f %z", ts_str))
+        .or_else(|_| fmt::strtime::parse("%Y-%m-%dT%H:%M:%S%.f %:z", ts_str))
         .or_else(|_| fmt::strtime::parse("%Y-%m-%dT%H:%M:%S%.f", ts_str))
-        .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f%z", ts_str))
-        .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f%:z", ts_str))
+        .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f %z", ts_str))
+        .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f %:z", ts_str))
         .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f", ts_str))?;
     let datetime = time.to_datetime()?;
     let timestamp = tz::offset(0).to_timestamp(datetime)?;
@@ -154,7 +154,7 @@ pub fn string_to_timestamp_timezone<'a, F: FnOnce() -> &'a TimeZone>(
         .offset()
         .unwrap_or_else(|| fn_tz().to_offset(timestamp));
 
-    Ok(timestamp_timezone::new(
+    Ok(timestamp_tz::new(
         timestamp.as_microsecond(),
         offset.seconds(),
     ))

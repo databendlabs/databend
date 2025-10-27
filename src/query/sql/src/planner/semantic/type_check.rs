@@ -6413,7 +6413,7 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
             data_type.remove_nullable()
         }
         TypeName::StageLocation => TableDataType::StageLocation,
-        TypeName::TimestampTimezone => TableDataType::TimestampTimezone,
+        TypeName::TimestampTz => TableDataType::TimestampTz,
     };
     if !matches!(type_name, TypeName::Nullable(_) | TypeName::NotNull(_)) && !not_null {
         return Ok(data_type.wrap_nullable());

@@ -142,7 +142,7 @@ impl Debug for ScalarRef<'_> {
             }
             ScalarRef::String(s) => write!(f, "{s:?}"),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
-            ScalarRef::TimestampTimezone(t) => write!(f, "{t:?}"),
+            ScalarRef::TimestampTz(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
             ScalarRef::Interval(i) => {
                 let interval = interval_to_string(i);
@@ -254,9 +254,7 @@ impl Debug for Column {
             Column::Binary(col) => write!(f, "{col:?}"),
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => f.debug_tuple("Timestamp").field(col).finish(),
-            Column::TimestampTimezone(col) => {
-                f.debug_tuple("TimestampTimezone").field(col).finish()
-            }
+            Column::TimestampTz(col) => f.debug_tuple("TimestampTz").field(col).finish(),
             Column::Date(col) => f.debug_tuple("Date").field(col).finish(),
             Column::Interval(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
@@ -291,7 +289,7 @@ impl Display for ScalarRef<'_> {
             ScalarRef::Opaque(o) => write!(f, "{o:?}"),
             ScalarRef::String(s) => write!(f, "{}", QuotedString(s, '\'')),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
-            ScalarRef::TimestampTimezone(t) => write!(f, "'{}'", t),
+            ScalarRef::TimestampTz(t) => write!(f, "'{}'", t),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
             ScalarRef::Interval(interval) => write!(f, "'{}'", interval_to_string(interval)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
@@ -646,7 +644,7 @@ impl Display for DataType {
             DataType::Generic(index) => write!(f, "T{index}"),
             DataType::Opaque(size) => write!(f, "Opaque({size})"),
             DataType::StageLocation => write!(f, "StageLocation"),
-            DataType::TimestampTimezone => write!(f, "TimestampTimezone"),
+            DataType::TimestampTz => write!(f, "TimestampTz"),
         }
     }
 }
@@ -661,7 +659,7 @@ impl Display for TableDataType {
             TableDataType::Number(num) => write!(f, "{num}"),
             TableDataType::Decimal(decimal) => write!(f, "{decimal}"),
             TableDataType::Timestamp => write!(f, "Timestamp"),
-            TableDataType::TimestampTimezone => write!(f, "TimestampTimezone"),
+            TableDataType::TimestampTz => write!(f, "TimestampTz"),
             TableDataType::Date => write!(f, "Date"),
             TableDataType::Null => write!(f, "NULL"),
             TableDataType::Nullable(inner) => write!(f, "{inner} NULL"),
@@ -1268,7 +1266,7 @@ impl Display for Domain {
             Domain::Boolean(domain) => write!(f, "{domain}"),
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
-            Domain::TimestampTimezone(domain) => write!(f, "{domain}"),
+            Domain::TimestampTz(domain) => write!(f, "{domain}"),
             Domain::Date(domain) => write!(f, "{domain}"),
             Domain::Interval(domain) => write!(f, "{:?}", domain),
             Domain::Nullable(domain) => write!(f, "{domain}"),
