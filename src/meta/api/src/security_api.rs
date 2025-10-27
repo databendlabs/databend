@@ -113,7 +113,7 @@ where
                         columns_ids: column_ids.clone(),
                     };
 
-                    for column_id in column_ids {
+                    if let Some(column_id) = column_ids.first() {
                         new_table_meta
                             .column_mask_policy_columns_ids
                             .insert(*column_id, policy_map.clone());
