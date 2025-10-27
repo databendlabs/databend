@@ -28,8 +28,16 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::DataOperator;
+use tokio::sync::Semaphore;
 
 use super::AggregatePayload;
+use super::TransformAggregateSpillReader;
+use super::TransformFinalAggregate;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
@@ -42,7 +50,7 @@ struct InputPortState {
     bucket: isize,
     max_partition_count: usize,
 }
-pub struct TransformPartitionBucket {
+pub struct NewTransformPartitionBucket {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
     params: Arc<AggregatorParams>,
@@ -56,7 +64,7 @@ pub struct TransformPartitionBucket {
     max_partition_count: usize,
 }
 
-impl TransformPartitionBucket {
+impl NewTransformPartitionBucket {
     pub fn create(input_nums: usize, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut inputs = Vec::with_capacity(input_nums);
 
@@ -68,7 +76,7 @@ impl TransformPartitionBucket {
             });
         }
 
-        Ok(TransformPartitionBucket {
+        Ok(NewTransformPartitionBucket {
             params,
             inputs,
             working_bucket: 0,
@@ -434,12 +442,13 @@ impl TransformPartitionBucket {
                 }
             }
         }
+
         DataBlock::empty_with_meta(AggregateMeta::create_partitioned(bucket, data))
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformPartitionBucket {
+impl Processor for NewTransformPartitionBucket {
     fn name(&self) -> String {
         String::from("TransformPartitionBucket")
     }
@@ -565,4 +574,44 @@ impl Processor for TransformPartitionBucket {
 
         Ok(())
     }
+}
+
+pub fn build_partition_bucket(
+    pipeline: &mut Pipeline,
+    params: Arc<AggregatorParams>,
+    max_restore_worker: u64,
+    after_worker: usize,
+) -> Result<()> {
+    let input_nums = pipeline.output_len();
+    let transform = NewTransformPartitionBucket::create(input_nums, params.clone())?;
+
+    let output = transform.get_output();
+    let inputs_port = transform.get_inputs();
+
+    pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(transform)),
+        inputs_port,
+        vec![output],
+    )]));
+
+    pipeline.try_resize(std::cmp::min(input_nums, max_restore_worker as usize))?;
+
+    let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
+    let operator = DataOperator::instance().spill_operator();
+    pipeline.add_transform(|input, output| {
+        let operator = operator.clone();
+        TransformAggregateSpillReader::create(input, output, operator, semaphore.clone())
+    })?;
+
+    pipeline.add_transform(|input, output| {
+        Ok(ProcessorPtr::create(TransformFinalAggregate::try_create(
+            input,
+            output,
+            params.clone(),
+        )?))
+    })?;
+
+    pipeline.try_resize(after_worker)?;
+
+    Ok(())
 }
