@@ -29,8 +29,8 @@ use crate::common;
 // The message bytes are built from the output of `test_pb_from_to()`
 
 #[test]
-fn test_decode_v152_data_type_stage_location() -> anyhow::Result<()> {
-    let table_data_type_v157 = vec![170, 3, 0, 160, 6, 156, 1, 168, 6, 24];
+fn test_decode_v157_data_type_timestamp_tz() -> anyhow::Result<()> {
+    let table_data_type_v157 = vec![170, 3, 0, 160, 6, 157, 1, 168, 6, 24];
 
     let want = || TableDataType::TimestampTz;
     common::test_pb_from_to(func_name!(), want())?;
