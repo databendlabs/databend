@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_sql::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
+use databend_common_sql::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
 use databend_common_sql::plans::AlterDatabasePlan;
 use log::debug;
 
@@ -49,11 +51,21 @@ impl Interpreter for AlterDatabaseInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "alter_database_execute");
-
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let database = catalog
+        let database = match catalog
             .get_database(&self.plan.tenant, &self.plan.database)
-            .await?;
+            .await
+        {
+            Ok(db) => db,
+            Err(err) => {
+                if self.plan.if_exists
+                    && err.code() == databend_common_exception::ErrorCode::UNKNOWN_DATABASE
+                {
+                    return Ok(PipelineBuildResult::create());
+                }
+                return Err(err);
+            }
+        };
 
         // Merge provided options with the existing database options
         let mut merged_options = database.options().clone();
@@ -61,8 +73,8 @@ impl Interpreter for AlterDatabaseInterpreter {
             merged_options.insert(key.clone(), value.clone());
         }
 
-        let connection_value = merged_options.get("DEFAULT_STORAGE_CONNECTION").cloned();
-        let path_value = merged_options.get("DEFAULT_STORAGE_PATH").cloned();
+        let connection_value = merged_options.get(DEFAULT_STORAGE_CONNECTION).cloned();
+        let path_value = merged_options.get(DEFAULT_STORAGE_PATH).cloned();
 
         // Check if both options are present together in the final merged state
         // This ensures that after ALTER, the database still has both options configured

@@ -161,6 +161,7 @@ pub struct AlterDatabasePlan {
     pub tenant: Tenant,
     pub catalog: String,
     pub database: String,
+    pub if_exists: bool,
     pub options: BTreeMap<String, String>,
 }
 

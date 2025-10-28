@@ -2,12 +2,14 @@
 
 # First create the required connection
 statement ok
+DROP CONNECTION IF EXISTS my_s3_connection
+
+statement ok
 CREATE CONNECTION IF NOT EXISTS my_s3_connection STORAGE_TYPE = 'fs'
 
 statement ok
 DROP DATABASE IF EXISTS test_db_options
 
-# TODO test connection and path match (re-use the logic, there should be somewhere)
 statement ok
 CREATE DATABASE test_db_options OPTIONS (
     DEFAULT_STORAGE_CONNECTION = 'my_s3_connection',
@@ -17,7 +19,7 @@ CREATE DATABASE test_db_options OPTIONS (
 query I
 show create database test_db_options
 ----
-test_db_options CREATE DATABASE `test_db_options` ENGINE=DEFAULT OPTIONS (DEFAULT_STORAGE_CONNECTION='my_s3_connection' DEFAULT_STORAGE_PATH='fs:///tmp/test-bucket/data/')
+test_db_options CREATE DATABASE `test_db_options` ENGINE=DEFAULT OPTIONS (DEFAULT_STORAGE_CONNECTION='my_s3_connection', DEFAULT_STORAGE_PATH='fs:///tmp/test-bucket/data/')
 
 # Test ALTER DATABASE SET OPTIONS with valid paired options
 statement ok
@@ -40,6 +42,9 @@ DROP DATABASE test_db_options
 # Test CREATE DATABASE with both ENGINE and OPTIONS
 # Create another connection for this test
 statement ok
+DROP CONNECTION IF EXISTS my_connection
+
+statement ok
 CREATE CONNECTION IF NOT EXISTS my_connection STORAGE_TYPE = 'fs'
 
 statement ok
@@ -51,7 +56,7 @@ CREATE OR REPLACE DATABASE test_db_mixed ENGINE = DEFAULT OPTIONS (
 query I
 show create database test_db_mixed
 ----
-test_db_mixed CREATE DATABASE `test_db_mixed` ENGINE=DEFAULT OPTIONS (DEFAULT_STORAGE_CONNECTION='my_connection' DEFAULT_STORAGE_PATH='fs:///tmp/mixed_path/')
+test_db_mixed CREATE DATABASE `test_db_mixed` ENGINE=DEFAULT OPTIONS (DEFAULT_STORAGE_CONNECTION='my_connection', DEFAULT_STORAGE_PATH='fs:///tmp/mixed_path/')
 
 statement ok
 DROP DATABASE test_db_mixed
@@ -64,6 +69,20 @@ CREATE DATABASE test_db_invalid OPTIONS (
     invalid_option = 'test'
 )
 
+# Test mismatched connection and path protocols - should fail
+statement error 1006
+CREATE DATABASE test_db_path_mismatch OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_connection',
+    DEFAULT_STORAGE_PATH = 's3://test-bucket/mismatch/'
+)
+
+# Test invalid path format - should fail
+statement error 1006
+CREATE DATABASE test_db_invalid_url OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_connection',
+    DEFAULT_STORAGE_PATH = 'not a valid url'
+)
+
 # Test mixed invalid database options
 # ERROR HY000 (1105): InvalidArgument. Code: 2004, Text = Invalid database option 'conn'. Valid options are: DEFAULT_STORAGE_CONNECTION, DEFAULT_STORAGE_PATH.
 statement error 2004
@@ -72,6 +91,13 @@ CREATE DATABASE test_db_invalid2 OPTIONS (
     path = 'fs:///tmp/path',
     DEFAULT_STORAGE_CONNECTION = 'my_conn',
     DEFAULT_STORAGE_PATH = 'fs:///tmp/bucket/path'
+)
+
+# ALTER DATABASE IF EXISTS should be a no-op for missing database
+statement ok
+ALTER DATABASE IF EXISTS missing_db SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'my_connection',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/if_exists_check/'
 )
 
 # Test incomplete options - DEFAULT_STORAGE_CONNECTION without DEFAULT_STORAGE_PATH
@@ -163,3 +189,9 @@ CREATE DATABASE test_db_duplicate2 OPTIONS (
 
 statement ok
 DROP DATABASE test_alter_single
+
+statement ok
+DROP CONNECTION IF EXISTS my_connection
+
+statement ok
+DROP CONNECTION IF EXISTS my_s3_connection
