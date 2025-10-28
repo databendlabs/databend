@@ -1548,9 +1548,9 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
+    fn get_runtime_filter_ready(&self, scan_id: usize) -> Vec<Arc<RuntimeFilterReady>> {
         let runtime_filter_ready = self.shared.runtime_filter_ready.read();
-        match runtime_filter_ready.get(&table_index) {
+        match runtime_filter_ready.get(&scan_id) {
             Some(v) => v.to_vec(),
             None => vec![],
         }
