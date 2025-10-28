@@ -189,20 +189,19 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
 }
 
 fn timestamp_domain_to_timestamp_tz_domain(
-    domain: &SimpleDomain<i64>,
+    _domain: &SimpleDomain<i64>,
 ) -> Option<SimpleDomain<timestamp_tz>> {
-    Some(SimpleDomain {
-        min: timestamp_tz::new(domain.min, 0),
-        max: timestamp_tz::new(domain.max, 0),
-    })
+    // We cannot infer a reliable offset without evaluating against the runtime timezone,
+    // so skip static domain narrowing to avoid incorrect planner assumptions.
+    None
 }
 
 fn timestamp_tz_domain_to_timestamp_domain(
     domain: &SimpleDomain<timestamp_tz>,
 ) -> Option<SimpleDomain<i64>> {
     Some(SimpleDomain {
-        min: domain.min.timestamp(),
-        max: domain.max.timestamp(),
+        min: domain.min.total_micros(),
+        max: domain.max.total_micros(),
     })
 }
 
