@@ -58,10 +58,12 @@ query T
 EXECUTE IMMEDIATE $$
 BEGIN
     let x;
-    let y Int Default 3;
+    let z Int;
+    z := 4;
+    let y Int Default z;
     x := 1 + y;
     RETURN x;
 END;
 $$;
 ----
-4
+5
