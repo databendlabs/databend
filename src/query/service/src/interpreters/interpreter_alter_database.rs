@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -99,6 +100,32 @@ impl Interpreter for AlterDatabaseInterpreter {
         };
 
         if let (Some(connection), Some(path)) = (connection, path_value.clone()) {
+            let connection_name = connection_value
+                .as_deref()
+                .expect("connection name must exist when connection is Some");
+
+            let uri_for_scheme =
+                databend_common_ast::ast::UriLocation::from_uri(path.clone(), BTreeMap::new())
+                    .map_err(|e| {
+                        databend_common_exception::ErrorCode::BadArguments(format!(
+                            "Invalid storage path '{}': {}",
+                            path, e
+                        ))
+                    })?;
+
+            let path_protocol = uri_for_scheme.protocol.to_ascii_lowercase();
+            let connection_protocol = connection.storage_type.to_ascii_lowercase();
+
+            if path_protocol != connection_protocol {
+                return Err(databend_common_exception::ErrorCode::BadArguments(format!(
+                    "{} protocol '{}' does not match connection '{}' protocol '{}'",
+                    DEFAULT_STORAGE_PATH,
+                    uri_for_scheme.protocol,
+                    connection_name,
+                    connection.storage_type
+                )));
+            }
+
             let mut uri_location = databend_common_ast::ast::UriLocation::from_uri(
                 path.clone(),
                 connection.storage_params,
