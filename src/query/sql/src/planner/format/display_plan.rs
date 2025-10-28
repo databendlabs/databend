@@ -274,9 +274,7 @@ impl Plan {
             Plan::SetWorkloadGroupQuotas(_) => Ok("SetWorkloadGroupQuotas".to_string()),
             Plan::UnsetWorkloadGroupQuotas(_) => Ok("UnsetWorkloadGroupQuotas".to_string()),
             Plan::AlterRole(_) => Ok("AlterRole".to_string()),
-            Plan::AlterDatabase(_) => {
-                todo!()
-            }
+            Plan::AlterDatabase(_) => Ok("AlterDatabase".to_string()),
         }
     }
 }
