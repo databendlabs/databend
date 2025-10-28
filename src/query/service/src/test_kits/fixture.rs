@@ -117,6 +117,7 @@ impl Drop for TestGuard {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
         {
+            log::set_max_level(log::LevelFilter::Off);
             databend_common_base::runtime::drop_guard(move || {
                 databend_common_base::base::GlobalInstance::drop_testing(&self._thread_name);
             })

@@ -147,3 +147,4 @@ mod v152_external_udf;
 mod v153_security_column_map;
 mod v154_vacuum_watermark;
 mod v155_row_access_policy_args;
+mod v156_data_mask_args;
