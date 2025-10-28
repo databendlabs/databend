@@ -1509,6 +1509,9 @@ fn test_script() {
     let file = &mut mint.new_goldenfile("script.txt").unwrap();
 
     let cases = &[
+        r#"LET cost FLOAT"#,
+        r#"LET cost FLOAT default 3.0"#,
+        r#"LET cost FLOAT := 100.0"#,
         r#"LET cost := 100.0"#,
         r#"LET t1 RESULTSET := SELECT * FROM numbers(100)"#,
         r#"profit := revenue - cost"#,

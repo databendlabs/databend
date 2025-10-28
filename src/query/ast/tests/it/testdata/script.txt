@@ -1,4 +1,104 @@
 ---------- Input ----------
+LET cost FLOAT
+---------- Output ---------
+LET cost Float32
+---------- AST ------------
+LetVar {
+    declare: DeclareVar {
+        span: Some(
+            4..14,
+        ),
+        name: Identifier {
+            span: Some(
+                4..8,
+            ),
+            name: "cost",
+            quote: None,
+            ident_type: None,
+        },
+        data_type: Some(
+            Float32,
+        ),
+        default: None,
+    },
+}
+
+
+---------- Input ----------
+LET cost FLOAT default 3.0
+---------- Output ---------
+LET cost Float32 := 3.0
+---------- AST ------------
+LetVar {
+    declare: DeclareVar {
+        span: Some(
+            4..26,
+        ),
+        name: Identifier {
+            span: Some(
+                4..8,
+            ),
+            name: "cost",
+            quote: None,
+            ident_type: None,
+        },
+        data_type: Some(
+            Float32,
+        ),
+        default: Some(
+            Literal {
+                span: Some(
+                    23..26,
+                ),
+                value: Decimal256 {
+                    value: 30,
+                    precision: 76,
+                    scale: 1,
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+LET cost FLOAT := 100.0
+---------- Output ---------
+LET cost Float32 := 100.0
+---------- AST ------------
+LetVar {
+    declare: DeclareVar {
+        span: Some(
+            4..23,
+        ),
+        name: Identifier {
+            span: Some(
+                4..8,
+            ),
+            name: "cost",
+            quote: None,
+            ident_type: None,
+        },
+        data_type: Some(
+            Float32,
+        ),
+        default: Some(
+            Literal {
+                span: Some(
+                    18..23,
+                ),
+                value: Decimal256 {
+                    value: 1000,
+                    precision: 76,
+                    scale: 1,
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
 LET cost := 100.0
 ---------- Output ---------
 LET cost := 100.0
@@ -16,16 +116,19 @@ LetVar {
             quote: None,
             ident_type: None,
         },
-        default: Literal {
-            span: Some(
-                12..17,
-            ),
-            value: Decimal256 {
-                value: 1000,
-                precision: 76,
-                scale: 1,
+        data_type: None,
+        default: Some(
+            Literal {
+                span: Some(
+                    12..17,
+                ),
+                value: Decimal256 {
+                    value: 1000,
+                    precision: 76,
+                    scale: 1,
+                },
             },
-        },
+        ),
     },
 }
 
@@ -2094,14 +2197,17 @@ ScriptBlock {
                     quote: None,
                     ident_type: None,
                 },
-                default: Literal {
-                    span: Some(
-                        17..18,
-                    ),
-                    value: UInt64(
-                        1,
-                    ),
-                },
+                data_type: None,
+                default: Some(
+                    Literal {
+                        span: Some(
+                            17..18,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                ),
             },
         ),
     ],

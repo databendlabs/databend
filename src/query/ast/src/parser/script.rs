@@ -76,12 +76,13 @@ pub fn declare_item(i: Input) -> IResult<DeclareItem> {
 pub fn declare_var(i: Input) -> IResult<DeclareVar> {
     map(
         consumed(rule! {
-            #ident ~ ":=" ~ ^#expr
+            #ident ~ ( #type_name )? ~ ( ( ":=" | DEFAULT ) ~ ^#expr )?
         }),
-        |(span, (name, _, default))| DeclareVar {
+        |(span, (name, data_type, default))| DeclareVar {
             span: transform_span(span.tokens),
             name,
-            default,
+            data_type,
+            default: default.map(|(_, default)| default),
         },
     )(i)
 }

@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Statement;
+use crate::ast::TypeName;
 use crate::Span;
 
 const INDENT_DEPTH: usize = 4;
@@ -72,13 +73,33 @@ impl Display for DeclareItem {
 pub struct DeclareVar {
     pub span: Span,
     pub name: Identifier,
-    pub default: Expr,
+    pub data_type: Option<TypeName>,
+    pub default: Option<Expr>,
 }
 
+impl std::ops::Deref for DeclareVar {
+    type Target = Option<TypeName>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data_type
+    }
+}
 impl Display for DeclareVar {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let DeclareVar { name, default, .. } = self;
-        write!(f, "{name} := {default}")?;
+        let DeclareVar {
+            name,
+            data_type,
+            default,
+            ..
+        } = self;
+
+        write!(f, "{name}")?;
+        if let Some(data_type) = data_type {
+            write!(f, " {data_type}")?;
+        }
+        if let Some(default) = default {
+            write!(f, " := {default}")?;
+        }
         Ok(())
     }
 }

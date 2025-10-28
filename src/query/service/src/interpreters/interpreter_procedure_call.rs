@@ -77,7 +77,8 @@ impl Interpreter for CallProcedureInterpreter {
                     declare: DeclareVar {
                         span: None,
                         name: Identifier::from_name(None, arg_name),
-                        default: arg.clone(),
+                        data_type: None,
+                        default: Some(arg.clone()),
                     },
                 });
             }
