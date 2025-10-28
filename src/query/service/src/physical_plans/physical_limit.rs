@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::filters::TransformLimit;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
@@ -33,7 +34,6 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_row_fetch::RowFetch;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::pipelines::processors::transforms::TransformLimit;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

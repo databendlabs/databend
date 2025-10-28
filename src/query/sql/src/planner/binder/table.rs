@@ -39,7 +39,6 @@ use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
-use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -542,7 +541,9 @@ impl Binder {
 
         let expr = TypeChecker::clone_expr_with_replacement(&expr, |nest_expr| {
             if let Expr::ColumnRef { column, .. } = nest_expr {
-                if let Some(arg) = args_map.get(column.column.name()) {
+                // Parameter names are normalized to lowercase in row_access_policy.rs
+                // So we need to normalize the lookup key to match
+                if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
                     return Ok(Some(arg.clone()));
                 }
             }
@@ -580,12 +581,12 @@ impl Binder {
 
     pub fn resolve_data_source(
         &self,
+        ctx: &Arc<dyn TableContext>,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
         navigation: Option<&TimeNavigation>,
         max_batch_size: Option<u64>,
-        abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         databend_common_base::runtime::block_on(async move {
             // Resolve table with ctx
@@ -598,7 +599,7 @@ impl Binder {
                 .await?;
 
             if let Some(desc) = navigation {
-                table_meta = table_meta.navigate_to(desc, abort_checker).await?;
+                table_meta = table_meta.navigate_to(ctx, desc).await?;
             }
             Ok(table_meta)
         })
@@ -750,7 +751,11 @@ impl Binder {
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         let catalog = self
             .catalogs
-            .get_catalog(tenant.tenant_name(), catalog_name, self.ctx.session_state())
+            .get_catalog(
+                tenant.tenant_name(),
+                catalog_name,
+                self.ctx.session_state()?,
+            )
             .await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))

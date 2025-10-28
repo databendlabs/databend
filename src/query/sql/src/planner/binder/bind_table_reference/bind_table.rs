@@ -126,12 +126,12 @@ impl Binder {
                 table_name.clone()
             };
             match self.resolve_data_source(
+                &self.ctx,
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
                 navigation.as_ref(),
                 max_batch_size,
-                self.ctx.clone().get_abort_checker(),
             ) {
                 Ok(table) => table,
                 Err(e) => {

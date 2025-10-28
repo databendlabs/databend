@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use regex::Regex;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::Client;
@@ -41,10 +42,41 @@ pub struct HttpClient {
 #[derive(serde::Deserialize, Debug)]
 struct QueryResponse {
     session: Option<HttpSessionConf>,
+    schema: Vec<SchemaItem>,
     data: Option<serde_json::Value>,
     next_uri: Option<String>,
 
     error: Option<serde_json::Value>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct SchemaItem {
+    #[allow(dead_code)]
+    pub name: String,
+    pub r#type: String,
+}
+
+impl SchemaItem {
+    fn parse_type(&self) -> Result<DefaultColumnType> {
+        let nullable = Regex::new(r"^Nullable\((.+)\)$").unwrap();
+        let value = match nullable.captures(&self.r#type) {
+            Some(captures) => {
+                let (_, [value]) = captures.extract();
+                value
+            }
+            None => &self.r#type,
+        };
+        let typ = match value {
+            "String" => DefaultColumnType::Text,
+            "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64" => {
+                DefaultColumnType::Integer
+            }
+            "Float32" | "Float64" => DefaultColumnType::FloatingPoint,
+            decimal if decimal.starts_with("Decimal") => DefaultColumnType::FloatingPoint,
+            _ => DefaultColumnType::Any,
+        };
+        Ok(typ)
+    }
 }
 
 // make error message the same with ErrorCode::display
@@ -125,14 +157,20 @@ impl HttpClient {
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         let start = Instant::now();
+        let port = self.port;
+        let mut response = self
+            .post_query(sql, &format!("http://127.0.0.1:{port}/v1/query"))
+            .await?;
 
-        let url = format!("http://127.0.0.1:{}/v1/query", self.port);
+        let mut schema = std::mem::take(&mut response.schema);
         let mut parsed_rows = vec![];
-        let mut response = self.post_query(sql, &url).await?;
         self.handle_response(&response, &mut parsed_rows)?;
         while let Some(next_uri) = &response.next_uri {
-            let url = format!("http://127.0.0.1:{}{next_uri}", self.port);
-            let new_response = self.poll_query_result(&url).await?;
+            let url = format!("http://127.0.0.1:{port}{next_uri}");
+            let mut new_response = self.poll_query_result(&url).await?;
+            if schema.is_empty() && !new_response.schema.is_empty() {
+                schema = std::mem::take(&mut new_response.schema);
+            }
             if new_response.next_uri.is_some() {
                 self.handle_response(&new_response, &mut parsed_rows)?;
                 response = new_response;
@@ -143,11 +181,6 @@ impl HttpClient {
         if let Some(error) = response.error {
             return Err(format_error(error).into());
         }
-        // Todo: add types to compare
-        let mut types = vec![];
-        if !parsed_rows.is_empty() {
-            types = vec![DefaultColumnType::Any; parsed_rows[0].len()];
-        }
 
         if self.debug {
             println!(
@@ -155,6 +188,11 @@ impl HttpClient {
                 start.elapsed()
             );
         }
+
+        let types = schema
+            .iter()
+            .map(|item| item.parse_type().unwrap_or(DefaultColumnType::Any))
+            .collect();
 
         Ok(DBOutput::Rows {
             types,

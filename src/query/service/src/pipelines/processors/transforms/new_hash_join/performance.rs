@@ -55,4 +55,9 @@ impl PerformanceContext {
             probe_hash_statistics: ProbeHashStatistics::new(max_block_size),
         }
     }
+
+    pub fn clear(&mut self) {
+        self.probe_result.clear();
+        self.probe_hash_statistics.clear(0);
+    }
 }

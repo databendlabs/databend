@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_expression::types::DataType;
@@ -20,6 +21,7 @@ use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 
 use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
+use crate::pipelines::processors::transforms::HashJoinFactory;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 
 pub struct BasicHashJoinState {
@@ -32,11 +34,16 @@ pub struct BasicHashJoinState {
 
     pub arenas: CStyleCell<Vec<Vec<u8>>>,
     pub hash_table: CStyleCell<HashJoinHashTable>,
+
+    level: usize,
+    factory: Arc<HashJoinFactory>,
 }
 
 impl BasicHashJoinState {
-    pub fn create() -> Self {
+    pub fn create(level: usize, factory: Arc<HashJoinFactory>) -> Self {
         BasicHashJoinState {
+            level,
+            factory,
             mutex: Mutex::new(()),
             build_rows: CStyleCell::new(0),
             chunks: CStyleCell::new(Vec::new()),
@@ -46,5 +53,11 @@ impl BasicHashJoinState {
             arenas: CStyleCell::new(Vec::new()),
             hash_table: CStyleCell::new(HashJoinHashTable::Null),
         }
+    }
+}
+
+impl Drop for BasicHashJoinState {
+    fn drop(&mut self) {
+        self.factory.remove_basic_state(self.level)
     }
 }

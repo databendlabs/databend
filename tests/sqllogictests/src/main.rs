@@ -27,6 +27,8 @@ use sqllogictest::default_validator;
 use sqllogictest::parse_file;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
+use sqllogictest::Location;
+use sqllogictest::QueryExpect;
 use sqllogictest::Record;
 use sqllogictest::Runner;
 use sqllogictest::TestError;
@@ -319,7 +321,6 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
 
             let col_separator = " ";
             let validator = default_validator;
-            let column_validator = default_column_validator;
             let mut runner =
                 Runner::new(|| async { create_databend(&client_type, &file_name).await });
             runner
@@ -328,7 +329,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                     col_separator,
                     validator,
                     sqllogictest::default_normalizer,
-                    column_validator,
+                    default_column_validator,
                 )
                 .await
                 .unwrap();
@@ -352,6 +353,33 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
     );
 
     Ok(())
+}
+
+fn column_validator(
+    loc: Location,
+    actual: Vec<DefaultColumnType>,
+    expected: Vec<DefaultColumnType>,
+) {
+    let equals = if actual.len() != expected.len() {
+        false
+    } else {
+        actual.iter().zip(expected.iter()).all(|x| {
+            use DefaultColumnType::*;
+            matches!(
+                x,
+                (Text, Text)
+                    | (Integer, Integer)
+                    | (FloatingPoint, FloatingPoint)
+                    | (Any, _)
+                    | (_, Any)
+            )
+        })
+    };
+    if !equals {
+        println!(
+            "warn: column type not match, actual: {actual:?}, expected: {expected:?}, loc: {loc}"
+        );
+    }
 }
 
 async fn run_parallel_async(
@@ -399,22 +427,40 @@ async fn run_file_async(
             break;
         }
         // Capture error record and continue to run next records
-        if let Err(e) = runner.run_async(record).await {
-            // Skip query result error in bench
-            if bench
-                && matches!(
-                    e.kind(),
-                    sqllogictest::TestErrorKind::QueryResultMismatch { .. }
-                )
-            {
-                continue;
-            }
+        let expected_types = if let Record::Query {
+            loc,
+            expected: QueryExpect::Results { types, .. },
+            ..
+        } = &record
+        {
+            Some((loc.clone(), types.clone()))
+        } else {
+            None
+        };
 
-            if no_fail_fast {
-                error_records.push(e);
-            } else {
-                return Err(e);
+        match (runner.run_async(record).await, expected_types) {
+            (
+                Ok(sqllogictest::RecordOutput::Query { types: actual, .. }),
+                Some((loc, expected)),
+            ) => column_validator(loc, actual, expected),
+            (Err(e), _) => {
+                // Skip query result error in bench
+                if bench
+                    && matches!(
+                        e.kind(),
+                        sqllogictest::TestErrorKind::QueryResultMismatch { .. }
+                    )
+                {
+                    continue;
+                }
+
+                if no_fail_fast {
+                    error_records.push(e);
+                } else {
+                    return Err(e);
+                }
             }
+            _ => {}
         }
     }
     let run_file_status = match error_records.is_empty() {

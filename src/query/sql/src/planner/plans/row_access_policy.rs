@@ -52,11 +52,20 @@ impl From<CreateRowAccessPolicyPlan> for CreateRowAccessPolicyReq {
             },
             name: RowAccessPolicyNameIdent::new(p.tenant.clone(), &p.name),
             row_access_policy_meta: RowAccessPolicyMeta {
+                // CRITICAL: Normalize parameter names to lowercase at creation time
+                // This ensures consistent matching when applying row access policies.
+                // SQL identifiers are case-insensitive, so we use lowercase as canonical form.
+                // This mirrors the fix for masking policies (see data_mask.rs).
                 args: p
                     .row_access
                     .parameters
                     .iter()
-                    .map(|arg| (arg.name.to_string(), arg.data_type.to_string()))
+                    .map(|arg| {
+                        (
+                            arg.name.to_lowercase(), // Normalize to lowercase
+                            arg.data_type.to_string(),
+                        )
+                    })
                     .collect(),
                 body: p.row_access.definition.to_string(),
                 comment: p.description,

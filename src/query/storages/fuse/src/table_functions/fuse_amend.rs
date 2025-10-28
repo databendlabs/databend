@@ -89,7 +89,7 @@ impl SimpleTableFunc for FuseAmendTable {
         })?;
 
         self.fail_safe_handler
-            .recover(tbl.table_info.clone())
+            .recover(ctx, tbl.table_info.clone())
             .await?;
 
         let col: Vec<String> = vec!["Ok".to_owned()];

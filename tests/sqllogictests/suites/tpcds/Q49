@@ -1,5 +1,5 @@
 # Q49
-query I
+query TIRII
 
 SELECT channel,
        item,

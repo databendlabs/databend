@@ -24,6 +24,10 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::processors::create_resize_item;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_transforms::blocks::build_cast_exprs;
+use databend_common_pipeline_transforms::blocks::CastSchemaBranch;
+use databend_common_pipeline_transforms::blocks::TransformBranchedCastSchema;
+use databend_common_pipeline_transforms::columns::TransformAddComputedColumns;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_pipeline_transforms::processors::BlockCompactBuilder;
@@ -33,15 +37,12 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::operations::UnMatchedExprs;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
 
-use crate::pipelines::processors::transforms::build_cast_exprs;
 use crate::pipelines::processors::transforms::build_expression_transform;
 use crate::pipelines::processors::transforms::AsyncFunctionBranch;
-use crate::pipelines::processors::transforms::CastSchemaBranch;
-use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::processors::transforms::TransformBranchedAsyncFunction;
-use crate::pipelines::processors::transforms::TransformBranchedCastSchema;
 use crate::pipelines::processors::transforms::TransformResortAddOnWithoutSourceSchema;
 use crate::pipelines::PipelineBuilder;
 
@@ -141,7 +142,7 @@ impl PipelineBuilder {
                 .try_create_transform_pipeline_builder_with_len(
                     || {
                         Ok(TransformBranchedCastSchema {
-                            ctx: self.ctx.clone(),
+                            func_ctx: self.ctx.get_function_context()?,
                             branches: branches.clone(),
                         })
                     },

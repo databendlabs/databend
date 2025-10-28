@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_transforms::sort_merge;
+use databend_common_pipeline_transforms::sorts::sort_merge;
 use databend_common_settings::Settings;
 
 pub trait DataProcessorStrategy: Send + Sync + 'static {

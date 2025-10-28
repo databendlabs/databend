@@ -1,5 +1,5 @@
 # Q40
-query I
+query TTRR
 SELECT w_state,
        i_item_id,
        sum(CASE

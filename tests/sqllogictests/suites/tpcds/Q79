@@ -1,5 +1,5 @@
 # Q79
-query I
+query TTTIRR
 SELECT c_last_name,
        c_first_name,
        SUBSTRING(s_city,1,30),

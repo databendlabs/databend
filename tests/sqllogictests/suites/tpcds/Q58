@@ -1,5 +1,5 @@
 # Q58
-query I
+query TRRRRRRR
 WITH ss_items AS
   (SELECT i_item_id item_id,
           sum(ss_ext_sales_price) ss_item_rev

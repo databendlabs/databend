@@ -384,8 +384,8 @@ impl DropTableColumnPlan {
 // ModifyColumnAction after name resolved, used in ModifyTableColumnPlan
 #[derive(Debug, Clone)]
 pub enum ModifyColumnAction {
-    // (column name, masking policy name)
-    SetMaskingPolicy(String, String),
+    // (masking policy name, using columns)
+    SetMaskingPolicy(String, Vec<String>),
     // column name
     UnsetMaskingPolicy(String),
     // modify column table field, field comments

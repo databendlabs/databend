@@ -51,10 +51,10 @@ use parquet::file::writer::SerializedFileWriter;
 use parquet::file::writer::SerializedRowGroupWriter;
 use parquet::schema::types::SchemaDescriptor;
 
-use super::async_buffer::BufferPool;
 use super::async_buffer::BufferWriter;
 use super::Location;
 use super::SpillerInner;
+use super::SpillsBufferPool;
 
 pub struct Properties {
     schema: Arc<Schema>,
@@ -338,7 +338,7 @@ impl<A> SpillerInner<A> {
     pub(super) async fn new_file_writer(
         &self,
         props: &Properties,
-        pool: &Arc<BufferPool>,
+        pool: &Arc<SpillsBufferPool>,
         chunk: usize,
         local_file_size: Option<usize>,
     ) -> Result<AnyFileWriter> {

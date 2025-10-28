@@ -71,7 +71,7 @@ impl AsyncSystemTable for LocksTable {
                 .get_catalog(
                     tenant.tenant_name(),
                     self.table_info.catalog(),
-                    ctx.session_state(),
+                    ctx.session_state()?,
                 )
                 .await?,
         ];

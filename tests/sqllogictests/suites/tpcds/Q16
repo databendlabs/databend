@@ -1,5 +1,5 @@
 # Q16
-query I
+query IRR
 SELECT count(DISTINCT cs_order_number) AS "order count",
        sum(cs_ext_ship_cost) AS "total shipping cost",
        sum(cs_net_profit) AS "total net profit"

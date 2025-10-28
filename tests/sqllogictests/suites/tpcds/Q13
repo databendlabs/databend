@@ -1,5 +1,5 @@
 # Q13
-query I
+query RRRR
 
 SELECT avg(ss_quantity) avg1,
        avg(ss_ext_sales_price) avg2,

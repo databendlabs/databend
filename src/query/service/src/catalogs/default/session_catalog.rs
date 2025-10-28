@@ -135,6 +135,7 @@ impl SessionCatalog {
         let SessionState {
             txn_mgr,
             temp_tbl_mgr,
+            ..
         } = session_state;
         SessionCatalog {
             inner,

@@ -1,5 +1,5 @@
 # Q23
-query I
+query TTR
 WITH frequent_ss_items AS
   (SELECT itemdesc,
           i_item_sk item_sk,

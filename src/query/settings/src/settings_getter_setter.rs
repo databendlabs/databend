@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::storage::S3StorageClass;
 
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
@@ -1094,5 +1095,19 @@ impl Settings {
 
     pub fn get_enable_experimental_new_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_new_join")? == 1)
+    }
+
+    pub fn get_s3_storage_class(&self) -> Result<S3StorageClass> {
+        let s3_storage_class_setting = self.try_get_string("s3_storage_class")?;
+        S3StorageClass::from_str(&s3_storage_class_setting).map_err(|e| {
+            ErrorCode::InvalidConfig(format!(
+                "Invalid s3_storage_class setting '{}': {}. Valid values are 'standard' or 'intelligent_tiering'.",
+                s3_storage_class_setting, e
+            ))
+        })
+    }
+
+    pub fn get_enable_experiment_aggregate_final(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experiment_aggregate_final")? != 0)
     }
 }

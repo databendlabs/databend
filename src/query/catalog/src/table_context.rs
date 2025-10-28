@@ -420,7 +420,7 @@ pub trait TableContext: Send + Sync {
 
     fn get_temp_table_prefix(&self) -> Result<String>;
 
-    fn session_state(&self) -> SessionState;
+    fn session_state(&self) -> Result<SessionState>;
 
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
 

@@ -16,13 +16,22 @@ syntax = "proto3";
 
 package databend_proto;
 
+message RowAccessPolicyArg {
+  string name = 1;
+  string type = 2;
+}
+
 message RowAccessPolicyMeta {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
+  // Deprecated: preserved for backward compatibility, use args_v2 instead
   map<string, string> args = 1;
   string body = 2;
   optional string comment = 3;
   string create_on = 4;
   optional string update_on = 5;
+
+  // New field that preserves argument order
+  repeated RowAccessPolicyArg args_v2 = 6;
 }

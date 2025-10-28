@@ -42,6 +42,7 @@ impl Binder {
         having: &Expr,
     ) -> Result<ScalarExpr> {
         bind_context.set_expr_context(ExprContext::HavingClause);
+
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),

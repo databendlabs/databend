@@ -184,6 +184,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (152, "2025-10-14: Add: TableDataType::StageLocation and UDFServer add arg_names"),
     (153, "2025-10-16: Add: RowAccessPolicyColumnMap rename to SecurityColumnMap store mask/row_access policy name and column id"),
     (154, "2025-10-16: Add: VacuumWatermark"),
+    (155, "2025-10-24: Add: RowAccessPolicyMeta::RowAccessPolicyArg"),
+    (156, "2025-10-22: Add: DataMaskMeta add DataMaskArg"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

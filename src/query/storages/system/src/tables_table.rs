@@ -171,7 +171,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .get_catalog(
                 tenant.tenant_name(),
                 self.get_table_info().catalog(),
-                ctx.session_state(),
+                ctx.session_state()?,
             )
             .await?
             .disable_table_info_refresh()?;

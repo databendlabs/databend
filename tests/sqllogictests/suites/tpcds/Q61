@@ -1,5 +1,5 @@
 # Q61
-query I
+query RRR
 SELECT promotions,
        total,
        cast(promotions AS decimal(15,4))/cast(total AS decimal(15,4))*100

@@ -26,11 +26,7 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::evaluator::CompoundBlockOperator;
 
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -92,47 +88,6 @@ impl FuseTable {
             // For blocking fs, we don't want this to be too large
             Ok(std::cmp::min(max_threads, max_io_requests).clamp(1, 48))
         }
-    }
-
-    fn apply_data_mask_policy_if_needed(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        plan: &DataSourcePlan,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        if let Some(data_mask_policy) = &plan.data_mask_policy {
-            let num_input_columns = plan.schema().num_fields();
-            let mut exprs = Vec::with_capacity(num_input_columns);
-            let mut projection = Vec::with_capacity(num_input_columns);
-            let mut mask_count = 0;
-            for i in 0..num_input_columns {
-                if let Some(raw_expr) = data_mask_policy.get(&i) {
-                    let expr = raw_expr.as_expr(&BUILTIN_FUNCTIONS);
-                    exprs.push(expr.project_column_ref(|_col_id| Ok(i))?);
-                    projection.push(mask_count + num_input_columns);
-                    mask_count += 1;
-                } else {
-                    projection.push(i);
-                }
-            }
-
-            let ops = vec![
-                BlockOperator::Map {
-                    exprs,
-                    projections: None,
-                },
-                BlockOperator::Project { projection },
-            ];
-
-            let query_ctx = ctx.clone();
-            let func_ctx = query_ctx.get_function_context()?;
-
-            pipeline.add_transformer(|| {
-                CompoundBlockOperator::new(ops.clone(), func_ctx.clone(), num_input_columns)
-            });
-        }
-
-        Ok(())
     }
 
     #[inline]
@@ -262,9 +217,6 @@ impl FuseTable {
             virtual_reader,
             rx,
         )?;
-
-        // replace the column which has data mask if needed
-        self.apply_data_mask_policy_if_needed(ctx.clone(), plan, pipeline)?;
 
         Ok(())
     }

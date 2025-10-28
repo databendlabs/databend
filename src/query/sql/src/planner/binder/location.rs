@@ -24,6 +24,7 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
@@ -195,6 +196,8 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         role_arn,
         external_id,
         network_config: None,
+        // For the present, we do not support parse storage class parameter from UriLocation yet
+        storage_class: S3StorageClass::default(),
     });
 
     l.connection

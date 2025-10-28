@@ -1,5 +1,5 @@
 # Q27
-query I
+query TTIRRRR
 WITH results AS
   (SELECT i_item_id,
           s_state,

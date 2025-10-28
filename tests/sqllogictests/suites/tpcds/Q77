@@ -1,5 +1,5 @@
 # Q77
-query I
+query TIRRR
 WITH ss AS
   (SELECT s_store_sk,
           sum(ss_ext_sales_price) AS sales,

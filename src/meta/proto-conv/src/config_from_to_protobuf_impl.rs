@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_app as mt;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageCosConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig;
@@ -138,6 +139,9 @@ impl FromToProto for StorageS3Config {
                 None => None,
                 Some(config) => Some(StorageNetworkParams::from_pb(*config)?),
             },
+            // For the time being, s3 storage class info is not present in meta store,
+            // storage class specifications at table/connection level is not supported yet.
+            storage_class: S3StorageClass::default(),
         })
     }
 

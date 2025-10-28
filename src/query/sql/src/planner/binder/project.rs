@@ -35,6 +35,10 @@ use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_users::UserApiProvider;
+use databend_enterprise_data_mask_feature::get_datamask_handler;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use itertools::Itertools;
@@ -348,10 +352,33 @@ impl Binder {
                 let (scalar, _) = scalar_binder.bind(&expr)?;
                 scalar
             }
-            None => ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span,
-                column: column_binding.clone(),
-            }),
+            None => {
+                // Check if column has masking policy
+                // Use the new direct masking policy application method to avoid re-binding issues
+                if LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
+                    .is_ok()
+                {
+                    if let Some(masked_scalar) =
+                        self.apply_masking_policy_directly(&column_binding, input_context)?
+                    {
+                        // Column has masking policy and it was successfully applied
+                        masked_scalar
+                    } else {
+                        // No masking policy or failed to apply - return simple BoundColumnRef
+                        ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span,
+                            column: column_binding.clone(),
+                        })
+                    }
+                } else {
+                    // License check failed - no masking policy support
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span,
+                        column: column_binding.clone(),
+                    })
+                }
+            }
         };
 
         Ok(SelectItem {
@@ -578,5 +605,160 @@ impl Binder {
         }
 
         Ok(())
+    }
+
+    /// Apply masking policy to a column binding directly without re-binding by name
+    /// This method uses the column_binding's table_index and metadata to construct
+    /// masked expressions, avoiding name resolution issues in complex queries (PIVOT, Stream, etc.)
+    fn apply_masking_policy_directly(
+        &self,
+        column_binding: &ColumnBinding,
+        bind_context: &BindContext,
+    ) -> Result<Option<ScalarExpr>> {
+        // Only proceed if license check passes
+        if LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
+            .is_err()
+        {
+            return Ok(None);
+        }
+
+        // Need table_index to access metadata
+        let table_index = match column_binding.table_index {
+            Some(idx) => idx,
+            None => return Ok(None),
+        };
+
+        // Extract masking policy information from metadata
+        let policy_data = {
+            let metadata = self.metadata.read();
+            let table_entry = metadata.table(table_index);
+            let table_ref = table_entry.table();
+            let table_info_ref = table_ref.get_table_info();
+
+            // Find the field by name to get column_id
+            let field = table_info_ref
+                .meta
+                .schema
+                .fields()
+                .iter()
+                .find(|f| f.name == column_binding.column_name);
+
+            match field {
+                Some(field) => table_info_ref
+                    .meta
+                    .column_mask_policy_columns_ids
+                    .get(&field.column_id)
+                    .map(|policy_info| {
+                        (
+                            policy_info.policy_id,
+                            policy_info.columns_ids.clone(),
+                            table_info_ref.meta.schema.clone(),
+                            column_binding.database_name.clone(),
+                            column_binding.table_name.clone(),
+                        )
+                    }),
+                None => None,
+            }
+        };
+
+        // If no masking policy, return None
+        let (policy_id, using_columns, table_schema, database, table) = match policy_data {
+            Some(data) => data,
+            None => return Ok(None),
+        };
+
+        // Fetch the masking policy asynchronously
+        let tenant = self.ctx.get_tenant();
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let handler = get_datamask_handler();
+
+        let policy = databend_common_base::runtime::block_on(async {
+            handler
+                .get_data_mask_by_id(meta_api.clone(), &tenant, policy_id)
+                .await
+        });
+
+        let policy = match policy {
+            Ok(p) => p.data,
+            Err(err) => {
+                return Err(ErrorCode::UnknownMaskPolicy(format!(
+                    "Failed to load masking policy (id: {}) for column '{}': {}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
+                    policy_id, column_binding.column_name, err
+                )));
+            }
+        };
+
+        // Parse the policy body
+        let tokens = tokenize_sql(&policy.body)?;
+        let settings = self.ctx.get_settings();
+        let ast_expr = parse_expr(&tokens, settings.get_sql_dialect()?)?;
+
+        // Create parameter mapping: each parameter maps to a column reference
+        // The key insight: use Expr::ColumnRef with full path (database.table.column)
+        // This ensures TypeChecker can resolve the columns even in complex queries
+        let args_map: HashMap<_, _> = policy
+            .args
+            .iter()
+            .enumerate()
+            .map(|(param_idx, (param_name, _))| {
+                let column_id = using_columns.get(param_idx).ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Masking policy metadata is corrupted: policy requires {} parameters, \
+                         but only {} columns are configured in USING clause.",
+                        policy.args.len(),
+                        using_columns.len()
+                    ))
+                })?;
+
+                let field_name = table_schema
+                    .fields()
+                    .iter()
+                    .find(|f| f.column_id == *column_id)
+                    .map(|f| f.name.clone())
+                    .unwrap_or_else(|| format!("column_{}", column_id));
+
+                let column_ref = Expr::ColumnRef {
+                    span: None,
+                    column: ColumnRef {
+                        database: database
+                            .as_ref()
+                            .map(|d| Identifier::from_name(None, d.clone())),
+                        table: table
+                            .as_ref()
+                            .map(|t| Identifier::from_name(None, t.clone())),
+                        column: ColumnID::Name(Identifier::from_name(None, field_name)),
+                    },
+                };
+
+                Ok((param_name.as_str(), column_ref))
+            })
+            .collect::<Result<_>>()?;
+
+        // Replace parameters in the masking policy expression
+        let replaced_expr = TypeChecker::clone_expr_with_replacement(&ast_expr, |nest_expr| {
+            if let Expr::ColumnRef { column, .. } = nest_expr {
+                // Parameter names are already normalized to lowercase at policy creation
+                if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
+                    return Ok(Some(arg.clone()));
+                }
+            }
+            Ok(None)
+        })?;
+
+        // Now resolve the replaced expression using TypeChecker
+        // IMPORTANT: Use the provided bind_context which has all the necessary column information
+        let mut bind_ctx = bind_context.clone();
+        let mut type_checker = TypeChecker::try_create(
+            &mut bind_ctx,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            false, // forbid_udf
+        )?;
+
+        let (scalar, _data_type) = *type_checker.resolve(&replaced_expr)?;
+        Ok(Some(scalar))
     }
 }
