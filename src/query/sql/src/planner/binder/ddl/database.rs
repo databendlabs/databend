@@ -49,6 +49,9 @@ use crate::plans::UndropDatabasePlan;
 use crate::BindContext;
 use crate::SelectBuilder;
 
+pub const DEFAULT_STORAGE_CONNECTION: &str = "DEFAULT_STORAGE_CONNECTION";
+pub const DEFAULT_STORAGE_PATH: &str = "DEFAULT_STORAGE_PATH";
+
 impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_show_databases(
@@ -217,20 +220,33 @@ impl Binder {
             ))),
 
             AlterDatabaseAction::SetOptions { options } => {
-                // Validate database options before processing
-                // For ALTER DATABASE, allow modifying single option (the other already exists)
-                self.validate_database_options(options, false).await?;
+                let catalog_arc = self.ctx.get_catalog(&catalog).await?;
+                let db_exists = catalog_arc.exists_database(&tenant, &database).await?;
+                if !db_exists && !*if_exists {
+                    return Err(ErrorCode::UnknownDatabase(format!(
+                        "Unknown database '{}'",
+                        database
+                    )));
+                }
 
-                // Convert SQLProperty to BTreeMap for database options
-                let db_options = options
-                    .iter()
-                    .map(|property| (property.name.clone(), property.value.clone()))
-                    .collect::<BTreeMap<String, String>>();
+                // Validate database options only when the database exists.
+                let db_options = if db_exists {
+                    // For ALTER DATABASE, allow modifying single option (the other already exists)
+                    self.validate_database_options(options, false).await?;
+
+                    options
+                        .iter()
+                        .map(|property| (property.name.clone(), property.value.clone()))
+                        .collect::<BTreeMap<String, String>>()
+                } else {
+                    BTreeMap::new()
+                };
 
                 Ok(Plan::AlterDatabase(Box::new(AlterDatabasePlan {
                     tenant,
                     catalog,
                     database,
+                    if_exists: *if_exists,
                     options: db_options,
                 })))
             }
@@ -331,8 +347,7 @@ impl Binder {
         require_both: bool,
     ) -> Result<()> {
         // Validate database options - only allow specific connection-related options
-        const VALID_DATABASE_OPTIONS: &[&str] =
-            &["DEFAULT_STORAGE_CONNECTION", "DEFAULT_STORAGE_PATH"];
+        const VALID_DATABASE_OPTIONS: &[&str] = &[DEFAULT_STORAGE_CONNECTION, DEFAULT_STORAGE_PATH];
 
         // Check for duplicate options
         let mut seen_options = std::collections::HashSet::new();
@@ -354,25 +369,23 @@ impl Binder {
         }
 
         // Validate pairing requirement based on operation type
-        let has_connection = options
-            .iter()
-            .any(|p| p.name == "DEFAULT_STORAGE_CONNECTION");
-        let has_path = options.iter().any(|p| p.name == "DEFAULT_STORAGE_PATH");
+        let has_connection = options.iter().any(|p| p.name == DEFAULT_STORAGE_CONNECTION);
+        let has_path = options.iter().any(|p| p.name == DEFAULT_STORAGE_PATH);
 
         if require_both {
             // For CREATE DATABASE: both options must be specified together
             if has_connection && !has_path {
-                return Err(ErrorCode::BadArguments(
-                    "DEFAULT_STORAGE_CONNECTION requires DEFAULT_STORAGE_PATH to be specified"
-                        .to_string(),
-                ));
+                return Err(ErrorCode::BadArguments(format!(
+                    "{} requires {} to be specified",
+                    DEFAULT_STORAGE_CONNECTION, DEFAULT_STORAGE_PATH
+                )));
             }
 
             if has_path && !has_connection {
-                return Err(ErrorCode::BadArguments(
-                    "DEFAULT_STORAGE_PATH requires DEFAULT_STORAGE_CONNECTION to be specified"
-                        .to_string(),
-                ));
+                return Err(ErrorCode::BadArguments(format!(
+                    "{} requires {} to be specified",
+                    DEFAULT_STORAGE_PATH, DEFAULT_STORAGE_CONNECTION
+                )));
             }
         }
         // For ALTER DATABASE: allow modifying single option (the other one already exists in database)
@@ -380,7 +393,7 @@ impl Binder {
         // Validate that the specified connection exists
         if let Some(connection_property) = options
             .iter()
-            .find(|p| p.name == "DEFAULT_STORAGE_CONNECTION")
+            .find(|p| p.name == DEFAULT_STORAGE_CONNECTION)
         {
             let connection_name = &connection_property.value;
 
@@ -402,15 +415,46 @@ impl Binder {
         if let (Some(connection_prop), Some(path_prop)) = (
             options
                 .iter()
-                .find(|p| p.name == "DEFAULT_STORAGE_CONNECTION"),
-            options.iter().find(|p| p.name == "DEFAULT_STORAGE_PATH"),
+                .find(|p| p.name == DEFAULT_STORAGE_CONNECTION),
+            options.iter().find(|p| p.name == DEFAULT_STORAGE_PATH),
         ) {
-            // Validate the storage path is accessible
+            // Validate the storage path is accessible and matches the connection protocol
             let connection = self.ctx.get_connection(&connection_prop.value).await?;
+
+            let uri_for_scheme = databend_common_ast::ast::UriLocation::from_uri(
+                path_prop.value.clone(),
+                BTreeMap::new(),
+            )
+            .map_err(|e| {
+                ErrorCode::BadArguments(format!(
+                    "Invalid storage path '{}': {}",
+                    path_prop.value, e
+                ))
+            })?;
+
+            let path_protocol = normalize_storage_protocol(&uri_for_scheme.protocol);
+            let connection_protocol = normalize_storage_protocol(&connection.storage_type);
+
+            if path_protocol != connection_protocol {
+                return Err(ErrorCode::BadArguments(format!(
+                    "{} protocol '{}' does not match connection '{}' protocol '{}'",
+                    DEFAULT_STORAGE_PATH,
+                    uri_for_scheme.protocol,
+                    connection_prop.value,
+                    connection.storage_type
+                )));
+            }
+
             let mut uri_location = databend_common_ast::ast::UriLocation::from_uri(
                 path_prop.value.clone(),
-                connection.storage_params,
-            )?;
+                connection.storage_params.clone(),
+            )
+            .map_err(|e| {
+                ErrorCode::BadArguments(format!(
+                    "Invalid storage path '{}': {}",
+                    path_prop.value, e
+                ))
+            })?;
 
             // Parse and validate the URI location using parse_storage_params_from_uri
             // This enforces that the path must end with '/' (directory requirement)
@@ -489,4 +533,12 @@ impl Binder {
             ..Default::default()
         })
     }
+}
+
+fn normalize_storage_protocol(protocol: &str) -> String {
+    let mut lower = protocol.to_ascii_lowercase();
+    if lower == "file" {
+        lower = "fs".to_string();
+    }
+    lower
 }

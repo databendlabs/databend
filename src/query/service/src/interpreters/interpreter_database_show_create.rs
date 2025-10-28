@@ -75,7 +75,7 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
                 .iter()
                 .map(|(k, v)| format!("{}='{}'", k, v))
                 .collect::<Vec<_>>()
-                .join(" ");
+                .join(", ");
             if !db.options().is_empty() {
                 write!(info, " OPTIONS ({})", options).expect("failed to format database options");
             }
