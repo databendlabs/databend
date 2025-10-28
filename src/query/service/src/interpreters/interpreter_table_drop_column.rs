@@ -27,6 +27,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
+use crate::interpreters::util::check_column_has_policy;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -85,14 +86,13 @@ impl Interpreter for DropTableColumnInterpreter {
 
         let table_schema = table_info.schema();
         let field = table_schema.field_with_name(self.plan.column.as_str())?;
-        if let Some(p) = &table_info.meta.row_access_policy_columns_ids {
-            if p.columns_ids.contains(&field.column_id) {
-                return Err(ErrorCode::AlterTableError(format!(
-                    "Cannot drop column '{}' which is associated with a Row access policy",
-                    self.plan.column.as_str()
-                )));
-            }
-        }
+
+        check_column_has_policy(&table_info.meta, &field.column_id).map_err(|_| {
+            ErrorCode::AlterTableError(format!(
+                "Cannot drop column '{}' which is associated with a security policy",
+                self.plan.column.as_str()
+            ))
+        })?;
         if field.computed_expr().is_none() {
             let mut schema: DataSchema = table_info.schema().into();
             schema.drop_column(self.plan.column.as_str())?;

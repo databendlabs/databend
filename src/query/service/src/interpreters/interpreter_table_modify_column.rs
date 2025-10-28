@@ -60,6 +60,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
+use crate::interpreters::util::check_column_has_policy;
 use crate::interpreters::Interpreter;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::PhysicalPlan;
@@ -145,6 +146,12 @@ impl ModifyTableColumnInterpreter {
             let (_, data_field) = schema.column_with_name(column).ok_or_else(|| {
                 ErrorCode::UnknownColumn(format!("Cannot find column {}", column))
             })?;
+
+            check_column_has_policy(&table_info.meta, &data_field.column_id)
+                .map_err(|_| ErrorCode::AlterTableError(format!(
+                    "Column '{}' is already attached to a security policy. A column cannot be attached to multiple security policies",
+                    data_field.name
+                )))?;
 
             let column_type = data_field.data_type();
             if policy_data_type != column_type.remove_nullable() {
@@ -241,6 +248,13 @@ impl ModifyTableColumnInterpreter {
         let mut modify_comment = false;
         for (field, comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
+                check_column_has_policy(&table_info.meta, &old_field.column_id).map_err(|_| {
+                    ErrorCode::AlterTableError(format!(
+                        "Cannot modify column '{}' which is associated with a security policy",
+                        old_field.name
+                    ))
+                })?;
+
                 if old_field.data_type != field.data_type {
                     // If the column is defined in bloom index columns,
                     // check whether the data type is supported for bloom index.
