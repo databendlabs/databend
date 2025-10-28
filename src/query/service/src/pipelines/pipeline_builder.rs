@@ -59,8 +59,6 @@ pub struct PipelineBuilder {
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
     pub(crate) is_exchange_stack: Vec<bool>,
-
-    pub contain_sink_processor: bool,
 }
 
 impl PipelineBuilder {
@@ -80,7 +78,6 @@ impl PipelineBuilder {
             join_state: None,
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
-            contain_sink_processor: false,
             is_exchange_stack: vec![],
         }
     }
