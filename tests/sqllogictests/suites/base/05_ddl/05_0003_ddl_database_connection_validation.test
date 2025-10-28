@@ -10,22 +10,32 @@ DROP DATABASE IF EXISTS test_db_valid_conn
 statement ok
 DROP CONNECTION IF EXISTS test_conn
 
-# Create a test connection
+# Create a test connection using local filesystem
 statement ok
-CREATE CONNECTION test_conn STORAGE_TYPE='s3' ENDPOINT_URL='http://localhost:9000' ACCESS_KEY_ID='test' SECRET_ACCESS_KEY='test'
+CREATE CONNECTION test_conn STORAGE_TYPE='fs'
 
 # Test creating database with valid connection (should succeed)
 statement ok
 CREATE DATABASE test_db_valid_conn OPTIONS (
     DEFAULT_STORAGE_CONNECTION = 'test_conn',
-    DEFAULT_STORAGE_PATH = 's3://test-bucket/path/'
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/test-bucket/path/'
 )
 
 # Test creating database with non-existent connection (should fail)
 statement error 1006
 CREATE DATABASE test_db_nonexistent_conn OPTIONS (
     DEFAULT_STORAGE_CONNECTION = 'nonexistent_connection',
-    DEFAULT_STORAGE_PATH = 's3://test-bucket/path/'
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/test-bucket/path/'
+)
+
+# Test protocol mismatch between connection and path (should fail)
+statement ok
+CREATE CONNECTION test_conn_s3 STORAGE_TYPE='s3' ENDPOINT_URL='http://127.0.0.1:9000' ACCESS_KEY_ID='test' SECRET_ACCESS_KEY='test'
+
+statement error 1006
+CREATE DATABASE test_db_protocol_mismatch OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'test_conn_s3',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/mismatch/'
 )
 
 # Test ALTER DATABASE with non-existent connection (should fail)
@@ -41,3 +51,6 @@ DROP DATABASE test_db_valid_conn
 
 statement ok
 DROP CONNECTION test_conn
+
+statement ok
+DROP CONNECTION test_conn_s3

@@ -17,7 +17,7 @@ mod catalog;
 mod column;
 mod connection;
 mod data_mask;
-mod database;
+pub mod database;
 mod dictionary;
 mod dynamic_table;
 mod index;

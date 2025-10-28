@@ -279,6 +279,10 @@ impl PrivilegeAccess {
     ) -> Result<()> {
         self.access_system_history(Some(catalog_name), Some(db_name), None, privileges)?;
         let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        if if_exists && !catalog.exists_database(&tenant, db_name).await? {
+            return Ok(());
+        }
         let check_current_role_only = match privileges {
             // create table/stream need check db's Create Privilege
             UserPrivilegeType::Create => true,
@@ -297,7 +301,6 @@ impl PrivilegeAccess {
                 return Ok(());
             }
             Err(_err) => {
-                let catalog = self.ctx.get_catalog(catalog_name).await?;
                 match self
                     .convert_to_id(&tenant, &catalog, db_name, None, false)
                     .await
@@ -2021,7 +2024,14 @@ impl AccessChecker for PrivilegeAccess {
             Plan::SetWorkloadGroupQuotas(_) => {}
             Plan::UnsetWorkloadGroupQuotas(_) => {}
             Plan::AlterDatabase(plan) => {
-                self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Alter, false).await?;
+                self
+                    .validate_db_access(
+                        &plan.catalog,
+                        &plan.database,
+                        UserPrivilegeType::Alter,
+                        plan.if_exists,
+                    )
+                    .await?;
             }
         }
 

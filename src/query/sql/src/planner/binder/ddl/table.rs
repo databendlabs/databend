@@ -117,6 +117,8 @@ use crate::binder::ConstraintExprBinder;
 use crate::binder::Visibility;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
+use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
+use crate::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
@@ -562,8 +564,8 @@ impl Binder {
             {
                 // Extract database-level default connection options
                 let default_connection_name =
-                    database_info.options().get("DEFAULT_STORAGE_CONNECTION");
-                let default_path = database_info.options().get("DEFAULT_STORAGE_PATH");
+                    database_info.options().get(DEFAULT_STORAGE_CONNECTION);
+                let default_path = database_info.options().get(DEFAULT_STORAGE_PATH);
 
                 // If both database defaults exist, construct UriLocation
                 if let (Some(connection_name), Some(path)) = (default_connection_name, default_path)

@@ -22,30 +22,52 @@ CREATE TABLE test_db_inherit.table_with_defaults (
     name VARCHAR(100)
 ) ENGINE = Fuse
 
-# Verify table was created (basic check - full verification would require storage inspection)
+# Verify table metadata inherits the database defaults
 query I
-SELECT COUNT(*) FROM system.tables WHERE database = 'test_db_inherit' AND name = 'table_with_defaults'
+SELECT storage_param FROM system.tables WHERE database = 'test_db_inherit' AND name = 'table_with_defaults'
 ----
-1
+fs | root=/tmp/05_0002/
+
+# Alter database defaults and ensure new tables pick up the updated settings
+statement ok
+ALTER DATABASE test_db_inherit SET OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'default_conn',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/05_0002_updated/'
+)
+
+statement ok
+CREATE TABLE test_db_inherit.table_after_alter (
+    id INT,
+    name VARCHAR(100)
+) ENGINE = Fuse
+
+query I
+SELECT storage_param FROM system.tables WHERE database = 'test_db_inherit' AND name = 'table_after_alter'
+----
+fs | root=/tmp/05_0002_updated/
 
 # Create a table with explicit location
 # This should override the database defaults
-# For now, we'll skip this test as it requires more complex setup with explicit_conn connection
-# statement ok
-# CREATE CONNECTION IF NOT EXISTS explicit_conn STORAGE_TYPE = 'fs'
-#
-# statement ok
-# CREATE TABLE test_db_inherit.table_with_explicit (
-#     id INT,
-#     name VARCHAR(100)
-# ) ENGINE = Fuse LOCATION = 'fs:///tmp/explicit-path/' CONNECTION = (NAME = 'explicit_conn')
+statement ok
+DROP CONNECTION IF EXISTS explicit_conn
 
-# Verify second table was created (skipped since table creation is commented out)
-# query I
-# SELECT COUNT(*) FROM system.tables WHERE database = 'test_db_inherit' AND name = 'table_with_explicit'
-# ----
-# 1
+statement ok
+CREATE CONNECTION IF NOT EXISTS explicit_conn STORAGE_TYPE = 'fs'
+
+statement ok
+CREATE TABLE test_db_inherit.table_with_explicit (
+    id INT,
+    name VARCHAR(100)
+) ENGINE = Fuse 'fs:///tmp/05_0002_explicit/' CONNECTION = (connection_name = 'explicit_conn')
+
+query I
+SELECT storage_param FROM system.tables WHERE database = 'test_db_inherit' AND name = 'table_with_explicit'
+----
+fs | root=/tmp/05_0002_explicit/
 
 # Cleanup
 statement ok
 DROP DATABASE test_db_inherit
+
+statement ok
+DROP CONNECTION IF EXISTS explicit_conn
