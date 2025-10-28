@@ -67,4 +67,5 @@ def test_arrow_ipc():
         (header, reader) = read_response(resp)
         drain_reader(reader)
 
+    rows.sort()
     assert rows == [x for x in range(97)]
