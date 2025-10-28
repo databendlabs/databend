@@ -402,15 +402,19 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
     );
 
     let cursor_stmts = rule!(
-        #let_cursor_stmt
-        | #open_cursor_stmt
+        #open_cursor_stmt
         | #fetch_cursor_stmt
         | #close_cursor_stmt
     );
 
-    let assignment_stmts = rule!(
-        #let_stmt_stmt
+    let let_stmts = rule!(
+        #let_cursor_stmt
+        | #let_stmt_stmt
         | #let_var_stmt
+    );
+
+    let assignment_stmts = rule!(
+        #let_stmts
         | #assign_stmt
     );
 

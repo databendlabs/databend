@@ -1515,6 +1515,7 @@ fn test_script() {
         r#"LET cost FLOAT := 100.0"#,
         r#"LET cost := 100.0"#,
         r#"LET t1 RESULTSET := SELECT * FROM numbers(100)"#,
+        r#"LET t1 cursor FOR SELECT * FROM numbers(100)"#,
         r#"profit := revenue - cost"#,
         r#"RETURN"#,
         r#"RETURN profit"#,

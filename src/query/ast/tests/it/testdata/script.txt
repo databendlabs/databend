@@ -224,6 +224,99 @@ LetStatement {
 
 
 ---------- Input ----------
+LET t1 cursor FOR SELECT * FROM numbers(100)
+---------- Output ---------
+LET t1 CURSOR FOR SELECT * FROM numbers(100)
+---------- AST ------------
+LetCursor {
+    declare: DeclareCursor {
+        span: Some(
+            4..44,
+        ),
+        name: Identifier {
+            span: Some(
+                4..6,
+            ),
+            name: "t1",
+            quote: None,
+            ident_type: None,
+        },
+        stmt: Some(
+            Query(
+                Query {
+                    span: Some(
+                        18..44,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                18..44,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                StarColumns {
+                                    qualified: [
+                                        Star(
+                                            Some(
+                                                25..26,
+                                            ),
+                                        ),
+                                    ],
+                                    column_filter: None,
+                                },
+                            ],
+                            from: [
+                                TableFunction {
+                                    span: Some(
+                                        32..44,
+                                    ),
+                                    lateral: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            32..39,
+                                        ),
+                                        name: "numbers",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    params: [
+                                        Literal {
+                                            span: Some(
+                                                40..43,
+                                            ),
+                                            value: UInt64(
+                                                100,
+                                            ),
+                                        },
+                                    ],
+                                    named_params: [],
+                                    alias: None,
+                                    sample: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        ),
+        resultset: None,
+    },
+}
+
+
+---------- Input ----------
 profit := revenue - cost
 ---------- Output ---------
 profit := revenue - cost
