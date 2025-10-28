@@ -315,10 +315,10 @@ impl FileReader {
         match &self.reader {
             Either::Left(file) => {
                 let plan = RangeFetchPlan::new(file.alignment(), fetch_ranges, &self.settings);
-                return plan.read(|range| {
+                plan.read(|range| {
                     let (buffer, rt_range) = file.read_range(range.clone())?;
                     Ok(dma_buffer_to_bytes(buffer).slice(rt_range))
-                });
+                })
             }
             Either::Right((op, location, pool)) => {
                 pool.fetch_ranges(op.clone(), location.clone(), fetch_ranges, self.settings)
@@ -397,12 +397,12 @@ impl RangeFetchPlan {
         }
     }
 
-    fn read<F>(self, mut load_data: F) -> Result<Vec<Bytes>>
+    fn read<F>(self, load_data: F) -> Result<Vec<Bytes>>
     where F: FnMut(Range<u64>) -> Result<Bytes> {
         let merged_chunks = self
             .merged
             .into_iter()
-            .map(|range| load_data(range))
+            .map(load_data)
             .collect::<Result<Vec<_>>>()?;
 
         let chunks = self
