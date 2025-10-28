@@ -546,42 +546,13 @@ pub struct SpillReader {
 }
 
 impl SpillReader {
-    pub async fn restore(&mut self, row_groups: Vec<usize>) -> Result<Vec<DataBlock>> {
+    pub fn restore(&mut self, row_groups: Vec<usize>, batch_size: usize) -> Result<Vec<DataBlock>> {
         if row_groups.is_empty() {
             return Ok(Vec::new());
         }
         let start = std::time::Instant::now();
 
-        let blocks = self
-            .spiller
-            .load_row_groups(
-                &self.location,
-                self.parquet_metadata.clone(),
-                &self.schema,
-                row_groups,
-            )
-            .await?;
-
-        record_read_profile(
-            self.location.is_local(),
-            &start,
-            blocks.iter().map(DataBlock::memory_size).sum(),
-        );
-
-        Ok(blocks)
-    }
-
-    pub fn restore2(
-        &mut self,
-        row_groups: Vec<usize>,
-        batch_size: usize,
-    ) -> Result<Vec<DataBlock>> {
-        if row_groups.is_empty() {
-            return Ok(Vec::new());
-        }
-        let start = std::time::Instant::now();
-
-        let blocks = self.spiller.load_row_groups2(
+        let blocks = self.spiller.load_row_groups(
             &self.location,
             self.parquet_metadata.clone(),
             &self.schema,

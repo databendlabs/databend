@@ -50,7 +50,7 @@ pub trait WriterFactory: Send {
 
 impl Reader for SpillReader {
     fn restore(&mut self, row_groups: Vec<usize>, batch_size: usize) -> Result<Vec<DataBlock>> {
-        self.restore2(row_groups, batch_size)
+        self.restore(row_groups, batch_size)
     }
 }
 
