@@ -107,6 +107,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
 
         let mut children = vec![
             FormatTreeNode::new(format!("table: {table_name}")),
+            FormatTreeNode::new(format!("scan id: {}", self.inner.scan_id)),
             FormatTreeNode::new(format!(
                 "output columns: [{}]",
                 format_output_columns(self.inner.output_schema()?, ctx.metadata, false)
