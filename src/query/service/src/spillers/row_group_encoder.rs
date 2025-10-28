@@ -22,6 +22,7 @@ use bytes::Bytes;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::SyncDmaFile;
+use databend_common_base::rangemap::RangeMerger;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -312,12 +313,38 @@ impl FileReader {
     fn get_ranges(&self, fetch_ranges: Vec<Range<u64>>) -> Result<Vec<Bytes>> {
         match &self.reader {
             Either::Left(file) => {
-                // todo: merge io
-                let mut chunks = Vec::with_capacity(fetch_ranges.len());
-                for range in fetch_ranges {
+                let align_ranges = fetch_ranges
+                    .into_iter()
+                    .map(|range| {
+                        (
+                            file.align_down(range.start as _) as u64
+                                ..file.align_up(range.end as _) as u64,
+                            range,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+
+                let range_merger = RangeMerger::from_iter(
+                    align_ranges.iter().map(|(align, _)| align.clone()),
+                    self.settings.max_gap_size,
+                    self.settings.max_range_size,
+                    Some(self.settings.parquet_fast_read_bytes),
+                );
+                let merged_ranges = range_merger.ranges();
+                let mut merged_chunks = Vec::with_capacity(merged_ranges.len());
+                for range in merged_ranges {
                     let (dma_buf, rt_range) = file.read_range(range)?;
-                    chunks.push(dma_buffer_to_bytes(dma_buf).slice(rt_range));
+                    merged_chunks.push(dma_buffer_to_bytes(dma_buf).slice(rt_range));
                 }
+
+                let mut chunks = Vec::with_capacity(align_ranges.len());
+                for (align, real) in align_ranges {
+                    let (i, merged) = range_merger.get(align).unwrap();
+                    let start = (real.start - merged.start) as usize;
+                    let end = (real.end - merged.start) as usize;
+                    chunks.push(merged_chunks[i].slice(start..end));
+                }
+
                 Ok(chunks)
             }
             Either::Right((op, location, pool)) => {
