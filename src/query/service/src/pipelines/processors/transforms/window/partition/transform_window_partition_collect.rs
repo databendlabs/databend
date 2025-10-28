@@ -100,38 +100,49 @@ impl WindowBuffer {
         }
     }
 
-    async fn spill(&mut self) -> Result<()> {
+    fn spill(&mut self) -> Result<()> {
         match self {
-            WindowBuffer::V1(inner) => inner.spill().await,
-            WindowBuffer::V2(inner) => inner.spill().await,
+            WindowBuffer::V1(_) => unreachable!(),
+            WindowBuffer::V2(inner) => inner.spill(),
         }
     }
 
-    async fn restore(&mut self) -> Result<Vec<DataBlock>> {
+    async fn async_spill(&mut self) -> Result<()> {
+        match self {
+            WindowBuffer::V1(inner) => inner.spill().await,
+            WindowBuffer::V2(_) => unreachable!(),
+        }
+    }
+
+    fn restore(&mut self) -> Result<Vec<DataBlock>> {
+        match self {
+            WindowBuffer::V1(_) => unreachable!(),
+            WindowBuffer::V2(inner) => inner.restore(),
+        }
+    }
+
+    async fn async_restore(&mut self) -> Result<Vec<DataBlock>> {
         match self {
             WindowBuffer::V1(inner) => inner.restore().await,
-            WindowBuffer::V2(inner) => inner.restore().await,
+            WindowBuffer::V2(_) => unreachable!(),
+        }
+    }
+
+    fn is_async(&self) -> bool {
+        match self {
+            WindowBuffer::V1(_) => true,
+            WindowBuffer::V2(_) => false,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 enum Step {
-    Sync(SyncStep),
-    Async(AsyncStep),
-    Finish,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum SyncStep {
     Collect,
     Process,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum AsyncStep {
     Spill,
     Restore,
+    Finish,
 }
 
 pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
@@ -215,19 +226,19 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
             is_collect_finished: false,
             output_data_blocks: VecDeque::new(),
             restored_data_blocks: Vec::new(),
-            step: Step::Sync(SyncStep::Collect),
+            step: Step::Collect,
         })
     }
 
     fn next_step(&mut self, step: Step) -> Result<Event> {
         let event = match step {
-            Step::Sync(_) => Event::Sync,
-            Step::Async(_) => Event::Async,
             Step::Finish => {
                 self.input.finish();
                 self.output.finish();
                 Event::Finished
             }
+            Step::Spill | Step::Restore if self.buffer.is_async() => Event::Async,
+            _ => Event::Sync,
         };
         self.step = step;
         Ok(event)
@@ -241,7 +252,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
 
         // First check. flush memory data to external storage if need
         if self.need_spill() {
-            return self.next_step(Step::Async(AsyncStep::Spill));
+            return self.next_step(Step::Spill);
         }
 
         if self.input.has_data() {
@@ -254,12 +265,12 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
 
         // Check again. flush memory data to external storage if need
         if self.need_spill() {
-            return self.next_step(Step::Async(AsyncStep::Spill));
+            return self.next_step(Step::Spill);
         }
 
         if self.input.is_finished() {
             self.is_collect_finished = true;
-            return self.next_step(Step::Async(AsyncStep::Restore));
+            return self.next_step(Step::Restore);
         }
 
         self.input.set_need_data();
@@ -276,7 +287,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
         }
 
         if self.need_spill() {
-            return self.next_step(Step::Async(AsyncStep::Spill));
+            return self.next_step(Step::Spill);
         }
 
         if let Some(data_block) = self.output_data_blocks.pop_front() {
@@ -286,7 +297,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
 
         match self.buffer.is_empty() {
             true => self.next_step(Step::Finish),
-            false => self.next_step(Step::Async(AsyncStep::Restore)),
+            false => self.next_step(Step::Restore),
         }
     }
 }
@@ -304,23 +315,23 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
     fn event(&mut self) -> Result<Event> {
         // (collect <--> spill) -> (process <--> restore) -> finish
         match self.step {
-            Step::Sync(SyncStep::Collect) => self.collect(),
-            Step::Async(AsyncStep::Spill) => {
+            Step::Collect => self.collect(),
+            Step::Spill => {
                 if self.is_collect_finished {
-                    self.step = Step::Sync(SyncStep::Process);
+                    self.step = Step::Process;
                     self.output()
                 } else {
                     // collect data again.
-                    self.step = Step::Sync(SyncStep::Collect);
+                    self.step = Step::Collect;
                     self.collect()
                 }
             }
-            Step::Sync(SyncStep::Process) => self.output(),
-            Step::Async(AsyncStep::Restore) => {
+            Step::Process => self.output(),
+            Step::Restore => {
                 if self.restored_data_blocks.is_empty() {
                     self.next_step(Step::Finish)
                 } else {
-                    self.next_step(Step::Sync(SyncStep::Process))
+                    self.next_step(Step::Process)
                 }
             }
             Step::Finish => Ok(Event::Finished),
@@ -329,22 +340,27 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
 
     fn process(&mut self) -> Result<()> {
         match self.step {
-            Step::Sync(SyncStep::Process) => {
+            Step::Process => {
                 let restored_data_blocks = std::mem::take(&mut self.restored_data_blocks);
                 let processed_blocks = self.strategy.process_data_blocks(restored_data_blocks)?;
                 self.output_data_blocks.extend(processed_blocks);
+                Ok(())
+            }
+            Step::Spill => self.buffer.spill(),
+            Step::Restore => {
+                self.restored_data_blocks = self.buffer.restore()?;
+                Ok(())
             }
             _ => unreachable!(),
         }
-        Ok(())
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match &self.step {
-            Step::Async(AsyncStep::Spill) => self.buffer.spill().await?,
-            Step::Async(AsyncStep::Restore) => {
-                self.restored_data_blocks = self.buffer.restore().await?;
+            Step::Spill => self.buffer.async_spill().await?,
+            Step::Restore => {
+                self.restored_data_blocks = self.buffer.async_restore().await?;
             }
             _ => unreachable!(),
         }

@@ -29,6 +29,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
+use databend_common_storages_parquet::ReadSettings;
 use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
@@ -433,16 +434,13 @@ pub struct WriterCreator {
 }
 
 impl WriterCreator {
-    pub async fn open(&mut self, local_file_size: Option<usize>) -> Result<SpillWriter> {
-        let writer = self
-            .spiller
-            .new_file_writer(
-                &self.props,
-                &self.spiller.adapter.buffer_pool,
-                self.chunk_size,
-                local_file_size,
-            )
-            .await?;
+    pub fn open(&mut self, local_file_size: Option<usize>) -> Result<SpillWriter> {
+        let writer = self.spiller.new_file_writer(
+            &self.props,
+            &self.spiller.adapter.buffer_pool,
+            self.chunk_size,
+            local_file_size,
+        )?;
         self.spiller.adapter.update_progress(1, 0);
 
         Ok(SpillWriter {
@@ -530,6 +528,7 @@ impl SpillWriter {
         };
 
         Ok(SpillReader {
+            settings: ReadSettings::from_settings(&self.spiller.adapter.ctx.get_settings())?,
             spiller: self.spiller,
             schema: self.schema,
             parquet_metadata: Arc::new(metadata),
@@ -543,6 +542,7 @@ pub struct SpillReader {
     schema: Arc<DataSchema>,
     parquet_metadata: Arc<ParquetMetaData>,
     location: Location,
+    settings: ReadSettings,
 }
 
 impl SpillReader {
@@ -561,6 +561,35 @@ impl SpillReader {
                 row_groups,
             )
             .await?;
+
+        record_read_profile(
+            self.location.is_local(),
+            &start,
+            blocks.iter().map(DataBlock::memory_size).sum(),
+        );
+
+        Ok(blocks)
+    }
+
+    pub fn restore2(
+        &mut self,
+        row_groups: Vec<usize>,
+        batch_size: usize,
+    ) -> Result<Vec<DataBlock>> {
+        if row_groups.is_empty() {
+            return Ok(Vec::new());
+        }
+        let start = std::time::Instant::now();
+
+        let blocks = self.spiller.load_row_groups2(
+            &self.location,
+            self.parquet_metadata.clone(),
+            &self.schema,
+            row_groups,
+            self.spiller.adapter.buffer_pool.clone(),
+            self.settings,
+            batch_size,
+        )?;
 
         record_read_profile(
             self.location.is_local(),

@@ -146,7 +146,7 @@ impl<'a> InMemoryRowGroup<'a> {
     }
 }
 
-async fn get_ranges(
+pub async fn get_ranges(
     ranges: &[Range<u64>],
     read_settings: &ReadSettings,
     location: &str,
@@ -226,7 +226,7 @@ impl<T: AsMetaRef> RowGroupCore<T> {
         &mut self,
         projection: &ProjectionMask,
         selection: Option<&RowSelection>,
-        get_ranges: impl Fn(&[Range<u64>]) -> Result<Vec<Bytes>>,
+        get_ranges: impl Fn(Vec<Range<u64>>) -> Result<Vec<Bytes>>,
     ) -> Result<()> {
         if let Some((selection, page_locations)) = selection.zip(self.page_locations.as_ref()) {
             // If we have a `RowSelection` and an `OffsetIndex` then only fetch pages required for the
@@ -235,7 +235,7 @@ impl<T: AsMetaRef> RowGroupCore<T> {
                 self.get_fetch_ranges_with_index(projection, selection, page_locations);
 
             // Fetch ranges in different async tasks.
-            let chunk_data = get_ranges(&fetch_ranges)?;
+            let chunk_data = get_ranges(fetch_ranges)?;
 
             self.set_data_with_index(projection, chunk_data, page_start_offsets);
             Ok(())
@@ -243,7 +243,7 @@ impl<T: AsMetaRef> RowGroupCore<T> {
             let fetch_ranges = self.get_fetch_ranges_without_index(projection);
 
             // Fetch ranges in different async tasks.
-            let chunk_data = get_ranges(&fetch_ranges)?;
+            let chunk_data = get_ranges(fetch_ranges)?;
 
             self.set_data_without_index(projection, chunk_data);
             Ok(())
@@ -381,6 +381,12 @@ pub trait AsMetaRef {
 }
 
 impl AsMetaRef for &RowGroupMetaData {
+    fn meta(&self) -> &RowGroupMetaData {
+        self
+    }
+}
+
+impl AsMetaRef for RowGroupMetaData {
     fn meta(&self) -> &RowGroupMetaData {
         self
     }

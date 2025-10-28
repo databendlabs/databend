@@ -112,16 +112,6 @@ pub(super) fn deserialize_block(columns_layout: &Layout, data: Buffer) -> Result
     }
 }
 
-pub fn fake_data_schema(block: &DataBlock) -> DataSchema {
-    let fields = block
-        .columns()
-        .iter()
-        .enumerate()
-        .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type()))
-        .collect::<Vec<_>>();
-    DataSchema::new(fields)
-}
-
 fn bare_blocks_from_arrow_ipc(layout: &[usize], mut data: Buffer) -> Result<DataBlock> {
     assert!(!layout.is_empty());
     let mut entries = Vec::with_capacity(layout.len());
@@ -184,7 +174,7 @@ fn bare_blocks_to_parquet<W: Write + Send>(
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
 
-    let data_schema = fake_data_schema(blocks.first().unwrap());
+    let data_schema = blocks.first().unwrap().infer_schema();
     let table_schema = infer_table_schema(&data_schema)?;
 
     let props = WriterProperties::builder()

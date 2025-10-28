@@ -30,12 +30,14 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
 use databend_common_storages_parquet::parquet_reader::RowGroupCore;
+use databend_common_storages_parquet::ReadSettings;
 use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
 use either::Either;
 use futures::future::BoxFuture;
 use futures::future::FutureExt;
+use opendal::Operator;
 use opendal::Reader;
 use parquet::arrow::arrow_reader::ArrowReaderBuilder;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
@@ -47,8 +49,10 @@ use parquet::arrow::async_reader::AsyncFileReader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::ArrowSchemaConverter;
+use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
 use parquet::errors;
+use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::metadata::RowGroupMetaDataPtr;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
@@ -297,6 +301,77 @@ impl FileWriter<BufferWriter> {
     }
 }
 
+struct FileReader2 {
+    meta: Arc<ParquetMetaData>,
+    reader: Either<SyncDmaFile, (Operator, String, Arc<SpillsBufferPool>)>,
+    settings: ReadSettings,
+    field_levels: FieldLevels,
+}
+
+impl FileReader2 {
+    #[allow(dead_code)]
+    fn load_row_group(&self, i: usize) -> Result<RowGroupCore<&RowGroupMetaData>> {
+        let meta = self.meta.row_group(i);
+        let mut core = RowGroupCore::new(meta, None);
+        core.fetch(&ProjectionMask::all(), None, |ranges| {
+            self.get_ranges(ranges)
+        })?;
+        Ok(core)
+    }
+
+    #[allow(dead_code)]
+    fn get_ranges(&self, fetch_ranges: Vec<Range<u64>>) -> Result<Vec<Bytes>> {
+        match &self.reader {
+            Either::Left(file) => {
+                // todo: merge io
+                let mut chunks = Vec::with_capacity(fetch_ranges.len());
+                for range in fetch_ranges {
+                    let (dma_buf, rt_range) = file.read_range(range)?;
+                    chunks.push(dma_buffer_to_bytes(dma_buf).slice(rt_range));
+                }
+                Ok(chunks)
+            }
+            Either::Right((op, location, pool)) => {
+                pool.fetch_ranges(op.clone(), location.clone(), fetch_ranges, self.settings)
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    fn read_row_group<'a>(
+        &'a self,
+        schema: &DataSchema,
+        row_group: &RowGroupCore<&'a RowGroupMetaData>,
+        batch_size: usize,
+    ) -> Result<Vec<DataBlock>> {
+        let reader = ParquetRecordBatchReader::try_new_with_row_groups(
+            &self.field_levels,
+            row_group,
+            batch_size,
+            None,
+        )?;
+
+        let mut blocks = Vec::new();
+        for record in reader {
+            let record = record?;
+
+            let num_rows = record.num_rows();
+            let mut columns = Vec::with_capacity(record.num_columns());
+            for (array, field) in record.columns().iter().zip(schema.fields()) {
+                let data_type = field.data_type();
+                columns.push(BlockEntry::new(
+                    Value::from_arrow_rs(array.clone(), data_type)?,
+                    || (data_type.clone(), num_rows),
+                ))
+            }
+            let block = DataBlock::new(columns, num_rows);
+            blocks.push(block);
+        }
+
+        Ok(blocks)
+    }
+}
+
 pub(super) struct FileReader {
     meta: Arc<ParquetMetaData>,
     reader: Either<AsyncDmaFile, Reader>,
@@ -331,67 +406,6 @@ impl AsyncFileReader for FileReader {
     }
 }
 
-impl FileReader {
-    fn new(meta: Arc<ParquetMetaData>, reader: Either<AsyncDmaFile, Reader>) -> Self {
-        Self { meta, reader }
-    }
-
-    #[allow(dead_code)]
-    fn load_row_group(&self, i: usize) -> Result<RowGroupCore> {
-        let meta = self.meta.row_group(i);
-        let mut core = RowGroupCore::new(meta, None);
-        core.fetch(&ProjectionMask::all(), None, |ranges| {
-            self.get_ranges(ranges)
-        })?;
-        Ok(core)
-    }
-
-    #[allow(dead_code)]
-    fn get_ranges(&self, _ranges: &[Range<u64>]) -> Result<Vec<Bytes>> {
-        todo!()
-    }
-
-    #[allow(dead_code)]
-    fn read_row_group<'a>(
-        &'a self,
-        schema: &DataSchema,
-        row_group: &RowGroupCore<'a>,
-        batch_size: usize,
-    ) -> Result<Vec<DataBlock>> {
-        let field_levels = parquet_to_arrow_field_levels(
-            self.meta.file_metadata().schema_descr(),
-            ProjectionMask::all(),
-            None,
-        )?;
-
-        let reader = ParquetRecordBatchReader::try_new_with_row_groups(
-            &field_levels,
-            row_group,
-            batch_size,
-            None,
-        )?;
-
-        let mut blocks = Vec::new();
-        for record in reader {
-            let record = record?;
-
-            let num_rows = record.num_rows();
-            let mut columns = Vec::with_capacity(record.num_columns());
-            for (array, field) in record.columns().iter().zip(schema.fields()) {
-                let data_type = field.data_type();
-                columns.push(BlockEntry::new(
-                    Value::from_arrow_rs(array.clone(), data_type)?,
-                    || (data_type.clone(), num_rows),
-                ))
-            }
-            let block = DataBlock::new(columns, num_rows);
-            blocks.push(block);
-        }
-
-        Ok(blocks)
-    }
-}
-
 pub enum AnyFileWriter {
     Local(FileWriter<LocalWriter>),
     Remote(String, FileWriter<BufferWriter>),
@@ -407,7 +421,7 @@ impl AnyFileWriter {
 }
 
 impl<A> SpillerInner<A> {
-    pub(super) async fn new_file_writer(
+    pub(super) fn new_file_writer(
         &self,
         props: &Properties,
         pool: &Arc<SpillsBufferPool>,
@@ -434,8 +448,7 @@ impl<A> SpillerInner<A> {
         };
 
         let remote_location = self.create_unique_location();
-        let remote_writer = op.writer(&remote_location).await?;
-        let remote = pool.buffer_write(remote_writer);
+        let remote = pool.buffer_writer(op.clone(), remote_location.clone())?;
 
         Ok(AnyFileWriter::Remote(
             remote_location,
@@ -455,9 +468,15 @@ impl<A> SpillerInner<A> {
             Location::Local(path) => {
                 let alignment = Some(self.temp_dir.as_ref().unwrap().block_alignment());
                 let file = AsyncDmaFile::open(path, true, alignment).await?;
-                FileReader::new(meta, Either::Left(file))
+                FileReader {
+                    meta,
+                    reader: Either::Left(file),
+                }
             }
-            Location::Remote(path) => FileReader::new(meta, Either::Right(op.reader(path).await?)),
+            Location::Remote(path) => FileReader {
+                meta,
+                reader: Either::Right(op.reader(path).await?),
+            },
         };
 
         let builder = ArrowReaderBuilder::new(input).await?;
@@ -467,6 +486,49 @@ impl<A> SpillerInner<A> {
             .build()?;
 
         load_blocks_from_stream(schema, stream).await
+    }
+
+    pub(super) fn load_row_groups2(
+        &self,
+        location: &Location,
+        meta: Arc<ParquetMetaData>,
+        schema: &DataSchema,
+        row_groups: Vec<usize>,
+        pool: Arc<SpillsBufferPool>,
+        settings: ReadSettings,
+        batch_size: usize,
+    ) -> Result<Vec<DataBlock>> {
+        let field_levels = parquet_to_arrow_field_levels(
+            meta.file_metadata().schema_descr(),
+            ProjectionMask::all(),
+            None,
+        )?;
+        let input = match location {
+            Location::Local(path) => {
+                let alignment = Some(self.temp_dir.as_ref().unwrap().block_alignment());
+                let file = SyncDmaFile::open(path, true, alignment)?;
+                FileReader2 {
+                    meta,
+                    reader: Either::Left(file),
+                    settings,
+                    field_levels,
+                }
+            }
+            Location::Remote(path) => FileReader2 {
+                meta,
+                reader: Either::Right((self.operator.clone(), path.clone(), pool)),
+                settings,
+                field_levels,
+            },
+        };
+
+        let mut blocks = Vec::new();
+        for i in row_groups {
+            let row_group = input.load_row_group(i)?;
+            blocks.append(&mut input.read_row_group(schema, &row_group, batch_size)?);
+        }
+
+        Ok(blocks)
     }
 }
 
