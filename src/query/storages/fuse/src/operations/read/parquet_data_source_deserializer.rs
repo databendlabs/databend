@@ -59,7 +59,6 @@ use crate::pruning::ExprBloomFilter;
 
 pub struct DeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
-    table_index: IndexType,
     scan_id: usize,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
@@ -122,7 +121,6 @@ impl DeserializeDataTransform {
         let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             ctx: ctx.clone(),
-            table_index: plan.table_index,
             scan_id: plan.scan_id,
             scan_progress,
             block_reader,
@@ -148,7 +146,7 @@ impl DeserializeDataTransform {
         if self.cached_runtime_filter.is_none() {
             let bloom_filters = self
                 .ctx
-                .get_runtime_filters(self.table_index)
+                .get_runtime_filters(self.scan_id)
                 .into_iter()
                 .filter_map(|entry| {
                     let RuntimeFilterEntry { bloom, stats, .. } = entry;
