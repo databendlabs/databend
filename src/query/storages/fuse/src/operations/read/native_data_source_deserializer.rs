@@ -28,8 +28,10 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::types::BooleanType;
@@ -58,7 +60,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::IndexType;
 use xorf::BinaryFuse16;
 
 use super::native_data_source::NativeDataSource;
@@ -199,7 +200,7 @@ pub struct NativeDeserializeDataTransform {
     scan_progress: Arc<Progress>,
 
     // Structures for table scan information:
-    table_index: IndexType,
+    scan_id: usize,
     block_reader: Arc<BlockReader>,
     src_schema: DataSchema,
     output_schema: DataSchema,
@@ -216,6 +217,8 @@ pub struct NativeDeserializeDataTransform {
     // Structures for the bloom runtime filter:
     ctx: Arc<dyn TableContext>,
     bloom_runtime_filter: Option<Vec<BloomRuntimeFilterRef>>,
+    need_wait_runtime_filter: bool,
+    runtime_filter_ready: Vec<Arc<RuntimeFilterReady>>,
 
     // Structures for aggregating index:
     index_reader: Arc<Option<AggIndexReader>>,
@@ -308,11 +311,13 @@ impl NativeDeserializeDataTransform {
         let mut output_schema = plan.schema().as_ref().clone();
         output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
+        let need_wait_runtime_filter =
+            !ctx.get_cluster().is_empty() && ctx.get_wait_runtime_filter(plan.scan_id);
 
         Ok(ProcessorPtr::create(Box::new(
             NativeDeserializeDataTransform {
                 ctx,
-                table_index: plan.table_index,
+                scan_id: plan.scan_id,
                 func_ctx,
                 scan_progress,
                 block_reader,
@@ -334,6 +339,8 @@ impl NativeDeserializeDataTransform {
                 bloom_runtime_filter: None,
                 read_state: ReadPartState::new(),
                 need_reserve_block_info,
+                need_wait_runtime_filter,
+                runtime_filter_ready: Vec::new(),
             },
         )))
     }
@@ -752,7 +759,7 @@ impl NativeDeserializeDataTransform {
         if self.bloom_runtime_filter.is_none() {
             let bloom_filters = self
                 .ctx
-                .get_runtime_filters(self.table_index)
+                .get_runtime_filters(self.scan_id)
                 .into_iter()
                 .filter_map(|entry| {
                     let RuntimeFilterEntry { bloom, stats, .. } = entry;
@@ -771,6 +778,20 @@ impl NativeDeserializeDataTransform {
                     self.filter_executor = Some(new_dummy_filter_executor(self.func_ctx.clone()));
                 }
             }
+        }
+    }
+
+    fn prepare_runtime_filter_wait(&mut self) -> bool {
+        if !self.need_wait_runtime_filter {
+            return false;
+        }
+        self.need_wait_runtime_filter = false;
+        let runtime_filter_ready = self.ctx.get_runtime_filter_ready(self.scan_id);
+        if !runtime_filter_ready.is_empty() {
+            self.runtime_filter_ready = runtime_filter_ready;
+            true
+        } else {
+            false
         }
     }
 
@@ -848,6 +869,7 @@ impl NativeDeserializeDataTransform {
     }
 }
 
+#[async_trait::async_trait]
 impl Processor for NativeDeserializeDataTransform {
     fn name(&self) -> String {
         String::from("NativeDeserializeDataTransform")
@@ -858,6 +880,10 @@ impl Processor for NativeDeserializeDataTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if self.prepare_runtime_filter_wait() {
+            return Ok(Event::Async);
+        }
+
         if self.output.is_finished() {
             self.input.finish();
             return Ok(Event::Finished);
@@ -901,6 +927,38 @@ impl Processor for NativeDeserializeDataTransform {
 
         self.input.set_need_data();
         Ok(Event::NeedData)
+    }
+
+    #[async_backtrace::framed]
+    async fn async_process(&mut self) -> Result<()> {
+        use std::time::Duration;
+
+        use databend_common_base::base::tokio::time::timeout;
+
+        let timeout_duration = Duration::from_secs(30);
+
+        for runtime_filter_ready in &self.runtime_filter_ready {
+            let mut rx = runtime_filter_ready.runtime_filter_watcher.subscribe();
+            if (*rx.borrow()).is_some() {
+                continue;
+            }
+
+            match timeout(timeout_duration, rx.changed()).await {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => {
+                    return Err(ErrorCode::TokioError("watcher's sender is dropped"));
+                }
+                Err(_) => {
+                    log::warn!(
+                        "Runtime filter wait timeout after {:?} for scan_id: {}",
+                        timeout_duration,
+                        self.scan_id
+                    );
+                }
+            }
+        }
+        self.runtime_filter_ready.clear();
+        Ok(())
     }
 
     fn process(&mut self) -> Result<()> {
