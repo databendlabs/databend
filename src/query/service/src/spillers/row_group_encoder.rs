@@ -20,6 +20,7 @@ use std::sync::Arc;
 use arrow_schema::Schema;
 use bytes::Bytes;
 use databend_common_base::base::dma_buffer_to_bytes;
+use databend_common_base::base::Alignment;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::SyncDmaFile;
 use databend_common_base::rangemap::RangeMerger;
@@ -313,39 +314,11 @@ impl FileReader {
     fn get_ranges(&self, fetch_ranges: Vec<Range<u64>>) -> Result<Vec<Bytes>> {
         match &self.reader {
             Either::Left(file) => {
-                let align_ranges = fetch_ranges
-                    .into_iter()
-                    .map(|range| {
-                        (
-                            file.align_down(range.start as _) as u64
-                                ..file.align_up(range.end as _) as u64,
-                            range,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-
-                let range_merger = RangeMerger::from_iter(
-                    align_ranges.iter().map(|(align, _)| align.clone()),
-                    self.settings.max_gap_size,
-                    self.settings.max_range_size,
-                    Some(self.settings.parquet_fast_read_bytes),
-                );
-                let merged_ranges = range_merger.ranges();
-                let mut merged_chunks = Vec::with_capacity(merged_ranges.len());
-                for range in merged_ranges {
-                    let (dma_buf, rt_range) = file.read_range(range)?;
-                    merged_chunks.push(dma_buffer_to_bytes(dma_buf).slice(rt_range));
-                }
-
-                let mut chunks = Vec::with_capacity(align_ranges.len());
-                for (align, real) in align_ranges {
-                    let (i, merged) = range_merger.get(align).unwrap();
-                    let start = (real.start - merged.start) as usize;
-                    let end = (real.end - merged.start) as usize;
-                    chunks.push(merged_chunks[i].slice(start..end));
-                }
-
-                Ok(chunks)
+                let plan = RangeFetchPlan::new(file.alignment(), fetch_ranges, &self.settings);
+                return plan.read(|range| {
+                    let (buffer, rt_range) = file.read_range(range.clone())?;
+                    Ok(dma_buffer_to_bytes(buffer).slice(rt_range))
+                });
             }
             Either::Right((op, location, pool)) => {
                 pool.fetch_ranges(op.clone(), location.clone(), fetch_ranges, self.settings)
@@ -384,6 +357,61 @@ impl FileReader {
         }
 
         Ok(blocks)
+    }
+}
+
+pub struct RangeFetchPlan {
+    merged: Vec<Range<u64>>,
+    merged_index: Vec<(usize, Range<usize>)>,
+}
+
+impl RangeFetchPlan {
+    fn new(alignment: Alignment, fetch_ranges: Vec<Range<u64>>, settings: &ReadSettings) -> Self {
+        let merger = RangeMerger::from_iter(
+            fetch_ranges.iter().map(|range| {
+                let aligned_start = alignment.align_down(range.start as usize) as u64;
+                let aligned_end = alignment.align_up(range.end as usize) as u64;
+                aligned_start..aligned_end
+            }),
+            settings.max_gap_size,
+            settings.max_range_size,
+            Some(settings.parquet_fast_read_bytes),
+        );
+
+        let merged = merger.ranges();
+        let merged_index = fetch_ranges
+            .into_iter()
+            .map(|fetch| {
+                let (index, merged) = merger
+                    .get(fetch.clone())
+                    .expect("range should be contained in merged ranges");
+                let start = (fetch.start - merged.start) as _;
+                let end = (fetch.end - merged.start) as _;
+                (index, start..end)
+            })
+            .collect();
+
+        Self {
+            merged,
+            merged_index,
+        }
+    }
+
+    fn read<F>(self, mut load_data: F) -> Result<Vec<Bytes>>
+    where F: FnMut(Range<u64>) -> Result<Bytes> {
+        let merged_chunks = self
+            .merged
+            .into_iter()
+            .map(|range| load_data(range))
+            .collect::<Result<Vec<_>>>()?;
+
+        let chunks = self
+            .merged_index
+            .into_iter()
+            .map(|(i, range)| merged_chunks[i].slice(range))
+            .collect();
+
+        Ok(chunks)
     }
 }
 
@@ -556,6 +584,38 @@ mod tests {
         let expected = DataBlock::concat(&[block.clone(), block])?;
         for (exp, got) in expected.columns().iter().zip(restored.columns()) {
             assert_eq!(exp, got);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_range_fetch_plan_merges_ranges() -> Result<()> {
+        let alignment = Alignment::new(4).unwrap();
+        let data: Vec<u8> = (0u8..64).collect();
+
+        let settings = ReadSettings {
+            max_gap_size: 4,
+            max_range_size: 32,
+            parquet_fast_read_bytes: 1,
+            enable_cache: false,
+        };
+
+        let fetch_ranges = vec![5..8, 9..12, 20..24];
+        let plan = RangeFetchPlan::new(alignment, fetch_ranges.clone(), &settings);
+        assert_eq!(&plan.merged, &[4..12, 20..24]);
+
+        let chunks = plan.read(|range| {
+            let start = range.start as usize;
+            let end = range.end as usize;
+            Ok(Bytes::copy_from_slice(&data[start..end]))
+        })?;
+
+        for (range, got) in fetch_ranges.into_iter().zip(chunks) {
+            assert_eq!(
+                got,
+                Bytes::copy_from_slice(&data[(range.start as _)..(range.end as _)])
+            );
         }
 
         Ok(())
