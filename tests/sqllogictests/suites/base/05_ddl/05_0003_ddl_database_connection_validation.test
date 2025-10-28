@@ -30,13 +30,42 @@ CREATE DATABASE test_db_nonexistent_conn OPTIONS (
 
 # Test protocol mismatch between connection and path (should fail)
 statement ok
-CREATE CONNECTION test_conn_s3 STORAGE_TYPE='s3' ENDPOINT_URL='http://127.0.0.1:9000' ACCESS_KEY_ID='test' SECRET_ACCESS_KEY='test'
+CREATE CONNECTION test_conn_s3_05_0003 STORAGE_TYPE='s3' ENDPOINT_URL='http://127.0.0.1:9000' ACCESS_KEY_ID='test' SECRET_ACCESS_KEY='test'
 
 statement error 1006
 CREATE DATABASE test_db_protocol_mismatch OPTIONS (
-    DEFAULT_STORAGE_CONNECTION = 'test_conn_s3',
+    DEFAULT_STORAGE_CONNECTION = 'test_conn_s3_05_0003',
     DEFAULT_STORAGE_PATH = 'fs:///tmp/mismatch/'
 )
+
+# Test ALTER DATABASE detects protocol mismatch when only path is changed
+statement ok
+DROP DATABASE IF EXISTS test_db_alter_protocol
+
+statement ok
+DROP CONNECTION IF EXISTS test_conn_alter
+
+statement ok
+CREATE CONNECTION test_conn_alter STORAGE_TYPE='fs'
+
+statement ok
+CREATE DATABASE test_db_alter_protocol OPTIONS (
+    DEFAULT_STORAGE_CONNECTION = 'test_conn_alter',
+    DEFAULT_STORAGE_PATH = 'fs:///tmp/test-bucket/alter/'
+)
+
+# ERROR HY000 (1105): BadArguments. Code: 1006, Text = DEFAULT_STORAGE_PATH protocol 's3' does not match connection 'test_conn_alter' protocol 'fs'.
+statement error 1006
+ALTER DATABASE test_db_alter_protocol SET OPTIONS (
+    DEFAULT_STORAGE_PATH = 's3://test-bucket/mismatch/'
+)
+
+# Cleanup database before continuing
+statement ok
+DROP DATABASE IF EXISTS test_db_alter_protocol
+
+statement ok
+DROP CONNECTION IF EXISTS test_conn_alter
 
 # Test ALTER DATABASE with non-existent connection (should fail)
 statement error 1006
