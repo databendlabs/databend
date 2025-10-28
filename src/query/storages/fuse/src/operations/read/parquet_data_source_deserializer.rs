@@ -78,7 +78,7 @@ pub struct DeserializeDataTransform {
     base_block_ids: Option<Scalar>,
     cached_runtime_filter: Option<Vec<BloomRuntimeFilterRef>>,
     need_reserve_block_info: bool,
-    need_wait_runtime_filter: bool,
+    already_waited_runtime_filter: bool,
     runtime_filter_ready: Vec<Arc<RuntimeFilterReady>>,
 }
 
@@ -102,7 +102,6 @@ impl DeserializeDataTransform {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let need_wait_runtime_filter = !ctx.get_cluster().is_empty();
 
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
         if let Some(virtual_reader) = virtual_reader.as_ref() {
@@ -122,7 +121,7 @@ impl DeserializeDataTransform {
         let output_schema: DataSchema = (&output_schema).into();
         let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
-            ctx,
+            ctx: ctx.clone(),
             table_index: plan.table_index,
             scan_id: plan.scan_id,
             scan_progress,
@@ -139,8 +138,8 @@ impl DeserializeDataTransform {
             base_block_ids: plan.base_block_ids.clone(),
             cached_runtime_filter: None,
             need_reserve_block_info,
-            need_wait_runtime_filter,
-            runtime_filter_ready: vec![],
+            already_waited_runtime_filter: false,
+            runtime_filter_ready: ctx.get_runtime_filter_ready(plan.scan_id),
         })))
     }
 
@@ -197,17 +196,11 @@ impl DeserializeDataTransform {
     }
 
     fn need_wait_runtime_filter(&mut self) -> bool {
-        if !self.need_wait_runtime_filter {
+        if self.already_waited_runtime_filter {
             return false;
         }
-        self.need_wait_runtime_filter = false;
-        let runtime_filter_ready = self.ctx.get_runtime_filter_ready(self.scan_id);
-        if !runtime_filter_ready.is_empty() {
-            self.runtime_filter_ready = runtime_filter_ready;
-            true
-        } else {
-            false
-        }
+        self.already_waited_runtime_filter = true;
+        !self.runtime_filter_ready.is_empty()
     }
 }
 
@@ -308,24 +301,23 @@ impl Processor for DeserializeDataTransform {
                     let origin_num_rows = data_block.num_rows();
 
                     let mut filter = None;
-                    if self.ctx.has_bloom_runtime_filters(self.table_index) {
-                        let start = Instant::now();
-                        let rows_before = data_block.num_rows();
-                        if let Some(bitmap) = self.runtime_filter(data_block.clone())? {
-                            data_block = data_block.filter_with_bitmap(&bitmap)?;
-                            filter = Some(bitmap);
-                            let rows_after = data_block.num_rows();
-                            let bloom_duration = start.elapsed();
+                    let bloom_start = Instant::now();
+
+                    let rows_before = data_block.num_rows();
+                    if let Some(bitmap) = self.runtime_filter(data_block.clone())? {
+                        data_block = data_block.filter_with_bitmap(&bitmap)?;
+                        filter = Some(bitmap);
+                        let rows_after = data_block.num_rows();
+                        let bloom_duration = bloom_start.elapsed();
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::RuntimeFilterBloomTime,
+                            bloom_duration.as_nanos() as usize,
+                        );
+                        if rows_before > rows_after {
                             Profile::record_usize_profile(
-                                ProfileStatisticsName::RuntimeFilterBloomTime,
-                                bloom_duration.as_nanos() as usize,
+                                ProfileStatisticsName::RuntimeFilterBloomRowsFiltered,
+                                rows_before - rows_after,
                             );
-                            if rows_before > rows_after {
-                                Profile::record_usize_profile(
-                                    ProfileStatisticsName::RuntimeFilterBloomRowsFiltered,
-                                    rows_before - rows_after,
-                                );
-                            }
                         }
                     }
 
