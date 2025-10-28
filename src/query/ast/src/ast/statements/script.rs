@@ -77,13 +77,6 @@ pub struct DeclareVar {
     pub default: Option<Expr>,
 }
 
-impl std::ops::Deref for DeclareVar {
-    type Target = Option<TypeName>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.data_type
-    }
-}
 impl Display for DeclareVar {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let DeclareVar {

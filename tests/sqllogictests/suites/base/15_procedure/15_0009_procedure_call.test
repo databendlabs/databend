@@ -67,3 +67,13 @@ END;
 $$;
 ----
 5
+
+statement error 3129
+EXECUTE IMMEDIATE $$
+BEGIN
+    let z Int;
+    let y Int Default z;
+    RETURN y;
+END;
+$$;
+
