@@ -432,8 +432,8 @@ impl Binder {
                 ))
             })?;
 
-            let path_protocol = normalize_storage_protocol(&uri_for_scheme.protocol);
-            let connection_protocol = normalize_storage_protocol(&connection.storage_type);
+            let path_protocol = uri_for_scheme.protocol.to_ascii_lowercase();
+            let connection_protocol = connection.storage_type.to_ascii_lowercase();
 
             if path_protocol != connection_protocol {
                 return Err(ErrorCode::BadArguments(format!(
@@ -533,12 +533,4 @@ impl Binder {
             ..Default::default()
         })
     }
-}
-
-fn normalize_storage_protocol(protocol: &str) -> String {
-    let mut lower = protocol.to_ascii_lowercase();
-    if lower == "file" {
-        lower = "fs".to_string();
-    }
-    lower
 }
