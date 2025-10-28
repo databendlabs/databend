@@ -232,7 +232,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=500)),
                 }),
                 ("enable_backpressure_spiller", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Use new backpressure spiller.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
