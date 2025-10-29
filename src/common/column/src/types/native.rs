@@ -15,6 +15,9 @@
 
 use std::cmp::Ordering;
 use std::convert::TryFrom;
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::ops::Add;
@@ -27,11 +30,16 @@ use borsh::BorshSerialize;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
 use databend_common_base::base::OrderedFloat;
+use jiff::fmt::strtime;
+use jiff::tz;
+use jiff::Timestamp;
 use log::error;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
 use super::PrimitiveType;
+
+pub const TIMESTAMP_TIMEZONE_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.6f %z";
 
 /// Sealed trait implemented by all physical types that can be allocated,
 /// serialized and deserialized by this crate.
@@ -71,6 +79,10 @@ pub trait NativeType:
 
     /// From bytes in big endian
     fn from_be_bytes(bytes: Self::Bytes) -> Self;
+
+    fn size_of() -> usize {
+        std::mem::size_of::<Self>()
+    }
 }
 
 macro_rules! native_type {
@@ -425,6 +437,138 @@ impl Neg for months_days_micros {
     #[inline(always)]
     fn neg(self) -> Self::Output {
         Self::new(-self.months(), -self.days(), -self.microseconds())
+    }
+}
+
+/// The in-memory representation of the MonthDayNano variant of the "Interval" logical type.
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Default,
+    Eq,
+    Zeroable,
+    Pod,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+)]
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub struct timestamp_tz(pub i128);
+
+impl Hash for timestamp_tz {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.total_micros().hash(state)
+    }
+}
+impl PartialEq for timestamp_tz {
+    fn eq(&self, other: &Self) -> bool {
+        self.total_micros() == other.total_micros()
+    }
+}
+impl PartialOrd for timestamp_tz {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for timestamp_tz {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let total_micros = self.total_micros();
+        let other_micros = other.total_micros();
+        total_micros.cmp(&other_micros)
+    }
+}
+
+impl timestamp_tz {
+    pub const MICROS_PER_SECOND: i64 = 1_000_000;
+
+    pub fn new(timestamp: i64, offset: i32) -> Self {
+        let ts = timestamp as u64 as i128; // <- 中间加一次 u64 屏蔽符号位
+        let off = (offset as i128) << 64;
+        Self(off | ts)
+    }
+
+    #[inline]
+    pub fn timestamp(&self) -> i64 {
+        self.0 as u64 as i64
+    }
+
+    #[inline]
+    pub fn seconds_offset(&self) -> i32 {
+        (self.0 >> 64) as i32
+    }
+
+    #[inline]
+    pub fn micros_offset(&self) -> Option<i64> {
+        (self.seconds_offset() as i64).checked_mul(Self::MICROS_PER_SECOND)
+    }
+
+    #[inline]
+    pub fn hours_offset(&self) -> i8 {
+        (self.seconds_offset() / 3600) as i8
+    }
+
+    #[inline]
+    pub fn total_micros(&self) -> i64 {
+        self.try_total_micros().unwrap_or_else(|| {
+            error!(
+                "interval is out of range: timestamp={}, offset={}",
+                self.timestamp(),
+                self.seconds_offset()
+            );
+            0
+        })
+    }
+
+    #[inline]
+    pub fn try_total_micros(&self) -> Option<i64> {
+        let offset_micros = self.micros_offset()?;
+        self.timestamp().checked_sub(offset_micros)
+    }
+}
+
+impl Display for timestamp_tz {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let timestamp = Timestamp::from_microsecond(self.timestamp()).unwrap();
+
+        let offset = tz::Offset::from_seconds(self.seconds_offset()).unwrap();
+        let string = strtime::format(
+            TIMESTAMP_TIMEZONE_FORMAT,
+            &timestamp.to_zoned(offset.to_time_zone()),
+        )
+        .unwrap();
+        write!(f, "{}", string)
+    }
+}
+
+impl NativeType for timestamp_tz {
+    const PRIMITIVE: PrimitiveType = PrimitiveType::TimestampTz;
+    type Bytes = [u8; 16];
+    #[inline]
+    fn to_le_bytes(&self) -> Self::Bytes {
+        self.0.to_le_bytes()
+    }
+
+    #[inline]
+    fn to_be_bytes(&self) -> Self::Bytes {
+        self.0.to_be_bytes()
+    }
+
+    #[inline]
+    fn from_le_bytes(bytes: Self::Bytes) -> Self {
+        let mut buf16 = [0u8; 16];
+        buf16.copy_from_slice(&bytes);
+        Self(i128::from_le_bytes(buf16))
+    }
+
+    #[inline]
+    fn from_be_bytes(bytes: Self::Bytes) -> Self {
+        let mut buf16 = [0u8; 16];
+        buf16.copy_from_slice(&bytes);
+        Self(i128::from_be_bytes(buf16))
     }
 }
 

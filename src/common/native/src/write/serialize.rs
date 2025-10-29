@@ -168,6 +168,16 @@ impl<'a, W: Write> ValueVisitor for WriteVisitor<'a, W> {
                 &self.write_options,
                 self.scratch,
             ),
+            Column::TimestampTz(column) => {
+                let column: Buffer<i128> = unsafe { std::mem::transmute(column) };
+                write_primitive::<i128, W>(
+                    self.w,
+                    &column,
+                    self.validity.clone(),
+                    &self.write_options,
+                    self.scratch,
+                )
+            }
             Column::Interval(column) => {
                 let column: Buffer<i128> = unsafe { std::mem::transmute(column) };
                 write_primitive::<i128, W>(

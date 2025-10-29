@@ -15,12 +15,14 @@
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use decimal::DecimalType;
 use geometry::GeometryType;
 
 use crate::types::opaque::OpaqueColumn;
 use crate::types::simple_type::SimpleType;
+use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::*;
 use crate::*;
 
@@ -83,6 +85,10 @@ pub trait ValueVisitor: Sized {
 
     fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<TimestampType>(buffer, &DataType::Timestamp)
+    }
+
+    fn visit_timestamp_tz(&mut self, buffer: Buffer<timestamp_tz>) -> Result<Self::U, Self::Error> {
+        self.visit_typed_column::<TimestampTzType>(buffer, &DataType::TimestampTz)
     }
 
     fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<Self::U, Self::Error> {
@@ -176,6 +182,7 @@ pub trait ValueVisitor: Sized {
             Column::Binary(column) => visitor.visit_binary(column),
             Column::String(column) => visitor.visit_string(column),
             Column::Timestamp(buffer) => visitor.visit_timestamp(buffer),
+            Column::TimestampTz(buffer) => visitor.visit_timestamp_tz(buffer),
             Column::Date(buffer) => visitor.visit_date(buffer),
             Column::Interval(buffer) => visitor.visit_interval(buffer),
             Column::Array(column) => visitor.visit_array(column),

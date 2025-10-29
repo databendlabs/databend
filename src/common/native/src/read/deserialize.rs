@@ -151,6 +151,14 @@ where
                 init,
             ))
         }
+        TableDataType::TimestampTz => {
+            init.push(InitNested::Primitive(is_nullable));
+            DynIter::new(TimestampTzNestedIter::<_>::new(
+                readers.pop().unwrap(),
+                data_type.clone(),
+                init,
+            ))
+        }
         TableDataType::Interval => {
             init.push(InitNested::Primitive(is_nullable));
             DynIter::new(IntervalNestedIter::<_>::new(

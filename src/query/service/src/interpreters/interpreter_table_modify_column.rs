@@ -186,7 +186,7 @@ impl ModifyTableColumnInterpreter {
                 // if the field has different leaf column numbers, we need drop the old column
                 // and add a new one to generate new column id. otherwise, leaf column ids will conflict.
                 if old_field.data_type.num_leaf_columns() != field.data_type.num_leaf_columns() {
-                    let _ = new_schema.drop_column_unchecked(&field.name)?;
+                    let _ = new_schema.drop_column(&field.name)?;
                     new_schema.add_column(field, i)?;
                 } else {
                     // new field don't have `column_id`, assign field directly will cause `column_id` lost.
