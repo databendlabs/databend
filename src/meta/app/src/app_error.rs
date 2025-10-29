@@ -316,6 +316,26 @@ impl TableVersionMismatched {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("DatabaseVersionMismatched: {db_id} expect `{expect}` but `{curr}`  while `{context}`")]
+pub struct DatabaseVersionMismatched {
+    db_id: u64,
+    expect: MatchSeq,
+    curr: u64,
+    context: String,
+}
+
+impl DatabaseVersionMismatched {
+    pub fn new(db_id: u64, expect: MatchSeq, curr: u64, context: impl Into<String>) -> Self {
+        Self {
+            db_id,
+            expect,
+            curr,
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("StreamAlreadyExists: {name} while {context}")]
 pub struct StreamAlreadyExists {
     name: String,
@@ -1031,6 +1051,9 @@ pub enum AppError {
     TableVersionMismatched(#[from] TableVersionMismatched),
 
     #[error(transparent)]
+    DatabaseVersionMismatched(#[from] DatabaseVersionMismatched),
+
+    #[error(transparent)]
     DuplicatedUpsertFiles(#[from] DuplicatedUpsertFiles),
 
     #[error(transparent)]
@@ -1317,6 +1340,8 @@ impl AppErrorMessage for TableSnapshotExpired {}
 impl AppErrorMessage for UnknownDatabaseId {}
 
 impl AppErrorMessage for TableVersionMismatched {}
+
+impl AppErrorMessage for DatabaseVersionMismatched {}
 
 impl AppErrorMessage for StreamAlreadyExists {
     fn message(&self) -> String {
@@ -1678,6 +1703,9 @@ impl From<AppError> for ErrorCode {
             }
             AppError::UndropTableHasNoHistory(err) => {
                 ErrorCode::UndropTableHasNoHistory(err.message())
+            }
+            AppError::DatabaseVersionMismatched(err) => {
+                ErrorCode::DatabaseVersionMismatched(err.message())
             }
             AppError::TableVersionMismatched(err) => {
                 ErrorCode::TableVersionMismatched(err.message())

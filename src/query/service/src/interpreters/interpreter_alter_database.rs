@@ -172,8 +172,12 @@ impl Interpreter for AlterDatabaseInterpreter {
                 })?;
         }
 
-        // Persist the merged options through the catalog database interface
-        database.update_options(merged_options).await?;
+        let expected_meta_seq = database.get_db_info().meta.seq;
+
+        // Persist the fully merged options with CAS semantics in the meta store
+        database
+            .update_options(expected_meta_seq, merged_options)
+            .await?;
 
         Ok(PipelineBuildResult::create())
     }
