@@ -350,7 +350,7 @@ impl AsyncDmaFile {
                         .map_err(io::Error::from)
                 })
                 .await?;
-                Alignment::new(stat.f_bsize.max(512) as usize).unwrap()
+                Alignment::new(stat.f_frsize.max(512) as usize).unwrap()
             }
         };
 
@@ -384,25 +384,23 @@ impl AsyncDmaFile {
 
         let fd = self.fd.as_raw_fd();
         let alignment = self.alignment;
-        let mut n;
-        loop {
+        let buf = asyncify(move || loop {
             let remain = buf.capacity() - buf.len();
-            (buf, n) = asyncify(move || {
-                let mut file = DmaFile {
-                    fd: unsafe { BorrowedFd::borrow_raw(fd) },
-                    alignment,
-                    offset: 0,
-                };
-                file.read_direct(&mut buf, remain).map(|n| (buf, n))
-            })
-            .await?;
-            if align_start + buf.len() >= range.end as usize {
-                break;
-            }
+            let mut file = DmaFile {
+                fd: unsafe { BorrowedFd::borrow_raw(fd) },
+                alignment,
+                offset: 0,
+            };
+            let n = file.read_direct(&mut buf, remain)?;
             if n == 0 {
                 return Err(io::Error::new(io::ErrorKind::UnexpectedEof, ""));
             }
-        }
+            if align_start + buf.len() >= range.end as usize {
+                return Ok(buf);
+            }
+        })
+        .await?;
+
         let rt_range = range.start as usize - align_start..range.end as usize - align_start;
         Ok((buf, rt_range))
     }
@@ -442,7 +440,7 @@ impl SyncDmaFile {
 
     fn open_dma(fd: OwnedFd) -> io::Result<DmaFile<OwnedFd>> {
         let stat = rustix::fs::fstatvfs(&fd)?;
-        let alignment = Alignment::new(stat.f_bsize.max(512) as usize).unwrap();
+        let alignment = Alignment::new(stat.f_frsize.max(512) as usize).unwrap();
 
         Ok(Self {
             fd,
@@ -987,7 +985,7 @@ mod tests {
         let filename = "test_file3";
         let _ = std::fs::remove_file(filename);
         let stat = rustix::fs::statvfs(".").unwrap();
-        let alignment = 512.max(stat.f_bsize as usize);
+        let alignment = 512.max(stat.f_frsize as usize);
         let file_size: usize = alignment * 2;
 
         let want = (0..file_size).map(|i| (i % 256) as u8).collect::<Vec<_>>();
