@@ -164,9 +164,9 @@ impl HashJoinFactory {
     pub fn create_hash_join(self: &Arc<Self>, id: usize) -> Result<Box<dyn Join>> {
         let settings = self.ctx.get_settings();
 
-        if settings.get_force_join_data_spill()? {
-            return self.create_grace_join(id);
-        }
+        // if settings.get_force_join_data_spill()? {
+        //     return self.create_grace_join(id);
+        // }
 
         let max_level = settings.get_max_grace_hash_join_level()?;
         let memory_settings = MemorySettings::from_join_settings(&self.ctx)?;
