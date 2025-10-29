@@ -136,7 +136,10 @@ select id from t_1;
 ----
 2
 
-statement error
+statement error 1132
+alter table t_1 modify column cc string not null;
+
+statement error 1132
 alter table t_1 drop column cc;
 
 statement ok
@@ -301,6 +304,12 @@ CREATE MASKING POLICY maskc AS (val int) RETURNS int -> CASE WHEN current_role()
 statement ok
 alter table data_mask_test modify column b set masking policy maskb;
 
+statement error 1132
+alter table data_mask_test modify column b string not null;
+
+statement error 1132
+alter table data_mask_test drop column b;
+
 query ITT
 select * from data_mask_test;
 ----
@@ -308,6 +317,9 @@ select * from data_mask_test;
 
 statement ok
 alter table data_mask_test modify column a set masking policy maska;
+
+statement error 1132
+alter table data_mask_test modify column a set masking policy maskc;
 
 query ITT
 select * from data_mask_test;
@@ -394,6 +406,10 @@ COMMENT = 'Mask SSN conditionally based on role';
 statement ok
 alter table employees modify column ssn set masking policy mask_ssn_conditional using (ssn, role);
 
+## Test 2: Apply policy with USING clause - Column 'ssn' is already attached to a security policy.
+statement error 1132
+alter table employees modify column role set masking policy mask_ssn_conditional using (role, ssn);
+
 ## Query should mask SSN for all rows since current_role() won't match
 query ITTIT
 select id, name, ssn, salary, department from employees order by id;
@@ -464,7 +480,7 @@ drop masking policy if exists mask_int_policy;
 statement ok
 CREATE MASKING POLICY mask_int_policy AS (val STRING, num INT) RETURNS STRING -> val;
 
-## Should fail - department is STRING, not INT
+## Should fail - Column 'department' is already attached to a security policy. A column cannot be attached to multiple security policies
 statement error 1114
 alter table employees modify column name set masking policy mask_int_policy using (name, department);
 
@@ -809,6 +825,9 @@ SELECT array_transform(arr, x -> x + sensitive) FROM t_test;
 
 statement ok
 CREATE MASKING POLICY mask_conditional AS (val INT, threshold INT) RETURNS INT -> CASE WHEN val > threshold THEN val ELSE -999 END;
+
+statement ok
+ALTER TABLE t_test MODIFY COLUMN sensitive UNSET MASKING POLICY
 
 statement ok
 ALTER TABLE t_test MODIFY COLUMN sensitive SET MASKING POLICY mask_conditional USING (sensitive, public);

@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 
@@ -82,6 +83,16 @@ impl TableMeta {
             )));
         };
         Ok(())
+    }
+
+    /// Check if a column reference a security policy.
+    pub fn is_column_reference_policy(&self, column_id: &ColumnId) -> bool {
+        self.column_mask_policy_columns_ids.contains_key(column_id)
+            || self
+                .row_access_policy_columns_ids
+                .as_ref()
+                .map(|policy| policy.columns_ids.contains(column_id))
+                .unwrap_or(false)
     }
 }
 

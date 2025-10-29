@@ -146,6 +146,16 @@ impl ModifyTableColumnInterpreter {
                 ErrorCode::UnknownColumn(format!("Cannot find column {}", column))
             })?;
 
+            if table_info
+                .meta
+                .is_column_reference_policy(&data_field.column_id)
+            {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Column '{}' is already attached to a security policy. A column cannot be attached to multiple security policies",
+                    data_field.name
+                )));
+            }
+
             let column_type = data_field.data_type();
             if policy_data_type != column_type.remove_nullable() {
                 return Err(ErrorCode::UnmatchColumnDataType(format!(
@@ -241,6 +251,16 @@ impl ModifyTableColumnInterpreter {
         let mut modify_comment = false;
         for (field, comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
+                if table_info
+                    .meta
+                    .is_column_reference_policy(&old_field.column_id)
+                {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Cannot modify column '{}' which is associated with a security policy",
+                        old_field.name
+                    )));
+                }
+
                 if old_field.data_type != field.data_type {
                     // If the column is defined in bloom index columns,
                     // check whether the data type is supported for bloom index.
