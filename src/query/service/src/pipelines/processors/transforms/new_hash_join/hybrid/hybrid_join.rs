@@ -33,7 +33,7 @@ use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 #[derive(Default)]
 enum HybridJoinVariant {
     #[default]
-    Swaping,
+    Swapping,
     Memory(Box<dyn Join>),
     GraceHashJoin(Box<dyn Join>),
 }
@@ -53,7 +53,7 @@ unsafe impl<T: GraceMemoryJoin + Sync> Sync for HybridHashJoin<T> {}
 impl<T: GraceMemoryJoin> Join for HybridHashJoin<T> {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         match &mut self.variant {
-            HybridJoinVariant::Swaping => unreachable!(),
+            HybridJoinVariant::Swapping => unreachable!(),
             HybridJoinVariant::Memory(memory) => {
                 let finalized = data.is_none();
 
@@ -87,7 +87,7 @@ impl<T: GraceMemoryJoin> Join for HybridHashJoin<T> {
         }
 
         match &mut self.variant {
-            HybridJoinVariant::Swaping => unreachable!(),
+            HybridJoinVariant::Swapping => unreachable!(),
             HybridJoinVariant::Memory(v) => v.final_build(),
             HybridJoinVariant::GraceHashJoin(grace) => grace.final_build(),
         }
@@ -95,7 +95,7 @@ impl<T: GraceMemoryJoin> Join for HybridHashJoin<T> {
 
     fn build_runtime_filter(&self, desc: &RuntimeFiltersDesc) -> Result<JoinRuntimeFilterPacket> {
         match &self.variant {
-            HybridJoinVariant::Swaping => unreachable!(),
+            HybridJoinVariant::Swapping => unreachable!(),
             HybridJoinVariant::Memory(v) => v.build_runtime_filter(desc),
             HybridJoinVariant::GraceHashJoin(grace) => grace.build_runtime_filter(desc),
         }
@@ -103,7 +103,7 @@ impl<T: GraceMemoryJoin> Join for HybridHashJoin<T> {
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
         match &mut self.variant {
-            HybridJoinVariant::Swaping => unreachable!(),
+            HybridJoinVariant::Swapping => unreachable!(),
             HybridJoinVariant::Memory(v) => v.probe_block(data),
             HybridJoinVariant::GraceHashJoin(grace) => grace.probe_block(data),
         }
@@ -111,7 +111,7 @@ impl<T: GraceMemoryJoin> Join for HybridHashJoin<T> {
 
     fn final_probe(&mut self) -> Result<Option<Box<dyn JoinStream + '_>>> {
         match &mut self.variant {
-            HybridJoinVariant::Swaping => unreachable!(),
+            HybridJoinVariant::Swapping => unreachable!(),
             HybridJoinVariant::Memory(v) => v.final_probe(),
             HybridJoinVariant::GraceHashJoin(grace) => grace.final_probe(),
         }
@@ -121,7 +121,7 @@ impl<T: GraceMemoryJoin> Join for HybridHashJoin<T> {
 impl<T: GraceMemoryJoin> GraceMemoryJoin for HybridHashJoin<T> {
     fn reset_memory(&mut self, reset_global: bool) {
         match std::mem::take(&mut self.variant) {
-            HybridJoinVariant::Swaping => unreachable!(),
+            HybridJoinVariant::Swapping => unreachable!(),
             HybridJoinVariant::Memory(memory) => {
                 let any_box: Box<dyn Any> = memory;
                 let mut downcast_type_join = any_box.downcast::<T>().expect("wrong memory type");
@@ -176,7 +176,7 @@ impl<T: GraceMemoryJoin> HybridHashJoin<T> {
 
     fn into_inner(mut self) -> Box<T> {
         match std::mem::take(&mut self.variant) {
-            HybridJoinVariant::Swaping => unreachable!(),
+            HybridJoinVariant::Swapping => unreachable!(),
             HybridJoinVariant::Memory(memory) => {
                 let any_box: Box<dyn Any> = memory;
                 any_box.downcast::<T>().expect("wrong memory type")
@@ -199,7 +199,7 @@ impl<T: GraceMemoryJoin> HybridHashJoin<T> {
 
     fn transform_memory_data(&mut self, finalized: bool) -> Result<()> {
         self.variant = match std::mem::take(&mut self.variant) {
-            HybridJoinVariant::Swaping => HybridJoinVariant::Swaping,
+            HybridJoinVariant::Swapping => HybridJoinVariant::Swapping,
             HybridJoinVariant::GraceHashJoin(v) => HybridJoinVariant::GraceHashJoin(v),
             HybridJoinVariant::Memory(memory_join) => {
                 let any_box: Box<dyn Any> = memory_join;
@@ -233,7 +233,7 @@ impl<T: GraceMemoryJoin> HybridHashJoin<T> {
 
     fn convert_to_grace_join(&mut self) -> Result<()> {
         self.variant = match std::mem::take(&mut self.variant) {
-            HybridJoinVariant::Swaping => HybridJoinVariant::Swaping,
+            HybridJoinVariant::Swapping => HybridJoinVariant::Swapping,
             HybridJoinVariant::GraceHashJoin(grace) => HybridJoinVariant::GraceHashJoin(grace),
             HybridJoinVariant::Memory(_) => {
                 HybridJoinVariant::GraceHashJoin(Box::new(self.create_grace_hash_join()?))
