@@ -418,7 +418,7 @@ openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
 ] }
-opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", rev = "a1fb4da", features = ["tls"] }
+opensrv-mysql = { git = "https://github.com/TCeason/opensrv.git", branch = "fix", features = ["tls"] }
 orc-rust = "0.6.0"
 ordered-float = { version = "5.0.0", default-features = false }
 ordq = "0.2.0"

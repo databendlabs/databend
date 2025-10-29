@@ -11110,7 +11110,7 @@ dependencies = [
 [[package]]
 name = "opensrv-mysql"
 version = "0.8.0"
-source = "git+https://github.com/databendlabs/opensrv.git?rev=a1fb4da#a1fb4da215c8693c7e4f62be249a01b7fec52997"
+source = "git+https://github.com/TCeason/opensrv.git?branch=fix#b65d3130ee7cb00a62b0e35df1667c658cf6ff35"
 dependencies = [
  "async-trait",
  "byteorder",
