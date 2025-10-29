@@ -234,18 +234,3 @@ impl<'a, T: serde::Serialize> AuditElement<'a, T> {
         }
     }
 }
-
-/// Check if a column has security policies that would prevent the operation.
-/// Returns an error if the column has masking policy or row access policy.
-pub fn check_column_has_policy(
-    table_meta: &databend_common_meta_app::schema::TableMeta,
-    column_id: &databend_common_expression::ColumnId,
-) -> databend_common_exception::Result<()> {
-    if table_meta.has_masking_policy(column_id) {
-        return Err(ErrorCode::AlterTableError(""));
-    }
-    if table_meta.has_row_access_policy(column_id) {
-        return Err(ErrorCode::AlterTableError(""));
-    }
-    Ok(())
-}

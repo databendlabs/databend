@@ -29,7 +29,6 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 
-use crate::interpreters::util::check_column_has_policy;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -121,12 +120,16 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
 
         for (column, policy_data_type) in columns.iter().zip(policy_data_types.into_iter()) {
             if let Some((_, data_field)) = schema.column_with_name(column) {
-                check_column_has_policy(&table.get_table_info().meta, &data_field.column_id)
-                    .map_err(|_| ErrorCode::AlterTableError(format!(
+                if table
+                    .get_table_info()
+                    .meta
+                    .is_column_reference_policy(&data_field.column_id)
+                {
+                    return Err(ErrorCode::AlterTableError(format!(
                         "Column '{}' is already attached to a security policy. A column cannot be attached to multiple security policies",
                         data_field.name
-                    )))?;
-
+                    )));
+                }
                 let column_type = data_field.data_type();
                 if policy_data_type != column_type.remove_nullable() {
                     return Err(ErrorCode::UnmatchColumnDataType(format!(

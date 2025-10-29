@@ -363,21 +363,6 @@ impl Default for TableMeta {
     }
 }
 
-impl TableMeta {
-    /// Check if a column has masking policy.
-    pub fn has_masking_policy(&self, column_id: &ColumnId) -> bool {
-        self.column_mask_policy_columns_ids.contains_key(column_id)
-    }
-
-    /// Check if a column has row access policy.
-    pub fn has_row_access_policy(&self, column_id: &ColumnId) -> bool {
-        self.row_access_policy_columns_ids
-            .as_ref()
-            .map(|policy| policy.columns_ids.contains(column_id))
-            .unwrap_or(false)
-    }
-}
-
 impl Display for TableMeta {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
