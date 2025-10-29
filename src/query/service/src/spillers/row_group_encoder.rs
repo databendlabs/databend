@@ -20,7 +20,6 @@ use std::sync::Arc;
 use arrow_schema::Schema;
 use bytes::Bytes;
 use databend_common_base::base::dma_buffer_to_bytes;
-use databend_common_base::base::Alignment;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::SyncDmaFile;
 use databend_common_base::rangemap::RangeMerger;
@@ -314,7 +313,7 @@ impl FileReader {
     fn get_ranges(&self, fetch_ranges: Vec<Range<u64>>) -> Result<Vec<Bytes>> {
         match &self.reader {
             Either::Left(file) => {
-                let plan = RangeFetchPlan::new(file.alignment(), fetch_ranges, &self.settings);
+                let plan = RangeFetchPlan::new(fetch_ranges, &self.settings);
                 plan.read(|range| {
                     let (buffer, rt_range) = file.read_range(range.clone())?;
                     Ok(dma_buffer_to_bytes(buffer).slice(rt_range))
@@ -366,13 +365,9 @@ pub struct RangeFetchPlan {
 }
 
 impl RangeFetchPlan {
-    fn new(alignment: Alignment, fetch_ranges: Vec<Range<u64>>, settings: &ReadSettings) -> Self {
+    fn new(fetch_ranges: Vec<Range<u64>>, settings: &ReadSettings) -> Self {
         let merger = RangeMerger::from_iter(
-            fetch_ranges.iter().map(|range| {
-                let aligned_start = alignment.align_down(range.start as usize) as u64;
-                let aligned_end = alignment.align_up(range.end as usize) as u64;
-                aligned_start..aligned_end
-            }),
+            fetch_ranges.iter().cloned(),
             settings.max_gap_size,
             settings.max_range_size,
             Some(settings.parquet_fast_read_bytes),
@@ -602,7 +597,6 @@ mod tests {
 
     #[test]
     fn test_range_fetch_plan_merges_ranges() -> Result<()> {
-        let alignment = Alignment::new(4).unwrap();
         let data: Vec<u8> = (0u8..64).collect();
 
         let settings = ReadSettings {
@@ -613,8 +607,8 @@ mod tests {
         };
 
         let fetch_ranges = vec![5..8, 9..12, 20..24];
-        let plan = RangeFetchPlan::new(alignment, fetch_ranges.clone(), &settings);
-        assert_eq!(&plan.merged, &[4..12, 20..24]);
+        let plan = RangeFetchPlan::new(fetch_ranges.clone(), &settings);
+        assert_eq!(&plan.merged, &[5..12, 20..24]);
 
         let chunks = plan.read(|range| {
             let start = range.start as usize;

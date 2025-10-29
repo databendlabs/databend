@@ -19,7 +19,6 @@ use std::alloc::Layout;
 use std::fmt;
 use std::io;
 use std::io::IoSlice;
-use std::io::SeekFrom;
 use std::io::Write;
 use std::ops::Range;
 use std::os::fd::AsFd;
@@ -33,7 +32,6 @@ use std::ptr::NonNull;
 use bytes::Bytes;
 use rustix::fs::OFlags;
 use tokio::fs::File as AsyncFile;
-use tokio::io::AsyncSeekExt;
 
 use crate::runtime::spawn_blocking;
 
@@ -361,25 +359,14 @@ impl AsyncDmaFile {
         })
     }
 
-    async fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-        self.fd.seek(pos).await
-    }
-
     pub async fn read_range(&mut self, range: Range<u64>) -> io::Result<(DmaBuffer, Range<usize>)> {
         let align_start = self.align_down(range.start as usize);
         let align_end = self.align_up(range.end as usize);
 
         let mut buf =
             Vec::with_capacity_in(align_end - align_start, DmaAllocator::new(self.alignment));
-
-        if align_start != 0 {
-            let offset = self.seek(SeekFrom::Start(align_start as u64)).await?;
-            if offset as usize != align_start {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "range out of range",
-                ));
-            }
+        if range.is_empty() {
+            return Ok((buf, 0..0));
         }
 
         let fd = self.fd.as_raw_fd();
@@ -391,12 +378,13 @@ impl AsyncDmaFile {
                 alignment,
                 offset: 0,
             };
-            let n = file.read_direct(&mut buf, remain)?;
-            if n == 0 {
-                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, ""));
-            }
+            let offset = align_start + buf.len();
+            let n = file.pread_direct(&mut buf, remain, offset as _)?;
             if align_start + buf.len() >= range.end as usize {
                 return Ok(buf);
+            }
+            if n == 0 {
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, ""));
             }
         })
         .await?;
@@ -890,92 +878,92 @@ mod tests {
         let _ = std::fs::remove_file("test_file");
 
         for dio in [true, false] {
-            run_test(0, dio).await.unwrap();
-            run_test(100, dio).await.unwrap();
-            run_test(200, dio).await.unwrap();
+            run_test(0, dio).await;
+            run_test(100, dio).await;
+            run_test(200, dio).await;
 
-            run_test(4096 - 1, dio).await.unwrap();
-            run_test(4096, dio).await.unwrap();
-            run_test(4096 + 1, dio).await.unwrap();
+            run_test(4096 - 1, dio).await;
+            run_test(4096, dio).await;
+            run_test(4096 + 1, dio).await;
 
-            run_test(4096 * 2 - 1, dio).await.unwrap();
-            run_test(4096 * 2, dio).await.unwrap();
-            run_test(4096 * 2 + 1, dio).await.unwrap();
+            run_test(4096 * 2 - 1, dio).await;
+            run_test(4096 * 2, dio).await;
+            run_test(4096 * 2 + 1, dio).await;
 
-            run_test(1024 * 1024 * 3 - 1, dio).await.unwrap();
-            run_test(1024 * 1024 * 3, dio).await.unwrap();
-            run_test(1024 * 1024 * 3 + 1, dio).await.unwrap();
+            run_test(1024 * 1024 * 3 - 1, dio).await;
+            run_test(1024 * 1024 * 3, dio).await;
+            run_test(1024 * 1024 * 3 + 1, dio).await;
         }
     }
 
-    async fn run_test(n: usize, dio: bool) -> io::Result<()> {
+    async fn run_test(n: usize, dio: bool) {
         let filename = "test_file";
         let want = (0..n).map(|i| (i % 256) as u8).collect::<Vec<_>>();
 
         let bufs = vec![IoSlice::new(&want)];
-        let length = dma_write_file_vectored(filename, &bufs).await?;
+        let length = dma_write_file_vectored(filename, &bufs).await.unwrap();
 
         assert_eq!(length, want.len());
 
         let mut got = Vec::new();
 
-        let length = dma_read_file(filename, &mut got).await?;
+        let length = dma_read_file(filename, &mut got).await.unwrap();
         assert_eq!(length, want.len());
         assert_eq!(got, want);
 
-        let file = AsyncDmaFile::open(filename, dio, None).await?;
+        let file = AsyncDmaFile::open(filename, dio, None).await.unwrap();
         let align = file.alignment;
         drop(file);
 
-        std::fs::remove_file(filename)?;
+        let file = SyncDmaFile::open(filename, dio, None).unwrap();
+        drop(file);
+
+        std::fs::remove_file(filename).unwrap();
 
         let mut buf = DmaWriteBuf::new(align, align.as_usize());
-        buf.write_all(&want)?;
-        let length = buf.into_file(filename, dio).await?;
-
+        buf.write_all(&want).unwrap();
+        let length = buf.into_file(filename, dio).await.unwrap();
         assert_eq!(length, want.len());
 
-        let (buf, range) = dma_read_file_range(filename, 0..length as u64).await?;
+        let (buf, range) = dma_read_file_range(filename, 0..length as u64)
+            .await
+            .unwrap();
         assert_eq!(&buf[range], &want);
 
-        std::fs::remove_file(filename)?;
-        Ok(())
+        std::fs::remove_file(filename).unwrap();
     }
 
     #[tokio::test]
     async fn test_range_read() {
         let filename = "test_file2";
         let _ = std::fs::remove_file(filename);
-        let n: usize = 4096 * 2;
+        let n: usize = 4096 * 2 + 10;
 
         let want = (0..n).map(|i| (i % 256) as u8).collect::<Vec<_>>();
 
         let bufs = vec![IoSlice::new(&want)];
         dma_write_file_vectored(filename, &bufs).await.unwrap();
 
-        let got = dma_read_file_range(filename, 0..10).await.unwrap();
-        let got = got.0[got.1].to_vec();
-        assert_eq!(&want[0..10], got);
+        let sync_file = SyncDmaFile::open(filename, true, None).unwrap();
+        let mut async_file = AsyncDmaFile::open(filename, true, None).await.unwrap();
 
-        let got = dma_read_file_range(filename, 10..30).await.unwrap();
-        let got = got.0[got.1].to_vec();
-        assert_eq!(&want[10..30], got);
+        for range in [
+            0..10,
+            4096 - 5..4096 + 5,
+            10..30,
+            4096..4096 + 5,
+            4096 * 2 - 5..4096 * 2,
+            4096 + 10..4096 * 2 + 5,
+        ] {
+            let range_usize = range.start as usize..range.end as _;
+            let got = async_file.read_range(range.clone()).await.unwrap();
+            let got = got.0[got.1].to_vec();
+            assert_eq!(&want[range_usize.clone()], got);
 
-        let got = dma_read_file_range(filename, 4096 - 5..4096 + 5)
-            .await
-            .unwrap();
-        let got = got.0[got.1].to_vec();
-        assert_eq!(&want[4096 - 5..4096 + 5], got);
-
-        let got = dma_read_file_range(filename, 4096..4096 + 5).await.unwrap();
-        let got = got.0[got.1].to_vec();
-        assert_eq!(&want[4096..4096 + 5], got);
-
-        let got = dma_read_file_range(filename, 4096 * 2 - 5..4096 * 2)
-            .await
-            .unwrap();
-        let got = got.0[got.1].to_vec();
-        assert_eq!(&want[4096 * 2 - 5..4096 * 2], got);
+            let got = sync_file.read_range(range.clone()).unwrap();
+            let got = got.0[got.1].to_vec();
+            assert_eq!(&want[range_usize], got);
+        }
 
         let _ = std::fs::remove_file(filename);
     }
