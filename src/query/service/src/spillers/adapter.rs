@@ -267,7 +267,7 @@ impl Spiller {
                 let (buf, range) = dma_read_file_range(path, 0..file_size as u64).await?;
                 Buffer::from(dma_buffer_to_bytes(buf)).slice(range)
             }
-            (Location::Local(path), Some(ref local)) => {
+            (Location::Local(path), Some(local)) => {
                 local
                     .read(path.file_name().unwrap().to_str().unwrap())
                     .await?

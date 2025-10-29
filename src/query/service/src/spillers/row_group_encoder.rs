@@ -480,8 +480,9 @@ impl<A> SpillerInner<A> {
             ProjectionMask::all(),
             None,
         )?;
-        let input = match location {
-            Location::Local(path) => {
+
+        let input = match (location, &self.local_operator) {
+            (Location::Local(path), None) => {
                 let alignment = Some(self.temp_dir.as_ref().unwrap().block_alignment());
                 let file = SyncDmaFile::open(path, true, alignment)?;
                 FileReader {
@@ -491,7 +492,17 @@ impl<A> SpillerInner<A> {
                     field_levels,
                 }
             }
-            Location::Remote(path) => FileReader {
+            (Location::Local(path), Some(local)) => FileReader {
+                meta,
+                reader: Either::Right((
+                    local.clone(),
+                    path.file_name().unwrap().to_str().unwrap().to_string(),
+                    pool,
+                )),
+                settings,
+                field_levels,
+            },
+            (Location::Remote(path), _) => FileReader {
                 meta,
                 reader: Either::Right((self.operator.clone(), path.clone(), pool)),
                 settings,

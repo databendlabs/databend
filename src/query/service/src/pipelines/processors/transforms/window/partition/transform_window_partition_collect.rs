@@ -20,7 +20,6 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -201,8 +200,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
         let spiller = if !settings.get_enable_backpressure_spiller()? {
             Either::Left(Spiller::create(ctx, operator, spill_config)?)
         } else {
-            let runtime = GlobalIORuntime::instance();
-            let buffer_pool = SpillsBufferPool::create(runtime, 128 * 1024 * 1024, 3);
+            let buffer_pool = SpillsBufferPool::instance();
             Either::Right(BackpressureSpiller::create(
                 ctx,
                 operator,
