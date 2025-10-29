@@ -16,6 +16,7 @@ use std::any::Any;
 use std::io::Cursor;
 
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_from_json;
@@ -30,6 +31,7 @@ use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::clamp_timestamp;
+use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -99,6 +101,7 @@ impl FieldJsonAstDecoder {
             }),
             ColumnBuilder::Date(c) => self.read_date(c, value),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, value),
+            ColumnBuilder::TimestampTz(c) => self.read_timestamp_tz(c, value),
             ColumnBuilder::Binary(_c) => unimplemented!("binary literal is not supported"),
             ColumnBuilder::String(c) => self.read_string(c, value),
             ColumnBuilder::Array(c) => self.read_array(c, value),
@@ -318,6 +321,19 @@ impl FieldJsonAstDecoder {
                 )),
             },
             _ => Err(ErrorCode::BadBytes("Incorrect timestamp value")),
+        }
+    }
+
+    fn read_timestamp_tz(&self, column: &mut Vec<timestamp_tz>, value: &Value) -> Result<()> {
+        match value {
+            Value::String(s) => {
+                let ts_tz = string_to_timestamp_tz(s.as_bytes(), || &self.jiff_timezone)?;
+                column.push(ts_tz);
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes(
+                "Incorrect TimestampTz value, must be string",
+            )),
         }
     }
 

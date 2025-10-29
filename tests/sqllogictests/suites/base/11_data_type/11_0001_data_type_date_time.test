@@ -81,6 +81,67 @@ select '2021-01-01T00:00:00+00:00'::timestamp = '2021-01-01T01:00:00+01:00'::tim
 ----
 1
 
+# FIXME: After Parser update then remove ::STRING
+query T
+select '2044-05-06 03:25:02.868894'::TIMESTAMP_TZ::STRING
+----
+2044-05-06 03:25:02.868894 +0000
+
+query T
+select '2044-05-06 03:25:02.868894-0700'::TIMESTAMP_TZ::STRING
+----
+2044-05-05 20:25:02.868894 -0700
+
+query T
+select '2044-05-06 03:25:02.868894-07:00'::TIMESTAMP_TZ::STRING
+----
+2044-05-05 20:25:02.868894 -0700
+
+query T
+select '2044-05-06T03:25:02.868894'::TIMESTAMP_TZ::STRING
+----
+2044-05-06 03:25:02.868894 +0000
+
+query T
+select '2044-05-06T03:25:02.868894-0700'::TIMESTAMP_TZ::STRING
+----
+2044-05-05 20:25:02.868894 -0700
+
+query T
+select '2044-05-06T03:25:02.868894-07:00'::TIMESTAMP_TZ::STRING
+----
+2044-05-05 20:25:02.868894 -0700
+
+query T
+select '9999-12-12'::TIMESTAMP_TZ::STRING
+----
+9999-12-12 00:00:00.000000 +0000
+
+query B
+select '2021-01-01 00:00:00+0000'::timestamp_tz = '2021-01-01 01:00:00+0100'::timestamp_tz
+----
+1
+
+query B
+select '2021-01-01T00:00:00'::timestamp_tz = '2021-01-01 01:00:00+01:00'::timestamp_tz
+----
+1
+
+query B
+select '2021-01-01 00:00:00+0100'::timestamp_tz = '2021-01-01 01:00:00+0100'::timestamp_tz
+----
+0
+
+query B
+select '2021-01-01 00:00:00+0100'::timestamp_tz < '2021-01-01 01:00:00+0100'::timestamp_tz
+----
+1
+
+query B
+select '2021-01-01 00:00:00+0100'::timestamp_tz > '2021-01-01 01:00:00+0100'::timestamp_tz
+----
+0
+
 statement ok
 drop database if exists db1
 

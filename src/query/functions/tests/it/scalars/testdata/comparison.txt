@@ -142,7 +142,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 74 more
+... and 76 more
 
 
 
@@ -189,6 +189,24 @@ optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
 output         : false
+
+
+ast            : to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')
+raw expr       : eq(to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
+checked expr   : eq<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 18:01:01.000000 +0900')=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')
+raw expr       : eq(to_timestamp_tz('2021-12-20 18:01:01.000000 +0900'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
+checked expr   : eq<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 18:01:01.000000 +0900" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
 
 
 ast            : lhs = rhs
@@ -411,7 +429,7 @@ candidate functions:
   noteq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 74 more
+... and 76 more
 
 
 
@@ -445,6 +463,24 @@ output         : false
 ast            : to_timestamp(-315360000000000)!=to_timestamp(-100)
 raw expr       : noteq(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
 checked expr   : noteq<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')!=to_timestamp_tz('2021-12-20 17:01:01.000000 +0700')
+raw expr       : noteq(to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0700'))
+checked expr   : noteq<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0700" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 16:01:01.000000 +0800')!=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')
+raw expr       : noteq(to_timestamp_tz('2021-12-20 16:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
+checked expr   : noteq<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 16:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -645,6 +681,24 @@ output         : true
 ast            : to_timestamp(-315360000000000)<to_timestamp(-100)
 raw expr       : lt(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
 checked expr   : lt<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')<to_timestamp_tz('2021-12-20 17:01:01.000000 +0700')
+raw expr       : lt(to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0700'))
+checked expr   : lt<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0700" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 16:01:01.000000 +0800')<to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')
+raw expr       : lt(to_timestamp_tz('2021-12-20 16:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
+checked expr   : lt<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 16:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -875,6 +929,33 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')<=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')
+raw expr       : lte(to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
+checked expr   : lte<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')<=to_timestamp_tz('2021-12-20 17:01:01.000000 +0700')
+raw expr       : lte(to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0700'))
+checked expr   : lte<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0700" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 16:01:01.000000 +0800')<=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')
+raw expr       : lte(to_timestamp_tz('2021-12-20 16:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
+checked expr   : lte<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 16:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
 ast            : parse_json(lhs) <= parse_json(rhs)
 raw expr       : lte(parse_json(lhs::String), parse_json(rhs::String))
 checked expr   : lte<Variant, Variant>(CAST<String>(lhs AS Variant), CAST<String>(rhs AS Variant))
@@ -1080,6 +1161,24 @@ optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
 output         : false
+
+
+ast            : to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')>to_timestamp_tz('2021-12-20 17:01:01.000000 +0900')
+raw expr       : gt(to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0900'))
+checked expr   : gt<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0900" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 18:01:01.000000 +0800')>to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')
+raw expr       : gt(to_timestamp_tz('2021-12-20 18:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
+checked expr   : gt<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 18:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
 
 
 ast            : parse_json('{"k":"v","a":"b"}') > parse_json('{"k":"v","a":"d"}')
@@ -1309,6 +1408,33 @@ output         : false
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-315360000000000)
 raw expr       : gte(to_timestamp(minus(315360000000000)), to_timestamp(minus(315360000000000)))
 checked expr   : gte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')>=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')
+raw expr       : gte(to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
+checked expr   : gte<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')>=to_timestamp_tz('2021-12-20 17:01:01.000000 +0900')
+raw expr       : gte(to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0900'))
+checked expr   : gte<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0900" AS TimestampTz))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : to_timestamp_tz('2021-12-20 18:01:01.000000 +0800')>=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')
+raw expr       : gte(to_timestamp_tz('2021-12-20 18:01:01.000000 +0800'), to_timestamp_tz('2021-12-20 17:01:01.000000 +0800'))
+checked expr   : gte<TimestampTz, TimestampTz>(CAST<String>("2021-12-20 18:01:01.000000 +0800" AS TimestampTz), CAST<String>("2021-12-20 17:01:01.000000 +0800" AS TimestampTz))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}

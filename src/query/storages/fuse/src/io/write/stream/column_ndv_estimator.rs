@@ -16,6 +16,7 @@ use std::hash::Hash;
 use std::marker::PhantomData;
 
 use databend_common_expression::types::boolean::TrueIdxIter;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal128Type;
@@ -65,6 +66,7 @@ pub enum ColumnNDVEstimator {
     String(ColumnNDVEstimatorImpl<StringType>),
     Date(ColumnNDVEstimatorImpl<DateType>),
     Timestamp(ColumnNDVEstimatorImpl<TimestampType>),
+    TimestampTz(ColumnNDVEstimatorImpl<TimestampTzType>),
     Decimal64(ColumnNDVEstimatorImpl<Decimal64Type>),
     Decimal128(ColumnNDVEstimatorImpl<Decimal128Type>),
     Decimal256(ColumnNDVEstimatorImpl<Decimal256Type>),
@@ -92,6 +94,9 @@ pub fn create_column_ndv_estimator(data_type: &DataType) -> ColumnNDVEstimator {
         DataType::Date => ColumnNDVEstimator::Date(ColumnNDVEstimatorImpl::<DateType>::new()),
         DataType::Timestamp => {
             ColumnNDVEstimator::Timestamp(ColumnNDVEstimatorImpl::<TimestampType>::new())
+        }
+        DataType::TimestampTz => {
+            ColumnNDVEstimator::TimestampTz(ColumnNDVEstimatorImpl::<TimestampTzType>::new())
         }
         DataType::Decimal(size) => {
             if size.can_carried_by_64() {

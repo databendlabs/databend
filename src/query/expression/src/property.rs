@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
 use enum_as_inner::EnumAsInner;
 
 use crate::types::boolean::BooleanDomain;
@@ -27,6 +28,7 @@ use crate::types::number::SimpleDomain;
 use crate::types::number::F32;
 use crate::types::number::F64;
 use crate::types::string::StringDomain;
+use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::ArgType;
@@ -121,6 +123,7 @@ pub enum Domain {
     Boolean(BooleanDomain),
     String(StringDomain),
     Timestamp(SimpleDomain<i64>),
+    TimestampTz(SimpleDomain<timestamp_tz>),
     Date(SimpleDomain<i32>),
     Interval(SimpleDomain<months_days_micros>),
     Nullable(NullableDomain<AnyType>),
@@ -205,6 +208,7 @@ impl Domain {
                 })
             }
             DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
+            DataType::TimestampTz => Domain::TimestampTz(TimestampTzType::full_domain()),
             DataType::Date => Domain::Date(DateType::full_domain()),
             DataType::Interval => Domain::Interval(IntervalType::full_domain()),
             DataType::Null => Domain::Nullable(NullableDomain {
@@ -512,6 +516,9 @@ impl Domain {
             }
             Domain::Timestamp(SimpleDomain { min, max }) => {
                 (Scalar::Timestamp(*min), Scalar::Timestamp(*max))
+            }
+            Domain::TimestampTz(SimpleDomain { min, max }) => {
+                (Scalar::TimestampTz(*min), Scalar::TimestampTz(*max))
             }
             Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
             Domain::Interval(SimpleDomain { min, max }) => {

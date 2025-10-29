@@ -1,4 +1,104 @@
 ---------- Input ----------
+LET cost FLOAT
+---------- Output ---------
+LET cost Float32
+---------- AST ------------
+LetVar {
+    declare: DeclareVar {
+        span: Some(
+            4..14,
+        ),
+        name: Identifier {
+            span: Some(
+                4..8,
+            ),
+            name: "cost",
+            quote: None,
+            ident_type: None,
+        },
+        data_type: Some(
+            Float32,
+        ),
+        default: None,
+    },
+}
+
+
+---------- Input ----------
+LET cost FLOAT default 3.0
+---------- Output ---------
+LET cost Float32 := 3.0
+---------- AST ------------
+LetVar {
+    declare: DeclareVar {
+        span: Some(
+            4..26,
+        ),
+        name: Identifier {
+            span: Some(
+                4..8,
+            ),
+            name: "cost",
+            quote: None,
+            ident_type: None,
+        },
+        data_type: Some(
+            Float32,
+        ),
+        default: Some(
+            Literal {
+                span: Some(
+                    23..26,
+                ),
+                value: Decimal256 {
+                    value: 30,
+                    precision: 76,
+                    scale: 1,
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
+LET cost FLOAT := 100.0
+---------- Output ---------
+LET cost Float32 := 100.0
+---------- AST ------------
+LetVar {
+    declare: DeclareVar {
+        span: Some(
+            4..23,
+        ),
+        name: Identifier {
+            span: Some(
+                4..8,
+            ),
+            name: "cost",
+            quote: None,
+            ident_type: None,
+        },
+        data_type: Some(
+            Float32,
+        ),
+        default: Some(
+            Literal {
+                span: Some(
+                    18..23,
+                ),
+                value: Decimal256 {
+                    value: 1000,
+                    precision: 76,
+                    scale: 1,
+                },
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
 LET cost := 100.0
 ---------- Output ---------
 LET cost := 100.0
@@ -16,16 +116,19 @@ LetVar {
             quote: None,
             ident_type: None,
         },
-        default: Literal {
-            span: Some(
-                12..17,
-            ),
-            value: Decimal256 {
-                value: 1000,
-                precision: 76,
-                scale: 1,
+        data_type: None,
+        default: Some(
+            Literal {
+                span: Some(
+                    12..17,
+                ),
+                value: Decimal256 {
+                    value: 1000,
+                    precision: 76,
+                    scale: 1,
+                },
             },
-        },
+        ),
     },
 }
 
@@ -116,6 +219,99 @@ LetStatement {
                 ignore_result: false,
             },
         ),
+    },
+}
+
+
+---------- Input ----------
+LET t1 cursor FOR SELECT * FROM numbers(100)
+---------- Output ---------
+LET t1 CURSOR FOR SELECT * FROM numbers(100)
+---------- AST ------------
+LetCursor {
+    declare: DeclareCursor {
+        span: Some(
+            4..44,
+        ),
+        name: Identifier {
+            span: Some(
+                4..6,
+            ),
+            name: "t1",
+            quote: None,
+            ident_type: None,
+        },
+        stmt: Some(
+            Query(
+                Query {
+                    span: Some(
+                        18..44,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                18..44,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                StarColumns {
+                                    qualified: [
+                                        Star(
+                                            Some(
+                                                25..26,
+                                            ),
+                                        ),
+                                    ],
+                                    column_filter: None,
+                                },
+                            ],
+                            from: [
+                                TableFunction {
+                                    span: Some(
+                                        32..44,
+                                    ),
+                                    lateral: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            32..39,
+                                        ),
+                                        name: "numbers",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    params: [
+                                        Literal {
+                                            span: Some(
+                                                40..43,
+                                            ),
+                                            value: UInt64(
+                                                100,
+                                            ),
+                                        },
+                                    ],
+                                    named_params: [],
+                                    alias: None,
+                                    sample: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            ),
+        ),
+        resultset: None,
     },
 }
 
@@ -2094,14 +2290,17 @@ ScriptBlock {
                     quote: None,
                     ident_type: None,
                 },
-                default: Literal {
-                    span: Some(
-                        17..18,
-                    ),
-                    value: UInt64(
-                        1,
-                    ),
-                },
+                data_type: None,
+                default: Some(
+                    Literal {
+                        span: Some(
+                            17..18,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                ),
             },
         ),
     ],

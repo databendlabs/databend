@@ -66,6 +66,16 @@ fn test_eq(file: &mut impl Write) {
         "to_timestamp(-315360000000000)=to_timestamp(-100)",
         &[],
     );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 18:01:01.000000 +0900')=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')",
+        &[],
+    );
 
     run_ast(file, "lhs = rhs", &[
         (
@@ -141,6 +151,16 @@ fn test_noteq(file: &mut impl Write) {
     );
     run_ast(
         file,
+        "to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')!=to_timestamp_tz('2021-12-20 17:01:01.000000 +0700')",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 16:01:01.000000 +0800')!=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')",
+        &[],
+    );
+    run_ast(
+        file,
         r#"parse_json('"databend"') != parse_json('"databend"')"#,
         &[],
     );
@@ -187,6 +207,16 @@ fn test_lt(file: &mut impl Write) {
     run_ast(
         file,
         "to_timestamp(-315360000000000)<to_timestamp(-100)",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')<to_timestamp_tz('2021-12-20 17:01:01.000000 +0700')",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 16:01:01.000000 +0800')<to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')",
         &[],
     );
     run_ast(file, r#"parse_json('"true"') < parse_json('"false"')"#, &[]);
@@ -247,6 +277,21 @@ fn test_lte(file: &mut impl Write) {
         "to_timestamp(-315360000000000)<=to_timestamp(-315360000000000)",
         &[],
     );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')<=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')<=to_timestamp_tz('2021-12-20 17:01:01.000000 +0700')",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 16:01:01.000000 +0800')<=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')",
+        &[],
+    );
     let table = [
         (
             "lhs",
@@ -294,6 +339,16 @@ fn test_gt(file: &mut impl Write) {
     run_ast(
         file,
         "to_timestamp(-315360000000000)>to_timestamp(-315360000000000)",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')>to_timestamp_tz('2021-12-20 17:01:01.000000 +0900')",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 18:01:01.000000 +0800')>to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')",
         &[],
     );
     run_ast(
@@ -353,6 +408,21 @@ fn test_gte(file: &mut impl Write) {
     run_ast(
         file,
         "to_timestamp(-315360000000000)>=to_timestamp(-315360000000000)",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')>=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')>=to_timestamp_tz('2021-12-20 17:01:01.000000 +0900')",
+        &[],
+    );
+    run_ast(
+        file,
+        "to_timestamp_tz('2021-12-20 18:01:01.000000 +0800')>=to_timestamp_tz('2021-12-20 17:01:01.000000 +0800')",
         &[],
     );
     run_ast(file, "parse_json('1.912e2') >= parse_json('1.912e2')", &[]);

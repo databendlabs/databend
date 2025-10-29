@@ -120,6 +120,16 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
 
         for (column, policy_data_type) in columns.iter().zip(policy_data_types.into_iter()) {
             if let Some((_, data_field)) = schema.column_with_name(column) {
+                if table
+                    .get_table_info()
+                    .meta
+                    .is_column_reference_policy(&data_field.column_id)
+                {
+                    return Err(ErrorCode::AlterTableError(format!(
+                        "Column '{}' is already attached to a security policy. A column cannot be attached to multiple security policies",
+                        data_field.name
+                    )));
+                }
                 let column_type = data_field.data_type();
                 if policy_data_type != column_type.remove_nullable() {
                     return Err(ErrorCode::UnmatchColumnDataType(format!(
