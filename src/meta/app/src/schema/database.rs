@@ -268,12 +268,20 @@ pub struct DropDatabaseReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateDatabaseOptionsReq {
     pub db_id: u64,
+    /// The database meta sequence the caller observed. Used for CAS semantics.
+    pub expected_meta_seq: u64,
+    /// The complete option map that should replace the existing options when the
+    /// expected meta sequence still matches.
     pub options: BTreeMap<String, String>,
 }
 
 impl Display for UpdateDatabaseOptionsReq {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "update_db_options:{}={:?}", self.db_id, self.options)
+        write!(
+            f,
+            "update_db_options:{}@{}={:?}",
+            self.db_id, self.expected_meta_seq, self.options
+        )
     }
 }
 
