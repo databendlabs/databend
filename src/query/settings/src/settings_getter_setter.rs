@@ -1097,6 +1097,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_new_join")? == 1)
     }
 
+    pub fn get_max_grace_hash_join_level(&self) -> Result<usize> {
+        Ok(self.try_get_u64("max_grace_hash_join_level")? as usize)
+    }
+
     pub fn get_s3_storage_class(&self) -> Result<S3StorageClass> {
         let s3_storage_class_setting = self.try_get_string("s3_storage_class")?;
         S3StorageClass::from_str(&s3_storage_class_setting).map_err(|e| {

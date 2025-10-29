@@ -17,4 +17,5 @@ mod grace_memory;
 mod grace_state;
 
 pub use grace_join::GraceHashJoin;
+pub use grace_memory::*;
 pub use grace_state::*;

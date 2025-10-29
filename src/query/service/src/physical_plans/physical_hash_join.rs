@@ -445,7 +445,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                factory.create_hash_join(self.join_type.clone(), 0)?,
+                factory.create_hash_join(0)?,
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
@@ -489,6 +489,7 @@ impl HashJoin {
             .collect::<Vec<_>>();
 
         Ok(HashJoinFactory::create(
+            self.join_type.clone(),
             ctx.ctx.clone(),
             ctx.func_ctx.clone(),
             DataBlock::choose_hash_method_with_types(&hash_key_types)?,

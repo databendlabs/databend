@@ -14,6 +14,8 @@
 
 use std::sync::PoisonError;
 
+use databend_common_expression::DataBlock;
+
 use crate::pipelines::processors::transforms::memory::outer_left_join::OuterLeftHashJoin;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
@@ -21,7 +23,8 @@ use crate::pipelines::processors::transforms::InnerHashJoin;
 use crate::pipelines::processors::transforms::Join;
 
 pub trait GraceMemoryJoin: Join {
-    fn reset_memory(&mut self);
+    fn reset_memory(&mut self, reset_global: bool);
+    fn take_memory_chunks(&self) -> Vec<DataBlock>;
 }
 
 fn reset_basic_state(state: &BasicHashJoinState) {
@@ -56,15 +59,32 @@ fn reset_basic_state(state: &BasicHashJoinState) {
 }
 
 impl GraceMemoryJoin for InnerHashJoin {
-    fn reset_memory(&mut self) {
+    fn reset_memory(&mut self, reset_global: bool) {
         self.performance_context.clear();
-        reset_basic_state(&self.basic_state);
+
+        if reset_global {
+            reset_basic_state(&self.basic_state);
+        }
+    }
+
+    fn take_memory_chunks(&self) -> Vec<DataBlock> {
+        let locked = self.basic_state.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        std::mem::take(self.basic_state.chunks.as_mut())
     }
 }
 
 impl GraceMemoryJoin for OuterLeftHashJoin {
-    fn reset_memory(&mut self) {
+    fn reset_memory(&mut self, reset_global: bool) {
         self.performance_context.clear();
-        reset_basic_state(&self.basic_state);
+        if reset_global {
+            reset_basic_state(&self.basic_state);
+        }
+    }
+
+    fn take_memory_chunks(&self) -> Vec<DataBlock> {
+        let locked = self.basic_state.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        std::mem::take(self.basic_state.chunks.as_mut())
     }
 }
