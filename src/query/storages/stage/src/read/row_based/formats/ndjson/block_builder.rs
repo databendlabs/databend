@@ -222,7 +222,7 @@ mod test {
     fn decode_err(data: &str) -> String {
         serde_json::from_slice::<serde_json::Value>(data.as_bytes())
             .map_err(|e| {
-                let e = map_json_error(e, data.as_bytes(), "mock_file".parse().unwrap());
+                let e = map_json_error(e, data.as_bytes(), "mock_file");
                 if let FileParseError::InvalidRow { message, .. } = e {
                     message
                 } else {
@@ -245,7 +245,7 @@ mod test {
         );
         assert_eq!(
             decode_err("{\"k\"-}").as_str(),
-            "expected `:` at pos 4 of size 6, next byte is '-'"
+            "expected `:` at line 1, position 4 of size 6 for File 'mock_file', next byte is '-'"
         );
     }
 }
