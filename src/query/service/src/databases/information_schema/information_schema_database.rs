@@ -20,6 +20,7 @@ use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
+use databend_common_storages_information_schema::CharacterSetsTable;
 use databend_common_storages_information_schema::ColumnsTable;
 use databend_common_storages_information_schema::KeyColumnUsageTable;
 use databend_common_storages_information_schema::KeywordsTable;
@@ -41,6 +42,7 @@ impl InformationSchemaDatabase {
     pub fn create(sys_db_meta: &mut InMemoryMetas, ctl_name: &str) -> Self {
         let table_list: Vec<Arc<dyn Table>> = vec![
             ColumnsTable::create(sys_db_meta.next_table_id(), ctl_name),
+            CharacterSetsTable::create(sys_db_meta.next_table_id(), ctl_name),
             TablesTable::create(sys_db_meta.next_table_id(), ctl_name),
             KeywordsTable::create(sys_db_meta.next_table_id(), ctl_name),
             ViewsTable::create(sys_db_meta.next_table_id(), ctl_name),

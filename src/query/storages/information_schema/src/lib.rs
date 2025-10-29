@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod character_sets_table;
 mod columns_table;
 mod key_column_usage_table;
 mod keywords_table;
@@ -20,6 +21,7 @@ mod statistics_table;
 mod tables_table;
 mod views_table;
 
+pub use character_sets_table::CharacterSetsTable;
 pub use columns_table::ColumnsTable;
 pub use key_column_usage_table::KeyColumnUsageTable;
 pub use keywords_table::KeywordsTable;

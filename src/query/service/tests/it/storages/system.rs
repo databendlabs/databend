@@ -32,6 +32,8 @@ use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_common_storages_basic::view_table::QUERY;
+use databend_common_storages_information_schema::CharacterSetsTable;
 use databend_common_storages_system::BuildOptionsTable;
 use databend_common_storages_system::CachesTable;
 use databend_common_storages_system::CatalogsTable;
@@ -136,6 +138,21 @@ async fn test_columns_table() -> Result<()> {
     let table = ColumnsTable::create(1, "default");
     run_table_tests(file, ctx, table).await?;
 
+    Ok(())
+}
+
+#[test]
+fn test_information_schema_character_sets_table_metadata() -> Result<()> {
+    let table = CharacterSetsTable::create(1, "default");
+    let table_info = table.get_table_info();
+    assert_eq!(table_info.name, "character_sets");
+    let query = table_info
+        .meta
+        .options
+        .get(QUERY)
+        .expect("view query must be set");
+    assert!(query.contains("utf8mb4"));
+    assert!(query.contains("character_set_name"));
     Ok(())
 }
 
