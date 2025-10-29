@@ -272,9 +272,14 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn update_options(&self, options: BTreeMap<String, String>) -> Result<()> {
+    async fn update_options(
+        &self,
+        expected_meta_seq: u64,
+        options: BTreeMap<String, String>,
+    ) -> Result<()> {
         let req = UpdateDatabaseOptionsReq {
             db_id: self.db_info.database_id.db_id,
+            expected_meta_seq,
             options,
         };
         self.ctx.meta.update_database_options(req).await?;
