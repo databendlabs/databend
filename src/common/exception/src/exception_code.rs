@@ -503,6 +503,8 @@ build_exceptions! {
     DatabaseAlreadyExists(2301),
     /// Table already exists
     TableAlreadyExists(2302),
+    /// Database version mismatch
+    DatabaseVersionMismatched(2303),
     /// View already exists
     ViewAlreadyExists(2306),
     /// Create table with drop time
