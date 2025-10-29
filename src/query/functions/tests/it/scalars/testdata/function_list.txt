@@ -19,6 +19,7 @@ ceiling -> ceil
 char_length -> length
 character_length -> length
 chr -> char
+current_date -> today
 current_timestamp -> now
 date -> to_date
 date_format -> to_string
@@ -1360,6 +1361,7 @@ Functions overloads:
 1 cot(Float64 NULL) :: Float64 NULL
 0 crc32(String) :: UInt32
 1 crc32(String NULL) :: UInt32 NULL
+0 current_time() :: String
 0 date_add_months(Date, Int64) :: Date
 1 date_add_months(Date NULL, Int64 NULL) :: Date NULL
 2 date_add_months(Timestamp, Int64) :: Timestamp

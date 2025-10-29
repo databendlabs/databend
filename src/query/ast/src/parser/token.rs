@@ -497,10 +497,14 @@ pub enum TokenKind {
     CROSS,
     #[token("CSV", ignore(ascii_case))]
     CSV,
-    #[token("CURRENT", ignore(ascii_case))]
-    CURRENT,
+    #[token("CURRENT_DATE", ignore(ascii_case))]
+    CURRENT_DATE,
+    #[token("CURRENT_TIME", ignore(ascii_case))]
+    CURRENT_TIME,
     #[token("CURRENT_TIMESTAMP", ignore(ascii_case))]
     CURRENT_TIMESTAMP,
+    #[token("CURRENT", ignore(ascii_case))]
+    CURRENT,
     #[token("DATABASE", ignore(ascii_case))]
     DATABASE,
     #[token("DATABASES", ignore(ascii_case))]

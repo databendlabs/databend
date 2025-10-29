@@ -2103,9 +2103,14 @@ fn register_between_functions(registry: &mut FunctionRegistry) {
 
 fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.register_aliases("now", &["current_timestamp"]);
+    registry.register_aliases("today", &["current_date"]);
 
     registry.properties.insert(
         "now".to_string(),
+        FunctionProperty::default().non_deterministic(),
+    );
+    registry.properties.insert(
+        "current_time".to_string(),
         FunctionProperty::default().non_deterministic(),
     );
     registry.properties.insert(
@@ -2151,6 +2156,36 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
         "now",
         |_| FunctionDomain::Full,
         |ctx| Value::Scalar(ctx.func_ctx.now.timestamp().as_microsecond()),
+    );
+
+    registry.register_0_arg_core::<StringType, _, _>(
+        "current_time",
+        |_| FunctionDomain::Full,
+        |ctx| {
+            let datetime = ctx
+                .func_ctx
+                .now
+                .with_time_zone(ctx.func_ctx.tz.clone())
+                .datetime();
+            let nanos = datetime.subsec_nanosecond();
+            let value = if nanos == 0 {
+                format!(
+                    "{:02}:{:02}:{:02}",
+                    datetime.hour(),
+                    datetime.minute(),
+                    datetime.second()
+                )
+            } else {
+                format!(
+                    "{:02}:{:02}:{:02}.{:06}",
+                    datetime.hour(),
+                    datetime.minute(),
+                    datetime.second(),
+                    nanos / 1_000
+                )
+            };
+            Value::Scalar(value)
+        },
     );
 
     registry.register_0_arg_core::<DateType, _, _>(
