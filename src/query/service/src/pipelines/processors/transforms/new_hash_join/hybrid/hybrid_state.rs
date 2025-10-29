@@ -69,10 +69,10 @@ impl HybridHashJoinState {
         let locked = self.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-        match self.spills_queue.as_mut().pop_front() {
-            None => None,
-            Some(v) => Some((self.spills_queue.is_empty(), v)),
-        }
+        self.spills_queue
+            .as_mut()
+            .pop_front()
+            .map(|v| (self.spills_queue.is_empty(), v))
     }
 }
 
