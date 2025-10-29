@@ -1,5 +1,5 @@
 # Q89
-query I
+query TTTTTIRR
 
 SELECT * from
   (SELECT i_category, i_class, i_brand, s_store_name, s_company_name, d_moy, sum(ss_sales_price) sum_sales, avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name) avg_monthly_sales

@@ -27,10 +27,13 @@ use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::GlobalConfig;
-use databend_common_expression::DataSchemaRef;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::DataSchema;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use fastrace::prelude::*;
+use headers::Header;
+use headers::HeaderMapExt;
 use http::HeaderMap;
 use http::HeaderValue;
 use http::StatusCode;
@@ -47,8 +50,10 @@ use poem::put;
 use poem::web::Json;
 use poem::web::Path;
 use poem::EndpointExt;
+use poem::FromRequest;
 use poem::IntoResponse;
 use poem::Request;
+use poem::RequestBody;
 use poem::Response;
 use poem::Route;
 use serde::Deserialize;
@@ -60,6 +65,7 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
+use super::query::ResponseState;
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::QueryError;
@@ -123,7 +129,7 @@ pub struct QueryResponseField {
 }
 
 impl QueryResponseField {
-    pub fn from_schema(schema: DataSchemaRef) -> Vec<Self> {
+    pub fn from_schema(schema: &DataSchema) -> Vec<Self> {
         schema
             .fields()
             .iter()
@@ -165,45 +171,34 @@ pub struct QueryResponse {
 }
 
 impl QueryResponse {
-    pub(crate) fn closed(query_id: &str, close_reason: CloseReason) -> impl IntoResponse {
-        let id = query_id.to_string();
-        let state = match close_reason {
-            CloseReason::Finalized => ExecuteStateKind::Succeeded,
-            _ => ExecuteStateKind::Failed,
-        };
-        Json(QueryResponse {
-            id: query_id.to_string(),
-            session_id: None,
-            node_id: GlobalConfig::instance().query.node_id.clone(),
-            state,
-            session: None,
-            error: None,
-            warnings: vec![],
-            has_result_set: None,
-            schema: vec![],
-            data: Arc::new(BlocksSerializer::empty()),
-            affect: None,
-            result_timeout_secs: None,
-            stats: Default::default(),
-            stats_uri: None,
-            final_uri: None,
-            next_uri: None,
-            kill_uri: None,
-        })
-        .with_header(HEADER_QUERY_ID, id.clone())
-        .with_header(HEADER_QUERY_STATE, state.to_string())
-    }
-    pub(crate) fn from_internal(
+    fn from_internal(
         id: String,
-        r: HttpQueryResponseInternal,
+        HttpQueryResponseInternal {
+            data,
+            session_id,
+            session,
+            node_id,
+            result_timeout_secs,
+            state:
+                ResponseState {
+                    has_result_set,
+                    schema,
+                    running_time_ms,
+                    progresses,
+                    state,
+                    affect,
+                    error,
+                    warnings,
+                },
+        }: HttpQueryResponseInternal,
         is_final: bool,
-    ) -> impl IntoResponse {
-        let state = r.state.clone();
+        body_format: BodyFormat,
+    ) -> Response {
         let (data, next_uri) = if is_final {
             (Arc::new(BlocksSerializer::empty()), None)
         } else {
-            match state.state {
-                ExecuteStateKind::Running | ExecuteStateKind::Starting => match r.data {
+            match state {
+                ExecuteStateKind::Running | ExecuteStateKind::Starting => match data {
                     None => (
                         Arc::new(BlocksSerializer::empty()),
                         Some(make_state_uri(&id)),
@@ -220,7 +215,7 @@ impl QueryResponse {
                     Arc::new(BlocksSerializer::empty()),
                     Some(make_final_uri(&id)),
                 ),
-                ExecuteStateKind::Succeeded => match r.data {
+                ExecuteStateKind::Succeeded => match data {
                     None => (
                         Arc::new(BlocksSerializer::empty()),
                         Some(make_final_uri(&id)),
@@ -236,39 +231,114 @@ impl QueryResponse {
             }
         };
 
-        if let Some(err) = &r.state.error {
+        if let Some(err) = &error {
             metrics_incr_http_response_errors_count(err.name(), err.code());
         }
 
-        let session_id = r.session_id.clone();
-        let stats = QueryStats {
-            progresses: state.progresses.clone(),
-            running_time_ms: state.running_time_ms,
-        };
         let rows = data.num_rows();
-
-        Json(QueryResponse {
-            data,
-            state: state.state,
-            schema: state.schema.clone(),
-            session_id: Some(session_id),
-            node_id: r.node_id,
-            session: r.session,
-            stats,
-            affect: state.affect,
-            warnings: r.state.warnings,
+        let mut res = QueryResponse {
             id: id.clone(),
+            session_id: Some(session_id),
+            node_id,
+            state,
+            session,
+            stats: QueryStats {
+                progresses,
+                running_time_ms,
+            },
+            schema: vec![],
+            data: Arc::new(BlocksSerializer::empty()),
+            affect,
+            warnings,
             next_uri,
             stats_uri: Some(make_state_uri(&id)),
             final_uri: Some(make_final_uri(&id)),
             kill_uri: Some(make_kill_uri(&id)),
+            error: error.map(QueryError::from_error_code),
+            has_result_set,
+            result_timeout_secs: Some(result_timeout_secs),
+        };
+
+        match body_format {
+            BodyFormat::Arrow if !schema.fields.is_empty() && !data.is_empty() => {
+                let buf: Result<_, ErrorCode> = try {
+                    const META_KEY: &str = "response_header";
+                    let json_res = serde_json::to_string(&res)?;
+                    data.to_arrow_ipc(&schema, vec![(META_KEY.to_string(), json_res)])?
+                };
+
+                match buf {
+                    Ok(buf) => Response::builder()
+                        .header(HEADER_QUERY_ID, id)
+                        .header(HEADER_QUERY_STATE, state.to_string())
+                        .header(HEADER_QUERY_PAGE_ROWS, rows)
+                        .content_type(body_format.content_type())
+                        .body(buf),
+                    Err(err) => Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(err.to_string()),
+                }
+            }
+            _ => {
+                res.data = data;
+                res.schema = QueryResponseField::from_schema(&schema);
+                Json(res)
+                    .with_header(HEADER_QUERY_ID, id)
+                    .with_header(HEADER_QUERY_STATE, state.to_string())
+                    .with_header(HEADER_QUERY_PAGE_ROWS, rows)
+                    .into_response()
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct StateResponse {
+    pub state: ExecuteStateKind,
+    pub error: Option<QueryError>,
+    pub warnings: Vec<String>,
+    pub stats: QueryStats,
+}
+
+impl StateResponse {
+    pub(crate) fn from_internal(id: String, r: HttpQueryResponseInternal) -> impl IntoResponse {
+        let state = r.state.clone();
+
+        if let Some(err) = &r.state.error {
+            metrics_incr_http_response_errors_count(err.name(), err.code());
+        }
+
+        let stats = QueryStats {
+            progresses: state.progresses.clone(),
+            running_time_ms: state.running_time_ms,
+        };
+        let rows = r.data.map(|d| d.page.data.num_rows()).unwrap_or_default();
+
+        Json(StateResponse {
+            state: state.state,
+            stats,
+            warnings: r.state.warnings,
             error: r.state.error.map(QueryError::from_error_code),
-            has_result_set: r.state.has_result_set,
-            result_timeout_secs: Some(r.result_timeout_secs),
         })
         .with_header(HEADER_QUERY_ID, id.clone())
         .with_header(HEADER_QUERY_STATE, state.state.to_string())
         .with_header(HEADER_QUERY_PAGE_ROWS, rows)
+    }
+
+    pub(crate) fn closed(query_id: &str, close_reason: CloseReason) -> impl IntoResponse {
+        let id = query_id.to_string();
+        let state = match close_reason {
+            CloseReason::Finalized => ExecuteStateKind::Succeeded,
+            _ => ExecuteStateKind::Failed,
+        };
+        Json(StateResponse {
+            state,
+            error: None,
+            warnings: vec![],
+            stats: Default::default(),
+        })
+        .with_header(HEADER_QUERY_ID, id.clone())
+        .with_header(HEADER_QUERY_STATE, state.to_string())
     }
 }
 
@@ -285,6 +355,7 @@ impl QueryResponse {
 #[poem::handler]
 async fn query_final_handler(
     ctx: &HttpQueryContext,
+    body_format: BodyFormat,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
@@ -313,7 +384,12 @@ async fn query_final_handler(
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
-                Ok(QueryResponse::from_internal(query_id, response, true))
+                Ok(QueryResponse::from_internal(
+                    query_id,
+                    response,
+                    true,
+                    body_format,
+                ))
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
@@ -368,12 +444,12 @@ async fn query_state_handler(
         match http_query_manager.get_query(&query_id) {
             Some(query) => {
                 if let Some(reason) = query.check_closed() {
-                    Ok(QueryResponse::closed(&query_id, reason.reason).into_response())
+                    Ok(StateResponse::closed(&query_id, reason.reason).into_response())
                 } else {
                     let response = query
                         .get_response_state_only()
                         .map_err(HttpErrorCode::server_error)?;
-                    Ok(QueryResponse::from_internal(query_id, response, false).into_response())
+                    Ok(StateResponse::from_internal(query_id, response).into_response())
                 }
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -386,6 +462,7 @@ async fn query_state_handler(
 #[poem::handler]
 async fn query_page_handler(
     ctx: &HttpQueryContext,
+    body_format: BodyFormat,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
@@ -437,7 +514,12 @@ async fn query_page_handler(
                 query
                     .update_expire_time(false, resp.is_data_drained())
                     .await;
-                Ok(QueryResponse::from_internal(query_id, resp, false))
+                Ok(QueryResponse::from_internal(
+                    query_id,
+                    resp,
+                    false,
+                    body_format,
+                ))
             }
         }
     };
@@ -461,13 +543,12 @@ async fn query_page_handler(
 
 #[poem::handler]
 #[async_backtrace::framed]
-#[fastrace::trace]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
+    body_format: BodyFormat,
     Json(mut req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
     let session = ctx.session.clone();
-
     let query_handle = async {
         let agent_info = ctx
             .user_agent
@@ -531,7 +612,10 @@ pub(crate) async fn query_handler(
                 query
                     .update_expire_time(false, resp.is_data_drained())
                     .await;
-                Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
+                Ok(
+                    QueryResponse::from_internal(query.id.to_string(), resp, false, body_format)
+                        .into_response(),
+                )
             }
         }
     };
@@ -901,4 +985,53 @@ pub(crate) fn get_http_tracing_span(
     let trace_id = query_id_to_trace_id(query_id);
     Span::root(name, SpanContext::new(trace_id, SpanId(rand::random())))
         .with_properties(|| ctx.to_fastrace_properties())
+}
+
+#[derive(Debug, Clone, Copy)]
+enum BodyFormat {
+    Json,
+    Arrow,
+}
+
+impl Header for BodyFormat {
+    fn name() -> &'static http::HeaderName {
+        &http::header::ACCEPT
+    }
+
+    fn decode<'i, I>(values: &mut I) -> Result<Self, headers::Error>
+    where
+        Self: Sized,
+        I: Iterator<Item = &'i HeaderValue>,
+    {
+        if let Some(v) = values.next() {
+            match v.to_str() {
+                Ok(s) if s == BodyFormat::Arrow.content_type() => return Ok(BodyFormat::Arrow),
+                Err(_) => return Err(headers::Error::invalid()),
+                _ => {}
+            };
+        }
+        Ok(BodyFormat::Json)
+    }
+
+    fn encode<E: Extend<HeaderValue>>(&self, values: &mut E) {
+        values.extend([HeaderValue::from_static(self.content_type())]);
+    }
+}
+
+impl BodyFormat {
+    pub const fn content_type(&self) -> &'static str {
+        match self {
+            BodyFormat::Json => "application/json",
+            BodyFormat::Arrow => "application/vnd.apache.arrow.stream",
+        }
+    }
+}
+
+impl<'a> FromRequest<'a> for BodyFormat {
+    async fn from_request(req: &'a Request, _body: &mut RequestBody) -> Result<Self, PoemError> {
+        Ok(req
+            .headers()
+            .typed_get::<Self>()
+            .unwrap_or(BodyFormat::Json))
+    }
 }

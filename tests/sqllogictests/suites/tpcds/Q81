@@ -1,5 +1,5 @@
 # Q81
-query I
+query TTTTTTTTTTTTTRTR
 WITH customer_total_return AS
   (SELECT cr_returning_customer_sk AS ctr_customer_sk ,
           ca_state AS ctr_state,

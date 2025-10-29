@@ -17,11 +17,10 @@ use std::sync::Arc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableDataType;
 use databend_common_license::license::Feature::RowAccessPolicy;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::SetTableRowAccessPolicyAction;
+use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_sql::plans::AddTableRowAccessPolicyPlan;
 use databend_common_sql::resolve_type_name_by_str;
@@ -43,11 +42,6 @@ pub struct AddTableRowAccessPolicyInterpreter {
 impl AddTableRowAccessPolicyInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: AddTableRowAccessPolicyPlan) -> Result<Self> {
         Ok(AddTableRowAccessPolicyInterpreter { ctx, plan })
-    }
-
-    fn parse_type_name(type_str: &str) -> Result<TableDataType> {
-        let table_data_type = resolve_type_name_by_str(type_str, false)?;
-        Ok(table_data_type.remove_nullable())
     }
 }
 
@@ -108,8 +102,8 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
         // check if column type match to the input type
         let mut policy_data_types = Vec::new();
         for (_, type_str) in &policy.args {
-            let policy_type = Self::parse_type_name(type_str)?;
-            policy_data_types.push(policy_type);
+            let table_data_type = resolve_type_name_by_str(type_str, false)?;
+            policy_data_types.push(table_data_type.remove_nullable());
         }
 
         let mut columns_ids = vec![];
@@ -148,7 +142,7 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
         let req = SetTableRowAccessPolicyReq {
             tenant: self.ctx.get_tenant(),
             table_id,
-            action: SetTableRowAccessPolicyAction::Set(*policy_id.data, columns_ids),
+            action: SetSecurityPolicyAction::Set(*policy_id.data, columns_ids),
         };
 
         let _resp = catalog.set_table_row_access_policy(req).await?;

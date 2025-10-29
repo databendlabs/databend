@@ -1,5 +1,5 @@
 # Q18
-query I
+query TTTTRRRRRRR
 SELECT i_item_id,
        ca_country,
        ca_state,

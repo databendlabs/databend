@@ -14,36 +14,37 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-use arrow_ipc::writer::write_message;
-use arrow_ipc::writer::IpcDataGenerator;
-use arrow_ipc::writer::IpcWriteOptions;
-use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::TableSchema;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::Value;
+use databend_common_expression::TableSchemaRefExt;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_generate_milliseconds;
-use databend_storages_common_index::extract_component_fields;
-use databend_storages_common_index::extract_fsts;
+use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::table::TableCompression;
 use jsonb::from_raw_jsonb;
 use jsonb::RawJsonb;
+use log::debug;
+use log::info;
+use tantivy::index::SegmentComponent;
 use tantivy::indexer::UserOperation;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
@@ -60,12 +61,13 @@ use tantivy::tokenizer::Stemmer;
 use tantivy::tokenizer::StopWordFilter;
 use tantivy::tokenizer::TextAnalyzer;
 use tantivy::tokenizer::TokenizerManager;
+use tantivy::Directory;
 use tantivy::IndexBuilder;
 use tantivy::IndexSettings;
 use tantivy::IndexWriter;
-use tantivy::SegmentComponent;
 use tantivy_jieba::JiebaTokenizer;
 
+use crate::index::build_tantivy_footer;
 use crate::io::TableMetaLocationGenerator;
 
 #[derive(Clone)]
@@ -106,6 +108,10 @@ pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedInd
         }
         // ignore invalid index
         if index_fields.len() != index.column_ids.len() {
+            debug!(
+                "Ignoring invalid inverted index: {}, missing columns",
+                index.name
+            );
             continue;
         }
         let index_schema = DataSchema::new(index_fields);
@@ -145,6 +151,19 @@ impl InvertedIndexState {
         inverted_index_builder: &InvertedIndexBuilder,
     ) -> Result<Self> {
         let start = Instant::now();
+
+        let inverted_index_location =
+            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+                &block_location.0,
+                &inverted_index_builder.name,
+                &inverted_index_builder.version,
+            );
+
+        info!(
+            "Start build inverted index for location: {}",
+            inverted_index_location
+        );
+
         let mut writer = InvertedIndexWriter::try_create(
             Arc::new(inverted_index_builder.schema.clone()),
             &inverted_index_builder.options,
@@ -153,18 +172,16 @@ impl InvertedIndexState {
         let data = writer.finalize()?;
 
         // Perf.
+        let size = data.len();
+        let elapsed_ms = start.elapsed().as_millis() as u64;
         {
-            metrics_inc_block_inverted_index_generate_milliseconds(
-                start.elapsed().as_millis() as u64
-            );
+            metrics_inc_block_inverted_index_generate_milliseconds(elapsed_ms);
         }
+        info!(
+            "Finish build inverted index: location={}, size={} bytes in {} ms",
+            inverted_index_location, size, elapsed_ms
+        );
 
-        let inverted_index_location =
-            TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
-                &block_location.0,
-                &inverted_index_builder.name,
-                &inverted_index_builder.version,
-            );
         Self::try_create(data, inverted_index_location)
     }
 }
@@ -183,7 +200,6 @@ impl InvertedIndexWriter {
         let (index_schema, _) = create_index_schema(schema.clone(), index_options)?;
 
         let index_settings = IndexSettings {
-            sort_by_field: None,
             ..Default::default()
         };
 
@@ -221,16 +237,19 @@ impl InvertedIndexWriter {
                 match unsafe { column.index_unchecked(i) } {
                     ScalarRef::String(text) => doc.add_text(field, text),
                     ScalarRef::Variant(jsonb_val) => {
-                        // only support object JSON, other JSON type will not add index.
                         let raw_jsonb = RawJsonb::new(jsonb_val);
-                        if let Ok(obj_val) =
-                            from_raw_jsonb::<serde_json::Map<String, serde_json::Value>>(&raw_jsonb)
-                        {
-                            let object: BTreeMap<String, OwnedValue> = obj_val
-                                .into_iter()
-                                .map(|(key, value)| (key, OwnedValue::from(value)))
-                                .collect();
-                            doc.add_object(field, object);
+                        if let Ok(value) = from_raw_jsonb::<serde_json::Value>(&raw_jsonb) {
+                            if value.is_object() {
+                                let owned_value = OwnedValue::from(value);
+                                doc.add_field_value(field, &owned_value);
+                            } else {
+                                // tantivy only support object JSON,
+                                // convert other JSON to object with an empty key.
+                                let owned_value = OwnedValue::from(value);
+                                let mut wrap_owned_value = BTreeMap::new();
+                                wrap_owned_value.insert("".to_string(), owned_value);
+                                doc.add_object(field, wrap_owned_value);
+                            }
                         } else {
                             doc.add_object(field, BTreeMap::new());
                         }
@@ -255,89 +274,73 @@ impl InvertedIndexWriter {
         let _ = self.index_writer.run(self.operations);
         let _ = self.index_writer.commit()?;
         let index = self.index_writer.index();
+        let directory = index.directory();
 
-        let mut fields = Vec::new();
-        let mut values = Vec::new();
+        let mut index_columns = Vec::with_capacity(8);
+
+        let managed_filepath = Path::new(".managed.json");
+        let managed_bytes = directory.atomic_read(managed_filepath)?;
+        let managed_scalar = Scalar::Binary(managed_bytes);
+        let managed_block_entry = BlockEntry::new_const_column(DataType::Binary, managed_scalar, 1);
+        index_columns.push(managed_block_entry);
+
+        let meta_filepath = Path::new("meta.json");
+        let meta_data = directory.atomic_read(meta_filepath)?;
+        let meta_string = std::str::from_utf8(&meta_data)?;
+        let meta_val: serde_json::Value = serde_json::from_str(meta_string)?;
+        let meta_json: String = serde_json::to_string(&meta_val)?;
+        let meta_scalar = Scalar::Binary(meta_json.into_bytes());
+        let meta_block_entry = BlockEntry::new_const_column(DataType::Binary, meta_scalar, 1);
+        index_columns.push(meta_block_entry);
 
         let segments = index.searchable_segments()?;
         let segment = &segments[0];
+        let components = vec![
+            SegmentComponent::FastFields,
+            SegmentComponent::Store,
+            SegmentComponent::FieldNorms,
+            SegmentComponent::Positions,
+            SegmentComponent::Postings,
+            SegmentComponent::Terms,
+        ];
+        for component in components {
+            let component_field = segment.open_read(component)?;
+            let bytes = component_field.read_bytes()?;
+            let mut value = bytes.as_slice().to_vec();
+            let footer = build_tantivy_footer(&value)?;
+            value.extend_from_slice(&footer);
 
-        let termdict_file = segment.open_read(SegmentComponent::Terms)?;
-        extract_fsts(termdict_file, &mut fields, &mut values)?;
+            let scalar = Scalar::Binary(value);
+            let block_entry = BlockEntry::new_const_column(DataType::Binary, scalar, 1);
+            index_columns.push(block_entry);
+        }
 
-        let field_norms_file = segment.open_read(SegmentComponent::FieldNorms)?;
-        extract_component_fields("fieldnorm", field_norms_file, &mut fields, &mut values)?;
+        let index_fields = vec![
+            TableField::new(".managed.json", TableDataType::Binary),
+            TableField::new("meta.json", TableDataType::Binary),
+            TableField::new("fast", TableDataType::Binary),
+            TableField::new("store", TableDataType::Binary),
+            TableField::new("fieldnorm", TableDataType::Binary),
+            TableField::new("pos", TableDataType::Binary),
+            TableField::new("idx", TableDataType::Binary),
+            TableField::new("term", TableDataType::Binary),
+        ];
 
-        let posting_file = segment.open_read(SegmentComponent::Postings)?;
-        extract_component_fields("idx", posting_file, &mut fields, &mut values)?;
-
-        let position_file = segment.open_read(SegmentComponent::Positions)?;
-        extract_component_fields("pos", position_file, &mut fields, &mut values)?;
-
-        let inverted_index_schema = TableSchema::new(fields);
-
-        let index_columns = values
-            .into_iter()
-            .map(|v| BlockEntry::new_const_column(DataType::Binary, v, 1))
-            .collect();
-        let inverted_index_block = DataBlock::new(index_columns, 1);
+        let index_schema = TableSchemaRefExt::create(index_fields);
+        let index_block = DataBlock::new(index_columns, 1);
 
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        block_to_inverted_index(&inverted_index_schema, inverted_index_block, &mut data)?;
+        let _ = blocks_to_parquet(
+            index_schema.as_ref(),
+            vec![index_block],
+            &mut data,
+            // Zstd has the best compression ratio
+            TableCompression::Zstd,
+            None,
+        )?;
+
         Ok(data)
     }
-}
-
-// inverted index block include 5 types of data,
-// and each of which may have multiple fields.
-// 1. `fst` used to check whether a term exist.
-//    for example: fst-0, fst-1, ..
-// 2. `term dict` records the idx and pos locations of each terms.
-//    for example: term-0, term-1, ..
-// 3. `idx` records the doc ids of each terms.
-//    for example: idx-0, idx-1, ..
-// 4. `pos` records the positions of each terms in doc.
-//    for example: pos-0, pos-1, ..
-// 5. `fieldnorms` records the number of tokens in each doc.
-//    for example: fieldnorms-0, fieldnorms-1, ..
-//
-// write the value of columns first,
-// and then the offsets of columns,
-// finally the number of columns.
-fn block_to_inverted_index(
-    table_schema: &TableSchema,
-    block: DataBlock,
-    write_buffer: &mut Vec<u8>,
-) -> Result<()> {
-    let mut offsets = Vec::with_capacity(block.num_columns());
-    for column in block.columns() {
-        let value: Value<BinaryType> = column.value().try_downcast().unwrap();
-        write_buffer.extend_from_slice(value.as_scalar().unwrap());
-        let offset = write_buffer.len() as u32;
-        offsets.push(offset);
-    }
-
-    // footer: schema + offsets + schema_len + meta_len
-    let arrow_schema = Arc::new(ArrowSchema::from(table_schema));
-    let generator = IpcDataGenerator {};
-    let write_options = IpcWriteOptions::default();
-    #[allow(deprecated)]
-    let encoded = generator.schema_to_bytes(&arrow_schema, &write_options);
-    let mut schema_buf = Vec::new();
-    let (schema_len, _) = write_message(&mut schema_buf, encoded, &write_options)?;
-    write_buffer.extend_from_slice(&schema_buf);
-
-    let schema_len = schema_len as u32;
-    let offset_len = (offsets.len() * 4) as u32;
-    for offset in offsets {
-        write_buffer.extend_from_slice(&offset.to_le_bytes());
-    }
-    let meta_len = schema_len + offset_len + 8;
-
-    write_buffer.extend_from_slice(&schema_len.to_le_bytes());
-    write_buffer.extend_from_slice(&meta_len.to_le_bytes());
-
-    Ok(())
 }
 
 // Create tokenizer can handle both Chinese and English
@@ -357,7 +360,7 @@ pub(crate) fn create_tokenizer_manager(
         let english_analyzer = TextAnalyzer::builder(SimpleTokenizer::default())
             .filter(LowerCaser)
             .build();
-        let chinese_analyzer = TextAnalyzer::builder(JiebaTokenizer {})
+        let chinese_analyzer = TextAnalyzer::builder(JiebaTokenizer::new())
             .filter(LowerCaser)
             .build();
 
@@ -366,7 +369,7 @@ pub(crate) fn create_tokenizer_manager(
         let mut english_analyzer =
             TextAnalyzer::builder(SimpleTokenizer::default()).filter_dynamic(LowerCaser);
         let mut chinese_analyzer =
-            TextAnalyzer::builder(JiebaTokenizer {}).filter_dynamic(LowerCaser);
+            TextAnalyzer::builder(JiebaTokenizer::new()).filter_dynamic(LowerCaser);
 
         // add optional filters
         // remove English stop words, like "a", "an", "and", etc.
@@ -476,7 +479,9 @@ pub(crate) fn create_index_schema(
         .set_tokenizer(&tokenizer_name)
         .set_index_option(index_record);
     let text_options = TextOptions::default().set_indexing_options(text_field_indexing.clone());
-    let json_options = JsonObjectOptions::default().set_indexing_options(text_field_indexing);
+    let json_options = JsonObjectOptions::default()
+        .set_indexing_options(text_field_indexing)
+        .set_fast(None);
 
     let mut schema_builder = Schema::builder();
     let mut index_fields = Vec::with_capacity(schema.fields.len());

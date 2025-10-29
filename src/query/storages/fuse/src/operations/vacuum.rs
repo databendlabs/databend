@@ -57,9 +57,12 @@ pub async fn vacuum_tables_from_info(
     vacuum_handler: Arc<VacuumHandlerWrapper>,
 ) -> Result<()> {
     for table_info in table_infos {
-        let table = FuseTable::do_create(table_info)?
-            .refresh(ctx.as_ref())
-            .await?;
+        let table = FuseTable::create_without_refresh_table_info(
+            table_info,
+            ctx.get_settings().get_s3_storage_class()?,
+        )?
+        .refresh(ctx.as_ref())
+        .await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         vacuum_table(fuse_table, ctx.clone(), &vacuum_handler, true).await;
     }

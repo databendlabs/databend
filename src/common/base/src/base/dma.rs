@@ -305,12 +305,7 @@ pub type AsyncDmaFile = DmaFile<AsyncFile>;
 
 impl AsyncDmaFile {
     async fn open_fd(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncFile> {
-        let flags = if cfg!(target_os = "linux") && dio {
-            OFlags::DIRECT.bits() as i32
-        } else {
-            0
-        };
-
+        let flags = flags_direct_or_empty(dio).bits() as i32;
         AsyncFile::options()
             .read(true)
             .custom_flags(flags)
@@ -319,12 +314,7 @@ impl AsyncDmaFile {
     }
 
     async fn create_fd(path: impl AsRef<Path>, dio: bool) -> io::Result<AsyncFile> {
-        let flags = if cfg!(target_os = "linux") && dio {
-            OFlags::EXCL | OFlags::DIRECT
-        } else {
-            OFlags::EXCL
-        };
-
+        let flags = flags_direct_or_empty(dio) | OFlags::EXCL;
         AsyncFile::options()
             .write(true)
             .create(true)
@@ -421,25 +411,34 @@ impl AsyncDmaFile {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn flags_direct_or_empty(dio: bool) -> OFlags {
+    if dio {
+        OFlags::DIRECT
+    } else {
+        OFlags::empty()
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn flags_direct_or_empty(_dio: bool) -> OFlags {
+    OFlags::empty()
+}
+
 pub type SyncDmaFile = DmaFile<OwnedFd>;
 
 impl SyncDmaFile {
     fn open_fd(path: impl rustix::path::Arg, dio: bool) -> io::Result<OwnedFd> {
-        let flags = if cfg!(target_os = "linux") && dio {
-            OFlags::RDONLY | OFlags::DIRECT
-        } else {
-            OFlags::RDONLY
-        };
+        let flags = OFlags::RDONLY | flags_direct_or_empty(dio);
         rustix::fs::open(path, flags, rustix::fs::Mode::empty()).map_err(io::Error::from)
     }
 
     fn create_fd(path: impl rustix::path::Arg, dio: bool) -> io::Result<OwnedFd> {
-        let flags = if cfg!(target_os = "linux") && dio {
-            OFlags::EXCL | OFlags::CREATE | OFlags::TRUNC | OFlags::WRONLY | OFlags::DIRECT
-        } else {
-            OFlags::EXCL | OFlags::CREATE | OFlags::TRUNC | OFlags::WRONLY
-        };
-
+        let flags = OFlags::EXCL
+            | OFlags::CREATE
+            | OFlags::TRUNC
+            | OFlags::WRONLY
+            | flags_direct_or_empty(dio);
         rustix::fs::open(path, flags, rustix::fs::Mode::from_raw_mode(0o666))
             .map_err(io::Error::from)
     }

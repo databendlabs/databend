@@ -23,16 +23,14 @@ use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::ParseMode;
 use databend_common_exception::Result;
-use databend_common_expression::block_debug::box_render;
-use databend_common_expression::types::StringType;
-use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
+use databend_common_expression::DataSchemaRef;
 use databend_common_script::compile;
 use databend_common_script::Executor;
 use databend_common_script::ReturnValue;
 use databend_common_sql::plans::CallProcedurePlan;
 use databend_common_storages_fuse::TableContext;
 
+use crate::interpreters::interpreter_execute_immediate::ProcedureState;
 use crate::interpreters::util::ScriptClient;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -42,11 +40,16 @@ use crate::sessions::QueryContext;
 pub struct CallProcedureInterpreter {
     ctx: Arc<QueryContext>,
     plan: CallProcedurePlan,
+    state: ProcedureState,
 }
 
 impl CallProcedureInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CallProcedurePlan) -> Result<Self> {
-        Ok(CallProcedureInterpreter { ctx, plan })
+        Ok(CallProcedureInterpreter {
+            ctx,
+            plan,
+            state: ProcedureState::new(),
+        })
     }
 }
 
@@ -60,6 +63,10 @@ impl Interpreter for CallProcedureInterpreter {
         false
     }
 
+    async fn get_dynamic_schema(&self) -> Option<DataSchemaRef> {
+        self.state.get_schema().await
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -70,7 +77,8 @@ impl Interpreter for CallProcedureInterpreter {
                     declare: DeclareVar {
                         span: None,
                         name: Identifier::from_name(None, arg_name),
-                        default: arg.clone(),
+                        data_type: None,
+                        default: Some(arg.clone()),
                     },
                 });
             }
@@ -105,27 +113,17 @@ impl Interpreter for CallProcedureInterpreter {
 
             match result {
                 Some(ReturnValue::Var(scalar)) => {
-                    PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                        StringType::from_data(vec![scalar.to_string()]),
-                    ])])?
+                    self.state.set_scalar_schema(&scalar).await;
+                    PipelineBuildResult::from_blocks(vec![ProcedureState::scalar_result(scalar)])?
                 }
                 Some(ReturnValue::Set(set)) => {
-                    let rendered_table = box_render(
-                        &set.schema,
-                        &[set.block.clone()],
-                        usize::MAX,
-                        usize::MAX,
-                        usize::MAX,
-                        true,
-                    )?;
-                    let lines = rendered_table.lines().map(|x| x.to_string()).collect();
-                    PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                        StringType::from_data(lines),
-                    ])])?
+                    self.state.set_schema(set.schema).await;
+                    PipelineBuildResult::from_blocks(vec![set.block])?
                 }
-                None => PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-                    StringType::from_data(Vec::<String>::new()),
-                ])])?,
+                None => {
+                    self.state.set_null_schema().await;
+                    PipelineBuildResult::from_blocks(vec![ProcedureState::null_result()])?
+                }
             }
         };
 

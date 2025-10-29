@@ -1,5 +1,5 @@
 # Q9
-query I
+query RRRRR
 
 SELECT CASE
            WHEN

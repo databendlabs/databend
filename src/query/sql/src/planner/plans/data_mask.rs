@@ -47,11 +47,19 @@ impl From<CreateDatamaskPolicyPlan> for CreateDatamaskReq {
             create_option: p.create_option,
             name: DataMaskNameIdent::new(p.tenant.clone(), &p.name),
             data_mask_meta: DatamaskMeta {
+                // CRITICAL: Normalize parameter names to lowercase at creation time
+                // This ensures consistent matching when applying masking policies.
+                // SQL identifiers are case-insensitive, so we use lowercase as canonical form.
                 args: p
                     .policy
                     .args
                     .iter()
-                    .map(|arg| (arg.arg_name.to_string(), arg.arg_type.to_string()))
+                    .map(|arg| {
+                        (
+                            arg.arg_name.to_lowercase(), // Normalize to lowercase
+                            arg.arg_type.to_string(),
+                        )
+                    })
                     .collect(),
                 return_type: p.policy.return_type.to_string(),
                 body: p.policy.body.to_string(),

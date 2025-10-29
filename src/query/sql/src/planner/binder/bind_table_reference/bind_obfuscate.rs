@@ -110,12 +110,12 @@ impl Binder {
 
         let schema = self
             .resolve_data_source(
+                &self.ctx,
                 &catalog_name,
                 &database_name,
                 &table_name,
                 None,
                 None,
-                self.ctx.clone().get_abort_checker(),
             )?
             .schema();
 

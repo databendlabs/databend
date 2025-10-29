@@ -48,8 +48,7 @@ pub fn query(i: Input) -> IResult<Query> {
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
     let (rest, set_operation_elements) = rule! { #set_operation_element+ }(i)?;
-    let iter = &mut set_operation_elements.into_iter();
-    run_pratt_parser(SetOperationParser, iter, rest, i)
+    run_pratt_parser(SetOperationParser, set_operation_elements, rest, i)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -711,8 +710,7 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
     let (rest, table_reference_elements) = rule! { #table_reference_element+ }(i)?;
-    let iter = &mut table_reference_elements.into_iter();
-    run_pratt_parser(TableReferenceParser, iter, rest, i)
+    run_pratt_parser(TableReferenceParser, table_reference_elements, rest, i)
 }
 
 #[derive(Debug, Clone, PartialEq)]

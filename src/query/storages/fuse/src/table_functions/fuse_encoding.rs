@@ -192,7 +192,8 @@ impl<'a> FuseEncodingImpl<'a> {
                                 .get(&column_id)
                                 .unwrap()
                                 .as_raw_data()
-                                .unwrap();
+                                .unwrap()
+                                .to_bytes();
                             let pages = std::io::Cursor::new(pages);
                             let page_metas = column_meta.as_native().unwrap().pages.clone();
                             let reader = NativeReader::new(pages, page_metas, vec![]);

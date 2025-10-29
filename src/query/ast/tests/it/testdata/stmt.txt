@@ -14510,6 +14510,73 @@ AlterTable(
                     ident_type: None,
                 },
                 "mask",
+                None,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask USING (b, c1);
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask USING (b, c1)
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: ModifyColumn {
+            action: SetMaskingPolicy(
+                Identifier {
+                    span: Some(
+                        28..29,
+                    ),
+                    name: "b",
+                    quote: None,
+                    ident_type: None,
+                },
+                "mask",
+                Some(
+                    [
+                        Identifier {
+                            span: Some(
+                                61..62,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        Identifier {
+                            span: Some(
+                                64..66,
+                            ),
+                            name: "c1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ],
+                ),
             ),
         },
     },
@@ -18382,7 +18449,14 @@ CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {
-        name: "system$test",
+        name: Identifier {
+            span: Some(
+                5..16,
+            ),
+            name: "system$test",
+            quote: None,
+            ident_type: None,
+        },
         args: [
             "a",
         ],
@@ -18397,7 +18471,14 @@ CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {
-        name: "system$test",
+        name: Identifier {
+            span: Some(
+                5..16,
+            ),
+            name: "system$test",
+            quote: None,
+            ident_type: None,
+        },
         args: [
             "a",
         ],
@@ -24293,7 +24374,14 @@ EXECUTE TASK MyTask
 ---------- AST ------------
 ExecuteTask(
     ExecuteTaskStmt {
-        name: "MyTask",
+        name: Identifier {
+            span: Some(
+                13..19,
+            ),
+            name: "MyTask",
+            quote: None,
+            ident_type: None,
+        },
     },
 )
 
@@ -24305,7 +24393,14 @@ DESCRIBE TASK MyTask
 ---------- AST ------------
 DescribeTask(
     DescribeTaskStmt {
-        name: "MyTask",
+        name: Identifier {
+            span: Some(
+                10..16,
+            ),
+            name: "MyTask",
+            quote: None,
+            ident_type: None,
+        },
     },
 )
 
@@ -26251,16 +26346,18 @@ CreateUDF(
         },
         description: None,
         definition: LambdaUDF {
-            parameters: [
-                Identifier {
-                    span: Some(
-                        44..45,
-                    ),
-                    name: "p",
-                    quote: None,
-                    ident_type: None,
-                },
-            ],
+            parameters: Names(
+                [
+                    Identifier {
+                        span: Some(
+                            44..45,
+                        ),
+                        name: "p",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+            ),
             definition: UnaryOp {
                 span: Some(
                     50..53,
@@ -26314,6 +26411,91 @@ CreateUDF(
 
 
 ---------- Input ----------
+CREATE FUNCTION IF NOT EXISTS isnotempty AS(p INT) -> not(is_null(p));
+---------- Output ---------
+CREATE FUNCTION IF NOT EXISTS isnotempty AS (p Int32) -> NOT is_null(p)
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists,
+        udf_name: Identifier {
+            span: Some(
+                30..40,
+            ),
+            name: "isnotempty",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: LambdaUDF {
+            parameters: NameWithTypes(
+                [
+                    (
+                        Identifier {
+                            span: Some(
+                                44..45,
+                            ),
+                            name: "p",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        Int32,
+                    ),
+                ],
+            ),
+            definition: UnaryOp {
+                span: Some(
+                    54..57,
+                ),
+                op: Not,
+                expr: FunctionCall {
+                    span: Some(
+                        58..68,
+                    ),
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier {
+                            span: Some(
+                                58..65,
+                            ),
+                            name: "is_null",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        args: [
+                            ColumnRef {
+                                span: Some(
+                                    66..67,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                66..67,
+                                            ),
+                                            name: "p",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                        params: [],
+                        order_by: [],
+                        window: None,
+                        lambda: None,
+                    },
+                },
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';
 ---------- Output ---------
 CREATE OR REPLACE FUNCTION isnotempty_test_replace AS (p) -> NOT is_null(p) DESC = 'This is a description'
@@ -26333,16 +26515,18 @@ CreateUDF(
             "This is a description",
         ),
         definition: LambdaUDF {
-            parameters: [
-                Identifier {
-                    span: Some(
-                        54..55,
-                    ),
-                    name: "p",
-                    quote: None,
-                    ident_type: None,
-                },
-            ],
+            parameters: Names(
+                [
+                    Identifier {
+                        span: Some(
+                            54..55,
+                        ),
+                        name: "p",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ],
+            ),
             definition: UnaryOp {
                 span: Some(
                     60..63,
@@ -26770,9 +26954,11 @@ CreateUDF(
         },
         description: None,
         definition: UDFScript {
-            arg_types: [
-                Int32,
-            ],
+            arg_types: Types(
+                [
+                    Int32,
+                ],
+            ),
             return_type: Int32,
             code: "def addone_py(i):\nreturn i+1",
             imports: [],
@@ -26812,9 +26998,11 @@ CreateUDF(
         },
         description: None,
         definition: UDFScript {
-            arg_types: [
-                Int32,
-            ],
+            arg_types: Types(
+                [
+                    Int32,
+                ],
+            ),
             return_type: Int32,
             code: "@data/abc/a.py",
             imports: [
@@ -26934,9 +27122,11 @@ CreateUDF(
         },
         description: None,
         definition: UDAFScript {
-            arg_types: [
-                Int32,
-            ],
+            arg_types: Types(
+                [
+                    Int32,
+                ],
+            ),
             state_fields: [
                 UDAFStateField {
                     name: Identifier {
@@ -26953,6 +27143,133 @@ CreateUDF(
                     name: Identifier {
                         span: Some(
                             61..62,
+                        ),
+                        name: "i",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: NotNull(
+                        Int32,
+                    ),
+                },
+            ],
+            return_type: Boolean,
+            imports: [],
+            packages: [],
+            code: "some code",
+            language: "javascript",
+            runtime_version: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE FUNCTION IF NOT EXISTS my_agg (a INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+CREATE FUNCTION IF NOT EXISTS my_agg ( a Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815'
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists,
+        udf_name: Identifier {
+            span: Some(
+                30..36,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFServer {
+            arg_types: NameWithTypes(
+                [
+                    (
+                        Identifier {
+                            span: Some(
+                                38..39,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        Int32,
+                    ),
+                ],
+            ),
+            state_fields: [
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            53..54,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
+            ],
+            return_type: Boolean,
+            address: "http://0.0.0.0:8815",
+            headers: {},
+            language: "javascript",
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE FUNCTION IF NOT EXISTS my_agg (a INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+---------- Output ---------
+CREATE FUNCTION IF NOT EXISTS my_agg ( a Int32 ) STATE { s STRING, i Int32 NOT NULL } RETURNS BOOLEAN LANGUAGE javascript IMPORTS = () PACKAGES = () AS $$
+some code
+$$
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists,
+        udf_name: Identifier {
+            span: Some(
+                30..36,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFScript {
+            arg_types: NameWithTypes(
+                [
+                    (
+                        Identifier {
+                            span: Some(
+                                38..39,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        Int32,
+                    ),
+                ],
+            ),
+            state_fields: [
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            53..54,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            63..64,
                         ),
                         name: "i",
                         quote: None,
@@ -26993,9 +27310,11 @@ AlterUDF(
         },
         description: None,
         definition: UDAFScript {
-            arg_types: [
-                Int32,
-            ],
+            arg_types: Types(
+                [
+                    Int32,
+                ],
+            ),
             state_fields: [
                 UDAFStateField {
                     name: Identifier {
@@ -27030,17 +27349,18 @@ BEGIN
 END;
 $$
 ---------- Output ---------
-EXECUTE IMMEDIATE $$
-BEGIN
-    LOOP
-        RETURN 1;
-    END LOOP;
-END;
-$$
+EXECUTE IMMEDIATE 'BEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;'
 ---------- AST ------------
 ExecuteImmediate(
     ExecuteImmediateStmt {
-        script: "BEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;",
+        script: Literal {
+            span: Some(
+                18..75,
+            ),
+            value: String(
+                "BEGIN\n    LOOP\n        RETURN 1;\n    END LOOP;\nEND;",
+            ),
+        },
     },
 )
 
@@ -27733,7 +28053,14 @@ CALL PROCEDURE p1()
 ---------- AST ------------
 CallProcedure(
     CallProcedureStmt {
-        name: "p1",
+        name: Identifier {
+            span: Some(
+                15..17,
+            ),
+            name: "p1",
+            quote: None,
+            ident_type: None,
+        },
         args: [],
     },
 )
@@ -27746,7 +28073,14 @@ CALL PROCEDURE p1(1, 'x', '2022-02-02'::DATE)
 ---------- AST ------------
 CallProcedure(
     CallProcedureStmt {
-        name: "p1",
+        name: Identifier {
+            span: Some(
+                15..17,
+            ),
+            name: "p1",
+            quote: None,
+            ident_type: None,
+        },
         args: [
             Literal {
                 span: Some(

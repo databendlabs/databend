@@ -21,6 +21,7 @@ databend-meta = { workspace = true }
 
 anyhow = { workspace = true }
 clap = { workspace = true }
+display-more = { workspace = true }
 futures = { workspace = true }
 mlua = { workspace = true }
 raft-log = { workspace = true }

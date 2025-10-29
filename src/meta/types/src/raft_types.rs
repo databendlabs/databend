@@ -42,7 +42,7 @@ impl RaftTypeConfig for TypeConfig {
     type Entry = openraft::entry::Entry<TypeConfig>;
     type SnapshotData = DB;
     type AsyncRuntime = TokioRuntime;
-    type Responder = OneshotResponder<TypeConfig>;
+    type ResponderBuilder = OneshotResponder<TypeConfig>;
 }
 
 pub type IOFlushed = openraft::storage::IOFlushed<TypeConfig>;

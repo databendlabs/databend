@@ -89,6 +89,8 @@ docker run -d --network host --name nginx_db -v "$(pwd)/scripts/ci/deploy/config
 
 docker logs nginx_db
 
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 8000
+
 curl -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select * from system.clusters"}'
 
 echo

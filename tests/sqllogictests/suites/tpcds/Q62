@@ -1,5 +1,5 @@
 # Q62
-query I
+query TTTIIIII
 SELECT w_substr,
        sm_type,
        web_name,

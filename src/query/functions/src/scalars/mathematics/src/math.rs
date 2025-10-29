@@ -18,8 +18,10 @@ use std::f64::consts::PI;
 use std::marker::PhantomData;
 
 use databend_common_base::base::OrderedFloat;
+use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::F64;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
@@ -401,6 +403,48 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         },
                     ),
+                );
+            }
+        })
+    }
+
+    // Register isnan function for float types
+    for ty in ALL_FLOAT_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                    "isnan",
+                    |_, _| {
+                        FunctionDomain::Domain(BooleanDomain {
+                            has_true: true,
+                            has_false: true,
+                        })
+                    },
+                    |val, _| {
+                        let f64_val: f64 = AsPrimitive::<f64>::as_(val);
+                        f64_val.is_nan()
+                    },
+                );
+            }
+        })
+    }
+
+    // Register isinf function for float types
+    for ty in ALL_FLOAT_TYPES {
+        with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                    "isinf",
+                    |_, _| {
+                        FunctionDomain::Domain(BooleanDomain {
+                            has_true: true,
+                            has_false: true,
+                        })
+                    },
+                    |val, _| {
+                        let f64_val: f64 = AsPrimitive::<f64>::as_(val);
+                        f64_val.is_infinite()
+                    },
                 );
             }
         })

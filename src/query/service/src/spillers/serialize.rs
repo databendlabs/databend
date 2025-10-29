@@ -33,15 +33,14 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
+use databend_storages_common_io::BufferReader;
 use opendal::Buffer;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
-use parquet::errors;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::reader::ChunkReader;
-use parquet::file::reader::Length;
 use parquet::format::FileMetaData;
 
 #[derive(Debug, Clone)]
@@ -108,12 +107,12 @@ impl BlocksEncoder {
 pub(super) fn deserialize_block(columns_layout: &Layout, data: Buffer) -> Result<DataBlock> {
     match columns_layout {
         Layout::ArrowIpc(layout) => bare_blocks_from_arrow_ipc(layout, data),
-        Layout::Parquet => bare_blocks_from_parquet(Reader(data)),
+        Layout::Parquet => bare_blocks_from_parquet(BufferReader(data)),
         Layout::Aggregate => unreachable!(),
     }
 }
 
-fn fake_data_schema(block: &DataBlock) -> DataSchema {
+pub fn fake_data_schema(block: &DataBlock) -> DataSchema {
     let fields = block
         .columns()
         .iter()
@@ -206,36 +205,6 @@ fn bare_blocks_to_parquet<W: Write + Send>(
     Ok(file_meta)
 }
 
-pub struct Reader(pub Buffer);
-
-impl Length for Reader {
-    fn len(&self) -> u64 {
-        self.0.len() as u64
-    }
-}
-
-impl ChunkReader for Reader {
-    type T = bytes::buf::Reader<Buffer>;
-
-    fn get_read(&self, start: u64) -> errors::Result<Self::T> {
-        let start = start as usize;
-        if start > self.0.remaining() {
-            return Err(errors::ParquetError::IndexOutOfBound(
-                start,
-                self.0.remaining(),
-            ));
-        }
-        let mut r = self.0.clone();
-        r.advance(start);
-        Ok(r.reader())
-    }
-
-    fn get_bytes(&self, start: u64, length: usize) -> errors::Result<bytes::Bytes> {
-        let start = start as usize;
-        Ok(self.0.slice(start..start + length).to_bytes())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use bytes::Bytes;
@@ -267,7 +236,7 @@ mod tests {
         let mut data = Vec::new();
         bare_blocks_to_parquet(blocks.clone(), &mut data)?;
 
-        let reader = Reader(Buffer::from(Bytes::from(data)));
+        let reader = BufferReader(Buffer::from(Bytes::from(data)));
 
         let got = bare_blocks_from_parquet(reader)?;
         let want = DataBlock::concat(&blocks)?;

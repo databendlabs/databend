@@ -176,7 +176,7 @@ Exchange
     ├── wait time: <slt:ignore>
     ├── exchange bytes: 1.09 KiB
     ├── output rows: 1
-    ├── output bytes: 43.00 B
+    ├── output bytes: 42.00 B
     ├── runtime filter build time: <slt:ignore>
     ├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3), author.name (#5), author.id (#4)]
     ├── join type: INNER
@@ -193,7 +193,7 @@ Exchange
     │   └── Filter
     │       ├── cpu time: <slt:ignore>
     │       ├── output rows: 1
-    │       ├── output bytes: 23.00 B
+    │       ├── output bytes: 31.00 B
     │       ├── output columns: [author.id (#4), author.name (#5)]
     │       ├── filters: [is_true(author.name (#5) = 'mark4')]
     │       ├── estimated rows: 1.25
@@ -201,8 +201,8 @@ Exchange
     │           ├── cpu time: <slt:ignore>
     │           ├── wait time: <slt:ignore>
     │           ├── output rows: 1
-    │           ├── output bytes: 23.00 B
-    │           ├── bytes scanned: 23.00 B
+    │           ├── output bytes: 31.00 B
+    │           ├── bytes scanned: 31.00 B
     │           ├── table: default.default.author
     │           ├── output columns: [id (#4), name (#5)]
     │           ├── read rows: 1

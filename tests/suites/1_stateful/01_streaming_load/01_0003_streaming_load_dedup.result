@@ -1,20 +1,26 @@
 >>>> create or replace table t1 (a int, b string);
 >>>> load csv/it.csv with format (type = CSV), with label L1
-{"id":"csv/it.csv","stats":{"rows":2,"bytes":36}}
+csv/it.csv
+2
+
 <<<<
 >>>> select * from t1 order by a
 1	b
 2	d
 <<<<
 >>>> load csv/it.csv with format (type = CSV), with label L1
-{"id":"csv/it.csv","stats":{"rows":0,"bytes":0}}
+csv/it.csv
+0
+
 <<<<
 >>>> select * from t1 order by a
 1	b
 2	d
 <<<<
 >>>> load csv/it.csv with format (type = CSV), with label L2
-{"id":"csv/it.csv","stats":{"rows":2,"bytes":36}}
+csv/it.csv
+2
+
 <<<<
 >>>> select * from t1 order by a
 1	b

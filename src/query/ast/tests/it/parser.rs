@@ -313,6 +313,7 @@ SELECT * from s;"#,
         r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER TABLE t DROP b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
+        r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask USING (b, c1);"#,
         r#"ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;"#,
         r#"ALTER TABLE t ADD ROW ACCESS POLICY p1 ON (col1);"#,
         r#"ALTER TABLE t ADD ROW ACCESS POLICY p1 ON (col1, col2, col3);"#,
@@ -838,6 +839,7 @@ SELECT * from s;"#,
         r#"GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';"#,
         r#"attach table t 's3://a' connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));"#,
+        r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p INT) -> not(is_null(p));"#,
         r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';"#,
         r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace (p STRING) RETURNS BOOL AS $$ not(is_null(p)) $$;"#,
         r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
@@ -874,6 +876,8 @@ SELECT * from s;"#,
         r#"DROP FUNCTION isnotempty;"#,
         r#"CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
+        r#"CREATE FUNCTION IF NOT EXISTS my_agg (a INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE FUNCTION IF NOT EXISTS my_agg (a INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
         r#"ALTER FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
         r#"
             EXECUTE IMMEDIATE
@@ -1506,8 +1510,12 @@ fn test_script() {
     let file = &mut mint.new_goldenfile("script.txt").unwrap();
 
     let cases = &[
+        r#"LET cost FLOAT"#,
+        r#"LET cost FLOAT default 3.0"#,
+        r#"LET cost FLOAT := 100.0"#,
         r#"LET cost := 100.0"#,
         r#"LET t1 RESULTSET := SELECT * FROM numbers(100)"#,
+        r#"LET t1 cursor FOR SELECT * FROM numbers(100)"#,
         r#"profit := revenue - cost"#,
         r#"RETURN"#,
         r#"RETURN profit"#,
@@ -1581,6 +1589,10 @@ fn test_script() {
         r#"select :a + 1"#,
         r#"select IDENTIFIER(:b)"#,
         r#"select a.IDENTIFIER(:b).c + minus(:d)"#,
+        r#"EXECUTE TASK IDENTIFIER(:my_task)"#,
+        r#"DESC TASK IDENTIFIER(:my_task)"#,
+        r#"CALL IDENTIFIER(:test)(a)"#,
+        r#"call PROCEDURE IDENTIFIER(:proc_name)()"#,
     ];
 
     for case in cases {

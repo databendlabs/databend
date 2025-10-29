@@ -1,5 +1,5 @@
 # Q15
-query I
+query TR
 SELECT ca_zip,
        sum(cs_sales_price)
 FROM catalog_sales,

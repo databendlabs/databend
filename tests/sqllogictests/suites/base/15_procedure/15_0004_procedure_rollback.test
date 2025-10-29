@@ -1,7 +1,4 @@
 statement ok
-set global enable_experimental_procedure=1;
-
-statement ok
 create or replace table t_rollback_1 (str varchar);
 
 statement ok

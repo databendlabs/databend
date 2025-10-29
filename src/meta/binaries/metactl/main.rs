@@ -28,6 +28,7 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_control::admin::MetaAdminClient;
 use databend_common_meta_control::args::BenchArgs;
+use databend_common_meta_control::args::DumpRaftLogWalArgs;
 use databend_common_meta_control::args::ExportArgs;
 use databend_common_meta_control::args::GetArgs;
 use databend_common_meta_control::args::GlobalArgs;
@@ -309,6 +310,30 @@ return metrics, nil
     fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
         lua_support::new_grpc_client(addresses, &BUILD_INFO)
     }
+
+    async fn dump_raft_log_wal(&self, args: &DumpRaftLogWalArgs) -> anyhow::Result<()> {
+        use std::path::PathBuf;
+
+        use raft_log::Config;
+        use raft_log::DumpApi;
+
+        let mut wal_dir = PathBuf::from(&args.raft_dir);
+        wal_dir.push("df_meta");
+        wal_dir.push("V004");
+        wal_dir.push("log");
+
+        let config = Arc::new(Config {
+            dir: wal_dir.to_string_lossy().to_string(),
+            ..Default::default()
+        });
+
+        let dump =
+            raft_log::Dump::<databend_common_meta_raft_store::raft_log_v004::RaftLogTypes>::new(
+                config,
+            )?;
+        dump.write_display(io::stdout())?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Subcommand)]
@@ -328,6 +353,7 @@ enum CtlCommand {
     Lua(LuaArgs),
     MemberList(MemberListArgs),
     Metrics(MetricsArgs),
+    DumpRaftLogWal(DumpRaftLogWalArgs),
 }
 
 /// Usage:
@@ -410,6 +436,9 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Metrics(args) => {
                 app.get_metrics(args).await?;
+            }
+            CtlCommand::DumpRaftLogWal(args) => {
+                app.dump_raft_log_wal(args).await?;
             }
         },
         // for backward compatibility

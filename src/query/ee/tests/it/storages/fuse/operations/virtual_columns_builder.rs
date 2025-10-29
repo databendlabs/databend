@@ -33,13 +33,8 @@ use jsonb::OwnedJsonb;
 async fn test_virtual_column_builder() -> Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
-
     let ctx = fixture.new_query_ctx().await?;
 
     let table = fixture.latest_default_table().await?;
@@ -402,10 +397,6 @@ async fn test_virtual_column_builder() -> Result<()> {
 async fn test_virtual_column_builder_stream_write() -> Result<()> {
     let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
 
-    fixture
-        .default_session()
-        .get_settings()
-        .set_enable_experimental_virtual_column(1)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 

@@ -25,15 +25,26 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
-use databend_common_pipeline_transforms::sort::algorithm::HeapSort;
-use databend_common_pipeline_transforms::sort::algorithm::LoserTreeSort;
-use databend_common_pipeline_transforms::sort::select_row_type;
-use databend_common_pipeline_transforms::sort::utils::add_order_field;
-use databend_common_pipeline_transforms::sort::utils::ORDER_COL_NAME;
-use databend_common_pipeline_transforms::sort::RowConverter;
-use databend_common_pipeline_transforms::sort::Rows;
-use databend_common_pipeline_transforms::sort::RowsTypeVisitor;
+use databend_common_pipeline_transforms::sorts::core::algorithm::HeapSort;
+use databend_common_pipeline_transforms::sorts::core::algorithm::LoserTreeSort;
+use databend_common_pipeline_transforms::sorts::core::algorithm::SortAlgorithm;
+use databend_common_pipeline_transforms::sorts::core::select_row_type;
+use databend_common_pipeline_transforms::sorts::core::RowConverter;
+use databend_common_pipeline_transforms::sorts::core::Rows;
+use databend_common_pipeline_transforms::sorts::core::RowsTypeVisitor;
+use databend_common_pipeline_transforms::sorts::utils::add_order_field;
+use databend_common_pipeline_transforms::sorts::utils::ORDER_COL_NAME;
+use databend_common_pipeline_transforms::sorts::Base;
+use databend_common_pipeline_transforms::sorts::BoundedMultiSortMergeProcessor;
+use databend_common_pipeline_transforms::sorts::BroadcastChannel;
+use databend_common_pipeline_transforms::sorts::SortBoundEdge;
+use databend_common_pipeline_transforms::sorts::SortDummyRoute;
+use databend_common_pipeline_transforms::sorts::SortSampleState;
+use databend_common_pipeline_transforms::sorts::TransformSort;
+use databend_common_pipeline_transforms::sorts::TransformSortBoundBroadcast;
+use databend_common_pipeline_transforms::sorts::TransformSortCollect;
+use databend_common_pipeline_transforms::sorts::TransformSortRestore;
+use databend_common_pipeline_transforms::sorts::TransformSortRoute;
 use databend_common_pipeline_transforms::traits::DataBlockSpill;
 use databend_common_pipeline_transforms::MemorySettings;
 
@@ -153,7 +164,7 @@ impl<S: DataBlockSpill> TransformSortBuilder<S> {
         select_row_type(&mut build, self.enable_fixed_rows)
     }
 
-    pub fn build_bound_broadcast(
+    fn build_bound_broadcast(
         &self,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -436,7 +447,7 @@ impl<S: DataBlockSpill> RowsTypeVisitor for Build<'_, S> {
 }
 
 #[derive(Clone)]
-pub struct ContextChannel {
+struct ContextChannel {
     ctx: Arc<QueryContext>,
     id: u32,
 }

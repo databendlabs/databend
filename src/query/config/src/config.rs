@@ -28,6 +28,7 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
 use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
@@ -955,6 +956,15 @@ pub struct S3StorageConfig {
     #[clap(long = "storage-s3-external-id", value_name = "VALUE", default_value_t)]
     #[serde(rename = "external_id")]
     pub s3_external_id: String,
+
+    #[clap(
+        long = "storage-s3-storage-class",
+        value_name = "standard|intelligent_tiering",
+        value_enum,
+        default_value = "standard",
+        help = "S3 storage class for Fuse tables (including external fuse tables). Warning: Some S3-compatible storage (e.g., MinIO) may not support intelligent_tiering."
+    )]
+    pub storage_class: S3StorageClass,
 }
 
 impl Default for S3StorageConfig {
@@ -997,6 +1007,7 @@ impl From<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: inner.enable_virtual_host_style,
             s3_role_arn: inner.role_arn,
             s3_external_id: inner.external_id,
+            storage_class: inner.storage_class,
         }
     }
 }
@@ -1019,6 +1030,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             role_arn: self.s3_role_arn,
             external_id: self.s3_external_id,
             network_config: None,
+            storage_class: self.storage_class,
         })
     }
 }
@@ -2413,7 +2425,7 @@ pub struct FileLogConfig {
         value_name = "VALUE",
         default_value = "4294967296"
     )]
-    #[serde(rename = "max-size")]
+    #[serde(rename = "max_size")]
     pub file_max_size: usize,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -3318,7 +3330,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-inverted-index-meta-count",
         value_name = "VALUE",
-        default_value = "3000"
+        default_value = "30000"
     )]
     pub inverted_index_meta_count: u64,
 
@@ -3326,7 +3338,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-inverted-index-filter-size",
         value_name = "VALUE",
-        default_value = "2147483648"
+        default_value = "64424509440"
     )]
     pub inverted_index_filter_size: u64,
 
@@ -3562,6 +3574,9 @@ pub struct SpillConfig {
     /// - "azblob": Azure blob remote spill
     /// - etc.
     ///   If not configured, uses main data storage with _spill prefix (default)
+    ///
+    /// Note: Spill operator created based on this config will only use Standard S3 storage class,
+    /// regardless of any other configured storage class
     #[clap(skip)]
     pub storage: Option<StorageConfig>,
 

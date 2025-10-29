@@ -289,6 +289,8 @@ build_exceptions! {
     AlterTableError(1132),
     /// Constraint error
     ConstraintError(1133),
+    /// Unknown row policy
+    UnknownMaskPolicy(1134),
 }
 
 // Sequence Errors [1124-1126, 3101-3102]
@@ -513,6 +515,8 @@ build_exceptions! {
     UndropDbHasNoHistory(2312),
     /// Undrop table with no drop time
     UndropTableWithNoDropTime(2313),
+    /// Undrop table blocked by vacuum retention guard
+    UndropTableRetentionGuard(2326),
     /// Drop table with drop time
     DropTableWithDropTime(2314),
     /// Drop database with drop time

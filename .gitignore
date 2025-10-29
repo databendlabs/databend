@@ -69,6 +69,7 @@ __pycache__/
 .python-version
 
 *.zip
+*.profraw
 
 # tpch data set
 benchmark/tpch/data

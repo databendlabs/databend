@@ -27,7 +27,6 @@ use databend_common_catalog::plan::StreamTablePart;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
-use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -61,17 +60,14 @@ pub struct ChangesDesc {
 impl FuseTable {
     pub async fn get_change_descriptor(
         &self,
+        ctx: &Arc<dyn TableContext>,
         append_only: bool,
         desc: String,
         navigation: Option<&NavigationPoint>,
-        abort_checker: AbortChecker,
     ) -> Result<ChangesDesc> {
         // To support analyze table, we move the change tracking check out of the function.
         let source = if let Some(point) = navigation {
-            self.navigate_to_point(point, abort_checker)
-                .await?
-                .as_ref()
-                .clone()
+            self.navigate_to_point(ctx, point).await?.as_ref().clone()
         } else {
             self.clone()
         };

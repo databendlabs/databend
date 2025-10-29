@@ -33,6 +33,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
@@ -51,22 +52,21 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+use super::blocks_serializer::BlocksSerializer;
+use super::execute_state::ExecuteStarting;
+use super::execute_state::ExecuteStopped;
 use super::execute_state::ExecutionError;
+use super::execute_state::ExecutorSessionState;
+use super::execute_state::Progresses;
 use super::CloseReason;
+use super::ExecuteState;
+use super::ExecuteStateKind;
+use super::Executor;
 use super::HttpQueryContext;
+use super::PageManager;
+use super::ResponseData;
+use super::Wait;
 use crate::servers::http::error::QueryError;
-use crate::servers::http::v1::http_query_handlers::QueryResponseField;
-use crate::servers::http::v1::query::blocks_serializer::BlocksSerializer;
-use crate::servers::http::v1::query::execute_state::ExecuteStarting;
-use crate::servers::http::v1::query::execute_state::ExecuteStopped;
-use crate::servers::http::v1::query::execute_state::ExecutorSessionState;
-use crate::servers::http::v1::query::execute_state::Progresses;
-use crate::servers::http::v1::query::ExecuteState;
-use crate::servers::http::v1::query::ExecuteStateKind;
-use crate::servers::http::v1::query::Executor;
-use crate::servers::http::v1::query::PageManager;
-use crate::servers::http::v1::query::ResponseData;
-use crate::servers::http::v1::query::Wait;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::QueryResponse;
@@ -488,7 +488,7 @@ pub struct StageAttachmentConf {
 #[derive(Debug, Clone)]
 pub struct ResponseState {
     pub has_result_set: Option<bool>,
-    pub schema: Vec<QueryResponseField>,
+    pub schema: DataSchemaRef,
     pub running_time_ms: i64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
@@ -844,7 +844,7 @@ impl HttpQuery {
                         .ok();
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
-                        schema: vec![],
+                        schema: Default::default(),
                         has_result_set: None,
                         reason: Err(e.clone()),
                         session_state: ExecutorSessionState::new(
@@ -937,7 +937,7 @@ impl HttpQuery {
             }
             ClientState::Closed(st) => {
                 let to = match st.reason {
-                    CloseReason::Finalized => 30,
+                    CloseReason::Finalized => self.result_timeout_secs.min(30),
                     _ => self.result_timeout_secs,
                 };
                 let expire_at = st.ts + Duration::from_secs(to);

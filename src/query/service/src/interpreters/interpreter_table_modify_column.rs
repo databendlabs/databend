@@ -31,8 +31,10 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
+use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -41,6 +43,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::resolve_type_name_by_str;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
@@ -82,7 +85,7 @@ impl ModifyTableColumnInterpreter {
         &self,
         catalog: Arc<dyn Catalog>,
         table: Arc<dyn Table>,
-        column: String,
+        using_columns: &[String],
         mask_name: String,
     ) -> Result<PipelineBuildResult> {
         LicenseManagerSwitch::instance()
@@ -97,44 +100,70 @@ impl ModifyTableColumnInterpreter {
 
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
+
+        // Get mask policy ID from name using KV API
+        let name_ident = DataMaskNameIdent::new(self.ctx.get_tenant(), mask_name.clone());
+        let mask_id_seq = meta_api.get_pb(&name_ident).await?;
+        let policy_id = match mask_id_seq {
+            Some(seq_id) => seq_id.data,
+            None => {
+                return Err(ErrorCode::UnknownDatamask(format!(
+                    "Data mask policy {} not found",
+                    mask_name
+                )))
+            }
+        };
+
         let policy = handler
             .get_data_mask(meta_api, &self.ctx.get_tenant(), mask_name.clone())
             .await?;
 
-        // check if column type match to the input type
-        let policy_data_type = policy.args[0].1.to_string().to_lowercase();
+        // check if column type match to the input type - similar to row access policy validation
+        let policy_data_types: Result<Vec<_>> = policy
+            .args
+            .iter()
+            .map(|(_, type_str)| {
+                let table_data_type = resolve_type_name_by_str(type_str, false)?;
+                Ok(table_data_type.remove_nullable())
+            })
+            .collect();
+        let policy_data_types = policy_data_types?;
+
         let schema = table.schema();
         let table_info = table.get_table_info();
-        if let Some((_, data_field)) = schema.column_with_name(&column) {
-            let data_type = data_field.data_type().to_string().to_lowercase();
-            if data_type != policy_data_type {
-                return Err(ErrorCode::UnmatchColumnDataType(format!(
-                    "Column '{}' data type {} does not match to the mask policy type {}",
-                    column, data_type, policy_data_type,
-                )));
-            }
-        } else {
-            return Err(ErrorCode::UnknownColumn(format!(
-                "Cannot find column {}",
-                column
+
+        if using_columns.len() != policy_data_types.len() {
+            return Err(ErrorCode::UnmatchColumnDataType(format!(
+                "Number of columns ({}) does not match the number of mask policy arguments ({})",
+                using_columns.len(),
+                policy_data_types.len()
             )));
         }
 
-        let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
+        let mut columns_ids = Vec::with_capacity(using_columns.len());
+        for (column, policy_data_type) in using_columns.iter().zip(policy_data_types) {
+            let (_, data_field) = schema.column_with_name(column).ok_or_else(|| {
+                ErrorCode::UnknownColumn(format!("Cannot find column {}", column))
+            })?;
 
-        let prev_column_mask_name =
-            if let Some(column_mask_policy) = &table_info.meta.column_mask_policy {
-                column_mask_policy.get(&column).cloned()
-            } else {
-                None
-            };
+            let column_type = data_field.data_type();
+            if policy_data_type != column_type.remove_nullable() {
+                return Err(ErrorCode::UnmatchColumnDataType(format!(
+                    "Column '{}' data type {} does not match to the mask policy type {}",
+                    column, column_type, policy_data_type,
+                )));
+            }
+
+            columns_ids.push(data_field.column_id);
+        }
+
+        let table_id = table_info.ident.table_id;
+
         let req = SetTableColumnMaskPolicyReq {
             tenant: self.ctx.get_tenant(),
-            seq: MatchSeq::Exact(table_version),
+            seq: MatchSeq::Exact(table_info.ident.seq),
             table_id,
-            column,
-            action: SetTableColumnMaskPolicyAction::Set(mask_name, prev_column_mask_name),
+            action: SetSecurityPolicyAction::Set(*policy_id, columns_ids),
         };
 
         let _resp = catalog.set_table_column_mask_policy(req).await?;
@@ -243,6 +272,27 @@ impl ModifyTableColumnInterpreter {
                     table_info.meta.field_comments[i] = comment.to_string();
                     modify_comment = true;
                 }
+
+                // Check for NULL values in columns that are being changed to NOT NULL
+                if old_field.data_type.is_nullable() && !field.data_type.is_nullable() {
+                    let statistics_provider = fuse_table
+                        .column_statistics_provider(self.ctx.clone())
+                        .await?;
+                    let column_stat = statistics_provider
+                        .column_statistics(old_field.column_id)
+                        .ok_or_else(|| {
+                            ErrorCode::UnknownColumn(format!(
+                                "Cannot find statistics for column '{}' (id: {})",
+                                field.name, old_field.column_id
+                            ))
+                        })?;
+                    if column_stat.null_count > 0 {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "Cannot change column '{}' to NOT NULL: contains {} NULL values",
+                            field.name, column_stat.null_count
+                        )));
+                    }
+                }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Cannot find column {}",
@@ -316,147 +366,129 @@ impl ModifyTableColumnInterpreter {
         let query_fields = new_schema_without_computed_fields
             .fields()
             .iter()
-            .enumerate()
-            .map(|(index, field)| {
-                if let Some(default_scalar) = modified_default_scalars.get(&index) {
-                    let old_field = schema.field_with_name(&field.name).unwrap();
-                    let need_remove_nullable =
-                        old_field.data_type.is_nullable() && !field.data_type.is_nullable();
-                    // If the column type is Tuple or Array(Tuple), the difference in the number of leaf columns may cause
-                    // the auto cast to fail.
-                    // We read the leaf column data, and then use build function to construct a new Tuple or Array(Tuple).
-                    // Note: other nested types auto cast can still fail, we need a more general handling
-                    // to solve this problem in the future.
-                    match (
-                        old_field.data_type.remove_nullable(),
-                        field.data_type.remove_nullable(),
-                    ) {
-                        (
-                            TableDataType::Tuple {
-                                fields_name: old_fields_name,
-                                ..
-                            },
-                            TableDataType::Tuple {
-                                fields_name: new_fields_name,
-                                fields_type: new_fields_type,
-                            },
-                        ) => {
-                            let transform_funcs = new_fields_name
-                                .iter()
-                                .zip(new_fields_type.iter())
-                                .map(|(new_field_name, new_field_type)| {
-                                    match old_fields_name.iter().position(|n| n == new_field_name) {
-                                        Some(idx) => {
-                                            format!("`{}`.{}", field.name, idx + 1)
-                                        }
-                                        None => {
-                                            let new_data_type = DataType::from(new_field_type);
-                                            let default_value =
-                                                Scalar::default_value(&new_data_type);
-                                            format!("{default_value}")
-                                        }
+            .map(|field| {
+                let old_field = schema.field_with_name(&field.name).unwrap();
+                // If the column type is Tuple or Array(Tuple), the difference in the number of leaf columns may cause
+                // the auto cast to fail.
+                // We read the leaf column data, and then use build function to construct a new Tuple or Array(Tuple).
+                // Note: other nested types auto cast can still fail, we need a more general handling
+                // to solve this problem in the future.
+                match (
+                    old_field.data_type.remove_nullable(),
+                    field.data_type.remove_nullable(),
+                ) {
+                    (
+                        TableDataType::Tuple {
+                            fields_name: old_fields_name,
+                            ..
+                        },
+                        TableDataType::Tuple {
+                            fields_name: new_fields_name,
+                            fields_type: new_fields_type,
+                        },
+                    ) => {
+                        let transform_funcs = new_fields_name
+                            .iter()
+                            .zip(new_fields_type.iter())
+                            .map(|(new_field_name, new_field_type)| {
+                                match old_fields_name.iter().position(|n| n == new_field_name) {
+                                    Some(idx) => {
+                                        format!("`{}`.{}", field.name, idx + 1)
                                     }
-                                })
-                                .collect::<Vec<_>>()
-                                .join(", ");
-
-                            format!(
-                                "if(is_not_null(`{}`), tuple({}), NULL) AS {}",
-                                field.name, transform_funcs, field.name
-                            )
-                        }
-                        (
-                            TableDataType::Array(box TableDataType::Tuple {
-                                fields_name: old_fields_name,
-                                ..
-                            }),
-                            TableDataType::Array(box TableDataType::Tuple {
-                                fields_name: new_fields_name,
-                                fields_type: new_fields_type,
-                            }),
-                        )
-                        | (
-                            TableDataType::Array(box TableDataType::Nullable(
-                                box TableDataType::Tuple {
-                                    fields_name: old_fields_name,
-                                    ..
-                                },
-                            )),
-                            TableDataType::Array(box TableDataType::Tuple {
-                                fields_name: new_fields_name,
-                                fields_type: new_fields_type,
-                            }),
-                        )
-                        | (
-                            TableDataType::Array(box TableDataType::Tuple {
-                                fields_name: old_fields_name,
-                                ..
-                            }),
-                            TableDataType::Array(box TableDataType::Nullable(
-                                box TableDataType::Tuple {
-                                    fields_name: new_fields_name,
-                                    fields_type: new_fields_type,
-                                },
-                            )),
-                        )
-                        | (
-                            TableDataType::Array(box TableDataType::Nullable(
-                                box TableDataType::Tuple {
-                                    fields_name: old_fields_name,
-                                    ..
-                                },
-                            )),
-                            TableDataType::Array(box TableDataType::Nullable(
-                                box TableDataType::Tuple {
-                                    fields_name: new_fields_name,
-                                    fields_type: new_fields_type,
-                                },
-                            )),
-                        ) => {
-                            let transform_funcs = new_fields_name
-                                .iter()
-                                .zip(new_fields_type.iter())
-                                .map(|(new_field_name, new_field_type)| {
-                                    match old_fields_name.iter().position(|n| n == new_field_name) {
-                                        Some(idx) => {
-                                            format!(
-                                                "array_transform(`{}`, v -> v.{})",
-                                                field.name,
-                                                idx + 1
-                                            )
-                                        }
-                                        None => {
-                                            let new_data_type = DataType::from(new_field_type);
-                                            let default_value =
-                                                Scalar::default_value(&new_data_type);
-                                            format!("{default_value}")
-                                        }
+                                    None => {
+                                        let new_data_type = DataType::from(new_field_type);
+                                        let default_value = Scalar::default_value(&new_data_type);
+                                        format!("{default_value}")
                                     }
-                                })
-                                .collect::<Vec<_>>()
-                                .join(", ");
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
 
-                            format!(
-                                "if(is_not_null(`{}`), arrays_zip({}), NULL) AS {}",
-                                field.name, transform_funcs, field.name
-                            )
-                        }
-                        (_, _) => {
-                            if need_remove_nullable {
-                                // If the column is being changed from NULLABLE to NOT NULL,
-                                // wrap it with `coalesce()` to replace NULL values with the default,
-                                // and `remove_nullable()` to mark the resulting expression as non-nullable.
-                                format!(
-                                    "remove_nullable(coalesce(`{}`, {}))",
-                                    field.name, default_scalar
-                                )
-                            } else {
-                                format!("`{}`", field.name)
-                            }
-                        }
+                        format!(
+                            "if(is_not_null(`{}`), tuple({}), NULL) AS {}",
+                            field.name, transform_funcs, field.name
+                        )
                     }
-                } else {
-                    format!("`{}`", field.name)
+                    (
+                        TableDataType::Array(box TableDataType::Tuple {
+                            fields_name: old_fields_name,
+                            ..
+                        }),
+                        TableDataType::Array(box TableDataType::Tuple {
+                            fields_name: new_fields_name,
+                            fields_type: new_fields_type,
+                        }),
+                    )
+                    | (
+                        TableDataType::Array(box TableDataType::Nullable(
+                            box TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            },
+                        )),
+                        TableDataType::Array(box TableDataType::Tuple {
+                            fields_name: new_fields_name,
+                            fields_type: new_fields_type,
+                        }),
+                    )
+                    | (
+                        TableDataType::Array(box TableDataType::Tuple {
+                            fields_name: old_fields_name,
+                            ..
+                        }),
+                        TableDataType::Array(box TableDataType::Nullable(
+                            box TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            },
+                        )),
+                    )
+                    | (
+                        TableDataType::Array(box TableDataType::Nullable(
+                            box TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            },
+                        )),
+                        TableDataType::Array(box TableDataType::Nullable(
+                            box TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            },
+                        )),
+                    ) => {
+                        let transform_funcs = new_fields_name
+                            .iter()
+                            .zip(new_fields_type.iter())
+                            .map(|(new_field_name, new_field_type)| {
+                                match old_fields_name.iter().position(|n| n == new_field_name) {
+                                    Some(idx) => {
+                                        format!(
+                                            "array_transform(`{}`, v -> v.{})",
+                                            field.name,
+                                            idx + 1
+                                        )
+                                    }
+                                    None => {
+                                        let new_data_type = DataType::from(new_field_type);
+                                        let default_value = Scalar::default_value(&new_data_type);
+                                        format!("{default_value}")
+                                    }
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+
+                        format!(
+                            "if(is_not_null(`{}`), arrays_zip({}), NULL) AS {}",
+                            field.name, transform_funcs, field.name
+                        )
+                    }
+                    (_, _) => {
+                        // No need to remove_nullable already check NULL value
+                        format!("`{}`", field.name)
+                    }
                 }
             })
             .collect::<Vec<_>>()
@@ -532,23 +564,27 @@ impl ModifyTableColumnInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let table_info = table.get_table_info();
+        let column_id = table_info
+            .schema()
+            .fields()
+            .iter()
+            .find(|field| field.name.as_str() == column.as_str())
+            .map(|field| field.column_id)
+            .ok_or_else(|| ErrorCode::UnknownColumn(format!("Cannot find column {}", column)))?;
+
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        let prev_column_mask_name =
-            if let Some(column_mask_policy) = &table_info.meta.column_mask_policy {
-                column_mask_policy.get(&column).cloned()
-            } else {
-                None
-            };
-
-        if let Some(prev_column_mask_name) = prev_column_mask_name {
+        if let Some(policy) = table_info
+            .meta
+            .column_mask_policy_columns_ids
+            .get(&column_id)
+        {
             let req = SetTableColumnMaskPolicyReq {
                 tenant: self.ctx.get_tenant(),
                 seq: MatchSeq::Exact(table_version),
                 table_id,
-                column,
-                action: SetTableColumnMaskPolicyAction::Unset(prev_column_mask_name),
+                action: SetSecurityPolicyAction::Unset(policy.policy_id),
             };
 
             let _resp = catalog.set_table_column_mask_policy(req).await?;
@@ -652,8 +688,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
         // NOTICE: if we support modify column data type,
         // need to check whether this column is referenced by other computed columns.
         let mut build_res = match &self.plan.action {
-            ModifyColumnAction::SetMaskingPolicy(column, mask_name) => {
-                self.do_set_data_mask_policy(catalog, table, column.to_string(), mask_name.clone())
+            ModifyColumnAction::SetMaskingPolicy(mask_name, using_columns) => {
+                self.do_set_data_mask_policy(catalog, table, using_columns, mask_name.clone())
                     .await?
             }
             ModifyColumnAction::UnsetMaskingPolicy(column) => {
@@ -747,7 +783,10 @@ pub(crate) async fn build_select_insert_plan(
     };
 
     // 3. define select schema and insert schema of DistributedInsertSelect plan
-    let new_table = FuseTable::try_create(table_info)?;
+    let new_table = FuseTable::create_and_refresh_table_info(
+        table_info,
+        ctx.get_settings().get_s3_storage_class()?,
+    )?;
 
     // 4. build DistributedInsertSelect plan
     let mut insert_plan = PhysicalPlan::new(DistributedInsertSelect {

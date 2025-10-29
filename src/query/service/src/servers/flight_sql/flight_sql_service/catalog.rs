@@ -57,12 +57,12 @@ impl CatalogInfoProvider {
             vec![(
                 catalog_name.clone(),
                 catalog_mgr
-                    .get_catalog(tenant.tenant_name(), &catalog_name, ctx.session_state())
+                    .get_catalog(tenant.tenant_name(), &catalog_name, ctx.session_state()?)
                     .await?,
             )]
         } else {
             catalog_mgr
-                .list_catalogs(&tenant, ctx.session_state())
+                .list_catalogs(&tenant, ctx.session_state()?)
                 .await?
                 .iter()
                 .map(|r| (r.name(), r.clone()))

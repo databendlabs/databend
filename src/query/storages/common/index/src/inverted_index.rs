@@ -50,6 +50,7 @@ use std::path::PathBuf;
 use std::result;
 use std::sync::Arc;
 
+use crc32fast::Hasher;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
@@ -63,6 +64,7 @@ use levenshtein_automata::Distance;
 use levenshtein_automata::LevenshteinAutomatonBuilder;
 use levenshtein_automata::DFA;
 use log::warn;
+use parquet::format::FileMetaData;
 use roaring::RoaringTreemap;
 use tantivy::directory::error::DeleteError;
 use tantivy::directory::error::OpenReadError;
@@ -94,8 +96,10 @@ use tantivy::query::Query;
 use tantivy::query::QueryClone;
 use tantivy::query::TermQuery;
 use tantivy::schema::Field;
+use tantivy::version;
 use tantivy::Directory;
 use tantivy::Term;
+use tantivy::Version;
 use tantivy_common::BinarySerializable;
 use tantivy_common::HasLen;
 use tantivy_common::VInt;
@@ -103,6 +107,47 @@ use tantivy_fst::Automaton;
 use tantivy_fst::IntoStreamer;
 use tantivy_fst::Regex;
 use tantivy_fst::Streamer;
+
+// tantivy version is used to generate the footer data
+
+// The magic byte of the footer to identify corruption
+// or an old version of the footer.
+const FOOTER_MAGIC_NUMBER: u32 = 1337;
+
+type CrcHashU32 = u32;
+
+/// A Footer is appended every part of data, like tantivy file.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+struct Footer {
+    version: Version,
+    crc: CrcHashU32,
+}
+
+impl Footer {
+    fn new(crc: CrcHashU32) -> Self {
+        let version = version().clone();
+        Footer { version, crc }
+    }
+
+    fn append_footer<W: std::io::Write>(&self, write: &mut W) -> Result<()> {
+        let footer_payload_len = write.write(serde_json::to_string(&self)?.as_ref())?;
+        BinarySerializable::serialize(&(footer_payload_len as u32), write)?;
+        BinarySerializable::serialize(&FOOTER_MAGIC_NUMBER, write)?;
+        Ok(())
+    }
+}
+
+// Build footer for tantivy files.
+// Footer is used to check whether the data is valid when open a file.
+pub fn build_tantivy_footer(bytes: &[u8]) -> Result<Vec<u8>> {
+    let mut hasher = Hasher::new();
+    hasher.update(bytes);
+    let crc = hasher.finalize();
+    let footer = Footer::new(crc);
+    let mut buf = Vec::new();
+    footer.append_footer(&mut buf)?;
+    Ok(buf)
+}
 
 fn extract_footer(data: FileSlice) -> Result<(Vec<FileAddr>, Vec<usize>)> {
     // The following code is copied from tantivy `CompositeFile::open` function.
@@ -661,7 +706,7 @@ impl DocIdsCollector {
             Ok(matched)
         } else if let Some(boost_query) = query.downcast_ref::<BoostQuery>() {
             Self::check_term_fsts_match(
-                boost_query.query(),
+                boost_query.underlying_query(),
                 fst_maps,
                 fuzziness,
                 matched_terms,
@@ -670,7 +715,7 @@ impl DocIdsCollector {
             )
         } else if let Some(const_query) = query.downcast_ref::<ConstScoreQuery>() {
             Self::check_term_fsts_match(
-                const_query.query(),
+                const_query.underlying_query(),
                 fst_maps,
                 fuzziness,
                 matched_terms,
@@ -708,11 +753,11 @@ impl DocIdsCollector {
     pub fn collect_phrase_matched_doc_ids(
         &mut self,
         query_key: String,
-        phrase_terms: Vec<(usize, Term)>,
+        phrase_terms: &[(usize, Term)],
         prefix_term: Option<(usize, &Vec<u64>)>,
     ) -> Result<Option<RoaringTreemap>> {
         let mut query_term_poses = Vec::with_capacity(phrase_terms.len());
-        for (term_pos, term) in &phrase_terms {
+        for (term_pos, term) in phrase_terms {
             // term not exist means this phrase in not matched.
             let Some(term_id) = self.term_reader.term_id(term) else {
                 return Ok(None);
@@ -1012,11 +1057,11 @@ impl DocIdsCollector {
             }
         } else if let Some(phrase_query) = query.downcast_ref::<PhraseQuery>() {
             let query_key = format!("{:?}", phrase_query);
-            let phrase_terms = phrase_query.phrase_terms_with_offsets();
+            let phrase_terms = phrase_query.get_phrase_terms_with_offsets();
             self.collect_phrase_matched_doc_ids(query_key, phrase_terms, None)
         } else if let Some(phrase_prefix_query) = query.downcast_ref::<PhrasePrefixQuery>() {
             let query_key = format!("{:?}", phrase_prefix_query);
-            let phrase_terms = phrase_prefix_query.phrase_terms_with_offsets();
+            let phrase_terms = phrase_prefix_query.get_phrase_terms_with_offsets();
             let (prefix_term_pos, prefix_term) = phrase_prefix_query.prefix_term_with_offset();
 
             let Some(prefix_term_ids) = prefix_terms.get(&prefix_term) else {
@@ -1047,9 +1092,17 @@ impl DocIdsCollector {
                 Ok(None)
             }
         } else if let Some(boost_query) = query.downcast_ref::<BoostQuery>() {
-            self.collect_matched_doc_ids(boost_query.query(), prefix_terms, fuzziness_terms)
+            self.collect_matched_doc_ids(
+                boost_query.underlying_query(),
+                prefix_terms,
+                fuzziness_terms,
+            )
         } else if let Some(const_query) = query.downcast_ref::<ConstScoreQuery>() {
-            self.collect_matched_doc_ids(const_query.query(), prefix_terms, fuzziness_terms)
+            self.collect_matched_doc_ids(
+                const_query.underlying_query(),
+                prefix_terms,
+                fuzziness_terms,
+            )
         } else if let Some(_empty_query) = query.downcast_ref::<EmptyQuery>() {
             Ok(None)
         } else if let Some(_all_query) = query.downcast_ref::<AllQuery>() {
@@ -1167,10 +1220,10 @@ impl DocIdsCollector {
             }
             Ok(scores)
         } else if let Some(boost_query) = query.downcast_ref::<BoostQuery>() {
-            let boost = boost_query.boost();
-            self.calculate_scores(boost_query.query(), doc_ids, Some(boost))
+            let boost = boost_query.get_boost();
+            self.calculate_scores(boost_query.underlying_query(), doc_ids, Some(boost))
         } else if let Some(const_query) = query.downcast_ref::<ConstScoreQuery>() {
-            let score = const_query.score();
+            let score = const_query.get_const_score();
             let scores = vec![F32::from(score); doc_ids.len() as usize];
             Ok(scores)
         } else if let Some(_all_query) = query.downcast_ref::<AllQuery>() {
@@ -1185,7 +1238,53 @@ impl DocIdsCollector {
 
 #[derive(Clone)]
 pub struct InvertedIndexMeta {
+    pub version: usize,
     pub columns: Vec<(String, SingleColumnMeta)>,
+}
+
+impl TryFrom<FileMetaData> for InvertedIndexMeta {
+    type Error = ErrorCode;
+
+    fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
+        let rg = meta.row_groups.remove(0);
+        let mut col_metas = Vec::with_capacity(rg.columns.len());
+        for x in &rg.columns {
+            match &x.meta_data {
+                Some(chunk_meta) => {
+                    let col_start =
+                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
+                            dict_page_offset
+                        } else {
+                            chunk_meta.data_page_offset
+                        };
+                    let col_len = chunk_meta.total_compressed_size;
+                    assert!(
+                        col_start >= 0 && col_len >= 0,
+                        "column start and length should not be negative"
+                    );
+                    let num_values = chunk_meta.num_values as u64;
+                    let res = SingleColumnMeta {
+                        offset: col_start as u64,
+                        len: col_len as u64,
+                        num_values,
+                    };
+                    let column_name = chunk_meta.path_in_schema[0].to_owned();
+                    col_metas.push((column_name, res));
+                }
+                None => {
+                    panic!(
+                        "expecting chunk meta data while converting ThriftFileMetaData to BloomIndexMeta"
+                    )
+                }
+            }
+        }
+        col_metas.shrink_to_fit();
+
+        Ok(Self {
+            version: 3,
+            columns: col_metas,
+        })
+    }
 }
 
 #[derive(Clone, Debug)]

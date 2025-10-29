@@ -1,5 +1,5 @@
 # Q65
-query I
+query TTRRRT
 SELECT s_store_name,
        i_item_desc,
        sc.revenue,

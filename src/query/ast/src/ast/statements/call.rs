@@ -19,10 +19,11 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_string_list;
+use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CallStmt {
-    pub name: String,
+    pub name: Identifier,
     pub args: Vec<String>,
 }
 

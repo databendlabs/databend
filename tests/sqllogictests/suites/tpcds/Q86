@@ -1,5 +1,5 @@
 # Q86
-query I
+query RTTII
 SELECT sum(ws_net_paid) AS total_sum ,
        i_category ,
        i_class ,

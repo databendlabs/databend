@@ -61,6 +61,8 @@ struct TableColumnStatistics {
     actual_row_count: Option<u64>,
     distinct_count: Option<u64>,
     null_count: Option<u64>,
+    min: Option<String>,
+    max: Option<String>,
     avg_size: Option<u64>,
     histogram: String,
 }
@@ -87,6 +89,8 @@ impl StatisticsTable {
                 "null_count",
                 TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
             ),
+            TableField::new("min", TableDataType::String.wrap_nullable()),
+            TableField::new("max", TableDataType::String.wrap_nullable()),
             TableField::new(
                 "avg_size",
                 TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
@@ -210,9 +214,48 @@ impl StatisticsTable {
                                 actual_row_count,
                                 distinct_count: column_statistics.and_then(|v| v.ndv),
                                 null_count: column_statistics.map(|v| v.null_count),
-                                histogram,
+                                min: column_statistics
+                                    .and_then(|s| s.min.clone())
+                                    .map(|v| v.to_string().unwrap()),
+                                max: column_statistics
+                                    .and_then(|s| s.max.clone())
+                                    .map(|v| v.to_string().unwrap()),
                                 avg_size: columns_statistics.average_size(column_id),
+                                histogram,
                             })
+                        }
+                        // add virtual column statistics
+                        let table_info = table.get_table_info();
+                        if let Some(virtual_schema) = &table_info.meta.virtual_schema {
+                            for virtual_field in virtual_schema.fields() {
+                                if let (Ok(source_field), Some(column_statistics)) = (
+                                    schema.field_of_column_id(virtual_field.source_column_id),
+                                    columns_statistics.column_statistics(virtual_field.column_id),
+                                ) {
+                                    let column_name =
+                                        format!("{}{}", source_field.name, virtual_field.name);
+                                    rows.push(TableColumnStatistics {
+                                        database_name: database.clone(),
+                                        table_name: table.name().into(),
+                                        column_name,
+                                        stats_row_count,
+                                        actual_row_count,
+                                        distinct_count: column_statistics.ndv,
+                                        null_count: Some(column_statistics.null_count),
+                                        min: column_statistics
+                                            .min
+                                            .clone()
+                                            .map(|v| v.to_string().unwrap()),
+                                        max: column_statistics
+                                            .max
+                                            .clone()
+                                            .map(|v| v.to_string().unwrap()),
+                                        avg_size: columns_statistics
+                                            .average_size(virtual_field.column_id),
+                                        histogram: "".to_string(),
+                                    })
+                                }
+                            }
                         }
                     }
                 }
@@ -241,7 +284,7 @@ impl AsyncSystemTable for StatisticsTable {
             .get_catalog(
                 ctx.get_tenant().tenant_name(),
                 self.get_table_info().catalog(),
-                ctx.session_state(),
+                ctx.session_state()?,
             )
             .await?;
         let rows = self.dump_table_columns(ctx, push_downs, &catalog).await?;
@@ -253,6 +296,8 @@ impl AsyncSystemTable for StatisticsTable {
         let mut actual_row_counts = Vec::with_capacity(rows.len());
         let mut distinct_counts = Vec::with_capacity(rows.len());
         let mut null_counts = Vec::with_capacity(rows.len());
+        let mut mins = Vec::with_capacity(rows.len());
+        let mut maxes = Vec::with_capacity(rows.len());
         let mut avg_sizes = Vec::with_capacity(rows.len());
         let mut histograms = Vec::with_capacity(rows.len());
         for row in rows {
@@ -263,6 +308,8 @@ impl AsyncSystemTable for StatisticsTable {
             actual_row_counts.push(row.actual_row_count);
             distinct_counts.push(row.distinct_count);
             null_counts.push(row.null_count);
+            mins.push(row.min);
+            maxes.push(row.max);
             avg_sizes.push(row.avg_size);
             histograms.push(row.histogram);
         }
@@ -275,6 +322,8 @@ impl AsyncSystemTable for StatisticsTable {
             UInt64Type::from_opt_data(actual_row_counts),
             UInt64Type::from_opt_data(distinct_counts),
             UInt64Type::from_opt_data(null_counts),
+            StringType::from_opt_data(mins),
+            StringType::from_opt_data(maxes),
             UInt64Type::from_opt_data(avg_sizes),
             StringType::from_data(histograms),
         ]))

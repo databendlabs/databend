@@ -16,3 +16,6 @@
 mod storage_params;
 
 pub use storage_params::*;
+
+#[cfg(test)]
+mod storage_params_test;

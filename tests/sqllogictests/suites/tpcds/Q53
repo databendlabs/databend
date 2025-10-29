@@ -1,5 +1,5 @@
 # Q53
-query I
+query IRR
 SELECT *
 FROM
   (SELECT i_manufact_id,

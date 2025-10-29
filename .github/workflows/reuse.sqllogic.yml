@@ -60,7 +60,7 @@ jobs:
           - { dirs: "crdb", runner: "2c8g" }
           - { dirs: "base", runner: "2c8g" }
           - { dirs: "ydb", runner: "2c8g" }
-          - { dirs: "tpcds", runner: "4c16g", parallel: "1" }
+          - { dirs: "tpcds", runner: "2c8g" }
           - { dirs: "tpch", runner: "2c8g" }
           - { dirs: "standalone", runner: "2c8g" }
         handler:

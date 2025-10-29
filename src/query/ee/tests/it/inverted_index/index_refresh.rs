@@ -102,7 +102,10 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let _ = interpreter.execute(ctx.clone()).await?;
 
     let new_table = table.refresh(ctx.as_ref()).await?;
-    let new_fuse_table = FuseTable::do_create(new_table.get_table_info().clone())?;
+    let new_fuse_table = FuseTable::create_without_refresh_table_info(
+        new_table.get_table_info().clone(),
+        ctx.get_settings().get_s3_storage_class()?,
+    )?;
     let table_schema = new_fuse_table.schema();
 
     // get index location from new table snapshot
@@ -160,7 +163,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let queries = vec![
         ("rust".to_string(), vec![0, 1]),
         ("java".to_string(), vec![2]),
-        ("data".to_string(), vec![1, 4, 5]),
+        ("data".to_string(), vec![4, 1, 5]),
     ];
 
     for (query_text, ids) in queries.into_iter() {

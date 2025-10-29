@@ -39,11 +39,11 @@ use super::WindowPartitionMeta;
 use crate::pipelines::processors::transforms::DataProcessorStrategy;
 use crate::sessions::QueryContext;
 use crate::spillers::BackpressureSpiller;
-use crate::spillers::BufferPool;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
+use crate::spillers::SpillsBufferPool;
 
 enum WindowBuffer {
     V1(WindowPartitionBuffer),
@@ -191,7 +191,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
             Either::Left(Spiller::create(ctx, operator, spill_config)?)
         } else {
             let runtime = GlobalIORuntime::instance();
-            let buffer_pool = BufferPool::create(runtime, 128 * 1024 * 1024, 3);
+            let buffer_pool = SpillsBufferPool::create(runtime, 128 * 1024 * 1024, 3);
             Either::Right(BackpressureSpiller::create(
                 ctx,
                 operator,

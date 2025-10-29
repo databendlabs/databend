@@ -15,12 +15,18 @@
 use std::cell::RefCell;
 use std::ops::DerefMut;
 
+use arrow_ipc::writer::IpcWriteOptions;
+use arrow_ipc::writer::StreamWriter;
+use arrow_ipc::CompressionType;
+use arrow_ipc::MetadataVersion;
+use databend_common_exception::Result;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_formats::field_encoder::FieldEncoderValues;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
@@ -99,6 +105,28 @@ impl BlocksSerializer {
 
     pub fn num_rows(&self) -> usize {
         self.columns.iter().map(|(_, num_rows)| *num_rows).sum()
+    }
+
+    pub fn to_arrow_ipc(
+        &self,
+        data_schema: &DataSchema,
+        ext_meta: Vec<(String, String)>,
+    ) -> Result<Vec<u8>> {
+        let mut schema = arrow_schema::Schema::from(data_schema);
+        schema.metadata.extend(ext_meta);
+
+        let mut buf = Vec::new();
+        let opts = IpcWriteOptions::try_new(8, false, MetadataVersion::V5)?
+            .try_with_compression(Some(CompressionType::LZ4_FRAME))?;
+        let mut writer = StreamWriter::try_new_with_options(&mut buf, &schema, opts)?;
+
+        for (block, _) in &self.columns {
+            let block = DataBlock::new_from_columns(block.clone());
+            let batch = block.to_record_batch_with_dataschema(data_schema)?;
+            writer.write(&batch)?;
+        }
+        writer.finish()?;
+        Ok(buf)
     }
 }
 

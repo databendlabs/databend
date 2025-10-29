@@ -27,6 +27,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::schema::Constraint;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_transforms::columns::TransformAddConstColumns;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::ConstraintExprBinder;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -52,7 +53,6 @@ use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanMeta;
-use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::RawValueSource;
@@ -290,8 +290,9 @@ impl Interpreter for InsertInterpreter {
                 if !plan.values_consts.is_empty() {
                     let input_schema = Arc::new(DataSchema::from(&plan.required_source_schema));
                     build_res.main_pipeline.try_add_transformer(|| {
+                        let ctx = self.ctx.get_function_context()?;
                         TransformAddConstColumns::try_new(
-                            self.ctx.clone(),
+                            ctx,
                             input_schema.clone(),
                             plan.required_values_schema.clone(),
                             plan.values_consts.clone(),

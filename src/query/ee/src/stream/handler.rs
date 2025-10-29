@@ -102,13 +102,12 @@ impl StreamHandler for RealStreamHandler {
         }
 
         let table = FuseTable::try_from_table(table.as_ref())?;
-        let abort_checker = ctx.get_abort_checker();
         let change_desc = table
             .get_change_descriptor(
+                &ctx,
                 plan.append_only,
                 "".to_string(),
                 plan.navigation.as_ref(),
-                abort_checker,
             )
             .await?;
         table.check_changes_valid(&table.get_table_info().desc, change_desc.seq)?;
