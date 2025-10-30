@@ -96,6 +96,9 @@ pub fn calculate_parquet_max_levels(data_type: &TableDataType) -> (i16, i16) {
         | TableDataType::EmptyMap
         | TableDataType::Array(_)
         | TableDataType::Map(_)
-        | TableDataType::Tuple { .. } => unimplemented!(),
+        | TableDataType::Tuple { .. }
+        | TableDataType::TimestampTz
+        | TableDataType::Opaque(_)
+        | TableDataType::StageLocation => unimplemented!(),
     }
 }

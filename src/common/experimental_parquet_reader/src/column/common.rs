@@ -34,28 +34,28 @@ use crate::reader::decompressor;
 /// This trait enables efficient dictionary-based deserialization for numeric types
 pub trait DictionarySupport: ParquetColumnType {
     /// Create a value from a dictionary entry (raw bytes)
-    /// 
+    ///
     /// # Arguments
     /// * `entry` - Raw bytes from dictionary page
-    /// 
+    ///
     /// # Returns
     /// Decoded value of type Self
     fn from_dictionary_entry(entry: &[u8]) -> Result<Self>;
-    
+
     /// Batch lookup from dictionary into provided output slice
-    /// 
+    ///
     /// # Arguments
     /// * `dictionary` - The dictionary values to lookup from
-    /// * `indices` - Array of dictionary indices 
+    /// * `indices` - Array of dictionary indices
     /// * `output` - Output slice to write results into (must have same length as indices)
-    /// 
+    ///
     /// # Performance
     /// This is the performance-critical path for dictionary decoding.
     /// Implementations should use batch bounds checking and unsafe operations for maximum speed.
     fn batch_from_dictionary_into_slice(
-        dictionary: &[Self], 
-        indices: &[i32], 
-        output: &mut [Self]
+        dictionary: &[Self],
+        indices: &[i32],
+        output: &mut [Self],
     ) -> Result<()>;
 }
 
@@ -288,7 +288,7 @@ fn process_data_page<T: Copy + DictionarySupport>(
                     )));
                 }
             }
-            
+
             process_plain_encoding(
                 values_buffer,
                 page_rows,
@@ -298,12 +298,7 @@ fn process_data_page<T: Copy + DictionarySupport>(
         }
         parquet2::encoding::Encoding::RleDictionary => {
             if let Some(dict) = dictionary {
-                process_rle_dictionary_encoding(
-                    values_buffer,
-                    page_rows,
-                    column_data,
-                    dict,
-                )?;
+                process_rle_dictionary_encoding(values_buffer, page_rows, column_data, dict)?;
             } else {
                 return Err(ErrorCode::Internal(
                     "RLE dictionary encoding requires dictionary page".to_string(),
@@ -331,17 +326,20 @@ fn process_dictionary_page<T: DictionarySupport>(
         PhysicalType::Int32 => 4,
         PhysicalType::Int64 => 8,
         PhysicalType::FixedLenByteArray(len) => len as usize,
-        _ => return Err(ErrorCode::Internal(format!(
-            "Unsupported physical type for dictionary: {:?}", T::PHYSICAL_TYPE
-        ))),
+        _ => {
+            return Err(ErrorCode::Internal(format!(
+                "Unsupported physical type for dictionary: {:?}",
+                T::PHYSICAL_TYPE
+            )))
+        }
     };
-    
+
     // Parse dictionary entries based on physical type
     for chunk in dict_buffer.chunks_exact(type_size) {
         let value = T::from_dictionary_entry(chunk)?;
         dictionary.push(value);
     }
-    
+
     Ok(())
 }
 
@@ -353,16 +351,18 @@ fn process_rle_dictionary_encoding<T: DictionarySupport>(
     dictionary: &[T],
 ) -> Result<()> {
     if values_buffer.is_empty() {
-        return Err(ErrorCode::Internal("Empty values buffer for RLE dictionary".to_string()));
+        return Err(ErrorCode::Internal(
+            "Empty values buffer for RLE dictionary".to_string(),
+        ));
     }
-    
+
     // First byte is bit_width
     let bit_width = values_buffer[0];
-    
+
     // Create RLE decoder
     let mut rle_decoder = RleDecoder::new(bit_width);
     rle_decoder.set_data(bytes::Bytes::copy_from_slice(&values_buffer[1..]));
-    
+
     // Decode indices - avoid zero initialization for performance
     let mut indices = Vec::with_capacity(page_rows);
     unsafe {
@@ -371,14 +371,14 @@ fn process_rle_dictionary_encoding<T: DictionarySupport>(
     let decoded_count = rle_decoder
         .get_batch(&mut indices)
         .map_err(|e| ErrorCode::Internal(format!("Failed to decode RLE indices: {}", e)))?;
-    
+
     if decoded_count != page_rows {
         return Err(ErrorCode::Internal(format!(
-            "RLE decoder returned wrong count: expected={}, got={}", 
+            "RLE decoder returned wrong count: expected={}, got={}",
             page_rows, decoded_count
         )));
     }
-    
+
     // Batch dictionary lookup - performance critical path
     let old_len = column_data.len();
     column_data.reserve(page_rows);
@@ -386,7 +386,7 @@ fn process_rle_dictionary_encoding<T: DictionarySupport>(
         column_data.set_len(old_len + page_rows);
     }
     T::batch_from_dictionary_into_slice(dictionary, &indices, &mut column_data[old_len..])?;
-    
+
     Ok(())
 }
 
@@ -399,7 +399,10 @@ pub trait ParquetColumnType: Copy + Send + Sync + 'static {
     const PHYSICAL_TYPE: PhysicalType;
 
     /// Create a column from the deserialized data
-    fn create_column(data: Vec<Self>, metadata: &Self::Metadata) -> databend_common_expression::Column;
+    fn create_column(
+        data: Vec<Self>,
+        metadata: &Self::Metadata,
+    ) -> databend_common_expression::Column;
 }
 
 // TODO rename this
@@ -409,7 +412,7 @@ pub struct ParquetColumnIterator<'a, T: ParquetColumnType + DictionarySupport> {
     num_rows: usize,
     is_nullable: bool,
     metadata: T::Metadata,
-    dictionary: Option<Vec<T>>,  // Cached dictionary values
+    dictionary: Option<Vec<T>>, // Cached dictionary values
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -494,10 +497,10 @@ impl<'a, T: ParquetColumnType + DictionarySupport> Iterator for ParquetColumnIte
                     }
                 }
                 parquet2::page::Page::Dict(dict_page) => {
-                    if T::PHYSICAL_TYPE == PhysicalType::Int32 
-                        || T::PHYSICAL_TYPE == PhysicalType::Int64 
-                        || matches!(T::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(_)) {
-                        
+                    if T::PHYSICAL_TYPE == PhysicalType::Int32
+                        || T::PHYSICAL_TYPE == PhysicalType::Int64
+                        || matches!(T::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(_))
+                    {
                         // Process dictionary page and cache the dictionary
                         if let Some(ref mut dictionary) = self.dictionary {
                             if let Err(e) = process_dictionary_page::<T>(dict_page, dictionary) {
@@ -505,7 +508,8 @@ impl<'a, T: ParquetColumnType + DictionarySupport> Iterator for ParquetColumnIte
                             }
                         } else {
                             let mut dictionary = Vec::new();
-                            if let Err(e) = process_dictionary_page::<T>(dict_page, &mut dictionary) {
+                            if let Err(e) = process_dictionary_page::<T>(dict_page, &mut dictionary)
+                            {
                                 return Some(Err(e));
                             }
                             self.dictionary = Some(dictionary);
@@ -682,12 +686,15 @@ pub fn combine_validity_bitmaps(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use parquet2::page::{DictPage, DataPage};
-    use parquet2::encoding::Encoding;
-    use parquet2::compression::Compression;
-    use parquet2::schema::types::PhysicalType;
     use std::sync::Arc;
+
+    use parquet2::compression::Compression;
+    use parquet2::encoding::Encoding;
+    use parquet2::page::DataPage;
+    use parquet2::page::DictPage;
+    use parquet2::schema::types::PhysicalType;
+
+    use super::*;
 
     // Mock implementation for testing
     #[derive(Debug, Clone, Copy, PartialEq)]
@@ -696,10 +703,15 @@ mod tests {
     impl ParquetColumnType for TestType {
         const PHYSICAL_TYPE: PhysicalType = PhysicalType::Int32;
         type Metadata = ();
-        
-        fn create_column(data: Vec<Self>, metadata: &Self::Metadata) -> databend_common_expression::Column {
+
+        fn create_column(
+            data: Vec<Self>,
+            metadata: &Self::Metadata,
+        ) -> databend_common_expression::Column {
             let raw_data: Vec<i32> = unsafe { std::mem::transmute(data) };
-            databend_common_expression::Column::Number(databend_common_expression::NumberColumn::Int32(raw_data.into()))
+            databend_common_expression::Column::Number(
+                databend_common_expression::NumberColumn::Int32(raw_data.into()),
+            )
         }
     }
 
@@ -727,9 +739,11 @@ mod tests {
 
             for (i, &index) in indices.iter().enumerate() {
                 if index < 0 || index as usize >= dictionary.len() {
-                    return Err(databend_common_exception::ErrorCode::Internal(
-                        format!("Dictionary index out of bounds: {} >= {}", index, dictionary.len()),
-                    ));
+                    return Err(databend_common_exception::ErrorCode::Internal(format!(
+                        "Dictionary index out of bounds: {} >= {}",
+                        index,
+                        dictionary.len()
+                    )));
                 }
                 output[i] = dictionary[index as usize];
             }
@@ -741,9 +755,9 @@ mod tests {
     fn test_process_dictionary_page() -> Result<()> {
         // Create test dictionary data (3 i32 values: 10, 20, 30)
         let dict_data = vec![
-            10u8, 0, 0, 0,  // 10 in little-endian
-            20u8, 0, 0, 0,  // 20 in little-endian
-            30u8, 0, 0, 0,  // 30 in little-endian
+            10u8, 0, 0, 0, // 10 in little-endian
+            20u8, 0, 0, 0, // 20 in little-endian
+            30u8, 0, 0, 0, // 30 in little-endian
         ];
 
         let dict_page = DictPage {
@@ -801,24 +815,24 @@ mod tests {
         // This test verifies that our optimization to avoid zero initialization
         // doesn't break the basic functionality. We can't directly test the
         // performance improvement, but we can ensure correctness.
-        
+
         let page_rows = 1000;
-        
+
         // Create indices vector with our optimized allocation
         let mut indices = Vec::with_capacity(page_rows);
         unsafe {
             indices.set_len(page_rows);
         }
-        
+
         // Verify the vector has the correct capacity and length
         assert_eq!(indices.len(), page_rows);
         assert!(indices.capacity() >= page_rows);
-        
+
         // Verify we can write to all positions (this would crash if unsafe was wrong)
         for i in 0..page_rows {
             indices[i] = i as i32;
         }
-        
+
         // Verify the data was written correctly
         for i in 0..page_rows {
             assert_eq!(indices[i], i as i32);
@@ -831,11 +845,17 @@ mod tests {
         assert_eq!(i32::PHYSICAL_TYPE, PhysicalType::Int32);
         assert_eq!(i64::PHYSICAL_TYPE, PhysicalType::Int64);
         assert_eq!(Date::PHYSICAL_TYPE, PhysicalType::Int32);
-        
+
         // Decimal types use FixedLenByteArray
         assert_eq!(Decimal64::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(8));
-        assert_eq!(Decimal128::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(16));
-        assert_eq!(Decimal256::PHYSICAL_TYPE, PhysicalType::FixedLenByteArray(32));
+        assert_eq!(
+            Decimal128::PHYSICAL_TYPE,
+            PhysicalType::FixedLenByteArray(16)
+        );
+        assert_eq!(
+            Decimal256::PHYSICAL_TYPE,
+            PhysicalType::FixedLenByteArray(32)
+        );
     }
 
     #[test]
@@ -843,16 +863,16 @@ mod tests {
         // Test the performance pattern we optimized: pre-allocation + direct assignment
         let dictionary = vec![TestType(100), TestType(200), TestType(300)];
         let indices = vec![0i32, 1, 2, 0, 1, 2]; // 6 lookups
-        
+
         // Pre-allocate output (our optimization)
         let mut output = Vec::with_capacity(indices.len());
         unsafe {
             output.set_len(indices.len());
         }
-        
+
         // Perform batch lookup
         TestType::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
-        
+
         // Verify results
         assert_eq!(output.len(), 6);
         assert_eq!(output[0], TestType(100));
@@ -861,7 +881,7 @@ mod tests {
         assert_eq!(output[3], TestType(100));
         assert_eq!(output[4], TestType(200));
         assert_eq!(output[5], TestType(300));
-        
+
         Ok(())
     }
 }

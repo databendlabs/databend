@@ -21,9 +21,9 @@ use databend_common_expression::types::DecimalSize;
 use databend_common_expression::Column;
 use parquet2::schema::types::PhysicalType;
 
+use crate::column::common::DictionarySupport;
 use crate::column::common::ParquetColumnIterator;
 use crate::column::common::ParquetColumnType;
-use crate::column::common::DictionarySupport;
 use crate::reader::decompressor::Decompressor;
 
 // =============================================================================
@@ -100,100 +100,109 @@ impl ParquetColumnType for Decimal256 {
 impl DictionarySupport for Decimal64 {
     fn from_dictionary_entry(entry: &[u8]) -> databend_common_exception::Result<Self> {
         if entry.len() != 8 {
-            return Err(databend_common_exception::ErrorCode::Internal(
-                format!("Invalid Decimal64 dictionary entry length: expected 8, got {}", entry.len())
-            ));
+            return Err(databend_common_exception::ErrorCode::Internal(format!(
+                "Invalid Decimal64 dictionary entry length: expected 8, got {}",
+                entry.len()
+            )));
         }
-        
+
         // Parquet stores integers in little-endian format
         let bytes: [u8; 8] = entry.try_into().map_err(|_| {
-            databend_common_exception::ErrorCode::Internal("Failed to convert bytes to Decimal64".to_string())
+            databend_common_exception::ErrorCode::Internal(
+                "Failed to convert bytes to Decimal64".to_string(),
+            )
         })?;
-        
+
         Ok(Decimal64(i64::from_le_bytes(bytes)))
     }
-    
+
     fn batch_from_dictionary_into_slice(
-        dictionary: &[Self], 
-        indices: &[i32], 
-        output: &mut [Self]
+        dictionary: &[Self],
+        indices: &[i32],
+        output: &mut [Self],
     ) -> databend_common_exception::Result<()> {
         // Validate output slice length
         if output.len() != indices.len() {
             return Err(databend_common_exception::ErrorCode::Internal(format!(
-                "Output slice length ({}) doesn't match indices length ({})", 
-                output.len(), indices.len()
+                "Output slice length ({}) doesn't match indices length ({})",
+                output.len(),
+                indices.len()
             )));
         }
-        
+
         // Batch bounds checking - find max index once
         if let Some(&max_idx) = indices.iter().max() {
             if max_idx as usize >= dictionary.len() {
                 return Err(databend_common_exception::ErrorCode::Internal(format!(
-                    "Dictionary index out of bounds: {} >= {}", 
-                    max_idx, dictionary.len()
+                    "Dictionary index out of bounds: {} >= {}",
+                    max_idx,
+                    dictionary.len()
                 )));
             }
         }
-        
+
         // Fast unchecked copy - all bounds verified above
         for (i, &index) in indices.iter().enumerate() {
             unsafe {
                 *output.get_unchecked_mut(i) = *dictionary.get_unchecked(index as usize);
             }
         }
-        
+
         Ok(())
     }
-
 }
 
 impl DictionarySupport for Decimal128 {
     fn from_dictionary_entry(entry: &[u8]) -> databend_common_exception::Result<Self> {
         if entry.len() != 16 {
-            return Err(databend_common_exception::ErrorCode::Internal(
-                format!("Invalid Decimal128 dictionary entry length: expected 16, got {}", entry.len())
-            ));
+            return Err(databend_common_exception::ErrorCode::Internal(format!(
+                "Invalid Decimal128 dictionary entry length: expected 16, got {}",
+                entry.len()
+            )));
         }
-        
+
         // Parquet stores integers in little-endian format
         let bytes: [u8; 16] = entry.try_into().map_err(|_| {
-            databend_common_exception::ErrorCode::Internal("Failed to convert bytes to Decimal128".to_string())
+            databend_common_exception::ErrorCode::Internal(
+                "Failed to convert bytes to Decimal128".to_string(),
+            )
         })?;
-        
+
         Ok(Decimal128(i128::from_le_bytes(bytes)))
     }
-    
+
     fn batch_from_dictionary_into_slice(
-        dictionary: &[Self], 
-        indices: &[i32], 
-        output: &mut [Self]
+        dictionary: &[Self],
+        indices: &[i32],
+        output: &mut [Self],
     ) -> databend_common_exception::Result<()> {
         // Validate output slice length
         if output.len() != indices.len() {
             return Err(databend_common_exception::ErrorCode::Internal(format!(
-                "Output slice length ({}) doesn't match indices length ({})", 
-                output.len(), indices.len()
+                "Output slice length ({}) doesn't match indices length ({})",
+                output.len(),
+                indices.len()
             )));
         }
-        
+
         // Batch bounds checking - find max index once
         if let Some(&max_idx) = indices.iter().max() {
             if max_idx as usize >= dictionary.len() {
                 return Err(databend_common_exception::ErrorCode::Internal(format!(
-                    "Dictionary index out of bounds: {} >= {}", 
-                    max_idx, dictionary.len()
+                    "Dictionary index out of bounds: {} >= {}",
+                    max_idx,
+                    dictionary.len()
                 )));
             }
         }
-        
+
         // Fast unchecked copy - all bounds verified above
         for (i, &index) in indices.iter().enumerate() {
             unsafe {
                 *output.get_unchecked_mut(i) = *dictionary.get_unchecked(index as usize);
             }
         }
-        
+
         Ok(())
     }
 }
@@ -201,51 +210,56 @@ impl DictionarySupport for Decimal128 {
 impl DictionarySupport for Decimal256 {
     fn from_dictionary_entry(entry: &[u8]) -> databend_common_exception::Result<Self> {
         if entry.len() != 32 {
-            return Err(databend_common_exception::ErrorCode::Internal(
-                format!("Invalid Decimal256 dictionary entry length: expected 32, got {}", entry.len())
-            ));
+            return Err(databend_common_exception::ErrorCode::Internal(format!(
+                "Invalid Decimal256 dictionary entry length: expected 32, got {}",
+                entry.len()
+            )));
         }
-        
+
         // Parquet stores integers in little-endian format
         let bytes: [u8; 32] = entry.try_into().map_err(|_| {
-            databend_common_exception::ErrorCode::Internal("Failed to convert bytes to Decimal256".to_string())
+            databend_common_exception::ErrorCode::Internal(
+                "Failed to convert bytes to Decimal256".to_string(),
+            )
         })?;
-        
+
         // Create i256 from bytes
         let value = i256::from_le_bytes(bytes);
         Ok(Decimal256(value))
     }
-    
+
     fn batch_from_dictionary_into_slice(
-        dictionary: &[Self], 
-        indices: &[i32], 
-        output: &mut [Self]
+        dictionary: &[Self],
+        indices: &[i32],
+        output: &mut [Self],
     ) -> databend_common_exception::Result<()> {
         // Validate output slice length
         if output.len() != indices.len() {
             return Err(databend_common_exception::ErrorCode::Internal(format!(
-                "Output slice length ({}) doesn't match indices length ({})", 
-                output.len(), indices.len()
+                "Output slice length ({}) doesn't match indices length ({})",
+                output.len(),
+                indices.len()
             )));
         }
-        
+
         // Batch bounds checking - find max index once
         if let Some(&max_idx) = indices.iter().max() {
             if max_idx as usize >= dictionary.len() {
                 return Err(databend_common_exception::ErrorCode::Internal(format!(
-                    "Dictionary index out of bounds: {} >= {}", 
-                    max_idx, dictionary.len()
+                    "Dictionary index out of bounds: {} >= {}",
+                    max_idx,
+                    dictionary.len()
                 )));
             }
         }
-        
+
         // Fast unchecked copy - all bounds verified above
         for (i, &index) in indices.iter().enumerate() {
             unsafe {
                 *output.get_unchecked_mut(i) = *dictionary.get_unchecked(index as usize);
             }
         }
-        
+
         Ok(())
     }
 }
@@ -311,8 +325,9 @@ pub fn new_decimal256_iter(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use databend_common_exception::Result;
+
+    use super::*;
 
     #[test]
     fn test_decimal64_dictionary_support() -> Result<()> {
@@ -393,13 +408,13 @@ mod tests {
             Decimal64(200),
             Decimal64(300),
             Decimal64(400),
-            Decimal64(500)
+            Decimal64(500),
         ];
-        
+
         // Test normal indices
         let indices = [0i32, 2, 4, 1, 3];
         let mut output = vec![Decimal64(0); 5];
-        
+
         Decimal64::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
         assert_eq!(output, vec![
             Decimal64(100),
@@ -412,9 +427,14 @@ mod tests {
         // Test repeated indices
         let indices = [1i32, 1, 1, 1];
         let mut output = vec![Decimal64(0); 4];
-        
+
         Decimal64::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
-        assert_eq!(output, vec![Decimal64(200), Decimal64(200), Decimal64(200), Decimal64(200)]);
+        assert_eq!(output, vec![
+            Decimal64(200),
+            Decimal64(200),
+            Decimal64(200),
+            Decimal64(200)
+        ]);
 
         Ok(())
     }
@@ -422,16 +442,12 @@ mod tests {
     #[test]
     fn test_decimal128_batch_from_dictionary_into_slice() -> Result<()> {
         // Setup dictionary
-        let dictionary = vec![
-            Decimal128(1000),
-            Decimal128(2000),
-            Decimal128(3000)
-        ];
-        
+        let dictionary = vec![Decimal128(1000), Decimal128(2000), Decimal128(3000)];
+
         // Test normal indices
         let indices = [2i32, 0, 1, 2, 0];
         let mut output = vec![Decimal128(0); 5];
-        
+
         Decimal128::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
         assert_eq!(output, vec![
             Decimal128(3000),
@@ -450,13 +466,13 @@ mod tests {
         let dictionary = vec![
             Decimal256(i256::from(10)),
             Decimal256(i256::from(20)),
-            Decimal256(i256::from(30))
+            Decimal256(i256::from(30)),
         ];
-        
+
         // Test normal indices
         let indices = [1i32, 0, 2];
         let mut output = vec![Decimal256(i256::from(0)); 3];
-        
+
         Decimal256::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
         assert_eq!(output, vec![
             Decimal256(i256::from(20)),
@@ -470,20 +486,25 @@ mod tests {
     #[test]
     fn test_decimal_bounds_checking() -> Result<()> {
         let dictionary = vec![Decimal64(10), Decimal64(20), Decimal64(30)];
-        
+
         // Test out of bounds index
         let indices = [0i32, 3, 1]; // Index 3 is out of bounds
         let mut output = vec![Decimal64(0); 3];
-        
-        let result = Decimal64::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
+
+        let result =
+            Decimal64::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Dictionary index out of bounds"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Dictionary index out of bounds"));
 
         // Test negative index
         let indices = [0i32, -1, 1];
         let mut output = vec![Decimal64(0); 3];
-        
-        let result = Decimal64::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
+
+        let result =
+            Decimal64::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
         assert!(result.is_err());
 
         Ok(())
@@ -495,7 +516,7 @@ mod tests {
         let dictionary = vec![Decimal128(10), Decimal128(20), Decimal128(30)];
         let indices: [i32; 0] = [];
         let mut output: Vec<Decimal128> = vec![];
-        
+
         Decimal128::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
         assert_eq!(output.len(), 0);
 
@@ -503,7 +524,7 @@ mod tests {
         let dictionary: Vec<Decimal128> = vec![];
         let indices: [i32; 0] = [];
         let mut output: Vec<Decimal128> = vec![];
-        
+
         Decimal128::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
         assert_eq!(output.len(), 0);
 
@@ -515,10 +536,14 @@ mod tests {
         let dictionary = vec![Decimal256(i256::from(10)), Decimal256(i256::from(20))];
         let indices = [0i32, 1, 0];
         let mut output = vec![Decimal256(i256::from(0)); 2]; // Output too small
-        
-        let result = Decimal256::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
+
+        let result =
+            Decimal256::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Output slice length mismatch"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Output slice length mismatch"));
 
         Ok(())
     }
