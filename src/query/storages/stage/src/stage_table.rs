@@ -44,6 +44,7 @@ use databend_storages_common_stage::SingleFilePartition;
 use opendal::Operator;
 
 use crate::read::avro::AvroReadPipelineBuilder;
+use crate::read::row_based::formats::csv_read_partitions;
 use crate::read::row_based::RowBasedReadPipelineBuilder;
 
 /// TODO: we need to track the data metrics in stage table.
@@ -169,10 +170,10 @@ impl Table for StageTable {
             FileFormatParams::Orc(_) => {
                 OrcTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
             }
-            FileFormatParams::Csv(_)
-            | FileFormatParams::NdJson(_)
-            | FileFormatParams::Tsv(_)
-            | FileFormatParams::Avro(_) => self.read_partitions_simple(ctx, stage_table_info).await,
+            FileFormatParams::Csv(_) => csv_read_partitions(stage_table_info, ctx).await,
+            FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_) | FileFormatParams::Avro(_) => {
+                self.read_partitions_simple(ctx, stage_table_info).await
+            }
             _ => unreachable!(
                 "unexpected format {} in StageTable::read_partition",
                 stage_table_info.stage_info.file_format_params

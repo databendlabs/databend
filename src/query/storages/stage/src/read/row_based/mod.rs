@@ -14,7 +14,7 @@
 
 mod batch;
 pub(crate) mod format;
-mod formats;
+pub mod formats;
 pub(crate) mod processors;
 mod read_pipeline;
 mod split;

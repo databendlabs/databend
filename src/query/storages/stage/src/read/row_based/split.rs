@@ -18,6 +18,9 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 use databend_common_catalog::plan::PartInfo;
+use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_storages_common_stage::SingleFilePartition;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
@@ -47,5 +50,13 @@ impl PartInfo for SplitRowBase {
         self.offset.hash(&mut s);
         self.size.hash(&mut s);
         s.finish()
+    }
+}
+
+impl SplitRowBase {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&Self> {
+        info.as_any()
+            .downcast_ref::<Self>()
+            .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to SplitRowBase."))
     }
 }

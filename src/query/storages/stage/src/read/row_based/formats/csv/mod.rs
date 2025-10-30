@@ -18,3 +18,4 @@ mod partitions;
 mod separator;
 
 pub use format::CsvInputFormat;
+pub use partitions::*;
