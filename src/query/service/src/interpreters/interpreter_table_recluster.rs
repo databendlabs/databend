@@ -632,7 +632,7 @@ impl ReclusterTableInterpreter {
                 "range_bound(1000, {sample_size})({cluster_key_str})"
             ));
 
-            hilbert_keys.push(format!("{table}.{cluster_key_str}, []"));
+            hilbert_keys.push(format!("{cluster_key_str}, []"));
         }
         let hilbert_keys_str = hilbert_keys.join(", ");
 
