@@ -71,3 +71,6 @@ DROP DATABASE test_db_inherit
 
 statement ok
 DROP CONNECTION IF EXISTS explicit_conn
+
+statement ok
+DROP CONNECTION IF EXISTS default_conn
