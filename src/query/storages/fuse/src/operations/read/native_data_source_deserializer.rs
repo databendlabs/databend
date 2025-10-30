@@ -235,6 +235,7 @@ pub struct NativeDeserializeDataTransform {
 #[derive(Clone)]
 struct BloomRuntimeFilterRef {
     column_index: FieldIndex,
+    filter_id: usize,
     filter: BinaryFuse16,
     stats: Arc<RuntimeFilterStats>,
 }
@@ -753,17 +754,30 @@ impl NativeDeserializeDataTransform {
                 .get_runtime_filters(self.scan_id)
                 .into_iter()
                 .filter_map(|entry| {
+                    let filter_id = entry.id;
                     let RuntimeFilterEntry { bloom, stats, .. } = entry;
                     let bloom = bloom?;
                     let column_index = self.src_schema.index_of(bloom.column_name.as_str()).ok()?;
                     Some(BloomRuntimeFilterRef {
                         column_index,
+                        filter_id,
                         filter: bloom.filter.clone(),
                         stats,
                     })
                 })
                 .collect::<Vec<_>>();
             if !bloom_filters.is_empty() {
+                let mut filter_ids = bloom_filters
+                    .iter()
+                    .map(|f| f.filter_id)
+                    .collect::<Vec<_>>();
+                filter_ids.sort_unstable();
+                log::info!(
+                    "RUNTIME-FILTER: scan_id={} bloom_filters={} filter_ids={:?}",
+                    self.scan_id,
+                    bloom_filters.len(),
+                    filter_ids
+                );
                 self.bloom_runtime_filter = Some(bloom_filters);
                 if self.filter_executor.is_none() {
                     self.filter_executor = Some(new_dummy_filter_executor(self.func_ctx.clone()));
