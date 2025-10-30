@@ -1499,6 +1499,34 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
     );
 
+    let current_date = map(consumed(rule! { CURRENT_DATE }), |(span, _)| {
+        ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct: false,
+                name: Identifier::from_name(transform_span(span.tokens), "current_date"),
+                args: vec![],
+                params: vec![],
+                order_by: vec![],
+                window: None,
+                lambda: None,
+            },
+        }
+    });
+
+    let current_time = map(consumed(rule! { CURRENT_TIME }), |(span, _)| {
+        ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct: false,
+                name: Identifier::from_name(transform_span(span.tokens), "current_time"),
+                args: vec![],
+                params: vec![],
+                order_by: vec![],
+                window: None,
+                lambda: None,
+            },
+        }
+    });
+
     let current_timestamp = map(consumed(rule! { CURRENT_TIMESTAMP }), |(span, _)| {
         ExprElement::FunctionCall {
             func: FunctionCall {
@@ -1573,6 +1601,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #dot_access : "<dot_access>"
                 | #map_access : "[<key>] | .<key> | :<key>"
                 | #literal : "<literal>"
+                | #current_date: "CURRENT_DATE"
+                | #current_time: "CURRENT_TIME"
                 | #current_timestamp: "CURRENT_TIMESTAMP"
                 | #array : "`[<expr>, ...]`"
                 | #map_expr : "`{ <literal> : <expr>, ... }`"
