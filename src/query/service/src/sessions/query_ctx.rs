@@ -33,6 +33,7 @@ use async_channel::Sender;
 use chrono_tz::Tz;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
@@ -61,6 +62,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterStatsSnapshot;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
@@ -517,6 +519,151 @@ impl QueryContext {
         self.shared
             .unload_callbacked
             .fetch_or(true, Ordering::SeqCst)
+    }
+
+    pub fn should_log_runtime_filters(&self) -> bool {
+        !self
+            .shared
+            .runtime_filter_logged
+            .swap(true, Ordering::SeqCst)
+    }
+
+    pub fn log_runtime_filter_stats(&self) {
+        struct FilterLogEntry {
+            filter_id: usize,
+            probe_expr: String,
+            bloom_column: Option<String>,
+            has_bloom: bool,
+            has_inlist: bool,
+            has_min_max: bool,
+            stats: RuntimeFilterStatsSnapshot,
+        }
+
+        let runtime_filters = self.shared.runtime_filters.read();
+        let mut snapshots: Vec<(IndexType, Vec<FilterLogEntry>)> = Vec::new();
+        for (scan_id, info) in runtime_filters.iter() {
+            if info.filters.is_empty() {
+                continue;
+            }
+
+            let mut filters = Vec::with_capacity(info.filters.len());
+            for entry in &info.filters {
+                filters.push(FilterLogEntry {
+                    filter_id: entry.id,
+                    probe_expr: entry.probe_expr.sql_display(),
+                    bloom_column: entry.bloom.as_ref().map(|bloom| bloom.column_name.clone()),
+                    has_bloom: entry.bloom.is_some(),
+                    has_inlist: entry.inlist.is_some(),
+                    has_min_max: entry.min_max.is_some(),
+                    stats: entry.stats.snapshot(),
+                });
+            }
+
+            if !filters.is_empty() {
+                snapshots.push((*scan_id, filters));
+            }
+        }
+        drop(runtime_filters);
+
+        if snapshots.is_empty() {
+            return;
+        }
+
+        if !self.should_log_runtime_filters() {
+            return;
+        }
+
+        let query_id = self.get_id();
+
+        for (scan_id, filters) in snapshots {
+            let mut filter_nodes = Vec::new();
+            for filter in filters {
+                let FilterLogEntry {
+                    filter_id,
+                    probe_expr,
+                    bloom_column,
+                    has_bloom,
+                    has_inlist,
+                    has_min_max,
+                    stats,
+                } = filter;
+
+                let mut types = Vec::new();
+                if has_bloom {
+                    types.push("bloom");
+                }
+                if has_inlist {
+                    types.push("inlist");
+                }
+                if has_min_max {
+                    types.push("min_max");
+                }
+                let type_text = if types.is_empty() {
+                    "none".to_string()
+                } else {
+                    types.join(",")
+                };
+
+                let mut detail_children = vec![
+                    FormatTreeNode::new(format!("probe expr: {}", probe_expr)),
+                    FormatTreeNode::new(format!("types: [{}]", type_text)),
+                ];
+
+                if let Some(column) = bloom_column {
+                    detail_children.push(FormatTreeNode::new(format!("bloom column: {}", column)));
+                }
+
+                if has_bloom {
+                    detail_children.push(FormatTreeNode::new(format!(
+                        "bloom rows filtered: {}",
+                        stats.bloom_rows_filtered
+                    )));
+                    detail_children.push(FormatTreeNode::new(format!(
+                        "bloom time: {:?}",
+                        Duration::from_nanos(stats.bloom_time_ns)
+                    )));
+                }
+
+                if has_inlist || has_min_max {
+                    detail_children.push(FormatTreeNode::new(format!(
+                        "inlist/min-max time: {:?}",
+                        Duration::from_nanos(stats.inlist_min_max_time_ns)
+                    )));
+                    detail_children.push(FormatTreeNode::new(format!(
+                        "min-max rows filtered: {}",
+                        stats.min_max_rows_filtered
+                    )));
+                    detail_children.push(FormatTreeNode::new(format!(
+                        "min-max partitions pruned: {}",
+                        stats.min_max_partitions_pruned
+                    )));
+                }
+
+                filter_nodes.push(FormatTreeNode::with_children(
+                    format!("filter id:{}", filter_id),
+                    detail_children,
+                ));
+            }
+
+            if filter_nodes.is_empty() {
+                continue;
+            }
+
+            let root = FormatTreeNode::with_children(format!("Scan {}", scan_id), vec![
+                FormatTreeNode::with_children("runtime filters".to_string(), filter_nodes),
+            ]);
+
+            match root.format_pretty() {
+                Ok(text) => info!(
+                    "runtime filter stats (query_id={}, scan_id={}):\n{}",
+                    query_id, scan_id, text
+                ),
+                Err(err) => info!(
+                    "runtime filter stats (query_id={}, scan_id={}): failed to format: {}",
+                    query_id, scan_id, err
+                ),
+            }
+        }
     }
 
     pub fn unload_spill_meta(&self) {

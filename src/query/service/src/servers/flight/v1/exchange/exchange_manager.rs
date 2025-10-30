@@ -57,6 +57,7 @@ use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
 use crate::physical_plans::PhysicalPlan;
+use crate::pipelines::attach_runtime_filter_logger;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -1083,10 +1084,11 @@ impl FragmentCoordinator {
             let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
-                pipeline_ctx,
+                pipeline_ctx.clone(),
             );
 
-            let res = pipeline_builder.finalize(&self.physical_plan)?;
+            let mut res = pipeline_builder.finalize(&self.physical_plan)?;
+            attach_runtime_filter_logger(pipeline_ctx, &mut res.main_pipeline);
 
             self.pipeline_build_res = Some(res);
         }

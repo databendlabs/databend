@@ -127,3 +127,10 @@ impl PipelineBuilder {
         plan.build_pipeline(self)
     }
 }
+
+pub fn attach_runtime_filter_logger(ctx: Arc<QueryContext>, pipeline: &mut Pipeline) {
+    pipeline.set_on_finished(always_callback(move |_info: &ExecutionInfo| {
+        ctx.log_runtime_filter_stats();
+        Ok(())
+    }));
+}
