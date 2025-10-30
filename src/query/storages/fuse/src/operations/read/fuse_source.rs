@@ -42,6 +42,7 @@ use crate::operations::read::native_data_transform_reader::ReadNativeDataTransfo
 use crate::operations::read::parquet_data_transform_reader::ReadParquetDataTransform;
 use crate::operations::read::DeserializeDataTransform;
 use crate::operations::read::NativeDeserializeDataTransform;
+use crate::operations::read::TransformRuntimeFilterWait;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
@@ -58,6 +59,8 @@ pub fn build_fuse_native_source_pipeline(
 ) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(true, max_threads, max_io_requests, plan);
+
+    let need_runtime_filter_wait = !ctx.get_runtime_filter_ready(plan.scan_id).is_empty();
 
     if topk.is_some() {
         max_threads = max_threads.min(16);
@@ -81,6 +84,16 @@ pub fn build_fuse_native_source_pipeline(
                     let pipe = build_block_source(max_threads, partitions.clone(), 1, ctx.clone())?;
                     pipeline.add_pipe(pipe);
                 }
+            }
+            if need_runtime_filter_wait {
+                pipeline.add_transform(|input, output| {
+                    Ok(TransformRuntimeFilterWait::create(
+                        ctx.clone(),
+                        plan.scan_id,
+                        input,
+                        output,
+                    ))
+                })?;
             }
             pipeline.add_transform(|input, output| {
                 ReadNativeDataTransform::<true>::create(
@@ -116,6 +129,17 @@ pub fn build_fuse_native_source_pipeline(
                     )?;
                     pipeline.add_pipe(pipe);
                 }
+            }
+
+            if need_runtime_filter_wait {
+                pipeline.add_transform(|input, output| {
+                    Ok(TransformRuntimeFilterWait::create(
+                        ctx.clone(),
+                        plan.scan_id,
+                        input,
+                        output,
+                    ))
+                })?;
             }
 
             pipeline.add_transform(|input, output| {
@@ -171,6 +195,7 @@ pub fn build_fuse_parquet_source_pipeline(
         blocks_total: AtomicU64::new(0),
         blocks_pruned: AtomicU64::new(0),
     });
+    let need_runtime_filter_wait = !ctx.get_runtime_filter_ready(plan.scan_id).is_empty();
 
     match block_reader.support_blocking_api() {
         true => {
@@ -189,6 +214,17 @@ pub fn build_fuse_parquet_source_pipeline(
             }
             let unfinished_processors_count =
                 Arc::new(AtomicU64::new(pipeline.output_len() as u64));
+
+            if need_runtime_filter_wait {
+                pipeline.add_transform(|input, output| {
+                    Ok(TransformRuntimeFilterWait::create(
+                        ctx.clone(),
+                        plan.scan_id,
+                        input,
+                        output,
+                    ))
+                })?;
+            }
 
             pipeline.add_transform(|input, output| {
                 ReadParquetDataTransform::<true>::create(
@@ -232,6 +268,17 @@ pub fn build_fuse_parquet_source_pipeline(
             }
             let unfinished_processors_count =
                 Arc::new(AtomicU64::new(pipeline.output_len() as u64));
+
+            if need_runtime_filter_wait {
+                pipeline.add_transform(|input, output| {
+                    Ok(TransformRuntimeFilterWait::create(
+                        ctx.clone(),
+                        plan.scan_id,
+                        input,
+                        output,
+                    ))
+                })?;
+            }
 
             pipeline.add_transform(|input, output| {
                 ReadParquetDataTransform::<false>::create(

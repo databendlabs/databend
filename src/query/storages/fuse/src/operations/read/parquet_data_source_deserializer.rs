@@ -24,10 +24,8 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -44,7 +42,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::IndexType;
 use xorf::BinaryFuse16;
 
 use super::parquet_data_source::ParquetDataSource;
@@ -77,8 +74,6 @@ pub struct DeserializeDataTransform {
     base_block_ids: Option<Scalar>,
     cached_runtime_filter: Option<Vec<BloomRuntimeFilterRef>>,
     need_reserve_block_info: bool,
-    already_waited_runtime_filter: bool,
-    runtime_filter_ready: Vec<Arc<RuntimeFilterReady>>,
 }
 
 #[derive(Clone)]
@@ -136,8 +131,6 @@ impl DeserializeDataTransform {
             base_block_ids: plan.base_block_ids.clone(),
             cached_runtime_filter: None,
             need_reserve_block_info,
-            already_waited_runtime_filter: false,
-            runtime_filter_ready: ctx.get_runtime_filter_ready(plan.scan_id),
         })))
     }
 
@@ -192,14 +185,6 @@ impl DeserializeDataTransform {
             Ok(None)
         }
     }
-
-    fn need_wait_runtime_filter(&mut self) -> bool {
-        if self.already_waited_runtime_filter {
-            return false;
-        }
-        self.already_waited_runtime_filter = true;
-        !self.runtime_filter_ready.is_empty()
-    }
 }
 
 #[async_trait::async_trait]
@@ -213,10 +198,6 @@ impl Processor for DeserializeDataTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.need_wait_runtime_filter() {
-            return Ok(Event::Async);
-        }
-
         if self.output.is_finished() {
             self.input.finish();
             return Ok(Event::Finished);
@@ -372,37 +353,6 @@ impl Processor for DeserializeDataTransform {
             }
         }
 
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        use std::time::Duration;
-
-        use databend_common_base::base::tokio::time::timeout;
-
-        let timeout_duration = Duration::from_secs(30);
-
-        for runtime_filter_ready in &self.runtime_filter_ready {
-            let mut rx = runtime_filter_ready.runtime_filter_watcher.subscribe();
-            if (*rx.borrow()).is_some() {
-                continue;
-            }
-
-            match timeout(timeout_duration, rx.changed()).await {
-                Ok(Ok(())) => {}
-                Ok(Err(_)) => {
-                    return Err(ErrorCode::TokioError("watcher's sender is dropped"));
-                }
-                Err(_) => {
-                    log::warn!(
-                        "Runtime filter wait timeout after {:?} for scan_id: {}",
-                        timeout_duration,
-                        self.scan_id
-                    );
-                }
-            }
-        }
         Ok(())
     }
 }
