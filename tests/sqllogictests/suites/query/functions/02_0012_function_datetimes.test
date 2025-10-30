@@ -228,7 +228,12 @@ select typeof(CURRENT_DATE()), typeof(CURRENT_TIME()), typeof(CURRENT_TIMESTAMP(
 DATE VARCHAR TIMESTAMP
 
 query B
-select regexp_like(CURRENT_TIME(), '^[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{6})?$')
+select regexp_like(CURRENT_TIME(), '^[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?$')
+----
+1
+
+query B
+select regexp_like(CURRENT_TIME(3), '^[0-9]{2}:[0-9]{2}:[0-9]{2}\.\d{3}$')
 ----
 1
 

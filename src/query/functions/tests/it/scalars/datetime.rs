@@ -13,12 +13,18 @@
 // limitations under the License.
 
 use std::io::Write;
+use std::str::FromStr;
 
 use databend_common_expression::types::*;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
 use goldenfile::Mint;
+use jiff::tz::TimeZone;
+use jiff::Timestamp;
 
 use super::run_ast;
+use super::run_ast_with_context;
+use super::TestContext;
 
 #[test]
 fn test_datetime() {
@@ -36,6 +42,7 @@ fn test_datetime() {
     test_to_number(file);
     test_rounder_functions(file);
     test_date_date_diff(file);
+    test_current_time(file);
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
@@ -741,4 +748,25 @@ fn test_date_date_diff(file: &mut impl Write) {
         "date_diff(second, to_timestamp('2020-02-29 23:59:59'), to_timestamp('2019-02-28 23:59:59'))",
         &[],
     );
+}
+
+fn test_current_time(file: &mut impl Write) {
+    let tz = TimeZone::UTC;
+    let now = Timestamp::from_str("2024-02-03T04:05:06.789123Z")
+        .unwrap()
+        .to_zoned(tz.clone());
+    let func_ctx = FunctionContext {
+        tz: tz.clone(),
+        now,
+        ..FunctionContext::default()
+    };
+    let ctx = TestContext {
+        func_ctx,
+        ..TestContext::default()
+    };
+
+    run_ast_with_context(file, "typeof(current_time())", ctx.clone());
+    run_ast_with_context(file, "current_time()", ctx.clone());
+    run_ast_with_context(file, "current_time(3)", ctx.clone());
+    run_ast_with_context(file, "current_time(10)", ctx);
 }

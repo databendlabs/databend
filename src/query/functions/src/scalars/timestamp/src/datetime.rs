@@ -68,6 +68,7 @@ use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_expression::EvalContext;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
@@ -2101,6 +2102,38 @@ fn register_between_functions(registry: &mut FunctionRegistry) {
     ]);
 }
 
+fn normalize_time_precision(raw: i64) -> Result<u8, String> {
+    if (0..=9).contains(&raw) {
+        Ok(raw as u8)
+    } else {
+        Err(format!(
+            "Invalid fractional seconds precision `{raw}` for `current_time` (expect 0-9)"
+        ))
+    }
+}
+
+fn current_time_string(func_ctx: &FunctionContext, precision: Option<u8>) -> String {
+    let datetime = func_ctx.now.with_time_zone(func_ctx.tz.clone()).datetime();
+    let nanos = datetime.subsec_nanosecond() as u32;
+    let mut value = format!(
+        "{:02}:{:02}:{:02}",
+        datetime.hour(),
+        datetime.minute(),
+        datetime.second()
+    );
+
+    let precision = precision.unwrap_or(9).min(9);
+    if precision > 0 {
+        let divisor = 10_u32.pow(9 - precision as u32);
+        let truncated = nanos / divisor;
+        let frac = format!("{:0width$}", truncated, width = precision as usize);
+        value.push('.');
+        value.push_str(&frac);
+    }
+
+    value
+}
+
 fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.register_aliases("now", &["current_timestamp"]);
     registry.register_aliases("today", &["current_date"]);
@@ -2161,31 +2194,23 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.register_0_arg_core::<StringType, _, _>(
         "current_time",
         |_| FunctionDomain::Full,
-        |ctx| {
-            let datetime = ctx
-                .func_ctx
-                .now
-                .with_time_zone(ctx.func_ctx.tz.clone())
-                .datetime();
-            let nanos = datetime.subsec_nanosecond();
-            let value = if nanos == 0 {
-                format!(
-                    "{:02}:{:02}:{:02}",
-                    datetime.hour(),
-                    datetime.minute(),
-                    datetime.second()
-                )
-            } else {
-                format!(
-                    "{:02}:{:02}:{:02}.{:06}",
-                    datetime.hour(),
-                    datetime.minute(),
-                    datetime.second(),
-                    nanos / 1_000
-                )
-            };
-            Value::Scalar(value)
-        },
+        |ctx| Value::Scalar(current_time_string(ctx.func_ctx, None)),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<Int64Type, StringType, _, _>(
+        "current_time",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<Int64Type, StringType>(|precision, output, ctx| {
+            match normalize_time_precision(precision) {
+                Ok(valid_precision) => {
+                    output.put_and_commit(current_time_string(ctx.func_ctx, Some(valid_precision)));
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err);
+                    output.commit_row();
+                }
+            }
+        }),
     );
 
     registry.register_0_arg_core::<DateType, _, _>(

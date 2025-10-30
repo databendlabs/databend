@@ -1362,6 +1362,8 @@ Functions overloads:
 0 crc32(String) :: UInt32
 1 crc32(String NULL) :: UInt32 NULL
 0 current_time() :: String
+1 current_time(Int64) :: String
+2 current_time(Int64 NULL) :: String NULL
 0 date_add_months(Date, Int64) :: Date
 1 date_add_months(Date NULL, Int64 NULL) :: Date NULL
 2 date_add_months(Timestamp, Int64) :: Timestamp
