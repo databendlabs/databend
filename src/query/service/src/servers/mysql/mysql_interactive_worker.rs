@@ -105,7 +105,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
     }
 
     #[async_backtrace::framed]
-    async fn auth_plugin_for_username(&self, _user: &[u8]) -> &str {
+    async fn auth_plugin_for_username(&self, _user: &[u8]) -> &'static str {
         "mysql_native_password"
     }
 
@@ -218,7 +218,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         let query_id = Uuid::now_v7();
         // Ensure the query id shares the same representation as trace_id.
         let query_id_str = query_id.simple().to_string();
-
+        info!("--- on_query:221 Federated query: {}", query.clone());
         let sampled =
             thread_rng().gen_range(0..100) <= self.base.session.get_trace_sample_rate()?;
         let span_context =
