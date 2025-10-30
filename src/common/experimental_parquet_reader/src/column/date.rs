@@ -15,9 +15,9 @@
 use databend_common_expression::Column;
 use parquet2::schema::types::PhysicalType;
 
+use crate::column::common::DictionarySupport;
 use crate::column::common::ParquetColumnIterator;
 use crate::column::common::ParquetColumnType;
-use crate::column::common::DictionarySupport;
 use crate::column::number::IntegerMetadata;
 
 /// Date type alias for i32 (days since epoch)
@@ -41,49 +41,54 @@ impl ParquetColumnType for Date {
 impl DictionarySupport for Date {
     fn from_dictionary_entry(entry: &[u8]) -> databend_common_exception::Result<Self> {
         if entry.len() != 4 {
-            return Err(databend_common_exception::ErrorCode::Internal(
-                format!("Invalid Date dictionary entry length: expected 4, got {}", entry.len())
-            ));
+            return Err(databend_common_exception::ErrorCode::Internal(format!(
+                "Invalid Date dictionary entry length: expected 4, got {}",
+                entry.len()
+            )));
         }
-        
+
         // Parquet stores dates as i32 in little-endian format
         let bytes: [u8; 4] = entry.try_into().map_err(|_| {
-            databend_common_exception::ErrorCode::Internal("Failed to convert bytes to Date".to_string())
+            databend_common_exception::ErrorCode::Internal(
+                "Failed to convert bytes to Date".to_string(),
+            )
         })?;
-        
+
         Ok(Date(i32::from_le_bytes(bytes)))
     }
-    
+
     fn batch_from_dictionary_into_slice(
-        dictionary: &[Self], 
-        indices: &[i32], 
-        output: &mut [Self]
+        dictionary: &[Self],
+        indices: &[i32],
+        output: &mut [Self],
     ) -> databend_common_exception::Result<()> {
         // Validate output slice length
         if output.len() != indices.len() {
             return Err(databend_common_exception::ErrorCode::Internal(format!(
-                "Output slice length ({}) doesn't match indices length ({})", 
-                output.len(), indices.len()
+                "Output slice length ({}) doesn't match indices length ({})",
+                output.len(),
+                indices.len()
             )));
         }
-        
+
         // Batch bounds checking - find max index once
         if let Some(&max_idx) = indices.iter().max() {
             if max_idx as usize >= dictionary.len() {
                 return Err(databend_common_exception::ErrorCode::Internal(format!(
-                    "Dictionary index out of bounds: {} >= {}", 
-                    max_idx, dictionary.len()
+                    "Dictionary index out of bounds: {} >= {}",
+                    max_idx,
+                    dictionary.len()
                 )));
             }
         }
-        
+
         // Fast unchecked copy - all bounds verified above
         for (i, &index) in indices.iter().enumerate() {
             unsafe {
                 *output.get_unchecked_mut(i) = *dictionary.get_unchecked(index as usize);
             }
         }
-        
+
         Ok(())
     }
 }
@@ -92,8 +97,9 @@ pub type DateIter<'a> = ParquetColumnIterator<'a, Date>;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use databend_common_exception::Result;
+
+    use super::*;
 
     #[test]
     fn test_date_dictionary_support() -> Result<()> {
@@ -131,20 +137,31 @@ mod tests {
             Date(1095),  // 1973-01-01 (3 years later)
             Date(18262), // 2020-01-01 (50 years later)
         ];
-        
+
         // Test normal indices
         let indices = [0i32, 2, 4, 1, 3];
         let mut output = vec![Date(0); 5];
-        
+
         Date::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
-        assert_eq!(output, vec![Date(0), Date(730), Date(18262), Date(365), Date(1095)]);
+        assert_eq!(output, vec![
+            Date(0),
+            Date(730),
+            Date(18262),
+            Date(365),
+            Date(1095)
+        ]);
 
         // Test repeated indices
         let indices = [4i32, 4, 4, 4]; // All point to 2020-01-01
         let mut output = vec![Date(0); 4];
-        
+
         Date::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
-        assert_eq!(output, vec![Date(18262), Date(18262), Date(18262), Date(18262)]);
+        assert_eq!(output, vec![
+            Date(18262),
+            Date(18262),
+            Date(18262),
+            Date(18262)
+        ]);
 
         Ok(())
     }
@@ -152,19 +169,22 @@ mod tests {
     #[test]
     fn test_date_bounds_checking() -> Result<()> {
         let dictionary = vec![Date(0), Date(365), Date(730)]; // 3 dates
-        
+
         // Test out of bounds index
         let indices = [0i32, 3, 1]; // Index 3 is out of bounds
         let mut output = vec![Date(0); 3];
-        
+
         let result = Date::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Dictionary index out of bounds"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Dictionary index out of bounds"));
 
         // Test negative index (should be caught as out of bounds when cast to usize)
         let indices = [0i32, -1, 1];
         let mut output = vec![Date(0); 3];
-        
+
         let result = Date::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
         assert!(result.is_err());
 
@@ -177,7 +197,7 @@ mod tests {
         let dictionary = vec![Date(0), Date(365), Date(730)];
         let indices: [i32; 0] = [];
         let mut output: Vec<Date> = vec![];
-        
+
         Date::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
         assert_eq!(output.len(), 0);
 
@@ -185,7 +205,7 @@ mod tests {
         let dictionary: Vec<Date> = vec![];
         let indices: [i32; 0] = [];
         let mut output: Vec<Date> = vec![];
-        
+
         Date::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
         assert_eq!(output.len(), 0);
 
@@ -197,10 +217,13 @@ mod tests {
         let dictionary = vec![Date(0), Date(365), Date(730)];
         let indices = [0i32, 1, 2];
         let mut output = vec![Date(0); 2]; // Output too small
-        
+
         let result = Date::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Output slice length mismatch"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Output slice length mismatch"));
 
         Ok(())
     }
@@ -221,7 +244,7 @@ mod tests {
         let dictionary = vec![Date(12345)];
         let indices = [0i32];
         let mut output = vec![Date(0); 1];
-        
+
         Date::batch_from_dictionary_into_slice(&dictionary, &indices, &mut output)?;
         assert_eq!(output, vec![Date(12345)]);
 

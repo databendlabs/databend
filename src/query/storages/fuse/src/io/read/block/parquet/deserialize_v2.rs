@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-
+use bytes::Buf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -197,7 +197,7 @@ impl BlockReader {
 
                 let mut column_iter = data_chunk_to_col_iter(
                     column_meta,
-                    data,
+                    data.chunk(),
                     num_rows,
                     &column_descriptor,
                     column_node.table_field.clone(),
