@@ -116,15 +116,15 @@ CREATE DATABASE test_db_incomplete2 OPTIONS (
 # Test ALTER DATABASE options
 # Create connection for this test
 statement ok
-CREATE CONNECTION IF NOT EXISTS test STORAGE_TYPE = 'fs'
+CREATE CONNECTION IF NOT EXISTS temp_test STORAGE_TYPE = 'fs'
 
 statement ok
-CREATE OR REPLACE DATABASE temp_db OPTIONS (DEFAULT_STORAGE_CONNECTION = 'test', DEFAULT_STORAGE_PATH = 'fs:///tmp/test_db/')
+CREATE OR REPLACE DATABASE temp_db OPTIONS (DEFAULT_STORAGE_CONNECTION = 'temp_test', DEFAULT_STORAGE_PATH = 'fs:///tmp/test_db/')
 
 # ALTER with single option should now succeed (the other option already exists in database)
 statement ok
 ALTER DATABASE temp_db SET OPTIONS (
-    DEFAULT_STORAGE_CONNECTION = 'test'
+    DEFAULT_STORAGE_CONNECTION = 'temp_test'
 )
 
 statement ok
@@ -195,3 +195,9 @@ DROP CONNECTION IF EXISTS my_connection
 
 statement ok
 DROP CONNECTION IF EXISTS my_s3_connection
+
+statement ok
+DROP CONNECTION IF EXISTS alter_test_conn
+
+statement ok
+DROP CONNECTION IF EXISTS temp_test
