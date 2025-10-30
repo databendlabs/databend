@@ -22,7 +22,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq)]
 pub struct SingleFilePartition {
     pub path: String,
     pub size: usize,

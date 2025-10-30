@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_formats::RecordDelimiter;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 
 use crate::read::load_context::LoadContext;
@@ -27,6 +28,21 @@ use crate::read::row_based::formats::csv::separator::CsvReader;
 #[derive(Clone)]
 pub struct CsvInputFormat {
     pub(crate) params: CsvFileFormatParams,
+}
+
+impl CsvInputFormat {
+    pub fn create_reader(params: &CsvFileFormatParams) -> Result<csv_core::Reader> {
+        let reader = csv_core::ReaderBuilder::new()
+            .delimiter(params.field_delimiter.as_bytes()[0])
+            .quote(params.quote.as_bytes()[0])
+            .escape((!params.escape.is_empty()).then(|| params.escape.as_bytes()[0]))
+            .terminator(match params.record_delimiter.as_str().try_into()? {
+                RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
+                RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),
+            })
+            .build();
+        Ok(reader)
+    }
 }
 
 impl RowBasedFileFormat for CsvInputFormat {
