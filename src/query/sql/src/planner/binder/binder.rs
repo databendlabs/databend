@@ -974,14 +974,24 @@ impl Binder {
         database: &Option<Identifier>,
         object: &Identifier,
     ) -> (String, String, String) {
-        let catalog_name = catalog
+        let mut catalog_name = catalog
             .as_ref()
             .map(|ident| self.normalize_identifier(ident).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database_name = database
+            .filter(|name| !name.is_empty());
+        let mut database_name = database
             .as_ref()
             .map(|ident| self.normalize_identifier(ident).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
+            .filter(|name| !name.is_empty());
+
+        if database_name.is_none() && catalog_name.is_some() {
+            // MySQL clients may emit `db`.``.`table`; treat the leading segment as the database.
+            database_name = catalog_name.take();
+        }
+
+        let catalog_name =
+            catalog_name.unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database_name =
+            database_name.unwrap_or_else(|| self.ctx.get_current_database());
         let object_name = self.normalize_identifier(object).name;
         (catalog_name, database_name, object_name)
     }

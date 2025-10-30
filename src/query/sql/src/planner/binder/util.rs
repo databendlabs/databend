@@ -98,19 +98,42 @@ impl TableIdentifier {
         table: &Identifier,
         table_alias: &Option<TableAlias>,
     ) -> TableIdentifier {
+        let mut catalog = catalog.clone();
+        let mut database = database.clone();
+
+        if catalog
+            .as_ref()
+            .is_some_and(|ident| binder.normalize_identifier(ident).name.is_empty())
+        {
+            catalog = None;
+        }
+
+        if database
+            .as_ref()
+            .is_some_and(|ident| binder.normalize_identifier(ident).name.is_empty())
+        {
+            database = None;
+        }
+
+        if database.is_none() {
+            if let Some(catalog_ident) = catalog.take() {
+                database = Some(catalog_ident);
+            }
+        }
+
         let Binder {
             ctx,
             name_resolution_ctx,
             dialect,
             ..
         } = binder;
-        let catalog = catalog.to_owned().unwrap_or(Identifier {
+        let catalog = catalog.unwrap_or(Identifier {
             span: None,
             name: ctx.get_current_catalog(),
             quote: Some(dialect.default_ident_quote()),
             ident_type: IdentifierType::None,
         });
-        let database = database.to_owned().unwrap_or(Identifier {
+        let database = database.unwrap_or(Identifier {
             span: None,
             name: ctx.get_current_database(),
             quote: Some(dialect.default_ident_quote()),
