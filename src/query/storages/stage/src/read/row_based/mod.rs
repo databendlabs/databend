@@ -17,6 +17,7 @@ pub(crate) mod format;
 mod formats;
 pub(crate) mod processors;
 mod read_pipeline;
+mod split;
 mod utils;
 
 pub use batch::BytesBatch;

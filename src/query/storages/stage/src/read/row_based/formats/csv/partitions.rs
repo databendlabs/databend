@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::hash::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfo;
@@ -34,6 +30,7 @@ use databend_storages_common_stage::SingleFilePartition;
 use opendal::Operator;
 
 use crate::read::row_based::formats::CsvInputFormat;
+use crate::read::row_based::split::SplitRowBase;
 
 #[async_backtrace::framed]
 pub async fn csv_read_partitions(
@@ -126,36 +123,6 @@ pub async fn csv_read_partitions(
             statistics,
             Partitions::create(PartitionsShuffleKind::Seq, partitions),
         ))
-    }
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct SplitRowBase {
-    pub file: SingleFilePartition,
-    pub seq_in_file: usize,
-    pub num_file_splits: usize,
-    pub offset: usize,
-    pub size: usize,
-}
-
-#[typetag::serde(name = "split_row_base")]
-impl PartInfo for SplitRowBase {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        info.as_any()
-            .downcast_ref::<SplitRowBase>()
-            .is_some_and(|other| self == other)
-    }
-
-    fn hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        self.file.path.hash(&mut s);
-        self.offset.hash(&mut s);
-        self.size.hash(&mut s);
-        s.finish()
     }
 }
 
