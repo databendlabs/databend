@@ -119,6 +119,12 @@ impl AggregateHashTable {
         self.payload.len()
     }
 
+    pub fn clear_for_reuse(&mut self) {
+        self.payload.reset_for_reuse();
+        self.hash_index.reset();
+        self.current_radix_bits = self.config.initial_radix_bits;
+    }
+
     pub fn add_groups(
         &mut self,
         state: &mut ProbeState,

@@ -100,6 +100,12 @@ impl PartitionedPayload {
         }
     }
 
+    pub fn reset_for_reuse(&mut self) {
+        for payload in self.payloads.iter_mut() {
+            payload.reset_for_reuse();
+        }
+    }
+
     pub fn append_rows(
         &mut self,
         state: &mut ProbeState,

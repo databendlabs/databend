@@ -61,6 +61,7 @@ pub struct NewFinalAggregateTransform {
 
     /// spill
     spiller: NewAggregateSpiller,
+    agg_hashtable: AggregateHashTable,
 }
 
 impl NewFinalAggregateTransform {
@@ -76,6 +77,12 @@ impl NewFinalAggregateTransform {
         max_aggregate_spill_level: usize,
     ) -> Result<Box<dyn Processor>> {
         let round_state = LocalRoundState::new(max_aggregate_spill_level);
+        let agg_hashtable = AggregateHashTable::new(
+            params.group_data_types.clone(),
+            params.aggregate_functions.clone(),
+            HashTableConfig::default().with_initial_radix_bits(0),
+            Arc::new(Bump::new()),
+        );
         Ok(Box::new(NewFinalAggregateTransform {
             input,
             output,
@@ -88,6 +95,7 @@ impl NewFinalAggregateTransform {
             barrier,
             shared_state,
             spiller,
+            agg_hashtable,
         }))
     }
 
@@ -220,60 +228,37 @@ impl NewFinalAggregateTransform {
     }
 
     fn final_aggregate(&mut self, mut queue: Vec<AggregateMeta>) -> Result<()> {
-        let mut agg_hashtable: Option<AggregateHashTable> = None;
+        self.agg_hashtable.clear_for_reuse();
 
         while let Some(meta) = queue.pop() {
             match meta {
-                AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
-                    Some(ht) => {
-                        let payload = payload.convert_to_partitioned_payload(
-                            self.params.group_data_types.clone(),
-                            self.params.aggregate_functions.clone(),
-                            self.params.num_states(),
-                            0,
-                            Arc::new(Bump::new()),
-                        )?;
-                        ht.combine_payloads(&payload, &mut self.flush_state)?;
-                    }
-                    None => {
-                        agg_hashtable = Some(payload.convert_to_aggregate_table(
-                            self.params.group_data_types.clone(),
-                            self.params.aggregate_functions.clone(),
-                            self.params.num_states(),
-                            0,
-                            Arc::new(Bump::new()),
-                            true,
-                        )?);
-                    }
-                },
-                AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
-                    Some(ht) => {
-                        ht.combine_payload(&payload.payload, &mut self.flush_state)?;
-                    }
-                    None => {
-                        let capacity =
-                            AggregateHashTable::get_capacity_for_count(payload.payload.len());
-                        let mut hashtable = AggregateHashTable::new_with_capacity(
-                            self.params.group_data_types.clone(),
-                            self.params.aggregate_functions.clone(),
-                            HashTableConfig::default().with_initial_radix_bits(0),
-                            capacity,
-                            Arc::new(Bump::new()),
-                        );
-                        hashtable.combine_payload(&payload.payload, &mut self.flush_state)?;
-                        agg_hashtable = Some(hashtable);
-                    }
-                },
+                AggregateMeta::Serialized(payload) => {
+                    let partitioned = payload.convert_to_partitioned_payload(
+                        self.params.group_data_types.clone(),
+                        self.params.aggregate_functions.clone(),
+                        self.params.num_states(),
+                        0,
+                        Arc::new(Bump::new()),
+                    )?;
+                    self.agg_hashtable
+                        .combine_payloads(&partitioned, &mut self.flush_state)?;
+                }
+                AggregateMeta::AggregatePayload(payload) => {
+                    self.agg_hashtable
+                        .combine_payload(&payload.payload, &mut self.flush_state)?;
+                }
                 _ => unreachable!(),
             }
         }
 
-        let output_block = if let Some(mut ht) = agg_hashtable {
+        let output_block = if self.agg_hashtable.len() == 0 {
+            self.params.empty_result_block()
+        } else {
             let mut blocks = vec![];
             self.flush_state.clear();
 
             loop {
-                if ht.merge_result(&mut self.flush_state)? {
+                if self.agg_hashtable.merge_result(&mut self.flush_state)? {
                     let mut entries = self.flush_state.take_aggregate_results();
                     let group_columns = self.flush_state.take_group_columns();
                     entries.extend_from_slice(&group_columns);
@@ -289,9 +274,9 @@ impl NewFinalAggregateTransform {
             } else {
                 DataBlock::concat(&blocks)?
             }
-        } else {
-            self.params.empty_result_block()
         };
+
+        self.agg_hashtable.clear_for_reuse();
 
         if output_block.is_empty() {
             self.round_state.phase = RoundPhase::Idle;
