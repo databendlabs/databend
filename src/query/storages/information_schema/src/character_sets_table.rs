@@ -58,7 +58,7 @@ const CHARACTER_SETS: &[(&str, &str, &str, u8)] = &[
     ("gbk", "gbk_chinese_ci", "GBK Simplified Chinese", 2),
     ("latin5", "latin5_turkish_ci", "ISO 8859-9 Turkish", 1),
     ("armscii8", "armscii8_general_ci", "ARMSCII-8 Armenian", 1),
-    ("utf8mb3", "utf8mb3_general_ci", "UTF-8 Unicode", 3),
+    ("utf8", "utf8_general_ci", "UTF-8 Unicode", 3),
     ("ucs2", "ucs2_general_ci", "UCS-2 Unicode", 2),
     ("cp866", "cp866_general_ci", "DOS Russian", 1),
     (

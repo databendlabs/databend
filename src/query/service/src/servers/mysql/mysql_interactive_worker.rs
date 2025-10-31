@@ -401,7 +401,7 @@ impl InteractiveWorkerBase {
                 if data_block.num_rows() > 0 {
                     info!("Federated response: {:?}", data_block);
                 }
-                let has_result = schema.fields().len() > 0 || data_block.num_columns() > 0;
+                let has_result = !schema.fields().is_empty() || data_block.num_columns() > 0;
                 Ok((
                     QueryResult::create(
                         DataBlockStream::create(None, vec![data_block]).boxed(),

@@ -241,8 +241,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
 
         fn column_length(field: &DataField) -> u32 {
             let length = compute_length(field.data_type());
-            let length = length.max(1).min(16382);
-            length
+            length.clamp(1, 16382)
         }
 
         fn make_column_from_field(field: &DataField) -> Result<Column> {
