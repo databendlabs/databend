@@ -64,8 +64,8 @@ impl MySQLFederated {
         Some((schema, block))
     }
 
-    // Build empty block for SHOW KEYS/INDEX statement.
-    // Returns an empty result set with proper column structure.
+    // Returns empty result set with MySQL-compatible schema for SHOW KEYS/INDEX commands.
+    // Required for PowerBI + MySQL ODBC 9.5 compatibility.
     // Reference: https://dev.mysql.com/doc/refman/8.0/en/show-index.html
     fn show_keys_block() -> Option<(TableSchemaRef, DataBlock)> {
         use databend_common_expression::types::number::*;

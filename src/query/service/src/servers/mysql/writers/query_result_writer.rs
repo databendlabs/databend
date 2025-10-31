@@ -236,6 +236,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 DataType::Opaque(_) => 1024,
                 DataType::Nullable(inner) => compute_length(inner),
                 DataType::Generic(_) => 1024,
+                DataType::TimestampTz => 1024,
             }
         }
 

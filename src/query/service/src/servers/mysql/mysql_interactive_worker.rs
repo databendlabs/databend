@@ -401,6 +401,10 @@ impl InteractiveWorkerBase {
                 if data_block.num_rows() > 0 {
                     info!("Federated response: {:?}", data_block);
                 }
+                // Fix for MySQL ODBC 9.5 + PowerBI compatibility:
+                // Empty result sets (0 rows but with schema) must set has_result=true,
+                // otherwise ODBC throws "invalid cursor state" error on commands like "SHOW KEYS FROM table".
+                // Check for column definitions instead of row count.
                 let has_result = !schema.fields().is_empty() || data_block.num_columns() > 0;
                 Ok((
                     QueryResult::create(
