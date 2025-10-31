@@ -87,8 +87,9 @@ class TestContext:
 
     def feed_data(self, node_id: int, number: int = 10) -> None:
         """Feed test data to node."""
+        # Use leader_ver to match the leader's protocol version (only leader accepts writes)
         cmd = [
-            str(self.binary("current", "databend-metabench")),
+            str(self.binary(self.leader_ver, "databend-metabench")),
             "--rpc", 'table_copy_file:{"file_cnt":2,"ttl_ms":86400999}',
             "--client", "1", "--number", str(number), "--prefix", "1",
             "--grpc-api-address", self.grpc_addr(node_id),
