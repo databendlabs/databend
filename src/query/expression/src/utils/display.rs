@@ -1123,6 +1123,24 @@ impl<Index: ColumnIndex> Expr<Index> {
 
         write_expr(self, 0)
     }
+
+    pub fn typed_sql_display(&self) -> String {
+        #[recursive::recursive]
+        fn get_datatype<Index: ColumnIndex>(expr: &Expr<Index>) -> &DataType {
+            match expr {
+                Expr::Constant(Constant { data_type, .. }) => data_type,
+                Expr::ColumnRef(ColumnRef { data_type, .. }) => data_type,
+                Expr::Cast(Cast { expr, .. }) => get_datatype(expr.as_ref()),
+                Expr::FunctionCall(FunctionCall { return_type, .. }) => return_type,
+                Expr::LambdaFunctionCall(LambdaFunctionCall { return_type, .. }) => return_type,
+            }
+        }
+
+        match self {
+            Expr::Cast(_) => format!("{} FROM {}", self.sql_display(), get_datatype(self)),
+            _ => format!("{}: {}", self.sql_display(), get_datatype(self)),
+        }
+    }
 }
 
 impl<T: ValueType> Display for Value<T> {
