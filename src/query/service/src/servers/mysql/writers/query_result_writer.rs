@@ -201,10 +201,55 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             }
         }
 
+        fn compute_length(data_type: &DataType) -> u32 {
+            match data_type {
+                DataType::Null | DataType::EmptyArray | DataType::EmptyMap => 0,
+                DataType::Boolean => 1,
+                DataType::Binary => 255,
+                DataType::String => 255 * 3,
+                DataType::Number(num_ty) => match num_ty {
+                    NumberDataType::Int8 | NumberDataType::UInt8 => 3,
+                    NumberDataType::Int16 | NumberDataType::UInt16 => 5,
+                    NumberDataType::Int32 | NumberDataType::UInt32 => 10,
+                    NumberDataType::Int64 => 19,
+                    NumberDataType::UInt64 => 20,
+                    NumberDataType::Float32 => 12,
+                    NumberDataType::Float64 => 22,
+                },
+                DataType::Decimal(size) => size.precision() as u32,
+                DataType::Date => 10,
+                DataType::Timestamp => 26,
+                DataType::Interval => 64,
+                DataType::Geometry | DataType::Geography => 1024,
+                DataType::Vector(_) => 1024,
+                DataType::Bitmap | DataType::Variant | DataType::StageLocation => 1024,
+                DataType::Array(inner) | DataType::Map(inner) => {
+                    let inner_len = compute_length(inner);
+                    (inner_len.saturating_mul(4)).min(1024)
+                }
+                DataType::Tuple(fields) => fields
+                    .iter()
+                    .map(compute_length)
+                    .max()
+                    .unwrap_or(1024)
+                    .min(1024),
+                DataType::Opaque(_) => 1024,
+                DataType::Nullable(inner) => compute_length(inner),
+                DataType::Generic(_) => 1024,
+            }
+        }
+
+        fn column_length(field: &DataField) -> u32 {
+            let length = compute_length(field.data_type());
+            let length = length.max(1).min(1024);
+            length
+        }
+
         fn make_column_from_field(field: &DataField) -> Result<Column> {
             convert_field_type(field).map(|column_type| Column {
                 table: "".to_string(),
                 column: field.name().to_string(),
+                collen: column_length(field),
                 coltype: column_type,
                 colflags: ColumnFlags::empty(),
             })
