@@ -205,8 +205,8 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
             match data_type {
                 DataType::Null | DataType::EmptyArray | DataType::EmptyMap => 0,
                 DataType::Boolean => 1,
-                DataType::Binary => 255,
-                DataType::String => 255 * 3,
+                DataType::Binary => 16382,
+                DataType::String => 16382 * 4,
                 DataType::Number(num_ty) => match num_ty {
                     NumberDataType::Int8 | NumberDataType::UInt8 => 3,
                     NumberDataType::Int16 | NumberDataType::UInt16 => 5,
@@ -225,7 +225,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 DataType::Bitmap | DataType::Variant | DataType::StageLocation => 1024,
                 DataType::Array(inner) | DataType::Map(inner) => {
                     let inner_len = compute_length(inner);
-                    (inner_len.saturating_mul(4)).min(1024)
+                    (inner_len.saturating_mul(4)).min(16382)
                 }
                 DataType::Tuple(fields) => fields
                     .iter()
@@ -241,7 +241,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
 
         fn column_length(field: &DataField) -> u32 {
             let length = compute_length(field.data_type());
-            let length = length.max(1).min(1024);
+            let length = length.max(1).min(16382);
             length
         }
 

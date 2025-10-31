@@ -46,15 +46,15 @@ impl ColumnsTable {
             is_nullable AS is_nullable,
             LOWER(data_type) AS data_type,
             CASE
-                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN CONCAT('varchar(', '255', ')')
+                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN CONCAT('varchar(', '16382', ')')
                 ELSE LOWER(data_type)
             END AS column_type,
             CASE
-                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN 255
+                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN 16382
                 ELSE NULL
             END AS character_maximum_length,
             CASE
-                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN 255 * 4
+                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN 16382 * 4
                 ELSE NULL
             END AS character_octet_length,
             NULL AS numeric_precision,
