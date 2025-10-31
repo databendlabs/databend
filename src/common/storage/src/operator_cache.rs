@@ -32,9 +32,9 @@ use crate::operator::init_operator_uncached;
 
 // Internal metrics for monitoring cache effectiveness
 static CACHE_HIT_COUNT: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("storage_operator_cache_hit_total"));
+    LazyLock::new(|| register_counter("storage_operator_cache_hit"));
 static CACHE_MISS_COUNT: LazyLock<Counter> =
-    LazyLock::new(|| register_counter("storage_operator_cache_miss_total"));
+    LazyLock::new(|| register_counter("storage_operator_cache_miss"));
 static CACHE_SIZE: LazyLock<Gauge> =
     LazyLock::new(|| register_gauge("storage_operator_cache_size"));
 
