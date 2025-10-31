@@ -165,7 +165,7 @@ impl DeserializeDataTransform {
             let probe_column = probe_block_entry.to_column();
 
             // Apply bloom filter
-            ExprBloomFilter::new(filter.clone()).apply(probe_column, &mut bitmap)?;
+            ExprBloomFilter::new(filter).apply(probe_column, &mut bitmap)?;
             bitmaps.push(bitmap);
         }
         if !bitmaps.is_empty() {
