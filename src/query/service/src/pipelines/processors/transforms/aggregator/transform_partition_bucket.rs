@@ -237,6 +237,7 @@ impl TransformPartitionBucket {
                         }
                         unreachable!()
                     }
+                    AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                     AggregateMeta::Spilled(_) => {
                         let meta = data_block.take_meta().unwrap();
 
@@ -545,6 +546,7 @@ impl Processor for TransformPartitionBucket {
                 AggregateMeta::Partitioned { .. } => unreachable!(),
                 AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(_) => unreachable!(),
+                AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                 AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
                 AggregateMeta::AggregatePayload(payload) => self.partition_payload(payload)?,
             };

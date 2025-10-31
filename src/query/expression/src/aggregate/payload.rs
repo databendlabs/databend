@@ -162,6 +162,17 @@ impl Payload {
         self.pages.clear();
     }
 
+    pub fn reset_for_reuse(&mut self) {
+        self.state_move_out = false;
+        self.total_rows = 0;
+        self.current_write_page = 0;
+        self.min_cardinality = None;
+        for page in self.pages.iter_mut() {
+            page.rows = 0;
+            page.state_offsets = 0;
+        }
+    }
+
     #[inline]
     pub fn memory_size(&self) -> usize {
         self.total_rows * self.tuple_size

@@ -162,6 +162,7 @@ impl Processor for TransformSpillReader {
                     self.deserialized_meta =
                         Some(AggregateMeta::create_partitioned(bucket, new_data));
                 }
+                AggregateMeta::NewBucketSpilled(_) => unreachable!(),
             }
         }
 
@@ -176,6 +177,7 @@ impl Processor for TransformSpillReader {
                 AggregateMeta::AggregatePayload(_) => unreachable!(),
                 AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
+                AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
                     let _guard = self.semaphore.acquire().await;
                     let instant = Instant::now();

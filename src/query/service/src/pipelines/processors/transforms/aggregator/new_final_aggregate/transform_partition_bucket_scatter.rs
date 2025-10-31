@@ -294,6 +294,7 @@ impl TransformPartitionBucketScatter {
 
                         (payload.bucket, payload.max_partition_count)
                     }
+                    AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                 };
             } else {
                 return Err(ErrorCode::Internal(format!(
@@ -460,7 +461,7 @@ impl TransformPartitionBucketScatter {
 #[async_trait::async_trait]
 impl Processor for TransformPartitionBucketScatter {
     fn name(&self) -> String {
-        String::from("TransformPartitionBucket")
+        String::from("TransformPartitionBucketScatter")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -569,6 +570,7 @@ impl Processor for TransformPartitionBucketScatter {
                 AggregateMeta::Partitioned { .. } => unreachable!(),
                 AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(_) => unreachable!(),
+                AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                 AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
                 AggregateMeta::AggregatePayload(payload) => self.partition_payload(payload)?,
             };

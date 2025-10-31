@@ -1107,7 +1107,11 @@ impl Settings {
         })
     }
 
-    pub fn get_enable_experiment_aggregate_final(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experiment_aggregate_final")? != 0)
+    pub fn get_enable_experiment_aggregate(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experiment_aggregate")? != 0)
+    }
+
+    pub fn get_max_aggregate_spill_level(&self) -> Result<u64> {
+        self.try_get_u64("max_aggregate_spill_level")
     }
 }
