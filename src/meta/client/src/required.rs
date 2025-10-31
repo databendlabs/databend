@@ -43,6 +43,19 @@ pub mod features {
     pub const PUT_RESPONSE_CURRENT: FeatureSpec = ("put_response/current", (1, 2, 756));
     /// Txn support a FetchAdd operation for json encoded u64 values.
     pub const FETCH_ADD_U64:        FeatureSpec = ("fetch_add_u64",        (1, 2, 764));
+    /// - 2025-07-03: since 1.2.770
+    ///   🖥 server: adaptive `expire_at` support both seconds and milliseconds.
+    pub const EXPIRE_IN_MILLIS:     FeatureSpec = ("expire_in_millis",     (1, 2, 770));
+    /// - 2025-07-04: since 1.2.770
+    ///   🖥 server: add `PutSequential`.
+    pub const PUT_SEQUENTIAL:       FeatureSpec = ("put_sequential",       (1, 2, 770));
+    /// - 2025-09-30: since 1.2.823
+    ///   🖥 server: store raft-log proposing time `proposed_at_ms` in `KVMeta`.
+    pub const PROPOSED_AT_MS:       FeatureSpec = ("proposed_at_ms",       (1, 2, 823));
+    /// - 2025-10-16: since 1.2.828
+    ///   🖥 server: rename `FetchAddU64` to `FetchIncreaseU64`, add `max_value`.
+    pub const FETCH_INCREASE_U64:   FeatureSpec = ("fetch_increase_u64",   (1, 2, 828));
+
 }
 
 /// All features that are ever defined and their least required server version.
@@ -62,6 +75,10 @@ pub fn all() -> &'static [FeatureSpec] {
         features::GET_CLIENT_INFO,
         features::PUT_RESPONSE_CURRENT,
         features::FETCH_ADD_U64,
+        features::EXPIRE_IN_MILLIS,
+        features::PUT_SEQUENTIAL,
+        features::PROPOSED_AT_MS,
+        features::FETCH_INCREASE_U64,
     ];
 
     REQUIRES
@@ -94,6 +111,12 @@ pub fn std() -> &'static [FeatureSpec] {
         features::MEMBER_LIST,
         features::GET_CLUSTER_STATUS,
         features::GET_CLIENT_INFO,
+        // - 2025-09-27: since 1.2.823
+        //   👥 client: require 1.2.770, remove calling RPC kv_api
+        features::PUT_RESPONSE_CURRENT,
+        features::FETCH_ADD_U64,
+        features::EXPIRE_IN_MILLIS,
+        features::PUT_SEQUENTIAL,
     ];
 
     REQUIRES
@@ -105,20 +128,10 @@ pub fn read_write() -> &'static [FeatureSpec] {
     pub const REQUIRES: &[FeatureSpec] = &[
         features::KV_READ_V1,
         features::TRANSACTION,
-    ];
-
-    REQUIRES
-}
-
-/// Features that are required by business logic, such as read, write and transaction and watch
-pub fn read_write_watch() -> &'static [FeatureSpec] {
-    #[rustfmt::skip]
-    pub const REQUIRES: &[FeatureSpec] = &[
-        features::KV_READ_V1,
-        features::TRANSACTION,
-        features::WATCH,
-        features::WATCH_INITIAL_FLUSH,
-        features::WATCH_INIT_FLAG,
+        features::PUT_RESPONSE_CURRENT,
+        features::FETCH_ADD_U64,
+        features::EXPIRE_IN_MILLIS,
+        features::PUT_SEQUENTIAL,
     ];
 
     REQUIRES
