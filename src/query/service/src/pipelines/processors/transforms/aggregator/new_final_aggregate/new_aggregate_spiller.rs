@@ -111,10 +111,8 @@ pub struct NewAggregateSpiller {
     read_setting: ReadSettings,
     spill_prefix: String,
     partition_count: usize,
-    rows_threshold: usize,
-    bytes_threshold: usize,
     partition_stream: BlockPartitionStream,
-    payload_writers: Vec<AggregatePayloadWriter>,
+    payload_writers: Option<Vec<AggregatePayloadWriter>>,
     write_stats: WriteStats,
 }
 
@@ -131,8 +129,6 @@ impl NewAggregateSpiller {
         let spill_prefix = ctx.query_id_spill_prefix();
         let partition_stream =
             BlockPartitionStream::create(rows_threshold, bytes_threshold, partition_count);
-        let payload_writers = Self::create_payload_writers(&spill_prefix, partition_count)?;
-
         let blocking_operator = DataOperator::instance()
             .spill_operator()
             .layer(BlockingLayer::create()?)
@@ -146,10 +142,8 @@ impl NewAggregateSpiller {
             read_setting,
             spill_prefix,
             partition_count,
-            rows_threshold,
-            bytes_threshold,
             partition_stream,
-            payload_writers,
+            payload_writers: None,
             write_stats: WriteStats::default(),
         })
     }
@@ -163,18 +157,23 @@ impl NewAggregateSpiller {
             .collect()
     }
 
-    fn recreate_resources(&mut self) -> Result<()> {
-        self.partition_stream = BlockPartitionStream::create(
-            self.rows_threshold,
-            self.bytes_threshold,
-            self.partition_count,
-        );
-        self.payload_writers =
-            Self::create_payload_writers(&self.spill_prefix, self.partition_count)?;
+    fn ensure_payload_writers(&mut self) -> Result<()> {
+        if self.payload_writers.is_none() {
+            self.payload_writers = Some(Self::create_payload_writers(
+                &self.spill_prefix,
+                self.partition_count,
+            )?);
+        }
         Ok(())
     }
 
     fn write_ready_blocks(&mut self, ready_blocks: Vec<(usize, DataBlock)>) -> Result<()> {
+        if ready_blocks.is_empty() {
+            return Ok(());
+        }
+
+        self.ensure_payload_writers()?;
+
         for (bucket, block) in ready_blocks {
             if block.is_empty() {
                 continue;
@@ -187,7 +186,13 @@ impl NewAggregateSpiller {
             }
 
             let start = Instant::now();
-            self.payload_writers[bucket].write_block(block)?;
+            {
+                let writers = self
+                    .payload_writers
+                    .as_mut()
+                    .ok_or_else(|| ErrorCode::Internal("payload writers are not initialized"))?;
+                writers[bucket].write_block(block)?;
+            }
             let elapsed = start.elapsed();
             self.write_stats.accumulate(elapsed);
         }
@@ -196,6 +201,8 @@ impl NewAggregateSpiller {
     }
 
     pub fn spill(&mut self, partition_id: usize, block: DataBlock) -> Result<()> {
+        self.ensure_payload_writers()?;
+
         if block.is_empty() {
             return Ok(());
         }
@@ -212,6 +219,8 @@ impl NewAggregateSpiller {
     }
 
     pub fn spill_finish(&mut self) -> Result<Vec<NewSpilledPayload>> {
+        self.ensure_payload_writers()?;
+
         let mut pending_blocks = Vec::new();
         for partition_id in 0..self.partition_count {
             if let Some(block) = self.partition_stream.finalize_partition(partition_id) {
@@ -222,29 +231,28 @@ impl NewAggregateSpiller {
 
         let mut spilled_payloads = Vec::new();
 
-        let writers = std::mem::take(&mut self.payload_writers);
-        for (partition_id, writer) in writers.into_iter().enumerate() {
-            let (path, written_size, row_groups) = writer.close()?;
-            if row_groups.is_empty() {
-                continue;
+        if let Some(writers) = self.payload_writers.take() {
+            for (partition_id, writer) in writers.into_iter().enumerate() {
+                let (path, written_size, row_groups) = writer.close()?;
+                if row_groups.is_empty() {
+                    continue;
+                }
+
+                if written_size > 0 {
+                    self.write_stats.add_bytes(written_size);
+                }
+                for row_group in row_groups {
+                    self.write_stats.add_rows(row_group.num_rows() as usize);
+                    spilled_payloads.push(NewSpilledPayload {
+                        bucket: partition_id as isize,
+                        location: path.clone(),
+                        row_group,
+                    });
+                }
             }
 
-            if written_size > 0 {
-                self.write_stats.add_bytes(written_size);
-            }
-            for row_group in row_groups {
-                self.write_stats.add_rows(row_group.num_rows() as usize);
-                spilled_payloads.push(NewSpilledPayload {
-                    bucket: partition_id as isize,
-                    location: path.clone(),
-                    row_group,
-                });
-            }
+            self.flush_write_profile();
         }
-
-        self.flush_write_profile();
-
-        self.recreate_resources()?;
 
         Ok(spilled_payloads)
     }
