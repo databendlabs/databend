@@ -15,20 +15,19 @@
 mod character_sets_table;
 mod columns_table;
 mod key_column_usage_table;
-mod referential_constraints_table;
 mod keywords_table;
+mod referential_constraints_table;
 mod schemata_table;
 mod statistics_table;
 mod tables_table;
 mod views_table;
-mod referential_constraints_table;
 
 pub use character_sets_table::CharacterSetsTable;
 pub use columns_table::ColumnsTable;
 pub use key_column_usage_table::KeyColumnUsageTable;
 pub use keywords_table::KeywordsTable;
+pub use referential_constraints_table::ReferentialConstraintsTable;
 pub use schemata_table::SchemataTable;
 pub use statistics_table::StatisticsTable;
 pub use tables_table::TablesTable;
 pub use views_table::ViewsTable;
-pub use referential_constraints_table::ReferentialConstraintsTable;

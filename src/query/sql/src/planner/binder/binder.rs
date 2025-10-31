@@ -988,10 +988,8 @@ impl Binder {
             database_name = catalog_name.take();
         }
 
-        let catalog_name =
-            catalog_name.unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database_name =
-            database_name.unwrap_or_else(|| self.ctx.get_current_database());
+        let catalog_name = catalog_name.unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database_name = database_name.unwrap_or_else(|| self.ctx.get_current_database());
         let object_name = self.normalize_identifier(object).name;
         (catalog_name, database_name, object_name)
     }

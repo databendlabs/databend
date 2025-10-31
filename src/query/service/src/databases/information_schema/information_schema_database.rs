@@ -24,6 +24,7 @@ use databend_common_storages_information_schema::CharacterSetsTable;
 use databend_common_storages_information_schema::ColumnsTable;
 use databend_common_storages_information_schema::KeyColumnUsageTable;
 use databend_common_storages_information_schema::KeywordsTable;
+use databend_common_storages_information_schema::ReferentialConstraintsTable;
 use databend_common_storages_information_schema::SchemataTable;
 use databend_common_storages_information_schema::StatisticsTable;
 use databend_common_storages_information_schema::TablesTable;
@@ -49,6 +50,7 @@ impl InformationSchemaDatabase {
             SchemataTable::create(sys_db_meta.next_table_id(), ctl_name),
             StatisticsTable::create(sys_db_meta.next_table_id(), ctl_name),
             KeyColumnUsageTable::create(sys_db_meta.next_table_id(), ctl_name),
+            ReferentialConstraintsTable::create(sys_db_meta.next_table_id(), ctl_name),
         ];
 
         let db = "information_schema";
