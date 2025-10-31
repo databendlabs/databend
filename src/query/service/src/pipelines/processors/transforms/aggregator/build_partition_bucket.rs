@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -28,7 +29,7 @@ use tokio::sync::Barrier;
 use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::FinalAggregateSharedState;
-use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::FinalAggregateSpiller;
+use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::NewAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::NewFinalAggregateTransform;
 use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::TransformPartitionBucketScatter;
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
@@ -43,8 +44,6 @@ fn build_partition_bucket_experimental(
     after_worker: usize,
     ctx: Arc<QueryContext>,
 ) -> Result<()> {
-    let operator = DataOperator::instance().spill_operator();
-
     // PartitionedPayload only accept power of two partitions
     let mut output_num = after_worker.next_power_of_two();
     const MAX_PARTITION_COUNT: usize = 128;
@@ -71,8 +70,12 @@ fn build_partition_bucket_experimental(
     let barrier = Arc::new(Barrier::new(output_num));
     let shared_state = Arc::new(Mutex::new(FinalAggregateSharedState::new(output_num)));
 
+    let settings = ctx.get_settings();
+    let block_bytes = settings.get_max_block_bytes()? as usize;
+    let max_aggregate_spill_level = settings.get_max_aggregate_spill_level()? as usize;
+
     for id in 0..output_num {
-        let spiller = FinalAggregateSpiller::try_create(ctx.clone(), operator.clone())?;
+        let spiller = NewAggregateSpiller::try_create(ctx.clone(), output_num, 0, block_bytes)?;
         let input_port = InputPort::create();
         let output_port = OutputPort::create();
         let processor = NewFinalAggregateTransform::try_create(
@@ -84,7 +87,7 @@ fn build_partition_bucket_experimental(
             barrier.clone(),
             shared_state.clone(),
             spiller,
-            ctx.clone(),
+            max_aggregate_spill_level,
         )?;
         builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
     }
@@ -133,17 +136,17 @@ fn build_partition_bucket_legacy(
     Ok(())
 }
 
-/// Build partition bucket pipeline based on the experiment_aggregate_final flag.
+/// Build partition bucket pipeline based on the experiment_aggregate flag.
 /// Dispatches to either experimental or legacy implementation.
 pub fn build_partition_bucket(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
     max_restore_worker: u64,
     after_worker: usize,
-    experiment_aggregate_final: bool,
+    experiment_aggregate: bool,
     ctx: Arc<QueryContext>,
 ) -> Result<()> {
-    if experiment_aggregate_final {
+    if experiment_aggregate {
         build_partition_bucket_experimental(pipeline, params, after_worker, ctx)
     } else {
         build_partition_bucket_legacy(pipeline, params, max_restore_worker, after_worker)

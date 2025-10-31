@@ -59,6 +59,7 @@ impl ExchangeSorting for AggregateExchangeSorting {
                 ))),
                 Some(meta_info) => match meta_info {
                     AggregateMeta::Partitioned { .. } => unreachable!(),
+                    AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                     AggregateMeta::Serialized(v) => {
                         compute_block_number(v.bucket, v.max_partition_count)
                     }
@@ -181,6 +182,7 @@ impl FlightScatter for HashTableHashScatter {
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
+                    AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                     AggregateMeta::AggregateSpilling(payload) => {
                         for p in scatter_partitioned_payload(payload, self.buckets)? {
                             blocks.push(DataBlock::empty_with_meta(
