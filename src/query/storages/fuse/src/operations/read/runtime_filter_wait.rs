@@ -29,6 +29,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
 
 pub struct TransformRuntimeFilterWait {
+    ctx: Arc<dyn TableContext>,
     scan_id: IndexType,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -43,12 +44,12 @@ impl TransformRuntimeFilterWait {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
     ) -> ProcessorPtr {
-        let runtime_filter_ready = ctx.get_runtime_filter_ready(scan_id);
         ProcessorPtr::create(Box::new(TransformRuntimeFilterWait {
+            ctx,
             scan_id,
             input,
             output,
-            runtime_filter_ready,
+            runtime_filter_ready: Vec::new(),
             wait_finished: false,
         }))
     }
@@ -95,6 +96,25 @@ impl Processor for TransformRuntimeFilterWait {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
+        if self.runtime_filter_ready.is_empty() {
+            self.runtime_filter_ready = self.ctx.get_runtime_filter_ready(self.scan_id);
+        }
+
+        if self.runtime_filter_ready.is_empty() {
+            log::info!(
+                "RUNTIME-FILTER: scan_id={} no runtime filters found, skipping wait",
+                self.scan_id
+            );
+            self.wait_finished = true;
+            return Ok(());
+        }
+
+        log::info!(
+            "RUNTIME-FILTER: scan_id={} waiting for {} runtime filters",
+            self.scan_id,
+            self.runtime_filter_ready.len()
+        );
+
         let timeout_duration = Duration::from_secs(30);
         for runtime_filter_ready in &self.runtime_filter_ready {
             let mut rx = runtime_filter_ready.runtime_filter_watcher.subscribe();

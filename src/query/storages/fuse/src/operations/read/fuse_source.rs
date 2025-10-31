@@ -60,8 +60,6 @@ pub fn build_fuse_native_source_pipeline(
     (max_threads, max_io_requests) =
         adjust_threads_and_request(true, max_threads, max_io_requests, plan);
 
-    let need_runtime_filter_wait = !ctx.get_runtime_filter_ready(plan.scan_id).is_empty();
-
     if topk.is_some() {
         max_threads = max_threads.min(16);
         max_io_requests = max_io_requests.min(16);
@@ -85,16 +83,14 @@ pub fn build_fuse_native_source_pipeline(
                     pipeline.add_pipe(pipe);
                 }
             }
-            if need_runtime_filter_wait {
-                pipeline.add_transform(|input, output| {
-                    Ok(TransformRuntimeFilterWait::create(
-                        ctx.clone(),
-                        plan.scan_id,
-                        input,
-                        output,
-                    ))
-                })?;
-            }
+            pipeline.add_transform(|input, output| {
+                Ok(TransformRuntimeFilterWait::create(
+                    ctx.clone(),
+                    plan.scan_id,
+                    input,
+                    output,
+                ))
+            })?;
             pipeline.add_transform(|input, output| {
                 ReadNativeDataTransform::<true>::create(
                     plan.scan_id,
@@ -131,16 +127,14 @@ pub fn build_fuse_native_source_pipeline(
                 }
             }
 
-            if need_runtime_filter_wait {
-                pipeline.add_transform(|input, output| {
-                    Ok(TransformRuntimeFilterWait::create(
-                        ctx.clone(),
-                        plan.scan_id,
-                        input,
-                        output,
-                    ))
-                })?;
-            }
+            pipeline.add_transform(|input, output| {
+                Ok(TransformRuntimeFilterWait::create(
+                    ctx.clone(),
+                    plan.scan_id,
+                    input,
+                    output,
+                ))
+            })?;
 
             pipeline.add_transform(|input, output| {
                 ReadNativeDataTransform::<false>::create(
@@ -195,7 +189,6 @@ pub fn build_fuse_parquet_source_pipeline(
         blocks_total: AtomicU64::new(0),
         blocks_pruned: AtomicU64::new(0),
     });
-    let need_runtime_filter_wait = !ctx.get_runtime_filter_ready(plan.scan_id).is_empty();
 
     match block_reader.support_blocking_api() {
         true => {
@@ -215,16 +208,14 @@ pub fn build_fuse_parquet_source_pipeline(
             let unfinished_processors_count =
                 Arc::new(AtomicU64::new(pipeline.output_len() as u64));
 
-            if need_runtime_filter_wait {
-                pipeline.add_transform(|input, output| {
-                    Ok(TransformRuntimeFilterWait::create(
-                        ctx.clone(),
-                        plan.scan_id,
-                        input,
-                        output,
-                    ))
-                })?;
-            }
+            pipeline.add_transform(|input, output| {
+                Ok(TransformRuntimeFilterWait::create(
+                    ctx.clone(),
+                    plan.scan_id,
+                    input,
+                    output,
+                ))
+            })?;
 
             pipeline.add_transform(|input, output| {
                 ReadParquetDataTransform::<true>::create(
@@ -269,16 +260,14 @@ pub fn build_fuse_parquet_source_pipeline(
             let unfinished_processors_count =
                 Arc::new(AtomicU64::new(pipeline.output_len() as u64));
 
-            if need_runtime_filter_wait {
-                pipeline.add_transform(|input, output| {
-                    Ok(TransformRuntimeFilterWait::create(
-                        ctx.clone(),
-                        plan.scan_id,
-                        input,
-                        output,
-                    ))
-                })?;
-            }
+            pipeline.add_transform(|input, output| {
+                Ok(TransformRuntimeFilterWait::create(
+                    ctx.clone(),
+                    plan.scan_id,
+                    input,
+                    output,
+                ))
+            })?;
 
             pipeline.add_transform(|input, output| {
                 ReadParquetDataTransform::<false>::create(
