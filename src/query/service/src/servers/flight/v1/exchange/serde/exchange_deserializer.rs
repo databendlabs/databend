@@ -111,7 +111,7 @@ pub fn deserialize_block(
     }
 
     let batch = flight_data_to_arrow_batch(&fragment_data.data, arrow_schema, &dictionaries_by_id)?;
-    let (data_block, _) = DataBlock::from_record_batch(schema, &batch)?;
+    let data_block = DataBlock::from_record_batch(schema, &batch)?;
     Ok(data_block)
 }
 

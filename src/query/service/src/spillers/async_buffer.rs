@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::io;
 use std::io::Write;
+use std::ops::Range;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
@@ -34,14 +35,16 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
-use databend_common_storages_parquet::read_all;
-use databend_common_storages_parquet::InMemoryRowGroup;
+use databend_common_storages_parquet::parquet_reader::row_group::get_ranges;
+use databend_common_storages_parquet::parquet_reader::RowGroupCore;
 use databend_common_storages_parquet::ReadSettings;
 use fastrace::future::FutureExt;
 use fastrace::Span;
 use opendal::Metadata;
 use opendal::Operator;
 use opendal::Writer;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::arrow_reader::RowGroups;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::parquet_to_arrow_schema;
 use parquet::arrow::ArrowWriter;
@@ -51,8 +54,6 @@ use parquet::basic::Compression;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
-
-use crate::spillers::serialize::fake_data_schema;
 
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
@@ -185,10 +186,16 @@ impl SpillsBufferPool {
     }
 
     pub fn writer(self: &Arc<Self>, op: Operator, path: String) -> Result<SpillsDataWriter> {
-        let pending_response = Arc::new(BufferOperatorResp {
-            mutex: Mutex::new(None),
-            condvar: Default::default(),
-        });
+        let writer = self.buffer_writer(op, path)?;
+        Ok(SpillsDataWriter::Uninitialize(Some(writer)))
+    }
+
+    pub(super) fn buffer_writer(
+        self: &Arc<Self>,
+        op: Operator,
+        path: String,
+    ) -> Result<BufferWriter> {
+        let pending_response = BufferOperatorResp::pending();
 
         let operator = BufferOperator::CreateWriter(CreateWriterOperator {
             span: Span::enter_with_local_parent("CreateWriterOperator"),
@@ -197,21 +204,11 @@ impl SpillsBufferPool {
             response: pending_response.clone(),
         });
 
-        if self.working_queue.try_send(operator).is_err() {
-            unreachable!("Buffer pool working queue need unbounded.");
-        }
+        self.working_queue
+            .try_send(operator)
+            .expect("Buffer pool working queue need unbounded.");
 
-        let locked = pending_response.mutex.lock();
-        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-        if locked.is_none() {
-            let waited = pending_response.condvar.wait(locked);
-            locked = waited.unwrap_or_else(PoisonError::into_inner);
-        }
-
-        Ok(SpillsDataWriter::Uninitialize(Some(
-            self.buffer_write(locked.take().unwrap()?),
-        )))
+        Ok(self.buffer_write(pending_response.wait_and_take()?))
     }
 
     pub fn reader(
@@ -223,7 +220,28 @@ impl SpillsBufferPool {
         SpillsDataReader::create(path, op, row_groups, self.clone())
     }
 
-    pub(crate) fn release_buffer(&self, buffer: BytesMut) {
+    pub fn fetch_ranges(
+        &self,
+        op: Operator,
+        location: String,
+        fetch_ranges: Vec<Range<u64>>,
+        settings: ReadSettings,
+    ) -> Result<Vec<Bytes>> {
+        let response = BufferOperatorResp::pending();
+        let operator = BufferOperator::Fetch(FetchOperator {
+            span: Span::enter_with_local_parent("FetchOperator"),
+            op,
+            location,
+            response: response.clone(),
+            fetch_ranges,
+            settings,
+        });
+        self.operator(operator);
+
+        response.wait_and_take()
+    }
+
+    fn release_buffer(&self, buffer: BytesMut) {
         if self.available_write_buffers_tx.try_send(buffer).is_err() {
             unreachable!("Buffer pool available_write_buffers need unbounded.");
         }
@@ -253,36 +271,33 @@ impl BufferWriter {
 
     fn write_buffer(&mut self, wait: bool) -> std::io::Result<()> {
         if let Some(pending_response) = self.pending_response.take() {
-            let locked = pending_response.mutex.lock();
-            let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-            if let Some(mut response) = locked.take() {
-                self.writer = Some(response.writer);
-                if let Some(last_error) = response.error.take() {
-                    return Err(last_error);
-                }
-            } else if wait {
-                let waited = pending_response.condvar.wait(locked);
-                let mut waited = waited.unwrap_or_else(PoisonError::into_inner);
-                let mut response = waited.take().unwrap();
+            if wait {
+                let mut response = pending_response.wait_and_take();
                 self.writer = Some(response.writer);
 
                 if let Some(last_error) = response.error.take() {
                     return Err(last_error);
                 }
             } else {
-                drop(locked);
-                self.pending_response = Some(pending_response);
+                let locked = pending_response.mutex.lock();
+                let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+                if let Some(mut response) = locked.take() {
+                    self.writer = Some(response.writer);
+                    if let Some(last_error) = response.error.take() {
+                        return Err(last_error);
+                    }
+                } else {
+                    drop(locked);
+                    self.pending_response = Some(pending_response);
+                }
             }
         }
 
         if let Some(writer) = self.writer.take() {
             assert!(self.pending_response.is_none());
 
-            let pending_response = Arc::new(BufferOperatorResp {
-                mutex: Mutex::new(None),
-                condvar: Default::default(),
-            });
+            let pending_response = BufferOperatorResp::pending();
 
             self.pending_response = Some(pending_response.clone());
 
@@ -303,10 +318,7 @@ impl BufferWriter {
         self.flush()?;
 
         if let Some(writer) = self.writer.take() {
-            let pending_response = Arc::new(BufferOperatorResp {
-                mutex: Mutex::new(None),
-                condvar: Default::default(),
-            });
+            let pending_response = BufferOperatorResp::pending();
 
             let close_operator = BufferOperator::Close(BufferCloseOperator {
                 span: Span::enter_with_local_parent("BufferCloseOperator"),
@@ -316,15 +328,7 @@ impl BufferWriter {
 
             self.buffer_pool.operator(close_operator);
 
-            let locked = pending_response.mutex.lock();
-            let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-            if locked.is_none() {
-                let waited = pending_response.condvar.wait(locked);
-                locked = waited.unwrap_or_else(PoisonError::into_inner);
-            }
-
-            return locked.take().unwrap().res;
+            return pending_response.wait_and_take().res;
         }
 
         Err(std::io::Error::new(
@@ -406,18 +410,10 @@ impl io::Write for BufferWriter {
         }
 
         if let Some(pending_response) = self.pending_response.take() {
-            let locked = pending_response.mutex.lock();
-            let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
+            let BufferWriteResp { writer, mut error } = pending_response.wait_and_take();
+            self.writer = Some(writer);
 
-            if locked.is_none() {
-                let waited = pending_response.condvar.wait(locked);
-                locked = waited.unwrap_or_else(PoisonError::into_inner);
-            }
-
-            let mut response = locked.take().unwrap();
-            self.writer = Some(response.writer);
-
-            if let Some(error) = response.error.take() {
+            if let Some(error) = error.take() {
                 return Err(error);
             }
         }
@@ -469,7 +465,7 @@ impl SpillsDataWriter {
     pub fn write(&mut self, block: DataBlock) -> Result<()> {
         match self {
             SpillsDataWriter::Uninitialize(writer) => {
-                let data_schema = fake_data_schema(&block);
+                let data_schema = block.infer_schema();
                 let table_schema = infer_table_schema(&data_schema)?;
 
                 let props = WriterProperties::builder()
@@ -570,52 +566,33 @@ impl SpillsDataReader {
         })
     }
 
-    #[allow(clippy::missing_transmute_annotations)]
     pub fn read(&mut self, settings: ReadSettings) -> Result<Option<DataBlock>> {
         let Some(row_group) = self.row_groups.pop_front() else {
             return Ok(None);
         };
 
-        let row_group = InMemoryRowGroup::new(
-            self.location.as_str(),
-            self.operator.clone(),
-            &row_group,
-            None,
-            settings,
-        );
+        let mut row_group = RowGroupCore::new(row_group, None);
+        row_group.fetch(&ProjectionMask::all(), None, |fetch_ranges| {
+            self.spills_buffer_pool.fetch_ranges(
+                self.operator.clone(),
+                self.location.clone(),
+                fetch_ranges,
+                settings,
+            )
+        })?;
 
-        let pending_response = Arc::new(BufferOperatorResp {
-            condvar: Default::default(),
-            mutex: Mutex::new(None),
-        });
-
-        let operator = BufferOperator::ReadRowGroup(ReadRowGroupOperator {
-            span: Span::enter_with_local_parent("ReadRowGroupOperator"),
-            in_memory_row_group: unsafe { std::mem::transmute(row_group) },
-            response: pending_response.clone(),
-        });
-
-        self.spills_buffer_pool.operator(operator);
-
-        let locked = pending_response.mutex.lock();
-        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-        if locked.is_none() {
-            let waited = pending_response.condvar.wait(locked);
-            locked = waited.unwrap_or_else(PoisonError::into_inner);
-        }
-
-        let fetched_row_group = locked.take().unwrap()?;
-
-        let num_rows = fetched_row_group.row_count();
-
-        Ok(Some(read_all(
-            &self.data_schema,
-            &fetched_row_group,
+        let num_rows = row_group.num_rows();
+        let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
             &self.field_levels,
-            None,
-            &None,
+            &row_group,
             num_rows,
+            None,
+        )?;
+        let batch = reader.next().transpose()?.unwrap();
+        debug_assert!(reader.next().is_none());
+        Ok(Some(DataBlock::from_record_batch(
+            &self.data_schema,
+            &batch,
         )?))
     }
 }
@@ -650,10 +627,13 @@ pub struct CreateWriterOperator {
     response: Arc<BufferOperatorResp<opendal::Result<Writer>>>,
 }
 
-pub struct ReadRowGroupOperator {
+pub struct FetchOperator {
     span: Span,
-    in_memory_row_group: InMemoryRowGroup<'static>,
-    response: Arc<BufferOperatorResp<Result<InMemoryRowGroup<'static>>>>,
+    location: String,
+    op: Operator,
+    fetch_ranges: Vec<Range<u64>>,
+    settings: ReadSettings,
+    response: Arc<BufferOperatorResp<Result<Vec<Bytes>>>>,
 }
 
 #[derive(Default)]
@@ -662,11 +642,37 @@ pub struct BufferOperatorResp<T> {
     mutex: Mutex<Option<T>>,
 }
 
+impl<T> BufferOperatorResp<T> {
+    fn pending() -> Arc<BufferOperatorResp<T>> {
+        Arc::new(BufferOperatorResp {
+            condvar: Default::default(),
+            mutex: Mutex::new(None),
+        })
+    }
+
+    fn done(&self, res: T) {
+        *self.mutex.lock().unwrap_or_else(PoisonError::into_inner) = Some(res);
+        self.condvar.notify_one();
+    }
+
+    fn wait_and_take(&self) -> T {
+        let locked = self.mutex.lock();
+        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        if locked.is_none() {
+            let waited = self.condvar.wait(locked);
+            locked = waited.unwrap_or_else(PoisonError::into_inner);
+        }
+
+        locked.take().unwrap()
+    }
+}
+
 pub enum BufferOperator {
     Write(BufferWriteOperator),
     Close(BufferCloseOperator),
     CreateWriter(CreateWriterOperator),
-    ReadRowGroup(ReadRowGroupOperator),
+    Fetch(FetchOperator),
 }
 
 impl BufferOperator {
@@ -675,7 +681,7 @@ impl BufferOperator {
             BufferOperator::Write(op) => &op.span,
             BufferOperator::Close(op) => &op.span,
             BufferOperator::CreateWriter(op) => &op.span,
-            BufferOperator::ReadRowGroup(op) => &op.span,
+            BufferOperator::Fetch(op) => &op.span,
         }
     }
 }
@@ -719,44 +725,28 @@ impl Background {
                     }
                 }
 
-                let locked = op.response.mutex.lock();
-                let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-                *locked = Some(BufferWriteResp {
+                op.response.done(BufferWriteResp {
                     error,
                     writer: op.writer,
                 });
-
-                op.response.condvar.notify_one();
             }
             BufferOperator::Close(mut op) => {
                 let res = op.writer.close().await;
-                let locked = op.response.mutex.lock();
-                let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-                *locked = Some(BufferCloseResp {
+
+                op.response.done(BufferCloseResp {
                     _writer: op.writer,
                     res: res.map_err(std::io::Error::from),
                 });
-
-                op.response.condvar.notify_one();
             }
             BufferOperator::CreateWriter(op) => {
                 let writer = op.op.writer(&op.path).await;
-                let locked = op.response.mutex.lock();
-                let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-                *locked = Some(writer);
 
-                op.response.condvar.notify_one();
+                op.response.done(writer);
             }
-            BufferOperator::ReadRowGroup(mut op) => {
-                let projection_mask = ProjectionMask::all();
-                let res = op.in_memory_row_group.fetch(&projection_mask, None).await;
+            BufferOperator::Fetch(op) => {
+                let res = get_ranges(&op.fetch_ranges, &op.settings, &op.location, &op.op).await;
 
-                let locked = op.response.mutex.lock();
-                let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-                *locked = Some(res.map(|_| op.in_memory_row_group));
-
-                op.response.condvar.notify_one();
+                op.response.done(res.map(|(chunks, _)| chunks));
             }
         }
     }

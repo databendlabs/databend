@@ -32,7 +32,7 @@ mod read_settings;
 mod utils;
 
 mod copy_into_table;
-mod parquet_reader;
+pub mod parquet_reader;
 mod parquet_table;
 mod partition;
 mod pruning;

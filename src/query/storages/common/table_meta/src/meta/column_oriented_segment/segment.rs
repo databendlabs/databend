@@ -352,7 +352,7 @@ pub fn deserialize_column_oriented_segment(
         .build()?;
     let batch = record_reader.next().unwrap()?;
     let data_schema = DataSchema::try_from(&(*batch.schema()))?;
-    let (block_metas, _) = DataBlock::from_record_batch(&data_schema, &batch)?;
+    let block_metas = DataBlock::from_record_batch(&data_schema, &batch)?;
     assert!(record_reader.next().is_none());
 
     // 3. deserialize summary

@@ -72,7 +72,7 @@ impl TempDirManager {
                     (
                         Some(path.canonicalize()?.into_boxed_path()),
                         (stat.f_blocks as f64 * *config.reserved_disk_ratio) as u64,
-                        Alignment::new(stat.f_bsize.max(512) as usize).unwrap(),
+                        Alignment::new(stat.f_frsize.max(512) as usize).unwrap(),
                     )
                 }
             }

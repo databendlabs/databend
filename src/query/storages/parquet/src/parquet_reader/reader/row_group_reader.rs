@@ -164,13 +164,7 @@ impl RowGroupReader {
                 .collect::<Vec<Vec<_>>>()
         });
         let (op, path) = self.operator(&part.location)?;
-        let row_group = InMemoryRowGroup::new(
-            path,
-            op,
-            &part.meta,
-            page_locations.as_deref(),
-            *read_settings,
-        );
+        let row_group = InMemoryRowGroup::new(path, op, &part.meta, page_locations, *read_settings);
         if let (Some((parquet_meta, delete_files)), true) = (delete_info, delete_filter.is_none()) {
             let futures = delete_files.iter().map(|delete| async {
                 let (op, path) = self.op_registry.get_operator_path(&delete.path)?;

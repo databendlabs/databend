@@ -208,7 +208,7 @@ impl AsyncSource for IcebergInspectSource {
         let schema = self.inspect_type.schema();
         let schema = DataSchema::from(schema);
         while let Some(Ok(d)) = stream.next().await {
-            let (block, _) = DataBlock::from_record_batch(&schema, &d)?;
+            let block = DataBlock::from_record_batch(&schema, &d)?;
             blocks.push(block);
         }
 

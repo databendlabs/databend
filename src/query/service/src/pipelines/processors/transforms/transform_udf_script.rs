@@ -559,13 +559,12 @@ impl TransformUdfScript {
             ))
         })?;
 
-        let (result_block, _) =
-            DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
-                ErrorCode::UDFDataError(format!(
-                    "Failed to create data block from record batch for function '{}': {}",
-                    func.name, err
-                ))
-            })?;
+        let result_block = DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
+            ErrorCode::UDFDataError(format!(
+                "Failed to create data block from record batch for function '{}': {}",
+                func.name, err
+            ))
+        })?;
 
         let entry = if contains_variant(&func.data_type) {
             let value = transform_variant(&result_block.get_by_offset(0).value(), false).map_err(

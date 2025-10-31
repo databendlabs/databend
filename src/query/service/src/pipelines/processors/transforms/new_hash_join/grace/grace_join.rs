@@ -202,7 +202,6 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
             partitions.push(GraceJoinPartition::create(&location_prefix)?);
         }
 
-        let ctx: Arc<dyn TableContext> = ctx.clone();
         Ok(GraceHashJoin {
             desc,
             state,
@@ -213,7 +212,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
             function_context: function_ctx,
             stage: RestoreStage::FlushMemory,
             partitions,
-            read_settings: ReadSettings::from_ctx(&ctx)?,
+            read_settings: ReadSettings::from_settings(&ctx.get_settings())?,
             build_partition_stream: BlockPartitionStream::create(rows, bytes, 16),
             probe_partition_stream: BlockPartitionStream::create(rows, bytes, 16),
         })

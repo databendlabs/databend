@@ -113,7 +113,7 @@ impl ResultCacheReader {
         for record_batch in reader {
             let record_batch = record_batch?;
             let schema = DataSchema::try_from(record_batch.schema().as_ref())?;
-            let (block, _) = DataBlock::from_record_batch(&schema, &record_batch)?;
+            let block = DataBlock::from_record_batch(&schema, &record_batch)?;
             blocks.push(block);
         }
 

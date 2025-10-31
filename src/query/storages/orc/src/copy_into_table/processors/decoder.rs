@@ -245,7 +245,7 @@ impl Processor for StripeDecoderForCopy {
         if let Some(mut stripe) = stripe {
             if let Some(batch) = stripe.iter.next() {
                 let start = Instant::now();
-                let (block, _) =
+                let block =
                     DataBlock::from_record_batch(stripe.schema.data_schema.as_ref(), &batch?)?;
                 let block = self.project(block, &stripe.projection)?;
                 if let Some(copy_status) = &self.copy_status {
