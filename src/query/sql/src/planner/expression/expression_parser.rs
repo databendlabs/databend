@@ -313,8 +313,11 @@ pub fn parse_lambda_expr(
     lambda_context: &mut BindContext,
     lambda_columns: &[(String, DataType)],
     ast: &AExpr,
+    parent_metadata: Option<Arc<RwLock<Metadata>>>,
 ) -> Result<Box<(ScalarExpr, DataType)>> {
-    let metadata = Metadata::default();
+    // Use parent metadata if provided (for masking policies on outer columns)
+    // Otherwise create empty metadata (for better performance in community edition)
+    let metadata = parent_metadata.unwrap_or_else(|| Arc::new(RwLock::new(Metadata::default())));
     lambda_context.set_expr_context(ExprContext::InLambdaFunction);
 
     // The column index may not be consecutive, and the length of columns
@@ -345,7 +348,7 @@ pub fn parse_lambda_expr(
         lambda_context,
         ctx.clone(),
         &name_resolution_ctx,
-        Arc::new(RwLock::new(metadata)),
+        metadata,
         &[],
         false,
     )?;

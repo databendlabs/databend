@@ -33,10 +33,11 @@ use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_compact_block_no_split_pipeline;
+use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -53,7 +54,6 @@ use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::CompactStrategy;
 use crate::pipelines::processors::transforms::HilbertPartitionExchange;
-use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::PipelineBuilder;
 use crate::spillers::SpillerDiskConfig;
@@ -135,7 +135,6 @@ impl IPhysicalPlan for Recluster {
                     internal_columns: None,
                     base_block_ids: None,
                     update_stream_columns: table.change_tracking_enabled(),
-                    data_mask_policy: None,
                     table_index: usize::MAX,
                     scan_id: usize::MAX,
                 };

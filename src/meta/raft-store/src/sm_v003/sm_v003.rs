@@ -56,11 +56,16 @@ pub struct SMV003 {
     /// A semaphore that permits at most one compactor to run.
     pub(crate) compaction_semaphore: Arc<Semaphore>,
 
-    /// Get a permit to write.
+    /// Semaphore for exclusive write access to the state machine.
     ///
-    /// Only one writer is allowed, to achieve serialization.
-    /// For historical reason, inserting a tombstone does not increase the seq.
-    /// Thus, mvcc isolation with the seq can not completely separate two concurrent writer.
+    /// Capacity is 1, ensuring only one writer at a time. This achieves serialization for:
+    /// - Applying Raft log entries to state machine
+    /// - Setting up watch streams with atomic snapshot reads
+    /// - Any operation requiring consistent state machine view
+    ///
+    /// Historical context: Inserting tombstones does not increase the seq,
+    /// so MVCC isolation with seq alone cannot completely separate concurrent writers.
+    /// This semaphore provides the necessary serialization.
     pub(crate) write_semaphore: Arc<Semaphore>,
 
     /// Since when to start cleaning expired keys.
@@ -215,6 +220,19 @@ impl SMV003 {
         self.on_change_applied.lock().unwrap().clone()
     }
 
+    /// Acquire exclusive writer permit for state machine operations.
+    ///
+    /// This returns a permit that grants exclusive write access to the state machine.
+    /// The permit is backed by a semaphore with capacity 1, ensuring only one writer
+    /// can hold the permit at a time.
+    ///
+    /// This is used to serialize operations that require atomicity across multiple steps,
+    /// such as:
+    /// - Applying Raft log entries (via `new_applier()`)
+    /// - Setting up watch streams with consistent snapshot reads
+    /// - Any operation that needs to prevent concurrent state machine modifications
+    ///
+    /// The permit is automatically released when dropped.
     pub async fn acquire_writer_permit(&self) -> WriterPermit {
         let acquirer = self.new_writer_acquirer();
         let permit = acquirer.acquire().await;

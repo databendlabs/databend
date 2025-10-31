@@ -89,7 +89,9 @@ impl Compiler {
                         &declare.name.name,
                         &mut self.ref_allocator,
                     );
-                    output.append(&mut self.compile_expr(&declare.default, to_var.clone())?);
+                    if let Some(default_expr) = &declare.default {
+                        output.append(&mut self.compile_expr(default_expr, to_var.clone())?);
+                    }
                     self.declare_ref(&declare.name, RefItem::Var(to_var))?;
                 }
                 ScriptStatement::LetStatement { declare } => {

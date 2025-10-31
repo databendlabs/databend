@@ -316,3 +316,5 @@ query B
 SELECT bool_not(1 = 0);
 ----
 1
+
+# TODO: UDF Timestamp Timezone

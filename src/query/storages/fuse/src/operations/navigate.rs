@@ -17,13 +17,13 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationPoint;
-use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -45,13 +45,12 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn navigate_to_point(
         &self,
+        ctx: &Arc<dyn TableContext>,
         point: &NavigationPoint,
-        abort_checker: AbortChecker,
     ) -> Result<Arc<FuseTable>> {
         match point {
             NavigationPoint::SnapshotID(snapshot_id) => {
-                self.navigate_to_snapshot(snapshot_id.as_str(), abort_checker)
-                    .await
+                self.navigate_to_snapshot(ctx, snapshot_id.as_str()).await
             }
             NavigationPoint::TimePoint(time_point) => {
                 let Some(location) = self.snapshot_loc() else {
@@ -59,15 +58,19 @@ impl FuseTable {
                         "Empty Table has no historical data",
                     ));
                 };
-                self.navigate_to_time_point(location, *time_point, abort_checker)
+                self.navigate_to_time_point(ctx, location, *time_point)
                     .await
             }
-            NavigationPoint::StreamInfo(info) => self.navigate_to_stream(info).await,
+            NavigationPoint::StreamInfo(info) => self.navigate_to_stream(ctx, info).await,
         }
     }
 
     #[async_backtrace::framed]
-    pub async fn navigate_to_stream(&self, stream_info: &TableInfo) -> Result<Arc<FuseTable>> {
+    pub async fn navigate_to_stream(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        stream_info: &TableInfo,
+    ) -> Result<Arc<FuseTable>> {
         let options = stream_info.options();
         let stream_table_id = options
             .get(OPT_KEY_SOURCE_TABLE_ID)
@@ -84,22 +87,29 @@ impl FuseTable {
             let mut table_info = self.table_info.clone();
             table_info.meta.options.remove(OPT_KEY_SNAPSHOT_LOCATION);
             table_info.meta.statistics = TableStatistics::default();
-            let table = FuseTable::do_create(table_info)?;
+            let table = FuseTable::create_without_refresh_table_info(
+                table_info,
+                ctx.get_settings().get_s3_storage_class()?,
+            )?;
             return Ok(table.into());
         };
         let (snapshot, format_version) =
             SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator()).await?;
-        self.load_table_by_snapshot(snapshot.as_ref(), format_version)
+        self.load_table_by_snapshot(
+            snapshot.as_ref(),
+            format_version,
+            ctx.get_settings().get_s3_storage_class()?,
+        )
     }
 
     #[async_backtrace::framed]
     pub async fn navigate_to_time_point(
         &self,
+        ctx: &Arc<dyn TableContext>,
         location: String,
         time_point: DateTime<Utc>,
-        aborting: AbortChecker,
     ) -> Result<Arc<FuseTable>> {
-        self.find(location, aborting, |snapshot| {
+        self.find(ctx, location, |snapshot| {
             if let Some(ts) = snapshot.timestamp {
                 ts <= time_point
             } else {
@@ -111,12 +121,12 @@ impl FuseTable {
 
     pub async fn navigate_back_with_limit(
         &self,
+        ctx: &Arc<dyn TableContext>,
         location: String,
         limit: usize,
-        aborting: AbortChecker,
     ) -> Result<Arc<FuseTable>> {
         let mut counter = 0;
-        self.find(location, aborting, |_snapshot| {
+        self.find(ctx, location, |_snapshot| {
             counter += 1;
             counter >= limit
         })
@@ -126,8 +136,8 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn navigate_to_snapshot(
         &self,
+        ctx: &Arc<dyn TableContext>,
         snapshot_id: &str,
-        abort_checker: AbortChecker,
     ) -> Result<Arc<FuseTable>> {
         let Some(location) = self.snapshot_loc() else {
             return Err(ErrorCode::TableHistoricalDataNotFound(
@@ -135,7 +145,7 @@ impl FuseTable {
             ));
         };
 
-        self.find(location, abort_checker, |snapshot| {
+        self.find(ctx, location, |snapshot| {
             snapshot
                 .snapshot_id
                 .simple()
@@ -149,13 +159,14 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn find<P>(
         &self,
+        ctx: &Arc<dyn TableContext>,
         location: String,
-        abort_checker: AbortChecker,
         mut pred: P,
     ) -> Result<Arc<FuseTable>>
     where
         P: FnMut(&TableSnapshot) -> bool,
     {
+        let abort_checker = ctx.clone().get_abort_checker();
         let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         // grab the table history as stream
@@ -179,7 +190,11 @@ impl FuseTable {
         }
 
         if let Some((snapshot, format_version)) = instant {
-            self.load_table_by_snapshot(snapshot.as_ref(), format_version)
+            self.load_table_by_snapshot(
+                snapshot.as_ref(),
+                format_version,
+                ctx.get_settings().get_s3_storage_class()?,
+            )
         } else {
             Err(ErrorCode::TableHistoricalDataNotFound(
                 "No historical data found at given point",
@@ -192,6 +207,7 @@ impl FuseTable {
         &self,
         snapshot: &TableSnapshot,
         format_version: u64,
+        s3_storage_class: S3StorageClass,
     ) -> Result<Arc<FuseTable>> {
         // The `seq` of ident that we cloned here is JUST a place holder
         // we should NOT use it other than a pure place holder.
@@ -231,7 +247,7 @@ impl FuseTable {
         };
 
         // let's instantiate it
-        let table = FuseTable::do_create(table_info)?;
+        let table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
         Ok(table.into())
     }
 
@@ -272,11 +288,7 @@ impl FuseTable {
                 }?;
 
                 let table = self
-                    .navigate_to_time_point(
-                        candidate_snapshot_path,
-                        time_point,
-                        ctx.clone().get_abort_checker(),
-                    )
+                    .navigate_to_time_point(ctx, candidate_snapshot_path, time_point)
                     .await?;
 
                 Ok((table, files))
@@ -285,11 +297,7 @@ impl FuseTable {
                 assert!(num > 0);
                 info!("navigate by number of snapshots, {:?}", num);
                 let table = self
-                    .navigate_back_with_limit(
-                        self.snapshot_loc().unwrap(),
-                        num,
-                        ctx.clone().get_abort_checker(),
-                    )
+                    .navigate_back_with_limit(ctx, self.snapshot_loc().unwrap(), num)
                     .await?;
 
                 // Safe to unwrap: table snapshot and snapshot timestamp exist, otherwise we should not be here

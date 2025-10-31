@@ -239,7 +239,7 @@ arrow-schema = { version = "55", features = ["serde"] }
 arrow-select = { version = "55" }
 arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript", "wasm"] }
 async-backtrace = "0.2"
-async-channel = "1.7.1"
+async-channel = "2.3.1"
 async-compat = { version = "0.2" }
 async-compression = { git = "https://github.com/datafuse-extras/async-compression", rev = "dc81082", features = [
     "futures-io",
@@ -399,6 +399,7 @@ opendal = { version = "0.53.2", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
+    "layers-blocking",
     "services-s3",
     "services-fs",
     "services-gcs",
@@ -464,7 +465,7 @@ rmp-serde = "1.1.1"
 roaring = { version = "^0.10", features = ["serde"] }
 rotbl = { version = "0.2.9", features = [] }
 rust_decimal = "1.26"
-rustix = "0.38.37"
+rustix = { version = "0.38.37", features = ["fs"] }
 rustls = { version = "0.23.27", features = ["ring", "tls12"], default-features = false }
 rustls-pemfile = "2"
 rustls-pki-types = "1"

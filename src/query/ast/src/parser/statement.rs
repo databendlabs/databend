@@ -4225,12 +4225,17 @@ pub fn modify_column_comment(i: Input) -> IResult<ColumnComment> {
 }
 
 pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
+    // Parse: <column> SET MASKING POLICY <policy_name> [USING (masked_col_name, cond_col_1, ...)]
     let set_mask_policy = map(
         rule! {
-            #ident ~ SET ~ MASKING ~ POLICY ~ #ident
+            #ident ~ SET ~ MASKING ~ POLICY ~ #ident ~ (USING ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
         },
-        |(column, _, _, _, mask_name)| {
-            ModifyColumnAction::SetMaskingPolicy(column, mask_name.to_string())
+        |(column, _, _, _, mask_name, opt_using)| {
+            ModifyColumnAction::SetMaskingPolicy(
+                column,
+                mask_name.to_string(),
+                opt_using.map(|(_, _, using_columns, _)| using_columns),
+            )
         },
     );
 

@@ -30,6 +30,7 @@ use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::opaque::OpaqueType;
+use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::vector::VectorColumnBuilder;
 use crate::types::AccessType;
 use crate::types::AnyType;
@@ -165,6 +166,13 @@ impl Column {
                     capacity,
                 );
                 Column::Interval(buffer)
+            }
+            Column::TimestampTz(_) => {
+                let buffer = Self::concat_primitive_types(
+                    columns.map(|col| TimestampTzType::try_downcast_column(&col).unwrap()),
+                    capacity,
+                );
+                Column::TimestampTz(buffer)
             }
             Column::Opaque(first) => {
                 with_opaque_size!(|N| match first.size() {

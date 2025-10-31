@@ -18,6 +18,8 @@
 #![feature(int_roundings)]
 #![feature(let_chains)]
 #![feature(iter_map_windows)]
+#![feature(assert_matches)]
+#![feature(debug_closure_helpers)]
 
 pub mod processors;
 pub use processors::*;

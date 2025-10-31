@@ -847,8 +847,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     fn set_session_state(&self, state: SessionState) -> Arc<dyn Catalog> {
+        let inner_mutable_cat = self
+            .mutable_catalog
+            .inner()
+            .with_storage_class_spec(state.s3_storage_class);
+
         Arc::new(DatabaseCatalog {
-            mutable_catalog: Arc::new(SessionCatalog::create(self.mutable_catalog.inner(), state)),
+            mutable_catalog: Arc::new(SessionCatalog::create(inner_mutable_cat, state)),
             immutable_catalog: self.immutable_catalog.clone(),
             table_function_factory: self.table_function_factory.clone(),
         })

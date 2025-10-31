@@ -21,3 +21,4 @@ pub mod policy;
 pub use no_prefetch::NoPretchPolicyBuilder;
 pub use predicate_and_topk::PredicateAndTopkPolicyBuilder;
 pub use topk_only::TopkOnlyPolicyBuilder;
+pub use utils::read_all;

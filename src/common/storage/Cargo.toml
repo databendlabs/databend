@@ -10,13 +10,7 @@ edition = { workspace = true }
 storage-hdfs = ["databend-common-meta-app/storage-hdfs"]
 
 [dependencies]
-ahash = { workspace = true }
-anyhow = { workspace = true }
-arrow-schema = { workspace = true }
-async-backtrace = { workspace = true }
-borsh = { workspace = true }
-chrono = { workspace = true }
-dashmap = { workspace = true }
+
 databend-common-ast = { workspace = true }
 databend-common-auth = { workspace = true }
 databend-common-base = { workspace = true }
@@ -26,6 +20,14 @@ databend-common-meta-app = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-native = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
+
+ahash = { workspace = true }
+anyhow = { workspace = true }
+arrow-schema = { workspace = true }
+async-backtrace = { workspace = true }
+borsh = { workspace = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 iceberg = { workspace = true }

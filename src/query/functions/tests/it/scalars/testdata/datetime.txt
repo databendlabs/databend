@@ -3835,3 +3835,41 @@ output domain  : {-31622400..=-31622400}
 output         : -31622400
 
 
+ast            : typeof(current_time())
+raw expr       : typeof(current_time())
+checked expr   : typeof<T0=String><T0>(current_time<>())
+optimized expr : "VARCHAR"
+func ctx       : (modified)
+output type    : String
+output domain  : {"VARCHAR"..="VARCHAR"}
+output         : 'VARCHAR'
+
+
+ast            : current_time()
+raw expr       : current_time()
+checked expr   : current_time<>()
+optimized expr : "04:05:06.789123000"
+func ctx       : (modified)
+output type    : String
+output domain  : {"04:05:06.789123000"..="04:05:06.789123000"}
+output         : '04:05:06.789123000'
+
+
+ast            : current_time(3)
+raw expr       : current_time(3)
+checked expr   : current_time<Int64>(CAST<UInt8>(3_u8 AS Int64))
+optimized expr : "04:05:06.789"
+func ctx       : (modified)
+output type    : String
+output domain  : {"04:05:06.789"..="04:05:06.789"}
+output         : '04:05:06.789'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | current_time(10)
+  | ^^^^^^^^^^^^^^^^ Invalid fractional seconds precision `10` for `current_time` (expect 0-9) while evaluating function `current_time(10)` in expr `current_time(CAST(10 AS Int64))`
+
+
+

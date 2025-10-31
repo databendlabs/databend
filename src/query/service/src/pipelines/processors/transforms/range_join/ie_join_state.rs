@@ -38,7 +38,7 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_transforms::processors::sort_merge;
+use databend_common_pipeline_transforms::sorts::sort_merge;
 
 use crate::physical_plans::RangeJoin;
 use crate::pipelines::processors::transforms::range_join::filter_block;

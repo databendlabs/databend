@@ -82,7 +82,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
             .get_catalog(
                 tenant.tenant_name(),
                 self.table_info.catalog(),
-                ctx.session_state(),
+                ctx.session_state()?,
             )
             .await?;
         let ctl_name = ctl.name();

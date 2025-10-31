@@ -45,16 +45,17 @@ SELECT * FROM t2
 
 
 statement ok
-CREATE TABLE IF NOT EXISTS t3(a Boolean, b Timestamp, c Date, d Array(Int), e Tuple(Int, String)) Engine = fuse STORAGE_FORMAT = 'native';
+CREATE TABLE IF NOT EXISTS t3(a Boolean, b Timestamp, c Date, d Array(Int), e Tuple(Int, String), f Timestamp With Time Zone) Engine = fuse STORAGE_FORMAT = 'native';
 
 statement ok
-INSERT INTO t3 (a,b,c,d,e) values(true, '2021-09-07 21:38:35.000000', '2021-09-07', [1, 2, 3], (10, 'abc')), (false, 1631050715000000, 18877, [4, 5, 6], (20, 'xyz'));
+INSERT INTO t3 (a,b,c,d,e,f) values(true, '2021-09-07 21:38:35.000000', '2021-09-07', [1, 2, 3], (10, 'abc'), '2024-10-22 12:00:00+0900'), (false, 1631050715000000, 18877, [4, 5, 6], (20, 'xyz'), '2024-10-22 12:00:00');
 
-query BTTTT
-SELECT * FROM t3 order by a desc;
+# FIXME: After Parser update then remove ::STRING
+query BTTTTT
+SELECT a, b, c, d, e, f::string FROM t3 order by a desc;
 ----
-1 2021-09-07 21:38:35.000000 2021-09-07 [1,2,3] (10,'abc')
-0 2021-09-07 21:38:35.000000 2021-09-07 [4,5,6] (20,'xyz')
+1 2021-09-07 21:38:35.000000 2021-09-07 [1,2,3] (10,'abc') 2024-10-22 21:00:00.000000 +0900
+0 2021-09-07 21:38:35.000000 2021-09-07 [4,5,6] (20,'xyz') 2024-10-22 12:00:00.000000 +0000
 
 query IIIT
 SELECT d[1], d[2], e.1, e.2 FROM t3;
@@ -142,16 +143,17 @@ DROP TABLE t_compression_none
 # Table Compression:ZSTD
 
 statement ok
-CREATE TABLE IF NOT EXISTS t_compression_zstd(a Boolean, b Timestamp, c Date) Engine = fuse COMPRESSION = 'ZSTD';
+CREATE TABLE IF NOT EXISTS t_compression_zstd(a Boolean, b Timestamp, c Date, e Timestamp With TIme Zone) Engine = fuse COMPRESSION = 'ZSTD';
 
 statement ok
-INSERT INTO t_compression_zstd (a,b,c) values(true, '2021-09-07 21:38:35.000000', '2021-09-07'), (false, 1631050715000000, 18877);
+INSERT INTO t_compression_zstd (a,b,c,e) values(true, '2021-09-07 21:38:35.000000', '2021-09-07', '2024-10-22 12:00:00+0900'), (false, 1631050715000000, 18877, '2024-10-22 12:00:00');
 
-query BTT
-SELECT * FROM t_compression_zstd order by a desc;
+# FIXME: After Parser update then remove ::STRING
+query BTTT
+SELECT a, b, c, e::string FROM t_compression_zstd order by a desc;
 ----
-1 2021-09-07 21:38:35.000000 2021-09-07
-0 2021-09-07 21:38:35.000000 2021-09-07
+1 2021-09-07 21:38:35.000000 2021-09-07 2024-10-22 21:00:00.000000 +0900
+0 2021-09-07 21:38:35.000000 2021-09-07 2024-10-22 12:00:00.000000 +0000
 
 statement ok
 DROP TABLE t_compression_zstd

@@ -89,7 +89,8 @@ async fn try_rebuild_req(
                 tid
             )));
         }
-        let latest_table = FuseTable::from_table_meta(tid, seq, table_meta)?;
+        let storage_class = ctx.get_settings().get_s3_storage_class()?;
+        let latest_table = FuseTable::from_table_meta(tid, seq, table_meta, storage_class)?;
         let default_cluster_key_id = latest_table.cluster_key_id();
         let latest_snapshot = latest_table.read_table_snapshot().await?;
         let (update_table_meta_req, _) = req
@@ -101,6 +102,7 @@ async fn try_rebuild_req(
             update_table_meta_req.table_id,
             0,
             update_table_meta_req.new_table_meta.clone(),
+            storage_class,
         )?;
         let new_snapshot = new_table.read_table_snapshot().await?;
         let base_snapshot_location = txn_mgr.lock().get_base_snapshot_location(tid);

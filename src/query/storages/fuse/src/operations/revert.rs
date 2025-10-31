@@ -34,10 +34,7 @@ impl FuseTable {
     ) -> Result<()> {
         // 1. try navigate to the point
         let table = self
-            .navigate_to_point(
-                &navigation_descriptor.point,
-                ctx.clone().get_abort_checker(),
-            )
+            .navigate_to_point(&ctx, &navigation_descriptor.point)
             .await?;
         let table_reverting_to = FuseTable::try_from_table(table.as_ref())?;
         let table_info = table_reverting_to.get_table_info();

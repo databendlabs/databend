@@ -18,9 +18,12 @@ use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::storage::S3StorageClass;
+use databend_common_meta_app::storage::StorageParams;
 use once_cell::sync::OnceCell;
 
 use super::settings_getter_setter::SpillFileFormat;
@@ -280,7 +283,7 @@ impl DefaultSettings {
                 }),
                 ("http_handler_result_timeout_secs", DefaultSettingValue {
                     value: {
-                        let result_timeout_secs = global_conf.map(|conf| conf.query.http_handler_result_timeout_secs)
+                        let result_timeout_secs = global_conf.as_ref().map(|conf| conf.query.http_handler_result_timeout_secs)
                             .unwrap_or(60);
                         UserSettingValue::UInt64(result_timeout_secs)
                     },
@@ -947,8 +950,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("compact_max_block_selection", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(10000),
-                    desc: "Limits the maximum number of blocks that can be selected during a compact operation.",
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Limits the maximum number of imperfect blocks that can be selected during a compact operation.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(2..=u64::MAX)),
@@ -1488,6 +1491,23 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
 
+                ("s3_storage_class", DefaultSettingValue {
+                    value: {
+                        let storage_class = Self::extract_s3_storage_class_config(&global_conf).unwrap_or_default();
+                        UserSettingValue::String(storage_class.to_string())
+                    },
+                    desc: "Default s3 storage class",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),
+                }),
+                ("enable_experiment_aggregate_final", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable experiment aggregate final, default is 0, 1 for enable",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -1495,6 +1515,16 @@ impl DefaultSettings {
                     .collect()
             }))
         })?))
+    }
+
+    fn extract_s3_storage_class_config(
+        config: &Option<Arc<InnerConfig>>,
+    ) -> Option<S3StorageClass> {
+        let storage_params = config.as_ref().map(|conf| &conf.storage.params);
+        if let Some(StorageParams::S3(s3_config)) = storage_params {
+            return Some(s3_config.storage_class);
+        }
+        None
     }
 
     fn storage_io_requests(num_cpus: u64) -> u64 {

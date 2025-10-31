@@ -48,9 +48,10 @@ impl NdJsonDecoder {
         buf: &[u8],
         columns: &mut [ColumnBuilder],
         null_if: &[&str],
+        file_full_path: &str,
     ) -> std::result::Result<(), FileParseError> {
         let mut json: serde_json::Value =
-            serde_json::from_reader(buf).map_err(|e| map_json_error(e, buf))?;
+            serde_json::from_reader(buf).map_err(|e| map_json_error(e, buf, file_full_path))?;
         // todo: this is temporary
         if self.field_decoder.is_select {
             self.field_decoder
@@ -168,7 +169,7 @@ impl RowDecoder for NdJsonDecoder {
             let row = row.trim();
             let row_id = batch.start_pos.rows + row_id;
             if !row.is_empty() {
-                if let Err(e) = self.read_row(row, columns, &null_if) {
+                if let Err(e) = self.read_row(row, columns, &null_if, &state.file_full_path) {
                     self.load_context.error_handler.on_error(
                         e.with_row(row_id),
                         Some((columns, state.num_rows)),
@@ -185,12 +186,11 @@ impl RowDecoder for NdJsonDecoder {
 }
 
 // The origin JSON error format "{} at line {} column {}" is misleading for NDJSON.
-// - rm `line {}`
 // - rename `column {}` to `pos {}`, 1-based to 0 based
 // - add info for size and next byte
 //
 // Use test in case of changes of serde_json.
-fn map_json_error(err: serde_json::Error, data: &[u8]) -> FileParseError {
+fn map_json_error(err: serde_json::Error, data: &[u8], file_full_path: &str) -> FileParseError {
     let pos = if err.column() > 0 {
         err.column() - 1
     } else {
@@ -199,10 +199,11 @@ fn map_json_error(err: serde_json::Error, data: &[u8]) -> FileParseError {
     let len = data.len();
 
     let mut message = err.to_string();
-    if let Some(p) = message.rfind(" at line") {
+    if let Some(p) = message.rfind(" column") {
         message = message[..p].to_string()
     }
-    message = format!("{message} at pos {pos} of size {len}");
+
+    message = format!("{message}, position {pos} of size {len} for File '{file_full_path}'");
     if err.column() < len {
         message = format!("{message}, next byte is '{}'", data[pos] as char)
     }
@@ -220,7 +221,7 @@ mod test {
     fn decode_err(data: &str) -> String {
         serde_json::from_slice::<serde_json::Value>(data.as_bytes())
             .map_err(|e| {
-                let e = map_json_error(e, data.as_bytes());
+                let e = map_json_error(e, data.as_bytes(), "mock_file");
                 if let FileParseError::InvalidRow { message, .. } = e {
                     message
                 } else {
@@ -235,15 +236,15 @@ mod test {
     fn test_json_decode_error() {
         assert_eq!(
             decode_err("{").as_str(),
-            "EOF while parsing an object at pos 0 of size 1"
+            "EOF while parsing an object at line 1, position 0 of size 1 for File 'mock_file'"
         );
         assert_eq!(
             decode_err("").as_str(),
-            "EOF while parsing a value at pos 0 of size 0"
+            "EOF while parsing a value at line 1, position 0 of size 0 for File 'mock_file'"
         );
         assert_eq!(
             decode_err("{\"k\"-}").as_str(),
-            "expected `:` at pos 4 of size 6, next byte is '-'"
+            "expected `:` at line 1, position 4 of size 6 for File 'mock_file', next byte is '-'"
         );
     }
 }

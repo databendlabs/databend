@@ -497,10 +497,14 @@ pub enum TokenKind {
     CROSS,
     #[token("CSV", ignore(ascii_case))]
     CSV,
-    #[token("CURRENT", ignore(ascii_case))]
-    CURRENT,
+    #[token("CURRENT_DATE", ignore(ascii_case))]
+    CURRENT_DATE,
+    #[token("CURRENT_TIME", ignore(ascii_case))]
+    CURRENT_TIME,
     #[token("CURRENT_TIMESTAMP", ignore(ascii_case))]
     CURRENT_TIMESTAMP,
+    #[token("CURRENT", ignore(ascii_case))]
+    CURRENT,
     #[token("DATABASE", ignore(ascii_case))]
     DATABASE,
     #[token("DATABASES", ignore(ascii_case))]
@@ -1236,8 +1240,12 @@ pub enum TokenKind {
     THEN,
     #[token("THURSDAY", ignore(ascii_case))]
     THURSDAY,
+    #[token("TIME", ignore(ascii_case))]
+    TIME,
     #[token("TIMESTAMP", ignore(ascii_case))]
     TIMESTAMP,
+    #[token("TIMESTAMP_TZ", ignore(ascii_case))]
+    TIMESTAMP_TZ,
     #[token("TIMEZONE_HOUR", ignore(ascii_case))]
     TIMEZONE_HOUR,
     #[token("TIMEZONE_MINUTE", ignore(ascii_case))]
@@ -1492,6 +1500,8 @@ pub enum TokenKind {
     REPORT,
     #[token("ISSUE", ignore(ascii_case))]
     ISSUE,
+    #[token("ZONE", ignore(ascii_case))]
+    ZONE,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

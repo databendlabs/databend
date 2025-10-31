@@ -37,6 +37,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
@@ -141,6 +142,7 @@ impl StreamTable {
         source_db_name: &str,
         source_tb_name: &str,
         batch_limit: Option<u64>,
+        s3_storage_class: S3StorageClass,
     ) -> Result<Arc<dyn Table>> {
         let stream_desc = &self.info.desc;
         let source = catalog
@@ -214,7 +216,11 @@ impl StreamTable {
         );
 
         if let Some((snapshot, format_version)) = instant {
-            Ok(fuse_table.load_table_by_snapshot(snapshot.as_ref(), format_version)?)
+            Ok(fuse_table.load_table_by_snapshot(
+                snapshot.as_ref(),
+                format_version,
+                s3_storage_class,
+            )?)
         } else {
             Ok(source)
         }

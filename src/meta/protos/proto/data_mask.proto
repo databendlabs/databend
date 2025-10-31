@@ -16,16 +16,25 @@ syntax = "proto3";
 
 package databend_proto;
 
+message DataMaskArg {
+  string name = 1;
+  string type = 2;
+}
+
 message DatamaskMeta {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
+  // Deprecated: preserved for backward compatibility, use args_v2 instead
   map<string, string> args = 1;
   string return_type = 2;
   string body = 3;
   optional string comment = 4;
   string create_on = 5;
   optional string update_on = 6;
+
+  // New field that preserves argument order
+  repeated DataMaskArg args_v2 = 7;
 }
 
 message MaskpolicyTableIdList {

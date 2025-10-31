@@ -103,9 +103,10 @@ async fn test_fuse_navigate() -> Result<()> {
         .sub(chrono::Duration::milliseconds(1));
 
     let ctx = fixture.new_query_ctx().await?;
+    let tbl_ctx: std::sync::Arc<dyn TableContext> = ctx.clone();
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot
     let tbl = fuse_table
-        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_abort_checker())
+        .navigate_to_time_point(&tbl_ctx, loc.clone(), instant)
         .await?;
 
     // check we got the snapshot of the first insertion
@@ -119,7 +120,7 @@ async fn test_fuse_navigate() -> Result<()> {
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the last insertion
     let res = fuse_table
-        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_abort_checker())
+        .navigate_to_time_point(&tbl_ctx, loc.clone(), instant)
         .await;
     match res {
         Ok(_) => panic!("historical data should not exist"),
@@ -132,7 +133,7 @@ async fn test_fuse_navigate() -> Result<()> {
     let checker = ctx.clone().get_abort_checker();
     assert!(checker.try_check_aborting().is_err());
     let res = fuse_table
-        .navigate_to_time_point(loc, instant, ctx.get_abort_checker())
+        .navigate_to_time_point(&tbl_ctx, loc, instant)
         .await;
 
     assert!(res.is_err());

@@ -15,12 +15,17 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 
 #[async_trait::async_trait]
 pub trait FailSafeHandler: Sync + Send {
-    async fn recover_table_data(&self, table_info: TableInfo) -> Result<()>;
+    async fn recover_table_data(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        table_info: TableInfo,
+    ) -> Result<()>;
 }
 
 pub struct FailSafeHandlerWrapper {
@@ -33,8 +38,8 @@ impl FailSafeHandlerWrapper {
     }
 
     #[async_backtrace::framed]
-    pub async fn recover(&self, table_info: TableInfo) -> Result<()> {
-        self.handler.recover_table_data(table_info).await
+    pub async fn recover(&self, ctx: &Arc<dyn TableContext>, table_info: TableInfo) -> Result<()> {
+        self.handler.recover_table_data(ctx, table_info).await
     }
 }
 

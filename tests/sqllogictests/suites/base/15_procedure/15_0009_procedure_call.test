@@ -53,3 +53,27 @@ $$;
 2 3
 3 4
 4 5
+
+query T
+EXECUTE IMMEDIATE $$
+BEGIN
+    let x;
+    let z Int;
+    z := 4;
+    let y Int Default z;
+    x := 1 + y;
+    RETURN x;
+END;
+$$;
+----
+5
+
+statement error 3129
+EXECUTE IMMEDIATE $$
+BEGIN
+    let z Int;
+    let y Int Default z;
+    RETURN y;
+END;
+$$;
+

@@ -31,8 +31,8 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::DynTransformBuilder;
 use databend_common_pipeline_sinks::AsyncSinker;
-use databend_common_pipeline_transforms::TransformSortPartial;
-use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
+use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::ColumnSet;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_common_storages_fuse::FuseTable;
@@ -786,7 +786,7 @@ impl IPhysicalPlan for ChunkCommitInsert {
 
         let catalog = CatalogManager::instance().build_catalog(
             self.targets[0].target_catalog_info.clone(),
-            builder.ctx.session_state(),
+            builder.ctx.session_state()?,
         )?;
 
         builder.main_pipeline.add_sink(|input| {
