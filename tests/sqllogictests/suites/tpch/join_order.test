@@ -103,39 +103,75 @@ order by
     s_name,
     p_partkey;
 ----
-HashJoin: INNER
-├── Build
-│   └── HashJoin: INNER
-│       ├── Build
-│       │   └── HashJoin: INNER
-│       │       ├── Build
-│       │       │   └── HashJoin: INNER
-│       │       │       ├── Build
-│       │       │       │   └── Scan: default.tpch_test.region (#4) (read rows: 5)
-│       │       │       └── Probe
-│       │       │           └── Scan: default.tpch_test.nation (#3) (read rows: 25)
-│       │       └── Probe
-│       │           └── Scan: default.tpch_test.supplier (#1) (read rows: 10000)
-│       └── Probe
-│           └── HashJoin: INNER
-│               ├── Build
-│               │   └── Scan: default.tpch_test.part (#0) (read rows: 200000)
-│               └── Probe
-│                   └── Scan: default.tpch_test.partsupp (#2) (read rows: 800000)
-└── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── HashJoin: INNER
-        │       │       ├── Build
-        │       │       │   └── Scan: default.tpch_test.region (#8) (read rows: 5)
-        │       │       └── Probe
-        │       │           └── Scan: default.tpch_test.nation (#7) (read rows: 25)
-        │       └── Probe
-        │           └── Scan: default.tpch_test.supplier (#6) (read rows: 10000)
-        └── Probe
-            └── Scan: default.tpch_test.partsupp (#5) (read rows: 800000)
+Sequence
+├── MaterializedCTE
+│   ├── cte_name: cte_cse_3
+│   ├── ref_count: 2
+│   └── Scan: default.tpch_test.region (#4) (read rows: 5)
+└── Sequence
+    ├── MaterializedCTE
+    │   ├── cte_name: cte_cse_2
+    │   ├── ref_count: 2
+    │   └── Scan: default.tpch_test.partsupp (#2) (read rows: 800000)
+    └── Sequence
+        ├── MaterializedCTE
+        │   ├── cte_name: cte_cse_1
+        │   ├── ref_count: 2
+        │   └── Scan: default.tpch_test.supplier (#1) (read rows: 10000)
+        └── Sequence
+            ├── MaterializedCTE
+            │   ├── cte_name: cte_cse_0
+            │   ├── ref_count: 2
+            │   └── Scan: default.tpch_test.nation (#3) (read rows: 25)
+            └── HashJoin: INNER
+                ├── Build
+                │   └── HashJoin: INNER
+                │       ├── Build
+                │       │   └── HashJoin: INNER
+                │       │       ├── Build
+                │       │       │   └── HashJoin: INNER
+                │       │       │       ├── Build
+                │       │       │       │   └── MaterializeCTERef
+                │       │       │       │       ├── cte_name: cte_cse_3
+                │       │       │       │       └── cte_schema: [r_regionkey (#25), r_name (#26)]
+                │       │       │       └── Probe
+                │       │       │           └── MaterializeCTERef
+                │       │       │               ├── cte_name: cte_cse_0
+                │       │       │               └── cte_schema: [n_nationkey (#21), n_name (#22), n_regionkey (#23)]
+                │       │       └── Probe
+                │       │           └── MaterializeCTERef
+                │       │               ├── cte_name: cte_cse_1
+                │       │               └── cte_schema: [s_suppkey (#9), s_name (#10), s_address (#11), s_nationkey (#12), s_phone (#13), s_acctbal (#14), s_comment (#15)]
+                │       └── Probe
+                │           └── HashJoin: INNER
+                │               ├── Build
+                │               │   └── Scan: default.tpch_test.part (#0) (read rows: 200000)
+                │               └── Probe
+                │                   └── MaterializeCTERef
+                │                       ├── cte_name: cte_cse_2
+                │                       └── cte_schema: [ps_partkey (#16), ps_suppkey (#17), ps_supplycost (#19)]
+                └── Probe
+                    └── HashJoin: INNER
+                        ├── Build
+                        │   └── HashJoin: INNER
+                        │       ├── Build
+                        │       │   └── HashJoin: INNER
+                        │       │       ├── Build
+                        │       │       │   └── MaterializeCTERef
+                        │       │       │       ├── cte_name: cte_cse_3
+                        │       │       │       └── cte_schema: [r_regionkey (#44), r_name (#45)]
+                        │       │       └── Probe
+                        │       │           └── MaterializeCTERef
+                        │       │               ├── cte_name: cte_cse_0
+                        │       │               └── cte_schema: [n_nationkey (#40), n_name (#41), n_regionkey (#42)]
+                        │       └── Probe
+                        │           └── MaterializeCTERef
+                        │               ├── cte_name: cte_cse_1
+                        │               └── cte_schema: [s_suppkey (#33), s_name (#34), s_address (#35), s_nationkey (#36), s_phone (#37), s_acctbal (#38), s_comment (#39)]
+                        └── Probe
+                            └── MaterializeCTERef
+                                ├── cte_name: cte_cse_2
+                                └── cte_schema: [ps_partkey (#28), ps_suppkey (#29), ps_supplycost (#31)]
 
 # Q3
 query I
@@ -308,27 +344,36 @@ order by
     cust_nation,
     l_year;
 ----
-HashJoin: INNER
-├── Build
-│   └── HashJoin: INNER
-│       ├── Build
-│       │   └── HashJoin: INNER
-│       │       ├── Build
-│       │       │   └── Scan: default.tpch_test.nation (#5) (read rows: 25)
-│       │       └── Probe
-│       │           └── Scan: default.tpch_test.customer (#3) (read rows: 150000)
-│       └── Probe
-│           └── Scan: default.tpch_test.orders (#2) (read rows: 1500000)
-└── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── Scan: default.tpch_test.nation (#4) (read rows: 25)
-        │       └── Probe
-        │           └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
-        └── Probe
-            └── Scan: default.tpch_test.lineitem (#1) (read rows: 6001215)
+Sequence
+├── MaterializedCTE
+│   ├── cte_name: cte_cse_0
+│   ├── ref_count: 2
+│   └── Scan: default.tpch_test.nation (#4) (read rows: 25)
+└── HashJoin: INNER
+    ├── Build
+    │   └── HashJoin: INNER
+    │       ├── Build
+    │       │   └── HashJoin: INNER
+    │       │       ├── Build
+    │       │       │   └── MaterializeCTERef
+    │       │       │       ├── cte_name: cte_cse_0
+    │       │       │       └── cte_schema: [n_nationkey (#44), n_name (#45)]
+    │       │       └── Probe
+    │       │           └── Scan: default.tpch_test.customer (#3) (read rows: 150000)
+    │       └── Probe
+    │           └── Scan: default.tpch_test.orders (#2) (read rows: 1500000)
+    └── Probe
+        └── HashJoin: INNER
+            ├── Build
+            │   └── HashJoin: INNER
+            │       ├── Build
+            │       │   └── MaterializeCTERef
+            │       │       ├── cte_name: cte_cse_0
+            │       │       └── cte_schema: [n_nationkey (#40), n_name (#41)]
+            │       └── Probe
+            │           └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
+            └── Probe
+                └── Scan: default.tpch_test.lineitem (#1) (read rows: 6001215)
 
 # Q8
 query I
@@ -370,35 +415,44 @@ group by
 order by
     o_year;
 ----
-HashJoin: INNER
-├── Build
-│   └── Scan: default.tpch_test.nation (#6) (read rows: 25)
-└── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── HashJoin: INNER
-        │       │       ├── Build
-        │       │       │   └── Scan: default.tpch_test.region (#7) (read rows: 5)
-        │       │       └── Probe
-        │       │           └── Scan: default.tpch_test.nation (#5) (read rows: 25)
-        │       └── Probe
-        │           └── HashJoin: INNER
-        │               ├── Build
-        │               │   └── HashJoin: INNER
-        │               │       ├── Build
-        │               │       │   └── HashJoin: INNER
-        │               │       │       ├── Build
-        │               │       │       │   └── Scan: default.tpch_test.part (#0) (read rows: 200000)
-        │               │       │       └── Probe
-        │               │       │           └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
-        │               │       └── Probe
-        │               │           └── Scan: default.tpch_test.orders (#3) (read rows: 1500000)
-        │               └── Probe
-        │                   └── Scan: default.tpch_test.customer (#4) (read rows: 150000)
-        └── Probe
-            └── Scan: default.tpch_test.supplier (#1) (read rows: 10000)
+Sequence
+├── MaterializedCTE
+│   ├── cte_name: cte_cse_0
+│   ├── ref_count: 2
+│   └── Scan: default.tpch_test.nation (#5) (read rows: 25)
+└── HashJoin: INNER
+    ├── Build
+    │   └── MaterializeCTERef
+    │       ├── cte_name: cte_cse_0
+    │       └── cte_schema: [n_nationkey (#53), n_name (#54), n_regionkey (#55)]
+    └── Probe
+        └── HashJoin: INNER
+            ├── Build
+            │   └── HashJoin: INNER
+            │       ├── Build
+            │       │   └── HashJoin: INNER
+            │       │       ├── Build
+            │       │       │   └── Scan: default.tpch_test.region (#7) (read rows: 5)
+            │       │       └── Probe
+            │       │           └── MaterializeCTERef
+            │       │               ├── cte_name: cte_cse_0
+            │       │               └── cte_schema: [n_nationkey (#49), n_name (#50), n_regionkey (#51)]
+            │       └── Probe
+            │           └── HashJoin: INNER
+            │               ├── Build
+            │               │   └── HashJoin: INNER
+            │               │       ├── Build
+            │               │       │   └── HashJoin: INNER
+            │               │       │       ├── Build
+            │               │       │       │   └── Scan: default.tpch_test.part (#0) (read rows: 200000)
+            │               │       │       └── Probe
+            │               │       │           └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
+            │               │       └── Probe
+            │               │           └── Scan: default.tpch_test.orders (#3) (read rows: 1500000)
+            │               └── Probe
+            │                   └── Scan: default.tpch_test.customer (#4) (read rows: 150000)
+            └── Probe
+                └── Scan: default.tpch_test.supplier (#1) (read rows: 10000)
 
 # Q9
 query I
@@ -535,27 +589,54 @@ group by
 order by
     value desc limit 100;
 ----
-HashJoin: INNER
-├── Build
-│   └── HashJoin: INNER
-│       ├── Build
-│       │   └── HashJoin: INNER
-│       │       ├── Build
-│       │       │   └── Scan: default.tpch_test.nation (#5) (read rows: 25)
-│       │       └── Probe
-│       │           └── Scan: default.tpch_test.supplier (#4) (read rows: 10000)
-│       └── Probe
-│           └── Scan: default.tpch_test.partsupp (#3) (read rows: 800000)
-└── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── Scan: default.tpch_test.nation (#2) (read rows: 25)
-        │       └── Probe
-        │           └── Scan: default.tpch_test.supplier (#1) (read rows: 10000)
-        └── Probe
-            └── Scan: default.tpch_test.partsupp (#0) (read rows: 800000)
+Sequence
+├── MaterializedCTE
+│   ├── cte_name: cte_cse_2
+│   ├── ref_count: 2
+│   └── Scan: default.tpch_test.partsupp (#0) (read rows: 800000)
+└── Sequence
+    ├── MaterializedCTE
+    │   ├── cte_name: cte_cse_1
+    │   ├── ref_count: 2
+    │   └── Scan: default.tpch_test.nation (#2) (read rows: 25)
+    └── Sequence
+        ├── MaterializedCTE
+        │   ├── cte_name: cte_cse_0
+        │   ├── ref_count: 2
+        │   └── Scan: default.tpch_test.supplier (#1) (read rows: 10000)
+        └── HashJoin: INNER
+            ├── Build
+            │   └── HashJoin: INNER
+            │       ├── Build
+            │       │   └── HashJoin: INNER
+            │       │       ├── Build
+            │       │       │   └── MaterializeCTERef
+            │       │       │       ├── cte_name: cte_cse_1
+            │       │       │       └── cte_schema: [n_nationkey (#30), n_name (#31)]
+            │       │       └── Probe
+            │       │           └── MaterializeCTERef
+            │       │               ├── cte_name: cte_cse_0
+            │       │               └── cte_schema: [s_suppkey (#23), s_nationkey (#26)]
+            │       └── Probe
+            │           └── MaterializeCTERef
+            │               ├── cte_name: cte_cse_2
+            │               └── cte_schema: [ps_partkey (#18), ps_suppkey (#19), ps_availqty (#20), ps_supplycost (#21)]
+            └── Probe
+                └── HashJoin: INNER
+                    ├── Build
+                    │   └── HashJoin: INNER
+                    │       ├── Build
+                    │       │   └── MaterializeCTERef
+                    │       │       ├── cte_name: cte_cse_1
+                    │       │       └── cte_schema: [n_nationkey (#12), n_name (#13)]
+                    │       └── Probe
+                    │           └── MaterializeCTERef
+                    │               ├── cte_name: cte_cse_0
+                    │               └── cte_schema: [s_suppkey (#5), s_nationkey (#8)]
+                    └── Probe
+                        └── MaterializeCTERef
+                            ├── cte_name: cte_cse_2
+                            └── cte_schema: [ps_partkey (#0), ps_suppkey (#1), ps_availqty (#2), ps_supplycost (#3)]
 
 # Q12
 query I
@@ -681,15 +762,24 @@ where
 order by
     s_suppkey;
 ----
-HashJoin: INNER
-├── Build
-│   └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
-└── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── Scan: default.tpch_test.lineitem (#1) (read rows: 6001215)
-        └── Probe
-            └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
+Sequence
+├── MaterializedCTE
+│   ├── cte_name: cte_cse_0
+│   ├── ref_count: 2
+│   └── Scan: default.tpch_test.lineitem (#1) (read rows: 6001215)
+└── HashJoin: INNER
+    ├── Build
+    │   └── MaterializeCTERef
+    │       ├── cte_name: cte_cse_0
+    │       └── cte_schema: [l_suppkey (#28), l_extendedprice (#31), l_discount (#32), l_shipdate (#36)]
+    └── Probe
+        └── HashJoin: INNER
+            ├── Build
+            │   └── MaterializeCTERef
+            │       ├── cte_name: cte_cse_0
+            │       └── cte_schema: [l_suppkey (#9), l_extendedprice (#12), l_discount (#13), l_shipdate (#17)]
+            └── Probe
+                └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
 
 # Q15
 query T
@@ -799,15 +889,24 @@ where
             l_partkey = p_partkey
 );
 ----
-HashJoin: INNER
-├── Build
-│   └── HashJoin: INNER
-│       ├── Build
-│       │   └── Scan: default.tpch_test.part (#1) (read rows: 200000)
-│       └── Probe
-│           └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
-└── Probe
-    └── Scan: default.tpch_test.lineitem (#0) (read rows: 6001215)
+Sequence
+├── MaterializedCTE
+│   ├── cte_name: cte_cse_0
+│   ├── ref_count: 2
+│   └── Scan: default.tpch_test.lineitem (#0) (read rows: 6001215)
+└── HashJoin: INNER
+    ├── Build
+    │   └── HashJoin: INNER
+    │       ├── Build
+    │       │   └── Scan: default.tpch_test.part (#1) (read rows: 200000)
+    │       └── Probe
+    │           └── MaterializeCTERef
+    │               ├── cte_name: cte_cse_0
+    │               └── cte_schema: [l_partkey (#27), l_quantity (#30), l_extendedprice (#31)]
+    └── Probe
+        └── MaterializeCTERef
+            ├── cte_name: cte_cse_0
+            └── cte_schema: [l_partkey (#1), l_quantity (#4), l_extendedprice (#5)]
 
 #Q18
 query I
@@ -844,19 +943,28 @@ order by
     o_totalprice desc,
     o_orderdate;
 ----
-HashJoin: INNER
-├── Build
-│   └── HashJoin: INNER
-│       ├── Build
-│       │   └── HashJoin: INNER
-│       │       ├── Build
-│       │       │   └── Scan: default.tpch_test.lineitem (#3) (read rows: 6001215)
-│       │       └── Probe
-│       │           └── Scan: default.tpch_test.orders (#1) (read rows: 1500000)
-│       └── Probe
-│           └── Scan: default.tpch_test.customer (#0) (read rows: 150000)
-└── Probe
-    └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
+Sequence
+├── MaterializedCTE
+│   ├── cte_name: cte_cse_0
+│   ├── ref_count: 2
+│   └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
+└── HashJoin: INNER
+    ├── Build
+    │   └── HashJoin: INNER
+    │       ├── Build
+    │       │   └── HashJoin: INNER
+    │       │       ├── Build
+    │       │       │   └── MaterializeCTERef
+    │       │       │       ├── cte_name: cte_cse_0
+    │       │       │       └── cte_schema: [l_orderkey (#34), l_quantity (#38)]
+    │       │       └── Probe
+    │       │           └── Scan: default.tpch_test.orders (#1) (read rows: 1500000)
+    │       └── Probe
+    │           └── Scan: default.tpch_test.customer (#0) (read rows: 150000)
+    └── Probe
+        └── MaterializeCTERef
+            ├── cte_name: cte_cse_0
+            └── cte_schema: [l_orderkey (#17), l_quantity (#21)]
 
 # Q19
 query I
@@ -1036,27 +1144,38 @@ order by
     numwait desc,
     s_name;
 ----
-HashJoin: RIGHT ANTI
-├── Build
-│   └── HashJoin: RIGHT SEMI
-│       ├── Build
-│       │   └── HashJoin: INNER
-│       │       ├── Build
-│       │       │   └── HashJoin: INNER
-│       │       │       ├── Build
-│       │       │       │   └── HashJoin: INNER
-│       │       │       │       ├── Build
-│       │       │       │       │   └── Scan: default.tpch_test.nation (#3) (read rows: 25)
-│       │       │       │       └── Probe
-│       │       │       │           └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
-│       │       │       └── Probe
-│       │       │           └── Scan: default.tpch_test.lineitem (#1) (read rows: 6001215)
-│       │       └── Probe
-│       │           └── Scan: default.tpch_test.orders (#2) (read rows: 1500000)
-│       └── Probe
-│           └── Scan: default.tpch_test.lineitem (#4) (read rows: 6001215)
-└── Probe
-    └── Scan: default.tpch_test.lineitem (#5) (read rows: 6001215)
+Sequence
+├── MaterializedCTE
+│   ├── cte_name: cte_cse_0
+│   ├── ref_count: 3
+│   └── Scan: default.tpch_test.lineitem (#1) (read rows: 6001215)
+└── HashJoin: RIGHT ANTI
+    ├── Build
+    │   └── HashJoin: RIGHT SEMI
+    │       ├── Build
+    │       │   └── HashJoin: INNER
+    │       │       ├── Build
+    │       │       │   └── HashJoin: INNER
+    │       │       │       ├── Build
+    │       │       │       │   └── HashJoin: INNER
+    │       │       │       │       ├── Build
+    │       │       │       │       │   └── Scan: default.tpch_test.nation (#3) (read rows: 25)
+    │       │       │       │       └── Probe
+    │       │       │       │           └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
+    │       │       │       └── Probe
+    │       │       │           └── MaterializeCTERef
+    │       │       │               ├── cte_name: cte_cse_0
+    │       │       │               └── cte_schema: [l_orderkey (#7), l_suppkey (#9), l_commitdate (#18), l_receiptdate (#19)]
+    │       │       └── Probe
+    │       │           └── Scan: default.tpch_test.orders (#2) (read rows: 1500000)
+    │       └── Probe
+    │           └── MaterializeCTERef
+    │               ├── cte_name: cte_cse_0
+    │               └── cte_schema: [l_orderkey (#37), l_suppkey (#39), l_commitdate (#48), l_receiptdate (#49)]
+    └── Probe
+        └── MaterializeCTERef
+            ├── cte_name: cte_cse_0
+            └── cte_schema: [l_orderkey (#53), l_suppkey (#55), l_commitdate (#64), l_receiptdate (#65)]
 
 # Q22
 query I
@@ -1098,12 +1217,21 @@ group by
 order by
     cntrycode;
 ----
-HashJoin: RIGHT ANTI
-├── Build
-│   └── HashJoin: INNER
-│       ├── Build
-│       │   └── Scan: default.tpch_test.customer (#1) (read rows: 150000)
-│       └── Probe
-│           └── Scan: default.tpch_test.customer (#0) (read rows: 150000)
-└── Probe
-    └── Scan: default.tpch_test.orders (#2) (read rows: 1500000)
+Sequence
+├── MaterializedCTE
+│   ├── cte_name: cte_cse_0
+│   ├── ref_count: 2
+│   └── Scan: default.tpch_test.customer (#0) (read rows: 150000)
+└── HashJoin: RIGHT ANTI
+    ├── Build
+    │   └── HashJoin: INNER
+    │       ├── Build
+    │       │   └── MaterializeCTERef
+    │       │       ├── cte_name: cte_cse_0
+    │       │       └── cte_schema: [c_custkey (#8), c_phone (#12), c_acctbal (#13)]
+    │       └── Probe
+    │           └── MaterializeCTERef
+    │               ├── cte_name: cte_cse_0
+    │               └── cte_schema: [c_custkey (#0), c_phone (#4), c_acctbal (#5)]
+    └── Probe
+        └── Scan: default.tpch_test.orders (#2) (read rows: 1500000)

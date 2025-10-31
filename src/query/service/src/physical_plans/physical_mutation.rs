@@ -297,7 +297,8 @@ impl PhysicalPlanBuilder {
         let udf_col_num = required_udf_ids.len();
         required.extend(required_udf_ids);
 
-        let mut plan = self.build(s_expr.child(0)?, required).await?;
+        let child_required = self.derive_single_child_required_columns(s_expr, &required)?;
+        let mut plan = self.build(s_expr.child(0)?, child_required).await?;
         if *no_effect {
             return Ok(plan);
         }
