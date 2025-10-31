@@ -71,11 +71,12 @@ fn build_partition_bucket_experimental(
     let shared_state = Arc::new(Mutex::new(FinalAggregateSharedState::new(output_num)));
 
     let settings = ctx.get_settings();
-    let block_bytes = settings.get_max_block_bytes()? as usize;
+    let rows = settings.get_max_block_size()? as usize;
+    let bytes = settings.get_max_block_bytes()? as usize;
     let max_aggregate_spill_level = settings.get_max_aggregate_spill_level()? as usize;
 
     for id in 0..output_num {
-        let spiller = NewAggregateSpiller::try_create(ctx.clone(), output_num, 0, block_bytes)?;
+        let spiller = NewAggregateSpiller::try_create(ctx.clone(), output_num, rows, bytes)?;
         let input_port = InputPort::create();
         let output_port = OutputPort::create();
         let processor = NewFinalAggregateTransform::try_create(
