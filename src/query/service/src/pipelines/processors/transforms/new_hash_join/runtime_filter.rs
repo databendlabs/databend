@@ -52,9 +52,12 @@ impl RuntimeFiltersDesc {
             let filter_desc = RuntimeFilterDesc::from(filter_desc);
 
             if !ctx.get_cluster().is_empty() {
-                let ready = Arc::new(RuntimeFilterReady::default());
-                runtime_filters_ready.push(ready.clone());
-                ctx.set_runtime_filter_ready(filter_desc.scan_id, ready);
+                // Set runtime filter ready for all probe targets
+                for (_probe_key, scan_id) in &filter_desc.probe_targets {
+                    let ready = Arc::new(RuntimeFilterReady::default());
+                    runtime_filters_ready.push(ready.clone());
+                    ctx.set_runtime_filter_ready(*scan_id, ready);
+                }
             }
 
             filters_desc.push(filter_desc);

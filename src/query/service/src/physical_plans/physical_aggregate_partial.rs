@@ -167,7 +167,6 @@ impl IPhysicalPlan for AggregatePartial {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        builder.contain_sink_processor = true;
         self.input.build_pipeline(builder)?;
 
         let max_block_size = builder.settings.get_max_block_size()?;

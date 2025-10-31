@@ -840,21 +840,19 @@ impl HashJoinBuildState {
     }
 
     pub fn add_runtime_filter_ready(&self) {
-        if self.ctx.get_cluster().is_empty() {
-            return;
-        }
-
-        let mut wait_runtime_filter_table_indexes = HashSet::new();
+        let mut scan_ids = HashSet::new();
         for rf in self.runtime_filter_desc() {
-            wait_runtime_filter_table_indexes.insert(rf.scan_id);
+            for (_probe_key, scan_id) in &rf.probe_targets {
+                scan_ids.insert(*scan_id);
+            }
         }
 
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         let runtime_filter_ready = &mut build_state.runtime_filter_ready;
-        for table_index in wait_runtime_filter_table_indexes.into_iter() {
+        for scan_id in scan_ids.into_iter() {
             let ready = Arc::new(RuntimeFilterReady::default());
             runtime_filter_ready.push(ready.clone());
-            self.ctx.set_runtime_filter_ready(table_index, ready);
+            self.ctx.set_runtime_filter_ready(scan_id, ready);
         }
     }
 

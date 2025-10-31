@@ -173,6 +173,7 @@ pub struct QueryContextShared {
     pub(super) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
     pub(super) spilled_files: Arc<RwLock<HashMap<spillers::Location, spillers::Layout>>>,
     pub(super) unload_callbacked: AtomicBool,
+    pub(super) runtime_filter_logged: AtomicBool,
     pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
     pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
 
@@ -261,6 +262,7 @@ impl QueryContextShared {
             cluster_spill_progress: Default::default(),
             spilled_files: Default::default(),
             unload_callbacked: AtomicBool::new(false),
+            runtime_filter_logged: AtomicBool::new(false),
             warehouse_cache: Arc::new(RwLock::new(None)),
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
