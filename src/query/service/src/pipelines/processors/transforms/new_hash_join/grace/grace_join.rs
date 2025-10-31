@@ -174,7 +174,14 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
 
                 self.stage = RestoreStage::RestoreBuild;
                 *self.state.restore_partition.as_mut() = None;
-                self.memory_hash_join.reset_memory();
+
+                // The first arrival in each partition clears the global state.
+                let mut reset_global_state = false;
+                std::mem::swap(
+                    &mut reset_global_state,
+                    self.state.reset_global_state.as_mut(),
+                );
+                self.memory_hash_join.reset_memory(reset_global_state);
                 Ok(Some(Box::new(EmptyJoinStream)))
             },
         }
@@ -222,6 +229,8 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
     fn advance_restore_partition(&mut self) -> bool {
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        *self.state.reset_global_state.as_mut() = true;
 
         if self.state.restore_partition.is_none() {
             let Some((id, data)) = self.state.build_row_groups.as_mut().pop_first() else {
@@ -366,6 +375,10 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         }
 
         Ok(())
+    }
+
+    pub fn into_inner(self) -> T {
+        self.memory_hash_join
     }
 }
 

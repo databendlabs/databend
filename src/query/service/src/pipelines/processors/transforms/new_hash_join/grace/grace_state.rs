@@ -33,6 +33,7 @@ pub struct GraceHashJoinState {
     pub mutex: Mutex<()>,
     pub ctx: Arc<QueryContext>,
     pub finished: CStyleCell<bool>,
+    pub reset_global_state: CStyleCell<bool>,
     pub restore_partition: CStyleCell<Option<usize>>,
     pub restore_build_queue: CStyleCell<VecDeque<SpillMetadata>>,
     pub restore_probe_queue: CStyleCell<VecDeque<SpillMetadata>>,
@@ -60,6 +61,7 @@ impl GraceHashJoinState {
             restore_build_queue: CStyleCell::new(VecDeque::new()),
             restore_probe_queue: CStyleCell::new(VecDeque::new()),
             restore_partition: CStyleCell::new(None),
+            reset_global_state: CStyleCell::new(true),
         })
     }
 }

@@ -1484,13 +1484,19 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_new_join", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables the experimental new join implement",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-
+                ("max_grace_hash_join_level", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "The maximum recursion depth of Grace Hash Join, each level of recursion adds 16 times the number of partitions compared to the previous level.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=16)),
+                }),
                 ("s3_storage_class", DefaultSettingValue {
                     value: {
                         let storage_class = Self::extract_s3_storage_class_config(&global_conf).unwrap_or_default();
