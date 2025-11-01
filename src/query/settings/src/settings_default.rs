@@ -544,6 +544,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("broadcast_row_count_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(300000),
+                    desc: "Broadcast join is disabled when the build side's estimated row count is above this limit.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enforce_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enforce broadcast join.",
