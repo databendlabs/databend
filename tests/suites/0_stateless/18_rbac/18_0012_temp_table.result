@@ -24,6 +24,6 @@ ERROR 1105 (HY000) at line 1: UnknownTable. Code: 1025, Text = error:
   --> SQL:1:15
   |
 1 | select * from test.t2
-  |               ^^^^^^^ Unknown table "default".test.t2 .
+  |               ^^^^^^^ Unknown table "default"."test".t2 .
 
 .
