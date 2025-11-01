@@ -86,16 +86,22 @@ class TestContext:
         print(f" === databend-meta ver={version} id={node_id} started")
 
     def feed_data(self, node_id: int, number: int = 10) -> None:
-        """Feed test data to node."""
+        """Feed test data to node using databend-meta --cmd."""
         # Use leader_ver to match the leader's protocol version (only leader accepts writes)
-        cmd = [
-            str(self.binary(self.leader_ver, "databend-metabench")),
-            "--rpc", 'table_copy_file:{"file_cnt":2,"ttl_ms":86400999}',
-            "--client", "1", "--number", str(number), "--prefix", "1",
-            "--grpc-api-address", self.grpc_addr(node_id),
-        ]
-        print(f" === Running: {' '.join(cmd)}")
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, check=True)
+        # Use databend-meta --cmd for compatibility with older versions that lack metabench
+        print(f" === Feeding {number} key-value pairs to node {node_id}")
+        for i in range(number):
+            key = f"test_key_{i}"
+            value = f"test_value_{i}_data"
+            cmd = [
+                str(self.binary(self.leader_ver, "databend-meta")),
+                "--grpc-api-address", self.grpc_addr(node_id),
+                "--cmd", "kvapi::upsert",
+                "--key", key,
+                "--value", value,
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, check=True)
+        print(f" === Successfully fed {number} entries to node {node_id}")
 
     def export(self, version: str, source: dict, output: Path) -> None:
         """Export meta data."""
