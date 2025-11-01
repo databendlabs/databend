@@ -17,13 +17,10 @@ use std::sync::Arc;
 use databend_common_ast::ast;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::DropTableIndexPlan;
 use databend_common_storages_fuse::TableContext;
-use databend_enterprise_table_index::get_table_index_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -52,22 +49,6 @@ impl Interpreter for DropTableIndexInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        match self.plan.index_type {
-            ast::TableIndexType::Inverted => {
-                LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
-            }
-            ast::TableIndexType::Ngram => {
-                LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::NgramIndex)?;
-            }
-            ast::TableIndexType::Vector => {
-                LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VectorIndex)?;
-            }
-            ast::TableIndexType::Aggregating => (),
-        }
-
         let index_name = self.plan.index_name.clone();
         let table_id = self.plan.table_id;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
@@ -90,8 +71,7 @@ impl Interpreter for DropTableIndexInterpreter {
             name: index_name,
         };
 
-        let handler = get_table_index_handler();
-        let _ = handler.do_drop_table_index(catalog, drop_index_req).await?;
+        let _ = catalog.drop_table_index(drop_index_req).await?;
 
         Ok(PipelineBuildResult::create())
     }

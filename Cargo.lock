@@ -4807,18 +4807,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-enterprise-aggregating-index"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-meta-app",
-]
-
-[[package]]
 name = "databend-enterprise-attach-table"
 version = "0.1.0"
 dependencies = [
@@ -4904,7 +4892,6 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-tracing",
  "databend-common-version",
- "databend-enterprise-aggregating-index",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
@@ -4913,7 +4900,6 @@ dependencies = [
  "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-storage-encryption",
  "databend-enterprise-stream-handler",
- "databend-enterprise-table-index",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
  "databend-query",
@@ -4981,21 +4967,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-sql",
-]
-
-[[package]]
-name = "databend-enterprise-table-index"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-expression",
- "databend-common-meta-app",
- "databend-common-pipeline-core",
- "databend-common-storages-fuse",
 ]
 
 [[package]]
@@ -5300,20 +5271,19 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-users",
  "databend-common-version",
- "databend-enterprise-aggregating-index",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-hilbert-clustering",
  "databend-enterprise-resources-management",
  "databend-enterprise-row-access-policy-feature",
  "databend-enterprise-stream-handler",
- "databend-enterprise-table-index",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-index",
  "databend-storages-common-io",
+ "databend-storages-common-pruner",
  "databend-storages-common-session",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
@@ -5376,6 +5346,7 @@ dependencies = [
  "socket2",
  "sqlx",
  "sysinfo",
+ "tantivy",
  "temp-env",
  "tempfile",
  "tokio",

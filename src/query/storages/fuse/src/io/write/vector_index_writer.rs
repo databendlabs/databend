@@ -14,10 +14,8 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -29,8 +27,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_generate_milliseconds;
@@ -80,15 +76,10 @@ pub struct VectorIndexBuilder {
 
 impl VectorIndexBuilder {
     pub fn try_create(
-        ctx: Arc<dyn TableContext>,
         table_indexes: &BTreeMap<String, TableIndex>,
         schema: TableSchemaRef,
         is_sync: bool,
     ) -> Option<VectorIndexBuilder> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(ctx.get_license_key(), Feature::VectorIndex)
-            .ok()?;
-
         let mut index_params = Vec::with_capacity(table_indexes.len());
         let mut field_offsets = Vec::with_capacity(table_indexes.len());
         let mut field_offsets_set = HashSet::new();
