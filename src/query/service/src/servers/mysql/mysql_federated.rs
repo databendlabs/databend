@@ -64,6 +64,77 @@ impl MySQLFederated {
         Some((schema, block))
     }
 
+    // Returns empty result set with MySQL-compatible schema for SHOW KEYS/INDEX commands.
+    // Required for PowerBI + MySQL ODBC 9.5 compatibility.
+    // Reference: https://dev.mysql.com/doc/refman/8.0/en/show-index.html
+    fn show_keys_block() -> Option<(TableSchemaRef, DataBlock)> {
+        use databend_common_expression::types::number::*;
+
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("Table", TableDataType::String),
+            TableField::new(
+                "Non_unique",
+                TableDataType::Number(databend_common_expression::types::NumberDataType::Int32),
+            ),
+            TableField::new("Key_name", TableDataType::String),
+            TableField::new(
+                "Seq_in_index",
+                TableDataType::Number(databend_common_expression::types::NumberDataType::Int32),
+            ),
+            TableField::new("Column_name", TableDataType::String),
+            TableField::new(
+                "Collation",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
+            TableField::new(
+                "Cardinality",
+                TableDataType::Nullable(Box::new(TableDataType::Number(
+                    databend_common_expression::types::NumberDataType::Int64,
+                ))),
+            ),
+            TableField::new(
+                "Sub_part",
+                TableDataType::Nullable(Box::new(TableDataType::Number(
+                    databend_common_expression::types::NumberDataType::Int64,
+                ))),
+            ),
+            TableField::new(
+                "Packed",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
+            TableField::new("Null", TableDataType::String),
+            TableField::new("Index_type", TableDataType::String),
+            TableField::new("Comment", TableDataType::String),
+            TableField::new("Index_comment", TableDataType::String),
+            TableField::new("Visible", TableDataType::String),
+            TableField::new(
+                "Expression",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
+        ]);
+
+        // Create empty block with proper column types
+        let block = DataBlock::new_from_columns(vec![
+            StringType::from_data(Vec::<String>::new()), // Table
+            Int32Type::from_data(Vec::<i32>::new()),     // Non_unique
+            StringType::from_data(Vec::<String>::new()), // Key_name
+            Int32Type::from_data(Vec::<i32>::new()),     // Seq_in_index
+            StringType::from_data(Vec::<String>::new()), // Column_name
+            StringType::from_data_with_validity(Vec::<&str>::new(), Vec::<bool>::new()), /* Collation */
+            Int64Type::from_data_with_validity(Vec::<i64>::new(), Vec::<bool>::new()), /* Cardinality */
+            Int64Type::from_data_with_validity(Vec::<i64>::new(), Vec::<bool>::new()), // Sub_part
+            StringType::from_data_with_validity(Vec::<&str>::new(), Vec::<bool>::new()), // Packed
+            StringType::from_data(Vec::<String>::new()),                               // Null
+            StringType::from_data(Vec::<String>::new()), // Index_type
+            StringType::from_data(Vec::<String>::new()), // Comment
+            StringType::from_data(Vec::<String>::new()), // Index_comment
+            StringType::from_data(Vec::<String>::new()), // Visible
+            StringType::from_data_with_validity(Vec::<&str>::new(), Vec::<bool>::new()), /* Expression */
+        ]);
+
+        Some((schema, block))
+    }
+
     // SELECT @@aa, @@bb as cc, @dd...
     // Block is built by the variables.
     fn select_variable_data_block(query: &str) -> Option<(TableSchemaRef, DataBlock)> {
@@ -217,6 +288,9 @@ impl MySQLFederated {
             (Regex::new("(?i)^(LOCK TABLES FOR BACKUP)").unwrap(), None),
             (Regex::new("(?i)^(UNLOCK BINLOG(.*))").unwrap(), None),
             (Regex::new("(?i)^(/\\*!40101 SET(.*) \\*/)$").unwrap(), None),
+            // PowerBI.
+            (Regex::new("(?i)^(SET SQL_AUTO_IS_NULL(.*))").unwrap(), None),
+            (Regex::new("(?i)^(SHOW KEYS FROM(.*))").unwrap(), MySQLFederated::show_keys_block()),
             // DBeaver.
             (Regex::new("(?i)^(SHOW WARNINGS)").unwrap(), None),
             (Regex::new("(?i)^(/\\* ApplicationName=(.*)SHOW WARNINGS)").unwrap(), None),

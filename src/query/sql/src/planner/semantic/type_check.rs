@@ -3800,6 +3800,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("nvl"),
             Ascii::new("nvl2"),
             Ascii::new("is_null"),
+            Ascii::new("isnull"),
             Ascii::new("is_error"),
             Ascii::new("error_or"),
             Ascii::new("coalesce"),
@@ -4025,7 +4026,7 @@ impl<'a> TypeChecker<'a> {
                     arg_z,
                 ]))
             }
-            ("is_null", &[arg_x]) => {
+            ("is_null", &[arg_x]) | ("isnull", &[arg_x]) => {
                 // Rewrite is_null(x) to not(is_not_null(x))
                 Some(
                     self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::FunctionCall {
