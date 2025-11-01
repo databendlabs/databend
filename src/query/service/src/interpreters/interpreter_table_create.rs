@@ -349,36 +349,6 @@ impl CreateTableInterpreter {
     async fn create_table(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let mut stat = None;
-        if !GlobalConfig::instance().query.management_mode {
-            if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
-                // using application level data operator is a temp workaround
-                // please see discussions https://github.com/datafuselabs/databend/pull/10424
-                let operator = self.ctx.get_application_level_data_operator()?.operator();
-                let reader = MetaReaders::table_snapshot_reader(operator);
-
-                let params = LoadParams {
-                    location: snapshot_loc.clone(),
-                    len_hint: None,
-                    ver: TableSnapshot::VERSION,
-                    put_cache: true,
-                };
-
-                let snapshot = reader.read(&params).await?;
-                stat = Some(TableStatistics {
-                    number_of_rows: snapshot.summary.row_count,
-                    data_bytes: snapshot.summary.uncompressed_byte_size,
-                    compressed_data_bytes: snapshot.summary.compressed_byte_size,
-                    index_data_bytes: snapshot.summary.index_size,
-                    bloom_index_size: snapshot.summary.bloom_index_size,
-                    ngram_index_size: snapshot.summary.ngram_index_size,
-                    inverted_index_size: snapshot.summary.inverted_index_size,
-                    vector_index_size: snapshot.summary.vector_index_size,
-                    virtual_column_size: snapshot.summary.virtual_column_size,
-                    number_of_segments: Some(snapshot.segments.len() as u64),
-                    number_of_blocks: Some(snapshot.summary.block_count),
-                });
-            }
-        }
         let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
             self.build_attach_request(storage_prefix).await
         } else {
