@@ -146,7 +146,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
-          artifacts: sqllogictests,sqlsmith,query,meta,metactl,metaverifier,bendsave
+          artifacts: sqllogictests,sqlsmith,query,meta,metactl,metabench,metaverifier,bendsave
       - name: Basic Sqllogic Test
         shell: bash
         env:
