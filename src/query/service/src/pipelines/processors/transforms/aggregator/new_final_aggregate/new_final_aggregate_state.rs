@@ -149,6 +149,8 @@ pub struct FinalAggregateSharedState {
     /// Collects the per-partition aggregate metadata reported by each processor during the current round.
     pub repartitioned_queues: RepartitionedQueues,
 
+    pub need_aggregate_queues: RepartitionedQueues,
+
     /// Partition queues waiting for block-level repartitioning (typically restored from spill).
     pending_queues: Vec<PendingQueue>,
 
@@ -166,6 +168,7 @@ impl FinalAggregateSharedState {
             last_round_is_spilled: false,
             finished_count: 0,
             repartitioned_queues: RepartitionedQueues::create(partition_count),
+            need_aggregate_queues: RepartitionedQueues::create(partition_count),
             pending_queues: vec![],
             next_round: Vec::with_capacity(partition_count),
             current_queue_spill_round: None,
@@ -183,11 +186,14 @@ impl FinalAggregateSharedState {
             let previous_spill_round = self.current_queue_spill_round.take();
             self.last_round_is_spilled = self.is_spilled;
 
-            if self.is_spilled {
+            let queues = self.repartitioned_queues.take_queues();
+
+            if !self.is_spilled {
+                self.need_aggregate_queues = queues;
+            } else {
                 self.is_spilled = false;
 
                 // flush all repartitioned queues to pending queues
-                let queues = self.repartitioned_queues.take_queues();
                 for queue in queues.0.into_iter() {
                     if queue.is_empty() {
                         continue;
@@ -199,11 +205,12 @@ impl FinalAggregateSharedState {
                 }
             }
 
-            // pop a queue and repartition in datablock level
-            if let Some(queue) = self.pending_queues.pop() {
-                self.current_queue_spill_round = Some(queue.spill_round);
-                self.next_round =
-                    split_partitioned_meta_into_datablocks(0, queue.data, self.partition_count);
+            if self.next_round.is_empty() {
+                if let Some(queue) = self.pending_queues.pop() {
+                    self.current_queue_spill_round = Some(queue.spill_round);
+                    self.next_round =
+                        split_partitioned_meta_into_datablocks(0, queue.data, self.partition_count);
+                }
             }
         }
     }

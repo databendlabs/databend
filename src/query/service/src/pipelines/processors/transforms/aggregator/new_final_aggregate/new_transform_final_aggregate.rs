@@ -418,7 +418,7 @@ impl Processor for NewFinalAggregateTransform {
                 let queue = self
                     .shared_state
                     .lock()
-                    .repartitioned_queues
+                    .need_aggregate_queues
                     .take_queue(self.id);
                 self.final_aggregate(queue)
             }
