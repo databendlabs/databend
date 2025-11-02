@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp::max;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -816,7 +817,8 @@ impl Operator for Join {
             let broadcast_row_count_limit = settings.get_broadcast_row_count_limit()?;
             // We only trigger broadcast join when the right table is sufficiently small.
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-            if right_stat_info.cardinality < 0_f64
+            if matches!(self.join_type, JoinType::Cross)
+                || right_stat_info.cardinality < 0_f64
                 || (right_stat_info.cardinality as u64) < broadcast_row_count_limit
             {
                 // (Any, Broadcast)
