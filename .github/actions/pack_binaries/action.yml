@@ -22,7 +22,7 @@ runs:
         target: ${{ inputs.target }}
         category: ${{ inputs.category }}
         path: distro/bin
-        artifacts: metactl,meta,query,bendsave
+        artifacts: metactl,meta,metabench,query,bendsave
     - name: Get Latest BendSQL
       id: bendsql
       uses: pozetroninc/github-action-get-latest-release@master
