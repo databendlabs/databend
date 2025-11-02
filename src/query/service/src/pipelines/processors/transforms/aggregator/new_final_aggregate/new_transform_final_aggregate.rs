@@ -276,8 +276,6 @@ impl NewFinalAggregateTransform {
             }
         };
 
-        self.agg_hashtable.clear_for_reuse();
-
         if output_block.is_empty() {
             self.round_state.phase = RoundPhase::Idle;
         } else {

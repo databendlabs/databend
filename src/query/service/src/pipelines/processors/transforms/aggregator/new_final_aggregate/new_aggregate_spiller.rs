@@ -20,6 +20,7 @@ use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -29,8 +30,6 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
-use opendal::layers::BlockingLayer;
-use opendal::BlockingOperator;
 use parquet::file::metadata::RowGroupMetaData;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
@@ -103,9 +102,6 @@ impl WriteStats {
 }
 
 pub struct NewAggregateSpiller {
-    // legacy, will remove latter
-    blocking_operator: BlockingOperator,
-
     pub memory_settings: MemorySettings,
     ctx: Arc<QueryContext>,
     read_setting: ReadSettings,
@@ -129,14 +125,8 @@ impl NewAggregateSpiller {
         let spill_prefix = ctx.query_id_spill_prefix();
         let partition_stream =
             BlockPartitionStream::create(rows_threshold, bytes_threshold, partition_count);
-        let blocking_operator = DataOperator::instance()
-            .spill_operator()
-            .layer(BlockingLayer::create()?)
-            .blocking();
 
         Ok(Self {
-            blocking_operator,
-
             memory_settings,
             ctx,
             read_setting,
@@ -266,7 +256,7 @@ impl NewAggregateSpiller {
 
         let operator = DataOperator::instance().spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
-        let mut reader = buffer_pool.reader(operator, location, vec![row_group.clone()])?;
+        let mut reader = buffer_pool.reader(operator.clone(), location, vec![row_group.clone()])?;
 
         let read_bytes = row_group.total_byte_size() as usize;
         let instant = Instant::now();
@@ -284,23 +274,32 @@ impl NewAggregateSpiller {
         }
     }
 
-    // legacy, will remove latter
+    // legacy, will remove later
     pub fn restore_legacy(&self, payload: BucketSpilledPayload) -> Result<AggregateMeta> {
         // read
         let instant = Instant::now();
-        let data = self
-            .blocking_operator
-            .read_with(&payload.location)
-            .range(payload.data_range.clone())
-            .call()?
-            .to_vec();
-
+        let operator = DataOperator::instance().spill_operator();
+        let BucketSpilledPayload {
+            bucket,
+            location,
+            data_range,
+            columns_layout,
+            max_partition_count,
+        } = payload;
+        let data = GlobalIORuntime::instance().block_on(async move {
+            let data = operator
+                .read_with(&location)
+                .range(data_range)
+                .await?
+                .to_vec();
+            Ok(data)
+        })?;
         self.flush_read_profile(&instant, data.len());
 
         // deserialize
         let mut begin = 0;
-        let mut columns = Vec::with_capacity(payload.columns_layout.len());
-        for &column_layout in &payload.columns_layout {
+        let mut columns = Vec::with_capacity(columns_layout.len());
+        for &column_layout in &columns_layout {
             columns.push(deserialize_column(
                 &data[begin..begin + column_layout as usize],
             )?);
@@ -308,9 +307,9 @@ impl NewAggregateSpiller {
         }
 
         Ok(AggregateMeta::Serialized(SerializedPayload {
-            bucket: payload.bucket,
+            bucket,
             data_block: DataBlock::new_from_columns(columns),
-            max_partition_count: payload.max_partition_count,
+            max_partition_count,
         }))
     }
 
