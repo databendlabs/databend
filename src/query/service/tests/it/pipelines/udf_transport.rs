@@ -259,7 +259,7 @@ async fn run_mock_exchange(mode: MockMode) -> Result<String> {
 
     let service = MockFlightService { mode };
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-    let server = tokio::spawn(async move {
+    let server = databend_common_base::runtime::spawn(async move {
         let _ = Server::builder()
             .add_service(FlightServiceServer::new(service))
             .serve_with_incoming_shutdown(incoming, async move {
