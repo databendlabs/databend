@@ -545,7 +545,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("broadcast_row_count_limit", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(u64::MAX),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Broadcast join is disabled when the build side's estimated row count is above this limit.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
