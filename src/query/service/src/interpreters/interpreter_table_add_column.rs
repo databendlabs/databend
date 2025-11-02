@@ -40,7 +40,6 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
-use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::info;
 
 use crate::interpreters::interpreter_table_create::is_valid_column;
@@ -219,12 +218,6 @@ pub(crate) async fn commit_table_meta(
         let new_snapshot_location =
             generate_new_snapshot(ctx, fuse_tbl, &new_table_meta.schema).await?;
 
-        if let Some(new_snapshot_location) = &new_snapshot_location {
-            new_table_meta.options.insert(
-                OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-                new_snapshot_location.clone(),
-            );
-        };
 
         let req = UpdateTableMetaReq {
             table_id,

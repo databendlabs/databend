@@ -33,7 +33,6 @@ use databend_enterprise_attach_table::AttachTableHandlerWrapper;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 
 pub struct RealAttachTableHandler {}
 #[async_trait::async_trait]
@@ -66,7 +65,6 @@ impl AttachTableHandler for RealAttachTableHandler {
         let root = info.root();
         let snapshot_loc = snapshot_full_path[root.len()..].to_string();
         let mut options = plan.options.clone();
-        options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
 
         let params = LoadParams {
             location: snapshot_loc.clone(),

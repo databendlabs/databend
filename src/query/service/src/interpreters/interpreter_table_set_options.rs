@@ -46,7 +46,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VE
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
-use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
@@ -171,15 +170,6 @@ impl Interpreter for SetOptionsInterpreter {
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
         is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
-
-        if let Some(new_snapshot_location) =
-            set_segment_format(self.ctx.clone(), table.clone(), &self.plan.set_options).await?
-        {
-            options_map.insert(
-                OPT_KEY_SNAPSHOT_LOCATION.to_string(),
-                Some(new_snapshot_location),
-            );
-        }
 
         let req = UpsertTableOptionReq {
             table_id: table.get_id(),
