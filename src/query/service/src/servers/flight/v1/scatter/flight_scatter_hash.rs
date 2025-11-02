@@ -237,12 +237,8 @@ fn get_hash_values(
 ) -> Result<Buffer<u64>> {
     match column {
         Value::Scalar(c) => match c {
-            databend_common_expression::Scalar::Null => {
-                Ok(vec![default_scatter_index; rows].into())
-            }
-            databend_common_expression::Scalar::Number(NumberScalar::UInt64(x)) => {
-                Ok(vec![x; rows].into())
-            }
+            Scalar::Null => Ok(vec![default_scatter_index; rows].into()),
+            Scalar::Number(NumberScalar::UInt64(x)) => Ok(vec![x; rows].into()),
             _ => unreachable!(),
         },
         Value::Column(c) => {
