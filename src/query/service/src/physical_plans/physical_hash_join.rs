@@ -76,6 +76,7 @@ type JoinConditionsResult = (
     Vec<bool>,
     Vec<Option<(RemoteExpr<String>, usize, usize, IndexType)>>,
     Vec<((usize, bool), usize)>,
+    Vec<Option<IndexType>>,
 );
 
 type ProjectionsResult = (
@@ -801,6 +802,7 @@ impl PhysicalPlanBuilder {
         let mut is_null_equal = Vec::new();
         let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
+        let mut build_table_indexes = Vec::new();
 
         let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
         for condition in join.equi_conditions.iter() {
@@ -817,6 +819,20 @@ impl PhysicalPlanBuilder {
 
             // Prepare runtime filter expression
             let left_expr_for_runtime_filter = self.prepare_runtime_filter_expr(left_condition)?;
+
+            let build_table_index = if right_condition.used_columns().len() == 1 {
+                let column_idx = *right_condition.used_columns().iter().next().unwrap();
+                if matches!(
+                    self.metadata.read().column(column_idx),
+                    ColumnEntry::BaseTableColumn(_)
+                ) {
+                    self.metadata.read().column(column_idx).table_index()
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
 
             // Handle inner join column optimization
             if matches!(join.join_type, JoinType::Inner | JoinType::InnerAny) {
@@ -891,6 +907,7 @@ impl PhysicalPlanBuilder {
                     (expr.as_remote_expr(), scan_id, table_index, column_idx)
                 },
             ));
+            build_table_indexes.push(build_table_index);
         }
 
         Ok((
@@ -899,6 +916,7 @@ impl PhysicalPlanBuilder {
             is_null_equal,
             left_join_conditions_rt,
             probe_to_build_index,
+            build_table_indexes,
         ))
     }
 
@@ -1284,6 +1302,7 @@ impl PhysicalPlanBuilder {
             is_null_equal,
             left_join_conditions_rt,
             mut probe_to_build_index,
+            build_table_indexes,
         ) = self.process_equi_conditions(
             join,
             &probe_schema,
@@ -1330,6 +1349,7 @@ impl PhysicalPlanBuilder {
             s_expr,
             &right_join_conditions,
             left_join_conditions_rt,
+            build_table_indexes,
         )
         .await?;
 

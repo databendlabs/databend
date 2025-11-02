@@ -42,6 +42,10 @@ pub async fn build_and_push_down_runtime_filter(
         .ctx
         .get_settings()
         .get_min_max_runtime_filter_threshold()? as usize;
+    let bloom_selectivity_threshold = join
+        .ctx
+        .get_settings()
+        .get_join_bloom_runtime_filter_selectivity_threshold()?;
 
     let build_start = Instant::now();
     let mut packet = build_runtime_filter_packet(
@@ -52,6 +56,7 @@ pub async fn build_and_push_down_runtime_filter(
         inlist_threshold,
         bloom_threshold,
         min_max_threshold,
+        bloom_selectivity_threshold,
     )?;
     let build_time = build_start.elapsed();
 

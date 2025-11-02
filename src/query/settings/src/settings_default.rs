@@ -509,6 +509,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("join_bloom_runtime_filter_selectivity_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Selectivity threshold for bloom runtime filter. Bloom filter is enabled when build_table_rows / build_side_rows > threshold.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",

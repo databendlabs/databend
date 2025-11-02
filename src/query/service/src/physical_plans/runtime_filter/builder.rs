@@ -90,6 +90,7 @@ pub async fn build_runtime_filter(
     s_expr: &SExpr,
     build_keys: &[RemoteExpr],
     probe_keys: ProbeKeysWithRuntimeFilter,
+    build_table_indexes: Vec<Option<IndexType>>,
 ) -> Result<PhysicalRuntimeFilters> {
     if !ctx.get_settings().get_enable_join_runtime_filter()? {
         return Ok(Default::default());
@@ -113,11 +114,14 @@ pub async fn build_runtime_filter(
     let probe_side = s_expr.probe_side_child();
 
     // Process each probe key that has runtime filter information
-    for (build_key, probe_key, scan_id, _table_index, column_idx) in build_keys
+    for (build_key, probe_key, scan_id, _table_index, column_idx, build_table_index) in build_keys
         .iter()
         .zip(probe_keys.into_iter())
-        .filter_map(|(b, p)| {
-            p.map(|(p, scan_id, table_index, column_idx)| (b, p, scan_id, table_index, column_idx))
+        .zip(build_table_indexes.into_iter())
+        .filter_map(|((b, p), table_idx)| {
+            p.map(|(p, scan_id, table_index, column_idx)| {
+                (b, p, scan_id, table_index, column_idx, table_idx)
+            })
         })
     {
         // Skip if not a column reference
@@ -127,6 +131,9 @@ pub async fn build_runtime_filter(
 
         let probe_targets =
             find_probe_targets(metadata, probe_side, &probe_key, scan_id, column_idx)?;
+
+        let build_table_rows =
+            get_build_table_rows(ctx.clone(), metadata, build_table_index).await?;
 
         let data_type = build_key
             .as_expr(&BUILTIN_FUNCTIONS)
@@ -143,6 +150,7 @@ pub async fn build_runtime_filter(
             id,
             build_key: build_key.clone(),
             probe_targets,
+            build_table_rows,
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter,
@@ -151,6 +159,24 @@ pub async fn build_runtime_filter(
     }
 
     Ok(PhysicalRuntimeFilters { filters })
+}
+
+async fn get_build_table_rows(
+    ctx: Arc<dyn TableContext>,
+    metadata: &MetadataRef,
+    build_table_index: Option<IndexType>,
+) -> Result<Option<u64>> {
+    if let Some(table_index) = build_table_index {
+        let table = {
+            let metadata_read = metadata.read();
+            metadata_read.table(table_index).table().clone()
+        };
+
+        let table_stats = table.table_statistics(ctx, false, None).await?;
+        return Ok(table_stats.and_then(|s| s.num_rows));
+    }
+
+    Ok(None)
 }
 
 fn find_probe_targets(

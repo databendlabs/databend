@@ -69,9 +69,8 @@ pub struct HashJoinDesc {
 pub struct RuntimeFilterDesc {
     pub id: usize,
     pub build_key: Expr,
-    /// List of (probe_key, scan_id) pairs that this filter should be applied to
-    /// A single filter can be pushed down to multiple scans with different probe keys
     pub probe_targets: Vec<(Expr<String>, usize)>,
+    pub build_table_rows: Option<u64>,
     pub enable_bloom_runtime_filter: bool,
     pub enable_inlist_runtime_filter: bool,
     pub enable_min_max_runtime_filter: bool,
@@ -99,6 +98,7 @@ impl From<&PhysicalRuntimeFilter> for RuntimeFilterDesc {
                 .iter()
                 .map(|(probe_key, scan_id)| (probe_key.as_expr(&BUILTIN_FUNCTIONS), *scan_id))
                 .collect(),
+            build_table_rows: runtime_filter.build_table_rows,
             enable_bloom_runtime_filter: runtime_filter.enable_bloom_runtime_filter,
             enable_inlist_runtime_filter: runtime_filter.enable_inlist_runtime_filter,
             enable_min_max_runtime_filter: runtime_filter.enable_min_max_runtime_filter,

@@ -42,6 +42,7 @@ struct JoinRuntimeFilterPacketBuilder<'a> {
     inlist_threshold: usize,
     bloom_threshold: usize,
     min_max_threshold: usize,
+    bloom_selectivity_threshold: u64,
 }
 
 impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
@@ -52,6 +53,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         inlist_threshold: usize,
         bloom_threshold: usize,
         min_max_threshold: usize,
+        bloom_selectivity_threshold: u64,
     ) -> Result<Self> {
         let build_key_column = Self::eval_build_key_column(data_blocks, func_ctx, build_key)?;
         Ok(Self {
@@ -60,6 +62,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
             inlist_threshold,
             bloom_threshold,
             min_max_threshold,
+            bloom_selectivity_threshold,
         })
     }
     fn build(&self, desc: &RuntimeFilterDesc) -> Result<RuntimeFilterPacket> {
@@ -115,7 +118,19 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
     }
 
     fn enable_bloom(&self, desc: &RuntimeFilterDesc) -> bool {
-        desc.enable_bloom_runtime_filter && self.build_key_column.len() < self.bloom_threshold
+        if !desc.enable_bloom_runtime_filter {
+            return false;
+        }
+
+        if self.build_key_column.len() >= self.bloom_threshold {
+            return false;
+        }
+
+        should_enable_bloom_runtime_filter(
+            desc,
+            self.build_key_column.len(),
+            self.bloom_selectivity_threshold,
+        )
     }
 
     fn build_min_max(&self) -> Result<SerializableDomain> {
@@ -175,6 +190,46 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
     }
 }
 
+fn should_enable_bloom_runtime_filter(
+    desc: &RuntimeFilterDesc,
+    build_num_rows: usize,
+    selectivity_threshold: u64,
+) -> bool {
+    if build_num_rows == 0 {
+        return false;
+    }
+
+    let Some(build_table_rows) = desc.build_table_rows else {
+        log::info!(
+            "RUNTIME-FILTER: Disable bloom filter {} - no build table statistics available",
+            desc.id
+        );
+        return false;
+    };
+
+    let selectivity_ratio = build_table_rows as f64 / build_num_rows as f64;
+
+    if selectivity_ratio > selectivity_threshold as f64 {
+        log::info!(
+            "RUNTIME-FILTER: Enable bloom filter {} - high selectivity ratio: {:.2} (m={}, n={})",
+            desc.id,
+            selectivity_ratio,
+            build_table_rows,
+            build_num_rows
+        );
+        true
+    } else {
+        log::info!(
+            "RUNTIME-FILTER: Disable bloom filter {} - low selectivity ratio: {:.2} (m={}, n={})",
+            desc.id,
+            selectivity_ratio,
+            build_table_rows,
+            build_num_rows
+        );
+        false
+    }
+}
+
 pub fn build_runtime_filter_packet(
     build_chunks: &[DataBlock],
     build_num_rows: usize,
@@ -183,6 +238,7 @@ pub fn build_runtime_filter_packet(
     inlist_threshold: usize,
     bloom_threshold: usize,
     min_max_threshold: usize,
+    bloom_selectivity_threshold: u64,
 ) -> Result<JoinRuntimeFilterPacket> {
     if build_num_rows == 0 {
         return Ok(JoinRuntimeFilterPacket::default());
@@ -198,6 +254,7 @@ pub fn build_runtime_filter_packet(
                 inlist_threshold,
                 bloom_threshold,
                 min_max_threshold,
+                bloom_selectivity_threshold,
             )?
             .build(rf)?,
         );
