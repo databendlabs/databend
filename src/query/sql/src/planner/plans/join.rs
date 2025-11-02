@@ -813,10 +813,12 @@ impl Operator for Join {
                 | JoinType::RightAsof
         ) && !settings.get_enforce_shuffle_join()?
         {
-            let broadcast_row_count_limit = settings.get_broadcast_row_count_limit()? as f64;
+            let broadcast_row_count_limit = settings.get_broadcast_row_count_limit()?;
             // We only trigger broadcast join when the right table is sufficiently small.
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-            if right_stat_info.cardinality < broadcast_row_count_limit {
+            if right_stat_info.cardinality < 0_f64
+                || (right_stat_info.cardinality as u64) < broadcast_row_count_limit
+            {
                 // (Any, Broadcast)
                 let left_distribution = Distribution::Any;
                 let right_distribution = Distribution::Broadcast;
