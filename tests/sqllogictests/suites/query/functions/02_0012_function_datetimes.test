@@ -222,6 +222,21 @@ select typeof(now() - now())
 ----
 BIGINT
 
+query TTT
+select typeof(CURRENT_DATE()), typeof(CURRENT_TIME()), typeof(CURRENT_TIMESTAMP())
+----
+DATE VARCHAR TIMESTAMP
+
+query B
+select regexp_like(CURRENT_TIME(), '^[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?$')
+----
+1
+
+query B
+select regexp_like(CURRENT_TIME(3), '^[0-9]{2}:[0-9]{2}:[0-9]{2}\.\d{3}$')
+----
+1
+
 query B
 select typeof(to_unix_timestamp('2023-04-06 04:06:23.231808'))
 ----

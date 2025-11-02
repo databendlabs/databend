@@ -57,6 +57,7 @@ pub fn supported_stat_type(data_type: &DataType) -> bool {
         DataType::Number(_)
             | DataType::Date
             | DataType::Timestamp
+            | DataType::TimestampTz
             | DataType::String
             | DataType::Decimal(_)
     )

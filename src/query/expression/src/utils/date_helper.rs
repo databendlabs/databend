@@ -868,13 +868,9 @@ pub fn calc_date_to_timestamp(val: i32, tz: TimeZone) -> std::result::Result<i64
 
     // today midnight
     let today_datetime_midnight = z.date().to_datetime(Time::midnight());
-    let today_zoned = if let Some(tz) = tz.iana_name() {
-        today_datetime_midnight
-            .in_tz(tz)
-            .map_err(|e| format!("Calc today midnight with error {}", e))?
-    } else {
-        return Err("Timezone can not decode as IANA time zone".to_string());
-    };
+    let today_zoned = today_datetime_midnight
+        .to_zoned(tz.clone())
+        .map_err(|e| format!("Calc today midnight with error {}", e))?;
     let today_is_dst = tz.to_offset_info(today_zoned.timestamp()).dst().is_dst();
 
     let tz_offset_micros = tz

@@ -17,6 +17,7 @@ use std::io::Cursor;
 
 use bstr::ByteSlice;
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -57,6 +58,7 @@ use num_traits::NumCast;
 
 use crate::binary::decode_binary;
 use crate::field_decoder::common::read_timestamp;
+use crate::field_decoder::common::read_timestamp_tz;
 use crate::field_decoder::FieldDecoder;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
@@ -148,6 +150,7 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Date(c) => self.read_date(c, data),
             ColumnBuilder::Interval(c) => self.read_interval(c, data),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, data),
+            ColumnBuilder::TimestampTz(c) => self.read_timestamp_tz(c, data),
             ColumnBuilder::Array(c) => self.read_array(c, data),
             ColumnBuilder::Map(c) => self.read_map(c, data),
             ColumnBuilder::Bitmap(c) => self.read_bitmap(c, data),
@@ -280,6 +283,10 @@ impl SeparatedTextDecoder {
 
     fn read_timestamp(&self, column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
         read_timestamp(column, data, self.common_settings())
+    }
+
+    fn read_timestamp_tz(&self, column: &mut Vec<timestamp_tz>, data: &[u8]) -> Result<()> {
+        read_timestamp_tz(column, data, self.common_settings())
     }
 
     fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {

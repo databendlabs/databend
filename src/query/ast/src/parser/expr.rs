@@ -1466,6 +1466,19 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
+    let timestamp_tz_expr = map(
+        rule! {
+            TIMESTAMP_TZ ~ #consumed(literal_string)
+        },
+        |(_, (span, date))| ExprElement::Cast {
+            expr: Box::new(Expr::Literal {
+                span: transform_span(span.tokens),
+                value: Literal::String(date),
+            }),
+            target_type: TypeName::TimestampTz,
+        },
+    );
+
     let interval_expr = map(
         rule! {
             INTERVAL ~ #consumed(literal_string)
@@ -1485,6 +1498,34 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, not, _, _)| ExprElement::IsDistinctFrom { not: not.is_some() },
     );
+
+    let current_date = map(consumed(rule! { CURRENT_DATE }), |(span, _)| {
+        ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct: false,
+                name: Identifier::from_name(transform_span(span.tokens), "current_date"),
+                args: vec![],
+                params: vec![],
+                order_by: vec![],
+                window: None,
+                lambda: None,
+            },
+        }
+    });
+
+    let current_time = map(consumed(rule! { CURRENT_TIME }), |(span, _)| {
+        ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct: false,
+                name: Identifier::from_name(transform_span(span.tokens), "current_time"),
+                args: vec![],
+                params: vec![],
+                order_by: vec![],
+                window: None,
+                lambda: None,
+            },
+        }
+    });
 
     let current_timestamp = map(consumed(rule! { CURRENT_TIMESTAMP }), |(span, _)| {
         ExprElement::FunctionCall {
@@ -1535,6 +1576,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #next_day : "`NEXT_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
                 | #date_expr : "`DATE <str_literal>`"
                 | #timestamp_expr : "`TIMESTAMP <str_literal>`"
+                | #timestamp_tz_expr : "`TIMESTAMP_TZ <str_literal>`"
                 | #interval : "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
                 | #interval_expr : "`INTERVAL <str_literal>`"
                 | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
@@ -1559,6 +1601,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #dot_access : "<dot_access>"
                 | #map_access : "[<key>] | .<key> | :<key>"
                 | #literal : "<literal>"
+                | #current_date: "CURRENT_DATE"
+                | #current_time: "CURRENT_TIME"
                 | #current_timestamp: "CURRENT_TIMESTAMP"
                 | #array : "`[<expr>, ...]`"
                 | #map_expr : "`{ <literal> : <expr>, ... }`"
@@ -1978,6 +2022,11 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         |(_, _, dimension, _)| TypeName::Vector(dimension),
     );
     let ty_stage_location = value(TypeName::StageLocation, rule! { STAGE_LOCATION });
+    let ty_timestamp_tz = value(
+        TypeName::TimestampTz,
+        rule! { TIMESTAMP ~ WITH ~ TIME ~ ZONE },
+    );
+    let ty_timestamp_tz_simply = value(TypeName::TimestampTz, rule! { TIMESTAMP_TZ });
     map_res(
         alt((
             rule! {
@@ -2002,6 +2051,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             },
             rule! {
             ( #ty_date
+            | #ty_timestamp_tz
+            | #ty_timestamp_tz_simply
             | #ty_datetime
             | #ty_interval
             | #ty_numeric

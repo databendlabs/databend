@@ -35,12 +35,15 @@ pub mod opaque;
 pub mod simple_type;
 pub mod string;
 pub mod timestamp;
+pub mod timestamp_tz;
 pub mod tuple;
 pub mod variant;
 pub mod vector;
 pub mod zero_size_type;
+
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::iter::TrustedLen;
 use std::ops::Deref;
 use std::ops::DerefMut;
@@ -119,6 +122,7 @@ pub enum DataType {
     Number(NumberDataType),
     Decimal(DecimalSize),
     Timestamp,
+    TimestampTz,
     Date,
     Nullable(Box<DataType>),
     Array(Box<DataType>),
@@ -204,6 +208,7 @@ impl DataType {
             | DataType::Number(_)
             | DataType::Decimal(_)
             | DataType::Timestamp
+            | DataType::TimestampTz
             | DataType::Date
             | DataType::Interval
             | DataType::Bitmap
@@ -231,6 +236,7 @@ impl DataType {
             | DataType::Number(_)
             | DataType::Decimal(_)
             | DataType::Timestamp
+            | DataType::TimestampTz
             | DataType::Date
             | DataType::Interval
             | DataType::Bitmap
@@ -427,6 +433,7 @@ impl DataType {
             DataType::String => Ok(TypeName::String),
             DataType::Date => Ok(TypeName::Date),
             DataType::Timestamp => Ok(TypeName::Timestamp),
+            DataType::TimestampTz => Ok(TypeName::TimestampTz),
             DataType::Interval => Ok(TypeName::Interval),
             DataType::Decimal(size) => {
                 let precision = size.precision();

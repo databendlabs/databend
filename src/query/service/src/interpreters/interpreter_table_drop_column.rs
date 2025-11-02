@@ -85,13 +85,12 @@ impl Interpreter for DropTableColumnInterpreter {
 
         let table_schema = table_info.schema();
         let field = table_schema.field_with_name(self.plan.column.as_str())?;
-        if let Some(p) = &table_info.meta.row_access_policy_columns_ids {
-            if p.columns_ids.contains(&field.column_id) {
-                return Err(ErrorCode::AlterTableError(format!(
-                    "Cannot drop column '{}' which is associated with a Row access policy",
-                    self.plan.column.as_str()
-                )));
-            }
+
+        if table_info.meta.is_column_reference_policy(&field.column_id) {
+            return Err(ErrorCode::AlterTableError(format!(
+                "Cannot drop column '{}' which is associated with a security policy",
+                self.plan.column.as_str()
+            )));
         }
         if field.computed_expr().is_none() {
             let mut schema: DataSchema = table_info.schema().into();

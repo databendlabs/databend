@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::types::timestamp_tz;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::type_check;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::*;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
@@ -70,6 +72,14 @@ fn test_type_check() {
         (
             "n_ts",
             TimestampType::from_data(vec![0]).wrap_nullable(None),
+        ),
+        (
+            "ts_tz",
+            TimestampTzType::from_data(vec![timestamp_tz::default()]),
+        ),
+        (
+            "n_ts_tz",
+            TimestampTzType::from_data(vec![timestamp_tz::default()]).wrap_nullable(None),
         ),
         ("j", VariantType::from_data(vec![json.clone()])),
         (

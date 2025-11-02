@@ -37,6 +37,7 @@ use crate::types::opaque::OpaqueColumn;
 use crate::types::opaque::OpaqueColumnVec;
 use crate::types::opaque::OpaqueType;
 use crate::types::string::StringColumn;
+use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::vector::VectorColumnBuilder;
 use crate::types::*;
 use crate::with_decimal_type;
@@ -296,6 +297,12 @@ impl Column {
                 let builder = TimestampType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<TimestampType>(columns, &data_type, builder, indices)
             }
+            Column::TimestampTz(_) => {
+                let builder = TimestampTzType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<TimestampTzType>(
+                    columns, &data_type, builder, indices,
+                )
+            }
             Column::Date(_) => {
                 let builder = DateType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<DateType>(columns, &data_type, builder, indices)
@@ -536,6 +543,13 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Timestamp(columns)
             }
+            Column::TimestampTz(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| TimestampTzType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                ColumnVec::TimestampTz(columns)
+            }
             Column::Interval(_) => {
                 let columns = columns
                     .iter()
@@ -698,6 +712,11 @@ impl Column {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
                 let ts = Int64Type::column_from_vec(builder, &[]);
                 Column::Timestamp(ts)
+            }
+            ColumnVec::TimestampTz(columns) => {
+                let builder = Self::take_block_vec_primitive_types(columns, indices);
+                let ts = TimestampTzType::column_from_vec(builder, &[]);
+                Column::TimestampTz(ts)
             }
             ColumnVec::Date(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
