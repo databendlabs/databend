@@ -99,10 +99,17 @@ pub async fn build_runtime_filter(
         return Ok(Default::default());
     }
 
-    let mut filters = Vec::new();
-
     let build_side = s_expr.build_side_child();
     let build_side_data_distribution = build_side.get_data_distribution()?;
+    if !build_side_data_distribution
+        .as_ref()
+        .is_none_or(|e| matches!(e, Exchange::Broadcast | Exchange::Hash(_)))
+    {
+        return Ok(Default::default());
+    }
+
+    let mut filters = Vec::new();
+
     let probe_side = s_expr.probe_side_child();
 
     // Process each probe key that has runtime filter information
@@ -127,23 +134,9 @@ pub async fn build_runtime_filter(
             .remove_nullable();
         let id = metadata.write().next_runtime_filter_id();
 
-        // Determine which filter types to enable based on data type and statistics
-        let enable_bloom_runtime_filter = {
-            let enable_in_cluster = build_side_data_distribution
-                .as_ref()
-                .is_none_or(|e| matches!(e, Exchange::Broadcast));
-            let is_supported_type = is_type_supported_for_bloom_filter(&data_type);
-            enable_in_cluster && is_supported_type
-        };
+        let enable_bloom_runtime_filter = is_type_supported_for_bloom_filter(&data_type);
 
-        let enable_min_max_runtime_filter = build_side_data_distribution
-            .as_ref()
-            .is_none_or(|e| matches!(e, Exchange::Broadcast | Exchange::Hash(_)))
-            && is_type_supported_for_min_max_filter(&data_type);
-
-        let enable_inlist_runtime_filter = build_side_data_distribution
-            .as_ref()
-            .is_none_or(|e| matches!(e, Exchange::Broadcast | Exchange::Hash(_)));
+        let enable_min_max_runtime_filter = is_type_supported_for_min_max_filter(&data_type);
 
         // Create and add the runtime filter
         let runtime_filter = PhysicalRuntimeFilter {
@@ -151,7 +144,7 @@ pub async fn build_runtime_filter(
             build_key: build_key.clone(),
             probe_targets,
             enable_bloom_runtime_filter,
-            enable_inlist_runtime_filter,
+            enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter,
         };
         filters.push(runtime_filter);
