@@ -165,6 +165,9 @@ class TestContext:
                     return f'"expire_at":{normalized}'
                 line = expire_at.sub(replace_expire, line)
 
+            expire_at = re.compile(r',?"expire_at":null')
+            line = expire_at.sub('', line)
+
             meta = re.compile(r',?"meta":{}')
             line = meta.sub('', line)
 
