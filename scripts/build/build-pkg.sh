@@ -37,7 +37,8 @@ echo "==> building databend ${DATABEND_VERSION} for ${TARGET} ..."
 cargo build --release \
 	--bin=databend-query \
 	--bin=databend-meta \
-	--bin=databend-metactl
+	--bin=databend-metactl \
+	--bin=databend-metabench
 
 #  --bin=table-meta-inspector
 
@@ -49,6 +50,7 @@ ${QUERY_BIN} --version
 mv ./target/release/databend-query distro/bin/
 mv ./target/release/databend-meta distro/bin/
 mv ./target/release/databend-metactl distro/bin/
+mv ./target/release/databend-metabench distro/bin/
 cp ./scripts/distribution/systemd/databend-* distro/systemd/
 cp ./scripts/distribution/configs/databend-* distro/configs/
 cp ./scripts/distribution/release-readme.txt distro/readme.txt

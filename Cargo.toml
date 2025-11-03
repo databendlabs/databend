@@ -399,6 +399,7 @@ opendal = { version = "0.53.2", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
+    "layers-blocking",
     "services-s3",
     "services-fs",
     "services-gcs",
@@ -464,7 +465,7 @@ rmp-serde = "1.1.1"
 roaring = { version = "^0.10", features = ["serde"] }
 rotbl = { version = "0.2.9", features = [] }
 rust_decimal = "1.26"
-rustix = "0.38.37"
+rustix = { version = "0.38.37", features = ["fs"] }
 rustls = { version = "0.23.27", features = ["ring", "tls12"], default-features = false }
 rustls-pemfile = "2"
 rustls-pki-types = "1"

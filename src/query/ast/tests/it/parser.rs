@@ -313,6 +313,7 @@ SELECT * from s;"#,
         r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER TABLE t DROP b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
+        r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask USING (b, c1);"#,
         r#"ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;"#,
         r#"ALTER TABLE t ADD ROW ACCESS POLICY p1 ON (col1);"#,
         r#"ALTER TABLE t ADD ROW ACCESS POLICY p1 ON (col1, col2, col3);"#,
@@ -1509,8 +1510,12 @@ fn test_script() {
     let file = &mut mint.new_goldenfile("script.txt").unwrap();
 
     let cases = &[
+        r#"LET cost FLOAT"#,
+        r#"LET cost FLOAT default 3.0"#,
+        r#"LET cost FLOAT := 100.0"#,
         r#"LET cost := 100.0"#,
         r#"LET t1 RESULTSET := SELECT * FROM numbers(100)"#,
+        r#"LET t1 cursor FOR SELECT * FROM numbers(100)"#,
         r#"profit := revenue - cost"#,
         r#"RETURN"#,
         r#"RETURN profit"#,

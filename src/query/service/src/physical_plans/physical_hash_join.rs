@@ -55,10 +55,8 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::runtime_filter::build_runtime_filter;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::pipelines::processors::transforms::memory::outer_left_join::OuterLeftHashJoin;
-use crate::pipelines::processors::transforms::BasicHashJoinState;
+use crate::pipelines::processors::transforms::HashJoinFactory;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
-use crate::pipelines::processors::transforms::InnerHashJoin;
 use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
@@ -405,16 +403,22 @@ impl HashJoin {
         builder: &mut PipelineBuilder,
         desc: Arc<HashJoinDesc>,
     ) -> Result<()> {
-        let state = Arc::new(BasicHashJoinState::create());
+        let factory = self.join_factory(builder, desc)?;
+
         // We must build the runtime filter before constructing the child nodes,
         // as we will inject some runtime filter information into the context for the child nodes to use.
         let rf_desc = RuntimeFiltersDesc::create(&builder.ctx, self)?;
 
-        if let Some((build_cache_index, _)) = self.build_side_cache_info {
-            builder.hash_join_states.insert(
-                build_cache_index,
-                HashJoinStateRef::NewHashJoinState(state.clone()),
-            );
+        // After common subexpression elimination is completed, we can delete this type of code.
+        {
+            let state = factory.create_basic_state(0)?;
+
+            if let Some((build_cache_index, _)) = self.build_side_cache_info {
+                builder.hash_join_states.insert(
+                    build_cache_index,
+                    HashJoinStateRef::NewHashJoinState(state.clone()),
+                );
+            }
         }
 
         self.build.build_pipeline(builder)?;
@@ -451,7 +455,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                self.create_join(&self.join_type, builder, desc.clone(), state.clone())?,
+                factory.create_hash_join(self.join_type.clone(), 0)?,
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
@@ -475,13 +479,11 @@ impl HashJoin {
             .resize(builder.main_pipeline.output_len(), true)
     }
 
-    fn create_join(
+    fn join_factory(
         &self,
-        join_type: &JoinType,
-        builder: &mut PipelineBuilder,
+        ctx: &PipelineBuilder,
         desc: Arc<HashJoinDesc>,
-        state: Arc<BasicHashJoinState>,
-    ) -> Result<Box<dyn crate::pipelines::processors::transforms::Join>> {
+    ) -> Result<Arc<HashJoinFactory>> {
         let hash_key_types = self
             .build_keys
             .iter()
@@ -496,25 +498,12 @@ impl HashJoin {
             })
             .collect::<Vec<_>>();
 
-        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
-
-        Ok(match join_type {
-            JoinType::Inner => Box::new(InnerHashJoin::create(
-                &builder.ctx,
-                builder.func_ctx.clone(),
-                method,
-                desc,
-                state,
-            )?),
-            JoinType::Left => Box::new(OuterLeftHashJoin::create(
-                &builder.ctx,
-                builder.func_ctx.clone(),
-                method,
-                desc,
-                state,
-            )?),
-            _ => unreachable!(),
-        })
+        Ok(HashJoinFactory::create(
+            ctx.ctx.clone(),
+            ctx.func_ctx.clone(),
+            DataBlock::choose_hash_method_with_types(&hash_key_types)?,
+            desc,
+        ))
     }
 }
 

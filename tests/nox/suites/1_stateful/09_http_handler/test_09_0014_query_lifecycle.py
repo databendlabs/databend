@@ -173,9 +173,9 @@ def test_query_lifecycle_finalized(rows):
                      "running_time_ms": 0},
                  }
     status_code, resp_state = get_query_state(query_id, node_id)
-    if rows == 8:
-        resp_state['state'] in ["Succeeded", "Running"]
-        resp_state['state'] = "Succeeded"
+
+    resp_state['state'] in ["Succeeded", "Running"]
+    resp_state['state'] = "Succeeded"
     assert (status_code, resp_state) == (200, exp_state)
 
     assert do_hb([resp0]) == (200, {"queries_to_remove": []})

@@ -40,5 +40,6 @@ pub use hash_join_state::*;
 pub use probe_state::ProbeState;
 pub use probe_state::ProcessState;
 pub use runtime_filter::*;
+pub use spill_common::get_hashes;
 pub use transform_hash_join_build::TransformHashJoinBuild;
 pub use transform_hash_join_probe::TransformHashJoinProbe;

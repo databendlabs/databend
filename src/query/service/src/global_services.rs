@@ -58,6 +58,7 @@ use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
+use crate::spillers::SpillsBufferPool;
 use crate::task::service::TaskService;
 
 pub struct GlobalServices;
@@ -106,6 +107,7 @@ impl GlobalServices {
         // 4. cluster discovery init.
         ClusterDiscovery::init(config, version).await?;
 
+        SpillsBufferPool::init();
         // TODO(xuanwo):
         //
         // This part is a bit complex because catalog are used widely in different

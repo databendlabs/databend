@@ -15,6 +15,8 @@
 use std::io::Write;
 
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
+use databend_common_exception::Result;
 use databend_common_expression::date_helper::calc_date_to_timestamp;
 use databend_common_expression::date_helper::today_date;
 use databend_common_expression::date_helper::DateConverter;
@@ -22,6 +24,7 @@ use databend_common_expression::date_helper::EvalMonthsImpl;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::IntervalType;
@@ -34,6 +37,9 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
+use jiff::tz::Offset;
+use jiff::tz::TimeZone;
+use jiff::Timestamp;
 use jiff::Zoned;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -113,22 +119,35 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<TimestampType, IntervalType, TimestampType>(
                 |a, b, output, ctx| {
-                    // plus microseconds and days
-                    let ts = a
-                        .wrapping_add(b.microseconds())
-                        .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
-                    match EvalMonthsImpl::eval_timestamp(
-                        ts,
+                    eval_timestamp_plus(
+                        a,
+                        b,
+                        output,
+                        ctx,
+                        |input| input,
+                        |result| result,
                         ctx.func_ctx.tz.clone(),
-                        b.months(),
-                        false,
-                    ) {
-                        Ok(t) => output.push(t),
-                        Err(e) => {
-                            ctx.set_error(output.len(), e);
-                            output.push(0);
+                    );
+                },
+            ),
+        );
+    registry
+        .register_passthrough_nullable_2_arg::<TimestampTzType, IntervalType, TimestampTzType, _, _>(
+            "plus",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<TimestampTzType, IntervalType, TimestampTzType>(
+                |a, b, output, ctx| {
+                    let offset = match Offset::from_seconds(a.seconds_offset()) {
+                        Ok(offset) => offset,
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            output.push(timestamp_tz::default());
+                            return;
                         }
-                    }
+                    };
+                    // EvalMonthsImpl::eval_timestamp will use tz to add offset to timestamp as local timestamp, so here we balance it by subtracting offset in advance
+                    // - input.micros_offset().unwrap_or(0)
+                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp() - input.micros_offset().unwrap_or(0), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
                 },
             ),
         );
@@ -139,22 +158,36 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<IntervalType, TimestampType, TimestampType>(
                 |b, a, output, ctx| {
-                    // plus microseconds and days
-                    let ts = a
-                        .wrapping_add(b.microseconds())
-                        .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
-                    match EvalMonthsImpl::eval_timestamp(
-                        ts,
+                    eval_timestamp_plus(
+                        a,
+                        b,
+                        output,
+                        ctx,
+                        |input| input,
+                        |result| result,
                         ctx.func_ctx.tz.clone(),
-                        b.months(),
-                        false,
-                    ) {
-                        Ok(t) => output.push(t),
-                        Err(e) => {
-                            ctx.set_error(output.len(), e);
-                            output.push(0);
+                    );
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_2_arg::<IntervalType, TimestampTzType, TimestampTzType, _, _>(
+            "plus",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<IntervalType, TimestampTzType, TimestampTzType>(
+                |b, a, output, ctx| {
+                    let offset = match Offset::from_seconds(a.seconds_offset()) {
+                        Ok(offset) => offset,
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            output.push(timestamp_tz::default());
+                            return;
                         }
-                    }
+                    };
+                    // EvalMonthsImpl::eval_timestamp will use tz to add offset to timestamp as local timestamp, so here we balance it by subtracting offset in advance
+                    // - input.micros_offset().unwrap_or(0)
+                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp() - input.micros_offset().unwrap_or(0), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
                 },
             ),
         );
@@ -179,22 +212,36 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<TimestampType, IntervalType, TimestampType>(
                 |a, b, output, ctx| {
-                    // plus microseconds and days
-                    let ts = a
-                        .wrapping_sub(b.microseconds())
-                        .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
-                    match EvalMonthsImpl::eval_timestamp(
-                        ts,
+                    eval_timestamp_minus(
+                        a,
+                        b,
+                        output,
+                        ctx,
+                        |input| input,
+                        |result| result,
                         ctx.func_ctx.tz.clone(),
-                        -b.months(),
-                        false,
-                    ) {
-                        Ok(t) => output.push(t),
-                        Err(e) => {
-                            ctx.set_error(output.len(), e);
-                            output.push(0);
+                    );
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_2_arg::<TimestampTzType, IntervalType, TimestampTzType, _, _>(
+            "minus",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<TimestampTzType, IntervalType, TimestampTzType>(
+                |a, b, output, ctx| {
+                    let offset = match Offset::from_seconds(a.seconds_offset()) {
+                        Ok(offset) => offset,
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            output.push(timestamp_tz::default());
+                            return;
                         }
-                    }
+                    };
+                    // EvalMonthsImpl::eval_timestamp will use tz to add offset to timestamp as local timestamp, so here we balance it by subtracting offset in advance
+                    // - input.micros_offset().unwrap_or(0)
+                    eval_timestamp_minus(a, b, output, ctx, |input| input.timestamp() - input.micros_offset().unwrap_or(0), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
                 },
             ),
         );
@@ -215,6 +262,38 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     let tz = &ctx.func_ctx.tz;
                     let t1 = t1.to_timestamp(tz.clone());
                     let t2 = t2.to_timestamp(tz.clone());
+                    output.push(calc_age(t1, t2, is_negative));
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_2_arg::<TimestampTzType, TimestampTzType, IntervalType, _, _>(
+            "age",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<TimestampTzType, TimestampTzType, IntervalType>(
+                |t1, t2, output, ctx| {
+                    let fn_to_zoned = |ts_tz: timestamp_tz| {
+                        let ts = Timestamp::from_microsecond(ts_tz.timestamp())?;
+                        let zone = TimeZone::fixed(Offset::from_seconds(ts_tz.seconds_offset())?);
+
+                        Result::Ok(ts.to_zoned(zone))
+                    };
+
+                    let mut is_negative = false;
+                    let mut t1 = t1;
+                    let mut t2 = t2;
+                    if t1 < t2 {
+                        std::mem::swap(&mut t1, &mut t2);
+                        is_negative = true;
+                    }
+                    let (t1, t2) = match (fn_to_zoned(t1), fn_to_zoned(t2)) {
+                        (Ok(t1), Ok(t2)) => (t1, t2),
+                        (Err(err), _) | (_, Err(err)) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            return;
+                        }
+                    };
                     output.push(calc_age(t1, t2, is_negative));
                 },
             ),
@@ -248,6 +327,38 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
         }),
     );
 
+    // age(ts) == age(now() at midnight, ts);
+    registry.register_passthrough_nullable_1_arg::<TimestampTzType, IntervalType, _, _>(
+        "age",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<TimestampTzType, IntervalType>(|t2, output, ctx| {
+            let fn_eval_age = |t2: timestamp_tz, ctx: &mut EvalContext| {
+                let mut is_negative = false;
+
+                let zone = TimeZone::fixed(Offset::from_seconds(t2.seconds_offset())?);
+                let today_date = today_date(&ctx.func_ctx.now, &zone);
+                let mut t2 = Timestamp::from_microsecond(t2.timestamp())?.to_zoned(zone.clone());
+                let mut t1 = calc_date_to_timestamp(today_date, zone.clone())?.to_timestamp(zone);
+
+                if t1 < t2 {
+                    std::mem::swap(&mut t1, &mut t2);
+                    is_negative = true;
+                }
+                Result::Ok(calc_age(t1, t2, is_negative))
+            };
+
+            match fn_eval_age(t2, ctx) {
+                Ok(result) => {
+                    output.push(result);
+                }
+                Err(e) => {
+                    ctx.set_error(output.len(), e.to_string());
+                    output.push(months_days_micros::new(0, 0, 0));
+                }
+            }
+        }),
+    );
+
     registry.register_passthrough_nullable_2_arg::<Int64Type, IntervalType, IntervalType, _, _>(
         "multiply",
         |_, _, _| FunctionDomain::Full,
@@ -271,6 +382,58 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             )
         }),
     );
+}
+
+fn eval_timestamp_plus<F1, F2, T>(
+    a: T,
+    b: months_days_micros,
+    output: &mut Vec<T>,
+    ctx: &mut EvalContext,
+    fn_input: F1,
+    fn_result: F2,
+    timezone: TimeZone,
+) where
+    F1: FnOnce(T) -> i64,
+    F2: FnOnce(i64) -> T,
+    T: Default,
+{
+    // plus microseconds and days
+    let ts = fn_input(a)
+        .wrapping_add(b.microseconds())
+        .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
+    match EvalMonthsImpl::eval_timestamp(ts, timezone, b.months(), false) {
+        Ok(t) => output.push(fn_result(t)),
+        Err(e) => {
+            ctx.set_error(output.len(), e);
+            output.push(T::default());
+        }
+    }
+}
+
+fn eval_timestamp_minus<F1, F2, T>(
+    a: T,
+    b: months_days_micros,
+    output: &mut Vec<T>,
+    ctx: &mut EvalContext,
+    fn_input: F1,
+    fn_result: F2,
+    timezone: TimeZone,
+) where
+    F1: FnOnce(T) -> i64,
+    F2: FnOnce(i64) -> T,
+    T: Default,
+{
+    // plus microseconds and days
+    let ts = fn_input(a)
+        .wrapping_sub(b.microseconds())
+        .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
+    match EvalMonthsImpl::eval_timestamp(ts, timezone, -b.months(), false) {
+        Ok(t) => output.push(fn_result(t)),
+        Err(e) => {
+            ctx.set_error(output.len(), e);
+            output.push(T::default());
+        }
+    }
 }
 
 fn register_number_to_interval(registry: &mut FunctionRegistry) {

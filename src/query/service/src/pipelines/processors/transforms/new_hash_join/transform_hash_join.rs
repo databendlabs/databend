@@ -157,17 +157,22 @@ impl Processor for TransformHashJoin {
                 Ok(())
             }
             Stage::ProbeFinal(state) => {
-                if !state.initialized {
-                    state.initialized = true;
-                    let final_stream = self.join.final_probe()?;
-                    // This is safe because both join and stream are properties of the struct.
-                    state.stream = Some(unsafe { std::mem::transmute(final_stream) });
+                if state.stream.is_none() {
+                    if let Some(final_stream) = self.join.final_probe()? {
+                        state.initialize = true;
+                        // This is safe because both join and stream are properties of the struct.
+                        state.stream = Some(unsafe { std::mem::transmute(final_stream) });
+                    } else {
+                        state.finished = true;
+                    }
                 }
 
                 if let Some(mut stream) = state.stream.take() {
                     if let Some(joined_data) = stream.next()? {
                         self.joined_data = Some(joined_data);
                         state.stream = Some(stream);
+                    } else {
+                        state.initialize = false;
                     }
                 }
 
@@ -179,7 +184,7 @@ impl Processor for TransformHashJoin {
     async fn async_process(&mut self) -> Result<()> {
         let wait_res = self.stage_sync_barrier.wait().await;
 
-        self.stage = match self.stage {
+        self.stage = match &mut self.stage {
             Stage::Build(_) => {
                 if wait_res.is_leader() {
                     let packet = self.join.build_runtime_filter(&self.rf_desc)?;
@@ -193,7 +198,14 @@ impl Processor for TransformHashJoin {
             }
             Stage::BuildFinal(_) => Stage::Probe(ProbeState::new()),
             Stage::Probe(_) => Stage::ProbeFinal(ProbeFinalState::new()),
-            Stage::ProbeFinal(_) => Stage::Finished,
+            Stage::ProbeFinal(state) => match state.finished {
+                true => Stage::Finished,
+                false => Stage::ProbeFinal(ProbeFinalState {
+                    initialize: true,
+                    finished: state.finished,
+                    stream: state.stream.take(),
+                }),
+            },
             Stage::Finished => Stage::Finished,
         };
 
@@ -296,14 +308,15 @@ impl ProbeState {
 }
 
 struct ProbeFinalState {
-    initialized: bool,
+    finished: bool,
+    initialize: bool,
     stream: Option<Box<dyn JoinStream>>,
 }
 
 impl Debug for ProbeFinalState {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProbeFinalState")
-            .field("initialized", &self.initialized)
+            .field("initialized", &self.finished)
             .finish()
     }
 }
@@ -311,8 +324,9 @@ impl Debug for ProbeFinalState {
 impl ProbeFinalState {
     pub fn new() -> ProbeFinalState {
         ProbeFinalState {
-            initialized: false,
             stream: None,
+            finished: false,
+            initialize: false,
         }
     }
 
@@ -321,11 +335,14 @@ impl ProbeFinalState {
             return Ok(Event::Sync);
         }
 
-        if self.initialized {
+        if self.finished {
             output_port.finish();
             return Ok(Event::Async);
         }
 
-        Ok(Event::Sync)
+        match self.initialize {
+            true => Ok(Event::Sync),
+            false => Ok(Event::Async),
+        }
     }
 }

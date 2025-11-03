@@ -33,25 +33,10 @@ fn data_mask_arg(i: Input) -> IResult<DataMaskArg> {
     })(i)
 }
 
-fn data_mask_more_arg(i: Input) -> IResult<DataMaskArg> {
-    map(rule! { "," ~ #data_mask_arg }, |(_, arg)| arg)(i)
-}
-
-fn data_mask_arg_list(i: Input) -> IResult<Vec<DataMaskArg>> {
-    map(rule! { #data_mask_more_arg* }, |args| args)(i)
-}
-
 fn data_mask_args(i: Input) -> IResult<Vec<DataMaskArg>> {
     map(
-        rule! { AS ~ "(" ~ #data_mask_arg ~ #data_mask_arg_list ~ ")" },
-        |(_, _, arg_0, more_args, _)| {
-            let mut args = vec![];
-            args.push(arg_0);
-            for arg in more_args {
-                args.push(arg);
-            }
-            args
-        },
+        rule! { AS ~ "(" ~ #comma_separated_list1(data_mask_arg) ~ ")" },
+        |(_, _, args, _)| args,
     )(i)
 }
 

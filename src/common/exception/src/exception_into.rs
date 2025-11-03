@@ -228,6 +228,12 @@ impl From<ParseError> for ErrorCode {
     }
 }
 
+impl From<jiff::Error> for ErrorCode {
+    fn from(error: jiff::Error) -> Self {
+        ErrorCode::JiffError(error.to_string())
+    }
+}
+
 impl From<GeozeroError> for ErrorCode {
     fn from(value: GeozeroError) -> Self {
         ErrorCode::GeometryError(value.to_string())

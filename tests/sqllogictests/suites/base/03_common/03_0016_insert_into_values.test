@@ -63,15 +63,16 @@ statement error (?s)1303.*Table columns count is not match, expect 1, input: 2, 
 insert into st1 values ('a', 'b')
 
 statement ok
-create table if not exists ts1(a timestamp)
+create table if not exists ts1(a timestamp, b timestamp with time zone)
 
 statement ok
-insert into ts1 values (1676620596564)
+insert into ts1 values (1676620596564, '2024-10-22 12:00:00+0900')
 
+# FIXME: After Parser update then remove ::STRING
 query T
-select * from ts1
+select a, b::STRING from ts1
 ----
-2023-02-17 07:56:36.564000
+2023-02-17 07:56:36.564000 2024-10-22 21:00:00.000000 +0900
 
 statement ok
 create table my_table(column1 string, column2 string, column3 string);

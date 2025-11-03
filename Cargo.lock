@@ -3040,7 +3040,7 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "databend_educe",
  "derive-visitor",
@@ -3228,6 +3228,7 @@ dependencies = [
  "ethnum",
  "foreign_vec",
  "hex",
+ "jiff",
  "log",
  "match-template",
  "num-traits",
@@ -3303,6 +3304,7 @@ dependencies = [
  "gimli 0.31.1",
  "http 1.3.1",
  "hyper 1.6.0",
+ "jiff",
  "libc",
  "object",
  "once_cell",
