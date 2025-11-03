@@ -57,6 +57,7 @@ pub enum RoundPhase {
     OutputReady(DataBlock),
     Aggregate,
     AsyncWait,
+    Finish,
 }
 
 impl Display for RoundPhase {
@@ -67,6 +68,7 @@ impl Display for RoundPhase {
             RoundPhase::OutputReady(_) => write!(f, "OutputReady"),
             RoundPhase::AsyncWait => write!(f, "AsyncWait"),
             RoundPhase::Aggregate => write!(f, "Aggregate"),
+            RoundPhase::Finish => write!(f, "Finish"),
         }
     }
 }
