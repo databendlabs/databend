@@ -221,7 +221,9 @@ fn collect_equi_conditions(s_expr: &SExpr) -> Result<Vec<JoinEquiCondition>> {
     let mut conditions = Vec::new();
 
     if let RelOperator::Join(join) = s_expr.plan() {
-        conditions.extend(join.equi_conditions.clone());
+        if matches!(join.join_type, JoinType::Inner) {
+            conditions.extend(join.equi_conditions.clone());
+        }
     }
 
     for child in s_expr.children() {
