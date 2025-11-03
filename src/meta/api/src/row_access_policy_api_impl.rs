@@ -22,7 +22,6 @@ use databend_common_meta_app::row_access_policy::RowAccessPolicyIdIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
-use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
@@ -42,7 +41,12 @@ use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
 use crate::row_access_policy_api::RowAccessPolicyApi;
+use crate::security_policy_usage::collect_policy_usage;
+use crate::security_policy_usage::PolicyBinding;
+use crate::security_policy_usage::PolicyDropTxnBatch;
+use crate::security_policy_usage::PolicyUsage;
 use crate::txn_backoff::txn_backoff;
+use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
@@ -143,8 +147,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
                 .map_err(RowAccessPolicyError::from)?
                 .await;
 
-            let mut txn = TxnRequest::default();
-
             let res = self.get_id_and_value(name_ident).await?;
             debug!(res :? = res, name_key :? =(name_ident); "{}", func_name!());
 
@@ -168,12 +170,28 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
 
             let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
 
-            txn_delete_exact(&mut txn, name_ident, seq_id.seq);
-            txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-            for binding in &usage.stale_bindings {
+            let PolicyDropTxnBatch {
+                prefix,
+                binding_count,
+                bindings,
+                table_updates,
+                finalize_policy,
+            } = usage.prepare_drop_batch(name_ident.tenant(), policy_id);
+
+            let mut txn = TxnRequest::default();
+            txn.condition
+                .push(txn_cond_eq_keys_with_prefix(&prefix, binding_count));
+
+            if finalize_policy {
+                txn_delete_exact(&mut txn, name_ident, seq_id.seq);
+                txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
+            }
+
+            for binding in bindings {
                 txn_delete_exact(&mut txn, &binding.ident, binding.seq);
             }
-            for update in &usage.table_updates {
+
+            for update in table_updates {
                 txn.condition
                     .push(txn_cond_eq_seq(&update.table_id, update.seq));
                 let op = txn_op_put_pb(&update.table_id, &update.meta, None)
@@ -182,10 +200,15 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             }
 
             let (succ, _responses) = send_txn(self, txn).await?;
-            debug!(succ = succ;"{}", func_name!());
 
-            if succ {
-                return Ok(Some((seq_id, seq_meta)));
+            if finalize_policy {
+                debug!(succ = succ;"{}", func_name!());
+                if succ {
+                    return Ok(Some((seq_id, seq_meta)));
+                }
+            } else {
+                debug!(succ = succ, cleanup = true;"{}", func_name!());
+                continue;
             }
         }
     }
@@ -216,34 +239,34 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
     }
 }
 
-#[derive(Default)]
-struct RowAccessPolicyUsage {
-    active_tables: Vec<u64>,
-    stale_bindings: Vec<RowAccessBindingEntry>,
-    table_updates: Vec<RowAccessTableMetaUpdate>,
-}
+type RowAccessPolicyUsage = PolicyUsage<RowAccessPolicyTableIdIdent>;
 
-struct RowAccessBindingEntry {
-    ident: RowAccessPolicyTableIdIdent,
-    seq: u64,
-}
+impl PolicyBinding for RowAccessPolicyTableIdIdent {
+    fn prefix_for(tenant: &Tenant, policy_id: u64) -> DirName<Self> {
+        DirName::new(RowAccessPolicyTableIdIdent::new_generic(
+            tenant.clone(),
+            RowAccessPolicyIdTableId {
+                policy_id,
+                table_id: 0,
+            },
+        ))
+    }
 
-struct RowAccessTableMetaUpdate {
-    table_id: TableId,
-    seq: u64,
-    meta: TableMeta,
-}
+    fn table_id(&self) -> u64 {
+        self.name().table_id
+    }
 
-fn strip_row_access_policy_from_table_meta(table_meta: &mut TableMeta, policy_id: u64) -> bool {
-    match &table_meta.row_access_policy_columns_ids {
-        Some(policy) if policy.policy_id == policy_id => {
-            table_meta.row_access_policy_columns_ids = None;
-            if table_meta.row_access_policy.is_some() {
-                table_meta.row_access_policy = None;
+    fn remove_security_policy_from_table_meta(table_meta: &mut TableMeta, policy_id: u64) -> bool {
+        match &table_meta.row_access_policy_columns_ids {
+            Some(policy) if policy.policy_id == policy_id => {
+                table_meta.row_access_policy_columns_ids = None;
+                if table_meta.row_access_policy.is_some() {
+                    table_meta.row_access_policy = None;
+                }
+                true
             }
-            true
+            _ => false,
         }
-        _ => false,
     }
 }
 
@@ -252,53 +275,5 @@ async fn collect_row_access_policy_usage(
     tenant: &Tenant,
     policy_id: u64,
 ) -> Result<RowAccessPolicyUsage, RowAccessPolicyError> {
-    let binding_prefix = DirName::new(RowAccessPolicyTableIdIdent::new_generic(
-        tenant.clone(),
-        RowAccessPolicyIdTableId {
-            policy_id,
-            table_id: 0,
-        },
-    ));
-    let bindings = kv_api
-        .list_pb_vec(&binding_prefix)
-        .await
-        .map_err(RowAccessPolicyError::from)?;
-
-    let mut usage = RowAccessPolicyUsage::default();
-    for (binding_ident, seqv) in bindings {
-        let table_id = binding_ident.name().table_id;
-        let table_key = TableId::new(table_id);
-        match kv_api
-            .get_pb(&table_key)
-            .await
-            .map_err(RowAccessPolicyError::from)?
-        {
-            Some(mut table_meta_seqv) => {
-                if table_meta_seqv.data.drop_on.is_none() {
-                    usage.active_tables.push(table_id);
-                } else {
-                    if strip_row_access_policy_from_table_meta(&mut table_meta_seqv.data, policy_id)
-                    {
-                        usage.table_updates.push(RowAccessTableMetaUpdate {
-                            table_id: table_key,
-                            seq: table_meta_seqv.seq,
-                            meta: table_meta_seqv.data.clone(),
-                        });
-                    }
-                    usage.stale_bindings.push(RowAccessBindingEntry {
-                        ident: binding_ident,
-                        seq: seqv.seq,
-                    });
-                }
-            }
-            None => {
-                usage.stale_bindings.push(RowAccessBindingEntry {
-                    ident: binding_ident,
-                    seq: seqv.seq,
-                });
-            }
-        }
-    }
-
-    Ok(usage)
+    collect_policy_usage(kv_api, tenant, policy_id).await
 }

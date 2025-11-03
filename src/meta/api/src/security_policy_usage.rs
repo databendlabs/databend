@@ -1,0 +1,185 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::collections::HashSet;
+
+use databend_common_meta_app::schema::TableId;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::SeqV;
+use databend_common_proto_conv::FromToProto;
+
+use crate::kv_pb_api::KVPbApi;
+
+/// Upper bound for the number of stale bindings we try to clean up in a single transaction.
+pub(crate) const MAX_POLICY_CLEANUP_BATCH: usize = 100;
+
+/// Represents a binding record that links a security policy to a table.
+#[derive(Clone)]
+pub(crate) struct PolicyBindingEntry<I> {
+    pub(crate) ident: I,
+    pub(crate) seq: u64,
+}
+
+impl<I> PolicyBindingEntry<I> {
+    pub(crate) fn new(ident: I, seq: u64) -> Self {
+        Self { ident, seq }
+    }
+
+    pub(crate) fn table_id(&self) -> u64
+    where I: PolicyBinding {
+        self.ident.table_id()
+    }
+}
+
+/// Describes an update that needs to be applied to a table meta entry.
+#[derive(Clone)]
+pub(crate) struct PolicyTableUpdate {
+    pub(crate) table_id: TableId,
+    pub(crate) seq: u64,
+    pub(crate) meta: TableMeta,
+}
+
+pub(crate) struct PolicyUsage<I> {
+    pub(crate) active_tables: Vec<u64>,
+    pub(crate) stale_bindings: Vec<PolicyBindingEntry<I>>,
+    pub(crate) table_updates: Vec<PolicyTableUpdate>,
+}
+
+impl<I> Default for PolicyUsage<I> {
+    fn default() -> Self {
+        Self {
+            active_tables: Vec::new(),
+            stale_bindings: Vec::new(),
+            table_updates: Vec::new(),
+        }
+    }
+}
+
+pub(crate) struct PolicyDropTxnBatch<I> {
+    pub(crate) prefix: DirName<I>,
+    pub(crate) binding_count: u64,
+    pub(crate) bindings: Vec<PolicyBindingEntry<I>>,
+    pub(crate) table_updates: Vec<PolicyTableUpdate>,
+    pub(crate) finalize_policy: bool,
+}
+
+impl<I> PolicyUsage<I> {
+    pub(crate) fn binding_count(&self) -> u64 {
+        (self.active_tables.len() + self.stale_bindings.len()) as u64
+    }
+
+    pub(crate) fn prepare_drop_batch(
+        &self,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> PolicyDropTxnBatch<I>
+    where
+        I: PolicyBinding + Clone,
+    {
+        let prefix = I::prefix_for(tenant, policy_id);
+        let binding_count = self.binding_count();
+
+        if self.stale_bindings.len() > MAX_POLICY_CLEANUP_BATCH {
+            let bindings: Vec<_> = self
+                .stale_bindings
+                .iter()
+                .take(MAX_POLICY_CLEANUP_BATCH)
+                .cloned()
+                .collect();
+
+            let touched_tables: HashSet<_> =
+                bindings.iter().map(|entry| entry.table_id()).collect();
+            let mut updates = Vec::new();
+            let mut seen_tables = HashSet::new();
+            for update in &self.table_updates {
+                let table_id = update.table_id.table_id;
+                if touched_tables.contains(&table_id) && seen_tables.insert(table_id) {
+                    updates.push(update.clone());
+                }
+            }
+
+            PolicyDropTxnBatch {
+                prefix,
+                binding_count,
+                bindings,
+                table_updates: updates,
+                finalize_policy: false,
+            }
+        } else {
+            PolicyDropTxnBatch {
+                prefix,
+                binding_count,
+                bindings: self.stale_bindings.clone(),
+                table_updates: self.table_updates.clone(),
+                finalize_policy: true,
+            }
+        }
+    }
+}
+
+pub(crate) trait PolicyBinding: kvapi::Key + Sized {
+    fn prefix_for(tenant: &Tenant, policy_id: u64) -> DirName<Self>;
+    fn table_id(&self) -> u64;
+    fn remove_security_policy_from_table_meta(meta: &mut TableMeta, policy_id: u64) -> bool;
+}
+
+/// Collects the usage information of a security policy by scanning table bindings.
+pub(crate) async fn collect_policy_usage<K, E>(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant: &Tenant,
+    policy_id: u64,
+) -> Result<PolicyUsage<K>, E>
+where
+    K: PolicyBinding + Clone + Send + Sync + 'static,
+    K::ValueType: FromToProto + Send,
+    E: From<MetaError>,
+{
+    let binding_prefix = K::prefix_for(tenant, policy_id);
+    let bindings = kv_api.list_pb_vec(&binding_prefix).await.map_err(E::from)?;
+
+    let mut usage = PolicyUsage::default();
+
+    for (binding_ident, seqv) in bindings {
+        let table_id = binding_ident.table_id();
+        let table_key = TableId::new(table_id);
+        let binding_seq = seqv.seq;
+        let table_meta_opt = kv_api.get_pb(&table_key).await.map_err(E::from)?;
+        match table_meta_opt {
+            Some(SeqV { data, .. }) if data.drop_on.is_none() => {
+                usage.active_tables.push(table_id);
+            }
+            Some(SeqV { seq, mut data, .. }) => {
+                if K::remove_security_policy_from_table_meta(&mut data, policy_id) {
+                    usage.table_updates.push(PolicyTableUpdate {
+                        table_id: table_key,
+                        seq,
+                        meta: data,
+                    });
+                }
+                usage
+                    .stale_bindings
+                    .push(PolicyBindingEntry::new(binding_ident, binding_seq));
+            }
+            None => usage
+                .stale_bindings
+                .push(PolicyBindingEntry::new(binding_ident, binding_seq)),
+        }
+    }
+
+    Ok(usage)
+}

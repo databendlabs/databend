@@ -1077,12 +1077,9 @@ select * from employees;
 2 Bob ***-**-**** 80000 Sales regular_user
 3 Charlie ***-**-**** 120000 Engineering regular_user
 
-statement ok
-DROP TABLE employees;
-
 ## -- should failed(table be used)
-statement error 1113
-DROP MASKING POLICY mask_ssn;
+statement error 1133
+DROP MASKING POLICY mask_ssn_conditional;
 
 statement ok
 DROP TABLE employees;

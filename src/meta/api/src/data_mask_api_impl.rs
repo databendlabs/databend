@@ -25,7 +25,6 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
@@ -44,7 +43,12 @@ use crate::errors::SecurityPolicyKind;
 use crate::fetch_id;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::security_policy_usage::collect_policy_usage;
+use crate::security_policy_usage::PolicyBinding;
+use crate::security_policy_usage::PolicyDropTxnBatch;
+use crate::security_policy_usage::PolicyUsage;
 use crate::txn_backoff::txn_backoff;
+use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
@@ -153,7 +157,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 .unwrap()
                 .map_err(MaskingPolicyError::from)?
                 .await;
-            let mut txn = TxnRequest::default();
 
             let res = self.get_id_and_value(name_ident).await?;
             debug!(res :? = res, name_key :? =(name_ident); "{}", func_name!());
@@ -177,25 +180,50 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
             let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
 
-            txn_delete_exact(&mut txn, name_ident, seq_id.seq);
-            txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-            for binding in &usage.stale_bindings {
+            let PolicyDropTxnBatch {
+                prefix,
+                binding_count,
+                bindings,
+                table_updates,
+                finalize_policy,
+            } = usage.prepare_drop_batch(name_ident.tenant(), policy_id);
+
+            let mut txn = TxnRequest::default();
+            txn.condition
+                .push(txn_cond_eq_keys_with_prefix(&prefix, binding_count));
+
+            if finalize_policy {
+                txn_delete_exact(&mut txn, name_ident, seq_id.seq);
+                txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
+            }
+
+            for binding in bindings {
                 txn_delete_exact(&mut txn, &binding.ident, binding.seq);
             }
-            for update in &usage.table_updates {
+
+            for update in table_updates {
                 txn.condition
                     .push(txn_cond_eq_seq(&update.table_id, update.seq));
                 let op = txn_op_put_pb(&update.table_id, &update.meta, None)
                     .map_err(|e| MaskingPolicyError::from(MetaError::from(e)))?;
                 txn.if_then.push(op);
             }
-            // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
-            clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
-            let (succ, _responses) = send_txn(self, txn).await?;
-            debug!(succ = succ;"{}", func_name!());
 
-            if succ {
-                return Ok(Some((seq_id, seq_meta)));
+            if finalize_policy {
+                // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
+                clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
+            }
+
+            let (succ, _responses) = send_txn(self, txn).await?;
+
+            if finalize_policy {
+                debug!(succ = succ;"{}", func_name!());
+                if succ {
+                    return Ok(Some((seq_id, seq_meta)));
+                }
+            } else {
+                debug!(succ = succ, cleanup = true;"{}", func_name!());
+                continue;
             }
         }
     }
@@ -243,41 +271,36 @@ async fn clear_table_column_mask_policy(
     Ok(())
 }
 
-#[derive(Default)]
-struct MaskPolicyUsage {
-    active_tables: Vec<u64>,
-    stale_bindings: Vec<BindingEntry>,
-    table_updates: Vec<TableMetaUpdate>,
-}
+type MaskPolicyUsage = PolicyUsage<MaskPolicyTableIdIdent>;
 
-struct BindingEntry {
-    ident: MaskPolicyTableIdIdent,
-    seq: u64,
-}
-
-struct TableMetaUpdate {
-    table_id: TableId,
-    seq: u64,
-    meta: TableMeta,
-}
-
-fn strip_mask_policy_from_table_meta(table_meta: &mut TableMeta, policy_id: u64) -> bool {
-    let mut removed = false;
-    table_meta
-        .column_mask_policy_columns_ids
-        .retain(|_, policy| {
-            let keep = policy.policy_id != policy_id;
-            if !keep {
-                removed = true;
-            }
-            keep
-        });
-
-    if removed && table_meta.column_mask_policy.is_some() {
-        table_meta.column_mask_policy = None;
+impl PolicyBinding for MaskPolicyTableIdIdent {
+    fn prefix_for(tenant: &Tenant, policy_id: u64) -> DirName<Self> {
+        DirName::new(MaskPolicyTableIdIdent::new_generic(
+            tenant.clone(),
+            MaskPolicyIdTableId {
+                policy_id,
+                table_id: 0,
+            },
+        ))
     }
 
-    removed
+    fn table_id(&self) -> u64 {
+        self.name().table_id
+    }
+
+    fn remove_security_policy_from_table_meta(table_meta: &mut TableMeta, policy_id: u64) -> bool {
+        let before = table_meta.column_mask_policy_columns_ids.len();
+        table_meta
+            .column_mask_policy_columns_ids
+            .retain(|_, policy| policy.policy_id != policy_id);
+
+        let removed = before != table_meta.column_mask_policy_columns_ids.len();
+        if removed {
+            table_meta.column_mask_policy = None;
+        }
+
+        removed
+    }
 }
 
 async fn collect_mask_policy_usage(
@@ -285,52 +308,5 @@ async fn collect_mask_policy_usage(
     tenant: &Tenant,
     policy_id: u64,
 ) -> Result<MaskPolicyUsage, MaskingPolicyError> {
-    let binding_prefix = DirName::new(MaskPolicyTableIdIdent::new_generic(
-        tenant.clone(),
-        MaskPolicyIdTableId {
-            policy_id,
-            table_id: 0,
-        },
-    ));
-    let bindings = kv_api
-        .list_pb_vec(&binding_prefix)
-        .await
-        .map_err(MaskingPolicyError::from)?;
-
-    let mut usage = MaskPolicyUsage::default();
-    for (binding_ident, seqv) in bindings {
-        let table_id = binding_ident.name().table_id;
-        let table_key = TableId::new(table_id);
-        match kv_api
-            .get_pb(&table_key)
-            .await
-            .map_err(MaskingPolicyError::from)?
-        {
-            Some(mut table_meta_seqv) => {
-                if table_meta_seqv.data.drop_on.is_none() {
-                    usage.active_tables.push(table_id);
-                } else {
-                    if strip_mask_policy_from_table_meta(&mut table_meta_seqv.data, policy_id) {
-                        usage.table_updates.push(TableMetaUpdate {
-                            table_id: table_key,
-                            seq: table_meta_seqv.seq,
-                            meta: table_meta_seqv.data.clone(),
-                        });
-                    }
-                    usage.stale_bindings.push(BindingEntry {
-                        ident: binding_ident,
-                        seq: seqv.seq,
-                    });
-                }
-            }
-            None => {
-                usage.stale_bindings.push(BindingEntry {
-                    ident: binding_ident,
-                    seq: seqv.seq,
-                });
-            }
-        }
-    }
-
-    Ok(usage)
+    collect_policy_usage(kv_api, tenant, policy_id).await
 }

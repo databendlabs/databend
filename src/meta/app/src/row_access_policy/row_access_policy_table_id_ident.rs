@@ -20,7 +20,7 @@ use databend_common_meta_kvapi::kvapi::KeyParser;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct RowAccessPolicyIdTableId {
     pub policy_id: u64,
     pub table_id: u64,

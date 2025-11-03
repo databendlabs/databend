@@ -60,6 +60,7 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
@@ -497,7 +498,7 @@ pub async fn handle_undrop_table(
         }
 
         let tenant = tenant_dbname_tbname.tenant().clone();
-        let policy_cleanup_ops =
+        let (policy_cleanup_ops, policy_cleanup_conditions) =
             cleanup_missing_policies_on_undrop(kv_api, &tenant, table_id, &mut seq_table_meta.data)
                 .await
                 .map_err(KVAppError::from)?;
@@ -509,7 +510,7 @@ pub async fn handle_undrop_table(
             // Prepare conditions for concurrent safety
             let vacuum_seq = seq_vacuum_retention.as_ref().map(|sr| sr.seq).unwrap_or(0);
 
-            let conditions = vec![
+            let mut conditions = vec![
                 // db has not to change, i.e., no new table is created.
                 // Renaming db is OK and does not affect the seq of db_meta.
                 txn_cond_eq_seq(&DatabaseId { db_id }, seq_db_meta.seq),
@@ -522,6 +523,7 @@ pub async fn handle_undrop_table(
                 // - If vacuum_retention is None: seq must remain 0 (no creation by vacuum)
                 txn_cond_eq_seq(&vacuum_ident, vacuum_seq),
             ];
+            conditions.extend(policy_cleanup_conditions);
 
             let mut if_then_ops = Vec::with_capacity(3 + policy_cleanup_ops.len());
             if_then_ops.push(txn_op_put_pb(
@@ -556,8 +558,9 @@ async fn cleanup_missing_policies_on_undrop(
     tenant: &Tenant,
     table_id: u64,
     table_meta: &mut TableMeta,
-) -> Result<Vec<TxnOp>, MetaError> {
+) -> Result<(Vec<TxnOp>, Vec<TxnCondition>), MetaError> {
     let mut ops = Vec::new();
+    let mut conditions = Vec::new();
 
     if !table_meta.column_mask_policy_columns_ids.is_empty() {
         let mut policy_columns: BTreeMap<u64, Vec<u32>> = BTreeMap::new();
@@ -576,6 +579,7 @@ async fn cleanup_missing_policies_on_undrop(
                 for column_id in columns {
                     table_meta.column_mask_policy_columns_ids.remove(&column_id);
                 }
+                conditions.push(txn_cond_eq_seq(&policy_ident, 0));
                 let binding_ident =
                     MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
                         policy_id,
@@ -598,6 +602,7 @@ async fn cleanup_missing_policies_on_undrop(
         if kv_api.get_pb(&policy_ident).await?.is_none() {
             table_meta.row_access_policy_columns_ids = None;
             table_meta.row_access_policy = None;
+            conditions.push(txn_cond_eq_seq(&policy_ident, 0));
             let binding_ident = RowAccessPolicyTableIdIdent::new_generic(
                 tenant.clone(),
                 RowAccessPolicyIdTableId {
@@ -609,7 +614,7 @@ async fn cleanup_missing_policies_on_undrop(
         }
     }
 
-    Ok(ops)
+    Ok((ops, conditions))
 }
 
 /// add __fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta
