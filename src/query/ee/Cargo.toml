@@ -13,7 +13,6 @@ async-trait = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
-databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
@@ -49,9 +48,7 @@ databend-enterprise-virtual-column = { workspace = true }
 databend-query = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-io = { workspace = true }
-databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-derive-visitor = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 jwt-simple = { workspace = true }
