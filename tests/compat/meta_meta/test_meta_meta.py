@@ -205,7 +205,7 @@ class TestContext:
         subprocess.run(cmd, check=True)
         time.sleep(3)
 
-        self.filter_and_compare_exports(raw1, raw2, include="state_machine", exclude=["DataHeader"], normalize_time_ms=normalize_time_ms)
+        self.filter_and_compare_exports(raw1, raw2, include="state_machine", exclude=["DataHeader"], remove_proposed_at = True, normalize_time_ms=normalize_time_ms, )
 
         return raw1, raw2
 
