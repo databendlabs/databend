@@ -226,7 +226,7 @@ where T: Decimal + std::ops::AddAssign
         match self
             .value
             .checked_mul(T::e(decimal_avg_data.scale_add))
-            .and_then(|v| v.checked_div(T::from_i128(self.count)))
+            .and_then(|v| v.checked_div(T::from_i128_uncheck(self.count.into())))
         {
             Some(value) => {
                 builder.push_item(value);

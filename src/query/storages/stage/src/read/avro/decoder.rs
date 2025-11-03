@@ -461,7 +461,7 @@ impl AvroDecoder {
                 let big_int = <BigInt>::from(d1);
                 if let Some(d1) = <D>::from_bigint(big_int) {
                     let d = if let Some(m) = multiplier {
-                        d1.checked_mul(D::from_i256(*m)).unwrap()
+                        d1.checked_mul(D::from_i256_uncheck(*m)).unwrap()
                     } else {
                         d1
                     };
