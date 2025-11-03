@@ -316,6 +316,12 @@ impl SchemaApiTestSuite {
         suite.table_update_meta(&b.build().await).await?;
         suite.table_update_mask_policy(&b.build().await).await?;
         suite
+            .mask_policy_drop_with_table_lifecycle(&b.build().await)
+            .await?;
+        suite
+            .row_access_policy_drop_with_table_lifecycle(&b.build().await)
+            .await?;
+        suite
             .table_update_row_access_policy(&b.build().await)
             .await?;
         suite.table_upsert_option(&b.build().await).await?;
@@ -3451,13 +3457,6 @@ impl SchemaApiTestSuite {
             assert!(res.is_none());
         }
 
-        info!("--- drop mask policy check");
-        {
-            let name_ident = DataMaskNameIdent::new(tenant.clone(), mask_name_1);
-            let dropped = mt.drop_data_mask(&name_ident).await?;
-            assert!(dropped.is_some());
-        }
-
         info!("--- create or replace mask policy");
         {
             let mask_name = "replace_mask";
@@ -3847,6 +3846,340 @@ impl SchemaApiTestSuite {
                 assert_eq!(table.options().get("key1"), Some(&"val1".into()));
             }
         }
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    async fn mask_policy_drop_with_table_lifecycle<
+        MT: SchemaApi + DatamaskApi + kvapi::KVApi<Error = MetaError>,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "tenant_mask_policy_drop";
+        let db_name = "db_mask_policy_drop";
+        let table_name = "tb_mask_policy_drop";
+        let mask_cleanup_name = "mask_cleanup_after_drop";
+        let mask_guard_name = "mask_guard_while_active";
+
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        // Prepare database and table.
+        let mut util = Util::new(mt, tenant_name, db_name, table_name, "FUSE");
+        util.create_db().await?;
+        let (table_id, _) = util.create_table().await?;
+
+        let table_name_ident =
+            TableNameIdent::new(tenant.clone(), db_name.to_string(), table_name.to_string());
+
+        let mut table_info = util.get_table().await?;
+        let number_column_id = table_info
+            .meta
+            .schema
+            .fields
+            .iter()
+            .find(|f| f.name == "number")
+            .unwrap()
+            .column_id;
+
+        // Create a masking policy and bind it to the table.
+        let created_on = Utc::now();
+        let mask_cleanup_ident =
+            DataMaskNameIdent::new(tenant.clone(), mask_cleanup_name.to_string());
+        mt.create_data_mask(CreateDatamaskReq {
+            create_option: CreateOption::Create,
+            name: mask_cleanup_ident.clone(),
+            data_mask_meta: DatamaskMeta {
+                args: vec![],
+                return_type: "".to_string(),
+                body: "".to_string(),
+                comment: None,
+                create_on: created_on,
+                update_on: None,
+            },
+        })
+        .await?;
+        let mask_cleanup_id = get_kv_u64_data(mt, &mask_cleanup_ident).await?;
+
+        let set_req = SetTableColumnMaskPolicyReq {
+            tenant: tenant.clone(),
+            seq: MatchSeq::Exact(table_info.ident.seq),
+            table_id,
+            action: SetSecurityPolicyAction::Set(mask_cleanup_id, vec![number_column_id]),
+        };
+        mt.set_table_column_mask_policy(set_req).await?;
+        table_info = util.get_table().await?;
+        assert!(table_info
+            .meta
+            .column_mask_policy_columns_ids
+            .contains_key(&number_column_id));
+
+        // Drop the table and ensure dropping the policy succeeds and cleans bindings.
+        util.drop_table_by_id().await?;
+        let dropped = mt.drop_data_mask(&mask_cleanup_ident).await?;
+        assert!(dropped.is_some());
+
+        let binding_ident =
+            MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                policy_id: mask_cleanup_id,
+                table_id,
+            });
+        assert!(
+            mt.get_pb(&binding_ident).await?.is_none(),
+            "stale mask binding should be removed when dropping policy"
+        );
+        assert!(
+            mt.get_data_mask(&mask_cleanup_ident).await?.is_none(),
+            "policy metadata should be gone after drop"
+        );
+
+        // Undrop the table; masking policy entries should disappear.
+        mt.undrop_table(UndropTableReq {
+            name_ident: table_name_ident.clone(),
+        })
+        .await?;
+        table_info = util.get_table().await?;
+        assert!(
+            table_info.meta.column_mask_policy_columns_ids.is_empty(),
+            "undropped table should no longer reference the dropped policy"
+        );
+
+        // Create another masking policy and bind it.
+        let mask_guard_ident = DataMaskNameIdent::new(tenant.clone(), mask_guard_name.to_string());
+        mt.create_data_mask(CreateDatamaskReq {
+            create_option: CreateOption::Create,
+            name: mask_guard_ident.clone(),
+            data_mask_meta: DatamaskMeta {
+                args: vec![],
+                return_type: "".to_string(),
+                body: "".to_string(),
+                comment: None,
+                create_on: Utc::now(),
+                update_on: None,
+            },
+        })
+        .await?;
+        let mask_guard_id = get_kv_u64_data(mt, &mask_guard_ident).await?;
+
+        table_info = util.get_table().await?;
+        let set_req = SetTableColumnMaskPolicyReq {
+            tenant: tenant.clone(),
+            seq: MatchSeq::Exact(table_info.ident.seq),
+            table_id,
+            action: SetSecurityPolicyAction::Set(mask_guard_id, vec![number_column_id]),
+        };
+        mt.set_table_column_mask_policy(set_req).await?;
+        table_info = util.get_table().await?;
+        let policy_entry = table_info
+            .meta
+            .column_mask_policy_columns_ids
+            .get(&number_column_id)
+            .expect("mask policy should be attached");
+        assert_eq!(mask_guard_id, policy_entry.policy_id);
+
+        // Drop and immediately undrop the table; the binding should persist.
+        util.drop_table_by_id().await?;
+        mt.undrop_table(UndropTableReq {
+            name_ident: table_name_ident.clone(),
+        })
+        .await?;
+        table_info = util.get_table().await?;
+        let policy_entry = table_info
+            .meta
+            .column_mask_policy_columns_ids
+            .get(&number_column_id)
+            .expect("mask policy should remain after undrop when policy still exists");
+        assert_eq!(mask_guard_id, policy_entry.policy_id);
+
+        // Dropping the policy should now fail because the table is active.
+        let err = mt.drop_data_mask(&mask_guard_ident).await.unwrap_err();
+        let err = ErrorCode::from(err);
+        assert_eq!(ErrorCode::ConstraintError("").code(), err.code());
+
+        let binding_ident =
+            MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                policy_id: mask_guard_id,
+                table_id,
+            });
+        assert!(
+            mt.get_pb(&binding_ident).await?.is_some(),
+            "binding should remain when policy drop is rejected"
+        );
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    async fn row_access_policy_drop_with_table_lifecycle<
+        MT: SchemaApi + RowAccessPolicyApi + kvapi::KVApi<Error = MetaError>,
+    >(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        let tenant_name = "tenant_row_policy_drop";
+        let db_name = "db_row_policy_drop";
+        let table_name = "tb_row_policy_drop";
+        let policy_cleanup_name = "row_cleanup_after_drop";
+        let policy_guard_name = "row_guard_while_active";
+
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
+        // Prepare database and table.
+        let mut util = Util::new(mt, tenant_name, db_name, table_name, "FUSE");
+        util.create_db().await?;
+        let (table_id, _) = util.create_table().await?;
+
+        let table_name_ident =
+            TableNameIdent::new(tenant.clone(), db_name.to_string(), table_name.to_string());
+
+        let mut table_info = util.get_table().await?;
+        let column_id = table_info.meta.schema.fields[0].column_id;
+
+        // Create a row access policy and bind it to the table.
+        let policy_cleanup_ident =
+            RowAccessPolicyNameIdent::new(tenant.clone(), policy_cleanup_name.to_string());
+        mt.create_row_access(CreateRowAccessPolicyReq {
+            can_replace: false,
+            name: policy_cleanup_ident.clone(),
+            row_access_policy_meta: RowAccessPolicyMeta {
+                args: vec![("number".to_string(), "UInt64".to_string())],
+                body: "true".to_string(),
+                comment: None,
+                create_on: Utc::now(),
+                update_on: None,
+            },
+        })
+        .await?
+        .unwrap();
+        let cleanup_policy_id = {
+            let res = mt
+                .get_row_access(&policy_cleanup_ident)
+                .await?
+                .expect("row access policy exists");
+            *res.0.data
+        };
+
+        let set_req = SetTableRowAccessPolicyReq {
+            tenant: tenant.clone(),
+            table_id,
+            action: SetSecurityPolicyAction::Set(cleanup_policy_id, vec![column_id]),
+        };
+        mt.set_table_row_access_policy(set_req).await??;
+        table_info = util.get_table().await?;
+        assert!(
+            table_info
+                .meta
+                .row_access_policy_columns_ids
+                .as_ref()
+                .is_some(),
+            "row access policy should be recorded in table meta"
+        );
+
+        // Drop the table and ensure dropping the policy succeeds and cleans bindings.
+        util.drop_table_by_id().await?;
+        let dropped = mt.drop_row_access(&policy_cleanup_ident).await?;
+        assert!(dropped.is_some());
+
+        let binding_ident =
+            RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), RowAccessPolicyIdTableId {
+                policy_id: cleanup_policy_id,
+                table_id,
+            });
+        assert!(
+            mt.get_pb(&binding_ident).await?.is_none(),
+            "stale row access binding should be removed when dropping policy"
+        );
+        assert!(
+            mt.get_row_access(&policy_cleanup_ident).await?.is_none(),
+            "policy metadata should be gone after drop"
+        );
+
+        // Undrop the table; row access policy entries should disappear.
+        mt.undrop_table(UndropTableReq {
+            name_ident: table_name_ident.clone(),
+        })
+        .await?;
+        table_info = util.get_table().await?;
+        assert!(
+            table_info.meta.row_access_policy_columns_ids.is_none(),
+            "undropped table should no longer reference the dropped row access policy"
+        );
+
+        // Create another row access policy and bind it.
+        let policy_guard_ident =
+            RowAccessPolicyNameIdent::new(tenant.clone(), policy_guard_name.to_string());
+        mt.create_row_access(CreateRowAccessPolicyReq {
+            can_replace: false,
+            name: policy_guard_ident.clone(),
+            row_access_policy_meta: RowAccessPolicyMeta {
+                args: vec![("number".to_string(), "UInt64".to_string())],
+                body: "true".to_string(),
+                comment: None,
+                create_on: Utc::now(),
+                update_on: None,
+            },
+        })
+        .await?
+        .unwrap();
+        let guard_policy_id = {
+            let res = mt
+                .get_row_access(&policy_guard_ident)
+                .await?
+                .expect("row access policy exists");
+            *res.0.data
+        };
+        let set_req = SetTableRowAccessPolicyReq {
+            tenant: tenant.clone(),
+            table_id,
+            action: SetSecurityPolicyAction::Set(guard_policy_id, vec![column_id]),
+        };
+        mt.set_table_row_access_policy(set_req).await??;
+        table_info = util.get_table().await?;
+        let policy_entry = table_info
+            .meta
+            .row_access_policy_columns_ids
+            .as_ref()
+            .expect("row access policy should be attached after setting");
+        assert_eq!(guard_policy_id, policy_entry.policy_id);
+
+        // Drop and immediately undrop the table; the binding should persist.
+        util.drop_table_by_id().await?;
+        mt.undrop_table(UndropTableReq {
+            name_ident: table_name_ident.clone(),
+        })
+        .await?;
+        table_info = util.get_table().await?;
+        let policy_entry = table_info
+            .meta
+            .row_access_policy_columns_ids
+            .as_ref()
+            .expect("row access policy should remain after undrop when policy still exists");
+        assert_eq!(guard_policy_id, policy_entry.policy_id);
+
+        // Dropping the policy should now fail because the table is active.
+        let err = mt.drop_row_access(&policy_guard_ident).await.unwrap_err();
+        let err = ErrorCode::from(err);
+        assert_eq!(ErrorCode::ConstraintError("").code(), err.code());
+
+        let binding_ident =
+            RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), RowAccessPolicyIdTableId {
+                policy_id: guard_policy_id,
+                table_id,
+            });
+        assert!(
+            mt.get_pb(&binding_ident).await?.is_some(),
+            "binding should remain when row access policy drop is rejected"
+        );
+
+        // Clean up by dropping the table and policy.
+        util.drop_table_by_id().await?;
+        let dropped = mt.drop_row_access(&policy_guard_ident).await?;
+        assert!(dropped.is_some());
+        assert!(
+            mt.get_pb(&binding_ident).await?.is_none(),
+            "binding should be removed after successful row access policy drop"
+        );
+
         Ok(())
     }
 

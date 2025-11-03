@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::time::Duration;
 
@@ -24,8 +25,16 @@ use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableRetentionGuard;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::data_mask::DataMaskId;
+use databend_common_meta_app::data_mask::DataMaskIdIdent;
+use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyIdIdent;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
@@ -487,6 +496,12 @@ pub async fn handle_undrop_table(
             }
         }
 
+        let tenant = tenant_dbname_tbname.tenant().clone();
+        let policy_cleanup_ops =
+            cleanup_missing_policies_on_undrop(kv_api, &tenant, table_id, &mut seq_table_meta.data)
+                .await
+                .map_err(KVAppError::from)?;
+
         {
             // reset drop on time
             seq_table_meta.drop_on = None;
@@ -494,28 +509,31 @@ pub async fn handle_undrop_table(
             // Prepare conditions for concurrent safety
             let vacuum_seq = seq_vacuum_retention.as_ref().map(|sr| sr.seq).unwrap_or(0);
 
-            let txn = TxnRequest::new(
-                vec![
-                    // db has not to change, i.e., no new table is created.
-                    // Renaming db is OK and does not affect the seq of db_meta.
-                    txn_cond_eq_seq(&DatabaseId { db_id }, seq_db_meta.seq),
-                    // still this table id
-                    txn_cond_eq_seq(&dbid_tbname, dbid_tbname_seq),
-                    // table is not changed
-                    txn_cond_eq_seq(&tbid, seq_table_meta.seq),
-                    // Concurrent safety: vacuum timestamp seq must not change during undrop
-                    // - If vacuum_retention exists: seq must remain the same (no update by vacuum)
-                    // - If vacuum_retention is None: seq must remain 0 (no creation by vacuum)
-                    txn_cond_eq_seq(&vacuum_ident, vacuum_seq),
-                ],
-                vec![
-                    // Changing a table in a db has to update the seq of db_meta,
-                    // to block the batch-delete-tables when deleting a db.
-                    txn_op_put_pb(&DatabaseId { db_id }, &seq_db_meta.data, None)?, /* (db_id) -> db_meta */
-                    txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
-                    txn_op_put_pb(&tbid, &seq_table_meta.data, None)?, /* (tenant, db_id, tb_id) -> tb_meta */
-                ],
-            );
+            let conditions = vec![
+                // db has not to change, i.e., no new table is created.
+                // Renaming db is OK and does not affect the seq of db_meta.
+                txn_cond_eq_seq(&DatabaseId { db_id }, seq_db_meta.seq),
+                // still this table id
+                txn_cond_eq_seq(&dbid_tbname, dbid_tbname_seq),
+                // table is not changed
+                txn_cond_eq_seq(&tbid, seq_table_meta.seq),
+                // Concurrent safety: vacuum timestamp seq must not change during undrop
+                // - If vacuum_retention exists: seq must remain the same (no update by vacuum)
+                // - If vacuum_retention is None: seq must remain 0 (no creation by vacuum)
+                txn_cond_eq_seq(&vacuum_ident, vacuum_seq),
+            ];
+
+            let mut if_then_ops = Vec::with_capacity(3 + policy_cleanup_ops.len());
+            if_then_ops.push(txn_op_put_pb(
+                &DatabaseId { db_id },
+                &seq_db_meta.data,
+                None,
+            )?); // (db_id) -> db_meta
+            if_then_ops.push(txn_op_put(&dbid_tbname, serialize_u64(table_id)?)); // (tenant, db_id, tb_name) -> tb_id
+            if_then_ops.push(txn_op_put_pb(&tbid, &seq_table_meta.data, None)?); // (tenant, db_id, tb_id) -> tb_meta
+            if_then_ops.extend(policy_cleanup_ops);
+
+            let txn = TxnRequest::new(conditions, if_then_ops);
 
             let (succ, _responses) = send_txn(kv_api, txn).await?;
 
@@ -531,6 +549,67 @@ pub async fn handle_undrop_table(
             }
         }
     }
+}
+
+async fn cleanup_missing_policies_on_undrop(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant: &Tenant,
+    table_id: u64,
+    table_meta: &mut TableMeta,
+) -> Result<Vec<TxnOp>, MetaError> {
+    let mut ops = Vec::new();
+
+    if !table_meta.column_mask_policy_columns_ids.is_empty() {
+        let mut policy_columns: BTreeMap<u64, Vec<u32>> = BTreeMap::new();
+        for (column_id, policy_map) in &table_meta.column_mask_policy_columns_ids {
+            policy_columns
+                .entry(policy_map.policy_id)
+                .or_default()
+                .push(*column_id);
+        }
+
+        let mut removed_any = false;
+        for (policy_id, columns) in policy_columns {
+            let policy_ident = DataMaskIdIdent::new_generic(tenant, DataMaskId::new(policy_id));
+            if kv_api.get_pb(&policy_ident).await?.is_none() {
+                removed_any = true;
+                for column_id in columns {
+                    table_meta.column_mask_policy_columns_ids.remove(&column_id);
+                }
+                let binding_ident =
+                    MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                        policy_id,
+                        table_id,
+                    });
+                ops.push(txn_op_del(&binding_ident));
+            }
+        }
+
+        if removed_any {
+            table_meta.column_mask_policy = None;
+        }
+    }
+
+    if let Some(policy_map) = table_meta.row_access_policy_columns_ids.clone() {
+        let policy_ident = RowAccessPolicyIdIdent::new_generic(
+            tenant,
+            RowAccessPolicyId::new(policy_map.policy_id),
+        );
+        if kv_api.get_pb(&policy_ident).await?.is_none() {
+            table_meta.row_access_policy_columns_ids = None;
+            table_meta.row_access_policy = None;
+            let binding_ident = RowAccessPolicyTableIdIdent::new_generic(
+                tenant.clone(),
+                RowAccessPolicyIdTableId {
+                    policy_id: policy_map.policy_id,
+                    table_id,
+                },
+            );
+            ops.push(txn_op_del(&binding_ident));
+        }
+    }
+
+    Ok(ops)
 }
 
 /// add __fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta

@@ -23,6 +23,7 @@ use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 
+use crate::errors::RowAccessPolicyError;
 use crate::meta_txn_error::MetaTxnError;
 
 #[async_trait::async_trait]
@@ -40,7 +41,7 @@ pub trait RowAccessPolicyApi: Send + Sync {
     async fn drop_row_access(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
-    ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaTxnError>;
+    ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, RowAccessPolicyError>;
 
     async fn get_row_access(
         &self,

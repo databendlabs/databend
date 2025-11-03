@@ -19,10 +19,10 @@ statement ok
 set global enable_planner_cache = 0;
 
 statement ok
-drop row access policy if exists rap_multi_case;
+drop table if exists rap_multi_test;
 
 statement ok
-drop table if exists rap_multi_test;
+drop row access policy if exists rap_multi_case;
 
 statement ok
 CREATE ROW ACCESS POLICY rap_multi_case AS (UserId string, Department string) RETURNS boolean ->
@@ -49,10 +49,36 @@ select * from rap_multi_test order by id;
 3 charlie Engineering
 
 statement ok
+drop table rap_multi_test;
+
+statement ok
+undrop table rap_multi_test;
+
+## Should only see Engineering department rows
+query ITT
+select * from rap_multi_test order by id;
+----
+1 alice Engineering
+3 charlie Engineering
+
+statement ok
+drop table rap_multi_test;
+
+statement ok
 drop table if exists rap_case_test;
 
 statement ok
 drop row access policy if exists rap_multi_case;
+
+statement ok
+undrop table rap_multi_test;
+
+query ITT
+select * from rap_multi_test order by id;
+----
+1 alice Engineering
+2 bob Sales
+3 charlie Engineering
 
 statement ok
 drop row access policy if exists rap1;
@@ -148,7 +174,10 @@ alter table t_1 drop column id;
 statement ok
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
 
-## t apply row access policy rpa_it(means if current role == account_admin will return false)
+## t apply row access policy rpa_it
+statement error 1133
+drop row access policy rap_it;
+
 query I
 select id from t;
 ----
@@ -220,10 +249,10 @@ statement ok
 drop row access policy if exists p1;
 
 statement ok
-drop row access policy if exists rap_it1;
+drop table if exists t_1;
 
 statement ok
-drop table if exists t_1;
+drop row access policy if exists rap_it1;
 
 statement ok
 drop MASKING POLICY if exists mask
@@ -303,6 +332,9 @@ CREATE MASKING POLICY maskc AS (val int) RETURNS int -> CASE WHEN current_role()
 
 statement ok
 alter table data_mask_test modify column b set masking policy maskb;
+
+statement error 1133
+drop masking policy maskb;
 
 statement error 1132
 alter table data_mask_test modify column b string not null;
@@ -954,6 +986,109 @@ drop masking policy if exists mask_mixedcase;
 
 statement ok
 drop masking policy if exists mask_multi_case;
+
+statement ok
+drop masking policy if exists mask_ssn_conditional;
+
+statement ok
+drop table if exists employees;
+
+statement ok
+CREATE MASKING POLICY mask_ssn_conditional AS (val STRING, user_role STRING) RETURNS STRING ->
+  CASE
+    WHEN user_role = current_role() THEN val
+    ELSE '***-**-****'
+  END
+COMMENT = 'Mask SSN conditionally based on role';
+
+statement ok
+create table employees(
+    id int,
+    name string,
+    ssn string,
+    salary int,
+    department string,
+    role string
+);
+
+statement ok
+insert into employees values
+    (1, 'Alice', '123-45-6789', 100000, 'Engineering', 'hr_admin'),
+    (2, 'Bob', '987-65-4321', 80000, 'Sales', 'regular_user'),
+    (3, 'Charlie', '456-78-9012', 120000, 'Engineering', 'regular_user');
+
+statement ok
+ALTER TABLE employees modify column ssn SET MASKING POLICY mask_ssn_conditional using (ssn, role);
+
+query ITTFT
+select * from employees;
+----
+1 Alice ***-**-**** 100000 Engineering hr_admin
+2 Bob ***-**-**** 80000 Sales regular_user
+3 Charlie ***-**-**** 120000 Engineering regular_user
+
+statement ok
+DROP TABLE employees;
+
+statement ok
+DROP MASKING POLICY mask_ssn_conditional;
+
+## policy invalid
+statement ok
+UNDROP TABLE employees;
+
+query ITTFT
+select * from employees;
+----
+1 Alice 123-45-6789 100000 Engineering hr_admin
+2 Bob 987-65-4321 80000 Sales regular_user
+3 Charlie 456-78-9012 120000 Engineering regular_user
+
+statement ok
+CREATE MASKING POLICY mask_ssn_conditional AS (val STRING, user_role STRING) RETURNS STRING ->
+  CASE
+    WHEN user_role = current_role() THEN val
+    ELSE '***-**-****'
+  END
+COMMENT = 'Mask SSN conditionally based on role';
+
+statement ok
+ALTER TABLE employees modify column ssn SET MASKING POLICY mask_ssn_conditional using (ssn, role);
+
+## policy valid
+query ITTFT
+select * from employees;
+----
+1 Alice ***-**-**** 100000 Engineering hr_admin
+2 Bob ***-**-**** 80000 Sales regular_user
+3 Charlie ***-**-**** 120000 Engineering regular_user
+
+statement ok
+DROP TABLE employees;
+
+statement ok
+UNDROP TABLE employees;
+
+## policy valid
+query ITTFT
+select * from employees;
+----
+1 Alice ***-**-**** 100000 Engineering hr_admin
+2 Bob ***-**-**** 80000 Sales regular_user
+3 Charlie ***-**-**** 120000 Engineering regular_user
+
+statement ok
+DROP TABLE employees;
+
+## -- should failed(table be used)
+statement error 1113
+DROP MASKING POLICY mask_ssn;
+
+statement ok
+DROP TABLE employees;
+
+statement ok
+DROP MASKING POLICY mask_ssn_conditional;
 
 statement ok
 unset global enable_planner_cache;
