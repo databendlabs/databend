@@ -66,6 +66,13 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         })
     }
     fn build(&self, desc: &RuntimeFilterDesc) -> Result<RuntimeFilterPacket> {
+        if !should_enable_runtime_filter(
+            desc,
+            self.build_key_column.len(),
+            self.bloom_selectivity_threshold,
+        ) {
+            return Ok(RuntimeFilterPacket::default());
+        }
         let start = Instant::now();
 
         let min_max_start = Instant::now();
@@ -126,11 +133,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
             return false;
         }
 
-        should_enable_bloom_runtime_filter(
-            desc,
-            self.build_key_column.len(),
-            self.bloom_selectivity_threshold,
-        )
+        true
     }
 
     fn build_min_max(&self) -> Result<SerializableDomain> {
@@ -190,7 +193,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
     }
 }
 
-fn should_enable_bloom_runtime_filter(
+fn should_enable_runtime_filter(
     desc: &RuntimeFilterDesc,
     build_num_rows: usize,
     selectivity_threshold: u64,
@@ -201,30 +204,32 @@ fn should_enable_bloom_runtime_filter(
 
     let Some(build_table_rows) = desc.build_table_rows else {
         log::info!(
-            "RUNTIME-FILTER: Disable bloom filter {} - no build table statistics available",
+            "RUNTIME-FILTER: Disable runtime filter {} - no build table statistics available",
             desc.id
         );
         return false;
     };
 
-    let selectivity_ratio = build_table_rows as f64 / build_num_rows as f64;
+    let selectivity_pct = (build_num_rows as f64 / build_table_rows as f64) * 100.0;
 
-    if selectivity_ratio > selectivity_threshold as f64 {
+    if selectivity_pct < selectivity_threshold as f64 {
         log::info!(
-            "RUNTIME-FILTER: Enable bloom filter {} - high selectivity ratio: {:.2} (m={}, n={})",
+            "RUNTIME-FILTER: Enable runtime filter {} - low selectivity: {:.2}% < {}% (build_rows={}, build_table_rows={})",
             desc.id,
-            selectivity_ratio,
-            build_table_rows,
-            build_num_rows
+            selectivity_pct,
+            selectivity_threshold,
+            build_num_rows,
+            build_table_rows
         );
         true
     } else {
         log::info!(
-            "RUNTIME-FILTER: Disable bloom filter {} - low selectivity ratio: {:.2} (m={}, n={})",
+            "RUNTIME-FILTER: Disable runtime filter {} - high selectivity: {:.2}% >= {}% (build_rows={}, build_table_rows={})",
             desc.id,
-            selectivity_ratio,
-            build_table_rows,
-            build_num_rows
+            selectivity_pct,
+            selectivity_threshold,
+            build_num_rows,
+            build_table_rows
         );
         false
     }
