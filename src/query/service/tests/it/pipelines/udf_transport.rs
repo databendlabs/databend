@@ -246,7 +246,7 @@ async fn malformed_data_returns_parse_hint() -> Result<()> {
 async fn schema_mismatch_returns_schema_hint() -> Result<()> {
     let message = run_mock_exchange(MockMode::SchemaMismatch).await?;
     assert!(
-        message.contains("UDF server return incorrect type"),
+        message.contains("returned an unexpected schema"),
         "unexpected schema mismatch message: {message}"
     );
     Ok(())

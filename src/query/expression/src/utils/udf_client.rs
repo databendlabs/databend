@@ -68,11 +68,16 @@ const UDF_KEEP_ALIVE_TIMEOUT_SEC: u64 = 20;
 // 4MB by default, we use 16G
 // max_encoding_message_size is usize::max by default
 const MAX_DECODING_MESSAGE_SIZE: usize = 16 * 1024 * 1024 * 1024;
+// These lowercase fragments map brittle transport errors to friendlier messaging.
+// Keep the list up to date as dependencies evolve or add new patterns when gaps appear.
 const TRANSPORT_ERROR_SNIPPETS: &[&str] = &[
     "h2 protocol error",
     "broken pipe",
     "connection reset",
     "error reading a body from connection",
+    "connection refused",
+    "network is unreachable",
+    "no route to host",
 ];
 
 #[derive(Debug)]
@@ -355,8 +360,7 @@ impl UDFFlightClient {
 
         if result_fields[0].data_type() != return_type {
             return Err(ErrorCode::UDFSchemaMismatch(format!(
-                "UDF server return incorrect type, expected: {}, but got: {}",
-                return_type,
+                "The user-defined function \"{func_name}\" returned an unexpected schema. Expected result type {return_type}, but got {}.",
                 result_fields[0].data_type()
             )));
         }
@@ -432,7 +436,7 @@ fn handle_flight_decode_error(func_name: &str, err: FlightError) -> ErrorCode {
             "The user-defined function \"{func_name}\" returned data that Databend could not parse. Check the UDF implementation or its logs. (details: {err_text})"
         )),
         FlightDecodeIssue::Other => ErrorCode::UDFDataError(format!(
-            "Decode record batch failed on UDF function {func_name}: {err_text}"
+            "Decode record batch failed on UDF function \"{func_name}\": {err_text}"
         )),
     }
 }
@@ -471,9 +475,7 @@ fn classify_status(status: &Status) -> FlightDecodeIssue {
 }
 
 fn classify_external_error(error: &(dyn StdError + Send + Sync + 'static)) -> FlightDecodeIssue {
-    if let Some(flight_err) = error.downcast_ref::<FlightError>() {
-        classify_flight_error(flight_err)
-    } else if let Some(arrow_err) = error.downcast_ref::<ArrowError>() {
+    if let Some(arrow_err) = error.downcast_ref::<ArrowError>() {
         classify_arrow_error(arrow_err)
     } else if let Some(status) = error.downcast_ref::<Status>() {
         classify_status(status)
