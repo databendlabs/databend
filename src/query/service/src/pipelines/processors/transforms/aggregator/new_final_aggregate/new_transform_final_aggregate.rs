@@ -362,7 +362,7 @@ impl NewFinalAggregateTransform {
 
     fn on_finish(&mut self) -> Result<()> {
         self.round_state.phase = RoundPhase::Finish;
-        let _ = self.hash_table.release();
+        self.hash_table.release();
         Ok(())
     }
 }
