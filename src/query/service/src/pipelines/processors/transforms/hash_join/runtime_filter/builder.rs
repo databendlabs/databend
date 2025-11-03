@@ -71,7 +71,12 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
             self.build_key_column.len(),
             self.bloom_selectivity_threshold,
         ) {
-            return Ok(RuntimeFilterPacket::default());
+            return Ok(RuntimeFilterPacket {
+                id: desc.id,
+                inlist: None,
+                min_max: None,
+                bloom: None,
+            });
         }
         let start = Instant::now();
 
