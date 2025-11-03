@@ -1334,5 +1334,14 @@ SELECT TRY_TO_DECIMAL('1234567.89012', 9, 5);
 ----
 NULL
 
+query ?
+select number::decimal(15,2) > 2.45 from numbers(5);
+----
+false
+false
+false
+true
+true      
+
 statement ok
 drop database decimal_t;
