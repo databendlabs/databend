@@ -200,6 +200,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'file_name'                       | 'system'             | 'temp_files'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'file_type'                       | 'system'             | 'temp_files'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'group'                           | 'system'             | 'configs'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'has_data'                        | 'system'             | 'streams'                 | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'histogram'                       | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'hit'                             | 'system'             | 'caches'                  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'host'                            | 'system'             | 'clusters'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
