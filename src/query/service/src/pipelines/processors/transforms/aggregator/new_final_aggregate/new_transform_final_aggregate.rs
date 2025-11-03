@@ -42,6 +42,8 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
+const MAX_BYTES_PER_FINAL_AGGREGATE_HASH_TABLE: usize = 16 * 1024 * 1024; // 16MB
+
 #[allow(clippy::enum_variant_names)]
 enum HashTable {
     MovedOut,
@@ -53,10 +55,21 @@ impl HashTable {
         HashTable::AggregateHashTable(Self::create_table(params))
     }
 
-    fn take_or_create(&mut self, params: &AggregatorParams) -> AggregateHashTable {
+    fn take_or_create(&mut self, params: &AggregatorParams) -> (AggregateHashTable, bool) {
         match std::mem::replace(self, HashTable::MovedOut) {
-            HashTable::AggregateHashTable(ht) => ht,
-            HashTable::MovedOut => Self::create_table(params),
+            HashTable::AggregateHashTable(ht) => {
+                let allocated = ht.allocated_bytes();
+                if allocated > MAX_BYTES_PER_FINAL_AGGREGATE_HASH_TABLE {
+                    info!(
+                        "NewFinalAggregateTransform hash table re-created due to memory limit, allocated: {}, max allowed: {}",
+                        allocated, MAX_BYTES_PER_FINAL_AGGREGATE_HASH_TABLE
+                    );
+                    (Self::create_table(params), false)
+                } else {
+                    (ht, true)
+                }
+            }
+            HashTable::MovedOut => (Self::create_table(params), false),
         }
     }
 
@@ -268,12 +281,14 @@ impl NewFinalAggregateTransform {
     }
 
     fn final_aggregate(&mut self, mut queue: Vec<AggregateMeta>) -> Result<()> {
-        let mut agg_hashtable = self.hash_table.take_or_create(self.params.as_ref());
+        let (mut agg_hashtable, need_clear) = self.hash_table.take_or_create(self.params.as_ref());
 
         // we will clear the hashtable for reuse, this will not release the payload memory
         // but only clear the internal state, so that we can avoid re-allocating memory
         // real memory release will happen when memory pressure is high
-        agg_hashtable.clear_for_reuse();
+        if need_clear {
+            agg_hashtable.clear_for_reuse();
+        }
 
         while let Some(meta) = queue.pop() {
             match meta {
