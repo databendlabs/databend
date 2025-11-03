@@ -44,20 +44,35 @@ impl ColumnsTable {
             when is_nullable='YES' then 1
             end as nullable,
             is_nullable AS is_nullable,
-            type AS data_type,
-            data_type AS column_type,
-            NULL AS character_maximum_length,
-            NULL AS character_octet_length,
+            LOWER(data_type) AS data_type,
+            CASE
+                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN CONCAT('varchar(', '16382', ')')
+                ELSE LOWER(data_type)
+            END AS column_type,
+            CASE
+                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN 16382
+                ELSE NULL
+            END AS character_maximum_length,
+            CASE
+                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN 16382 * 4
+                ELSE NULL
+            END AS character_octet_length,
             NULL AS numeric_precision,
             NULL AS numeric_precision_radix,
             NULL AS numeric_scale,
             NULL AS datetime_precision,
             NULL AS character_set_catalog,
             NULL AS character_set_schema,
-            NULL AS character_set_name,
+            CASE
+                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN 'utf8mb4'
+                ELSE NULL
+            END AS character_set_name,
             NULL AS collation_catalog,
             NULL AS collation_schema,
-            NULL AS collation_name,
+            CASE
+                WHEN UPPER(data_type) IN ('VARCHAR', 'STRING') THEN 'utf8mb4_general_ci'
+                ELSE NULL
+            END AS collation_name,
             NULL AS domain_catalog,
             NULL AS domain_schema,
             NULL AS domain_name,
