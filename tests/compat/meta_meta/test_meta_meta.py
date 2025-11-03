@@ -136,36 +136,42 @@ class TestContext:
         filtered1 = raw1.parent / f"{raw1.stem}-filtered"
         filtered2 = raw2.parent / f"{raw2.stem}-filtered"
 
-        transform = None
-        if remove_proposed_at or normalize_time_ms:
-            def transform(line):
-                if remove_proposed_at:
-                    proposed_at = re.compile(r',"proposed_at_ms":\d+')
-                    line = proposed_at.sub("", line)
-                if normalize_time_ms:
-                    # Normalize time_ms: truncate last 3 digits
-                    time_ms = re.compile(r'"time_ms":(\d+)')
-                    def replace_time(match):
-                        val = match.group(1)
-                        if len(val) >= 3:
-                            normalized = val[:-3] + '000'
-                        else:
-                            normalized = val
-                        return f'"time_ms":{normalized}'
-                    line = time_ms.sub(replace_time, line)
+        def transform(line):
+            if remove_proposed_at:
+                proposed_at = re.compile(r',?"proposed_at_ms":\d+')
+                line = proposed_at.sub("", line)
 
-                    # Normalize expire_at: convert milliseconds to seconds
-                    expire_at = re.compile(r'"expire_at":(\d+)')
-                    def replace_expire(match):
-                        val = match.group(1)
-                        if len(val) > 10:
-                            # Convert from milliseconds to seconds
-                            normalized = val[:-3]
-                        else:
-                            normalized = val
-                        return f'"expire_at":{normalized}'
-                    line = expire_at.sub(replace_expire, line)
-                return line
+            if normalize_time_ms:
+                # Normalize time_ms: truncate last 3 digits
+                time_ms = re.compile(r'"time_ms":(\d+)')
+                def replace_time(match):
+                    val = match.group(1)
+                    if len(val) >= 3:
+                        normalized = val[:-3] + '000'
+                    else:
+                        normalized = val
+                    return f'"time_ms":{normalized}'
+                line = time_ms.sub(replace_time, line)
+
+                # Normalize expire_at: convert milliseconds to seconds
+                expire_at = re.compile(r'"expire_at":(\d+)')
+                def replace_expire(match):
+                    val = match.group(1)
+                    if len(val) > 10:
+                        # Convert from milliseconds to seconds
+                        normalized = val[:-3]
+                    else:
+                        normalized = val
+                    return f'"expire_at":{normalized}'
+                line = expire_at.sub(replace_expire, line)
+
+            meta = re.compile(r',?"meta":{}')
+            line = meta.sub('', line)
+
+            meta = re.compile(r',?"meta":null')
+            line = meta.sub('', line)
+
+            return line
 
         filter_and_sort(raw1, filtered1, include=include, exclude=exclude, transform=transform)
         filter_and_sort(raw2, filtered2, include=include, exclude=exclude, transform=transform)
