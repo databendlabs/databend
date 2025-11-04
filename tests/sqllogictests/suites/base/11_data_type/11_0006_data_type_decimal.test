@@ -1337,11 +1337,11 @@ NULL
 query ?
 select number::decimal(15,2) > 2.45 from numbers(5);
 ----
-false
-false
-false
-true
-true      
+0
+0
+0
+1
+1      
 
 statement ok
 drop database decimal_t;
