@@ -13,21 +13,27 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Display;
+use std::fmt::Write;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::display::scalar_ref_to_string;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::BuilderMut;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::assert_variadic_arguments;
@@ -56,15 +62,6 @@ impl FunctionData for StringAggFunctionData {
 }
 
 impl StringAggState {
-    fn append_scalar(&mut self, scalar: &ScalarRef<'_>, delimiter: &str) {
-        if let ScalarRef::String(value) = scalar {
-            self.values.push_str(value);
-        } else {
-            self.values.push_str(&scalar_ref_to_string(scalar));
-        }
-        self.values.push_str(delimiter);
-    }
-
     fn delimiter(function_data: Option<&dyn FunctionData>) -> &str {
         &function_data
             .and_then(|data| data.as_any().downcast_ref::<StringAggFunctionData>())
@@ -73,63 +70,39 @@ impl StringAggState {
     }
 }
 
-impl UnaryState<AnyType, StringType> for StringAggState {
+impl<T> UnaryState<T, StringType> for StringAggState
+where T: ToStringType
+{
     fn add(
         &mut self,
-        other: ScalarRef<'_>,
+        other: T::ScalarRef<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let delimiter = Self::delimiter(function_data);
-        if let ScalarRef::String(value) = other {
-            self.values.push_str(value);
-        } else {
-            self.values.push_str(&scalar_ref_to_string(&other));
-        }
-        self.values.push_str(delimiter);
+        write!(self.values, "{}{delimiter}", T::format(&other)).unwrap();
         Ok(())
     }
 
     fn add_batch(
         &mut self,
-        other: Column,
+        other: T::Column,
         validity: Option<&Bitmap>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let delimiter = Self::delimiter(function_data);
-
-        match other {
-            Column::String(column) => match validity {
-                Some(validity) => {
-                    for (value, valid) in column.iter().zip(validity.iter()) {
-                        if valid {
-                            self.values.push_str(value);
-                            self.values.push_str(delimiter);
-                        }
+        match validity {
+            Some(validity) => {
+                for (value, valid) in T::iter_column(&other).zip(validity.iter()) {
+                    if valid {
+                        write!(self.values, "{}{delimiter}", T::format(&value)).unwrap();
                     }
                 }
-                None => {
-                    for value in column.iter() {
-                        self.values.push_str(value);
-                        self.values.push_str(delimiter);
-                    }
+            }
+            None => {
+                for value in T::iter_column(&other) {
+                    write!(self.values, "{}{delimiter}", T::format(&value)).unwrap();
                 }
-            },
-            column => match validity {
-                Some(validity) => {
-                    for (value, valid) in column.iter().zip(validity.iter()) {
-                        if valid {
-                            self.values.push_str(&scalar_ref_to_string(&value));
-                            self.values.push_str(delimiter);
-                        }
-                    }
-                }
-                None => {
-                    for value in column.iter() {
-                        self.values.push_str(&scalar_ref_to_string(&value));
-                        self.values.push_str(delimiter);
-                    }
-                }
-            },
+            }
         }
 
         Ok(())
@@ -153,6 +126,34 @@ impl UnaryState<AnyType, StringType> for StringAggState {
             builder.put_and_commit(&self.values[..len]);
         }
         Ok(())
+    }
+}
+
+trait ToStringType: AccessType {
+    fn format(v: &Self::ScalarRef<'_>) -> impl Display;
+}
+
+impl ToStringType for BooleanType {
+    fn format(v: &Self::ScalarRef<'_>) -> impl Display {
+        v
+    }
+}
+
+impl ToStringType for StringType {
+    fn format(v: &Self::ScalarRef<'_>) -> impl Display {
+        v
+    }
+}
+
+impl<T: Number + Display> ToStringType for NumberType<T> {
+    fn format(v: &Self::ScalarRef<'_>) -> impl Display {
+        v
+    }
+}
+
+impl ToStringType for AnyType {
+    fn format(v: &Self::ScalarRef<'_>) -> impl Display {
+        scalar_ref_to_string(v)
     }
 }
 
@@ -193,34 +194,59 @@ pub fn try_create_aggregate_string_agg_function(
 ) -> Result<AggregateFunctionRef> {
     assert_variadic_arguments(display_name, argument_types.len(), (1, 2))?;
     let value_type = argument_types[0].remove_nullable();
-    if !matches!(
-        value_type,
-        DataType::Boolean
-            | DataType::String
-            | DataType::Number(_)
-            | DataType::Decimal(_)
-            | DataType::Timestamp
-            | DataType::Date
-            | DataType::Variant
-            | DataType::Interval
-    ) {
-        return Err(ErrorCode::BadDataValueType(format!(
-            "{} does not support type '{:?}'",
-            display_name, value_type
-        )));
-    }
     let delimiter = if params.len() == 1 {
         params[0].as_string().unwrap().clone()
     } else {
         String::new()
     };
-    AggregateUnaryFunction::<StringAggState, AnyType, StringType>::create(
-        display_name,
-        DataType::String,
-    )
-    .with_need_drop(true)
-    .with_function_data(Box::new(StringAggFunctionData { delimiter }))
-    .finish()
+
+    match_template::match_template! {
+        T = [
+            Boolean => BooleanType,
+            String => StringType,
+        ],
+        match value_type {
+            DataType::T => {
+                AggregateUnaryFunction::<StringAggState, T, StringType>::create(
+                    display_name,
+                    DataType::String,
+                )
+                .with_need_drop(true)
+                .with_function_data(Box::new(StringAggFunctionData { delimiter }))
+                .finish()
+            },
+            DataType::Number(num_type) => {
+                with_number_mapped_type!(|NUM| match num_type {
+                    NumberDataType::NUM => {
+                        AggregateUnaryFunction::<StringAggState, NumberType<NUM>, StringType>::create(
+                            display_name,
+                            DataType::String,
+                        )
+                        .with_need_drop(true)
+                        .with_function_data(Box::new(StringAggFunctionData { delimiter }))
+                        .finish()
+                    }
+                })
+            },
+            DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Variant
+            | DataType::Interval => {
+                AggregateUnaryFunction::<StringAggState, AnyType, StringType>::create(
+                    display_name,
+                    DataType::String,
+                )
+                .with_need_drop(true)
+                .with_function_data(Box::new(StringAggFunctionData { delimiter }))
+                .finish()
+            },
+            _ => Err(ErrorCode::BadDataValueType(format!(
+                "{} does not support type '{:?}'",
+                display_name, value_type
+            ))),
+        }
+    }
 }
 
 pub fn aggregate_string_agg_function_desc() -> AggregateFunctionDescription {
