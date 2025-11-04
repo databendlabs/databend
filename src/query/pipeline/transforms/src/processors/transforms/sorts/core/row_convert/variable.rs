@@ -78,8 +78,15 @@ impl Rows for VariableRows {
         Column::Binary(self.clone())
     }
 
-    fn try_from_column(col: &Column) -> Option<Self> {
-        col.as_binary().cloned()
+    fn from_column(col: &Column) -> Result<Self> {
+        match col.as_binary().cloned() {
+            Some(col) => Ok(col),
+            None => Err(ErrorCode::BadDataValueType(format!(
+                "Order column type mismatched. Expected {} but got {}",
+                Self::data_type(),
+                col.data_type()
+            ))),
+        }
     }
 
     fn slice(&self, range: Range<usize>) -> Self {

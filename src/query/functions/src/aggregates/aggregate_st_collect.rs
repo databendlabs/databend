@@ -264,11 +264,8 @@ where
                 state.add_batch(&column, Some(&nullable_column.validity))
             }
             _ => {
-                if let Some(column) = T::try_downcast_column(&columns[0].to_column()) {
-                    state.add_batch(&column, None)
-                } else {
-                    Ok(())
-                }
+                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
+                state.add_batch(&column, None)
             }
         }
     }
@@ -296,13 +293,12 @@ where
                     });
             }
             _ => {
-                if let Some(column) = T::try_downcast_column(&columns[0].to_column()) {
-                    let column_iter = T::iter_column(&column);
-                    column_iter.zip(places.iter()).for_each(|(v, place)| {
-                        let state = AggrState::new(*place, loc).get::<State>();
-                        state.add(Some(v.clone()))
-                    });
-                }
+                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
+                let column_iter = T::iter_column(&column);
+                column_iter.zip(places.iter()).for_each(|(v, place)| {
+                    let state = AggrState::new(*place, loc).get::<State>();
+                    state.add(Some(v.clone()))
+                });
             }
         }
 
@@ -323,10 +319,9 @@ where
                 }
             }
             _ => {
-                if let Some(column) = T::try_downcast_column(&columns[0].to_column()) {
-                    let v = T::index_column(&column, row);
-                    state.add(v);
-                }
+                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
+                let v = T::index_column(&column, row);
+                state.add(v);
             }
         }
 
