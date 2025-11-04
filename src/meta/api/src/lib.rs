@@ -40,7 +40,6 @@ pub mod reply;
 mod schema_api;
 mod schema_api_test_suite;
 pub mod security_api;
-mod security_policy_usage;
 mod sequence_api;
 pub mod serialization_util;
 pub mod table_api;
