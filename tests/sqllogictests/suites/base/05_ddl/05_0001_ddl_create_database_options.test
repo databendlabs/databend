@@ -134,7 +134,7 @@ CREATE OR REPLACE DATABASE temp_db
 # ERROR HY000 (1105): BadArguments. Code: 1006, Text = DEFAULT_STORAGE_CONNECTION and DEFAULT_STORAGE_PATH options must be used together.
 statement error 1006
 ALTER DATABASE temp_db SET OPTIONS (
-    DEFAULT_STORAGE_CONNECTION = 'test'
+    DEFAULT_STORAGE_CONNECTION = 'temp_test'
 )
 
 statement ok
