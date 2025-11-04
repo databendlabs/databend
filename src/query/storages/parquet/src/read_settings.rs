@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_settings::Settings;
 
 #[derive(Clone, Copy)]
 pub struct ReadSettings {
@@ -37,13 +35,11 @@ impl Default for ReadSettings {
 }
 
 impl ReadSettings {
-    pub fn from_ctx(ctx: &Arc<dyn TableContext>) -> Result<ReadSettings> {
+    pub fn from_settings(settings: &Settings) -> Result<ReadSettings> {
         Ok(ReadSettings {
-            max_gap_size: ctx.get_settings().get_storage_io_min_bytes_for_seek()?,
-            max_range_size: ctx
-                .get_settings()
-                .get_storage_io_max_page_bytes_for_read()?,
-            parquet_fast_read_bytes: ctx.get_settings().get_parquet_fast_read_bytes()?,
+            max_gap_size: settings.get_storage_io_min_bytes_for_seek()?,
+            max_range_size: settings.get_storage_io_max_page_bytes_for_read()?,
+            parquet_fast_read_bytes: settings.get_parquet_fast_read_bytes()?,
             enable_cache: false,
         })
     }

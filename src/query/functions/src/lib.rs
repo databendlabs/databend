@@ -16,13 +16,10 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::type_complexity)]
-#![allow(internal_features)]
-#![feature(core_intrinsics)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
-#![feature(str_internals)]
 
 use aggregates::AggregateFunctionFactory;
 use ctor::ctor;

@@ -16,9 +16,9 @@ CREATE TABLE showcolumn.t3(c1 int null default 4, c2 Datetime not null default '
 query TTTTTT
 SHOW COLUMNS FROM default.showcolumn.t3
 ----
-c1 INT YES 4 NULL NULL
-c2 TIMESTAMP NO '2022-02-02 12:00:00.000000' NULL NULL
-c3 VARCHAR NO 'c3' NULL NULL
+c1 int YES 4 NULL NULL
+c2 timestamp NO '2022-02-02 12:00:00.000000' NULL NULL
+c3 varchar(16382) NO 'c3' NULL NULL
 
 statement ok
 CREATE TABLE showcolumn.t4(c1 int comment '4', c2 Datetime comment '2022-02-02 12:00:00', c3 String comment 'c\s3') ENGINE = Null;
@@ -43,113 +43,132 @@ use showcolumn
 query TTTTTTT
 SHOW FULL COLUMNS IN t3
 ----
-c1 INT YES 4 NULL NULL NULL NULL (empty)
-c2 TIMESTAMP NO '2022-02-02 12:00:00.000000' NULL NULL NULL NULL (empty)
-c3 VARCHAR NO 'c3' NULL NULL NULL NULL (empty)
+c1 int YES 4 NULL NULL NULL NULL (empty)
+c2 timestamp NO '2022-02-02 12:00:00.000000' NULL NULL NULL NULL (empty)
+c3 varchar(16382) NO 'c3' NULL NULL utf8mb4_general_ci NULL (empty)
 
 query TTTTTTT
 SHOW FULL COLUMNS IN t3 like '%1';
 ----
-c1 INT YES 4 NULL NULL NULL NULL (empty)
+c1 int YES 4 NULL NULL NULL NULL (empty)
 
 query TTTTTT
 SHOW COLUMNS IN t3 where column_name like '%1';
 ----
-c1 INT YES 4 NULL NULL
+c1 int YES 4 NULL NULL
 
 query TTTTTTTTT
 SHOW FULL COLUMNS IN t3 where is_nullable!='YES' and default like '%2022-02-02 12:00:00.000000%';
 ----
-c2 TIMESTAMP NO '2022-02-02 12:00:00.000000' NULL NULL NULL NULL (empty)
+c2 timestamp NO '2022-02-02 12:00:00.000000' NULL NULL NULL NULL (empty)
 
 
 query TTTTTTTTT
 SHOW FULL COLUMNS IN columns from system
 ----
-comment VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-data_type VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-database VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-default_expression VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-default_kind VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-is_nullable VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-name VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-table VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-type VARCHAR NO (empty) NULL NULL NULL NULL (empty)
+comment varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+data_type varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+database varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+default_expression varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+default_kind varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+is_nullable varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+name varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+table varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+type varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 
 query TTTTTT
 SHOW COLUMNS IN columns from system like '%type%'
 ----
-data_type VARCHAR NO (empty) NULL NULL
-type VARCHAR NO (empty) NULL NULL
+data_type varchar(16382) NO (empty) NULL NULL
+type varchar(16382) NO (empty) NULL NULL
 
 query TTTTTT
 SHOW COLUMNS IN columns from system where column_name != '%type%' and is_nullable!='YES'
 ----
-comment VARCHAR NO (empty) NULL NULL
-data_type VARCHAR NO (empty) NULL NULL
-database VARCHAR NO (empty) NULL NULL
-default_expression VARCHAR NO (empty) NULL NULL
-default_kind VARCHAR NO (empty) NULL NULL
-is_nullable VARCHAR NO (empty) NULL NULL
-name VARCHAR NO (empty) NULL NULL
-table VARCHAR NO (empty) NULL NULL
-type VARCHAR NO (empty) NULL NULL
+comment varchar(16382) NO (empty) NULL NULL
+data_type varchar(16382) NO (empty) NULL NULL
+database varchar(16382) NO (empty) NULL NULL
+default_expression varchar(16382) NO (empty) NULL NULL
+default_kind varchar(16382) NO (empty) NULL NULL
+is_nullable varchar(16382) NO (empty) NULL NULL
+name varchar(16382) NO (empty) NULL NULL
+table varchar(16382) NO (empty) NULL NULL
+type varchar(16382) NO (empty) NULL NULL
 
 query TTTTTTT
 SHOW FULL COLUMNS IN columns from information_schema
 ----
-character_maximum_length NULL NO (empty) NULL NULL NULL NULL (empty)
-character_octet_length NULL NO (empty) NULL NULL NULL NULL (empty)
-character_set_catalog NULL NO (empty) NULL NULL NULL NULL (empty)
-character_set_name NULL NO (empty) NULL NULL NULL NULL (empty)
-character_set_schema NULL NO (empty) NULL NULL NULL NULL (empty)
-collation_catalog NULL NO (empty) NULL NULL NULL NULL (empty)
-collation_name NULL NO (empty) NULL NULL NULL NULL (empty)
-collation_schema NULL NO (empty) NULL NULL NULL NULL (empty)
-column_comment VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-column_default NULL NO (empty) NULL NULL NULL NULL (empty)
-column_key NULL NO (empty) NULL NULL NULL NULL (empty)
-column_name VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-column_type VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-data_type VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-datetime_precision NULL NO (empty) NULL NULL NULL NULL (empty)
-default VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-domain_catalog NULL NO (empty) NULL NULL NULL NULL (empty)
-domain_name NULL NO (empty) NULL NULL NULL NULL (empty)
-domain_schema NULL NO (empty) NULL NULL NULL NULL (empty)
-extra NULL NO (empty) NULL NULL NULL NULL (empty)
-is_nullable VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-nullable TINYINT UNSIGNED YES (empty) NULL NULL NULL NULL (empty)
-numeric_precision NULL NO (empty) NULL NULL NULL NULL (empty)
-numeric_precision_radix NULL NO (empty) NULL NULL NULL NULL (empty)
-numeric_scale NULL NO (empty) NULL NULL NULL NULL (empty)
-ordinal_position TINYINT UNSIGNED NO (empty) NULL NULL NULL NULL (empty)
-privileges NULL NO (empty) NULL NULL NULL NULL (empty)
-table_catalog VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-table_name VARCHAR NO (empty) NULL NULL NULL NULL (empty)
-table_schema VARCHAR NO (empty) NULL NULL NULL NULL (empty)
+character_maximum_length smallint unsigned YES (empty) NULL NULL NULL NULL (empty)
+character_octet_length smallint unsigned YES (empty) NULL NULL NULL NULL (empty)
+character_set_catalog null NO (empty) NULL NULL NULL NULL (empty)
+character_set_name varchar(16382) YES (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+character_set_schema null NO (empty) NULL NULL NULL NULL (empty)
+collation_catalog null NO (empty) NULL NULL NULL NULL (empty)
+collation_name varchar(16382) YES (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+collation_schema null NO (empty) NULL NULL NULL NULL (empty)
+column_comment varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+column_default null NO (empty) NULL NULL NULL NULL (empty)
+column_key null NO (empty) NULL NULL NULL NULL (empty)
+column_name varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+column_type varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+data_type varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+datetime_precision null NO (empty) NULL NULL NULL NULL (empty)
+default varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+domain_catalog null NO (empty) NULL NULL NULL NULL (empty)
+domain_name null NO (empty) NULL NULL NULL NULL (empty)
+domain_schema null NO (empty) NULL NULL NULL NULL (empty)
+extra null NO (empty) NULL NULL NULL NULL (empty)
+is_nullable varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+nullable tinyint unsigned YES (empty) NULL NULL NULL NULL (empty)
+numeric_precision null NO (empty) NULL NULL NULL NULL (empty)
+numeric_precision_radix null NO (empty) NULL NULL NULL NULL (empty)
+numeric_scale null NO (empty) NULL NULL NULL NULL (empty)
+ordinal_position tinyint unsigned NO (empty) NULL NULL NULL NULL (empty)
+privileges null NO (empty) NULL NULL NULL NULL (empty)
+table_catalog varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+table_name varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
+table_schema varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 
 query TTTTTT
 SHOW COLUMNS IN columns from information_schema like 'numeric%'
 ----
-numeric_precision NULL NO (empty) NULL NULL
-numeric_precision_radix NULL NO (empty) NULL NULL
-numeric_scale NULL NO (empty) NULL NULL
+numeric_precision null NO (empty) NULL NULL
+numeric_precision_radix null NO (empty) NULL NULL
+numeric_scale null NO (empty) NULL NULL
 
 query TTTTTT
 SHOW COLUMNS IN columns from information_schema where column_name != '%type%' and column_type!='NULL'
 ----
-column_comment VARCHAR NO (empty) NULL NULL
-column_name VARCHAR NO (empty) NULL NULL
-column_type VARCHAR NO (empty) NULL NULL
-data_type VARCHAR NO (empty) NULL NULL
-default VARCHAR NO (empty) NULL NULL
-is_nullable VARCHAR NO (empty) NULL NULL
-nullable TINYINT UNSIGNED YES (empty) NULL NULL
-ordinal_position TINYINT UNSIGNED NO (empty) NULL NULL
-table_catalog VARCHAR NO (empty) NULL NULL
-table_name VARCHAR NO (empty) NULL NULL
-table_schema VARCHAR NO (empty) NULL NULL
+character_maximum_length smallint unsigned YES (empty) NULL NULL
+character_octet_length smallint unsigned YES (empty) NULL NULL
+character_set_catalog null NO (empty) NULL NULL
+character_set_name varchar(16382) YES (empty) NULL NULL
+character_set_schema null NO (empty) NULL NULL
+collation_catalog null NO (empty) NULL NULL
+collation_name varchar(16382) YES (empty) NULL NULL
+collation_schema null NO (empty) NULL NULL
+column_comment varchar(16382) NO (empty) NULL NULL
+column_default null NO (empty) NULL NULL
+column_key null NO (empty) NULL NULL
+column_name varchar(16382) NO (empty) NULL NULL
+column_type varchar(16382) NO (empty) NULL NULL
+data_type varchar(16382) NO (empty) NULL NULL
+datetime_precision null NO (empty) NULL NULL
+default varchar(16382) NO (empty) NULL NULL
+domain_catalog null NO (empty) NULL NULL
+domain_name null NO (empty) NULL NULL
+domain_schema null NO (empty) NULL NULL
+extra null NO (empty) NULL NULL
+is_nullable varchar(16382) NO (empty) NULL NULL
+nullable tinyint unsigned YES (empty) NULL NULL
+numeric_precision null NO (empty) NULL NULL
+numeric_precision_radix null NO (empty) NULL NULL
+numeric_scale null NO (empty) NULL NULL
+ordinal_position tinyint unsigned NO (empty) NULL NULL
+privileges null NO (empty) NULL NULL
+table_catalog varchar(16382) NO (empty) NULL NULL
+table_name varchar(16382) NO (empty) NULL NULL
+table_schema varchar(16382) NO (empty) NULL NULL
 
 statement ok
 DROP DATABASE showcolumn

@@ -41,7 +41,7 @@ select count() from fuse_snapshot('test_hilbert','t');
 ----
 4
 
-query T
+query TTT
 select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 ----
 (a, b) hilbert {"partial_block_count":0,"partial_segment_count":0,"stable_block_count":0,"stable_segment_count":0,"total_block_count":4,"total_segment_count":4,"unclustered_block_count":4,"unclustered_segment_count":4}
@@ -69,7 +69,7 @@ insert into t values(9, 9);
 statement ok
 alter table t recluster final;
 
-query T
+query TTT
 select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 ----
 (a, b) hilbert {"partial_block_count":1,"partial_segment_count":1,"stable_block_count":4,"stable_segment_count":2,"total_block_count":5,"total_segment_count":3,"unclustered_block_count":0,"unclustered_segment_count":0}
@@ -89,7 +89,7 @@ select block_count,row_count from fuse_segment('test_hilbert','t');
 statement ok
 alter table t cluster by hilbert(b, a);
 
-query T
+query TTT
 select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 ----
 (b, a) hilbert {"partial_block_count":0,"partial_segment_count":0,"stable_block_count":0,"stable_segment_count":0,"total_block_count":5,"total_segment_count":3,"unclustered_block_count":5,"unclustered_segment_count":3}
@@ -97,7 +97,7 @@ select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 statement ok
 alter table t recluster final;
 
-query T
+query TTT
 select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 ----
 (b, a) hilbert {"partial_block_count":0,"partial_segment_count":0,"stable_block_count":5,"stable_segment_count":2,"total_block_count":5,"total_segment_count":2,"unclustered_block_count":0,"unclustered_segment_count":0}
@@ -106,7 +106,7 @@ select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
 #  force eval as linear clustering by specify columns  #
 ########################################################
 
-query T
+query TTT
 select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t', 'a,b');
 ----
 (a, b) linear {"average_depth":1.4,"average_overlaps":0.4,"block_depth_histogram":{"00001":3,"00002":2},"constant_block_count":0,"total_block_count":5}
@@ -122,7 +122,7 @@ statement ok
 create or replace table t_linear(a int, b int) cluster by (a, b) row_per_block=2 block_per_segment=2;
 
 # no
-query T
+query TTT
 select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t_linear');
 ----
 (a, b) linear {"average_depth":0.0,"average_overlaps":0.0,"block_depth_histogram":{},"constant_block_count":0,"total_block_count":0}
@@ -145,7 +145,7 @@ set enable_parallel_multi_merge_sort = 0;
 statement ok
 alter table t_linear recluster final;
 
-query T
+query TTT
 select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t_linear');
 ----
 (a, b) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":4},"constant_block_count":0,"total_block_count":4}

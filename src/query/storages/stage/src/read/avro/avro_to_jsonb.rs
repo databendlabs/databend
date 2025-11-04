@@ -222,8 +222,16 @@ mod tests {
     #[test]
     fn test_decimal_256_ok() {
         let cases = vec![
-            (39, 10, i256::from_i128(i128::MAX).mul(i256::from_i128(10))),
-            (72, 10, i256::from_i128(i128::MAX).mul(i256::from_i128(10))),
+            (
+                39,
+                10,
+                i256::from_i128_uncheck(i128::MAX).mul(i256::from_i64(10)),
+            ),
+            (
+                72,
+                10,
+                i256::from_i128_uncheck(i128::MAX).mul(i256::from_i64(10)),
+            ),
             (72, 10, i256::DECIMAL_MAX),
         ];
         for (p, s, v) in cases {

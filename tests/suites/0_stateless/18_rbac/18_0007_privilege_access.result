@@ -66,41 +66,41 @@ test -- show tables from grant_db
 t
 Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
 test -- show columns from one from system
-dummy	TINYINT UNSIGNED	NO		NULL	NULL
-c1	INT	NO		NULL	NULL
+dummy	tinyint unsigned	NO		NULL	NULL
+c1	int	NO		NULL	NULL
 0
 Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for table 'system.tasks'
-bloom_index_size	BIGINT UNSIGNED	YES		NULL	NULL
-catalog	VARCHAR	NO		NULL	NULL
-cluster_by	VARCHAR	NO		NULL	NULL
-comment	VARCHAR	NO		NULL	NULL
-created_on	TIMESTAMP	NO		NULL	NULL
-data_compressed_size	BIGINT UNSIGNED	YES		NULL	NULL
-data_size	BIGINT UNSIGNED	YES		NULL	NULL
-database	VARCHAR	NO		NULL	NULL
-database_id	BIGINT UNSIGNED	NO		NULL	NULL
-dropped_on	TIMESTAMP	YES		NULL	NULL
-engine	VARCHAR	NO		NULL	NULL
-engine_full	VARCHAR	NO		NULL	NULL
-index_size	BIGINT UNSIGNED	YES		NULL	NULL
-inverted_index_size	BIGINT UNSIGNED	YES		NULL	NULL
-is_attach	VARCHAR	NO		NULL	NULL
-is_external	BOOLEAN	NO		NULL	NULL
-is_transient	VARCHAR	NO		NULL	NULL
-name	VARCHAR	NO		NULL	NULL
-ngram_index_size	BIGINT UNSIGNED	YES		NULL	NULL
-num_rows	BIGINT UNSIGNED	YES		NULL	NULL
-number_of_blocks	BIGINT UNSIGNED	YES		NULL	NULL
-number_of_segments	BIGINT UNSIGNED	YES		NULL	NULL
-owner	VARCHAR	YES		NULL	NULL
-storage_param	VARCHAR	NO		NULL	NULL
-table_id	BIGINT UNSIGNED	NO		NULL	NULL
-table_option	VARCHAR	NO		NULL	NULL
-table_type	VARCHAR	NO		NULL	NULL
-total_columns	BIGINT UNSIGNED	NO		NULL	NULL
-updated_on	TIMESTAMP	NO		NULL	NULL
-vector_index_size	BIGINT UNSIGNED	YES		NULL	NULL
-virtual_column_size	BIGINT UNSIGNED	YES		NULL	NULL
+bloom_index_size	bigint unsigned	YES		NULL	NULL
+catalog	varchar(16382)	NO		NULL	NULL
+cluster_by	varchar(16382)	NO		NULL	NULL
+comment	varchar(16382)	NO		NULL	NULL
+created_on	timestamp	NO		NULL	NULL
+data_compressed_size	bigint unsigned	YES		NULL	NULL
+data_size	bigint unsigned	YES		NULL	NULL
+database	varchar(16382)	NO		NULL	NULL
+database_id	bigint unsigned	NO		NULL	NULL
+dropped_on	timestamp	YES		NULL	NULL
+engine	varchar(16382)	NO		NULL	NULL
+engine_full	varchar(16382)	NO		NULL	NULL
+index_size	bigint unsigned	YES		NULL	NULL
+inverted_index_size	bigint unsigned	YES		NULL	NULL
+is_attach	varchar(16382)	NO		NULL	NULL
+is_external	boolean	NO		NULL	NULL
+is_transient	varchar(16382)	NO		NULL	NULL
+name	varchar(16382)	NO		NULL	NULL
+ngram_index_size	bigint unsigned	YES		NULL	NULL
+num_rows	bigint unsigned	YES		NULL	NULL
+number_of_blocks	bigint unsigned	YES		NULL	NULL
+number_of_segments	bigint unsigned	YES		NULL	NULL
+owner	varchar(16382)	YES		NULL	NULL
+storage_param	varchar(16382)	NO		NULL	NULL
+table_id	bigint unsigned	NO		NULL	NULL
+table_option	varchar(16382)	NO		NULL	NULL
+table_type	varchar(16382)	NO		NULL	NULL
+total_columns	bigint unsigned	NO		NULL	NULL
+updated_on	timestamp	NO		NULL	NULL
+vector_index_size	bigint unsigned	YES		NULL	NULL
+virtual_column_size	bigint unsigned	YES		NULL	NULL
 Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
 1
 0
