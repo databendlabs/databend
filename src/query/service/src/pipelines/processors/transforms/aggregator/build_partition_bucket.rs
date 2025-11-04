@@ -28,10 +28,10 @@ use parking_lot::Mutex;
 use tokio::sync::Barrier;
 use tokio::sync::Semaphore;
 
-use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::FinalAggregateSharedState;
-use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::NewAggregateSpiller;
-use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::NewFinalAggregateTransform;
-use crate::pipelines::processors::transforms::aggregator::new_final_aggregate::TransformPartitionBucketScatter;
+use crate::pipelines::processors::transforms::aggregator::new_aggregate::FinalAggregateSharedState;
+use crate::pipelines::processors::transforms::aggregator::new_aggregate::NewAggregateSpiller;
+use crate::pipelines::processors::transforms::aggregator::new_aggregate::NewFinalAggregateTransform;
+use crate::pipelines::processors::transforms::aggregator::new_aggregate::TransformPartitionBucketScatter;
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillReader;
