@@ -140,10 +140,6 @@ impl ExprRuntimePruner {
         }
 
         if partition_pruned {
-            info!(
-                "Pruned partition with {:?} rows by runtime filter",
-                part.nums_rows
-            );
             Profile::record_usize_profile(ProfileStatisticsName::RuntimeFilterPruneParts, 1);
         }
 
