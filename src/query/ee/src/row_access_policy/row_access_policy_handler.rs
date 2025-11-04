@@ -53,7 +53,7 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         meta_api: Arc<MetaStore>,
         req: DropRowAccessPolicyReq,
     ) -> Result<()> {
-        let dropped = (meta_api.drop_row_access(&req.name).await?)?;
+        let dropped = meta_api.drop_row_access(&req.name).await??;
         if dropped.is_none() {
             return Err(AppError::from(req.name.unknown_error("drop row policy")).into());
         }

@@ -3916,7 +3916,7 @@ impl SchemaApiTestSuite {
 
         // Drop the table and ensure dropping the policy succeeds and cleans bindings.
         util.drop_table_by_id().await?;
-        let dropped = (mt.drop_data_mask(&mask_cleanup_ident).await?)?;
+        let dropped = mt.drop_data_mask(&mask_cleanup_ident).await??;
         assert!(dropped.is_some());
 
         let binding_ident =
@@ -4078,7 +4078,7 @@ impl SchemaApiTestSuite {
 
         // Drop the table and ensure dropping the policy succeeds and cleans bindings.
         util.drop_table_by_id().await?;
-        let dropped = (mt.drop_row_access(&policy_cleanup_ident).await?)?;
+        let dropped = mt.drop_row_access(&policy_cleanup_ident).await??;
         assert!(dropped.is_some());
 
         let binding_ident =
@@ -4175,7 +4175,7 @@ impl SchemaApiTestSuite {
 
         // Clean up by dropping the table and policy.
         util.drop_table_by_id().await?;
-        let dropped = (mt.drop_row_access(&policy_guard_ident).await?)?;
+        let dropped = mt.drop_row_access(&policy_guard_ident).await??;
         assert!(dropped.is_some());
         assert!(
             mt.get_pb(&binding_ident).await?.is_none(),
