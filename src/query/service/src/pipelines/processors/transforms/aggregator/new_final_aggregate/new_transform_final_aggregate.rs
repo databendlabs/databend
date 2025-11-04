@@ -29,7 +29,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use log::debug;
-use log::info;
 use parking_lot::Mutex;
 use tokio::sync::Barrier;
 
@@ -42,57 +41,6 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
-const MAX_BYTES_PER_FINAL_AGGREGATE_HASH_TABLE: usize = 16 * 1024 * 1024; // 16MB
-
-#[allow(clippy::enum_variant_names)]
-enum HashTable {
-    MovedOut,
-    AggregateHashTable(AggregateHashTable),
-}
-
-impl HashTable {
-    fn new(params: &AggregatorParams) -> Self {
-        HashTable::AggregateHashTable(Self::create_table(params))
-    }
-
-    fn take_or_create(&mut self, params: &AggregatorParams) -> (AggregateHashTable, bool) {
-        match std::mem::replace(self, HashTable::MovedOut) {
-            HashTable::AggregateHashTable(ht) => {
-                let allocated = ht.allocated_bytes();
-                if allocated > MAX_BYTES_PER_FINAL_AGGREGATE_HASH_TABLE {
-                    info!(
-                        "NewFinalAggregateTransform hash table re-created due to memory limit, allocated: {}, max allowed: {}",
-                        allocated, MAX_BYTES_PER_FINAL_AGGREGATE_HASH_TABLE
-                    );
-                    (Self::create_table(params), false)
-                } else {
-                    (ht, true)
-                }
-            }
-            HashTable::MovedOut => (Self::create_table(params), false),
-        }
-    }
-
-    fn set(&mut self, table: AggregateHashTable) {
-        *self = HashTable::AggregateHashTable(table);
-    }
-
-    fn release(&mut self) {
-        if let HashTable::AggregateHashTable(ht) = std::mem::replace(self, HashTable::MovedOut) {
-            drop(ht);
-        }
-    }
-
-    fn create_table(params: &AggregatorParams) -> AggregateHashTable {
-        AggregateHashTable::new(
-            params.group_data_types.clone(),
-            params.aggregate_functions.clone(),
-            HashTableConfig::default().with_initial_radix_bits(0),
-            Arc::new(Bump::new()),
-        )
-    }
-}
-
 pub struct NewFinalAggregateTransform {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -102,7 +50,6 @@ pub struct NewFinalAggregateTransform {
     /// final aggregate
     params: Arc<AggregatorParams>,
     flush_state: PayloadFlushState,
-    hash_table: HashTable,
 
     /// storing repartition result
     repartitioned_queues: RepartitionedQueues,
@@ -129,7 +76,6 @@ impl NewFinalAggregateTransform {
         max_aggregate_spill_level: usize,
     ) -> Result<Box<dyn Processor>> {
         let round_state = LocalRoundState::new(max_aggregate_spill_level);
-        let hash_table = HashTable::new(params.as_ref());
         Ok(Box::new(NewFinalAggregateTransform {
             input,
             output,
@@ -137,7 +83,6 @@ impl NewFinalAggregateTransform {
             partition_count,
             params,
             flush_state: PayloadFlushState::default(),
-            hash_table,
             round_state,
             repartitioned_queues: RepartitionedQueues::create(partition_count),
             barrier,
@@ -232,12 +177,6 @@ impl NewFinalAggregateTransform {
             self.round_state.current_queue_spill_round < self.round_state.max_aggregate_spill_level;
         let need_spill = self.spiller.memory_settings.check_spill();
 
-        // if memory pressure is high, release hashtable's memory immediately
-        if need_spill {
-            info!("NewFinalAggregateTransform[{}] hash table released memory due to high memory pressure", self.id);
-            self.hash_table.release();
-        }
-
         if !can_trigger_spill {
             if need_spill {
                 debug!(
@@ -281,42 +220,60 @@ impl NewFinalAggregateTransform {
     }
 
     fn final_aggregate(&mut self, mut queue: Vec<AggregateMeta>) -> Result<()> {
-        let (mut agg_hashtable, need_clear) = self.hash_table.take_or_create(self.params.as_ref());
-
-        // we will clear the hashtable for reuse, this will not release the payload memory
-        // but only clear the internal state, so that we can avoid re-allocating memory
-        // real memory release will happen when memory pressure is high
-        if need_clear {
-            agg_hashtable.clear_for_reuse();
-        }
+        let mut agg_hashtable: Option<AggregateHashTable> = None;
 
         while let Some(meta) = queue.pop() {
             match meta {
-                AggregateMeta::Serialized(payload) => {
-                    let partitioned = payload.convert_to_partitioned_payload(
-                        self.params.group_data_types.clone(),
-                        self.params.aggregate_functions.clone(),
-                        self.params.num_states(),
-                        0,
-                        Arc::new(Bump::new()),
-                    )?;
-                    agg_hashtable.combine_payloads(&partitioned, &mut self.flush_state)?;
-                }
-                AggregateMeta::AggregatePayload(payload) => {
-                    agg_hashtable.combine_payload(&payload.payload, &mut self.flush_state)?;
-                }
+                AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {
+                    Some(ht) => {
+                        let payload = payload.convert_to_partitioned_payload(
+                            self.params.group_data_types.clone(),
+                            self.params.aggregate_functions.clone(),
+                            self.params.num_states(),
+                            0,
+                            Arc::new(Bump::new()),
+                        )?;
+                        ht.combine_payloads(&payload, &mut self.flush_state)?;
+                    }
+                    None => {
+                        agg_hashtable = Some(payload.convert_to_aggregate_table(
+                            self.params.group_data_types.clone(),
+                            self.params.aggregate_functions.clone(),
+                            self.params.num_states(),
+                            0,
+                            Arc::new(Bump::new()),
+                            true,
+                        )?);
+                    }
+                },
+                AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
+                    Some(ht) => {
+                        ht.combine_payload(&payload.payload, &mut self.flush_state)?;
+                    }
+                    None => {
+                        let capacity =
+                            AggregateHashTable::get_capacity_for_count(payload.payload.len());
+                        let mut hashtable = AggregateHashTable::new_with_capacity(
+                            self.params.group_data_types.clone(),
+                            self.params.aggregate_functions.clone(),
+                            HashTableConfig::default().with_initial_radix_bits(0),
+                            capacity,
+                            Arc::new(Bump::new()),
+                        );
+                        hashtable.combine_payload(&payload.payload, &mut self.flush_state)?;
+                        agg_hashtable = Some(hashtable);
+                    }
+                },
                 _ => unreachable!(),
             }
         }
 
-        let output_block = if agg_hashtable.len() == 0 {
-            self.params.empty_result_block()
-        } else {
+        let output_block = if let Some(mut ht) = agg_hashtable {
             let mut blocks = vec![];
             self.flush_state.clear();
 
             loop {
-                if agg_hashtable.merge_result(&mut self.flush_state)? {
+                if ht.merge_result(&mut self.flush_state)? {
                     let mut entries = self.flush_state.take_aggregate_results();
                     let group_columns = self.flush_state.take_group_columns();
                     entries.extend_from_slice(&group_columns);
@@ -332,9 +289,9 @@ impl NewFinalAggregateTransform {
             } else {
                 DataBlock::concat(&blocks)?
             }
+        } else {
+            self.params.empty_result_block()
         };
-
-        self.hash_table.set(agg_hashtable);
 
         if output_block.is_empty() {
             self.round_state.phase = RoundPhase::Idle;
@@ -374,12 +331,6 @@ impl NewFinalAggregateTransform {
 
         Ok(())
     }
-
-    fn on_finish(&mut self) -> Result<()> {
-        self.round_state.phase = RoundPhase::Finish;
-        self.hash_table.release();
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -394,10 +345,6 @@ impl Processor for NewFinalAggregateTransform {
 
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
-            if !matches!(self.round_state.phase, RoundPhase::Finish) {
-                self.round_state.phase = RoundPhase::Finish;
-                return Ok(Event::Sync);
-            }
             self.input.finish();
             return Ok(Event::Finished);
         }
@@ -461,10 +408,6 @@ impl Processor for NewFinalAggregateTransform {
         }
 
         if self.input.is_finished() {
-            if !matches!(self.round_state.phase, RoundPhase::Finish) {
-                self.round_state.phase = RoundPhase::Finish;
-                return Ok(Event::Sync);
-            }
             self.output.finish();
             return Ok(Event::Finished);
         }
@@ -494,7 +437,6 @@ impl Processor for NewFinalAggregateTransform {
                     .take_queue(self.id);
                 self.final_aggregate(queue)
             }
-            RoundPhase::Finish => self.on_finish(),
             _ => Err(ErrorCode::Internal(format!(
                 "NewFinalAggregateTransform process called in {} state",
                 phase

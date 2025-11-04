@@ -121,7 +121,7 @@ impl NewAggregateSpiller {
     ) -> Result<Self> {
         let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let read_setting = ReadSettings::from_ctx(&table_ctx)?;
+        let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
         let spill_prefix = ctx.query_id_spill_prefix();
         let partition_stream =
             BlockPartitionStream::create(rows_threshold, bytes_threshold, partition_count);
