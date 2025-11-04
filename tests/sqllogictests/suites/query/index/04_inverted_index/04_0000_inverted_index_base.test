@@ -471,7 +471,7 @@ statement ok
 ALTER TABLE books MODIFY COLUMN title string not null
 
 query TTT
-SELECT name, type, definition FROM system.indexes WHERE type = 'INVERTED' ORDER BY name;
+SELECT name, type, definition FROM system.indexes WHERE database = 'test_inverted_index' AND type = 'INVERTED' ORDER BY name;
 ----
 idx INVERTED t1(body)tokenizer='chinese'
 idx1 INVERTED t(content)index_record='"basic"' tokenizer='chinese'
