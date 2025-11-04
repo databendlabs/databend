@@ -344,14 +344,13 @@ impl UDFFlightClient {
 
         let result_batch = result_batch?;
         let schema = DataSchema::try_from(&(*result_batch.schema()))?;
-        let (result_block, result_schema) = DataBlock::from_record_batch(&schema, &result_batch)
-            .map_err(|err| {
-                ErrorCode::UDFDataError(format!(
-                    "Cannot convert arrow record batch to data block: {err}"
-                ))
-            })?;
+        let result_block = DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
+            ErrorCode::UDFDataError(format!(
+                "Cannot convert arrow record batch to data block: {err}"
+            ))
+        })?;
 
-        let result_fields = result_schema.fields();
+        let result_fields = schema.fields();
         if result_fields.is_empty() || result_block.is_empty() {
             return Err(ErrorCode::EmptyDataFromServer(
                 "Get empty data from UDF Server",

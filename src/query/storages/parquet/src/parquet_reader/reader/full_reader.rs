@@ -254,7 +254,7 @@ impl ParquetWholeFileReader {
                     if let Some(transformer) = &mut transformer {
                         batch = transformer.process_record_batch(batch)?
                     }
-                    DataBlock::from_record_batch(&output_data_schema, &batch).map(|t| t.0)
+                    DataBlock::from_record_batch(&output_data_schema, &batch)
                 })
             })))
         }
