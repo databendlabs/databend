@@ -694,12 +694,13 @@ fn integer_to_decimal<T, S>(
 where
     T: Decimal + Mul<Output = T>,
     S: AccessType,
-    for<'a> S::ScalarRef<'a>: Number + AsPrimitive<i128>,
+    for<'a> S::ScalarRef<'a>: Number + Into<i128>,
 {
     let multiplier = T::e(size.scale());
 
     let min_for_precision = T::min_for_precision(size.precision());
     let max_for_precision = T::max_for_precision(size.precision());
+    let range = min_for_precision..=max_for_precision;
 
     let never_overflow = if size.scale() == 0 {
         true
@@ -710,27 +711,23 @@ where
         ]
         .into_iter()
         .all(|x| {
-            let Some(x) = T::from_i128(x.as_()).checked_mul(multiplier) else {
-                return false;
-            };
-            x >= min_for_precision && x <= max_for_precision
+            T::from_i128(x)
+                .and_then(|x| x.checked_mul(multiplier))
+                .map(|x| range.contains(&x))
+                .unwrap_or(false)
         })
     };
 
     if never_overflow {
-        vectorize_1_arg(|x: S::ScalarRef<'_>, _| T::from_i128(x.as_()) * multiplier)(from, ctx)
+        vectorize_1_arg(|x: S::ScalarRef<'_>, _| T::from_i128_uncheck(x.into()) * multiplier)(
+            from, ctx,
+        )
     } else {
         let f = |x: S::ScalarRef<'_>, builder: &mut Vec<T>, ctx: &mut EvalContext| {
-            if let Some(x) = T::from_i128(x.as_()).checked_mul(multiplier) {
-                if x > max_for_precision || x < min_for_precision {
-                    ctx.set_error(
-                        builder.len(),
-                        concat!("Decimal overflow at line : ", line!()),
-                    );
-                    builder.push(T::one());
-                } else {
-                    builder.push(x);
-                }
+            if let Some(x) = T::from_i128(x).and_then(|x| x.checked_mul(multiplier))
+                && range.contains(&x)
+            {
+                builder.push(x);
             } else {
                 ctx.set_error(
                     builder.len(),
@@ -783,11 +780,11 @@ pub(super) fn get_round_val<T: Decimal>(x: T, scale: u8, rounding_mode: bool) ->
     }
     // Checking whether numbers need to be added or subtracted to calculate rounding
     let q = x.checked_div(T::e(scale - 1))?;
-    let m = q.checked_rem(T::from_i128(10))?;
-    if m >= T::from_i128(5) {
+    let m = q.checked_rem(T::from_i64(10))?;
+    if m >= T::from_i64(5) {
         return Some(T::one());
     }
-    if m <= T::from_i128(-5) {
+    if m <= T::from_i64(-5) {
         return Some(T::minus_one());
     }
     None

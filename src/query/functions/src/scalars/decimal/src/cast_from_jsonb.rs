@@ -105,8 +105,24 @@ where
     let value = jsonb::from_slice(val).map_err(|e| format!("Invalid jsonb value, {e}"))?;
     match value {
         JsonbValue::Number(num) => match num {
-            JsonbNumber::Int64(v) => integer_to_decimal(v, min, max, multiplier).map(|v| Some(v)),
-            JsonbNumber::UInt64(v) => integer_to_decimal(v, min, max, multiplier).map(|v| Some(v)),
+            JsonbNumber::Int64(n) => {
+                match T::from_i64(n)
+                    .checked_mul(multiplier)
+                    .take_if(|v| (min..=max).contains(v))
+                {
+                    Some(v) => Ok(Some(v)),
+                    None => Err(format!("Decimal overflow, value `{n}`")),
+                }
+            }
+            JsonbNumber::UInt64(n) => {
+                match T::from_i128(n)
+                    .and_then(|v| v.checked_mul(multiplier))
+                    .take_if(|v| (min..=max).contains(v))
+                {
+                    Some(v) => Ok(Some(v)),
+                    None => Err(format!("Decimal overflow, value `{n}`")),
+                }
+            }
             JsonbNumber::Float64(v) => {
                 float_to_decimal(F64::from(v), min, max, multiplier_f64, rounding_mode)
                     .map(|v| Some(v))
@@ -119,10 +135,10 @@ where
                         let min = i64::min_for_precision(dest_size.precision());
                         let max = i64::max_for_precision(dest_size.precision());
                         decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
-                            .map(|v| Some(T::from_i128(v)))
+                            .map(|v| Some(T::from_i64(v)))
                     }
                     DecimalDataType::Decimal128(_) | DecimalDataType::Decimal256(_) => {
-                        let x = T::from_i128(d.value);
+                        let x = T::from_i64(d.value);
                         decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
                             .map(|v| Some(v))
                     }
@@ -136,10 +152,10 @@ where
                         let min = i128::min_for_precision(dest_size.precision());
                         let max = i128::max_for_precision(dest_size.precision());
                         decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
-                            .map(|v| Some(T::from_i128(v)))
+                            .map(|v| Some(T::from_i128_uncheck(v)))
                     }
                     DecimalDataType::Decimal128(_) | DecimalDataType::Decimal256(_) => {
-                        let x = T::from_i128(d.value);
+                        let x = T::from_i128_uncheck(d.value);
                         decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
                             .map(|v| Some(v))
                     }
@@ -153,10 +169,10 @@ where
                         let min = i256::min_for_precision(dest_size.precision());
                         let max = i256::max_for_precision(dest_size.precision());
                         decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
-                            .map(|v| Some(T::from_i256(v)))
+                            .map(|v| Some(T::from_i256_uncheck(v)))
                     }
                     DecimalDataType::Decimal256(_) => {
-                        let x = T::from_i256(i256(d.value));
+                        let x = T::from_i256_uncheck(i256(d.value));
                         decimal_to_decimal(x, min, max, from_size, dest_size, rounding_mode)
                             .map(|v| Some(v))
                     }
@@ -188,19 +204,6 @@ where
             }
         }
     }
-}
-
-fn integer_to_decimal<T, N>(x: N, min: T, max: T, multiplier: T) -> Result<T, String>
-where
-    T: Decimal,
-    N: Number + AsPrimitive<i128> + std::fmt::Display,
-{
-    if let Some(y) = T::from_i128(x.as_()).checked_mul(multiplier) {
-        if y <= max && y >= min {
-            return Ok(y);
-        }
-    }
-    Err(format!("Decimal overflow, value `{x}`"))
 }
 
 fn float_to_decimal<T, N>(
