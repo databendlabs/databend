@@ -1259,7 +1259,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_selector_executor", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables selector executor for filter expression",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
