@@ -91,6 +91,11 @@ impl FilterExecutor {
                 .try_downcast::<BooleanType>()
                 .unwrap();
             data_block.filter_boolean_value(&filter)
+            // let data_block = data_block.filter_boolean_value(&filter)?;
+            // match self.projections {
+            //     Some(projections) => Ok(data_block.project(&projections)),
+            //     None => Ok(data_block),
+            // }
         }
     }
 
