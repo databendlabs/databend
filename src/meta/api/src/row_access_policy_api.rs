@@ -41,7 +41,10 @@ pub trait RowAccessPolicyApi: Send + Sync {
     async fn drop_row_access(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
-    ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, RowAccessPolicyError>;
+    ) -> Result<
+        Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, RowAccessPolicyError>,
+        MetaTxnError,
+    >;
 
     async fn get_row_access(
         &self,

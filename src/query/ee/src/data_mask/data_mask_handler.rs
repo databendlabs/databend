@@ -43,7 +43,7 @@ impl DatamaskHandler for RealDatamaskHandler {
     }
 
     async fn drop_data_mask(&self, meta_api: Arc<MetaStore>, req: DropDatamaskReq) -> Result<()> {
-        let dropped = meta_api.drop_data_mask(&req.name).await?;
+        let dropped = (meta_api.drop_data_mask(&req.name).await?)?;
         if dropped.is_none() {
             if req.if_exists {
                 // Ok

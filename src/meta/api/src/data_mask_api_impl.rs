@@ -38,11 +38,10 @@ use log::debug;
 
 use crate::data_mask_api::DatamaskApi;
 use crate::errors::MaskingPolicyError;
-use crate::errors::SecurityPolicyError;
-use crate::errors::SecurityPolicyKind;
 use crate::fetch_id;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::meta_txn_error::MetaTxnError;
 use crate::security_policy_usage::collect_policy_usage;
 use crate::security_policy_usage::PolicyBinding;
 use crate::security_policy_usage::PolicyDropTxnBatch;
@@ -147,22 +146,24 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     async fn drop_data_mask(
         &self,
         name_ident: &DataMaskNameIdent,
-    ) -> Result<Option<(SeqV<DataMaskId>, SeqV<DatamaskMeta>)>, MaskingPolicyError> {
+    ) -> Result<
+        Result<Option<(SeqV<DataMaskId>, SeqV<DatamaskMeta>)>, MaskingPolicyError>,
+        MetaTxnError,
+    > {
         debug!(name_ident :? =(name_ident); "DatamaskApi: {}", func_name!());
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials
-                .next()
-                .unwrap()
-                .map_err(MaskingPolicyError::from)?
-                .await;
+            trials.next().unwrap().map_err(MetaTxnError::from)?.await;
 
-            let res = self.get_id_and_value(name_ident).await?;
+            let res = self
+                .get_id_and_value(name_ident)
+                .await
+                .map_err(MetaTxnError::from)?;
             debug!(res :? = res, name_key :? =(name_ident); "{}", func_name!());
 
             let Some((seq_id, seq_meta)) = res else {
-                return Ok(None);
+                return Ok(Ok(None));
             };
 
             let policy_id = *seq_id.data;
@@ -170,12 +171,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             if !usage.active_tables.is_empty() {
                 let tenant = name_ident.tenant().tenant_name().to_string();
                 let policy_name = name_ident.data_mask_name().to_string();
-                let err = SecurityPolicyError::policy_in_use(
-                    tenant,
-                    SecurityPolicyKind::Masking,
-                    policy_name,
-                );
-                return Err(err.into());
+                let err = MaskingPolicyError::policy_in_use(tenant, policy_name);
+                return Ok(Err(err));
             }
 
             let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
@@ -205,7 +202,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 txn.condition
                     .push(txn_cond_eq_seq(&update.table_id, update.seq));
                 let op = txn_op_put_pb(&update.table_id, &update.meta, None)
-                    .map_err(|e| MaskingPolicyError::from(MetaError::from(e)))?;
+                    .map_err(MetaTxnError::from)?;
                 txn.if_then.push(op);
             }
 
@@ -214,12 +211,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
             }
 
-            let (succ, _responses) = send_txn(self, txn).await?;
+            let (succ, _responses) = send_txn(self, txn).await.map_err(MetaTxnError::from)?;
 
             if finalize_policy {
                 debug!(succ = succ;"{}", func_name!());
                 if succ {
-                    return Ok(Some((seq_id, seq_meta)));
+                    return Ok(Ok(Some((seq_id, seq_meta))));
                 }
             } else {
                 debug!(succ = succ, cleanup = true;"{}", func_name!());
@@ -258,10 +255,13 @@ async fn clear_table_column_mask_policy(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_ident: &DataMaskNameIdent,
     txn: &mut TxnRequest,
-) -> Result<(), MaskingPolicyError> {
+) -> Result<(), MetaTxnError> {
     let id_list_key = MaskPolicyTableIdListIdent::new_from(name_ident.clone());
 
-    let seq_id_list = kv_api.get_pb(&id_list_key).await?;
+    let seq_id_list = kv_api
+        .get_pb(&id_list_key)
+        .await
+        .map_err(MetaTxnError::from)?;
 
     let Some(seq_id_list) = seq_id_list else {
         return Ok(());
@@ -307,6 +307,6 @@ async fn collect_mask_policy_usage(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: &Tenant,
     policy_id: u64,
-) -> Result<MaskPolicyUsage, MaskingPolicyError> {
+) -> Result<MaskPolicyUsage, MetaTxnError> {
     collect_policy_usage(kv_api, tenant, policy_id).await
 }

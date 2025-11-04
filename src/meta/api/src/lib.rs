@@ -81,8 +81,6 @@ pub use error_util::table_has_to_not_exist;
 pub use error_util::unknown_database_error;
 pub use errors::MaskingPolicyError;
 pub use errors::RowAccessPolicyError;
-pub use errors::SecurityPolicyError;
-pub use errors::SecurityPolicyKind;
 pub use garbage_collection_api::GarbageCollectionApi;
 pub use index_api::IndexApi;
 // Re-export from new kv_fetch_util module for backward compatibility

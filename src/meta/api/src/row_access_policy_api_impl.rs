@@ -35,8 +35,6 @@ use fastrace::func_name;
 use log::debug;
 
 use crate::errors::RowAccessPolicyError;
-use crate::errors::SecurityPolicyError;
-use crate::errors::SecurityPolicyKind;
 use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
@@ -135,23 +133,24 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
     async fn drop_row_access(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
-    ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, RowAccessPolicyError>
-    {
+    ) -> Result<
+        Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, RowAccessPolicyError>,
+        MetaTxnError,
+    > {
         debug!(name_ident :? =(name_ident); "RowAccessPolicyApi: {}", func_name!());
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
-            trials
-                .next()
-                .unwrap()
-                .map_err(RowAccessPolicyError::from)?
-                .await;
+            trials.next().unwrap().map_err(MetaTxnError::from)?.await;
 
-            let res = self.get_id_and_value(name_ident).await?;
+            let res = self
+                .get_id_and_value(name_ident)
+                .await
+                .map_err(MetaTxnError::from)?;
             debug!(res :? = res, name_key :? =(name_ident); "{}", func_name!());
 
             let Some((seq_id, seq_meta)) = res else {
-                return Ok(None);
+                return Ok(Ok(None));
             };
 
             let policy_id = *seq_id.data;
@@ -160,12 +159,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             if !usage.active_tables.is_empty() {
                 let tenant = name_ident.tenant().tenant_name().to_string();
                 let policy_name = name_ident.row_access_name().to_string();
-                let err = SecurityPolicyError::policy_in_use(
-                    tenant,
-                    SecurityPolicyKind::RowAccess,
-                    policy_name,
-                );
-                return Err(err.into());
+                let err = RowAccessPolicyError::policy_in_use(tenant, policy_name);
+                return Ok(Err(err));
             }
 
             let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
@@ -195,16 +190,16 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
                 txn.condition
                     .push(txn_cond_eq_seq(&update.table_id, update.seq));
                 let op = txn_op_put_pb(&update.table_id, &update.meta, None)
-                    .map_err(|e| RowAccessPolicyError::from(MetaError::from(e)))?;
+                    .map_err(MetaTxnError::from)?;
                 txn.if_then.push(op);
             }
 
-            let (succ, _responses) = send_txn(self, txn).await?;
+            let (succ, _responses) = send_txn(self, txn).await.map_err(MetaTxnError::from)?;
 
             if finalize_policy {
                 debug!(succ = succ;"{}", func_name!());
                 if succ {
-                    return Ok(Some((seq_id, seq_meta)));
+                    return Ok(Ok(Some((seq_id, seq_meta))));
                 }
             } else {
                 debug!(succ = succ, cleanup = true;"{}", func_name!());
@@ -274,6 +269,6 @@ async fn collect_row_access_policy_usage(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: &Tenant,
     policy_id: u64,
-) -> Result<RowAccessPolicyUsage, RowAccessPolicyError> {
+) -> Result<RowAccessPolicyUsage, MetaTxnError> {
     collect_policy_usage(kv_api, tenant, policy_id).await
 }
