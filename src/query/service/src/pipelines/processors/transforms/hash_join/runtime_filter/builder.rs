@@ -42,6 +42,7 @@ struct JoinRuntimeFilterPacketBuilder<'a> {
     inlist_threshold: usize,
     bloom_threshold: usize,
     min_max_threshold: usize,
+    is_spill_happened: bool,
     selectivity_threshold: u64,
 }
 
@@ -54,6 +55,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         bloom_threshold: usize,
         min_max_threshold: usize,
         selectivity_threshold: u64,
+        is_spill_happened: bool,
     ) -> Result<Self> {
         let build_key_column = Self::eval_build_key_column(data_blocks, func_ctx, build_key)?;
         Ok(Self {
@@ -63,14 +65,17 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
             bloom_threshold,
             min_max_threshold,
             selectivity_threshold,
+            is_spill_happened,
         })
     }
     fn build(&self, desc: &RuntimeFilterDesc) -> Result<RuntimeFilterPacket> {
-        if !should_enable_runtime_filter(
-            desc,
-            self.build_key_column.len(),
-            self.selectivity_threshold,
-        ) {
+        if self.is_spill_happened
+            || !should_enable_runtime_filter(
+                desc,
+                self.build_key_column.len(),
+                self.selectivity_threshold,
+            )
+        {
             return Ok(RuntimeFilterPacket {
                 id: desc.id,
                 inlist: None,
@@ -249,6 +254,7 @@ pub fn build_runtime_filter_packet(
     bloom_threshold: usize,
     min_max_threshold: usize,
     selectivity_threshold: u64,
+    is_spill_happened: bool,
 ) -> Result<JoinRuntimeFilterPacket> {
     if build_num_rows == 0 {
         return Ok(JoinRuntimeFilterPacket {
@@ -268,6 +274,7 @@ pub fn build_runtime_filter_packet(
                 bloom_threshold,
                 min_max_threshold,
                 selectivity_threshold,
+                is_spill_happened,
             )?
             .build(rf)?,
         );

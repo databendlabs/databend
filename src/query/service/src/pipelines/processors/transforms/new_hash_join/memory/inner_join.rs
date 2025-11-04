@@ -103,6 +103,7 @@ impl Join for InnerHashJoin {
             desc.bloom_threshold,
             desc.min_max_threshold,
             desc.selectivity_threshold,
+            false,
         )
     }
 

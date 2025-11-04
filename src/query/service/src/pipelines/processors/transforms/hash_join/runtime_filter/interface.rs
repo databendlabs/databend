@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use databend_common_exception::Result;
@@ -48,6 +49,10 @@ pub async fn build_and_push_down_runtime_filter(
         .get_join_runtime_filter_selectivity_threshold()?;
 
     let build_start = Instant::now();
+    let is_spill_happened = join
+        .hash_join_state
+        .is_spill_happened
+        .load(Ordering::Acquire);
     let mut packet = build_runtime_filter_packet(
         build_chunks,
         build_num_rows,
@@ -57,6 +62,7 @@ pub async fn build_and_push_down_runtime_filter(
         bloom_threshold,
         min_max_threshold,
         selectivity_threshold,
+        is_spill_happened,
     )?;
     let build_time = build_start.elapsed();
 
