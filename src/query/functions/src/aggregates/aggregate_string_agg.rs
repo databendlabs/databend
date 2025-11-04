@@ -12,231 +12,176 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
-use std::fmt;
-use std::sync::Arc;
+use std::any::Any;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::BuilderMut;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::ValueType;
-use databend_common_expression::AggrStateRegistry;
-use databend_common_expression::AggrStateType;
+use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::assert_variadic_arguments;
 use super::batch_merge1;
-use super::AggrState;
-use super::AggrStateLoc;
-use super::AggregateFunction;
+use super::batch_serialize1;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
-use super::StateAddr;
+use super::AggregateUnaryFunction;
+use super::FunctionData;
+use super::StateSerde;
+use super::UnaryState;
 
-#[derive(Debug)]
-pub struct StringAggState {
+#[derive(Default)]
+struct StringAggState {
     values: String,
 }
 
-#[derive(Clone)]
-pub struct AggregateStringAggFunction {
-    display_name: String,
+struct StringAggFunctionData {
     delimiter: String,
 }
 
-impl AggregateFunction for AggregateStringAggFunction {
-    fn name(&self) -> &str {
-        "AggregateStringAggFunction"
+impl FunctionData for StringAggFunctionData {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl StringAggState {
+    fn append_scalar(&mut self, scalar: &ScalarRef<'_>, delimiter: &str) {
+        if let ScalarRef::String(value) = scalar {
+            self.values.push_str(value);
+        } else {
+            self.values.push_str(&scalar_ref_to_string(scalar));
+        }
+        self.values.push_str(delimiter);
     }
 
-    fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::String)
+    fn delimiter(function_data: Option<&dyn FunctionData>) -> &str {
+        &function_data
+            .and_then(|data| data.as_any().downcast_ref::<StringAggFunctionData>())
+            .expect("string_agg function data is missing")
+            .delimiter
+    }
+}
+
+impl UnaryState<AnyType, StringType> for StringAggState {
+    fn add(
+        &mut self,
+        other: ScalarRef<'_>,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let delimiter = Self::delimiter(function_data);
+        if let ScalarRef::String(value) = other {
+            self.values.push_str(value);
+        } else {
+            self.values.push_str(&scalar_ref_to_string(&other));
+        }
+        self.values.push_str(delimiter);
+        Ok(())
     }
 
-    fn init_state(&self, place: AggrState) {
-        place.write(|| StringAggState {
-            values: String::new(),
-        });
-    }
-
-    fn register_state(&self, registry: &mut AggrStateRegistry) {
-        registry.register(AggrStateType::Custom(Layout::new::<StringAggState>()));
-    }
-
-    fn accumulate(
-        &self,
-        place: AggrState,
-        entries: ProjectedBlock,
+    fn add_batch(
+        &mut self,
+        other: Column,
         validity: Option<&Bitmap>,
-        _input_rows: usize,
+        function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let state = place.get::<StringAggState>();
-        match validity {
-            Some(validity) => {
-                if let Some(column) = entries[0].downcast::<StringType>() {
-                    column.iter().zip(validity.iter()).for_each(|(v, b)| {
-                        if b {
-                            state.values.push_str(v);
-                            state.values.push_str(&self.delimiter);
+        let delimiter = Self::delimiter(function_data);
+
+        match other {
+            Column::String(column) => match validity {
+                Some(validity) => {
+                    for (value, valid) in column.iter().zip(validity.iter()) {
+                        if valid {
+                            self.values.push_str(value);
+                            self.values.push_str(delimiter);
                         }
-                    });
-                } else {
-                    entries[0]
-                        .downcast::<AnyType>()
-                        .unwrap()
-                        .iter()
-                        .zip(validity.iter())
-                        .for_each(|(v, b)| {
-                            if b {
-                                state.values.push_str(&scalar_ref_to_string(&v));
-                                state.values.push_str(&self.delimiter);
-                            }
-                        });
+                    }
                 }
-            }
-            None => {
-                if let Some(column) = entries[0].downcast::<StringType>() {
-                    column.iter().for_each(|v| {
-                        state.values.push_str(v);
-                        state.values.push_str(&self.delimiter);
-                    });
-                } else {
-                    entries[0]
-                        .downcast::<AnyType>()
-                        .unwrap()
-                        .iter()
-                        .for_each(|v| {
-                            state.values.push_str(&scalar_ref_to_string(&v));
-                            state.values.push_str(&self.delimiter);
-                        });
+                None => {
+                    for value in column.iter() {
+                        self.values.push_str(value);
+                        self.values.push_str(delimiter);
+                    }
                 }
-            }
-        }
-        Ok(())
-    }
-
-    fn accumulate_keys(
-        &self,
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        columns: ProjectedBlock,
-        _input_rows: usize,
-    ) -> Result<()> {
-        for (scalar, place) in columns[0]
-            .downcast::<AnyType>()
-            .unwrap()
-            .iter()
-            .zip(places.iter())
-        {
-            let state = AggrState::new(*place, loc).get::<StringAggState>();
-            state.values.push_str(&scalar_ref_to_string(&scalar));
-            state.values.push_str(&self.delimiter);
-        }
-        Ok(())
-    }
-
-    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
-        let view = columns[0].downcast::<StringType>().unwrap();
-        let v = view.index(row).unwrap();
-        let state = place.get::<StringAggState>();
-        state.values.push_str(v);
-        state.values.push_str(&self.delimiter);
-        Ok(())
-    }
-
-    fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![DataType::String.into()]
-    }
-
-    fn batch_serialize(
-        &self,
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        builders: &mut [ColumnBuilder],
-    ) -> Result<()> {
-        let builder = builders[0].as_string_mut().unwrap();
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<StringAggState>();
-            builder.put_str(&state.values);
-            builder.commit_row();
-        }
-        Ok(())
-    }
-
-    fn batch_merge(
-        &self,
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        state: &BlockEntry,
-        filter: Option<&Bitmap>,
-    ) -> Result<()> {
-        batch_merge1::<StringType, StringAggState, _>(
-            places,
-            loc,
-            state,
-            filter,
-            |state, values| {
-                state.values.push_str(values);
-                Ok(())
             },
-        )
+            column => match validity {
+                Some(validity) => {
+                    for (value, valid) in column.iter().zip(validity.iter()) {
+                        if valid {
+                            self.values.push_str(&scalar_ref_to_string(&value));
+                            self.values.push_str(delimiter);
+                        }
+                    }
+                }
+                None => {
+                    for value in column.iter() {
+                        self.values.push_str(&scalar_ref_to_string(&value));
+                        self.values.push_str(delimiter);
+                    }
+                }
+            },
+        }
+
+        Ok(())
     }
 
-    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
-        let state = place.get::<StringAggState>();
-        let other = rhs.get::<StringAggState>();
-        state.values.push_str(&other.values);
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.values.push_str(&rhs.values);
         Ok(())
     }
 
     fn merge_result(
-        &self,
-        place: AggrState,
-        _read_only: bool,
-        builder: &mut ColumnBuilder,
+        &mut self,
+        mut builder: BuilderMut<'_, StringType>,
+        function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let state = place.get::<StringAggState>();
-        let mut builder = StringType::downcast_builder(builder);
-        if !state.values.is_empty() {
-            let len = state.values.len() - self.delimiter.len();
-            builder.put_and_commit(&state.values[..len]);
-        } else {
+        let delimiter = Self::delimiter(function_data);
+        if self.values.is_empty() {
             builder.put_and_commit("");
+        } else {
+            let len = self.values.len() - delimiter.len();
+            builder.put_and_commit(&self.values[..len]);
         }
         Ok(())
     }
-
-    fn need_manual_drop_state(&self) -> bool {
-        true
-    }
-
-    unsafe fn drop_state(&self, place: AggrState) {
-        let state = place.get::<StringAggState>();
-        std::ptr::drop_in_place(state);
-    }
 }
 
-impl fmt::Display for AggregateStringAggFunction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.display_name)
+impl StateSerde for StringAggState {
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![DataType::String.into()]
     }
-}
 
-impl AggregateStringAggFunction {
-    fn try_create(display_name: &str, delimiter: String) -> Result<Arc<dyn AggregateFunction>> {
-        let func = AggregateStringAggFunction {
-            display_name: display_name.to_string(),
-            delimiter,
-        };
-        Ok(Arc::new(func))
+    fn batch_serialize(
+        places: &[super::StateAddr],
+        loc: &[super::AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize1::<StringType, Self, _>(places, loc, builders, |state, builder| {
+            builder.put_and_commit(&state.values);
+            Ok(())
+        })
+    }
+
+    fn batch_merge(
+        places: &[super::StateAddr],
+        loc: &[super::AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<StringType, Self, _>(places, loc, state, filter, |state, values| {
+            state.values.push_str(values);
+            Ok(())
+        })
     }
 }
 
@@ -245,7 +190,7 @@ pub fn try_create_aggregate_string_agg_function(
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
-) -> Result<Arc<dyn AggregateFunction>> {
+) -> Result<AggregateFunctionRef> {
     assert_variadic_arguments(display_name, argument_types.len(), (1, 2))?;
     let value_type = argument_types[0].remove_nullable();
     if !matches!(
@@ -269,7 +214,13 @@ pub fn try_create_aggregate_string_agg_function(
     } else {
         String::new()
     };
-    AggregateStringAggFunction::try_create(display_name, delimiter)
+    AggregateUnaryFunction::<StringAggState, AnyType, StringType>::create(
+        display_name,
+        DataType::String,
+    )
+    .with_need_drop(true)
+    .with_function_data(Box::new(StringAggFunctionData { delimiter }))
+    .finish()
 }
 
 pub fn aggregate_string_agg_function_desc() -> AggregateFunctionDescription {
