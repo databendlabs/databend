@@ -28,24 +28,6 @@ use crate::kv_pb_api::KVPbApi;
 /// Upper bound for the number of stale bindings we try to clean up in a single transaction.
 pub(crate) const MAX_POLICY_CLEANUP_BATCH: usize = 100;
 
-/// Represents a binding record that links a security policy to a table.
-#[derive(Clone)]
-pub(crate) struct PolicyBindingEntry<I> {
-    pub(crate) ident: I,
-    pub(crate) seq: u64,
-}
-
-impl<I> PolicyBindingEntry<I> {
-    pub(crate) fn new(ident: I, seq: u64) -> Self {
-        Self { ident, seq }
-    }
-
-    pub(crate) fn table_id(&self) -> u64
-    where I: PolicyBinding {
-        self.ident.table_id()
-    }
-}
-
 /// Describes an update that needs to be applied to a table meta entry.
 #[derive(Clone)]
 pub(crate) struct PolicyTableUpdate {
@@ -54,13 +36,13 @@ pub(crate) struct PolicyTableUpdate {
     pub(crate) meta: TableMeta,
 }
 
-pub(crate) struct PolicyUsage<I> {
+pub(crate) struct PolicyUsage<K> {
     pub(crate) active_tables: Vec<(u64, u64)>, // (table_id, seq)
-    pub(crate) stale_bindings: Vec<PolicyBindingEntry<I>>,
+    pub(crate) stale_bindings: Vec<(K, u64)>,  // (binding_key, seq)
     pub(crate) table_updates: Vec<PolicyTableUpdate>,
 }
 
-impl<I> Default for PolicyUsage<I> {
+impl<K> Default for PolicyUsage<K> {
     fn default() -> Self {
         Self {
             active_tables: Vec::new(),
@@ -72,24 +54,24 @@ impl<I> Default for PolicyUsage<I> {
 
 /// Represents the action to take when dropping a security policy.
 /// This enum eliminates the need for a boolean flag to determine behavior.
-pub(crate) enum PolicyDropAction<I> {
+pub(crate) enum PolicyDropAction<K> {
     /// Can drop the policy now - all stale bindings fit in one transaction.
     FinalDrop {
-        prefix: DirName<I>,
+        prefix: DirName<K>,
         binding_count: u64,
-        bindings: Vec<PolicyBindingEntry<I>>,
+        bindings: Vec<(K, u64)>,
         table_updates: Vec<PolicyTableUpdate>,
     },
     /// Need to cleanup a batch of stale bindings first, then retry.
     CleanupBatch {
-        prefix: DirName<I>,
+        prefix: DirName<K>,
         binding_count: u64,
-        bindings: Vec<PolicyBindingEntry<I>>,
+        bindings: Vec<(K, u64)>,
         table_updates: Vec<PolicyTableUpdate>,
     },
 }
 
-impl<I> PolicyUsage<I> {
+impl<K> PolicyUsage<K> {
     pub(crate) fn binding_count(&self) -> u64 {
         (self.active_tables.len() + self.stale_bindings.len()) as u64
     }
@@ -98,11 +80,11 @@ impl<I> PolicyUsage<I> {
         self,
         tenant: &Tenant,
         policy_id: u64,
-    ) -> PolicyDropAction<I>
+    ) -> PolicyDropAction<K>
     where
-        I: PolicyBinding + Clone,
+        K: PolicyBinding + Clone,
     {
-        let prefix = I::prefix_for(tenant, policy_id);
+        let prefix = K::prefix_for(tenant, policy_id);
         let binding_count = self.binding_count();
 
         if self.stale_bindings.len() > MAX_POLICY_CLEANUP_BATCH {
@@ -114,7 +96,7 @@ impl<I> PolicyUsage<I> {
                 .collect();
 
             let touched_tables: HashSet<_> =
-                bindings.iter().map(|entry| entry.table_id()).collect();
+                bindings.iter().map(|(key, _seq)| key.table_id()).collect();
             let mut updates = Vec::new();
             let mut seen_tables = HashSet::new();
             for update in &self.table_updates {
@@ -197,13 +179,9 @@ where
                         meta: data,
                     });
                 }
-                usage
-                    .stale_bindings
-                    .push(PolicyBindingEntry::new(binding_ident, binding_seq));
+                usage.stale_bindings.push((binding_ident, binding_seq));
             }
-            None => usage
-                .stale_bindings
-                .push(PolicyBindingEntry::new(binding_ident, binding_seq)),
+            None => usage.stale_bindings.push((binding_ident, binding_seq)),
         }
     }
 

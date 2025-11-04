@@ -186,8 +186,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
                     txn_delete_exact(&mut txn, name_ident, seq_id.seq);
                     txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
 
-                    for binding in bindings {
-                        txn_delete_exact(&mut txn, &binding.ident, binding.seq);
+                    for (key, seq) in bindings {
+                        txn_delete_exact(&mut txn, &key, seq);
                     }
 
                     // Clean up stale policy references in dropped table metadata
@@ -235,8 +235,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
                     txn.condition
                         .push(txn_cond_eq_keys_with_prefix(&prefix, binding_count));
 
-                    for binding in bindings {
-                        txn_delete_exact(&mut txn, &binding.ident, binding.seq);
+                    for (key, seq) in bindings {
+                        txn_delete_exact(&mut txn, &key, seq);
                     }
 
                     for update in table_updates {
