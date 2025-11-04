@@ -32,6 +32,7 @@ use opendal::Operator;
 use crate::read::row_based::formats::CsvInputFormat;
 use crate::read::row_based::split::SplitRowBase;
 
+#[fastrace::trace(name = "csv_read_partitions")]
 #[async_backtrace::framed]
 pub async fn csv_read_partitions(
     stage_table_info: &StageTableInfo,
@@ -126,7 +127,6 @@ pub async fn csv_read_partitions(
     }
 }
 
-#[allow(dead_code)]
 async fn split_file(
     op: &Operator,
     file: &StageFileInfo,
@@ -176,7 +176,6 @@ async fn split_file(
     ))
 }
 
-#[allow(dead_code)]
 fn next_row_start(mut reader: csv_core::Reader, buf: &[u8], temp: &mut [u8]) -> Option<usize> {
     use csv_core::ReadFieldResult::*;
     let mut readded = 0;
