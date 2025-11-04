@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+
 use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -23,7 +25,7 @@ pub trait JoinStream: Send + Sync {
     fn next(&mut self) -> Result<Option<DataBlock>>;
 }
 
-pub trait Join: Send + Sync + 'static {
+pub trait Join: Any + Send + Sync + 'static {
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()>;
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>>;
