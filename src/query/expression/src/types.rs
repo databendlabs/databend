@@ -66,7 +66,6 @@ pub use self::bitmap::BitmapType;
 pub use self::boolean::Bitmap;
 pub use self::boolean::BooleanType;
 pub use self::boolean::MutableBitmap;
-pub use self::compute_view::StringConvert;
 pub use self::date::DateType;
 pub use self::decimal::*;
 pub use self::empty_array::EmptyArrayType;

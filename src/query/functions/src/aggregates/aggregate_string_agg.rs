@@ -18,8 +18,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::compute_view::StringConvertView;
-use databend_common_expression::types::AccessType;
+use databend_common_expression::display::scalar_ref_to_string;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
@@ -28,10 +28,6 @@ use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::DataBlock;
-use databend_common_expression::EvaluateOptions;
-use databend_common_expression::Evaluator;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
@@ -44,7 +40,6 @@ use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::BUILTIN_FUNCTIONS;
 
 #[derive(Debug)]
 pub struct StringAggState {
@@ -55,7 +50,6 @@ pub struct StringAggState {
 pub struct AggregateStringAggFunction {
     display_name: String,
     delimiter: String,
-    value_type: DataType,
 }
 
 impl AggregateFunction for AggregateStringAggFunction {
@@ -84,40 +78,46 @@ impl AggregateFunction for AggregateStringAggFunction {
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = if self.value_type != DataType::String {
-            let block = DataBlock::new(vec![entries[0].clone()], entries[0].len());
-            let func_ctx = &FunctionContext::default();
-            let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-            let value = evaluator.run_cast(
-                None,
-                &self.value_type,
-                &DataType::String,
-                entries[0].value(),
-                None,
-                &|| "(string_aggr)".to_string(),
-                &mut EvaluateOptions::default(),
-            )?;
-            BlockEntry::new(value, || (DataType::String, block.num_rows()))
-                .downcast::<StringType>()
-                .unwrap()
-        } else {
-            entries[0].downcast::<StringType>().unwrap()
-        };
         let state = place.get::<StringAggState>();
         match validity {
             Some(validity) => {
-                column.iter().zip(validity.iter()).for_each(|(v, b)| {
-                    if b {
-                        state.values.push_str(v);
-                        state.values.push_str(&self.delimiter);
-                    }
-                });
+                if let Some(column) = entries[0].downcast::<StringType>() {
+                    column.iter().zip(validity.iter()).for_each(|(v, b)| {
+                        if b {
+                            state.values.push_str(v);
+                            state.values.push_str(&self.delimiter);
+                        }
+                    });
+                } else {
+                    entries[0]
+                        .downcast::<AnyType>()
+                        .unwrap()
+                        .iter()
+                        .zip(validity.iter())
+                        .for_each(|(v, b)| {
+                            if b {
+                                state.values.push_str(&scalar_ref_to_string(&v));
+                                state.values.push_str(&self.delimiter);
+                            }
+                        });
+                }
             }
             None => {
-                column.iter().for_each(|v| {
-                    state.values.push_str(v);
-                    state.values.push_str(&self.delimiter);
-                });
+                if let Some(column) = entries[0].downcast::<StringType>() {
+                    column.iter().for_each(|v| {
+                        state.values.push_str(v);
+                        state.values.push_str(&self.delimiter);
+                    });
+                } else {
+                    entries[0]
+                        .downcast::<AnyType>()
+                        .unwrap()
+                        .iter()
+                        .for_each(|v| {
+                            state.values.push_str(&scalar_ref_to_string(&v));
+                            state.values.push_str(&self.delimiter);
+                        });
+                }
             }
         }
         Ok(())
@@ -130,13 +130,16 @@ impl AggregateFunction for AggregateStringAggFunction {
         columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        StringConvertView::iter_column(&columns[0].to_column())
+        for (scalar, place) in columns[0]
+            .downcast::<AnyType>()
+            .unwrap()
+            .iter()
             .zip(places.iter())
-            .for_each(|(v, place)| {
-                let state = AggrState::new(*place, loc).get::<StringAggState>();
-                state.values.push_str(v.as_str());
-                state.values.push_str(&self.delimiter);
-            });
+        {
+            let state = AggrState::new(*place, loc).get::<StringAggState>();
+            state.values.push_str(&scalar_ref_to_string(&scalar));
+            state.values.push_str(&self.delimiter);
+        }
         Ok(())
     }
 
@@ -228,15 +231,10 @@ impl fmt::Display for AggregateStringAggFunction {
 }
 
 impl AggregateStringAggFunction {
-    fn try_create(
-        display_name: &str,
-        delimiter: String,
-        value_type: DataType,
-    ) -> Result<Arc<dyn AggregateFunction>> {
+    fn try_create(display_name: &str, delimiter: String) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateStringAggFunction {
             display_name: display_name.to_string(),
             delimiter,
-            value_type,
         };
         Ok(Arc::new(func))
     }
@@ -271,7 +269,7 @@ pub fn try_create_aggregate_string_agg_function(
     } else {
         String::new()
     };
-    AggregateStringAggFunction::try_create(display_name, delimiter, value_type)
+    AggregateStringAggFunction::try_create(display_name, delimiter)
 }
 
 pub fn aggregate_string_agg_function_desc() -> AggregateFunctionDescription {
