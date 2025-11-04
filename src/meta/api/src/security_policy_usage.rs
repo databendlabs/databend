@@ -55,7 +55,7 @@ pub(crate) struct PolicyTableUpdate {
 }
 
 pub(crate) struct PolicyUsage<I> {
-    pub(crate) active_tables: Vec<u64>,
+    pub(crate) active_tables: Vec<(u64, u64)>, // (table_id, seq)
     pub(crate) stale_bindings: Vec<PolicyBindingEntry<I>>,
     pub(crate) table_updates: Vec<PolicyTableUpdate>,
 }
@@ -70,12 +70,23 @@ impl<I> Default for PolicyUsage<I> {
     }
 }
 
-pub(crate) struct PolicyDropTxnBatch<I> {
-    pub(crate) prefix: DirName<I>,
-    pub(crate) binding_count: u64,
-    pub(crate) bindings: Vec<PolicyBindingEntry<I>>,
-    pub(crate) table_updates: Vec<PolicyTableUpdate>,
-    pub(crate) finalize_policy: bool,
+/// Represents the action to take when dropping a security policy.
+/// This enum eliminates the need for a boolean flag to determine behavior.
+pub(crate) enum PolicyDropAction<I> {
+    /// Can drop the policy now - all stale bindings fit in one transaction.
+    FinalDrop {
+        prefix: DirName<I>,
+        binding_count: u64,
+        bindings: Vec<PolicyBindingEntry<I>>,
+        table_updates: Vec<PolicyTableUpdate>,
+    },
+    /// Need to cleanup a batch of stale bindings first, then retry.
+    CleanupBatch {
+        prefix: DirName<I>,
+        binding_count: u64,
+        bindings: Vec<PolicyBindingEntry<I>>,
+        table_updates: Vec<PolicyTableUpdate>,
+    },
 }
 
 impl<I> PolicyUsage<I> {
@@ -83,11 +94,11 @@ impl<I> PolicyUsage<I> {
         (self.active_tables.len() + self.stale_bindings.len()) as u64
     }
 
-    pub(crate) fn prepare_drop_batch(
-        &self,
+    pub(crate) fn prepare_drop_action(
+        self,
         tenant: &Tenant,
         policy_id: u64,
-    ) -> PolicyDropTxnBatch<I>
+    ) -> PolicyDropAction<I>
     where
         I: PolicyBinding + Clone,
     {
@@ -113,20 +124,18 @@ impl<I> PolicyUsage<I> {
                 }
             }
 
-            PolicyDropTxnBatch {
+            PolicyDropAction::CleanupBatch {
                 prefix,
                 binding_count,
                 bindings,
                 table_updates: updates,
-                finalize_policy: false,
             }
         } else {
-            PolicyDropTxnBatch {
+            PolicyDropAction::FinalDrop {
                 prefix,
                 binding_count,
-                bindings: self.stale_bindings.clone(),
-                table_updates: self.table_updates.clone(),
-                finalize_policy: true,
+                bindings: self.stale_bindings,
+                table_updates: self.table_updates,
             }
         }
     }
@@ -139,6 +148,24 @@ pub(crate) trait PolicyBinding: kvapi::Key + Sized {
 }
 
 /// Collects the usage information of a security policy by scanning table bindings.
+///
+/// # Concurrency Safety
+///
+/// This function performs non-transactional reads but ensures correctness through
+/// optimistic concurrency control in the subsequent transaction:
+///
+/// 1. **Active tables are protected**: Records `(table_id, seq)` for all active tables.
+///    The transaction will include `txn_cond_eq_seq` guards to detect if any active
+///    table is modified (e.g., dropped) concurrently. If detected, transaction fails
+///    and we retry with fresh state.
+///
+/// 2. **New bindings are detected**: Uses `txn_cond_eq_keys_with_prefix` to ensure
+///    no new bindings are created between scanning and transaction execution.
+///
+/// 3. **Stale bindings cleanup is atomic**: All stale binding deletions and table meta
+///    updates occur in a single transaction with proper seq guards.
+///
+/// The retry loop ensures eventual consistency even under high concurrency.
 pub(crate) async fn collect_policy_usage<K, E>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: &Tenant,
@@ -160,8 +187,8 @@ where
         let binding_seq = seqv.seq;
         let table_meta_opt = kv_api.get_pb(&table_key).await.map_err(E::from)?;
         match table_meta_opt {
-            Some(SeqV { data, .. }) if data.drop_on.is_none() => {
-                usage.active_tables.push(table_id);
+            Some(SeqV { seq, data, .. }) if data.drop_on.is_none() => {
+                usage.active_tables.push((table_id, seq));
             }
             Some(SeqV { seq, mut data, .. }) => {
                 if K::remove_security_policy_from_table_meta(&mut data, policy_id) {

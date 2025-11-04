@@ -510,32 +510,36 @@ pub async fn handle_undrop_table(
             // Prepare conditions for concurrent safety
             let vacuum_seq = seq_vacuum_retention.as_ref().map(|sr| sr.seq).unwrap_or(0);
 
-            let mut conditions = vec![
-                // db has not to change, i.e., no new table is created.
-                // Renaming db is OK and does not affect the seq of db_meta.
-                txn_cond_eq_seq(&DatabaseId { db_id }, seq_db_meta.seq),
-                // still this table id
-                txn_cond_eq_seq(&dbid_tbname, dbid_tbname_seq),
-                // table is not changed
-                txn_cond_eq_seq(&tbid, seq_table_meta.seq),
-                // Concurrent safety: vacuum timestamp seq must not change during undrop
-                // - If vacuum_retention exists: seq must remain the same (no update by vacuum)
-                // - If vacuum_retention is None: seq must remain 0 (no creation by vacuum)
-                txn_cond_eq_seq(&vacuum_ident, vacuum_seq),
-            ];
-            conditions.extend(policy_cleanup_conditions);
-
-            let mut if_then_ops = Vec::with_capacity(3 + policy_cleanup_ops.len());
-            if_then_ops.push(txn_op_put_pb(
-                &DatabaseId { db_id },
-                &seq_db_meta.data,
-                None,
-            )?); // (db_id) -> db_meta
-            if_then_ops.push(txn_op_put(&dbid_tbname, serialize_u64(table_id)?)); // (tenant, db_id, tb_name) -> tb_id
-            if_then_ops.push(txn_op_put_pb(&tbid, &seq_table_meta.data, None)?); // (tenant, db_id, tb_id) -> tb_meta
-            if_then_ops.extend(policy_cleanup_ops);
-
-            let txn = TxnRequest::new(conditions, if_then_ops);
+            let txn = TxnRequest::new(
+                [
+                    vec![
+                        // db has not to change, i.e., no new table is created.
+                        // Renaming db is OK and does not affect the seq of db_meta.
+                        txn_cond_eq_seq(&DatabaseId { db_id }, seq_db_meta.seq),
+                        // still this table id
+                        txn_cond_eq_seq(&dbid_tbname, dbid_tbname_seq),
+                        // table is not changed
+                        txn_cond_eq_seq(&tbid, seq_table_meta.seq),
+                        // Concurrent safety: vacuum timestamp seq must not change during undrop
+                        // - If vacuum_retention exists: seq must remain the same (no update by vacuum)
+                        // - If vacuum_retention is None: seq must remain 0 (no creation by vacuum)
+                        txn_cond_eq_seq(&vacuum_ident, vacuum_seq),
+                    ],
+                    policy_cleanup_conditions,
+                ]
+                .concat(),
+                [
+                    vec![
+                        // Changing a table in a db has to update the seq of db_meta,
+                        // to block the batch-delete-tables when deleting a db.
+                        txn_op_put_pb(&DatabaseId { db_id }, &seq_db_meta.data, None)?, // (db_id) -> db_meta
+                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), // (tenant, db_id, tb_name) -> tb_id
+                        txn_op_put_pb(&tbid, &seq_table_meta.data, None)?, // (tenant, db_id, tb_id) -> tb_meta
+                    ],
+                    policy_cleanup_ops,
+                ]
+                .concat(),
+            );
 
             let (succ, _responses) = send_txn(kv_api, txn).await?;
 
@@ -562,59 +566,123 @@ async fn cleanup_missing_policies_on_undrop(
     let mut ops = Vec::new();
     let mut conditions = Vec::new();
 
-    if !table_meta.column_mask_policy_columns_ids.is_empty() {
-        let mut policy_columns: BTreeMap<u64, Vec<u32>> = BTreeMap::new();
-        for (column_id, policy_map) in &table_meta.column_mask_policy_columns_ids {
-            policy_columns
-                .entry(policy_map.policy_id)
-                .or_default()
-                .push(*column_id);
-        }
+    // Cleanup missing masking policies
+    cleanup_missing_masking_policies(
+        kv_api,
+        tenant,
+        table_id,
+        table_meta,
+        &mut ops,
+        &mut conditions,
+    )
+    .await?;
 
-        let mut removed_any = false;
-        for (policy_id, columns) in policy_columns {
-            let policy_ident = DataMaskIdIdent::new_generic(tenant, DataMaskId::new(policy_id));
-            if kv_api.get_pb(&policy_ident).await?.is_none() {
-                removed_any = true;
-                for column_id in columns {
-                    table_meta.column_mask_policy_columns_ids.remove(&column_id);
-                }
-                conditions.push(txn_cond_eq_seq(&policy_ident, 0));
-                let binding_ident =
-                    MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
-                        policy_id,
-                        table_id,
-                    });
-                ops.push(txn_op_del(&binding_ident));
-            }
-        }
-
-        if removed_any {
-            table_meta.column_mask_policy = None;
-        }
-    }
-
-    if let Some(policy_map) = table_meta.row_access_policy_columns_ids.clone() {
-        let policy_ident = RowAccessPolicyIdIdent::new_generic(
-            tenant,
-            RowAccessPolicyId::new(policy_map.policy_id),
-        );
-        if kv_api.get_pb(&policy_ident).await?.is_none() {
-            table_meta.row_access_policy_columns_ids = None;
-            table_meta.row_access_policy = None;
-            conditions.push(txn_cond_eq_seq(&policy_ident, 0));
-            let binding_ident = RowAccessPolicyTableIdIdent::new_generic(
-                tenant.clone(),
-                RowAccessPolicyIdTableId {
-                    policy_id: policy_map.policy_id,
-                    table_id,
-                },
-            );
-            ops.push(txn_op_del(&binding_ident));
-        }
-    }
+    // Cleanup missing row access policy
+    cleanup_missing_row_access_policy(
+        kv_api,
+        tenant,
+        table_id,
+        table_meta,
+        &mut ops,
+        &mut conditions,
+    )
+    .await?;
 
     Ok((ops, conditions))
+}
+
+/// Helper function to cleanup missing masking policies during table undrop
+async fn cleanup_missing_masking_policies(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant: &Tenant,
+    table_id: u64,
+    table_meta: &mut TableMeta,
+    ops: &mut Vec<TxnOp>,
+    conditions: &mut Vec<TxnCondition>,
+) -> Result<(), MetaError> {
+    if table_meta.column_mask_policy_columns_ids.is_empty() {
+        return Ok(());
+    }
+
+    // Group columns by policy ID
+    let mut policy_columns: BTreeMap<u64, Vec<u32>> = BTreeMap::new();
+    for (column_id, policy_map) in &table_meta.column_mask_policy_columns_ids {
+        policy_columns
+            .entry(policy_map.policy_id)
+            .or_default()
+            .push(*column_id);
+    }
+
+    // Check which policies are missing and collect them
+    let mut missing_policies = std::collections::HashSet::new();
+    for (policy_id, columns) in policy_columns {
+        let policy_ident = DataMaskIdIdent::new_generic(tenant, DataMaskId::new(policy_id));
+
+        // Verify policy doesn't exist
+        if kv_api.get_pb(&policy_ident).await?.is_none() {
+            missing_policies.insert(policy_id);
+
+            // Add condition to ensure policy remains missing (seq = 0)
+            conditions.push(txn_cond_eq_seq(&policy_ident, 0));
+
+            // Delete the binding record
+            let binding_ident =
+                MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                    policy_id,
+                    table_id,
+                });
+            ops.push(txn_op_del(&binding_ident));
+
+            // Remove all columns associated with this missing policy
+            for column_id in columns {
+                table_meta.column_mask_policy_columns_ids.remove(&column_id);
+            }
+        }
+    }
+
+    // Clear the legacy policy reference if any policies were removed
+    if !missing_policies.is_empty() {
+        table_meta.column_mask_policy = None;
+    }
+
+    Ok(())
+}
+
+/// Helper function to cleanup missing row access policy during table undrop
+async fn cleanup_missing_row_access_policy(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant: &Tenant,
+    table_id: u64,
+    table_meta: &mut TableMeta,
+    ops: &mut Vec<TxnOp>,
+    conditions: &mut Vec<TxnCondition>,
+) -> Result<(), MetaError> {
+    let Some(policy_map) = table_meta.row_access_policy_columns_ids.clone() else {
+        return Ok(());
+    };
+
+    let policy_ident =
+        RowAccessPolicyIdIdent::new_generic(tenant, RowAccessPolicyId::new(policy_map.policy_id));
+
+    // Verify policy doesn't exist
+    if kv_api.get_pb(&policy_ident).await?.is_none() {
+        // Clear policy references from table meta
+        table_meta.row_access_policy_columns_ids = None;
+        table_meta.row_access_policy = None;
+
+        // Add condition to ensure policy remains missing (seq = 0)
+        conditions.push(txn_cond_eq_seq(&policy_ident, 0));
+
+        // Delete the binding record
+        let binding_ident =
+            RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), RowAccessPolicyIdTableId {
+                policy_id: policy_map.policy_id,
+                table_id,
+            });
+        ops.push(txn_op_del(&binding_ident));
+    }
+
+    Ok(())
 }
 
 /// add __fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta

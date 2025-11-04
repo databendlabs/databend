@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
@@ -41,7 +42,7 @@ use crate::meta_txn_error::MetaTxnError;
 use crate::row_access_policy_api::RowAccessPolicyApi;
 use crate::security_policy_usage::collect_policy_usage;
 use crate::security_policy_usage::PolicyBinding;
-use crate::security_policy_usage::PolicyDropTxnBatch;
+use crate::security_policy_usage::PolicyDropAction;
 use crate::security_policy_usage::PolicyUsage;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
@@ -139,14 +140,18 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
     > {
         debug!(name_ident :? =(name_ident); "RowAccessPolicyApi: {}", func_name!());
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap().map_err(MetaTxnError::from)?.await;
+        /// Maximum number of cleanup batch iterations to prevent infinite loops.
+        /// Each iteration cleans up to 100 stale bindings. With this limit, we can
+        /// handle up to 1000 stale bindings before giving up.
+        const MAX_CLEANUP_ITERATIONS: usize = 10;
 
-            let res = self
-                .get_id_and_value(name_ident)
-                .await
-                .map_err(MetaTxnError::from)?;
+        let mut trials = txn_backoff(None, func_name!());
+        let mut cleanup_iterations = 0;
+
+        loop {
+            trials.next().unwrap()?.await;
+
+            let res = self.get_id_and_value(name_ident).await?;
             debug!(res :? = res, name_key :? =(name_ident); "{}", func_name!());
 
             let Some((seq_id, seq_meta)) = res else {
@@ -164,46 +169,90 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             }
 
             let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
+            let action = usage.prepare_drop_action(name_ident.tenant(), policy_id);
 
-            let PolicyDropTxnBatch {
-                prefix,
-                binding_count,
-                bindings,
-                table_updates,
-                finalize_policy,
-            } = usage.prepare_drop_batch(name_ident.tenant(), policy_id);
+            match action {
+                PolicyDropAction::FinalDrop {
+                    prefix,
+                    binding_count,
+                    bindings,
+                    table_updates,
+                } => {
+                    let mut txn = TxnRequest::default();
+                    // Ensure no new bindings were created concurrently
+                    txn.condition
+                        .push(txn_cond_eq_keys_with_prefix(&prefix, binding_count));
 
-            let mut txn = TxnRequest::default();
-            txn.condition
-                .push(txn_cond_eq_keys_with_prefix(&prefix, binding_count));
+                    txn_delete_exact(&mut txn, name_ident, seq_id.seq);
+                    txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
 
-            if finalize_policy {
-                txn_delete_exact(&mut txn, name_ident, seq_id.seq);
-                txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-            }
+                    for binding in bindings {
+                        txn_delete_exact(&mut txn, &binding.ident, binding.seq);
+                    }
 
-            for binding in bindings {
-                txn_delete_exact(&mut txn, &binding.ident, binding.seq);
-            }
+                    // Clean up stale policy references in dropped table metadata
+                    for update in table_updates {
+                        txn.condition
+                            .push(txn_cond_eq_seq(&update.table_id, update.seq));
+                        let op = txn_op_put_pb(&update.table_id, &update.meta, None)?;
+                        txn.if_then.push(op);
+                    }
 
-            for update in table_updates {
-                txn.condition
-                    .push(txn_cond_eq_seq(&update.table_id, update.seq));
-                let op = txn_op_put_pb(&update.table_id, &update.meta, None)
-                    .map_err(MetaTxnError::from)?;
-                txn.if_then.push(op);
-            }
+                    let (succ, _responses) = send_txn(self, txn).await?;
 
-            let (succ, _responses) = send_txn(self, txn).await.map_err(MetaTxnError::from)?;
-
-            if finalize_policy {
-                debug!(succ = succ;"{}", func_name!());
-                if succ {
-                    return Ok(Ok(Some((seq_id, seq_meta))));
+                    if succ {
+                        debug!("Policy dropped successfully");
+                        return Ok(Ok(Some((seq_id, seq_meta))));
+                    }
+                    // Retry if transaction failed
                 }
-            } else {
-                debug!(succ = succ, cleanup = true;"{}", func_name!());
-                continue;
+
+                PolicyDropAction::CleanupBatch {
+                    prefix,
+                    binding_count,
+                    bindings,
+                    table_updates,
+                } => {
+                    cleanup_iterations += 1;
+                    if cleanup_iterations > MAX_CLEANUP_ITERATIONS {
+                        let op_desc = format!(
+                            "drop row access policy '{}' (too many stale bindings or concurrent conflicts)",
+                            name_ident.row_access_name()
+                        );
+                        return Err(MetaTxnError::TxnRetryMaxTimes(TxnRetryMaxTimes::new(
+                            &op_desc,
+                            MAX_CLEANUP_ITERATIONS as u32,
+                        )));
+                    }
+
+                    // Incremental cleanup: Remove a batch of stale bindings to avoid oversized transactions.
+                    // This transaction only cleans up stale bindings; it does NOT drop the policy itself.
+                    // After successful cleanup, the loop retries and may progress to FinalDrop.
+                    //
+                    // Note: If the process crashes mid-cleanup, remaining stale bindings will be cleaned
+                    // on the next DROP attempt. This is acceptable as the cleanup is idempotent.
+                    let mut txn = TxnRequest::default();
+                    txn.condition
+                        .push(txn_cond_eq_keys_with_prefix(&prefix, binding_count));
+
+                    for binding in bindings {
+                        txn_delete_exact(&mut txn, &binding.ident, binding.seq);
+                    }
+
+                    for update in table_updates {
+                        txn.condition
+                            .push(txn_cond_eq_seq(&update.table_id, update.seq));
+                        let op = txn_op_put_pb(&update.table_id, &update.meta, None)?;
+                        txn.if_then.push(op);
+                    }
+
+                    let (succ, _) = send_txn(self, txn).await?;
+                    debug!(
+                        "Cleaned up batch of stale bindings (iteration {}/{}), succ={}",
+                        cleanup_iterations, MAX_CLEANUP_ITERATIONS, succ
+                    );
+                    // Continue to next iteration to process remaining bindings
+                }
             }
         }
     }
@@ -252,12 +301,12 @@ impl PolicyBinding for RowAccessPolicyTableIdIdent {
     }
 
     fn remove_security_policy_from_table_meta(table_meta: &mut TableMeta, policy_id: u64) -> bool {
+        // For compatibility considerations, retain this field.
+        // row_access_policy should always be None.
+        table_meta.row_access_policy = None;
         match &table_meta.row_access_policy_columns_ids {
             Some(policy) if policy.policy_id == policy_id => {
                 table_meta.row_access_policy_columns_ids = None;
-                if table_meta.row_access_policy.is_some() {
-                    table_meta.row_access_policy = None;
-                }
                 true
             }
             _ => false,

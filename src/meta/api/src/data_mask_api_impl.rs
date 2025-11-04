@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::data_mask::CreateDatamaskReply;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskId;
@@ -44,7 +45,7 @@ use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
 use crate::security_policy_usage::collect_policy_usage;
 use crate::security_policy_usage::PolicyBinding;
-use crate::security_policy_usage::PolicyDropTxnBatch;
+use crate::security_policy_usage::PolicyDropAction;
 use crate::security_policy_usage::PolicyUsage;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
@@ -152,14 +153,18 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     > {
         debug!(name_ident :? =(name_ident); "DatamaskApi: {}", func_name!());
 
-        let mut trials = txn_backoff(None, func_name!());
-        loop {
-            trials.next().unwrap().map_err(MetaTxnError::from)?.await;
+        /// Maximum number of cleanup batch iterations to prevent infinite loops.
+        /// Each iteration cleans up to 100 stale bindings. With this limit, we can
+        /// handle up to 1000 stale bindings before giving up.
+        const MAX_CLEANUP_ITERATIONS: usize = 10;
 
-            let res = self
-                .get_id_and_value(name_ident)
-                .await
-                .map_err(MetaTxnError::from)?;
+        let mut trials = txn_backoff(None, func_name!());
+        let mut cleanup_iterations = 0;
+
+        loop {
+            trials.next().unwrap()?.await;
+
+            let res = self.get_id_and_value(name_ident).await?;
             debug!(res :? = res, name_key :? =(name_ident); "{}", func_name!());
 
             let Some((seq_id, seq_meta)) = res else {
@@ -176,51 +181,93 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             }
 
             let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
+            let action = usage.prepare_drop_action(name_ident.tenant(), policy_id);
 
-            let PolicyDropTxnBatch {
-                prefix,
-                binding_count,
-                bindings,
-                table_updates,
-                finalize_policy,
-            } = usage.prepare_drop_batch(name_ident.tenant(), policy_id);
+            match action {
+                PolicyDropAction::FinalDrop {
+                    prefix,
+                    binding_count,
+                    bindings,
+                    table_updates,
+                } => {
+                    let mut txn = TxnRequest::default();
+                    // Ensure no new bindings were created concurrently
+                    txn.condition
+                        .push(txn_cond_eq_keys_with_prefix(&prefix, binding_count));
 
-            let mut txn = TxnRequest::default();
-            txn.condition
-                .push(txn_cond_eq_keys_with_prefix(&prefix, binding_count));
+                    txn_delete_exact(&mut txn, name_ident, seq_id.seq);
+                    txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
 
-            if finalize_policy {
-                txn_delete_exact(&mut txn, name_ident, seq_id.seq);
-                txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-            }
+                    for binding in bindings {
+                        txn_delete_exact(&mut txn, &binding.ident, binding.seq);
+                    }
 
-            for binding in bindings {
-                txn_delete_exact(&mut txn, &binding.ident, binding.seq);
-            }
+                    // Clean up stale policy references in dropped table metadata
+                    for update in table_updates {
+                        txn.condition
+                            .push(txn_cond_eq_seq(&update.table_id, update.seq));
+                        let op = txn_op_put_pb(&update.table_id, &update.meta, None)?;
+                        txn.if_then.push(op);
+                    }
 
-            for update in table_updates {
-                txn.condition
-                    .push(txn_cond_eq_seq(&update.table_id, update.seq));
-                let op = txn_op_put_pb(&update.table_id, &update.meta, None)
-                    .map_err(MetaTxnError::from)?;
-                txn.if_then.push(op);
-            }
+                    // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
+                    clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
 
-            if finalize_policy {
-                // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
-                clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
-            }
+                    let (succ, _responses) = send_txn(self, txn).await?;
 
-            let (succ, _responses) = send_txn(self, txn).await.map_err(MetaTxnError::from)?;
-
-            if finalize_policy {
-                debug!(succ = succ;"{}", func_name!());
-                if succ {
-                    return Ok(Ok(Some((seq_id, seq_meta))));
+                    if succ {
+                        debug!("Policy dropped successfully");
+                        return Ok(Ok(Some((seq_id, seq_meta))));
+                    }
+                    // Retry if transaction failed
                 }
-            } else {
-                debug!(succ = succ, cleanup = true;"{}", func_name!());
-                continue;
+
+                PolicyDropAction::CleanupBatch {
+                    prefix,
+                    binding_count,
+                    bindings,
+                    table_updates,
+                } => {
+                    cleanup_iterations += 1;
+                    if cleanup_iterations > MAX_CLEANUP_ITERATIONS {
+                        let op_desc = format!(
+                            "drop masking policy '{}' (too many stale bindings or concurrent conflicts)",
+                            name_ident.data_mask_name()
+                        );
+                        return Err(MetaTxnError::TxnRetryMaxTimes(TxnRetryMaxTimes::new(
+                            &op_desc,
+                            MAX_CLEANUP_ITERATIONS as u32,
+                        )));
+                    }
+
+                    // Incremental cleanup: Remove a batch of stale bindings to avoid oversized transactions.
+                    // This transaction only cleans up stale bindings; it does NOT drop the policy itself.
+                    // After successful cleanup, the loop retries and may progress to FinalDrop.
+                    //
+                    // Note: If the process crashes mid-cleanup, remaining stale bindings will be cleaned
+                    // on the next DROP attempt. This is acceptable as the cleanup is idempotent.
+                    let mut txn = TxnRequest::default();
+                    txn.condition
+                        .push(txn_cond_eq_keys_with_prefix(&prefix, binding_count));
+
+                    for binding in bindings {
+                        txn_delete_exact(&mut txn, &binding.ident, binding.seq);
+                    }
+
+                    for update in table_updates {
+                        txn.condition
+                            .push(txn_cond_eq_seq(&update.table_id, update.seq));
+                        let op = txn_op_put_pb(&update.table_id, &update.meta, None)?;
+                        txn.if_then.push(op);
+                    }
+
+                    let (succ, _) = send_txn(self, txn).await?;
+                    debug!(
+                        "Cleaned up batch of stale bindings (iteration {}/{}), succ={}",
+                        cleanup_iterations, MAX_CLEANUP_ITERATIONS, succ
+                    );
+                    // Continue to next iteration to process remaining bindings
+                }
             }
         }
     }
@@ -255,13 +302,10 @@ async fn clear_table_column_mask_policy(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_ident: &DataMaskNameIdent,
     txn: &mut TxnRequest,
-) -> Result<(), MetaTxnError> {
+) -> Result<(), MetaError> {
     let id_list_key = MaskPolicyTableIdListIdent::new_from(name_ident.clone());
 
-    let seq_id_list = kv_api
-        .get_pb(&id_list_key)
-        .await
-        .map_err(MetaTxnError::from)?;
+    let seq_id_list = kv_api.get_pb(&id_list_key).await?;
 
     let Some(seq_id_list) = seq_id_list else {
         return Ok(());
@@ -289,17 +333,15 @@ impl PolicyBinding for MaskPolicyTableIdIdent {
     }
 
     fn remove_security_policy_from_table_meta(table_meta: &mut TableMeta, policy_id: u64) -> bool {
+        // For compatibility considerations, retain this field.
+        // column_mask_policy should always None.
+        table_meta.column_mask_policy = None;
         let before = table_meta.column_mask_policy_columns_ids.len();
         table_meta
             .column_mask_policy_columns_ids
             .retain(|_, policy| policy.policy_id != policy_id);
 
-        let removed = before != table_meta.column_mask_policy_columns_ids.len();
-        if removed {
-            table_meta.column_mask_policy = None;
-        }
-
-        removed
+        before != table_meta.column_mask_policy_columns_ids.len()
     }
 }
 
