@@ -102,7 +102,7 @@ impl Join for InnerHashJoin {
             desc.inlist_threshold,
             desc.bloom_threshold,
             desc.min_max_threshold,
-            desc.bloom_selectivity_threshold,
+            desc.selectivity_threshold,
         )
     }
 

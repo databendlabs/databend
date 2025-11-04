@@ -29,6 +29,7 @@ pub fn merge_join_runtime_filter_packets(
         "RUNTIME-FILTER: merge_join_runtime_filter_packets input: {:?}",
         packets
     );
+    let total_build_rows: usize = packets.iter().map(|packet| packet.build_rows).sum();
     // Skip packets that `JoinRuntimeFilterPacket::packets` is `None`
     let packets = packets
         .into_iter()
@@ -36,7 +37,10 @@ pub fn merge_join_runtime_filter_packets(
         .collect::<Vec<_>>();
 
     if packets.is_empty() {
-        return Ok(JoinRuntimeFilterPacket::default());
+        return Ok(JoinRuntimeFilterPacket {
+            packets: None,
+            build_rows: total_build_rows,
+        });
     }
 
     let mut result = HashMap::new();
@@ -55,6 +59,7 @@ pub fn merge_join_runtime_filter_packets(
     );
     Ok(JoinRuntimeFilterPacket {
         packets: Some(result),
+        build_rows: total_build_rows,
     })
 }
 

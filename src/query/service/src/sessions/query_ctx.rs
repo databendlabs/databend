@@ -537,6 +537,9 @@ impl QueryContext {
             has_inlist: bool,
             has_min_max: bool,
             stats: RuntimeFilterStatsSnapshot,
+            build_rows: usize,
+            build_table_rows: Option<u64>,
+            enabled: bool,
         }
 
         let runtime_filters = self.shared.runtime_filters.read();
@@ -556,6 +559,9 @@ impl QueryContext {
                     has_inlist: entry.inlist.is_some(),
                     has_min_max: entry.min_max.is_some(),
                     stats: entry.stats.snapshot(),
+                    build_rows: entry.build_rows,
+                    build_table_rows: entry.build_table_rows,
+                    enabled: entry.enabled,
                 });
             }
 
@@ -586,6 +592,9 @@ impl QueryContext {
                     has_inlist,
                     has_min_max,
                     stats,
+                    build_rows,
+                    build_table_rows,
+                    enabled,
                 } = filter;
 
                 let mut types = Vec::new();
@@ -607,6 +616,14 @@ impl QueryContext {
                 let mut detail_children = vec![
                     FormatTreeNode::new(format!("probe expr: {}", probe_expr)),
                     FormatTreeNode::new(format!("types: [{}]", type_text)),
+                    FormatTreeNode::new(format!("enabled: {}", enabled)),
+                    FormatTreeNode::new(format!("build rows: {}", build_rows)),
+                    FormatTreeNode::new(format!(
+                        "build table rows: {}",
+                        build_table_rows
+                            .map(|v| v.to_string())
+                            .unwrap_or_else(|| "unknown".to_string())
+                    )),
                 ];
 
                 if let Some(column) = bloom_column {
@@ -1667,15 +1684,12 @@ impl TableContext for QueryContext {
                     .iter_mut()
                     .find(|existing| existing.id == new_filter.id)
                 {
-                    if new_filter.bloom.is_some() {
-                        existing.bloom = new_filter.bloom.take();
-                    }
-                    if new_filter.inlist.is_some() {
-                        existing.inlist = new_filter.inlist.take();
-                    }
-                    if new_filter.min_max.is_some() {
-                        existing.min_max = new_filter.min_max.take();
-                    }
+                    existing.bloom = new_filter.bloom.take();
+                    existing.inlist = new_filter.inlist.take();
+                    existing.min_max = new_filter.min_max.take();
+                    existing.build_rows = new_filter.build_rows;
+                    existing.build_table_rows = new_filter.build_table_rows;
+                    existing.enabled = new_filter.enabled;
                 } else {
                     entry.filters.push(new_filter);
                 }

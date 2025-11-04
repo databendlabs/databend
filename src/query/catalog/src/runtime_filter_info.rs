@@ -61,6 +61,9 @@ pub struct RuntimeFilterEntry {
     pub inlist: Option<Expr<String>>,
     pub min_max: Option<Expr<String>>,
     pub stats: Arc<RuntimeFilterStats>,
+    pub build_rows: usize,
+    pub build_table_rows: Option<u64>,
+    pub enabled: bool,
 }
 
 #[derive(Clone)]

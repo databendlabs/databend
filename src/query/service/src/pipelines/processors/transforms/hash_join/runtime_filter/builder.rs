@@ -42,7 +42,7 @@ struct JoinRuntimeFilterPacketBuilder<'a> {
     inlist_threshold: usize,
     bloom_threshold: usize,
     min_max_threshold: usize,
-    bloom_selectivity_threshold: u64,
+    selectivity_threshold: u64,
 }
 
 impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
@@ -53,7 +53,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         inlist_threshold: usize,
         bloom_threshold: usize,
         min_max_threshold: usize,
-        bloom_selectivity_threshold: u64,
+        selectivity_threshold: u64,
     ) -> Result<Self> {
         let build_key_column = Self::eval_build_key_column(data_blocks, func_ctx, build_key)?;
         Ok(Self {
@@ -62,14 +62,14 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
             inlist_threshold,
             bloom_threshold,
             min_max_threshold,
-            bloom_selectivity_threshold,
+            selectivity_threshold,
         })
     }
     fn build(&self, desc: &RuntimeFilterDesc) -> Result<RuntimeFilterPacket> {
         if !should_enable_runtime_filter(
             desc,
             self.build_key_column.len(),
-            self.bloom_selectivity_threshold,
+            self.selectivity_threshold,
         ) {
             return Ok(RuntimeFilterPacket {
                 id: desc.id,
@@ -198,7 +198,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
     }
 }
 
-fn should_enable_runtime_filter(
+pub(super) fn should_enable_runtime_filter(
     desc: &RuntimeFilterDesc,
     build_num_rows: usize,
     selectivity_threshold: u64,
@@ -248,10 +248,13 @@ pub fn build_runtime_filter_packet(
     inlist_threshold: usize,
     bloom_threshold: usize,
     min_max_threshold: usize,
-    bloom_selectivity_threshold: u64,
+    selectivity_threshold: u64,
 ) -> Result<JoinRuntimeFilterPacket> {
     if build_num_rows == 0 {
-        return Ok(JoinRuntimeFilterPacket::default());
+        return Ok(JoinRuntimeFilterPacket {
+            packets: None,
+            build_rows: build_num_rows,
+        });
     }
     let mut runtime_filters = HashMap::new();
     for rf in runtime_filter_desc {
@@ -264,12 +267,13 @@ pub fn build_runtime_filter_packet(
                 inlist_threshold,
                 bloom_threshold,
                 min_max_threshold,
-                bloom_selectivity_threshold,
+                selectivity_threshold,
             )?
             .build(rf)?,
         );
     }
     Ok(JoinRuntimeFilterPacket {
         packets: Some(runtime_filters),
+        build_rows: build_num_rows,
     })
 }

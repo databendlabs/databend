@@ -56,9 +56,13 @@ impl Debug for RuntimeFilterPacket {
 /// # Fields
 ///
 /// * `packets` - A map of runtime filter packets, keyed by their unique identifier `RuntimeFilterPacket::id`. When `packets` is `None`, it means that `build_num_rows` is zero.
+/// * `build_rows` - Total number of rows used when building the runtime filters.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct JoinRuntimeFilterPacket {
+    #[serde(default)]
     pub packets: Option<HashMap<usize, RuntimeFilterPacket>>,
+    #[serde(default)]
+    pub build_rows: usize,
 }
 
 #[typetag::serde(name = "join_runtime_filter_packet")]

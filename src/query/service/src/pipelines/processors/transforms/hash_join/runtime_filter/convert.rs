@@ -35,6 +35,7 @@ use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use xorf::BinaryFuse16;
 
+use super::builder::should_enable_runtime_filter;
 use super::packet::JoinRuntimeFilterPacket;
 use super::packet::SerializableDomain;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
@@ -50,7 +51,9 @@ use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 pub fn build_runtime_filter_infos(
     packet: JoinRuntimeFilterPacket,
     runtime_filter_descs: HashMap<usize, &RuntimeFilterDesc>,
+    selectivity_threshold: u64,
 ) -> Result<HashMap<usize, RuntimeFilterInfo>> {
+    let total_build_rows = packet.build_rows;
     let Some(packets) = packet.packets else {
         return Ok(HashMap::new());
     };
@@ -59,6 +62,7 @@ pub fn build_runtime_filter_infos(
     // Iterate over all runtime filter packets
     for packet in packets.into_values() {
         let desc = runtime_filter_descs.get(&packet.id).unwrap();
+        let enabled = should_enable_runtime_filter(desc, total_build_rows, selectivity_threshold);
 
         // Apply this single runtime filter to all probe targets (scan_id, probe_key pairs)
         // This implements the design goal: "one runtime filter built once, pushed down to multiple scans"
@@ -68,26 +72,41 @@ pub fn build_runtime_filter_infos(
             let mut runtime_entry = RuntimeFilterEntry {
                 id: desc.id,
                 probe_expr: probe_key.clone(),
-                bloom: if let Some(ref bloom) = packet.bloom {
-                    Some(build_bloom_filter(bloom.clone(), probe_key)?)
+                bloom: if enabled {
+                    if let Some(ref bloom) = packet.bloom {
+                        Some(build_bloom_filter(bloom.clone(), probe_key)?)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 },
-                inlist: if let Some(ref inlist) = packet.inlist {
-                    Some(build_inlist_filter(inlist.clone(), probe_key)?)
+                inlist: if enabled {
+                    if let Some(ref inlist) = packet.inlist {
+                        Some(build_inlist_filter(inlist.clone(), probe_key)?)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 },
-                min_max: if let Some(ref min_max) = packet.min_max {
-                    Some(build_min_max_filter(
-                        min_max.clone(),
-                        probe_key,
-                        &desc.build_key,
-                    )?)
+                min_max: if enabled {
+                    if let Some(ref min_max) = packet.min_max {
+                        Some(build_min_max_filter(
+                            min_max.clone(),
+                            probe_key,
+                            &desc.build_key,
+                        )?)
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 },
                 stats: Arc::new(RuntimeFilterStats::new()),
+                build_rows: total_build_rows,
+                build_table_rows: desc.build_table_rows,
+                enabled,
             };
 
             if let Some(existing) = entry

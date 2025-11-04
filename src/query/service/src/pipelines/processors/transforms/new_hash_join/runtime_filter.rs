@@ -32,7 +32,7 @@ pub struct RuntimeFiltersDesc {
     pub bloom_threshold: usize,
     pub inlist_threshold: usize,
     pub min_max_threshold: usize,
-    pub bloom_selectivity_threshold: u64,
+    pub selectivity_threshold: u64,
 
     broadcast_id: Option<u32>,
     pub filters_desc: Vec<RuntimeFilterDesc>,
@@ -45,8 +45,7 @@ impl RuntimeFiltersDesc {
         let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
         let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
         let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
-        let bloom_selectivity_threshold =
-            settings.get_join_bloom_runtime_filter_selectivity_threshold()?;
+        let selectivity_threshold = settings.get_join_runtime_filter_selectivity_threshold()?;
 
         let mut filters_desc = Vec::with_capacity(join.runtime_filter.filters.len());
         let mut runtime_filters_ready = Vec::with_capacity(join.runtime_filter.filters.len());
@@ -71,7 +70,7 @@ impl RuntimeFiltersDesc {
             bloom_threshold,
             inlist_threshold,
             min_max_threshold,
-            bloom_selectivity_threshold,
+            selectivity_threshold,
             runtime_filters_ready,
             ctx: ctx.clone(),
             broadcast_id: join.broadcast_id,
@@ -84,7 +83,8 @@ impl RuntimeFiltersDesc {
         }
 
         let runtime_filter_descs = self.filters_desc.iter().map(|r| (r.id, r)).collect();
-        let runtime_filter_infos = build_runtime_filter_infos(packet, runtime_filter_descs)?;
+        let runtime_filter_infos =
+            build_runtime_filter_infos(packet, runtime_filter_descs, self.selectivity_threshold)?;
 
         self.ctx.set_runtime_filter(runtime_filter_infos);
 

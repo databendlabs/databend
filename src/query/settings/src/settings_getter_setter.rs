@@ -388,8 +388,8 @@ impl Settings {
         Ok(self.try_get_u64("enable_join_runtime_filter")? != 0)
     }
 
-    pub fn get_join_bloom_runtime_filter_selectivity_threshold(&self) -> Result<u64> {
-        self.try_get_u64("join_bloom_runtime_filter_selectivity_threshold")
+    pub fn get_join_runtime_filter_selectivity_threshold(&self) -> Result<u64> {
+        self.try_get_u64("join_runtime_filter_selectivity_threshold")
     }
 
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
