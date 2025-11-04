@@ -148,7 +148,7 @@ impl IPhysicalPlan for AggregateFinal {
             .get_enable_experimental_aggregate_hashtable()?;
         let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
         let max_restore_worker = builder.settings.get_max_aggregate_restore_worker()?;
-        let experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
+        let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
 
         let mut is_cluster_aggregate = false;
         if ExchangeSource::check_physical_plan(&self.input) {
@@ -163,6 +163,7 @@ impl IPhysicalPlan for AggregateFinal {
             is_cluster_aggregate,
             max_block_size as usize,
             max_spill_io_requests as usize,
+            enable_experiment_aggregate,
         )?;
 
         if params.group_columns.is_empty() {
@@ -200,7 +201,6 @@ impl IPhysicalPlan for AggregateFinal {
             params.clone(),
             max_restore_worker,
             after_group_parallel,
-            experiment_aggregate,
             builder.ctx.clone(),
         )
     }

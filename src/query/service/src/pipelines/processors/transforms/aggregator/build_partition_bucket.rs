@@ -107,8 +107,8 @@ fn build_partition_bucket_legacy(
 ) -> Result<()> {
     let operator = DataOperator::instance().spill_operator();
 
-    let input_nums = pipeline.output_len();
-    let transform = TransformPartitionBucket::create(input_nums, params.clone())?;
+    let input_num = pipeline.output_len();
+    let transform = TransformPartitionBucket::create(input_num, params.clone())?;
 
     let output = transform.get_output();
     let inputs_port = transform.get_inputs();
@@ -119,7 +119,7 @@ fn build_partition_bucket_legacy(
         vec![output],
     )]));
 
-    pipeline.try_resize(std::cmp::min(input_nums, max_restore_worker as usize))?;
+    pipeline.try_resize(std::cmp::min(input_num, max_restore_worker as usize))?;
     let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
     pipeline.add_transform(|input, output| {
         let operator = operator.clone();
@@ -144,10 +144,9 @@ pub fn build_partition_bucket(
     params: Arc<AggregatorParams>,
     max_restore_worker: u64,
     after_worker: usize,
-    experiment_aggregate: bool,
     ctx: Arc<QueryContext>,
 ) -> Result<()> {
-    if experiment_aggregate {
+    if params.enable_experiment_aggregate {
         build_partition_bucket_experimental(pipeline, params, after_worker, ctx)
     } else {
         build_partition_bucket_legacy(pipeline, params, max_restore_worker, after_worker)
