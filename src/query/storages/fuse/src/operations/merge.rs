@@ -103,12 +103,8 @@ impl FuseTable {
             true,
         )?;
         let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
-        let vector_index_builder = VectorIndexBuilder::try_create(
-            ctx.clone(),
-            &self.table_info.meta.indexes,
-            new_schema.clone(),
-            true,
-        );
+        let vector_index_builder =
+            VectorIndexBuilder::try_create(&self.table_info.meta.indexes, new_schema.clone(), true);
 
         let block_builder = BlockBuilder {
             ctx: ctx.clone(),

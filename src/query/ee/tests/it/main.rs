@@ -13,10 +13,6 @@
 // limitations under the License.
 
 #![feature(unwrap_infallible)]
-mod aggregating_index;
-mod inverted_index;
 mod license;
-mod ngram_index;
 mod storages;
 mod stream;
-mod vector_index;

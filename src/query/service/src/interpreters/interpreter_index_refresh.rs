@@ -27,8 +27,6 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_pipeline_core::ExecutionInfo;
@@ -44,7 +42,6 @@ use databend_common_storages_fuse::FuseBlockPartInfo;
 use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
-use databend_enterprise_aggregating_index::get_agg_index_handler;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::interpreters::Interpreter;
@@ -204,8 +201,6 @@ impl Interpreter for RefreshIndexInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
         let (mut query_plan, output_schema, select_columns) = match self.plan.query_plan.as_ref() {
             Plan::Query {
                 s_expr,
@@ -363,8 +358,7 @@ impl Interpreter for RefreshIndexInterpreter {
 
 async fn modify_last_update(ctx: Arc<QueryContext>, req: UpdateIndexReq) -> Result<()> {
     let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
-    let handler = get_agg_index_handler();
-    let _ = handler.do_update_index(catalog, req).await?;
+    let _ = catalog.update_index(req).await?;
     Ok(())
 }
 

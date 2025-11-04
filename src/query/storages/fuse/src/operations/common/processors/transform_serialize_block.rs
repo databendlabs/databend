@@ -170,7 +170,6 @@ impl TransformSerializeBlock {
             None
         };
         let vector_index_builder = VectorIndexBuilder::try_create(
-            ctx.clone(),
             &table.table_info.meta.indexes,
             source_schema.clone(),
             true,

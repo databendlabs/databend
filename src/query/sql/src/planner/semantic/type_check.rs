@@ -4644,12 +4644,6 @@ impl<'a> TypeChecker<'a> {
                         && matches!(col_data_type, DataType::Vector(_))
                         && matches!(&**argument, ScalarExpr::ConstantExpr(_))
                         && matches!(&target_type, DataType::Vector(_))
-                        && LicenseManagerSwitch::instance()
-                            .check_enterprise_enabled(
-                                self.ctx.get_license_key(),
-                                Feature::VectorIndex,
-                            )
-                            .is_ok()
                     {
                         let table_index = table_index.unwrap();
                         let table_entry = self.metadata.read().table(table_index).clone();

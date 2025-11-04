@@ -38,8 +38,6 @@ use databend_common_expression::FunctionKind;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -1079,11 +1077,6 @@ impl Binder {
     ) -> Result<SExpr> {
         if bind_context.bound_internal_columns.is_empty() {
             return Ok(s_expr);
-        }
-        // check inverted index license
-        if !bind_context.inverted_index_map.is_empty() {
-            LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
         }
         let bound_internal_columns = &bind_context.bound_internal_columns;
         let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);

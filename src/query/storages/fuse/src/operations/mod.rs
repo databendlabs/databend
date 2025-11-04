@@ -33,6 +33,7 @@ mod recluster;
 mod replace;
 mod replace_into;
 mod revert;
+mod table_index;
 mod truncate;
 mod util;
 
@@ -52,6 +53,7 @@ pub use read::need_reserve_block_info;
 pub use read::row_fetch_processor;
 pub use replace_into::*;
 pub use snapshot_hint::*;
+pub use table_index::do_refresh_table_index;
 pub use util::acquire_task_permit;
 pub use util::column_parquet_metas;
 pub use util::read_block;
