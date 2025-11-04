@@ -195,9 +195,11 @@ impl BlockReader {
                 let num_rows = deserialization_context.num_rows;
                 let field_name = column_node.field.name().to_owned();
 
+                let bytes = data.to_bytes();
+                let chunk = bytes.chunk();
                 let mut column_iter = data_chunk_to_col_iter(
                     column_meta,
-                    data.chunk(),
+                    &chunk,
                     num_rows,
                     &column_descriptor,
                     column_node.table_field.clone(),
