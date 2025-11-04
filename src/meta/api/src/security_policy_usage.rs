@@ -166,18 +166,17 @@ pub(crate) trait PolicyBinding: kvapi::Key + Sized {
 ///    updates occur in a single transaction with proper seq guards.
 ///
 /// The retry loop ensures eventual consistency even under high concurrency.
-pub(crate) async fn collect_policy_usage<K, E>(
+pub(crate) async fn collect_policy_usage<K>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: &Tenant,
     policy_id: u64,
-) -> Result<PolicyUsage<K>, E>
+) -> Result<PolicyUsage<K>, MetaError>
 where
     K: PolicyBinding + Clone + Send + Sync + 'static,
     K::ValueType: FromToProto + Send,
-    E: From<MetaError>,
 {
     let binding_prefix = K::prefix_for(tenant, policy_id);
-    let bindings = kv_api.list_pb_vec(&binding_prefix).await.map_err(E::from)?;
+    let bindings = kv_api.list_pb_vec(&binding_prefix).await?;
 
     let mut usage = PolicyUsage::default();
 
@@ -185,7 +184,7 @@ where
         let table_id = binding_ident.table_id();
         let table_key = TableId::new(table_id);
         let binding_seq = seqv.seq;
-        let table_meta_opt = kv_api.get_pb(&table_key).await.map_err(E::from)?;
+        let table_meta_opt = kv_api.get_pb(&table_key).await?;
         match table_meta_opt {
             Some(SeqV { seq, data, .. }) if data.drop_on.is_none() => {
                 usage.active_tables.push((table_id, seq));

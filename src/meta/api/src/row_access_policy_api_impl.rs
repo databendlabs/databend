@@ -159,8 +159,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             };
 
             let policy_id = *seq_id.data;
-            let usage =
-                collect_row_access_policy_usage(self, name_ident.tenant(), policy_id).await?;
+            let usage: RowAccessPolicyUsage =
+                collect_policy_usage(self, name_ident.tenant(), policy_id).await?;
             if !usage.active_tables.is_empty() {
                 let tenant = name_ident.tenant().tenant_name().to_string();
                 let policy_name = name_ident.row_access_name().to_string();
@@ -312,12 +312,4 @@ impl PolicyBinding for RowAccessPolicyTableIdIdent {
             _ => false,
         }
     }
-}
-
-async fn collect_row_access_policy_usage(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: &Tenant,
-    policy_id: u64,
-) -> Result<RowAccessPolicyUsage, MetaTxnError> {
-    collect_policy_usage(kv_api, tenant, policy_id).await
 }

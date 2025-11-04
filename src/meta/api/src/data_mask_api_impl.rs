@@ -172,7 +172,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             };
 
             let policy_id = *seq_id.data;
-            let usage = collect_mask_policy_usage(self, name_ident.tenant(), policy_id).await?;
+            let usage: MaskPolicyUsage =
+                collect_policy_usage(self, name_ident.tenant(), policy_id).await?;
             if !usage.active_tables.is_empty() {
                 let tenant = name_ident.tenant().tenant_name().to_string();
                 let policy_name = name_ident.data_mask_name().to_string();
@@ -343,12 +344,4 @@ impl PolicyBinding for MaskPolicyTableIdIdent {
 
         before != table_meta.column_mask_policy_columns_ids.len()
     }
-}
-
-async fn collect_mask_policy_usage(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: &Tenant,
-    policy_id: u64,
-) -> Result<MaskPolicyUsage, MetaTxnError> {
-    collect_policy_usage(kv_api, tenant, policy_id).await
 }
