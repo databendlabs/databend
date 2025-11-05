@@ -101,7 +101,7 @@ HashJoin
 ├── probe keys: [t1.b (#3), number (#4)]
 ├── keys is null equal: [false, false]
 ├── filters: []
-├── estimated rows: 1000.00
+├── estimated rows: 333.33
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
 │   ├── output columns: [number (#0)]
@@ -114,43 +114,46 @@ HashJoin
 └── EvalScalar(Probe)
     ├── output columns: [number (#4), b (#3)]
     ├── expressions: [CAST(t1.b (#2) AS UInt64 NULL)]
-    ├── estimated rows: 100.00
+    ├── estimated rows: 33.33
     └── EvalScalar
         ├── output columns: [number (#4), b (#2)]
         ├── expressions: [number (#4) + t1.a (#1)]
-        ├── estimated rows: 100.00
+        ├── estimated rows: 33.33
         └── HashJoin
-            ├── output columns: [number (#4), t1.number (#1)]
+            ├── output columns: [t1.number (#1), number (#4)]
             ├── join type: INNER
-            ├── build keys: [t1.a (#1)]
-            ├── probe keys: [outer.number (#4)]
+            ├── build keys: [outer.number (#4)]
+            ├── probe keys: [t1.a (#1)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── estimated rows: 100.00
-            ├── TableScan(Build)
-            │   ├── table: default.system.numbers
-            │   ├── output columns: [number (#1)]
-            │   ├── read rows: 10
-            │   ├── read size: < 1 KiB
-            │   ├── partitions total: 1
-            │   ├── partitions scanned: 1
-            │   ├── push downs: [filters: [], limit: NONE]
-            │   └── estimated rows: 10.00
-            └── AggregateFinal(Probe)
-                ├── output columns: [number (#4)]
-                ├── group by: [number]
-                ├── aggregate functions: []
-                ├── estimated rows: 10.00
-                └── AggregatePartial
-                    ├── group by: [number]
-                    ├── aggregate functions: []
-                    ├── estimated rows: 10.00
-                    └── TableScan
-                        ├── table: default.system.numbers
-                        ├── output columns: [number (#4)]
-                        ├── read rows: 10
-                        ├── read size: < 1 KiB
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 10.00
+            ├── build join filters:
+            │   └── filter id:0, build key:outer.number (#4), probe key:t1.a (#1), filter type:inlist,min_max
+            ├── estimated rows: 33.33
+            ├── AggregateFinal(Build)
+            │   ├── output columns: [number (#4)]
+            │   ├── group by: [number]
+            │   ├── aggregate functions: []
+            │   ├── estimated rows: 3.33
+            │   └── AggregatePartial
+            │       ├── group by: [number]
+            │       ├── aggregate functions: []
+            │       ├── estimated rows: 3.33
+            │       └── TableScan
+            │           ├── table: default.system.numbers
+            │           ├── output columns: [number (#4)]
+            │           ├── read rows: 10
+            │           ├── read size: < 1 KiB
+            │           ├── partitions total: 1
+            │           ├── partitions scanned: 1
+            │           ├── push downs: [filters: [], limit: NONE]
+            │           └── estimated rows: 10.00
+            └── TableScan(Probe)
+                ├── table: default.system.numbers
+                ├── output columns: [number (#1)]
+                ├── read rows: 10
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── push downs: [filters: [], limit: NONE]
+                ├── apply join filters: [#0]
+                └── estimated rows: 10.00

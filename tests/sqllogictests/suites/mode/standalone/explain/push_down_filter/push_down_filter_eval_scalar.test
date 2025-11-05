@@ -62,16 +62,16 @@ AggregateFinal
     ├── estimated rows: 1.00
     └── UnionAll
         ├── output columns: [sc (#9)]
-        ├── estimated rows: 1.00
+        ├── estimated rows: 2.00
         ├── AggregateFinal
         │   ├── output columns: [t.id (#0)]
         │   ├── group by: [id]
         │   ├── aggregate functions: []
-        │   ├── estimated rows: 0.00
+        │   ├── estimated rows: 1.00
         │   └── AggregatePartial
         │       ├── group by: [id]
         │       ├── aggregate functions: []
-        │       ├── estimated rows: 0.00
+        │       ├── estimated rows: 1.00
         │       └── HashJoin
         │           ├── output columns: [t.id (#0)]
         │           ├── join type: RIGHT OUTER

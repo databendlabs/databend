@@ -265,11 +265,11 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:CAST(t2.v['b']['c'] (#5) AS Int32 NULL), probe key:t1.a (#7), filter type:inlist,min_max
-├── estimated rows: 0.00
+├── estimated rows: 0.50
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#0), t2.v['b']['c'] (#5)]
 │   ├── filters: [is_true(TRY_CAST(t2.v['a'][0] (#2) AS UInt8 NULL) = 1)]
-│   ├── estimated rows: 0.00
+│   ├── estimated rows: 0.50
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
 │       ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]

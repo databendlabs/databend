@@ -173,11 +173,11 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:scalar_subquery_1 (#1), probe key:t.number (#0), filter type:inlist,min_max
-├── estimated rows: 0.00
+├── estimated rows: 1.00
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
 │   ├── filters: [numbers.number (#1) = 0]
-│   ├── estimated rows: 0.00
+│   ├── estimated rows: 0.50
 │   └── TableScan
 │       ├── table: default.system.numbers
 │       ├── output columns: [number (#1)]

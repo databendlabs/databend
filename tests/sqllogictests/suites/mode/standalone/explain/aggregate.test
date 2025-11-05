@@ -28,11 +28,11 @@ AggregateFinal
 ├── output columns: [numbers.number (#0)]
 ├── group by: [number]
 ├── aggregate functions: []
-├── estimated rows: 10.00
+├── estimated rows: 3.33
 └── AggregatePartial
     ├── group by: [number]
     ├── aggregate functions: []
-    ├── estimated rows: 10.00
+    ├── estimated rows: 3.33
     └── TableScan
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]

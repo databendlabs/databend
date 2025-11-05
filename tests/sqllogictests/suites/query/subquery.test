@@ -325,7 +325,7 @@ SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
 6  FL
 
 query IT
-SELECT * FROM ( SELECT * FROM c WHERE c_id < 6 ) c WHERE c_id in (SELECT o.c_id FROM o WHERE o.c_id = c.c_id AND c.bill!='MA');
+SELECT * FROM ( SELECT * FROM c WHERE c_id < 6 ) c WHERE c_id in (SELECT o.c_id FROM o WHERE o.c_id = c.c_id AND c.bill!='MA') ORDER BY c_id;
 ----
 1  CA
 2  TX
@@ -691,11 +691,11 @@ select 1 < ANY(SELECT 1.0)
 0
 
 query I
-select number from numbers(10) where number in (select unnest([1,2,3]))
+select number from numbers(10) where number in (select unnest([1,2,3])) ORDER BY number
 ----
-3
 1
 2
+3
 
 
 statement ok

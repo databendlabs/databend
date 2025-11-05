@@ -1248,11 +1248,11 @@ HashJoin: RIGHT OUTER
         └── Probe
             └── HashJoin: CROSS
                 ├── Build
-                │   └── HashJoin: LEFT SEMI
+                │   └── HashJoin: RIGHT SEMI
                 │       ├── Build
-                │       │   └── Scan: default.default.sales (#3) (read rows: 500)
+                │       │   └── Scan: default.default.customers (#0) (read rows: 100)
                 │       └── Probe
-                │           └── Scan: default.default.customers (#0) (read rows: 100)
+                │           └── Scan: default.default.sales (#3) (read rows: 500)
                 └── Probe
                     └── Scan: default.default.sales (#1) (read rows: 500)
 
