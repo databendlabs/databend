@@ -360,6 +360,9 @@ pub trait TableContext: Send + Sync {
     fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>>;
 
     fn clear_runtime_filter(&self);
+    fn assert_no_runtime_filter_state(&self) -> Result<()> {
+        unimplemented!()
+    }
 
     fn set_merge_into_join(&self, join: MergeIntoJoin);
 

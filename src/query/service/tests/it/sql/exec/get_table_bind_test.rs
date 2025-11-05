@@ -1061,6 +1061,10 @@ impl TableContext for CtxDelegation {
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
         self.ctx.get_abort_notify()
     }
+
+    fn assert_no_runtime_filter_state(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

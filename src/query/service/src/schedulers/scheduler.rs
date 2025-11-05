@@ -143,25 +143,37 @@ impl ServiceQueryExecutor {
         &self,
         plan: &PhysicalPlan,
     ) -> Result<Vec<DataBlock>> {
-        let build_res = build_query_pipeline_without_render_result_set(&self.ctx, plan).await?;
-        let settings = ExecutorSettings::try_create(self.ctx.clone())?;
-        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
-        self.ctx.set_executor(pulling_executor.get_inner())?;
+        let result = async {
+            let build_res = build_query_pipeline_without_render_result_set(&self.ctx, plan).await?;
+            let settings = ExecutorSettings::try_create(self.ctx.clone())?;
+            let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+            self.ctx.set_executor(pulling_executor.get_inner())?;
 
-        PullingExecutorStream::create(pulling_executor)?
-            .try_collect::<Vec<DataBlock>>()
-            .await
+            PullingExecutorStream::create(pulling_executor)?
+                .try_collect::<Vec<DataBlock>>()
+                .await
+        }
+        .await;
+
+        self.ctx.clear_runtime_filter();
+        result
     }
 }
 
 #[async_trait]
 impl QueryExecutor for ServiceQueryExecutor {
     async fn execute_query_with_sql_string(&self, query_sql: &str) -> Result<Vec<DataBlock>> {
-        let mut planner = Planner::new(self.ctx.clone());
-        let (plan, _) = planner.plan_sql(query_sql).await?;
-        let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
-        let stream = interpreter.execute(self.ctx.clone()).await?;
-        let blocks = stream.try_collect::<Vec<_>>().await?;
-        Ok(blocks)
+        let result = async {
+            let mut planner = Planner::new(self.ctx.clone());
+            let (plan, _) = planner.plan_sql(query_sql).await?;
+            let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
+            let stream = interpreter.execute(self.ctx.clone()).await?;
+            let blocks = stream.try_collect::<Vec<_>>().await?;
+            Ok(blocks)
+        }
+        .await;
+
+        self.ctx.clear_runtime_filter();
+        result
     }
 }

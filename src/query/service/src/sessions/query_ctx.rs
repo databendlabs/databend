@@ -1672,6 +1672,30 @@ impl TableContext for QueryContext {
     fn clear_runtime_filter(&self) {
         let mut runtime_filters = self.shared.runtime_filters.write();
         runtime_filters.clear();
+        self.shared.runtime_filter_ready.write().clear();
+        self.shared
+            .runtime_filter_logged
+            .store(false, Ordering::SeqCst);
+    }
+
+    fn assert_no_runtime_filter_state(&self) -> Result<()> {
+        let query_id = self.get_id();
+        if !self.shared.runtime_filters.read().is_empty() {
+            return Err(ErrorCode::Internal(format!(
+                "Runtime filters should be empty for query {query_id}"
+            )));
+        }
+        if !self.shared.runtime_filter_ready.read().is_empty() {
+            return Err(ErrorCode::Internal(format!(
+                "Runtime filter ready set should be empty for query {query_id}"
+            )));
+        }
+        if self.shared.runtime_filter_logged.load(Ordering::Relaxed) {
+            return Err(ErrorCode::Internal(format!(
+                "Runtime filter logged flag should be reset for query {query_id}"
+            )));
+        }
+        Ok(())
     }
 
     fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
