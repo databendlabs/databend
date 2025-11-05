@@ -3,6 +3,7 @@ explain select * from numbers(1)
 ----
 TableScan
 ├── table: default.system.numbers
+├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read size: < 1 KiB
@@ -20,6 +21,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -41,12 +43,13 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
+        ├── scan id: 0
         ├── output columns: [number (#0)]
-	├── read rows: 0
-	├── read size: 0
-	├── partitions total: 0
-	├── partitions scanned: 0
-	├── push downs: [filters: [false], limit: NONE]
+        ├── read rows: 0
+        ├── read size: 0
+        ├── partitions total: 0
+        ├── partitions scanned: 0
+        ├── push downs: [filters: [false], limit: NONE]
         └── estimated rows: 1.00
 
 query T
@@ -62,6 +65,7 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
+        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read size: < 1 KiB
@@ -79,6 +83,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -92,6 +97,7 @@ explain select * from numbers(1) where TRUE and 1 = 1
 ----
 TableScan
 ├── table: default.system.numbers
+├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read size: < 1 KiB
@@ -120,6 +126,7 @@ explain select a from (select number as a, number as b from numbers(1))
 ----
 TableScan
 ├── table: default.system.numbers
+├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read size: < 1 KiB
@@ -133,6 +140,7 @@ explain select a from (select number as a, number+1 as b from numbers(1))
 ----
 TableScan
 ├── table: default.system.numbers
+├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 1
 ├── read size: < 1 KiB
@@ -164,6 +172,7 @@ EvalScalar
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t_json
+    ├── scan id: 0
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -182,6 +191,7 @@ EvalScalar
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t_json
+    ├── scan id: 0
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
     ├── read size: < 1 KiB

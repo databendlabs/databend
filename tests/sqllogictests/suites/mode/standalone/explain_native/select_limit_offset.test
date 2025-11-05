@@ -139,7 +139,7 @@ Limit
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:t.a (#0), probe key:t1.a (#1), filter type:inlist,min_max
+    │   └── filter id:0, build key:t.a (#0), probe targets:[t1.a (#1)@scan1], filter type:bloom,inlist,min_max
     ├── estimated rows: 2.00
     ├── Limit(Build)
     │   ├── output columns: [t.a (#0)]
@@ -148,6 +148,7 @@ Limit
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t
+    │       ├── scan id: 0
     │       ├── output columns: [a (#0)]
     │       ├── read rows: 1
     │       ├── read size: < 1 KiB
@@ -158,6 +159,7 @@ Limit
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t1
+        ├── scan id: 1
         ├── output columns: [a (#1)]
         ├── read rows: 2
         ├── read size: < 1 KiB
@@ -184,7 +186,7 @@ Limit
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:t.a (#1), probe key:t1.a (#0), filter type:inlist,min_max
+    │   └── filter id:0, build key:t.a (#1), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 2.00
     ├── Limit(Build)
     │   ├── output columns: [t.a (#1)]
@@ -193,6 +195,7 @@ Limit
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t
+    │       ├── scan id: 1
     │       ├── output columns: [a (#1)]
     │       ├── read rows: 1
     │       ├── read size: < 1 KiB
@@ -203,6 +206,7 @@ Limit
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: [a (#0)]
         ├── read rows: 2
         ├── read size: < 1 KiB

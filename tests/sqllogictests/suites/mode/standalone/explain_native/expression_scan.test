@@ -31,6 +31,7 @@ HashJoin
 ├── estimated rows: 3.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
+│   ├── scan id: 0
 │   ├── output columns: [a (#0), b (#1)]
 │   ├── read rows: 3
 │   ├── read size: < 1 KiB
@@ -72,6 +73,7 @@ HashJoin
 ├── estimated rows: 6.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
+│   ├── scan id: 0
 │   ├── output columns: [a (#0), b (#1), c (#2)]
 │   ├── read rows: 3
 │   ├── read size: < 1 KiB
@@ -113,6 +115,7 @@ HashJoin
 ├── estimated rows: 6.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
+│   ├── scan id: 0
 │   ├── output columns: [a (#0), b (#1), c (#2)]
 │   ├── read rows: 3
 │   ├── read size: < 1 KiB
@@ -168,6 +171,7 @@ HashJoin
 │   ├── estimated rows: 6.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t1
+│   │   ├── scan id: 0
 │   │   ├── output columns: [a (#0), b (#1), c (#2)]
 │   │   ├── read rows: 3
 │   │   ├── read size: < 1 KiB
@@ -240,6 +244,7 @@ HashJoin
 │   ├── estimated rows: 6.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t1
+│   │   ├── scan id: 0
 │   │   ├── output columns: [a (#0), b (#1), c (#2)]
 │   │   ├── read rows: 3
 │   │   ├── read size: < 1 KiB

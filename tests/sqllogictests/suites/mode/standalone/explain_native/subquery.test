@@ -32,6 +32,7 @@ Filter
     │           ├── estimated rows: 1.00
     │           ├── TableScan(Build)
     │           │   ├── table: default.system.numbers
+    │           │   ├── scan id: 3
     │           │   ├── output columns: []
     │           │   ├── read rows: 1
     │           │   ├── read size: < 1 KiB
@@ -41,6 +42,7 @@ Filter
     │           │   └── estimated rows: 1.00
     │           └── TableScan(Probe)
     │               ├── table: default.system.numbers
+    │               ├── scan id: 2
     │               ├── output columns: [number (#2)]
     │               ├── read rows: 1
     │               ├── read size: < 1 KiB
@@ -58,6 +60,7 @@ Filter
         ├── estimated rows: 1.00
         ├── TableScan(Build)
         │   ├── table: default.system.numbers
+        │   ├── scan id: 1
         │   ├── output columns: []
         │   ├── read rows: 1
         │   ├── read size: < 1 KiB
@@ -67,6 +70,7 @@ Filter
         │   └── estimated rows: 1.00
         └── TableScan(Probe)
             ├── table: default.system.numbers
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 1
             ├── read size: < 1 KiB
@@ -92,6 +96,7 @@ Filter
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
+    │   ├── scan id: 1
     │   ├── output columns: [number (#1)]
     │   ├── read rows: 1
     │   ├── read size: < 1 KiB
@@ -101,6 +106,7 @@ Filter
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
+        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read size: < 1 KiB
@@ -144,6 +150,7 @@ HashJoin
 │                   ├── estimated rows: 0.00
 │                   └── TableScan
 │                       ├── table: default.system.numbers
+│                       ├── scan id: 1
 │                       ├── output columns: [number (#1)]
 │                       ├── read rows: 1
 │                       ├── read size: < 1 KiB
@@ -153,6 +160,7 @@ HashJoin
 │                       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -172,7 +180,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:scalar_subquery_1 (#1), probe key:t.number (#0), filter type:inlist,min_max
+│   └── filter id:0, build key:scalar_subquery_1 (#1), probe targets:[t.number (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
@@ -180,6 +188,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.system.numbers
+│       ├── scan id: 1
 │       ├── output columns: [number (#1)]
 │       ├── read rows: 1
 │       ├── read size: < 1 KiB
@@ -189,6 +198,7 @@ HashJoin
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -211,6 +221,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
+│   ├── scan id: 1
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -220,6 +231,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -241,6 +253,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
+│   ├── scan id: 1
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -250,6 +263,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -271,6 +285,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
+│   ├── scan id: 1
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -280,6 +295,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -305,6 +321,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.system.numbers
+│       ├── scan id: 1
 │       ├── output columns: [number (#1)]
 │       ├── read rows: 1
 │       ├── read size: < 1 KiB
@@ -318,6 +335,7 @@ HashJoin
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
+        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read size: < 1 KiB
@@ -339,6 +357,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
+│   ├── scan id: 1
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -348,6 +367,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -369,6 +389,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
+│   ├── scan id: 1
 │   ├── output columns: [number (#1)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -378,6 +399,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -397,7 +419,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:number (#2), probe key:number (#0), filter type:inlist,min_max
+│   └── filter id:1, build key:number (#2), probe targets:[number (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.20
 ├── HashJoin(Build)
 │   ├── output columns: [numbers.number (#2)]
@@ -407,7 +429,7 @@ HashJoin
 │   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── build join filters:
-│   │   └── filter id:0, build key:number (#2), probe key:t1.number (#1), filter type:inlist,min_max
+│   │   └── filter id:0, build key:number (#2), probe targets:[t1.number (#1)@scan1], filter type:bloom,inlist,min_max
 │   ├── estimated rows: 0.20
 │   ├── Filter(Build)
 │   │   ├── output columns: [numbers.number (#2)]
@@ -424,6 +446,7 @@ HashJoin
 │   │           ├── estimated rows: 1.00
 │   │           └── TableScan
 │   │               ├── table: default.system.numbers
+│   │               ├── scan id: 2
 │   │               ├── output columns: [number (#2)]
 │   │               ├── read rows: 1
 │   │               ├── read size: < 1 KiB
@@ -433,6 +456,7 @@ HashJoin
 │   │               └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.system.numbers
+│       ├── scan id: 1
 │       ├── output columns: [number (#1)]
 │       ├── read rows: 1
 │       ├── read size: < 1 KiB
@@ -443,6 +467,7 @@ HashJoin
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -465,6 +490,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
+│   ├── scan id: 2
 │   ├── output columns: [number (#2)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -482,6 +508,7 @@ HashJoin
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.system.numbers
+    │   ├── scan id: 1
     │   ├── output columns: [number (#1)]
     │   ├── read rows: 1
     │   ├── read size: < 1 KiB
@@ -491,6 +518,7 @@ HashJoin
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
+        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 1
         ├── read size: < 1 KiB
@@ -543,6 +571,7 @@ EvalScalar
     │               ├── estimated rows: 0.00
     │               └── TableScan
     │                   ├── table: default.default.t
+    │                   ├── scan id: 1
     │                   ├── output columns: []
     │                   ├── read rows: 0
     │                   ├── read size: 0
@@ -553,6 +582,7 @@ EvalScalar
     │                   └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.default.t
+        ├── scan id: 0
         ├── output columns: [i (#0)]
         ├── read rows: 4
         ├── read size: < 1 KiB
