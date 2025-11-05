@@ -259,6 +259,7 @@ where
     ) -> Result<()> {
         let state = place.get::<State>();
         match &columns[0].to_column() {
+            Column::Null { .. } => Ok(()),
             Column::Nullable(box nullable_column) => {
                 let column = T::try_downcast_column(&nullable_column.column).unwrap();
                 state.add_batch(&column, Some(&nullable_column.validity))
@@ -278,6 +279,7 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         match &columns[0].to_column() {
+            Column::Null { .. } => (),
             Column::Nullable(box nullable_column) => {
                 let column = T::try_downcast_column(&nullable_column.column).unwrap();
                 let column_iter = T::iter_column(&column);
@@ -308,6 +310,7 @@ where
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<State>();
         match &columns[0].to_column() {
+            Column::Null { .. } => (),
             Column::Nullable(box nullable_column) => {
                 let valid = nullable_column.validity.get_bit(row);
                 if valid {
