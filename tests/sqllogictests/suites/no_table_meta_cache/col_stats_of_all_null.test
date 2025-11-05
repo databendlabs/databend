@@ -50,4 +50,4 @@ TableScan
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <range pruning: 1 to 0>]
 ├── push downs: [filters: [is_true(t.c (#0) > 6)], limit: NONE]
-└── estimated rows: 0.00
+└── estimated rows: 0.50

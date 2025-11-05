@@ -1094,15 +1094,15 @@ AggregateFinal
 ├── output columns: [count() (#4), numbers.number (#0)]
 ├── group by: [number]
 ├── aggregate functions: [count()]
-├── estimated rows: 0.40
+├── estimated rows: 166.67
 └── AggregatePartial
     ├── group by: [number]
     ├── aggregate functions: [count()]
-    ├── estimated rows: 0.40
+    ├── estimated rows: 166.67
     └── Filter
         ├── output columns: [numbers.number (#0)]
         ├── filters: [numbers.number (#0) = 3, row_number() OVER (PARTITION BY id ORDER BY number DESC) (#3) = 1]
-        ├── estimated rows: 0.40
+        ├── estimated rows: 500.00
         └── Window
             ├── output columns: [numbers.number (#0), row_number_part_0 (#2), row_number() OVER (PARTITION BY id ORDER BY number DESC) (#3)]
             ├── aggregate function: [row_number]

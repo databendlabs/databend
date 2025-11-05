@@ -141,7 +141,7 @@ explain select a, get(v, 'd') from t2 where get(v, 'd') = 20
 Filter
 ├── output columns: [t2.a (#0), t2.v['d'] (#6)]
 ├── filters: [is_true(TRY_CAST(t2.v['d'] (#6) AS UInt8 NULL) = 20)]
-├── estimated rows: 0.00
+├── estimated rows: 0.50
 └── TableScan
     ├── table: default.test_virtual_db.t2
     ├── output columns: [a (#0), v['d'] (#6)]

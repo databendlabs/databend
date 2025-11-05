@@ -323,7 +323,7 @@ EvalScalar
                 │   ├── output columns: [derived.b (#5)]
                 │   ├── outer columns: []
                 │   ├── used columns: [derived.a (#4), derived.b (#5)]
-                │   ├── cardinality: 0.000
+                │   ├── cardinality: 1.000
                 │   ├── precise cardinality: N/A
                 │   ├── statistics
                 │   └── Scan

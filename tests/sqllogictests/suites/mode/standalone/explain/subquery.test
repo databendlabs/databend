@@ -119,11 +119,11 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── estimated rows: 0.00
+├── estimated rows: 0.50
 ├── Filter(Build)
 │   ├── output columns: []
 │   ├── filters: [count(*) (#2) = 1]
-│   ├── estimated rows: 0.00
+│   ├── estimated rows: 0.50
 │   └── AggregateFinal
 │       ├── output columns: [count(*) (#2)]
 │       ├── group by: []
@@ -137,11 +137,11 @@ HashJoin
 │               ├── output columns: []
 │               ├── limit: 1
 │               ├── offset: 0
-│               ├── estimated rows: 0.00
+│               ├── estimated rows: 0.50
 │               └── Filter
 │                   ├── output columns: []
 │                   ├── filters: [numbers.number (#1) = 0]
-│                   ├── estimated rows: 0.00
+│                   ├── estimated rows: 0.50
 │                   └── TableScan
 │                       ├── table: default.system.numbers
 │                       ├── output columns: [number (#1)]

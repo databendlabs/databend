@@ -871,7 +871,7 @@ from numbers(10) where number > 5
 Sort(Single)
 ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
 ├── sort keys: [number ASC NULLS LAST]
-├── estimated rows: 0.00
+├── estimated rows: 25.00
 └── HashJoin
     ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
@@ -881,15 +881,15 @@ Sort(Single)
     ├── filters: []
     ├── build join filters:
     │   └── filter id:0, build key:numbers.number (#2), probe key:a.number (#0), filter type:inlist,min_max
-    ├── estimated rows: 0.00
+    ├── estimated rows: 25.00
     ├── EvalScalar(Build)
     │   ├── output columns: [numbers.number (#2), register_at (#3)]
     │   ├── expressions: [to_yyyymmdd(CAST(numbers.number (#2) AS Timestamp))]
-    │   ├── estimated rows: 0.00
+    │   ├── estimated rows: 5.00
     │   └── Filter
     │       ├── output columns: [numbers.number (#2)]
     │       ├── filters: [numbers.number (#2) > 5]
-    │       ├── estimated rows: 0.00
+    │       ├── estimated rows: 5.00
     │       └── TableScan
     │           ├── table: default.system.numbers
     │           ├── output columns: [number (#2)]
@@ -902,11 +902,11 @@ Sort(Single)
     └── EvalScalar(Probe)
         ├── output columns: [numbers.number (#0), pt (#1)]
         ├── expressions: [to_yyyymmdd(CAST(numbers.number (#0) AS Timestamp))]
-        ├── estimated rows: 0.00
+        ├── estimated rows: 5.00
         └── Filter
             ├── output columns: [numbers.number (#0)]
             ├── filters: [numbers.number (#0) > 5]
-            ├── estimated rows: 0.00
+            ├── estimated rows: 5.00
             └── TableScan
                 ├── table: default.system.numbers
                 ├── output columns: [number (#0)]

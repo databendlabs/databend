@@ -327,9 +327,9 @@ SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
 query IT
 SELECT * FROM ( SELECT * FROM c WHERE c_id < 6 ) c WHERE c_id in (SELECT o.c_id FROM o WHERE o.c_id = c.c_id AND c.bill!='MA');
 ----
+1  CA
 2  TX
 4  TX
-1  CA
 
 # Subquery in SELECT clause
 

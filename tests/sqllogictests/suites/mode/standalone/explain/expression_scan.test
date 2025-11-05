@@ -46,11 +46,11 @@ HashJoin
         ├── output columns: [t1.b (#1)]
         ├── group by: [b]
         ├── aggregate functions: []
-        ├── estimated rows: 0.00
+        ├── estimated rows: 1.00
         └── AggregatePartial
             ├── group by: [b]
             ├── aggregate functions: []
-            ├── estimated rows: 0.00
+            ├── estimated rows: 1.00
             └── CacheScan
                 ├── output columns: [t1.b (#1)]
                 ├── cache index: 0

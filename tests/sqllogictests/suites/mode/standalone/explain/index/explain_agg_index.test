@@ -33,11 +33,11 @@ AggregateFinal
 └── AggregatePartial
     ├── group by: [b]
     ├── aggregate functions: [sum(a)]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 1.00
     └── Filter
         ├── output columns: [t1.a (#0), t1.b (#1)]
         ├── filters: [t1.b (#1) > 3]
-        ├── estimated rows: 0.00
+        ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.test_index_db.t1
             ├── output columns: [a (#0), b (#1)]
