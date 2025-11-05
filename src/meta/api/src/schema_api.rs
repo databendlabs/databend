@@ -635,7 +635,6 @@ async fn restore_policy_references_on_undrop(
                     // Policy missing - mark for cleanup from table_meta
                     // Note: table-policy reference was already deleted during drop_table
                     missing_policies.insert(policy_id);
-                    conditions.push(txn_cond_eq_seq(&policy_ident, 0));
                 }
                 Some(seq_policy) => {
                     // Policy exists - restore the table-policy reference
@@ -645,6 +644,9 @@ async fn restore_policy_references_on_undrop(
                             policy_id,
                             table_id,
                         });
+                    // Concurrent safety: ensure policy still exists when txn executes.
+                    // Critical: if policy is dropped before txn execution, this prevents
+                    // creating a dangling reference to a non-existent policy.
                     conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
                     ops.push(txn_op_put_pb(&ref_key, &MaskPolicyTableId, None)?);
                 }
@@ -672,10 +674,11 @@ async fn restore_policy_references_on_undrop(
     }
 
     // Process row access policy
-    if let Some(policy_map) = table_meta.row_access_policy_columns_ids.clone() {
+    if let Some(policy_map) = &table_meta.row_access_policy_columns_ids {
+        let policy_id = policy_map.policy_id;
         let policy_ident = RowAccessPolicyIdIdent::new_generic(
             tenant,
-            RowAccessPolicyId::new(policy_map.policy_id),
+            RowAccessPolicyId::new(policy_id),
         );
         let seq_policy = kv_api.get_pb(&policy_ident).await?;
 
@@ -685,11 +688,10 @@ async fn restore_policy_references_on_undrop(
                 // Note: table-policy reference was already deleted during drop_table
                 debug!(
                     "Undrop table {}: removing missing row access policy {}",
-                    table_id, policy_map.policy_id
+                    table_id, policy_id
                 );
                 table_meta.row_access_policy_columns_ids = None;
                 table_meta.row_access_policy = None;
-                conditions.push(txn_cond_eq_seq(&policy_ident, 0));
             }
             Some(seq_policy) => {
                 // Policy exists - restore the table-policy reference
@@ -697,10 +699,13 @@ async fn restore_policy_references_on_undrop(
                 let ref_key = RowAccessPolicyTableIdIdent::new_generic(
                     tenant.clone(),
                     RowAccessPolicyIdTableId {
-                        policy_id: policy_map.policy_id,
+                        policy_id,
                         table_id,
                     },
                 );
+                // Concurrent safety: ensure policy still exists when txn executes.
+                // Critical: if policy is dropped before txn execution, this prevents
+                // creating a dangling reference to a non-existent policy.
                 conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
                 ops.push(txn_op_put_pb(&ref_key, &RowAccessPolicyTableId, None)?);
             }
