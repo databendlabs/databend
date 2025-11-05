@@ -119,6 +119,31 @@ statement ok
 DROP TABLE IF EXISTS `05_0003_at_t3`
 
 statement ok
+CREATE OR REPLACE TABLE `05_0003_at_t6` ( a int, b string, c int) approx_distinct_columns = 'a,b' COMPRESSION='zstd' STORAGE_FORMAT='native'
+
+statement ok
+ALTER TABLE `05_0003_at_t6` drop column a;
+
+query TT
+SHOW CREATE TABLE `05_0003_at_t6`;
+----
+05_0003_at_t6 CREATE TABLE "05_0003_at_t6" ( b INT NULL, c INT NULL ) ENGINE=FUSE APPROX_DISTINCT_COLUMNS='b' COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='native'
+
+statement error 1301
+ALTER TABLE `05_0003_at_t6` MODIFY COLUMN b binary; 
+
+statement ok
+ALTER TABLE `05_0003_at_t6` drop column b;
+
+query TT
+SHOW CREATE TABLE `05_0003_at_t6`;
+----
+05_0003_at_t6 CREATE TABLE "05_0003_at_t6" ( c INT NULL ) ENGINE=FUSE APPROX_DISTINCT_COLUMNS='' COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='native'
+
+statement ok
+DROP TABLE IF EXISTS `05_0003_at_t6`
+
+statement ok
 set hide_options_in_show_create_table=1
 
 statement ok

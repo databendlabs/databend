@@ -32,6 +32,9 @@ alter table t_18827 modify column b float64;
 statement ok
 alter table t_18827 modify column a binary;
 
+statement error 1132
+alter table t_18827 add column c date default today();
+
 query T
 select a, b from t_18827;
 ----

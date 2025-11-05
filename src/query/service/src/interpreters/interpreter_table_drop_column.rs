@@ -20,9 +20,11 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_sql::plans::DropTableColumnPlan;
+use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -123,6 +125,17 @@ impl Interpreter for DropTableColumnInterpreter {
         if let Some(value) = opts.get_mut(OPT_KEY_BLOOM_INDEX_COLUMNS) {
             let bloom_index_cols = value.parse::<BloomIndexColumns>()?;
             if let BloomIndexColumns::Specify(mut cols) = bloom_index_cols {
+                if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
+                    // remove from the bloom index columns.
+                    cols.remove(pos);
+                    *value = cols.join(",");
+                }
+            }
+        }
+        if let Some(value) = opts.get_mut(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+            if let ApproxDistinctColumns::Specify(mut cols) =
+                value.parse::<ApproxDistinctColumns>()?
+            {
                 if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
                     // remove from the bloom index columns.
                     cols.remove(pos);
