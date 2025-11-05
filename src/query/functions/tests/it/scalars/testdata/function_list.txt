@@ -920,6 +920,8 @@ Functions overloads:
 1 bitmap_subset_in_range(Bitmap NULL, UInt64 NULL, UInt64 NULL) :: Bitmap NULL
 0 bitmap_subset_limit(Bitmap, UInt64, UInt64) :: Bitmap
 1 bitmap_subset_limit(Bitmap NULL, UInt64 NULL, UInt64 NULL) :: Bitmap NULL
+0 bitmap_to_array(Bitmap) :: Array(UInt64)
+1 bitmap_to_array(Bitmap NULL) :: Array(UInt64) NULL
 0 bitmap_xor(Bitmap, Bitmap) :: Bitmap
 1 bitmap_xor(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
 0 blake3(String) :: String
