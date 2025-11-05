@@ -266,9 +266,10 @@ fn generate_procedure_name_ident(
         return Ok(ProcedureNameIdent::new(tenant, name.clone().into()));
     }
 
+    let args = split_procedure_arg_types(&name.args_type)?;
     let mut args_type = vec![];
-    for arg in name.args_type.split(',') {
-        args_type.push(DataType::from(&resolve_type_name_by_str(arg, true)?));
+    for arg in args {
+        args_type.push(DataType::from(&resolve_type_name_by_str(&arg, true)?));
     }
     let new_name = databend_common_ast::ast::ProcedureIdentity {
         name: name.name.to_string(),
@@ -282,4 +283,36 @@ fn generate_procedure_name_ident(
         tenant,
         ProcedureIdentity::from(new_name),
     ))
+}
+
+fn split_procedure_arg_types(raw: &str) -> Result<Vec<String>> {
+    let mut parts = Vec::new();
+    let mut depth = 0;
+    let mut start = 0;
+
+    for (i, c) in raw.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                let arg = raw[start..i].trim();
+                if !arg.is_empty() {
+                    parts.push(arg.to_string());
+                }
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+
+    if depth != 0 {
+        return Err(ErrorCode::SyntaxException("unmatched parentheses"));
+    }
+
+    let last = raw[start..].trim();
+    if !last.is_empty() {
+        parts.push(last.to_string());
+    }
+
+    Ok(parts)
 }
