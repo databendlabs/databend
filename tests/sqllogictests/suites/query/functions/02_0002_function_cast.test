@@ -204,9 +204,8 @@ SELECT to_timestamp(1640019661000000) = to_timestamp('2021-12-20 17:01:01.000000
 statement error 1006
 SELECT to_timestamp('2020.10.')
 
-# FIXME: After Parser update then remove ::STRING
 query T
-select to_timestamp_tz(to_timestamp('2021-12-20 17:01:01.000000'))::STRING
+select to_timestamp_tz(to_timestamp('2021-12-20 17:01:01.000000'))
 ----
 2021-12-20 17:01:01.000000 +0000
 
