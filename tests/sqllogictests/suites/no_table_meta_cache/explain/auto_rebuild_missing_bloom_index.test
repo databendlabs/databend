@@ -30,6 +30,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
+    ├── scan id: 0
     ├── output columns: [c (#0)]
     ├── read rows: 0
     ├── read size: 0
@@ -57,12 +58,13 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
+    ├── scan id: 0
     ├── output columns: [c (#0)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
+    ├── read rows: 0
+    ├── read size: 0
     ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 0>]
     ├── push downs: [filters: [is_true(t.c (#0) = 6)], limit: NONE]
     └── estimated rows: 5.00
 
@@ -85,6 +87,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
+    ├── scan id: 0
     ├── output columns: [c (#0)]
     ├── read rows: 0
     ├── read size: 0
@@ -125,6 +128,7 @@ Filter
 ├── estimated rows: 2.67
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
+    ├── scan id: 0
     ├── output columns: [c (#0), s (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -157,6 +161,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
+    ├── scan id: 0
     ├── output columns: [c (#0), s (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -185,7 +190,6 @@ query I
 select is_null(`bloom(0)`) as b1, is_null(`bloom(1)`)  as b2 from t_index order by b2;
 ----
 0 0
-0 1
 
 # re-generate other bloom index
 query TT
