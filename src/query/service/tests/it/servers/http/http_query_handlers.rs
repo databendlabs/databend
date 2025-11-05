@@ -551,7 +551,6 @@ async fn test_active_sessions() -> Result<()> {
         .into_iter()
         .map(|(_status, resp)| (resp.error.map(|e| e.message).unwrap_or_default()))
         .collect::<Vec<_>>();
-    _fixture.keep_alive();
     results.sort();
     let msg = "[HTTP-QUERY] Failed to upgrade session: Current active sessions (2) has exceeded the max_active_sessions limit (2)";
     let expect = vec!["", "", msg];

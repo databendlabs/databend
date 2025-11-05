@@ -15,11 +15,10 @@
 mod predicate;
 mod read_policy;
 mod reader;
-mod row_group;
+pub mod row_group;
 mod topk;
 mod utils;
 
-pub use read_policy::read_all;
 pub use read_policy::*;
 pub use reader::InmMemoryFile;
 pub use reader::ParquetFileReader;
@@ -28,4 +27,5 @@ pub use reader::ParquetWholeFileReader;
 pub use reader::RowGroupReader;
 pub use row_group::cached_range_full_read;
 pub use row_group::InMemoryRowGroup;
+pub use row_group::RowGroupCore;
 pub use utils::DataBlockIterator;

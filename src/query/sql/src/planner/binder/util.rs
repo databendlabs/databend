@@ -98,24 +98,47 @@ impl TableIdentifier {
         table: &Identifier,
         table_alias: &Option<TableAlias>,
     ) -> TableIdentifier {
+        // Use the common normalization logic to handle MySQL-style identifiers.
+        // This handles the special case: `db`.``.`table` -> database="db", catalog=current
+        let (catalog_name, database_name) =
+            binder.normalize_mysql_catalog_database_pair(catalog, database);
+
         let Binder {
             ctx,
             name_resolution_ctx,
             dialect,
             ..
         } = binder;
-        let catalog = catalog.to_owned().unwrap_or(Identifier {
-            span: None,
-            name: ctx.get_current_catalog(),
-            quote: Some(dialect.default_ident_quote()),
-            ident_type: IdentifierType::None,
-        });
-        let database = database.to_owned().unwrap_or(Identifier {
-            span: None,
-            name: ctx.get_current_database(),
-            quote: Some(dialect.default_ident_quote()),
-            ident_type: IdentifierType::None,
-        });
+
+        // Reconstruct Identifier objects from the normalized names
+        let catalog = match catalog_name {
+            Some(name) => Identifier {
+                span: catalog.as_ref().and_then(|c| c.span),
+                name,
+                quote: Some(dialect.default_ident_quote()),
+                ident_type: IdentifierType::None,
+            },
+            None => Identifier {
+                span: None,
+                name: ctx.get_current_catalog(),
+                quote: Some(dialect.default_ident_quote()),
+                ident_type: IdentifierType::None,
+            },
+        };
+        let database = match database_name {
+            Some(name) => Identifier {
+                span: database.as_ref().and_then(|d| d.span),
+                name,
+                quote: Some(dialect.default_ident_quote()),
+                ident_type: IdentifierType::None,
+            },
+            None => Identifier {
+                span: None,
+                name: ctx.get_current_database(),
+                quote: Some(dialect.default_ident_quote()),
+                ident_type: IdentifierType::None,
+            },
+        };
         let database = Identifier {
             span: merge_span(catalog.span, database.span),
             ..database

@@ -610,8 +610,9 @@ pub trait Decimal:
     fn from_float(value: f64) -> Self;
 
     fn from_i64(value: i64) -> Self;
-    fn from_i128<U: Into<i128>>(value: U) -> Self;
-    fn from_i256(value: i256) -> Self;
+    fn from_i128(value: impl Into<i128>) -> Option<Self>;
+    fn from_i128_uncheck(value: i128) -> Self;
+    fn from_i256_uncheck(value: i256) -> Self;
     fn from_bigint(value: BigInt) -> Option<Self>;
 
     fn de_binary(bytes: &mut &[u8]) -> Self;
@@ -800,12 +801,17 @@ impl Decimal for i64 {
     }
 
     #[inline]
-    fn from_i128<U: Into<i128>>(value: U) -> Self {
-        value.into() as i64
+    fn from_i128(value: impl Into<i128>) -> Option<Self> {
+        i64::try_from(value.into()).ok()
     }
 
     #[inline]
-    fn from_i256(value: i256) -> Self {
+    fn from_i128_uncheck(value: i128) -> Self {
+        value as i64
+    }
+
+    #[inline]
+    fn from_i256_uncheck(value: i256) -> Self {
         value.as_i64()
     }
 
@@ -1092,7 +1098,7 @@ impl Decimal for i128 {
 
     #[inline]
     fn as_decimal<D: Decimal>(self) -> D {
-        D::from_i128(self)
+        D::from_i128_uncheck(self)
     }
 
     fn from_float(value: f64) -> Self {
@@ -1132,12 +1138,17 @@ impl Decimal for i128 {
     }
 
     #[inline]
-    fn from_i128<U: Into<i128>>(value: U) -> Self {
-        value.into()
+    fn from_i128(value: impl Into<i128>) -> Option<Self> {
+        Some(value.into())
     }
 
     #[inline]
-    fn from_i256(value: i256) -> Self {
+    fn from_i128_uncheck(value: i128) -> Self {
+        value
+    }
+
+    #[inline]
+    fn from_i256_uncheck(value: i256) -> Self {
         value.as_i128()
     }
 
@@ -1397,12 +1408,17 @@ impl Decimal for i256 {
     }
 
     #[inline]
-    fn from_i128<U: Into<i128>>(value: U) -> Self {
-        i256::from(value.into())
+    fn from_i128(value: impl Into<i128>) -> Option<Self> {
+        Some(i256::from(value.into()))
     }
 
     #[inline]
-    fn from_i256(value: i256) -> Self {
+    fn from_i128_uncheck(value: i128) -> Self {
+        i256::from(value)
+    }
+
+    #[inline]
+    fn from_i256_uncheck(value: i256) -> Self {
         value
     }
 
@@ -1531,7 +1547,7 @@ impl Decimal for i256 {
 
     #[inline]
     fn as_decimal<D: Decimal>(self) -> D {
-        D::from_i256(self)
+        D::from_i256_uncheck(self)
     }
 }
 

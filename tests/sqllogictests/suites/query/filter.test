@@ -8,7 +8,7 @@ create or replace table t(a int null, b varchar null);
 statement ok
 insert into t(a, b) values (3, NULL), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (3,'hello'), (1,'4'), (1,'4');
 
-query I
+query IT
 select a, b from t where a = 1 and cast(b as int) >= 2;
 ----
 1 4
@@ -39,39 +39,39 @@ select count(*) from t where a > b;
 ----
 1
 
-query II
+query I
 select count(*) from t where a >= b;
 ----
 3
 
-query III
+query I
 select count(*) from t where a < b;
 ----
 0
 
-query I?
+query I
 select count(*) from t where a <= b;
 ----
 2
 
-query BB
+query ??
 select * from t where a
 ----
 1 1
 1 0
 
-query BB
+query ??
 select * from t where not(a)
 ----
 0 0
 
-query BB
+query ??
 select * from t where not(not(a))
 ----
 1 1
 1 0
 
-query BB
+query ??
 select * from t where not(not(not(a)))
 ----
 0 0
@@ -83,20 +83,20 @@ statement ok
 insert into t values(1, 'databend'), (2, ' databend query'), (3, 'query databend'), (4, 'query databend, query'), (5, 'databend cloud data warehouse'), (6, 'databend%cloud data warehouse');
 
 # LikePattern::OrdinalStr
-query I
+query IT
 select * from t where b like 'databend';
 ----
 1 databend
 
 # LikePattern::StartOfPercent
-query I
+query IT
 select * from t where b like '%databend';
 ----
 1 databend
 3 query databend
 
 # LikePattern::EndOfPercent
-query I
+query IT
 select * from t where b like 'databend%';
 ----
 1 databend
@@ -104,7 +104,7 @@ select * from t where b like 'databend%';
 6 databend%cloud data warehouse
 
 # LikePattern::SurroundByPercent
-query I
+query IT
 select * from t where b like '%databend%';
 ----
 1 databend
@@ -115,48 +115,48 @@ select * from t where b like '%databend%';
 6 databend%cloud data warehouse
 
 # LikePattern::ComplexPattern
-query I
+query IT
 select * from t where b like 'databend\\%cloud%data%warehouse';
 ----
 6 databend%cloud data warehouse
 
 # LikePattern::ComplexPattern
-query I
+query IT
 select * from t where b like 'databend%cloud_data%warehouse';
 ----
 5 databend cloud data warehouse
 6 databend%cloud data warehouse
 
 # LikePattern::SimplePattern, has_start_percent = false, has_end_percent = false
-query I
+query IT
 select * from t where b like 'databend%cloud%data%warehouse';
 ----
 5 databend cloud data warehouse
 6 databend%cloud data warehouse
 
 # LikePattern::SimplePattern, has_start_percent = true, has_end_percent = false
-query I
+query IT
 select * from t where b like '%databend%cloud%data%warehouse';
 ----
 5 databend cloud data warehouse
 6 databend%cloud data warehouse
 
 # LikePattern::SimplePattern, has_start_percent = false, has_end_percent = true
-query I
+query IT
 select * from t where b like 'databend%cloud%data%warehouse%';
 ----
 5 databend cloud data warehouse
 6 databend%cloud data warehouse
 
 # LikePattern::SimplePattern, has_start_percent = true, has_end_percent = true
-query I
+query IT
 select * from t where b like '%databend%cloud%data%warehouse%';
 ----
 5 databend cloud data warehouse
 6 databend%cloud data warehouse
 
 # LikePattern::StartOfPercent, push down not
-query I
+query IT
 select * from t where b not like '%databend';
 ----
 2  databend query
@@ -165,7 +165,7 @@ select * from t where b not like '%databend';
 6 databend%cloud data warehouse
 
 # LikePattern::SimplePattern, has_start_percent = false, has_end_percent = false, push down not
-query I
+query IT
 select * from t where b not like 'databend%cloud%data%warehouse';
 ----
 1 databend

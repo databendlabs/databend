@@ -1043,7 +1043,7 @@ impl TableContext for CtxDelegation {
     }
 
     fn session_state(&self) -> Result<SessionState> {
-        todo!()
+        Ok(SessionState::default())
     }
 
     fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {

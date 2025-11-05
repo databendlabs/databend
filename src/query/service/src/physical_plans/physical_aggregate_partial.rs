@@ -177,6 +177,8 @@ impl IPhysicalPlan for AggregatePartial {
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
 
+        let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
+
         let params = PipelineBuilder::build_aggregator_params(
             self.input.output_schema()?,
             &self.group_by,
@@ -185,6 +187,7 @@ impl IPhysicalPlan for AggregatePartial {
             builder.is_exchange_parent(),
             max_block_size as usize,
             max_spill_io_requests as usize,
+            enable_experiment_aggregate,
         )?;
 
         if params.group_columns.is_empty() {

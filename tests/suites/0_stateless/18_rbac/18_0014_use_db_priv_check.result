@@ -10,6 +10,6 @@ t1
 t
 === show columns ===
 Error: APIError: QueryFailed: [1063]Permission denied: User 'test'@'%' does not have the required privileges for table 'a.t'
-ida1	INT	YES		NULL	NULL
-idb	INT	YES		NULL	NULL
+ida1	int	YES		NULL	NULL
+idb	int	YES		NULL	NULL
 Error: APIError: QueryFailed: [1063]Permission denied: User 'test'@'%' does not have the required privileges for table 'b.t1'

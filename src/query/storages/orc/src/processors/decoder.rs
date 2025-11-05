@@ -76,7 +76,7 @@ impl AccumulatingTransform for StripeDecoder {
         let mut start_row = stripe.start_row;
 
         for batch in batches {
-            let (mut block, _) = DataBlock::from_record_batch(self.data_schema.as_ref(), &batch)?;
+            let mut block = DataBlock::from_record_batch(self.data_schema.as_ref(), &batch)?;
             if let Some(copy_status) = &self.copy_status {
                 copy_status.add_chunk(&stripe.path, FileStatus {
                     num_rows_loaded: block.num_rows(),

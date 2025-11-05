@@ -38,8 +38,6 @@ use databend_common_expression::FunctionKind;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -966,6 +964,38 @@ impl Binder {
             .build()
     }
 
+    /// Normalize MySQL-style catalog and database identifiers.
+    ///
+    /// This handles the special case where MySQL clients may emit `db`.``.`table`,
+    /// where the empty middle segment should be treated as the absence of a catalog,
+    /// and the first segment should be interpreted as the database name.
+    ///
+    /// Returns: (Option<catalog_name>, Option<database_name>)
+    /// - Empty string identifiers are filtered out (treated as None)
+    /// - If database is None but catalog is Some, catalog is promoted to database
+    pub(crate) fn normalize_mysql_catalog_database_pair(
+        &self,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+    ) -> (Option<String>, Option<String>) {
+        // Normalize and filter out empty strings
+        let mut catalog_name = catalog
+            .as_ref()
+            .map(|ident| self.normalize_identifier(ident).name)
+            .filter(|name| !name.is_empty());
+        let mut database_name = database
+            .as_ref()
+            .map(|ident| self.normalize_identifier(ident).name)
+            .filter(|name| !name.is_empty());
+
+        // Handle MySQL's `db`.``.`table` syntax by promoting catalog to database
+        if database_name.is_none() && catalog_name.is_some() {
+            database_name = catalog_name.take();
+        }
+
+        (catalog_name, database_name)
+    }
+
     /// Normalize [[<catalog>].<database>].<object>
     /// object like table, view ...
     pub fn normalize_object_identifier_triple(
@@ -974,14 +1004,11 @@ impl Binder {
         database: &Option<Identifier>,
         object: &Identifier,
     ) -> (String, String, String) {
-        let catalog_name = catalog
-            .as_ref()
-            .map(|ident| self.normalize_identifier(ident).name)
-            .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database_name = database
-            .as_ref()
-            .map(|ident| self.normalize_identifier(ident).name)
-            .unwrap_or_else(|| self.ctx.get_current_database());
+        let (catalog_name, database_name) =
+            self.normalize_mysql_catalog_database_pair(catalog, database);
+
+        let catalog_name = catalog_name.unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database_name = database_name.unwrap_or_else(|| self.ctx.get_current_database());
         let object_name = self.normalize_identifier(object).name;
         (catalog_name, database_name, object_name)
     }
@@ -1050,11 +1077,6 @@ impl Binder {
     ) -> Result<SExpr> {
         if bind_context.bound_internal_columns.is_empty() {
             return Ok(s_expr);
-        }
-        // check inverted index license
-        if !bind_context.inverted_index_map.is_empty() {
-            LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
         }
         let bound_internal_columns = &bind_context.bound_internal_columns;
         let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);

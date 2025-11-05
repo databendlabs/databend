@@ -12,39 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future;
 use std::io;
 use std::io::Write;
+use std::ops::Range;
 use std::sync::Arc;
 
 use arrow_schema::Schema;
+use bytes::Bytes;
 use databend_common_base::base::dma_buffer_to_bytes;
-use databend_common_base::base::AsyncDmaFile;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_base::base::SyncDmaFile;
+use databend_common_base::rangemap::RangeMerger;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
+use databend_common_storages_parquet::parquet_reader::RowGroupCore;
+use databend_common_storages_parquet::ReadSettings;
 use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
 use either::Either;
-use futures::future::BoxFuture;
-use futures::future::FutureExt;
-use opendal::Reader;
-use parquet::arrow::arrow_reader::ArrowReaderBuilder;
-use parquet::arrow::arrow_reader::ArrowReaderOptions;
+use opendal::Operator;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_writer::compute_leaves;
 use parquet::arrow::arrow_writer::get_column_writers;
 use parquet::arrow::arrow_writer::ArrowColumnWriter;
-use parquet::arrow::async_reader::AsyncFileReader;
-use parquet::arrow::async_reader::ParquetRecordBatchStream;
+use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::ArrowSchemaConverter;
+use parquet::arrow::FieldLevels;
+use parquet::arrow::ProjectionMask;
 use parquet::errors;
+use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::metadata::RowGroupMetaDataPtr;
+use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterPropertiesPtr;
 use parquet::file::writer::SerializedFileWriter;
@@ -64,7 +66,12 @@ pub struct Properties {
 
 impl Properties {
     pub fn new(data_schema: &DataSchema) -> errors::Result<Self> {
-        let writer_props = Arc::new(WriterProperties::default());
+        let writer_props = Arc::new(
+            WriterProperties::builder()
+                .set_offset_index_disabled(true)
+                .set_statistics_enabled(EnabledStatistics::None)
+                .build(),
+        );
         let schema = Arc::new(Schema::from(data_schema));
         let parquet = ArrowSchemaConverter::new()
             .with_coerce_types(writer_props.coerce_types())
@@ -154,7 +161,7 @@ impl RowGroupEncoder {
 
         let reader = ParquetRecordBatchReader::try_new(parquet_bytes, usize::MAX)?;
         let blocks = reader
-            .map(|batch| Ok(DataBlock::from_record_batch(&data_schema, &batch?)?.0))
+            .map(|batch| DataBlock::from_record_batch(&data_schema, &batch?))
             .collect::<Result<Vec<_>>>()?;
 
         if blocks.is_empty() {
@@ -286,37 +293,120 @@ impl FileWriter<BufferWriter> {
     }
 }
 
-pub(super) struct FileReader {
+struct FileReader {
     meta: Arc<ParquetMetaData>,
-    reader: Either<AsyncDmaFile, Reader>,
+    reader: Either<SyncDmaFile, (Operator, String, Arc<SpillsBufferPool>)>,
+    settings: ReadSettings,
+    field_levels: FieldLevels,
 }
 
-impl AsyncFileReader for FileReader {
-    fn get_bytes(
-        &mut self,
-        range: std::ops::Range<u64>,
-    ) -> BoxFuture<'_, errors::Result<bytes::Bytes>> {
-        async move {
-            match &mut self.reader {
-                Either::Left(file) => {
-                    let (dma_buf, rt_range) = file.read_range(range).await?;
-                    Ok(dma_buffer_to_bytes(dma_buf).slice(rt_range))
-                }
-                Either::Right(reader) => Ok(reader
-                    .read(range)
-                    .await
-                    .map_err(|err| errors::ParquetError::External(Box::new(err)))?
-                    .to_bytes()),
-            }
-        }
-        .boxed()
+impl FileReader {
+    fn load_row_group(&self, i: usize) -> Result<RowGroupCore<&RowGroupMetaData>> {
+        let meta = self.meta.row_group(i);
+        let mut core = RowGroupCore::new(meta, None);
+        core.fetch(&ProjectionMask::all(), None, |ranges| {
+            self.get_ranges(ranges)
+        })?;
+        Ok(core)
     }
 
-    fn get_metadata<'a>(
-        &'a mut self,
-        _options: Option<&'a ArrowReaderOptions>,
-    ) -> BoxFuture<'a, errors::Result<Arc<ParquetMetaData>>> {
-        future::ready(Ok(self.meta.clone())).boxed()
+    fn get_ranges(&self, fetch_ranges: Vec<Range<u64>>) -> Result<Vec<Bytes>> {
+        match &self.reader {
+            Either::Left(file) => {
+                let plan = RangeFetchPlan::new(fetch_ranges, &self.settings);
+                plan.read(|range| {
+                    let (buffer, rt_range) = file.read_range(range.clone())?;
+                    Ok(dma_buffer_to_bytes(buffer).slice(rt_range))
+                })
+            }
+            Either::Right((op, location, pool)) => {
+                pool.fetch_ranges(op.clone(), location.clone(), fetch_ranges, self.settings)
+            }
+        }
+    }
+
+    fn read_row_group<'a>(
+        &'a self,
+        schema: &DataSchema,
+        row_group: &RowGroupCore<&'a RowGroupMetaData>,
+        batch_size: usize,
+    ) -> Result<Vec<DataBlock>> {
+        let reader = ParquetRecordBatchReader::try_new_with_row_groups(
+            &self.field_levels,
+            row_group,
+            batch_size,
+            None,
+        )?;
+
+        let mut blocks = Vec::new();
+        for record in reader {
+            let record = record?;
+
+            let num_rows = record.num_rows();
+            let mut columns = Vec::with_capacity(record.num_columns());
+            for (array, field) in record.columns().iter().zip(schema.fields()) {
+                let data_type = field.data_type();
+                columns.push(BlockEntry::new(
+                    Value::from_arrow_rs(array.clone(), data_type)?,
+                    || (data_type.clone(), num_rows),
+                ))
+            }
+            let block = DataBlock::new(columns, num_rows);
+            blocks.push(block);
+        }
+
+        Ok(blocks)
+    }
+}
+
+pub struct RangeFetchPlan {
+    merged: Vec<Range<u64>>,
+    merged_index: Vec<(usize, Range<usize>)>,
+}
+
+impl RangeFetchPlan {
+    fn new(fetch_ranges: Vec<Range<u64>>, settings: &ReadSettings) -> Self {
+        let merger = RangeMerger::from_iter(
+            fetch_ranges.iter().cloned(),
+            settings.max_gap_size,
+            settings.max_range_size,
+            Some(settings.parquet_fast_read_bytes),
+        );
+
+        let merged = merger.ranges();
+        let merged_index = fetch_ranges
+            .into_iter()
+            .map(|fetch| {
+                let (index, merged) = merger
+                    .get(fetch.clone())
+                    .expect("range should be contained in merged ranges");
+                let start = (fetch.start - merged.start) as _;
+                let end = (fetch.end - merged.start) as _;
+                (index, start..end)
+            })
+            .collect();
+
+        Self {
+            merged,
+            merged_index,
+        }
+    }
+
+    fn read<F>(self, load_data: F) -> Result<Vec<Bytes>>
+    where F: FnMut(Range<u64>) -> Result<Bytes> {
+        let merged_chunks = self
+            .merged
+            .into_iter()
+            .map(load_data)
+            .collect::<Result<Vec<_>>>()?;
+
+        let chunks = self
+            .merged_index
+            .into_iter()
+            .map(|(i, range)| merged_chunks[i].slice(range))
+            .collect();
+
+        Ok(chunks)
     }
 }
 
@@ -335,7 +425,7 @@ impl AnyFileWriter {
 }
 
 impl<A> SpillerInner<A> {
-    pub(super) async fn new_file_writer(
+    pub(super) fn new_file_writer(
         &self,
         props: &Properties,
         pool: &Arc<SpillsBufferPool>,
@@ -362,8 +452,7 @@ impl<A> SpillerInner<A> {
         };
 
         let remote_location = self.create_unique_location();
-        let remote_writer = op.writer(&remote_location).await?;
-        let remote = pool.buffer_write(remote_writer);
+        let remote = pool.buffer_writer(op.clone(), remote_location.clone())?;
 
         Ok(AnyFileWriter::Remote(
             remote_location,
@@ -371,65 +460,59 @@ impl<A> SpillerInner<A> {
         ))
     }
 
-    pub(super) async fn load_row_groups(
+    pub(super) fn load_row_groups(
         &self,
         location: &Location,
         meta: Arc<ParquetMetaData>,
         schema: &DataSchema,
         row_groups: Vec<usize>,
+        pool: Arc<SpillsBufferPool>,
+        settings: ReadSettings,
+        batch_size: usize,
     ) -> Result<Vec<DataBlock>> {
-        let op = &self.operator;
-        let input = match location {
-            Location::Local(path) => {
+        let field_levels = parquet_to_arrow_field_levels(
+            meta.file_metadata().schema_descr(),
+            ProjectionMask::all(),
+            None,
+        )?;
+
+        let input = match (location, &self.local_operator) {
+            (Location::Local(path), None) => {
                 let alignment = Some(self.temp_dir.as_ref().unwrap().block_alignment());
-                let file = AsyncDmaFile::open(path, true, alignment).await?;
+                let file = SyncDmaFile::open(path, true, alignment)?;
                 FileReader {
                     meta,
                     reader: Either::Left(file),
+                    settings,
+                    field_levels,
                 }
             }
-            Location::Remote(path) => FileReader {
+            (Location::Local(path), Some(local)) => FileReader {
                 meta,
-                reader: Either::Right(op.reader(path).await?),
+                reader: Either::Right((
+                    local.clone(),
+                    path.file_name().unwrap().to_str().unwrap().to_string(),
+                    pool,
+                )),
+                settings,
+                field_levels,
+            },
+            (Location::Remote(path), _) => FileReader {
+                meta,
+                reader: Either::Right((self.operator.clone(), path.clone(), pool)),
+                settings,
+                field_levels,
             },
         };
 
-        let builder = ArrowReaderBuilder::new(input).await?;
-        let stream = builder
-            .with_row_groups(row_groups)
-            .with_batch_size(usize::MAX)
-            .build()?;
-
-        load_blocks_from_stream(schema, stream).await
-    }
-}
-
-async fn load_blocks_from_stream<T>(
-    schema: &DataSchema,
-    mut stream: ParquetRecordBatchStream<T>,
-) -> Result<Vec<DataBlock>>
-where
-    T: AsyncFileReader + Unpin + Send + 'static,
-{
-    let mut blocks = Vec::new();
-    while let Some(reader) = stream.next_row_group().await? {
-        for record in reader {
-            let record = record?;
-            let num_rows = record.num_rows();
-            let mut columns = Vec::with_capacity(record.num_columns());
-            for (array, field) in record.columns().iter().zip(schema.fields()) {
-                let data_type = field.data_type();
-                columns.push(BlockEntry::new(
-                    Value::from_arrow_rs(array.clone(), data_type)?,
-                    || (data_type.clone(), num_rows),
-                ))
-            }
-            let block = DataBlock::new(columns, num_rows);
-            blocks.push(block);
+        let mut blocks = Vec::new();
+        for i in row_groups {
+            let row_group = input.load_row_group(i)?;
+            blocks.append(&mut input.read_row_group(schema, &row_group, batch_size)?);
         }
-    }
 
-    Ok(blocks)
+        Ok(blocks)
+    }
 }
 
 #[cfg(test)]
@@ -507,6 +590,37 @@ mod tests {
         let expected = DataBlock::concat(&[block.clone(), block])?;
         for (exp, got) in expected.columns().iter().zip(restored.columns()) {
             assert_eq!(exp, got);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_range_fetch_plan_merges_ranges() -> Result<()> {
+        let data: Vec<u8> = (0u8..64).collect();
+
+        let settings = ReadSettings {
+            max_gap_size: 4,
+            max_range_size: 32,
+            parquet_fast_read_bytes: 1,
+            enable_cache: false,
+        };
+
+        let fetch_ranges = vec![5..8, 9..12, 20..24];
+        let plan = RangeFetchPlan::new(fetch_ranges.clone(), &settings);
+        assert_eq!(&plan.merged, &[5..12, 20..24]);
+
+        let chunks = plan.read(|range| {
+            let start = range.start as usize;
+            let end = range.end as usize;
+            Ok(Bytes::copy_from_slice(&data[start..end]))
+        })?;
+
+        for (range, got) in fetch_ranges.into_iter().zip(chunks) {
+            assert_eq!(
+                got,
+                Bytes::copy_from_slice(&data[(range.start as _)..(range.end as _)])
+            );
         }
 
         Ok(())

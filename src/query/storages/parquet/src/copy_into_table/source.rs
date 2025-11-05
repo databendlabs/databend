@@ -167,7 +167,7 @@ impl Processor for ParquetCopySource {
                                 .build_reader(
                                     part,
                                     self.operator.clone(),
-                                    &ReadSettings::from_ctx(&self.ctx)?,
+                                    &ReadSettings::from_settings(&self.ctx.get_settings())?,
                                     self.batch_size,
                                 )
                                 .await?

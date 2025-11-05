@@ -1,0 +1,60 @@
+statement ok
+drop database if exists test_gram_index
+
+statement ok
+create database test_gram_index
+
+statement ok
+use test_gram_index
+
+statement ok
+CREATE OR REPLACE TABLE t1 (id int, content string);
+
+query I
+INSERT INTO t1 VALUES
+(1, 'The quick brown fox jumps over the lazy dog'),
+(2, 'A picture is worth a thousand words');
+----
+2
+
+statement ok
+CREATE NGRAM INDEX idx1 ON t1(content) gram_size = 5 bloom_size = 1048576;
+
+query I
+INSERT INTO t1 VALUES
+(3, 'The early bird catches the worm'),
+(4, 'Actions speak louder than words');
+----
+2
+
+statement ok
+optimize table t1 compact segment;
+
+query IB
+select row_count, ngram_index_size is null from fuse_block('test_gram_index','t1') order by block_location;
+----
+2 1
+2 0
+
+statement ok
+REFRESH NGRAM INDEX idx1 ON t1;
+
+query IB
+select row_count, ngram_index_size is null from fuse_block('test_gram_index','t1') order by block_location;
+----
+2 0
+2 0
+
+query IIB
+select block_count, row_count, segment_stats_size > 0 from fuse_segment('test_gram_index','t1');
+----
+2 4 1
+
+statement ok
+drop table t1 all;
+
+statement ok
+use default
+
+statement ok
+drop database test_gram_index

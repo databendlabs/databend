@@ -35,6 +35,9 @@ select db.t.a from db.t
 1
 2
 
+statement ok
+select t1.a from `db`.``.`t` as t1
+
 onlyif http
 query I
 select t1.a from db.t as t1
