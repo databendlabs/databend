@@ -171,6 +171,14 @@ impl Interpreter for AddTableColumnInterpreter {
             .await;
         }
 
+        let need_update = num_rows > 0 && !self.plan.is_deterministic;
+        if need_update && tbl.change_tracking_enabled() {
+            return Err(ErrorCode::AlterTableError(format!(
+                "Cannot add non-deterministic default column to table '{}' with change tracking enabled",
+                table_info.desc
+            )));
+        }
+
         let new_table_meta = table_info.meta.clone();
         commit_table_meta(
             &self.ctx,
@@ -183,14 +191,7 @@ impl Interpreter for AddTableColumnInterpreter {
 
         // If the column is not deterministic and table is non-empty,
         // update to refresh the value with default expr.
-        if num_rows > 0 && !self.plan.is_deterministic {
-            if tbl.change_tracking_enabled() {
-                return Err(ErrorCode::AlterTableError(format!(
-                    "Cannot add non-deterministic default column to table '{}' with change tracking enabled",
-                    table_info.desc
-                )));
-            }
-
+        if need_update {
             self.ctx
                 .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
             let query = format!(
