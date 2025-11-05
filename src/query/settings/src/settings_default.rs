@@ -1501,7 +1501,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),
                 }),
                 ("enable_experiment_aggregate", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enable experiment aggregate, default is 0, 1 for enable",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1509,7 +1509,7 @@ impl DefaultSettings {
                 }),
                 ("max_aggregate_spill_level", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Maximum recursion depth for the aggregate spill. Each recursion level repartitions data into num_cpu smaller parts to ensure it fits in memory.",
+                    desc: "Maximum recursion depth for the aggregate spill. Each recursion level repartition data into `num_cpu` smaller parts to ensure it fits in memory.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=16)),
