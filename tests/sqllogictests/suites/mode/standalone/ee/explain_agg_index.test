@@ -54,6 +54,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.test_index_db.t1
+            ├── scan id: 0
             ├── output columns: [a (#0), b (#1)]
             ├── read rows: 0
             ├── read size: 0
@@ -82,6 +83,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.test_index_db.t1
+            ├── scan id: 0
             ├── output columns: [b (#1)]
             ├── read rows: 0
             ├── read size: 0
@@ -114,6 +116,7 @@ EvalScalar
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.test_index_db.t1
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -146,6 +149,7 @@ EvalScalar
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.test_index_db.t1
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -167,7 +171,7 @@ HashJoin
 ├── keys is null equal: [false, false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:b (#4), probe key:b (#1), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:b (#4), probe targets:[b (#1)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── AggregateFinal(Build)
 │   ├── output columns: [SUM(a) (#5), t.b (#4)]
@@ -184,6 +188,7 @@ HashJoin
 │           ├── estimated rows: 0.00
 │           └── TableScan
 │               ├── table: default.test_index_db.t1
+│               ├── scan id: 1
 │               ├── output columns: [a (#3), b (#4)]
 │               ├── read rows: 0
 │               ├── read size: 0
@@ -204,6 +209,7 @@ HashJoin
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.test_index_db.t1
+            ├── scan id: 0
             ├── output columns: [a (#0), b (#1)]
             ├── read rows: 0
             ├── read size: 0
@@ -235,6 +241,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.test_index_db.t1
+            ├── scan id: 0
             ├── output columns: [a (#0), b (#1)]
             ├── read rows: 0
             ├── read size: 0
@@ -270,6 +277,7 @@ EvalScalar
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.test_index_db.t1
+            ├── scan id: 0
             ├── output columns: [a (#0)]
             ├── read rows: 0
             ├── read size: 0
@@ -307,6 +315,7 @@ EvalScalar
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.test_index_db.onebrc
+            ├── scan id: 0
             ├── output columns: [station_name (#0), measurement (#1)]
             ├── read rows: 0
             ├── read size: 0
@@ -345,6 +354,7 @@ Sort(Single)
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.test_index_db.onebrc
+                ├── scan id: 0
                 ├── output columns: [station_name (#0), measurement (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -383,6 +393,7 @@ Sort(Single)
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.test_index_db.onebrc
+                ├── scan id: 0
                 ├── output columns: [station_name (#0), measurement (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -421,6 +432,7 @@ Sort(Single)
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.test_index_db.onebrc
+                ├── scan id: 0
                 ├── output columns: [station_name (#0), measurement (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -464,6 +476,7 @@ Sort(Single)
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.test_index_db.onebrc
+                    ├── scan id: 0
                     ├── output columns: [station_name (#0), measurement (#1)]
                     ├── read rows: 0
                     ├── read size: 0
@@ -507,6 +520,7 @@ Sort(Single)
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.test_index_db.onebrc
+                    ├── scan id: 0
                     ├── output columns: [station_name (#0), measurement (#1)]
                     ├── read rows: 0
                     ├── read size: 0
@@ -550,6 +564,7 @@ Sort(Single)
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.test_index_db.onebrc
+                    ├── scan id: 0
                     ├── output columns: [station_name (#0), measurement (#1)]
                     ├── read rows: 0
                     ├── read size: 0
@@ -593,6 +608,7 @@ Sort(Single)
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.test_index_db.onebrc
+                    ├── scan id: 0
                     ├── output columns: [station_name (#0), measurement (#1)]
                     ├── read rows: 0
                     ├── read size: 0
@@ -623,6 +639,7 @@ AggregateFinal
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.test_index_db.onebrc
+        ├── scan id: 0
         ├── output columns: [measurement (#1)]
         ├── read rows: 0
         ├── read size: 0
@@ -657,6 +674,7 @@ AggregateFinal
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.test_index_db.t1
+        ├── scan id: 0
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read size: 0

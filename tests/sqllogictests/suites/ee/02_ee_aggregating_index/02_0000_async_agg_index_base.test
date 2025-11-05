@@ -347,6 +347,7 @@ EvalScalar
         ├── estimated rows: 8.00
         └── TableScan
             ├── table: default.test_index.t
+            ├── scan id: 0
             ├── output columns: [id (#0), user_id (#1), event_name (#2)]
             ├── read rows: 8
             ├── read size: < 1 KiB
@@ -391,6 +392,7 @@ EvalScalar
             ├── estimated rows: 6.00
             └── TableScan
                 ├── table: default.test_index.t
+                ├── scan id: 0
                 ├── output columns: [id (#0), user_id (#1), event_name (#2)]
                 ├── read rows: 8
                 ├── read size: < 1 KiB
@@ -437,6 +439,7 @@ Sort(Single)
                 ├── estimated rows: 6.00
                 └── TableScan
                     ├── table: default.test_index.t
+                    ├── scan id: 0
                     ├── output columns: [id (#0), user_id (#1), event_name (#2)]
                     ├── read rows: 8
                     ├── read size: < 1 KiB

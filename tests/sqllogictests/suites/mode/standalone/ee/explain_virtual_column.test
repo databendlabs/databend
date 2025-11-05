@@ -42,6 +42,7 @@ EvalScalar
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_virtual_db.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -60,6 +61,7 @@ EvalScalar
 ├── estimated rows: 0.20
 └── TableScan
     ├── table: default.test_virtual_db.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -83,6 +85,7 @@ explain select a, v['a'][0], v['b']['c'] from t2
 ----
 TableScan
 ├── table: default.test_virtual_db.t2
+├── scan id: 0
 ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]
 ├── read rows: 1
 ├── read size: < 1 KiB
@@ -102,6 +105,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.test_virtual_db.t2
+    ├── scan id: 0
     ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -125,6 +129,7 @@ EvalScalar
     ├── estimated rows: 0.50
     └── TableScan
         ├── table: default.test_virtual_db.t2
+        ├── scan id: 0
         ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]
         ├── read rows: 1
         ├── read size: < 1 KiB
@@ -144,6 +149,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.test_virtual_db.t2
+    ├── scan id: 0
     ├── output columns: [a (#0), v['d'] (#6)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -159,6 +165,7 @@ explain select a, get(get(v, 'a'), 0), get(get(v, 'b'), 'c') from t2;
 ----
 TableScan
 ├── table: default.test_virtual_db.t2
+├── scan id: 0
 ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]
 ├── read rows: 1
 ├── read size: < 1 KiB
@@ -178,6 +185,7 @@ EvalScalar
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_virtual_db.t2
+    ├── scan id: 0
     ├── output columns: [v['d'] (#6)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -206,6 +214,7 @@ EvalScalar
     ├── estimated rows: 0.50
     └── TableScan
         ├── table: default.test_virtual_db.t2
+        ├── scan id: 0
         ├── output columns: [a (#0), v['d'] (#6)]
         ├── read rows: 1
         ├── read size: < 1 KiB
@@ -233,6 +242,7 @@ EvalScalar
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.test_virtual_db.t1
+    │   ├── scan id: 1
     │   ├── output columns: [a (#7)]
     │   ├── read rows: 1
     │   ├── read size: < 1 KiB
@@ -243,6 +253,7 @@ EvalScalar
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.test_virtual_db.t2
+        ├── scan id: 0
         ├── output columns: [a (#0), v (#1), v['b']['c'] (#5)]
         ├── read rows: 1
         ├── read size: < 1 KiB
@@ -264,7 +275,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:CAST(t2.v['b']['c'] (#5) AS Int32 NULL), probe key:t1.a (#7), filter type:inlist,min_max
+│   └── filter id:0, build key:CAST(t2.v['b']['c'] (#5) AS Int32 NULL), probe targets:[t1.a (#7)@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#0), t2.v['b']['c'] (#5)]
@@ -272,6 +283,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
+│       ├── scan id: 0
 │       ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]
 │       ├── read rows: 1
 │       ├── read size: < 1 KiB
@@ -283,6 +295,7 @@ HashJoin
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.test_virtual_db.t1
+    ├── scan id: 1
     ├── output columns: [a (#7)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -310,6 +323,7 @@ HashJoin
 │   ├── estimated rows: 0.20
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
+│       ├── scan id: 1
 │       ├── output columns: [a (#2), v (#3), v['b']['c'] (#7)]
 │       ├── read rows: 1
 │       ├── read size: < 1 KiB
@@ -321,6 +335,7 @@ HashJoin
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.test_virtual_db.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -347,6 +362,7 @@ HashJoin
 │   ├── estimated rows: 0.20
 │   └── TableScan
 │       ├── table: default.test_virtual_db.t2
+│       ├── scan id: 1
 │       ├── output columns: [a (#2), v (#3), v['b']['c'] (#7)]
 │       ├── read rows: 1
 │       ├── read size: < 1 KiB
@@ -358,6 +374,7 @@ HashJoin
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.test_virtual_db.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), v (#1)]
     ├── read rows: 1
     ├── read size: < 1 KiB
@@ -389,6 +406,7 @@ AggregateFinal
         ├── estimated rows: 1.00
         ├── TableScan(Build)
         │   ├── table: default.test_virtual_db.t1
+        │   ├── scan id: 1
         │   ├── output columns: [a (#7)]
         │   ├── read rows: 1
         │   ├── read size: < 1 KiB
@@ -399,6 +417,7 @@ AggregateFinal
         │   └── estimated rows: 1.00
         └── TableScan(Probe)
             ├── table: default.test_virtual_db.t2
+            ├── scan id: 0
             ├── output columns: [v['b']['c'] (#5)]
             ├── read rows: 1
             ├── read size: < 1 KiB
@@ -500,8 +519,8 @@ EvalScalar
                 ├── keys is null equal: [false, false, false]
                 ├── filters: []
                 ├── build join filters:
-                │   ├── filter id:2, build key:p.entity_id (#9), probe key:a.entity_id (#0), filter type:inlist,min_max
-                │   └── filter id:3, build key:p.source_id (#10), probe key:a.source_id (#1), filter type:inlist,min_max
+                │   ├── filter id:2, build key:p.entity_id (#9), probe targets:[a.entity_id (#0)@scan0], filter type:bloom,inlist,min_max
+                │   └── filter id:3, build key:p.source_id (#10), probe targets:[a.source_id (#1)@scan0], filter type:bloom,inlist,min_max
                 ├── estimated rows: 0.04
                 ├── EvalScalar(Build)
                 │   ├── output columns: [a.entity_id (#9), a.source_id (#10), event_date (#22)]
@@ -528,8 +547,8 @@ EvalScalar
                 │                   ├── keys is null equal: [false, false]
                 │                   ├── filters: []
                 │                   ├── build join filters:
-                │                   │   ├── filter id:0, build key:a.entity_id (#9), probe key:c.entity_id (#18), filter type:inlist,min_max
-                │                   │   └── filter id:1, build key:a.source_id (#10), probe key:c.source_id (#19), filter type:inlist,min_max
+                │                   │   ├── filter id:0, build key:a.entity_id (#9), probe targets:[c.entity_id (#18)@scan2], filter type:bloom,inlist,min_max
+                │                   │   └── filter id:1, build key:a.source_id (#10), probe targets:[c.source_id (#19)@scan2], filter type:bloom,inlist,min_max
                 │                   ├── estimated rows: 0.20
                 │                   ├── Filter(Build)
                 │                   │   ├── output columns: [a.entity_id (#9), a.source_id (#10), a.content_object['event_date'] (#17)]
@@ -537,6 +556,7 @@ EvalScalar
                 │                   │   ├── estimated rows: 0.20
                 │                   │   └── TableScan
                 │                   │       ├── table: default.test_virtual_db.data_source_a
+                │                   │       ├── scan id: 1
                 │                   │       ├── output columns: [entity_id (#9), source_id (#10), content_object['event_date'] (#17)]
                 │                   │       ├── read rows: 1
                 │                   │       ├── read size: < 1 KiB
@@ -552,6 +572,7 @@ EvalScalar
                 │                       ├── estimated rows: 1.00
                 │                       └── TableScan
                 │                           ├── table: default.test_virtual_db.config_table
+                │                           ├── scan id: 2
                 │                           ├── output columns: [entity_id (#18), source_id (#19), process_mode (#20)]
                 │                           ├── read rows: 1
                 │                           ├── read size: < 1 KiB
@@ -567,6 +588,7 @@ EvalScalar
                     ├── estimated rows: 0.20
                     └── TableScan
                         ├── table: default.test_virtual_db.data_source_a
+                        ├── scan id: 0
                         ├── output columns: [entity_id (#0), source_id (#1), metadata_object['type'] (#5), content_object['category_a'] (#6), content_object['category_b'] (#7), content_object['event_date'] (#8)]
                         ├── read rows: 1
                         ├── read size: < 1 KiB
@@ -687,8 +709,8 @@ CommitSink
                 ├── keys is null equal: [false, false]
                 ├── filters: []
                 ├── build join filters:
-                │   ├── filter id:0, build key:CAST(source.record_id (#3) AS String NULL), probe key:target.record_id (#5), filter type:inlist,min_max
-                │   └── filter id:1, build key:CAST(source.category_id (#1) AS String NULL), probe key:target.category_id (#6), filter type:inlist,min_max
+                │   ├── filter id:0, build key:CAST(source.record_id (#3) AS String NULL), probe targets:[target.record_id (#5)@scan1], filter type:bloom,inlist,min_max
+                │   └── filter id:1, build key:CAST(source.category_id (#1) AS String NULL), probe targets:[target.category_id (#6)@scan1], filter type:bloom,inlist,min_max
                 ├── estimated rows: 1.00
                 ├── EvalScalar(Build)
                 │   ├── output columns: [data_staging.data_object['metadata']['category_id'] (#1), data_staging.data_object['unique_key'] (#3), reference_time (#4)]
@@ -696,6 +718,7 @@ CommitSink
                 │   ├── estimated rows: 1.00
                 │   └── TableScan
                 │       ├── table: default.test_virtual_db.data_staging
+                │       ├── scan id: 0
                 │       ├── output columns: [data_object['metadata']['category_id'] (#1), data_object['unique_key'] (#3)]
                 │       ├── read rows: 1
                 │       ├── read size: < 1 KiB
@@ -707,6 +730,7 @@ CommitSink
                 │       └── estimated rows: 1.00
                 └── TableScan(Probe)
                     ├── table: default.test_virtual_db.data_main
+                    ├── scan id: 1
                     ├── output columns: [record_id (#5), category_id (#6), _row_id (#8)]
                     ├── read rows: 1
                     ├── read size: < 1 KiB
