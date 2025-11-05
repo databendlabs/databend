@@ -231,7 +231,7 @@ impl SharedPartitionStream {
             inner: Arc::new(Mutex::new(SharedPartitionStreamInner {
                 partition_stream,
                 worker_count,
-                working_count: 0,
+                working_count: worker_count,
             })),
         }
     }
