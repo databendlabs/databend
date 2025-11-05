@@ -3914,11 +3914,10 @@ impl SchemaApiTestSuite {
             .column_mask_policy_columns_ids
             .contains_key(&number_column_id));
 
-        // Drop the table and ensure dropping the policy succeeds and cleans bindings.
+        // Drop the table (this deletes the table-policy reference), then drop the policy.
         util.drop_table_by_id().await?;
-        let dropped = mt.drop_data_mask(&mask_cleanup_ident).await??;
-        assert!(dropped.is_some());
 
+        // Verify the reference was already deleted by drop_table
         let binding_ident =
             MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
                 policy_id: mask_cleanup_id,
@@ -3926,8 +3925,12 @@ impl SchemaApiTestSuite {
             });
         assert!(
             mt.get_pb(&binding_ident).await?.is_none(),
-            "stale mask binding should be removed when dropping policy"
+            "table-policy reference should be removed when dropping table"
         );
+
+        // Now drop_policy should succeed since there are no active references
+        let dropped = mt.drop_data_mask(&mask_cleanup_ident).await??;
+        assert!(dropped.is_some());
         assert!(
             mt.get_data_mask(&mask_cleanup_ident).await?.is_none(),
             "policy metadata should be gone after drop"
@@ -4076,11 +4079,10 @@ impl SchemaApiTestSuite {
             "row access policy should be recorded in table meta"
         );
 
-        // Drop the table and ensure dropping the policy succeeds and cleans bindings.
+        // Drop the table (this deletes the table-policy reference), then drop the policy.
         util.drop_table_by_id().await?;
-        let dropped = mt.drop_row_access(&policy_cleanup_ident).await??;
-        assert!(dropped.is_some());
 
+        // Verify the reference was already deleted by drop_table
         let binding_ident =
             RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), RowAccessPolicyIdTableId {
                 policy_id: cleanup_policy_id,
@@ -4088,8 +4090,12 @@ impl SchemaApiTestSuite {
             });
         assert!(
             mt.get_pb(&binding_ident).await?.is_none(),
-            "stale row access binding should be removed when dropping policy"
+            "table-policy reference should be removed when dropping table"
         );
+
+        // Now drop_policy should succeed since there are no active references
+        let dropped = mt.drop_row_access(&policy_cleanup_ident).await??;
+        assert!(dropped.is_some());
         assert!(
             mt.get_row_access(&policy_cleanup_ident).await?.is_none(),
             "policy metadata should be gone after drop"

@@ -147,8 +147,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     > {
         debug!(name_ident :? =(name_ident); "DatamaskApi: {}", func_name!());
 
-        const BATCH_SIZE: usize = 100;
-
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
@@ -161,7 +159,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
             let policy_id = *seq_id.data;
             let tenant = name_ident.tenant();
-            let binding_prefix = DirName::new(MaskPolicyTableIdIdent::new_generic(
+            let table_policy_ref_prefix = DirName::new(MaskPolicyTableIdIdent::new_generic(
                 tenant.clone(),
                 MaskPolicyIdTableId {
                     policy_id,
@@ -169,78 +167,36 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 },
             ));
 
-            // List all bindings and categorize them
-            let bindings = self.list_pb_vec(&binding_prefix).await?;
-            let total_binding_count = bindings.len() as u64;
-
-            let mut active_bindings = Vec::new();
-            let mut stale_bindings = Vec::new();
-
-            for (binding_key, binding_seqv) in bindings {
-                let table_id = binding_key.name().table_id;
-                let table_key = databend_common_meta_app::schema::TableId::new(table_id);
-
-                match self.get_pb(&table_key).await? {
-                    Some(SeqV { data, .. }) if data.drop_on.is_none() => {
-                        // Active table using this policy
-                        active_bindings.push(table_id);
-                    }
-                    _ => {
-                        // Table dropped or doesn't exist - stale binding
-                        stale_bindings.push((binding_key, binding_seqv.seq));
-                    }
-                }
-            }
+            // List all table-policy references
+            let table_policy_refs = self.list_pb_vec(&table_policy_ref_prefix).await?;
 
             // Policy is in use - cannot drop
-            if !active_bindings.is_empty() {
+            if !table_policy_refs.is_empty() {
                 return Ok(Err(MaskingPolicyError::policy_in_use(
                     tenant.tenant_name().to_string(),
                     name_ident.data_mask_name().to_string(),
                 )));
             }
 
-            // Still have stale bindings - clean up a batch
-            if !stale_bindings.is_empty() {
-                let batch_size = stale_bindings.len().min(BATCH_SIZE);
-                let batch: Vec<_> = stale_bindings.into_iter().take(batch_size).collect();
+            // No references - drop the policy
+            let id_ident = seq_id.data.into_t_ident(tenant);
+            let mut txn = TxnRequest::default();
 
-                let mut txn = TxnRequest::default();
-                txn.condition.push(txn_cond_eq_keys_with_prefix(
-                    &binding_prefix,
-                    total_binding_count,
-                ));
+            // Ensure no new references were created
+            txn.condition
+                .push(txn_cond_eq_keys_with_prefix(&table_policy_ref_prefix, 0));
 
-                for (key, seq) in batch {
-                    txn_delete_exact(&mut txn, &key, seq);
-                }
+            txn_delete_exact(&mut txn, name_ident, seq_id.seq);
+            txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
 
-                let (succ, _) = send_txn(self, txn).await?;
-                if succ {
-                    continue; // Loop back to clean next batch or drop policy
-                }
-                // Transaction failed, retry from beginning
-            } else {
-                // All bindings cleaned up - now drop the policy itself
-                let id_ident = seq_id.data.into_t_ident(tenant);
-                let mut txn = TxnRequest::default();
+            // TODO: Tentative retention for compatibility. Can be deleted later.
+            clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
 
-                // Ensure no new bindings were created
-                txn.condition
-                    .push(txn_cond_eq_keys_with_prefix(&binding_prefix, 0));
-
-                txn_delete_exact(&mut txn, name_ident, seq_id.seq);
-                txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-
-                // TODO: Tentative retention for compatibility. Can be deleted later.
-                clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
-
-                let (succ, _responses) = send_txn(self, txn).await?;
-                if succ {
-                    return Ok(Ok(Some((seq_id, seq_meta))));
-                }
-                // Transaction failed, retry
+            let (succ, _responses) = send_txn(self, txn).await?;
+            if succ {
+                return Ok(Ok(Some((seq_id, seq_meta))));
             }
+            // Transaction failed, retry
         }
     }
 

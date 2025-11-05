@@ -42,9 +42,9 @@ impl KeyCodec for RowAccessPolicyIdTableId {
     }
 }
 
-/// RowAccess Policy can be applied to tables, If drop a row access policy
+/// RowAccess Policy can be applied to tables. When dropping a row access policy,
 /// should get all __fd_row_access_policy_apply_table_id/tenant/<policy_id>/<table_id>
-/// and remove table's bind.
+/// and remove the table's reference.
 pub type RowAccessPolicyTableIdIdent = TIdent<Resource, RowAccessPolicyIdTableId>;
 pub type RowAccessPolicyTableIdIdentRaw = TIdentRaw<Resource, RowAccessPolicyIdTableId>;
 
