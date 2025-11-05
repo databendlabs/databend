@@ -37,6 +37,7 @@ CommitSink
                 ├── estimated rows: 2.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.t2
+                │   ├── scan id: 1
                 │   ├── output columns: [a (#2)]
                 │   ├── read rows: 2
                 │   ├── read size: < 1 KiB
@@ -47,6 +48,7 @@ CommitSink
                 │   └── estimated rows: 2.00
                 └── TableScan(Probe)
                     ├── table: default.default.t1
+                    ├── scan id: 0
                     ├── output columns: [a (#0), _row_id (#4)]
                     ├── read rows: 4
                     ├── read size: < 1 KiB
@@ -104,6 +106,7 @@ CommitSink
             ├── estimated rows: 2.00
             ├── TableScan(Build)
             │   ├── table: default.default.t2
+            │   ├── scan id: 1
             │   ├── output columns: [a (#2)]
             │   ├── read rows: 2
             │   ├── read size: < 1 KiB
@@ -118,6 +121,7 @@ CommitSink
                 ├── estimated rows: 3.00
                 └── TableScan
                     ├── table: default.default.t1
+                    ├── scan id: 0
                     ├── output columns: [a (#0), b (#1), _row_id (#4)]
                     ├── read rows: 4
                     ├── read size: < 1 KiB
@@ -205,12 +209,13 @@ CommitSink
                 ├── keys is null equal: [false, false, false]
                 ├── filters: []
                 ├── build join filters:
-                │   ├── filter id:0, build key:p.c_code (#9), probe key:c.c_code (#1), filter type:inlist,min_max
-                │   ├── filter id:1, build key:p.id (#8), probe key:c.id (#0), filter type:inlist,min_max
-                │   └── filter id:2, build key:p.me_id (#10), probe key:c.me_id (#2), filter type:inlist,min_max
+                │   ├── filter id:0, build key:p.c_code (#9), probe targets:[c.c_code (#1)@scan0], filter type:bloom,inlist,min_max
+                │   ├── filter id:1, build key:p.id (#8), probe targets:[c.id (#0)@scan0], filter type:bloom,inlist,min_max
+                │   └── filter id:2, build key:p.me_id (#10), probe targets:[c.me_id (#2)@scan0], filter type:bloom,inlist,min_max
                 ├── estimated rows: 3.20
                 ├── TableScan(Build)
                 │   ├── table: default.default.t2
+                │   ├── scan id: 1
                 │   ├── output columns: [id (#8), c_code (#9), me_id (#10), p_id (#11), m_p_id (#12), lkp_id (#13), l_p_id (#14), l_m_p_id (#15)]
                 │   ├── read rows: 4
                 │   ├── read size: < 1 KiB
@@ -221,6 +226,7 @@ CommitSink
                 │   └── estimated rows: 4.00
                 └── TableScan(Probe)
                     ├── table: default.default.t1
+                    ├── scan id: 0
                     ├── output columns: [id (#0), c_code (#1), me_id (#2), _row_id (#16)]
                     ├── read rows: 4
                     ├── read size: < 1 KiB

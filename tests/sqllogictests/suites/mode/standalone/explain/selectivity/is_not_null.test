@@ -13,6 +13,7 @@ Filter
 ├── estimated rows: 3.00
 └── TableScan
     ├── table: default.default.twocolumn
+    ├── scan id: 0
     ├── output columns: [x (#0), y (#1)]
     ├── read rows: 4
     ├── read size: < 1 KiB
@@ -40,6 +41,7 @@ Filter
 ├── estimated rows: 2.00
 └── TableScan
     ├── table: default.default.t_user
+    ├── scan id: 0
     ├── output columns: [id (#0), name (#1)]
     ├── read rows: 2
     ├── read size: < 1 KiB

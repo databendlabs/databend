@@ -19,7 +19,7 @@ EvalScalar
 ├── expressions: [sum(number) (#1) / CAST(if(CAST(count(number) (#2) = 0 AS Boolean NULL), 1, count(number) (#2)) AS UInt64 NULL)]
 ├── estimated rows: 1.00
 └── AggregateFinal
-    ├── cpu time: <slt:ignore>
+    ├── cpu time: 687.538µs
     ├── output rows: 1
     ├── output bytes: 17.00 B
     ├── output columns: [sum(number) (#1), count(number) (#2)]
@@ -27,18 +27,19 @@ EvalScalar
     ├── aggregate functions: [sum(number), count()]
     ├── estimated rows: 1.00
     └── AggregatePartial
-        ├── cpu time: <slt:ignore>
+        ├── cpu time: 6.892802ms
         ├── output rows: 4
         ├── output bytes: 68.00 B
         ├── group by: []
         ├── aggregate functions: [sum(number), count()]
         ├── estimated rows: 1.00
         └── TableScan
-            ├── cpu time: <slt:ignore>
+            ├── cpu time: 16.152556ms
             ├── output rows: 1 million
             ├── output bytes: 7.63 MiB
             ├── bytes scanned: 7.63 MiB
             ├── table: default.system.numbers
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 1000000
             ├── read size: 7.63 MiB
@@ -97,6 +98,7 @@ EXPLAIN SELECT * FROM article;
 ----
 TableScan
 ├── table: default.default.article
+├── scan id: 0
 ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
 ├── read rows: 6
 ├── read size: < 1 KiB
@@ -112,6 +114,7 @@ EXPLAIN ANALYZE SELECT * FROM article;
 ----
 TableScan
 ├── table: default.default.article
+├── scan id: 0
 ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
 ├── read rows: 6
 ├── read size: < 1 KiB
@@ -130,12 +133,13 @@ Filter
 ├── filters: [is_true(article.article_id (#0) < 3)]
 ├── estimated rows: 3.00
 └── TableScan
-    ├── cpu time: <slt:ignore>
-    ├── wait time: <slt:ignore>
+    ├── cpu time: 21.507743ms
+    ├── wait time: 64.23832ms
     ├── output rows: 4
     ├── output bytes: 80.00 B
     ├── bytes scanned: 80.00 B
     ├── table: default.default.article
+    ├── scan id: 0
     ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
     ├── read rows: 4
     ├── read size: < 1 KiB
@@ -156,22 +160,23 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:author.id (#4), probe key:article.author_id (#1), filter type:inlist,min_max
+│   └── filter id:0, build key:author.id (#4), probe targets:[article.author_id (#1)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 2.50
 ├── Filter(Build)
-│   ├── cpu time: <slt:ignore>
+│   ├── cpu time: 349.255µs
 │   ├── output rows: 1
 │   ├── output bytes: 31.00 B
 │   ├── output columns: [author.id (#4), author.name (#5)]
 │   ├── filters: [is_true(author.name (#5) = 'mark4')]
 │   ├── estimated rows: 1.25
 │   └── TableScan
-│       ├── cpu time: <slt:ignore>
-│       ├── wait time: <slt:ignore>
+│       ├── cpu time: 20.376214ms
+│       ├── wait time: 124.75826ms
 │       ├── output rows: 1
 │       ├── output bytes: 31.00 B
 │       ├── bytes scanned: 31.00 B
 │       ├── table: default.default.author
+│       ├── scan id: 1
 │       ├── output columns: [id (#4), name (#5)]
 │       ├── read rows: 1
 │       ├── read size: < 1 KiB
@@ -181,14 +186,13 @@ HashJoin
 │       ├── push downs: [filters: [is_true(author.name (#5) = 'mark4')], limit: NONE]
 │       └── estimated rows: 5.00
 └── TableScan(Probe)
-    ├── cpu time: <slt:ignore>
-    ├── wait time: <slt:ignore>
-    ├── output rows: 1
-    ├── output bytes: 20.00 B
-    ├── bytes scanned: 20.00 B
-    ├── parts pruned by runtime filter: 5
-    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── cpu time: 11.048782ms
+    ├── wait time: 3.840004ms
+    ├── output rows: 6
+    ├── output bytes: 120.00 B
+    ├── bytes scanned: 120.00 B
     ├── table: default.default.article
+    ├── scan id: 0
     ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
     ├── read rows: 6
     ├── read size: < 1 KiB

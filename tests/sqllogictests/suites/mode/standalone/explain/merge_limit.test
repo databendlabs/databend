@@ -15,6 +15,7 @@ Limit
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.test_table
+    ├── scan id: 0
     ├── output columns: [id (#0), name (#1), value (#2)]
     ├── read rows: 0
     ├── read size: 0
@@ -34,6 +35,7 @@ Limit
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.test_table
+    ├── scan id: 0
     ├── output columns: [id (#0), name (#1), value (#2)]
     ├── read rows: 0
     ├── read size: 0
@@ -53,6 +55,7 @@ Limit
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.test_table
+    ├── scan id: 0
     ├── output columns: [id (#0), name (#1), value (#2)]
     ├── read rows: 0
     ├── read size: 0
@@ -76,6 +79,7 @@ Limit
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.test_table
+    ├── scan id: 0
     ├── output columns: [id (#0), name (#1), value (#2)]
     ├── read rows: 0
     ├── read size: 0
@@ -115,6 +119,7 @@ Limit
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.test_table
+                    ├── scan id: 0
                     ├── output columns: [id (#0), _row_id (#3)]
                     ├── read rows: 0
                     ├── read size: 0
@@ -144,6 +149,7 @@ RowFetch
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.test_table
+            ├── scan id: 0
             ├── output columns: [id (#0), _row_id (#3)]
             ├── read rows: 0
             ├── read size: 0
