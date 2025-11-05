@@ -49,7 +49,7 @@ use crate::txn_op_builder_util::txn_op_put_pb;
 /// Thus every type that impl kvapi::KVApi impls RowAccessPolicyApi.
 #[tonic::async_trait]
 impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
-    async fn create_row_access(
+    async fn create_row_access_policy(
         &self,
         req: CreateRowAccessPolicyReq,
     ) -> Result<
@@ -125,7 +125,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
         Ok(Ok(CreateRowAccessPolicyReply { id: *id }))
     }
 
-    async fn drop_row_access(
+    async fn drop_row_access_policy(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
     ) -> Result<
@@ -184,7 +184,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
         }
     }
 
-    async fn get_row_access(
+    async fn get_row_access_policy(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
     ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaError> {
@@ -195,7 +195,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
         Ok(res)
     }
 
-    async fn get_row_access_by_id(
+    async fn get_row_access_policy_by_id(
         &self,
         tenant: &Tenant,
         policy_id: u64,

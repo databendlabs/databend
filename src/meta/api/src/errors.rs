@@ -43,13 +43,12 @@ pub enum MaskingPolicyError {
     #[error(
         "MASKING POLICY `{policy_name}` is still in use. Unset it from all tables before dropping."
     )]
-    PolicyInUse { tenant: String, policy_name: String },
+    PolicyInUse { policy_name: String },
 }
 
 impl MaskingPolicyError {
-    pub fn policy_in_use(tenant: impl Into<String>, policy_name: impl Into<String>) -> Self {
+    pub fn policy_in_use(_tenant: impl Into<String>, policy_name: impl Into<String>) -> Self {
         Self::PolicyInUse {
-            tenant: tenant.into(),
             policy_name: policy_name.into(),
         }
     }
@@ -69,13 +68,12 @@ pub enum RowAccessPolicyError {
     #[error(
         "ROW ACCESS POLICY `{policy_name}` is still in use. Unset it from all tables before dropping."
     )]
-    PolicyInUse { tenant: String, policy_name: String },
+    PolicyInUse { policy_name: String },
 }
 
 impl RowAccessPolicyError {
-    pub fn policy_in_use(tenant: impl Into<String>, policy_name: impl Into<String>) -> Self {
+    pub fn policy_in_use(_tenant: impl Into<String>, policy_name: impl Into<String>) -> Self {
         Self::PolicyInUse {
-            tenant: tenant.into(),
             policy_name: policy_name.into(),
         }
     }

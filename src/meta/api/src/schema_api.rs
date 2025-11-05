@@ -642,6 +642,18 @@ async fn cleanup_missing_policies_on_undrop(
 
         // Remove columns with missing policies
         for missing_policy_id in missing_policies {
+            let removed_columns: Vec<_> = table_meta
+                .column_mask_policy_columns_ids
+                .iter()
+                .filter(|(_, pm)| pm.policy_id == missing_policy_id)
+                .map(|(col_id, _)| *col_id)
+                .collect();
+
+            debug!(
+                "Undrop table {}: removing missing masking policy {} from columns {:?}",
+                table_id, missing_policy_id, removed_columns
+            );
+
             table_meta
                 .column_mask_policy_columns_ids
                 .retain(|_, policy_map| policy_map.policy_id != missing_policy_id);
@@ -665,6 +677,10 @@ async fn cleanup_missing_policies_on_undrop(
         match seq_policy {
             None => {
                 // Policy missing - clean up
+                debug!(
+                    "Undrop table {}: removing missing row access policy {}",
+                    table_id, policy_map.policy_id
+                );
                 table_meta.row_access_policy_columns_ids = None;
                 table_meta.row_access_policy = None;
                 conditions.push(txn_cond_eq_seq(&policy_ident, 0));

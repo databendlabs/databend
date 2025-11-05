@@ -96,7 +96,7 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
         let (policy_id, policy) = handler
-            .get_row_access(meta_api, &self.ctx.get_tenant(), policy_name.clone())
+            .get_row_access_policy(meta_api, &self.ctx.get_tenant(), policy_name.clone())
             .await?;
 
         // check if column type match to the input type

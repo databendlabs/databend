@@ -45,7 +45,7 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         std::result::Result<CreateRowAccessPolicyReply, ExistError<Resource>>,
         MetaTxnError,
     > {
-        meta_api.create_row_access(req).await
+        meta_api.create_row_access_policy(req).await
     }
 
     async fn drop_row_access(
@@ -53,7 +53,7 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         meta_api: Arc<MetaStore>,
         req: DropRowAccessPolicyReq,
     ) -> Result<()> {
-        let dropped = meta_api.drop_row_access(&req.name).await??;
+        let dropped = meta_api.drop_row_access_policy(&req.name).await??;
         if dropped.is_none() {
             return Err(AppError::from(req.name.unknown_error("drop row policy")).into());
         }
@@ -69,7 +69,7 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
     ) -> Result<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)> {
         let name_ident = RowAccessPolicyNameIdent::new(tenant, name);
         let res = meta_api
-            .get_row_access(&name_ident)
+            .get_row_access_policy(&name_ident)
             .await?
             .ok_or_else(|| AppError::from(name_ident.unknown_error("get row policy")))?;
         Ok(res)
@@ -82,7 +82,7 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         policy_id: u64,
     ) -> Result<SeqV<RowAccessPolicyMeta>> {
         let res = meta_api
-            .get_row_access_by_id(tenant, policy_id)
+            .get_row_access_policy_by_id(tenant, policy_id)
             .await?
             .ok_or_else(|| {
                 databend_common_exception::ErrorCode::UnknownRowAccessPolicy(format!(

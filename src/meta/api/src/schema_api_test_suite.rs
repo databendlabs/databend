@@ -3559,10 +3559,10 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         };
-        mt.create_row_access(req).await.unwrap().unwrap();
+        mt.create_row_access_policy(req).await.unwrap().unwrap();
 
         let name = RowAccessPolicyNameIdent::new(tenant.clone(), policy1.to_string());
-        let res = mt.get_row_access(&name).await.unwrap().unwrap();
+        let res = mt.get_row_access_policy(&name).await.unwrap().unwrap();
         let policy1_id = res.0.data;
 
         let req = CreateRowAccessPolicyReq {
@@ -3576,7 +3576,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         };
-        mt.create_row_access(req).await.unwrap().unwrap();
+        mt.create_row_access_policy(req).await.unwrap().unwrap();
 
         let table_id_1;
         info!("--- apply mask1 policy to table 1 and check");
@@ -4042,7 +4042,7 @@ impl SchemaApiTestSuite {
         // Create a row access policy and bind it to the table.
         let policy_cleanup_ident =
             RowAccessPolicyNameIdent::new(tenant.clone(), policy_cleanup_name.to_string());
-        mt.create_row_access(CreateRowAccessPolicyReq {
+        mt.create_row_access_policy(CreateRowAccessPolicyReq {
             can_replace: false,
             name: policy_cleanup_ident.clone(),
             row_access_policy_meta: RowAccessPolicyMeta {
@@ -4057,7 +4057,7 @@ impl SchemaApiTestSuite {
         .unwrap();
         let cleanup_policy_id = {
             let res = mt
-                .get_row_access(&policy_cleanup_ident)
+                .get_row_access_policy(&policy_cleanup_ident)
                 .await?
                 .expect("row access policy exists");
             *res.0.data
@@ -4094,10 +4094,12 @@ impl SchemaApiTestSuite {
         );
 
         // Now drop_policy should succeed since there are no active references
-        let dropped = mt.drop_row_access(&policy_cleanup_ident).await??;
+        let dropped = mt.drop_row_access_policy(&policy_cleanup_ident).await??;
         assert!(dropped.is_some());
         assert!(
-            mt.get_row_access(&policy_cleanup_ident).await?.is_none(),
+            mt.get_row_access_policy(&policy_cleanup_ident)
+                .await?
+                .is_none(),
             "policy metadata should be gone after drop"
         );
 
@@ -4115,7 +4117,7 @@ impl SchemaApiTestSuite {
         // Create another row access policy and bind it.
         let policy_guard_ident =
             RowAccessPolicyNameIdent::new(tenant.clone(), policy_guard_name.to_string());
-        mt.create_row_access(CreateRowAccessPolicyReq {
+        mt.create_row_access_policy(CreateRowAccessPolicyReq {
             can_replace: false,
             name: policy_guard_ident.clone(),
             row_access_policy_meta: RowAccessPolicyMeta {
@@ -4130,7 +4132,7 @@ impl SchemaApiTestSuite {
         .unwrap();
         let guard_policy_id = {
             let res = mt
-                .get_row_access(&policy_guard_ident)
+                .get_row_access_policy(&policy_guard_ident)
                 .await?
                 .expect("row access policy exists");
             *res.0.data
@@ -4164,7 +4166,7 @@ impl SchemaApiTestSuite {
         assert_eq!(guard_policy_id, policy_entry.policy_id);
 
         // Dropping the policy should now fail because the table is active.
-        let err = mt.drop_row_access(&policy_guard_ident).await?;
+        let err = mt.drop_row_access_policy(&policy_guard_ident).await?;
         let err = err.unwrap_err();
         let err = ErrorCode::from(err);
         assert_eq!(ErrorCode::ConstraintError("").code(), err.code());
@@ -4181,7 +4183,7 @@ impl SchemaApiTestSuite {
 
         // Clean up by dropping the table and policy.
         util.drop_table_by_id().await?;
-        let dropped = mt.drop_row_access(&policy_guard_ident).await??;
+        let dropped = mt.drop_row_access_policy(&policy_guard_ident).await??;
         assert!(dropped.is_some());
         assert!(
             mt.get_pb(&binding_ident).await?.is_none(),

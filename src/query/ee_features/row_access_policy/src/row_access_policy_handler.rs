@@ -91,7 +91,7 @@ impl RowAccessPolicyHandlerWrapper {
         std::result::Result<CreateRowAccessPolicyReply, ExistError<Resource>>,
         MetaTxnError,
     > {
-        self.handler.create_row_access(meta_api, req).await
+        self.handler.create_row_access_policy(meta_api, req).await
     }
 
     pub async fn drop_row_access(
@@ -99,7 +99,7 @@ impl RowAccessPolicyHandlerWrapper {
         meta_api: Arc<MetaStore>,
         req: DropRowAccessPolicyReq,
     ) -> Result<()> {
-        self.handler.drop_row_access(meta_api, req).await
+        self.handler.drop_row_access_policy(meta_api, req).await
     }
 
     pub async fn get_row_access(
@@ -108,7 +108,9 @@ impl RowAccessPolicyHandlerWrapper {
         tenant: &Tenant,
         name: String,
     ) -> Result<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)> {
-        self.handler.get_row_access(meta_api, tenant, name).await
+        self.handler
+            .get_row_access_policy(meta_api, tenant, name)
+            .await
     }
 
     pub async fn get_row_access_by_id(
@@ -118,7 +120,7 @@ impl RowAccessPolicyHandlerWrapper {
         policy_id: u64,
     ) -> Result<SeqV<RowAccessPolicyMeta>> {
         self.handler
-            .get_row_access_by_id(meta_api, tenant, policy_id)
+            .get_row_access_policy_by_id(meta_api, tenant, policy_id)
             .await
     }
 }
