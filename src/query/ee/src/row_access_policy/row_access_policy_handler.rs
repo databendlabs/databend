@@ -37,7 +37,7 @@ pub struct RealRowAccessPolicyHandler {}
 
 #[async_trait::async_trait]
 impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
-    async fn create_row_access(
+    async fn create_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         req: CreateRowAccessPolicyReq,
@@ -48,7 +48,7 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         meta_api.create_row_access_policy(req).await
     }
 
-    async fn drop_row_access(
+    async fn drop_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         req: DropRowAccessPolicyReq,
@@ -61,7 +61,7 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         Ok(())
     }
 
-    async fn get_row_access(
+    async fn get_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
@@ -75,7 +75,7 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         Ok(res)
     }
 
-    async fn get_row_access_by_id(
+    async fn get_row_access_policy_by_id(
         &self,
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,

@@ -243,18 +243,21 @@ pub async fn construct_drop_table_txn_operations(
     //   3. The transaction ensures atomicity - either all references are deleted or none
     //
     // This avoids the overhead of reading each reference's seq while maintaining correctness.
+    let policy_ids: HashSet<u64> = tb_meta
+        .column_mask_policy_columns_ids
+        .values()
+        .map(|policy_map| policy_map.policy_id)
+        .collect();
 
-    // Delete masking policy references
-    for policy_map in tb_meta.column_mask_policy_columns_ids.values() {
-        txn.if_then
-            .push(txn_op_del(&MaskPolicyTableIdIdent::new_generic(
-                tenant.clone(),
-                MaskPolicyIdTableId {
-                    policy_id: policy_map.policy_id,
-                    table_id,
-                },
-            )));
-    }
+    txn.if_then.extend(policy_ids.into_iter().map(|policy_id| {
+        txn_op_del(&MaskPolicyTableIdIdent::new_generic(
+            tenant.clone(),
+            MaskPolicyIdTableId {
+                policy_id,
+                table_id,
+            },
+        ))
+    }));
 
     // Delete row access policy reference
     if let Some(policy_map) = &tb_meta.row_access_policy_columns_ids {

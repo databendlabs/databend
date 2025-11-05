@@ -44,7 +44,7 @@ use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait RowAccessPolicyHandler: Sync + Send {
-    async fn create_row_access(
+    async fn create_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         req: CreateRowAccessPolicyReq,
@@ -53,20 +53,20 @@ pub trait RowAccessPolicyHandler: Sync + Send {
         MetaTxnError,
     >;
 
-    async fn drop_row_access(
+    async fn drop_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         req: DropRowAccessPolicyReq,
     ) -> Result<()>;
 
-    async fn get_row_access(
+    async fn get_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
         name: String,
     ) -> Result<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>;
 
-    async fn get_row_access_by_id(
+    async fn get_row_access_policy_by_id(
         &self,
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
@@ -83,7 +83,7 @@ impl RowAccessPolicyHandlerWrapper {
         Self { handler }
     }
 
-    pub async fn create_row_access(
+    pub async fn create_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         req: CreateRowAccessPolicyReq,
@@ -94,7 +94,7 @@ impl RowAccessPolicyHandlerWrapper {
         self.handler.create_row_access_policy(meta_api, req).await
     }
 
-    pub async fn drop_row_access(
+    pub async fn drop_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         req: DropRowAccessPolicyReq,
@@ -102,7 +102,7 @@ impl RowAccessPolicyHandlerWrapper {
         self.handler.drop_row_access_policy(meta_api, req).await
     }
 
-    pub async fn get_row_access(
+    pub async fn get_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
@@ -113,7 +113,7 @@ impl RowAccessPolicyHandlerWrapper {
             .await
     }
 
-    pub async fn get_row_access_by_id(
+    pub async fn get_row_access_policy_by_id(
         &self,
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
