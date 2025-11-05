@@ -22,7 +22,7 @@ Limit
                 ├── keys is null equal: [false]
                 ├── filters: []
                 ├── build join filters:
-                │   └── filter id:4, build key:ctr1.ctr_customer_sk (#3), probe key:customer.c_customer_sk (#78), filter type:bloom,inlist,min_max
+                │   └── filter id:4, build key:ctr1.ctr_customer_sk (#3), probe targets:[customer.c_customer_sk (#78)@scan3], filter type:bloom,inlist,min_max
                 ├── estimated rows: 0.00
                 ├── Exchange(Build)
                 │   ├── output columns: [store_returns.sr_customer_sk (#3)]
@@ -35,7 +35,7 @@ Limit
                 │       ├── keys is null equal: [false]
                 │       ├── filters: [ctr1.ctr_total_return (#48) > scalar_subquery_147 (#147)]
                 │       ├── build join filters:
-                │       │   └── filter id:3, build key:sr_store_sk (#103), probe key:sr_store_sk (#7), filter type:bloom,inlist,min_max
+                │       │   └── filter id:3, build key:sr_store_sk (#103), probe targets:[sr_store_sk (#7)@scan0], filter type:bloom,inlist,min_max
                 │       ├── estimated rows: 0.00
                 │       ├── Exchange(Build)
                 │       │   ├── output columns: [sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147), store_returns.sr_store_sk (#103)]
@@ -48,7 +48,7 @@ Limit
                 │       │       ├── keys is null equal: [false]
                 │       │       ├── filters: []
                 │       │       ├── build join filters:
-                │       │       │   └── filter id:2, build key:sr_store_sk (#103), probe key:store.s_store_sk (#49), filter type:bloom,inlist,min_max
+                │       │       │   └── filter id:2, build key:sr_store_sk (#103), probe targets:[store.s_store_sk (#49)@scan2], filter type:bloom,inlist,min_max
                 │       │       ├── estimated rows: 0.00
                 │       │       ├── Exchange(Build)
                 │       │       │   ├── output columns: [store_returns.sr_store_sk (#103), sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147)]
@@ -89,13 +89,14 @@ Limit
                 │       │       │                                   ├── keys is null equal: [false]
                 │       │       │                                   ├── filters: []
                 │       │       │                                   ├── build join filters:
-                │       │       │                                   │   └── filter id:1, build key:date_dim.d_date_sk (#116), probe key:store_returns.sr_returned_date_sk (#96), filter type:bloom,inlist,min_max
+                │       │       │                                   │   └── filter id:1, build key:date_dim.d_date_sk (#116), probe targets:[store_returns.sr_returned_date_sk (#96)@scan4], filter type:bloom,inlist,min_max
                 │       │       │                                   ├── estimated rows: 0.00
                 │       │       │                                   ├── Exchange(Build)
                 │       │       │                                   │   ├── output columns: [date_dim.d_date_sk (#116)]
                 │       │       │                                   │   ├── exchange type: Broadcast
                 │       │       │                                   │   └── TableScan
                 │       │       │                                   │       ├── table: default.default.date_dim
+                │       │       │                                   │       ├── scan id: 5
                 │       │       │                                   │       ├── output columns: [d_date_sk (#116)]
                 │       │       │                                   │       ├── read rows: 0
                 │       │       │                                   │       ├── read size: 0
@@ -105,6 +106,7 @@ Limit
                 │       │       │                                   │       └── estimated rows: 0.00
                 │       │       │                                   └── TableScan(Probe)
                 │       │       │                                       ├── table: default.default.store_returns
+                │       │       │                                       ├── scan id: 4
                 │       │       │                                       ├── output columns: [sr_returned_date_sk (#96), sr_customer_sk (#99), sr_store_sk (#103), sr_return_amt (#107)]
                 │       │       │                                       ├── read rows: 0
                 │       │       │                                       ├── read size: 0
@@ -115,6 +117,7 @@ Limit
                 │       │       │                                       └── estimated rows: 0.00
                 │       │       └── TableScan(Probe)
                 │       │           ├── table: default.default.store
+                │       │           ├── scan id: 2
                 │       │           ├── output columns: [s_store_sk (#49)]
                 │       │           ├── read rows: 0
                 │       │           ├── read size: 0
@@ -143,13 +146,14 @@ Limit
                 │                       ├── keys is null equal: [false]
                 │                       ├── filters: []
                 │                       ├── build join filters:
-                │                       │   └── filter id:0, build key:date_dim.d_date_sk (#20), probe key:store_returns.sr_returned_date_sk (#0), filter type:inlist,min_max
+                │                       │   └── filter id:0, build key:date_dim.d_date_sk (#20), probe targets:[store_returns.sr_returned_date_sk (#0)@scan0], filter type:bloom,inlist,min_max
                 │                       ├── estimated rows: 841298963.13
                 │                       ├── Exchange(Build)
                 │                       │   ├── output columns: [date_dim.d_date_sk (#20)]
                 │                       │   ├── exchange type: Broadcast
                 │                       │   └── TableScan
                 │                       │       ├── table: default.default.date_dim
+                │                       │       ├── scan id: 1
                 │                       │       ├── output columns: [d_date_sk (#20)]
                 │                       │       ├── read rows: 0
                 │                       │       ├── read size: 0
@@ -159,6 +163,7 @@ Limit
                 │                       │       └── estimated rows: 29.22
                 │                       └── TableScan(Probe)
                 │                           ├── table: default.default.store_returns
+                │                           ├── scan id: 0
                 │                           ├── output columns: [sr_returned_date_sk (#0), sr_customer_sk (#3), sr_store_sk (#7), sr_return_amt (#11)]
                 │                           ├── read rows: 0
                 │                           ├── read size: 0
@@ -169,6 +174,7 @@ Limit
                 │                           └── estimated rows: 28792282.00
                 └── TableScan(Probe)
                     ├── table: default.default.customer
+                    ├── scan id: 3
                     ├── output columns: [c_customer_sk (#78), c_customer_id (#79)]
                     ├── read rows: 0
                     ├── read size: 0

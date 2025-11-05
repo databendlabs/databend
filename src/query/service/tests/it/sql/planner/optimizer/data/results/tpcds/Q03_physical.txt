@@ -34,13 +34,14 @@ Limit
                             ├── keys is null equal: [false]
                             ├── filters: []
                             ├── build join filters:
-                            │   └── filter id:1, build key:dt.d_date_sk (#0), probe key:store_sales.ss_sold_date_sk (#28), filter type:inlist,min_max
+                            │   └── filter id:1, build key:dt.d_date_sk (#0), probe targets:[store_sales.ss_sold_date_sk (#28)@scan1], filter type:bloom,inlist,min_max
                             ├── estimated rows: 143057683321996.78
                             ├── Exchange(Build)
                             │   ├── output columns: [dt.d_date_sk (#0), dt.d_year (#6)]
                             │   ├── exchange type: Broadcast
                             │   └── TableScan
                             │       ├── table: default.default.date_dim
+                            │       ├── scan id: 0
                             │       ├── output columns: [d_date_sk (#0), d_year (#6)]
                             │       ├── read rows: 0
                             │       ├── read size: 0
@@ -56,13 +57,14 @@ Limit
                                 ├── keys is null equal: [false]
                                 ├── filters: []
                                 ├── build join filters:
-                                │   └── filter id:0, build key:item.i_item_sk (#51), probe key:store_sales.ss_item_sk (#30), filter type:inlist,min_max
+                                │   └── filter id:0, build key:item.i_item_sk (#51), probe targets:[store_sales.ss_item_sk (#30)@scan1], filter type:bloom,inlist,min_max
                                 ├── estimated rows: 23500557158.40
                                 ├── Exchange(Build)
                                 │   ├── output columns: [item.i_item_sk (#51), item.i_brand_id (#58), item.i_brand (#59)]
                                 │   ├── exchange type: Broadcast
                                 │   └── TableScan
                                 │       ├── table: default.default.item
+                                │       ├── scan id: 2
                                 │       ├── output columns: [i_item_sk (#51), i_brand_id (#58), i_brand (#59)]
                                 │       ├── read rows: 0
                                 │       ├── read size: 0
@@ -72,6 +74,7 @@ Limit
                                 │       └── estimated rows: 81.60
                                 └── TableScan(Probe)
                                     ├── table: default.default.store_sales
+                                    ├── scan id: 1
                                     ├── output columns: [ss_sold_date_sk (#28), ss_item_sk (#30), ss_ext_sales_price (#43)]
                                     ├── read rows: 0
                                     ├── read size: 0
