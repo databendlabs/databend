@@ -538,10 +538,14 @@ pub async fn handle_undrop_table(
         }
 
         let tenant = tenant_dbname_tbname.tenant().clone();
-        let (policy_cleanup_ops, policy_cleanup_conditions) =
-            cleanup_missing_policies_on_undrop(kv_api, &tenant, table_id, &mut seq_table_meta.data)
-                .await
-                .map_err(KVAppError::from)?;
+        let (policy_restore_ops, policy_restore_conditions) = restore_policy_references_on_undrop(
+            kv_api,
+            &tenant,
+            table_id,
+            &mut seq_table_meta.data,
+        )
+        .await
+        .map_err(KVAppError::from)?;
 
         {
             // reset drop on time
@@ -565,7 +569,7 @@ pub async fn handle_undrop_table(
                         // - If vacuum_retention is None: seq must remain 0 (no creation by vacuum)
                         txn_cond_eq_seq(&vacuum_ident, vacuum_seq),
                     ],
-                    policy_cleanup_conditions,
+                    policy_restore_conditions,
                 ]
                 .concat(),
                 [
@@ -576,7 +580,7 @@ pub async fn handle_undrop_table(
                         txn_op_put(&dbid_tbname, serialize_u64(table_id)?), // (tenant, db_id, tb_name) -> tb_id
                         txn_op_put_pb(&tbid, &seq_table_meta.data, None)?, // (tenant, db_id, tb_id) -> tb_meta
                     ],
-                    policy_cleanup_ops,
+                    policy_restore_ops,
                 ]
                 .concat(),
             );
@@ -597,7 +601,12 @@ pub async fn handle_undrop_table(
     }
 }
 
-async fn cleanup_missing_policies_on_undrop(
+/// Restore policy references when undropping a table.
+///
+/// This function handles two cases:
+/// 1. Policy exists: Restore the table-policy reference (deleted during drop_table)
+/// 2. Policy missing: Clean up the policy reference from table_meta
+async fn restore_policy_references_on_undrop(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: &Tenant,
     table_id: u64,
@@ -621,22 +630,21 @@ async fn cleanup_missing_policies_on_undrop(
             let policy_ident = DataMaskIdIdent::new_generic(tenant, DataMaskId::new(policy_id));
             let seq_policy = kv_api.get_pb(&policy_ident).await?;
 
-            // The table-policy reference key is per (policy_id, table_id), not per column
-            let ref_key =
-                MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
-                    policy_id,
-                    table_id,
-                });
-
             match seq_policy {
                 None => {
-                    // Policy missing - mark for cleanup
+                    // Policy missing - mark for cleanup from table_meta
+                    // Note: table-policy reference was already deleted during drop_table
                     missing_policies.insert(policy_id);
                     conditions.push(txn_cond_eq_seq(&policy_ident, 0));
-                    ops.push(txn_op_del(&ref_key));
                 }
                 Some(seq_policy) => {
                     // Policy exists - restore the table-policy reference
+                    // (it was deleted during drop_table)
+                    let ref_key =
+                        MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                            policy_id,
+                            table_id,
+                        });
                     conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
                     ops.push(txn_op_put_pb(&ref_key, &MaskPolicyTableId, None)?);
                 }
@@ -671,15 +679,10 @@ async fn cleanup_missing_policies_on_undrop(
         );
         let seq_policy = kv_api.get_pb(&policy_ident).await?;
 
-        let ref_key =
-            RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), RowAccessPolicyIdTableId {
-                policy_id: policy_map.policy_id,
-                table_id,
-            });
-
         match seq_policy {
             None => {
-                // Policy missing - clean up
+                // Policy missing - clean up from table_meta
+                // Note: table-policy reference was already deleted during drop_table
                 debug!(
                     "Undrop table {}: removing missing row access policy {}",
                     table_id, policy_map.policy_id
@@ -687,10 +690,17 @@ async fn cleanup_missing_policies_on_undrop(
                 table_meta.row_access_policy_columns_ids = None;
                 table_meta.row_access_policy = None;
                 conditions.push(txn_cond_eq_seq(&policy_ident, 0));
-                ops.push(txn_op_del(&ref_key));
             }
             Some(seq_policy) => {
-                // Policy exists - restore reference
+                // Policy exists - restore the table-policy reference
+                // (it was deleted during drop_table)
+                let ref_key = RowAccessPolicyTableIdIdent::new_generic(
+                    tenant.clone(),
+                    RowAccessPolicyIdTableId {
+                        policy_id: policy_map.policy_id,
+                        table_id,
+                    },
+                );
                 conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
                 ops.push(txn_op_put_pb(&ref_key, &RowAccessPolicyTableId, None)?);
             }
