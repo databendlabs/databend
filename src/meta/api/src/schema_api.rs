@@ -653,33 +653,22 @@ async fn restore_policy_references_on_undrop(
             }
         }
 
-        // Remove columns with missing policies
-        for missing_policy_id in missing_policies {
-            let removed_columns: Vec<_> = table_meta
-                .column_mask_policy_columns_ids
-                .iter()
-                .filter(|(_, pm)| pm.policy_id == missing_policy_id)
-                .map(|(col_id, _)| *col_id)
-                .collect();
-
+        for missing_policy_id in &missing_policies {
             debug!(
-                "Undrop table {}: removing missing masking policy {} from columns {:?}",
-                table_id, missing_policy_id, removed_columns
+                "Undrop table {}: removing missing masking policy {}",
+                table_id, missing_policy_id
             );
-
-            table_meta
-                .column_mask_policy_columns_ids
-                .retain(|_, policy_map| policy_map.policy_id != missing_policy_id);
         }
+        table_meta
+            .column_mask_policy_columns_ids
+            .retain(|_, policy_map| !missing_policies.contains(&policy_map.policy_id));
     }
 
     // Process row access policy
     if let Some(policy_map) = &table_meta.row_access_policy_columns_ids {
         let policy_id = policy_map.policy_id;
-        let policy_ident = RowAccessPolicyIdIdent::new_generic(
-            tenant,
-            RowAccessPolicyId::new(policy_id),
-        );
+        let policy_ident =
+            RowAccessPolicyIdIdent::new_generic(tenant, RowAccessPolicyId::new(policy_id));
         let seq_policy = kv_api.get_pb(&policy_ident).await?;
 
         match seq_policy {
@@ -711,7 +700,6 @@ async fn restore_policy_references_on_undrop(
             }
         }
     }
-
     Ok((ops, conditions))
 }
 
