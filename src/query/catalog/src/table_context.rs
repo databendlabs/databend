@@ -359,10 +359,6 @@ pub trait TableContext: Send + Sync {
 
     fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>>;
 
-    fn set_wait_runtime_filter(&self, table_index: usize, need_to_wait: bool);
-
-    fn get_wait_runtime_filter(&self, table_index: usize) -> bool;
-
     fn clear_runtime_filter(&self);
 
     fn set_merge_into_join(&self, join: MergeIntoJoin);

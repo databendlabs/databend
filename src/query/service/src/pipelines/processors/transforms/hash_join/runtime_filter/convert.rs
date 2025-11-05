@@ -69,7 +69,7 @@ pub fn build_runtime_filter_infos(
         for (probe_key, scan_id) in &desc.probe_targets {
             let entry = filters.entry(*scan_id).or_default();
 
-            let mut runtime_entry = RuntimeFilterEntry {
+            let runtime_entry = RuntimeFilterEntry {
                 id: desc.id,
                 probe_expr: probe_key.clone(),
                 bloom: if enabled {
@@ -109,23 +109,7 @@ pub fn build_runtime_filter_infos(
                 enabled,
             };
 
-            if let Some(existing) = entry
-                .filters
-                .iter_mut()
-                .find(|existing| existing.id == runtime_entry.id)
-            {
-                if runtime_entry.bloom.is_some() {
-                    existing.bloom = runtime_entry.bloom.take();
-                }
-                if runtime_entry.inlist.is_some() {
-                    existing.inlist = runtime_entry.inlist.take();
-                }
-                if runtime_entry.min_max.is_some() {
-                    existing.min_max = runtime_entry.min_max.take();
-                }
-            } else {
-                entry.filters.push(runtime_entry);
-            }
+            entry.filters.push(runtime_entry);
         }
     }
     Ok(filters)

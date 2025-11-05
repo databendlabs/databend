@@ -952,14 +952,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_wait_runtime_filter(&self, _table_index: usize, _need_to_wait: bool) {
-        todo!()
-    }
-
-    fn get_wait_runtime_filter(&self, _table_index: usize) -> bool {
-        todo!()
-    }
-
     fn clear_runtime_filter(&self) {
         todo!()
     }

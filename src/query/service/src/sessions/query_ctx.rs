@@ -1678,21 +1678,8 @@ impl TableContext for QueryContext {
         let mut runtime_filters = self.shared.runtime_filters.write();
         for (scan_id, filter) in filters {
             let entry = runtime_filters.entry(scan_id).or_default();
-            for mut new_filter in filter.filters {
-                if let Some(existing) = entry
-                    .filters
-                    .iter_mut()
-                    .find(|existing| existing.id == new_filter.id)
-                {
-                    existing.bloom = new_filter.bloom.take();
-                    existing.inlist = new_filter.inlist.take();
-                    existing.min_max = new_filter.min_max.take();
-                    existing.build_rows = new_filter.build_rows;
-                    existing.build_table_rows = new_filter.build_table_rows;
-                    existing.enabled = new_filter.enabled;
-                } else {
-                    entry.filters.push(new_filter);
-                }
+            for new_filter in filter.filters {
+                entry.filters.push(new_filter);
             }
         }
     }
@@ -1714,19 +1701,6 @@ impl TableContext for QueryContext {
         match runtime_filter_ready.get(&scan_id) {
             Some(v) => v.to_vec(),
             None => vec![],
-        }
-    }
-
-    fn set_wait_runtime_filter(&self, table_index: usize, need_to_wait: bool) {
-        let mut wait_runtime_filter = self.shared.wait_runtime_filter.write();
-        wait_runtime_filter.insert(table_index, need_to_wait);
-    }
-
-    fn get_wait_runtime_filter(&self, table_index: usize) -> bool {
-        let wait_runtime_filter = self.shared.wait_runtime_filter.read();
-        match wait_runtime_filter.get(&table_index) {
-            Some(v) => *v,
-            None => false,
         }
     }
 
