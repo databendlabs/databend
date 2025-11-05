@@ -56,6 +56,7 @@ RowFetch
         ├── estimated rows: 16.00
         └── TableScan
             ├── table: default.test_vector_index_db.t
+            ├── scan id: 0
             ├── output columns: [_vector_score (#2), _row_id (#3)]
             ├── read rows: 12
             ├── read size: 0
@@ -83,6 +84,7 @@ RowFetch
         ├── estimated rows: 16.00
         └── TableScan
             ├── table: default.test_vector_index_db.t
+            ├── scan id: 0
             ├── output columns: [_vector_score (#2), _row_id (#3)]
             ├── read rows: 8
             ├── read size: 0
@@ -113,7 +115,8 @@ RowFetch
             ├── filters: [t._vector_score (#2) > 0.1]
             ├── estimated rows: 0.01
             └── TableScan
-            	├── table: default.test_vector_index_db.t
+                ├── table: default.test_vector_index_db.t
+                ├── scan id: 0
                 ├── output columns: [_vector_score (#2), _row_id (#3)]
                 ├── read rows: 12
                 ├── read size: 0
@@ -158,6 +161,7 @@ RowFetch
         ├── estimated rows: 8.00
         └── TableScan
             ├── table: default.test_vector_index_db.t2
+            ├── scan id: 0
             ├── output columns: [_vector_score (#3), _row_id (#4)]
             ├── read rows: 4
             ├── read size: 0
@@ -185,6 +189,7 @@ RowFetch
         ├── estimated rows: 8.00
         └── TableScan
             ├── table: default.test_vector_index_db.t2
+            ├── scan id: 0
             ├── output columns: [_vector_score (#3), _row_id (#4)]
             ├── read rows: 4
             ├── read size: 0
@@ -199,5 +204,3 @@ use default
 
 statement ok
 drop database test_vector_index_db
-
-

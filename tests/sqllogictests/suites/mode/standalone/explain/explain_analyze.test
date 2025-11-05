@@ -19,7 +19,7 @@ EvalScalar
 ├── expressions: [sum(number) (#1) / CAST(if(CAST(count(number) (#2) = 0 AS Boolean NULL), 1, count(number) (#2)) AS UInt64 NULL)]
 ├── estimated rows: 1.00
 └── AggregateFinal
-    ├── cpu time: 687.538µs
+    ├── cpu time: <slt:ignore>
     ├── output rows: 1
     ├── output bytes: 17.00 B
     ├── output columns: [sum(number) (#1), count(number) (#2)]
@@ -27,14 +27,14 @@ EvalScalar
     ├── aggregate functions: [sum(number), count()]
     ├── estimated rows: 1.00
     └── AggregatePartial
-        ├── cpu time: 6.892802ms
+        ├── cpu time: <slt:ignore>
         ├── output rows: 4
         ├── output bytes: 68.00 B
         ├── group by: []
         ├── aggregate functions: [sum(number), count()]
         ├── estimated rows: 1.00
         └── TableScan
-            ├── cpu time: 16.152556ms
+            ├── cpu time: <slt:ignore>
             ├── output rows: 1 million
             ├── output bytes: 7.63 MiB
             ├── bytes scanned: 7.63 MiB
@@ -133,8 +133,8 @@ Filter
 ├── filters: [is_true(article.article_id (#0) < 3)]
 ├── estimated rows: 3.00
 └── TableScan
-    ├── cpu time: 21.507743ms
-    ├── wait time: 64.23832ms
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
     ├── output rows: 4
     ├── output bytes: 80.00 B
     ├── bytes scanned: 80.00 B
@@ -163,15 +163,15 @@ HashJoin
 │   └── filter id:0, build key:author.id (#4), probe targets:[article.author_id (#1)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 2.50
 ├── Filter(Build)
-│   ├── cpu time: 349.255µs
+│   ├── cpu time: <slt:ignore>
 │   ├── output rows: 1
 │   ├── output bytes: 31.00 B
 │   ├── output columns: [author.id (#4), author.name (#5)]
 │   ├── filters: [is_true(author.name (#5) = 'mark4')]
 │   ├── estimated rows: 1.25
 │   └── TableScan
-│       ├── cpu time: 20.376214ms
-│       ├── wait time: 124.75826ms
+│       ├── cpu time: <slt:ignore>
+│       ├── wait time: <slt:ignore>
 │       ├── output rows: 1
 │       ├── output bytes: 31.00 B
 │       ├── bytes scanned: 31.00 B
@@ -186,8 +186,8 @@ HashJoin
 │       ├── push downs: [filters: [is_true(author.name (#5) = 'mark4')], limit: NONE]
 │       └── estimated rows: 5.00
 └── TableScan(Probe)
-    ├── cpu time: 11.048782ms
-    ├── wait time: 3.840004ms
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
     ├── output rows: 6
     ├── output bytes: 120.00 B
     ├── bytes scanned: 120.00 B
