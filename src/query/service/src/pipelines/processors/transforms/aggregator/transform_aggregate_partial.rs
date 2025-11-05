@@ -71,25 +71,25 @@ impl TransformPartialAggregate {
         params: Arc<AggregatorParams>,
         config: HashTableConfig,
     ) -> Result<Box<dyn Processor>> {
-        let hash_table = {
-            let arena = Arc::new(Bump::new());
-            match !params.has_distinct_combinator() {
-                true => HashTable::AggregateHashTable(AggregateHashTable::new(
-                    params.group_data_types.clone(),
-                    params.aggregate_functions.clone(),
-                    config,
-                    arena,
-                )),
-                false => {
-                    let max_radix_bits = config.max_radix_bits;
-                    HashTable::AggregateHashTable(AggregateHashTable::new(
-                        params.group_data_types.clone(),
-                        params.aggregate_functions.clone(),
-                        config.with_initial_radix_bits(max_radix_bits),
-                        arena,
-                    ))
-                }
-            }
+        let arena = Arc::new(Bump::new());
+        // when enable_experiment_aggregate, we will repartition again in the final stage
+        // it will be too small if we use max radix bits here
+        let hash_table = if params.has_distinct_combinator() && !params.enable_experiment_aggregate
+        {
+            let max_radix_bits = config.max_radix_bits;
+            HashTable::AggregateHashTable(AggregateHashTable::new(
+                params.group_data_types.clone(),
+                params.aggregate_functions.clone(),
+                config.with_initial_radix_bits(max_radix_bits),
+                arena,
+            ))
+        } else {
+            HashTable::AggregateHashTable(AggregateHashTable::new(
+                params.group_data_types.clone(),
+                params.aggregate_functions.clone(),
+                config,
+                arena,
+            ))
         };
 
         Ok(AccumulatingTransformer::create(

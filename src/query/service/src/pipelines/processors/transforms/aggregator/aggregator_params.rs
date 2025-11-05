@@ -41,6 +41,8 @@ pub struct AggregatorParams {
     pub cluster_aggregator: bool,
     pub max_block_size: usize,
     pub max_spill_io_requests: usize,
+
+    pub enable_experiment_aggregate: bool,
 }
 
 impl AggregatorParams {
@@ -54,6 +56,7 @@ impl AggregatorParams {
         cluster_aggregator: bool,
         max_block_size: usize,
         max_spill_io_requests: usize,
+        enable_experiment_aggregate: bool,
     ) -> Result<Arc<AggregatorParams>> {
         let states_layout = if !agg_funcs.is_empty() {
             Some(get_states_layout(agg_funcs)?)
@@ -72,6 +75,7 @@ impl AggregatorParams {
             cluster_aggregator,
             max_block_size,
             max_spill_io_requests,
+            enable_experiment_aggregate,
         }))
     }
 
