@@ -57,6 +57,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
+use roaring::RoaringTreemap;
 use xorf::BinaryFuse16;
 
 use super::native_data_source::NativeDataSource;
@@ -797,15 +798,19 @@ impl NativeDeserializeDataTransform {
         let mut block = block.resort(&self.src_schema, &self.output_schema)?;
         let fuse_part = FuseBlockPartInfo::from_part(&self.parts[0])?;
         let offsets = if self.block_reader.query_internal_columns() {
-            let offset = self.read_state.offset;
+            let offset = self.read_state.offset as u64;
             let offsets = if let Some(count) = self.read_state.filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
-                filter_executor.mutable_true_selection()[0..count]
-                    .iter()
-                    .map(|idx| *idx as usize + offset)
-                    .collect::<Vec<_>>()
+                RoaringTreemap::from_sorted_iter(
+                    filter_executor.mutable_true_selection()[0..count]
+                        .iter()
+                        .map(|idx| *idx as u64 + offset),
+                )
+                .unwrap()
             } else {
-                (offset..offset + origin_num_rows).collect()
+                let mut offsets = RoaringTreemap::new();
+                offsets.insert_range(offset..offset + origin_num_rows as u64);
+                offsets
             };
             Some(offsets)
         } else {

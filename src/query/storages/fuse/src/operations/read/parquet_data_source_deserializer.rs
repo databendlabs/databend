@@ -43,6 +43,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::IndexType;
+use roaring::RoaringTreemap;
 use xorf::BinaryFuse16;
 
 use super::parquet_data_source::ParquetDataSource;
@@ -343,9 +344,12 @@ impl Processor for DeserializeDataTransform {
                     // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
                     let offsets = if self.block_reader.query_internal_columns() {
                         filter.as_ref().map(|bitmap| {
-                            (0..origin_num_rows)
-                                .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
-                                .collect()
+                            RoaringTreemap::from_sorted_iter(
+                                (0..origin_num_rows)
+                                    .filter(|i| unsafe { bitmap.get_bit_unchecked(*i) })
+                                    .map(|i| i as u64),
+                            )
+                            .unwrap()
                         })
                     } else {
                         None
