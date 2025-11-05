@@ -99,7 +99,7 @@ explain select a, get_by_keypath(v, '{"a",0}') from t2 where get_by_keypath(v, '
 Filter
 ├── output columns: [t2.a (#0), t2.v['a'][0] (#2)]
 ├── filters: [is_true(TRY_CAST(t2.v['b']['c'] (#5) AS UInt8 NULL) = 10)]
-├── estimated rows: 0.00
+├── estimated rows: 0.50
 └── TableScan
     ├── table: default.test_virtual_db.t2
     ├── output columns: [a (#0), v['a'][0] (#2), v['b']['c'] (#5)]

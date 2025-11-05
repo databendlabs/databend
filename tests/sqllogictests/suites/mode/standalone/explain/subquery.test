@@ -81,7 +81,7 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 Filter
 ├── output columns: [t.number (#0)]
 ├── filters: [(is_true(2 (#2)) OR t.number (#0) > 1)]
-├── estimated rows: 0.20
+├── estimated rows: 0.60
 └── HashJoin
     ├── output columns: [t.number (#0), marker (#2)]
     ├── join type: RIGHT MARK

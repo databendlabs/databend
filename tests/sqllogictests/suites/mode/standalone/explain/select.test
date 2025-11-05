@@ -17,7 +17,7 @@ explain select * from (select * from numbers(1)) as t1 where number = 1
 Filter
 ├── output columns: [numbers.number (#0)]
 ├── filters: [t1.number (#0) = 1]
-├── estimated rows: 0.00
+├── estimated rows: 0.50
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]

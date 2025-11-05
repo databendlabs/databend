@@ -1058,11 +1058,11 @@ explain with test as ( select number % 10 as id, number as full_matched, max(num
 EvalScalar
 ├── output columns: [numbers.number (#0), max(number) OVER (PARTITION BY id) (#2), id (#3)]
 ├── expressions: [numbers.number (#0) % 10]
-├── estimated rows: 0.40
+├── estimated rows: 500.00
 └── Filter
     ├── output columns: [numbers.number (#0), max(number) OVER (PARTITION BY id) (#2)]
     ├── filters: [numbers.number (#0) = 3]
-    ├── estimated rows: 0.40
+    ├── estimated rows: 500.00
     └── Window
         ├── output columns: [numbers.number (#0), max_part_0 (#1), max(number) OVER (PARTITION BY id) (#2)]
         ├── aggregate function: [max(number)]

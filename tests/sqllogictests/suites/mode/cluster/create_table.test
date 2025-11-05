@@ -18,26 +18,26 @@ EvalScalar
     └── Sort(Final)
         ├── output columns: [max(number) (#1), numbers.number (#0)]
         ├── sort keys: [number ASC NULLS LAST]
-        ├── estimated rows: 10000000.00
+        ├── estimated rows: 3333333.33
         └── Exchange
             ├── output columns: [max(number) (#1), numbers.number (#0), #_order_col]
             ├── exchange type: Merge
             └── Sort(Partial)
                 ├── output columns: [max(number) (#1), numbers.number (#0), #_order_col]
                 ├── sort keys: [number ASC NULLS LAST]
-                ├── estimated rows: 10000000.00
+                ├── estimated rows: 3333333.33
                 └── AggregateFinal
                     ├── output columns: [max(number) (#1), numbers.number (#0)]
                     ├── group by: [number]
                     ├── aggregate functions: [max(number)]
-                    ├── estimated rows: 10000000.00
+                    ├── estimated rows: 3333333.33
                     └── Exchange
                         ├── output columns: [max(number) (#1), numbers.number (#0)]
                         ├── exchange type: Hash(0)
                         └── AggregatePartial
                             ├── group by: [number]
                             ├── aggregate functions: [max(number)]
-                            ├── estimated rows: 10000000.00
+                            ├── estimated rows: 3333333.33
                             ├── rank limit: 3
                             └── TableScan
                                 ├── table: default.system.numbers

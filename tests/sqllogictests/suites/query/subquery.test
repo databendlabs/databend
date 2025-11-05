@@ -327,9 +327,9 @@ SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
 query IT
 SELECT * FROM ( SELECT * FROM c WHERE c_id < 6 ) c WHERE c_id in (SELECT o.c_id FROM o WHERE o.c_id = c.c_id AND c.bill!='MA');
 ----
-1  CA
 2  TX
 4  TX
+1  CA
 
 # Subquery in SELECT clause
 
@@ -693,9 +693,9 @@ select 1 < ANY(SELECT 1.0)
 query I
 select number from numbers(10) where number in (select unnest([1,2,3]))
 ----
+3
 1
 2
-3
 
 
 statement ok
@@ -900,7 +900,7 @@ create or replace TABLE `merge_log` (
   `created_at` TIMESTAMP NULL
 ) ENGINE = FUSE;
 
-query
+query 
 SELECT
   (SELECT MAX(created_at)
    FROM merge_log
