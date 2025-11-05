@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -20,40 +21,38 @@ use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
+use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::sessions::QueryContext;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataWriter;
 
-struct AggregatePayloadWriter {
+struct PayloadWriter {
     path: String,
     writer: SpillsDataWriter,
 }
 
-impl AggregatePayloadWriter {
-    fn create(prefix: &str) -> Result<Self> {
+impl PayloadWriter {
+    fn try_create(prefix: &str) -> Result<Self> {
         let operator = DataOperator::instance().spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniqName::unique());
         let spills_data_writer = buffer_pool.writer(operator, file_path.clone())?;
 
-        Ok(AggregatePayloadWriter {
+        Ok(PayloadWriter {
             path: file_path,
             writer: spills_data_writer,
         })
@@ -97,92 +96,53 @@ impl WriteStats {
     }
 
     fn take(&mut self) -> Self {
-        std::mem::take(self)
+        mem::take(self)
     }
 }
 
-pub struct NewAggregateSpiller {
-    pub memory_settings: MemorySettings,
-    ctx: Arc<QueryContext>,
-    read_setting: ReadSettings,
+struct AggregatePayloadWriters {
     spill_prefix: String,
     partition_count: usize,
-    partition_stream: BlockPartitionStream,
-    payload_writers: Option<Vec<AggregatePayloadWriter>>,
+    writers: Vec<PayloadWriter>,
     write_stats: WriteStats,
 }
 
-impl NewAggregateSpiller {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
-        partition_count: usize,
-        rows_threshold: usize,
-        bytes_threshold: usize,
-    ) -> Result<Self> {
-        let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
-        let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
-        let spill_prefix = ctx.query_id_spill_prefix();
-        let partition_stream =
-            BlockPartitionStream::create(rows_threshold, bytes_threshold, partition_count);
-
-        Ok(Self {
-            memory_settings,
-            ctx,
-            read_setting,
-            spill_prefix,
+impl AggregatePayloadWriters {
+    pub fn create(prefix: &str, partition_count: usize) -> Self {
+        AggregatePayloadWriters {
+            spill_prefix: prefix.to_string(),
             partition_count,
-            partition_stream,
-            payload_writers: None,
+            writers: vec![],
             write_stats: WriteStats::default(),
-        })
+        }
     }
 
-    fn create_payload_writers(
-        prefix: &str,
-        partition_count: usize,
-    ) -> Result<Vec<AggregatePayloadWriter>> {
-        (0..partition_count)
-            .map(|_| AggregatePayloadWriter::create(prefix))
-            .collect()
-    }
-
-    fn ensure_payload_writers(&mut self) -> Result<()> {
-        if self.payload_writers.is_none() {
-            self.payload_writers = Some(Self::create_payload_writers(
-                &self.spill_prefix,
-                self.partition_count,
-            )?);
+    fn ensure_writers(&mut self) -> Result<()> {
+        if self.writers.is_empty() {
+            let mut writers = Vec::with_capacity(self.partition_count);
+            for _ in 0..self.partition_count {
+                writers.push(PayloadWriter::try_create(&self.spill_prefix)?);
+            }
+            self.writers = writers;
         }
         Ok(())
     }
 
-    fn write_ready_blocks(&mut self, ready_blocks: Vec<(usize, DataBlock)>) -> Result<()> {
+    pub fn write_ready_blocks(&mut self, ready_blocks: Vec<(usize, DataBlock)>) -> Result<()> {
         if ready_blocks.is_empty() {
             return Ok(());
         }
 
-        self.ensure_payload_writers()?;
+        self.ensure_writers()?;
 
         for (bucket, block) in ready_blocks {
             if block.is_empty() {
                 continue;
             }
 
-            if bucket >= self.partition_count {
-                return Err(ErrorCode::Internal(
-                    "NewAggregateSpiller produced invalid partition id",
-                ));
-            }
-
             let start = Instant::now();
-            {
-                let writers = self
-                    .payload_writers
-                    .as_mut()
-                    .ok_or_else(|| ErrorCode::Internal("payload writers are not initialized"))?;
-                writers[bucket].write_block(block)?;
-            }
+            self.writers[bucket].write_block(block)?;
+
             let elapsed = start.elapsed();
             self.write_stats.accumulate(elapsed);
         }
@@ -190,61 +150,149 @@ impl NewAggregateSpiller {
         Ok(())
     }
 
+    pub fn finalize(&mut self) -> Result<(Vec<NewSpilledPayload>, WriteStats)> {
+        let writers = mem::take(&mut self.writers);
+        if writers.is_empty() {
+            return Ok((Vec::new(), self.write_stats.take()));
+        }
+
+        let mut spilled_payloads = Vec::new();
+        for (partition_id, writer) in writers.into_iter().enumerate() {
+            let (path, written_size, row_groups) = writer.close()?;
+            if row_groups.is_empty() {
+                continue;
+            }
+
+            if written_size > 0 {
+                self.write_stats.add_bytes(written_size);
+            }
+
+            for row_group in row_groups {
+                self.write_stats.add_rows(row_group.num_rows() as usize);
+                spilled_payloads.push(NewSpilledPayload {
+                    bucket: partition_id as isize,
+                    location: path.clone(),
+                    row_group,
+                });
+            }
+        }
+
+        let stats = self.write_stats.take();
+        Ok((spilled_payloads, stats))
+    }
+}
+
+struct SharedPartitionStreamInner {
+    partition_stream: BlockPartitionStream,
+    worker_count: usize,
+    working_count: usize,
+}
+
+impl SharedPartitionStreamInner {
+    pub fn finish(&mut self) -> Vec<(usize, DataBlock)> {
+        self.working_count -= 1;
+
+        if self.working_count == 0 {
+            self.working_count = self.worker_count;
+
+            let ids = self.partition_stream.partition_ids();
+
+            let mut pending_blocks = Vec::with_capacity(ids.len());
+
+            for id in ids {
+                if let Some(block) = self.partition_stream.finalize_partition(id) {
+                    pending_blocks.push((id, block));
+                }
+            }
+        }
+        vec![]
+    }
+
+    pub fn partition(&mut self, partition_id: u64, block: DataBlock) -> Vec<(usize, DataBlock)> {
+        let indices = vec![partition_id; block.num_rows()];
+        self.partition_stream.partition(indices, block, true)
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedPartitionStream {
+    inner: Arc<Mutex<SharedPartitionStreamInner>>,
+}
+
+impl SharedPartitionStream {
+    pub fn new(
+        worker_count: usize,
+        max_rows: usize,
+        max_bytes: usize,
+        partition_count: usize,
+    ) -> Self {
+        let partition_stream = BlockPartitionStream::create(max_rows, max_bytes, partition_count);
+        SharedPartitionStream {
+            inner: Arc::new(Mutex::new(SharedPartitionStreamInner {
+                partition_stream,
+                worker_count,
+                working_count: 0,
+            })),
+        }
+    }
+
+    pub fn finish(&self) -> Vec<(usize, DataBlock)> {
+        let mut inner = self.inner.lock();
+        inner.finish()
+    }
+
+    pub fn partition(&self, partition_id: usize, block: DataBlock) -> Vec<(usize, DataBlock)> {
+        let mut inner = self.inner.lock();
+        inner.partition(partition_id as u64, block)
+    }
+}
+
+pub struct NewAggregateSpiller {
+    pub memory_settings: MemorySettings,
+    ctx: Arc<QueryContext>,
+    read_setting: ReadSettings,
+    partition_count: usize,
+    partition_stream: SharedPartitionStream,
+    payload_writers: AggregatePayloadWriters,
+}
+
+impl NewAggregateSpiller {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        partition_count: usize,
+        partition_stream: SharedPartitionStream,
+    ) -> Result<Self> {
+        let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
+        let spill_prefix = ctx.query_id_spill_prefix();
+
+        let payload_writers = AggregatePayloadWriters::create(&spill_prefix, partition_count);
+
+        Ok(Self {
+            memory_settings,
+            ctx,
+            read_setting,
+            partition_count,
+            partition_stream,
+            payload_writers,
+        })
+    }
+
     pub fn spill(&mut self, partition_id: usize, block: DataBlock) -> Result<()> {
-        self.ensure_payload_writers()?;
-
-        if block.is_empty() {
-            return Ok(());
-        }
-
-        if partition_id >= self.partition_count {
-            return Err(ErrorCode::Internal(
-                "NewAggregateSpiller received invalid partition id",
-            ));
-        }
-
-        let indices = vec![partition_id as u64; block.num_rows()];
-        let ready_blocks = self.partition_stream.partition(indices, block, true);
-        self.write_ready_blocks(ready_blocks)
+        let ready_blocks = self.partition_stream.partition(partition_id, block);
+        self.payload_writers.write_ready_blocks(ready_blocks)?;
+        Ok(())
     }
 
     pub fn spill_finish(&mut self) -> Result<Vec<NewSpilledPayload>> {
-        self.ensure_payload_writers()?;
+        let pending_blocks = self.partition_stream.finish();
+        self.payload_writers.write_ready_blocks(pending_blocks)?;
 
-        let mut pending_blocks = Vec::new();
-        for partition_id in 0..self.partition_count {
-            if let Some(block) = self.partition_stream.finalize_partition(partition_id) {
-                pending_blocks.push((partition_id, block));
-            }
-        }
-        self.write_ready_blocks(pending_blocks)?;
+        let (payloads, write_stats) = self.payload_writers.finalize()?;
+        self.flush_write_profile(write_stats);
 
-        let mut spilled_payloads = Vec::new();
-
-        if let Some(writers) = self.payload_writers.take() {
-            for (partition_id, writer) in writers.into_iter().enumerate() {
-                let (path, written_size, row_groups) = writer.close()?;
-                if row_groups.is_empty() {
-                    continue;
-                }
-
-                if written_size > 0 {
-                    self.write_stats.add_bytes(written_size);
-                }
-                for row_group in row_groups {
-                    self.write_stats.add_rows(row_group.num_rows() as usize);
-                    spilled_payloads.push(NewSpilledPayload {
-                        bucket: partition_id as isize,
-                        location: path.clone(),
-                        row_group,
-                    });
-                }
-            }
-
-            self.flush_write_profile();
-        }
-
-        Ok(spilled_payloads)
+        Ok(payloads)
     }
 
     pub fn restore(&self, payload: NewSpilledPayload) -> Result<AggregateMeta> {
@@ -274,45 +322,6 @@ impl NewAggregateSpiller {
         }
     }
 
-    // legacy, will remove later
-    pub fn restore_legacy(&self, payload: BucketSpilledPayload) -> Result<AggregateMeta> {
-        // read
-        let instant = Instant::now();
-        let operator = DataOperator::instance().spill_operator();
-        let BucketSpilledPayload {
-            bucket,
-            location,
-            data_range,
-            columns_layout,
-            max_partition_count,
-        } = payload;
-        let data = GlobalIORuntime::instance().block_on(async move {
-            let data = operator
-                .read_with(&location)
-                .range(data_range)
-                .await?
-                .to_vec();
-            Ok(data)
-        })?;
-        self.flush_read_profile(&instant, data.len());
-
-        // deserialize
-        let mut begin = 0;
-        let mut columns = Vec::with_capacity(columns_layout.len());
-        for &column_layout in &columns_layout {
-            columns.push(deserialize_column(
-                &data[begin..begin + column_layout as usize],
-            )?);
-            begin += column_layout as usize;
-        }
-
-        Ok(AggregateMeta::Serialized(SerializedPayload {
-            bucket,
-            data_block: DataBlock::new_from_columns(columns),
-            max_partition_count,
-        }))
-    }
-
     fn flush_read_profile(&self, instant: &Instant, read_bytes: usize) {
         Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
         Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
@@ -322,8 +331,7 @@ impl NewAggregateSpiller {
         );
     }
 
-    fn flush_write_profile(&mut self) {
-        let stats = self.write_stats.take();
+    fn flush_write_profile(&self, stats: WriteStats) {
         if stats.count == 0 && stats.bytes == 0 && stats.rows == 0 {
             return;
         }

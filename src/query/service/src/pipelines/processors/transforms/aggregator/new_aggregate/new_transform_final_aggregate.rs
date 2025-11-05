@@ -422,7 +422,7 @@ impl Processor for NewFinalAggregateTransform {
             RoundPhase::NewTask(meta) => {
                 let meta = match meta {
                     AggregateMeta::NewBucketSpilled(p) => self.spiller.restore(p)?,
-                    AggregateMeta::BucketSpilled(p) => self.spiller.restore_legacy(p)?,
+                    AggregateMeta::BucketSpilled(_) => unreachable!(),
                     other => other,
                 };
                 self.repartition(meta)?;
