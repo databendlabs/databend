@@ -45,6 +45,7 @@ Exchange
         │       ├── estimated rows: 0.40
         │       └── TableScan
         │           ├── table: default.d_subquery.t2
+        │           ├── scan id: 2
         │           ├── output columns: [a (#3)]
         │           ├── read rows: 2
         │           ├── read size: < 1 KiB
@@ -73,6 +74,7 @@ Exchange
                 │       ├── estimated rows: 0.40
                 │       └── TableScan
                 │           ├── table: default.d_subquery.t2
+                │           ├── scan id: 1
                 │           ├── output columns: [a (#1)]
                 │           ├── read rows: 2
                 │           ├── read size: < 1 KiB
@@ -86,6 +88,7 @@ Exchange
                     ├── exchange type: Hash(a (#0))
                     └── TableScan
                         ├── table: default.d_subquery.t1
+                        ├── scan id: 0
                         ├── output columns: [a (#0)]
                         ├── read rows: 3
                         ├── read size: < 1 KiB
@@ -122,6 +125,7 @@ Exchange
         │   ├── exchange type: Broadcast
         │   └── TableScan
         │       ├── table: default.d_subquery.t2
+        │       ├── scan id: 2
         │       ├── output columns: [a (#2)]
         │       ├── read rows: 2
         │       ├── read size: < 1 KiB
@@ -146,6 +150,7 @@ Exchange
                 │   ├── exchange type: Broadcast
                 │   └── TableScan
                 │       ├── table: default.d_subquery.t2
+                │       ├── scan id: 1
                 │       ├── output columns: [a (#1)]
                 │       ├── read rows: 2
                 │       ├── read size: < 1 KiB
@@ -159,6 +164,7 @@ Exchange
                     ├── exchange type: Hash(t1.a (#0))
                     └── TableScan
                         ├── table: default.d_subquery.t1
+                        ├── scan id: 0
                         ├── output columns: [a (#0)]
                         ├── read rows: 3
                         ├── read size: < 1 KiB

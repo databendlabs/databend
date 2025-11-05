@@ -41,7 +41,7 @@ Sort(Final)
             ├── keys is null equal: [false]
             ├── filters: []
             ├── build join filters(distributed):
-            │   └── filter id:0, build key:t2.number (#1), probe key:t1.number (#0), filter type:inlist,min_max
+            │   └── filter id:0, build key:t2.number (#1), probe targets:[t1.number (#0)@scan0], filter type:bloom,inlist,min_max
             ├── estimated rows: 0.01
             ├── Filter(Build)
             │   ├── output columns: [t2.number (#1)]
@@ -63,6 +63,7 @@ Sort(Final)
             │               ├── exchange type: Hash(t2.number (#1))
             │               └── TableScan
             │                   ├── table: default.default.t2
+            │                   ├── scan id: 1
             │                   ├── output columns: [number (#1)]
             │                   ├── read rows: 14
             │                   ├── read size: < 1 KiB
@@ -76,6 +77,7 @@ Sort(Final)
                 ├── exchange type: Hash(t1.number (#0))
                 └── TableScan
                     ├── table: default.default.t1
+                    ├── scan id: 0
                     ├── output columns: [number (#0)]
                     ├── read rows: 5
                     ├── read size: < 1 KiB

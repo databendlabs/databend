@@ -21,6 +21,7 @@ Exchange
             ├── exchange type: Hash(numbers_mt.number (#0))
             └── TableScan
                 ├── table: default.system.numbers_mt
+                ├── scan id: 0
                 ├── output columns: [number (#0)]
                 ├── read rows: 100000
                 ├── read size: 781.25 KiB
@@ -53,6 +54,7 @@ Exchange
             ├── estimated rows: 100000.00
             └── TableScan
                 ├── table: default.system.numbers_mt
+                ├── scan id: 0
                 ├── output columns: [number (#0)]
                 ├── read rows: 100000
                 ├── read size: 781.25 KiB

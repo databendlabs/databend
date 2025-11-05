@@ -28,6 +28,7 @@ Exchange
     ├── estimated rows: 99.00
     └── TableScan
         ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: [a (#0)]
         ├── read rows: 100
         ├── read size: < 1 KiB
@@ -55,7 +56,7 @@ Exchange
         ├── keys is null equal: [false]
         ├── filters: []
         ├── build join filters:
-        │   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
+        │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
         ├── estimated rows: 99.92
         ├── Exchange(Build)
         │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -66,6 +67,7 @@ Exchange
         │       ├── estimated rows: 99.92
         │       └── TableScan
         │           ├── table: default.default.t2
+        │           ├── scan id: 1
         │           ├── output columns: [a (#2), b (#3)]
         │           ├── read rows: 100
         │           ├── read size: < 1 KiB
@@ -80,6 +82,7 @@ Exchange
             ├── estimated rows: 99.92
             └── TableScan
                 ├── table: default.default.t1
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 100
                 ├── read size: < 1 KiB
@@ -104,13 +107,14 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
+    │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 100.00
     ├── Exchange(Build)
     │   ├── output columns: [t2.a (#2), t2.b (#3)]
     │   ├── exchange type: Broadcast
     │   └── TableScan
     │       ├── table: default.default.t2
+    │       ├── scan id: 1
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 100
     │       ├── read size: < 1 KiB
@@ -121,6 +125,7 @@ Exchange
     │       └── estimated rows: 100.00
     └── TableScan(Probe)
         ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 100
         ├── read size: < 1 KiB
@@ -232,13 +237,14 @@ Limit
                     ├── keys is null equal: [false]
                     ├── filters: []
                     ├── build join filters:
-                    │   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
+                    │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
                     ├── estimated rows: 100.00
                     ├── Exchange(Build)
                     │   ├── output columns: [t2.a (#2)]
                     │   ├── exchange type: Broadcast
                     │   └── TableScan
                     │       ├── table: default.default.t2
+                    │       ├── scan id: 1
                     │       ├── output columns: [a (#2)]
                     │       ├── read rows: 100
                     │       ├── read size: < 1 KiB
@@ -249,6 +255,7 @@ Limit
                     │       └── estimated rows: 100.00
                     └── TableScan(Probe)
                         ├── table: default.default.t1
+                        ├── scan id: 0
                         ├── output columns: [a (#0), b (#1)]
                         ├── read rows: 100
                         ├── read size: < 1 KiB
@@ -276,13 +283,14 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
+    │   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 100.00
     ├── Exchange(Build)
     │   ├── output columns: [t2.a (#2), t2.b (#3)]
     │   ├── exchange type: Broadcast
     │   └── TableScan
     │       ├── table: default.default.t2
+    │       ├── scan id: 1
     │       ├── output columns: [a (#2), b (#3)]
     │       ├── read rows: 100
     │       ├── read size: < 1 KiB
@@ -293,6 +301,7 @@ Exchange
     │       └── estimated rows: 100.00
     └── TableScan(Probe)
         ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 100
         ├── read size: < 1 KiB
@@ -327,6 +336,7 @@ Limit
             ├── estimated rows: 10.00
             └── TableScan
                 ├── table: default.system.numbers
+                ├── scan id: 0
                 ├── output columns: [number (#0)]
                 ├── read rows: 10
                 ├── read size: < 1 KiB
@@ -363,6 +373,7 @@ AggregateFinal
             │   ├── exchange type: Hash(CAST(y.a (#1) AS UInt64 NULL))
             │   └── TableScan
             │       ├── table: default.system.numbers
+            │       ├── scan id: 1
             │       ├── output columns: [number (#1)]
             │       ├── read rows: 5
             │       ├── read size: < 1 KiB
@@ -379,6 +390,7 @@ AggregateFinal
                     ├── estimated rows: 10.00
                     └── TableScan
                         ├── table: default.system.numbers
+                        ├── scan id: 0
                         ├── output columns: [number (#0)]
                         ├── read rows: 10
                         ├── read size: < 1 KiB
@@ -416,7 +428,7 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:CAST(CAST(subquery_2 (#2) AS UInt8 NULL) AS Int32 NULL), probe key:t1.a (#0), filter type:inlist,min_max
+    │   └── filter id:0, build key:CAST(CAST(subquery_2 (#2) AS UInt8 NULL) AS Int32 NULL), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 2.00
     ├── Exchange(Build)
     │   ├── output columns: [col0 (#2)]
@@ -438,6 +450,7 @@ Exchange
     │                   └── column 0: [1, 2]
     └── TableScan(Probe)
         ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 3
         ├── read size: < 1 KiB
@@ -497,7 +510,7 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters(distributed):
-    │   └── filter id:0, build key:t1.a0f (#28), probe key:t2.a0f (#2), filter type:inlist,min_max
+    │   └── filter id:0, build key:t1.a0f (#28), probe targets:[t2.a0f (#2)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [a00c.a0f (#28)]
@@ -519,6 +532,7 @@ Exchange
     │               ├── exchange type: Hash(a00c.a0f (#28))
     │               └── TableScan
     │                   ├── table: default.default.a00c
+    │                   ├── scan id: 1
     │                   ├── output columns: [a0f (#28), a0t (#42)]
     │                   ├── read rows: 0
     │                   ├── read size: 0
@@ -551,6 +565,7 @@ Exchange
                             ├── estimated rows: 0.00
                             └── TableScan
                                 ├── table: default.default.a00c
+                                ├── scan id: 0
                                 ├── output columns: [a0f (#2), a0t (#16), a0w (#19)]
                                 ├── read rows: 0
                                 ├── read size: 0

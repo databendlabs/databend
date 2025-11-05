@@ -43,6 +43,7 @@ EvalScalar
                 ├── output bytes: 7.63 MiB
                 ├── bytes scanned: 7.63 MiB
                 ├── table: default.system.numbers
+                ├── scan id: 0
                 ├── output columns: [number (#0)]
                 ├── read rows: 1000000
                 ├── read size: 7.63 MiB
@@ -104,6 +105,7 @@ Exchange
 ├── exchange type: Merge
 └── TableScan
     ├── table: default.default.article
+    ├── scan id: 0
     ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
     ├── read rows: 6
     ├── read size: < 1 KiB
@@ -127,6 +129,7 @@ Exchange
     ├── output bytes: 120.00 B
     ├── bytes scanned: 120.00 B
     ├── table: default.default.article
+    ├── scan id: 0
     ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
     ├── read rows: 6
     ├── read size: < 1 KiB
@@ -156,6 +159,7 @@ Exchange
         ├── output bytes: 80.00 B
         ├── bytes scanned: 80.00 B
         ├── table: default.default.article
+        ├── scan id: 0
         ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
         ├── read rows: 4
         ├── read size: < 1 KiB
@@ -177,7 +181,6 @@ Exchange
     ├── exchange bytes: 1.09 KiB
     ├── output rows: 1
     ├── output bytes: 42.00 B
-    ├── runtime filter build time: <slt:ignore>
     ├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3), author.name (#5), author.id (#4)]
     ├── join type: INNER
     ├── build keys: [author.id (#4)]
@@ -185,7 +188,7 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:author.id (#4), probe key:article.author_id (#1), filter type:inlist,min_max
+    │   └── filter id:0, build key:author.id (#4), probe targets:[article.author_id (#1)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 2.50
     ├── Exchange(Build)
     │   ├── output columns: [author.id (#4), author.name (#5)]
@@ -204,6 +207,7 @@ Exchange
     │           ├── output bytes: 31.00 B
     │           ├── bytes scanned: 31.00 B
     │           ├── table: default.default.author
+    │           ├── scan id: 1
     │           ├── output columns: [id (#4), name (#5)]
     │           ├── read rows: 1
     │           ├── read size: < 1 KiB
@@ -215,12 +219,11 @@ Exchange
     └── TableScan(Probe)
         ├── cpu time: <slt:ignore>
         ├── wait time: <slt:ignore>
-        ├── output rows: 1
-        ├── output bytes: 20.00 B
-        ├── bytes scanned: 20.00 B
-        ├── parts pruned by runtime filter: 5
-        ├── runtime filter inlist/min-max time: <slt:ignore>
+        ├── output rows: 6
+        ├── output bytes: 120.00 B
+        ├── bytes scanned: 120.00 B
         ├── table: default.default.article
+        ├── scan id: 0
         ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
         ├── read rows: 6
         ├── read size: < 1 KiB

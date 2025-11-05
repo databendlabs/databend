@@ -46,6 +46,7 @@ RowFetch
                 ├── estimated rows: 300.00
                 └── TableScan
                     ├── table: default.default.t_lazy
+                    ├── scan id: 0
                     ├── output columns: [a (#0), _row_id (#7)]
                     ├── read rows: 200
                     ├── read size: < 1 KiB
@@ -81,6 +82,7 @@ RowFetch
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.t_lazy
+                    ├── scan id: 0
                     ├── output columns: [a (#0), _row_id (#7)]
                     ├── read rows: 100
                     ├── read size: < 1 KiB
@@ -114,6 +116,7 @@ Limit
             ├── estimated rows: 300.00
             └── TableScan
                 ├── table: default.default.t_lazy
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
                 ├── read rows: 200
                 ├── read size: 1.12 KiB
@@ -145,6 +148,7 @@ Limit
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.t_lazy
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
                 ├── read rows: 100
                 ├── read size: < 1 KiB
@@ -172,6 +176,7 @@ Limit
         ├── estimated rows: 2.00
         └── TableScan
             ├── table: default.default.t_lazy
+            ├── scan id: 0
             ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
             ├── read rows: 100
             ├── read size: < 1 KiB
