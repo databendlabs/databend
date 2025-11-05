@@ -28,6 +28,7 @@ use crate::pipelines::processors::transforms::hash_join::transform_hash_join_bui
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
+use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
@@ -112,7 +113,6 @@ pub struct TransformHashJoinProbe {
     partition_id_to_restore: usize,
 
     step: Step,
-    step_logs: Vec<Step>,
 }
 
 impl TransformHashJoinProbe {
@@ -176,7 +176,6 @@ impl TransformHashJoinProbe {
             spiller,
             partition_id_to_restore: 0,
             step: Step::Async(AsyncStep::WaitBuild),
-            step_logs: vec![Step::Async(AsyncStep::WaitBuild)],
         }))
     }
 
@@ -192,7 +191,6 @@ impl TransformHashJoinProbe {
             }
         };
         self.step = step.clone();
-        self.step_logs.push(step);
         Ok(event)
     }
 
@@ -526,6 +524,10 @@ impl TransformHashJoinProbe {
                 .continue_build_watcher
                 .send(true)
                 .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
+
+            self.join_probe_state.hash_join_state.reset();
+            let hashtable = unsafe { &mut *self.join_probe_state.hash_join_state.hash_table.get() };
+            *hashtable = HashJoinHashTable::Null;
         }
         Ok(())
     }
