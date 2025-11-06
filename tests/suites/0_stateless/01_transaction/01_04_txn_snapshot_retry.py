@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from random import Random
@@ -45,11 +44,6 @@ def run_transaction_batch(thread_id: int) -> None:
 
     try:
         for tx_index in range(TRANSACTIONS_PER_THREAD):
-            print(
-                f"[thread {thread_id}] start tx {tx_index}",
-                file=sys.stderr,
-                flush=True,
-            )
             base_value = (
                 thread_id * VALUE_GAP + tx_index * ROWS_PER_TRANSACTION
             )
@@ -60,12 +54,6 @@ def run_transaction_batch(thread_id: int) -> None:
             attempts = 0
             while True:
                 attempts += 1
-                if attempts > 1:
-                    print(
-                        f"[thread {thread_id}] retry tx {tx_index}, attempt {attempts}",
-                        file=sys.stderr,
-                        flush=True,
-                    )
                 try:
                     cursor.execute("BEGIN")
                     drain(cursor)
@@ -77,11 +65,6 @@ def run_transaction_batch(thread_id: int) -> None:
 
                     cursor.execute("COMMIT")
                     drain(cursor)
-                    print(
-                        f"[thread {thread_id}] commit tx {tx_index} succeeded",
-                        file=sys.stderr,
-                        flush=True,
-                    )
                     break
                 except Exception:
                     try:
@@ -114,12 +97,6 @@ def main() -> None:
         setup_cursor.close()
         setup_conn.close()
 
-    print(
-        f"Launching {NUM_THREADS} threads, {TRANSACTIONS_PER_THREAD} tx per thread",
-        file=sys.stderr,
-        flush=True,
-    )
-
     with ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
         futures = [
             executor.submit(run_transaction_batch, thread_id)
@@ -127,7 +104,6 @@ def main() -> None:
         ]
         for future in as_completed(futures):
             future.result()
-    print("All threads finished", file=sys.stderr, flush=True)
 
     verify_conn, verify_cursor = create_connection()
     try:
