@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -47,6 +48,13 @@ pub async fn commit_with_backoff(
     let mut backoff = set_backoff(None, None, None);
     let mut retries = 0;
 
+    // Compute segments diff for all tables before entering the retry loop.
+    // This diff represents the actual changes made by the transaction (base -> txn_generated),
+    // and remains constant across all retries.
+    // Also cache the original snapshots for statistics merging.
+    let (table_segments_diffs, table_original_snapshots) =
+        compute_table_segments_diffs(ctx.clone(), &req).await?;
+
     loop {
         let ret = catalog
             .retryable_update_multi_table_meta(req.clone())
@@ -63,14 +71,78 @@ pub async fn commit_with_backoff(
         };
         sleep(duration).await;
         retries += 1;
-        try_rebuild_req(ctx.clone(), &mut req, update_failed_tbls).await?;
+        try_rebuild_req(
+            ctx.clone(),
+            &mut req,
+            update_failed_tbls,
+            &table_segments_diffs,
+            &table_original_snapshots,
+        )
+        .await?;
     }
+}
+
+async fn compute_table_segments_diffs(
+    ctx: Arc<dyn TableContext>,
+    req: &UpdateMultiTableMetaReq,
+) -> Result<(
+    HashMap<u64, SegmentsDiff>,
+    HashMap<u64, Option<Arc<TableSnapshot>>>,
+)> {
+    let txn_mgr = ctx.txn_mgr();
+    let storage_class = ctx.get_settings().get_s3_storage_class()?;
+    let mut table_segments_diffs = HashMap::new();
+    let mut table_original_snapshots = HashMap::new();
+
+    for (update_table_meta_req, _) in &req.update_table_metas {
+        let tid = update_table_meta_req.table_id;
+
+        // Read the base snapshot (snapshot at transaction begin)
+        let base_snapshot_location = txn_mgr.lock().get_base_snapshot_location(tid);
+
+        // Read the transaction-generated snapshot (original snapshot before any merge)
+        let new_table = FuseTable::from_table_meta(
+            update_table_meta_req.table_id,
+            0,
+            update_table_meta_req.new_table_meta.clone(),
+            storage_class,
+        )?;
+
+        let base_snapshot = new_table
+            .read_table_snapshot_with_location(base_snapshot_location)
+            .await?;
+        let new_snapshot = new_table.read_table_snapshot().await?;
+
+        let base_segments = base_snapshot
+            .as_ref()
+            .map(|s| s.segments.as_slice())
+            .unwrap_or(&[]);
+        let new_segments = new_snapshot
+            .as_ref()
+            .map(|s| s.segments.as_slice())
+            .unwrap_or(&[]);
+
+        info!(
+            "Computing segments diff for table {} (base: {} segments, txn: {} segments)",
+            tid,
+            base_segments.len(),
+            new_segments.len()
+        );
+
+        let diff = SegmentsDiff::new(base_segments, new_segments);
+        table_segments_diffs.insert(tid, diff);
+        table_original_snapshots.insert(tid, new_snapshot);
+    }
+
+    Ok((table_segments_diffs, table_original_snapshots))
 }
 
 async fn try_rebuild_req(
     ctx: Arc<dyn TableContext>,
     req: &mut UpdateMultiTableMetaReq,
     update_failed_tbls: Vec<(u64, u64, TableMeta)>,
+    table_segments_diffs: &HashMap<u64, SegmentsDiff>,
+    table_original_snapshots: &HashMap<u64, Option<Arc<TableSnapshot>>>,
 ) -> Result<()> {
     info!(
         "try_rebuild_req: update_failed_tbls={:?}",
@@ -98,25 +170,34 @@ async fn try_rebuild_req(
             .iter_mut()
             .find(|(meta, _)| meta.table_id == tid)
             .unwrap();
-        let new_table = FuseTable::from_table_meta(
-            update_table_meta_req.table_id,
-            0,
-            update_table_meta_req.new_table_meta.clone(),
-            storage_class,
-        )?;
-        let new_snapshot = new_table.read_table_snapshot().await?;
+
         let base_snapshot_location = txn_mgr.lock().get_base_snapshot_location(tid);
-        let base_snapshot = new_table
-            .read_table_snapshot_with_location(base_snapshot_location)
+        let base_snapshot = latest_table
+            .read_table_snapshot_with_location(base_snapshot_location.clone())
             .await?;
 
-        let segments_diff = SegmentsDiff::new(base_snapshot.segments(), new_snapshot.segments());
-        let Some(merged_segments) = segments_diff.apply(latest_snapshot.segments().to_vec()) else {
+        // Get the pre-computed segments diff for this table (computed before retry loop)
+        let segments_diff = table_segments_diffs.get(&tid).ok_or_else(|| {
+            ErrorCode::Internal(format!("Missing segments diff for table {}", tid))
+        })?;
+
+        let Some(merged_segments) = segments_diff
+            .clone()
+            .apply(latest_snapshot.segments().to_vec())
+        else {
             return Err(ErrorCode::UnresolvableConflict(format!(
                 "Unresolvable conflict detected for table {}",
                 tid
             )));
         };
+
+        // Read the original transaction-generated snapshot from cache for statistics merging
+        let new_snapshot = table_original_snapshots
+            .get(&tid)
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!("Missing original snapshot for table {}", tid))
+            })?
+            .clone();
 
         let s = merge_statistics(
             new_snapshot.summary(),
