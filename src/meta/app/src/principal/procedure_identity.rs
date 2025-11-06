@@ -64,6 +64,12 @@ impl KeyCodec for ProcedureIdentity {
 
 impl From<databend_common_ast::ast::ProcedureIdentity> for ProcedureIdentity {
     fn from(procedure: databend_common_ast::ast::ProcedureIdentity) -> Self {
-        ProcedureIdentity::new(procedure.name, procedure.args_type)
+        let args_type_str = procedure
+            .args_type
+            .iter()
+            .map(|t| t.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        ProcedureIdentity::new(procedure.name, args_type_str)
     }
 }

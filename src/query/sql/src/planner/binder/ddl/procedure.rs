@@ -49,7 +49,6 @@ use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::SubqueryType;
 use crate::resolve_type_name;
-use crate::resolve_type_name_by_str;
 use crate::BindContext;
 use crate::Binder;
 use crate::ScalarExpr;
@@ -266,53 +265,21 @@ fn generate_procedure_name_ident(
         return Ok(ProcedureNameIdent::new(tenant, name.clone().into()));
     }
 
-    let args = split_procedure_arg_types(&name.args_type)?;
-    let mut args_type = vec![];
-    for arg in args {
-        args_type.push(DataType::from(&resolve_type_name_by_str(&arg, true)?));
-    }
-    let new_name = databend_common_ast::ast::ProcedureIdentity {
-        name: name.name.to_string(),
-        args_type: args_type
-            .iter()
-            .map(|arg| arg.to_string())
-            .collect::<Vec<String>>()
-            .join(","),
-    };
+    let args_data_type: Vec<DataType> = name
+        .args_type
+        .iter()
+        .map(|type_name| resolve_type_name(type_name, true).map(|t| DataType::from(&t)))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Convert normalized DataType back to string for storage
+    let args_type_str = args_data_type
+        .iter()
+        .map(|dt| dt.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
     Ok(ProcedureNameIdent::new(
         tenant,
-        ProcedureIdentity::from(new_name),
+        ProcedureIdentity::new(name.name.clone(), args_type_str),
     ))
-}
-
-fn split_procedure_arg_types(raw: &str) -> Result<Vec<String>> {
-    let mut parts = Vec::new();
-    let mut depth = 0;
-    let mut start = 0;
-
-    for (i, c) in raw.char_indices() {
-        match c {
-            '(' => depth += 1,
-            ')' => depth -= 1,
-            ',' if depth == 0 => {
-                let arg = raw[start..i].trim();
-                if !arg.is_empty() {
-                    parts.push(arg.to_string());
-                }
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-
-    if depth != 0 {
-        return Err(ErrorCode::SyntaxException("unmatched parentheses"));
-    }
-
-    let last = raw[start..].trim();
-    if !last.is_empty() {
-        parts.push(last.to_string());
-    }
-
-    Ok(parts)
 }
