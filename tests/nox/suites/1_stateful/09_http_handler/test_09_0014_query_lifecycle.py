@@ -118,7 +118,7 @@ def test_query_lifecycle_finalized(rows):
         "max_rows_in_buffer": max_rows_per_page,
     }
 
-    resp0 = do_query(f"select * from numbers({rows})", timeout=timeout, pagination=pagination)
+    resp0 = do_query(f"select number from numbers({rows}) order by number", timeout=timeout, pagination=pagination)
 
     query_id = resp0.get("id")
     node_id = resp0.get("node_id")
