@@ -323,11 +323,11 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 0.00
+├── estimated rows: 0.25
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
 │   ├── filters: [numbers.number (#1) < 10, numbers.number (#1) = 0]
-│   ├── estimated rows: 0.00
+│   ├── estimated rows: 0.50
 │   └── TableScan
 │       ├── table: default.system.numbers
 │       ├── output columns: [number (#1)]
@@ -340,7 +340,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.number (#0)]
     ├── filters: [t.number (#0) < 10]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 0.50
     └── TableScan
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
