@@ -7,7 +7,7 @@ import pytest
 auth = ("root", "")
 STICKY_HEADER = "X-DATABEND-STICKY-NODE"
 
-max_threads = 32
+timezone = 'Asia/Shanghai'
 
 def patch_json(resp):
     if resp.get("stats", {}).get("running_time_ms"):
@@ -19,7 +19,7 @@ def do_query(query, timeout=10, pagination=None, port=8000, patch=True):
     session = {
         "settings": {
             "http_handler_result_timeout_secs": f"{timeout}",
-            "max_threads": f"{max_threads}"
+            "timezone": f"{timezone}"
         }
     }
 
@@ -148,6 +148,7 @@ def test_query_lifecycle_finalized(rows):
            "final_uri": f"/v1/query/{query_id}/final",
            "next_uri": f"/v1/query/{query_id}/page/1",
            "kill_uri": f"/v1/query/{query_id}/kill",
+           'settings': {'timezone': 'Asia/Shanghai'},
            'session': {'catalog': 'default',
                        'database': 'default',
                        'internal': sessions_internal,
@@ -155,7 +156,7 @@ def test_query_lifecycle_finalized(rows):
                        'need_sticky': False,
                        'role': 'account_admin',
                        'settings': {'http_handler_result_timeout_secs': f'{timeout}',
-                                    'max_threads': f"{max_threads}"},
+                                    'timezone': f"{timezone}"},
                        'txn_state': 'AutoCommit'}
            }
 
@@ -184,6 +185,7 @@ def test_query_lifecycle_finalized(rows):
 
     # not return session since nothing changed
     exp["session"] = None
+    del exp["settings"] # only in the first resp
     exp["state"] = "Succeeded"
     if rows == 8:
         exp["next_uri"] = f"/v1/query/{query_id}/page/2"
