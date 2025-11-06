@@ -317,6 +317,11 @@ impl MySQLFederated {
             (Regex::new("(?i)^(/\\*!40014 SET(.*) \\*/)$").unwrap(), None),
             (Regex::new("(?i)^(/\\*!40000 SET(.*) \\*/)$").unwrap(), None),
             (Regex::new("(?i)^(/\\*!40000 ALTER(.*) \\*/)$").unwrap(), None),
+            (
+                // JDBC healthcheck
+                Regex::new("(?i)^(SELECT 1 FROM DUAL)$").unwrap(),
+                MySQLFederated::select_function_block("1", "1"),
+            ),
         ]
             });
 
