@@ -40,6 +40,8 @@ use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
 use crate::FuseTable;
 
+const FUSE_ENGINE: &str = "FUSE";
+
 pub async fn commit_with_backoff(
     ctx: Arc<dyn TableContext>,
     mut req: UpdateMultiTableMetaReq,
@@ -96,6 +98,16 @@ async fn compute_table_segments_diffs(
 
     for (update_table_meta_req, _) in &req.update_table_metas {
         let tid = update_table_meta_req.table_id;
+        let engine = update_table_meta_req.new_table_meta.engine.as_str();
+
+        if engine != FUSE_ENGINE {
+            log::info!(
+                "Skipping segments diff pre-compute for table {} with engine {}",
+                tid,
+                engine
+            );
+            continue;
+        }
 
         // Read the base snapshot (snapshot at transaction begin)
         let base_snapshot_location = txn_mgr.lock().get_base_snapshot_location(tid);
