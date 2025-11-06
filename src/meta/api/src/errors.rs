@@ -14,7 +14,6 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::principal::AutoIncrementKey;
-
 /// Table logic error, unrelated to the backend service providing Table management, or dependent component.
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum TableError {
@@ -35,6 +34,56 @@ impl From<TableError> for ErrorCode {
         match value {
             TableError::AlterTableError { .. } => ErrorCode::AlterTableError(s),
             TableError::UnknownTableId { .. } => ErrorCode::UnknownTableId(s),
+        }
+    }
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum MaskingPolicyError {
+    #[error(
+        "MASKING POLICY `{policy_name}` is still in use. Unset it from all tables before dropping."
+    )]
+    PolicyInUse { policy_name: String },
+}
+
+impl MaskingPolicyError {
+    pub fn policy_in_use(_tenant: impl Into<String>, policy_name: impl Into<String>) -> Self {
+        Self::PolicyInUse {
+            policy_name: policy_name.into(),
+        }
+    }
+}
+
+impl From<MaskingPolicyError> for ErrorCode {
+    fn from(value: MaskingPolicyError) -> Self {
+        let s = value.to_string();
+        match value {
+            MaskingPolicyError::PolicyInUse { .. } => ErrorCode::ConstraintError(s),
+        }
+    }
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum RowAccessPolicyError {
+    #[error(
+        "ROW ACCESS POLICY `{policy_name}` is still in use. Unset it from all tables before dropping."
+    )]
+    PolicyInUse { policy_name: String },
+}
+
+impl RowAccessPolicyError {
+    pub fn policy_in_use(_tenant: impl Into<String>, policy_name: impl Into<String>) -> Self {
+        Self::PolicyInUse {
+            policy_name: policy_name.into(),
+        }
+    }
+}
+
+impl From<RowAccessPolicyError> for ErrorCode {
+    fn from(value: RowAccessPolicyError) -> Self {
+        let s = value.to_string();
+        match value {
+            RowAccessPolicyError::PolicyInUse { .. } => ErrorCode::ConstraintError(s),
         }
     }
 }

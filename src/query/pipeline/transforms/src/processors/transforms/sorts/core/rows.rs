@@ -15,7 +15,6 @@
 use std::fmt::Debug;
 use std::ops::Range;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
@@ -35,17 +34,7 @@ where Self: Sized + Clone + Debug + Send
     fn row(&self, index: usize) -> Self::Item<'_>;
     fn to_column(&self) -> Column;
 
-    fn from_column(col: &Column) -> Result<Self> {
-        Self::try_from_column(col).ok_or_else(|| {
-            ErrorCode::BadDataValueType(format!(
-                "Order column type mismatched. Expected {} but got {}",
-                Self::data_type(),
-                col.data_type()
-            ))
-        })
-    }
-
-    fn try_from_column(col: &Column) -> Option<Self>;
+    fn from_column(col: &Column) -> Result<Self>;
 
     fn data_type() -> DataType {
         Self::Type::data_type()

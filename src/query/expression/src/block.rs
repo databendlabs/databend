@@ -182,13 +182,13 @@ impl BlockEntry {
         }
     }
 
-    pub fn downcast<T: AccessType>(&self) -> Option<ColumnView<T>> {
+    pub fn downcast<T: AccessType>(&self) -> Result<ColumnView<T>> {
         match self {
-            BlockEntry::Const(scalar, _, num_rows) => T::try_downcast_scalar(&scalar.as_ref())
-                .map(|s| ColumnView::Const(T::to_owned_scalar(s), *num_rows)),
-            BlockEntry::Column(column) => {
-                T::try_downcast_column(column).map(|c| ColumnView::Column(c))
-            }
+            BlockEntry::Const(scalar, _, num_rows) => Ok(ColumnView::Const(
+                T::to_owned_scalar(T::try_downcast_scalar(&scalar.as_ref())?),
+                *num_rows,
+            )),
+            BlockEntry::Column(column) => Ok(ColumnView::Column(T::try_downcast_column(column)?)),
         }
     }
 }

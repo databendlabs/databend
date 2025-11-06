@@ -15,11 +15,13 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
+use databend_common_exception::Result;
+
+use super::AccessType;
+use super::BuilderMut;
+use super::DataType;
+use super::ValueType;
 use crate::property::Domain;
-use crate::types::AccessType;
-use crate::types::BuilderMut;
-use crate::types::DataType;
-use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -44,16 +46,16 @@ impl AccessType for AnyType {
         scalar.as_ref()
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        Some(scalar.clone())
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        Ok(scalar.clone())
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        Some(col.clone())
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        Ok(col.clone())
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        Some(domain.clone())
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        Ok(domain.clone())
     }
 
     fn column_len(col: &Self::Column) -> usize {
