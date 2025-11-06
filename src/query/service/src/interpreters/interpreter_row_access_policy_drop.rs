@@ -55,7 +55,7 @@ impl Interpreter for DropRowAccessPolicyInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
         if let Err(e) = handler
-            .drop_row_access(meta_api, self.plan.clone().into())
+            .drop_row_access_policy(meta_api, self.plan.clone().into())
             .await
         {
             if e.code() == ErrorCode::UNKNOWN_ROW_ACCESS_POLICY && self.plan.if_exists {

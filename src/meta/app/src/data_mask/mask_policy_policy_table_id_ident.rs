@@ -20,7 +20,7 @@ use databend_common_meta_kvapi::kvapi::KeyParser;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct MaskPolicyIdTableId {
     pub policy_id: u64,
     pub table_id: u64,
@@ -42,9 +42,9 @@ impl KeyCodec for MaskPolicyIdTableId {
     }
 }
 
-/// Mask Policy can be applied to tables, If drop a masking policy
+/// Mask Policy can be applied to tables. When dropping a masking policy,
 /// should get all __fd_mask_policy_apply_table_id/tenant/<policy_id>/<table_id>
-/// and remove table's bind.
+/// and remove the table's reference.
 pub type MaskPolicyTableIdIdent = TIdent<Resource, MaskPolicyIdTableId>;
 pub type MaskPolicyTableIdIdentRaw = TIdentRaw<Resource, MaskPolicyIdTableId>;
 

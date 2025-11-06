@@ -23,11 +23,12 @@ use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 
+use crate::errors::RowAccessPolicyError;
 use crate::meta_txn_error::MetaTxnError;
 
 #[async_trait::async_trait]
 pub trait RowAccessPolicyApi: Send + Sync {
-    async fn create_row_access(
+    async fn create_row_access_policy(
         &self,
         req: CreateRowAccessPolicyReq,
     ) -> Result<
@@ -37,17 +38,20 @@ pub trait RowAccessPolicyApi: Send + Sync {
 
     /// On success, returns the dropped id and row policy.
     /// Returning None, means nothing is removed.
-    async fn drop_row_access(
+    async fn drop_row_access_policy(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
-    ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaTxnError>;
+    ) -> Result<
+        Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, RowAccessPolicyError>,
+        MetaTxnError,
+    >;
 
-    async fn get_row_access(
+    async fn get_row_access_policy(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
     ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaError>;
 
-    async fn get_row_access_by_id(
+    async fn get_row_access_policy_by_id(
         &self,
         tenant: &Tenant,
         policy_id: u64,
