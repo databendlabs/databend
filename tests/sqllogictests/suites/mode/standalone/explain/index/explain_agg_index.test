@@ -439,11 +439,11 @@ Sort(Single)
         ├── output columns: [MIN(measurement) (#2), sum(measurement) (#3), count(measurement) (#4), MAX(measurement) (#5), onebrc.station_name (#0), onebrc.measurement (#1)]
         ├── group by: [station_name, measurement]
         ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
-        ├── estimated rows: 0.00
+        ├── estimated rows: 1.00
         └── AggregatePartial
             ├── group by: [station_name, measurement]
             ├── aggregate functions: [min(measurement), sum(measurement), count(measurement), max(measurement)]
-            ├── estimated rows: 0.00
+            ├── estimated rows: 1.00
             └── Filter
                 ├── output columns: [onebrc.station_name (#0), onebrc.measurement (#1)]
                 ├── filters: [is_true(onebrc.measurement (#1) > 0), is_true(onebrc.station_name (#0) = 'Beijing'), is_true((onebrc.measurement (#1) = 1 OR onebrc.measurement (#1) = 2))]
