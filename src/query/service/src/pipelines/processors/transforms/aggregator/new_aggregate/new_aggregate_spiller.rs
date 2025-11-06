@@ -205,6 +205,7 @@ impl SharedPartitionStreamInner {
                     pending_blocks.push((id, block));
                 }
             }
+            return pending_blocks;
         }
         vec![]
     }
