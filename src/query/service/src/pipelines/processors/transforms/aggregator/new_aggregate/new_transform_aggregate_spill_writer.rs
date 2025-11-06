@@ -61,6 +61,13 @@ impl AccumulatingTransform for NewTransformAggregateSpillWriter {
                 let meta = data.take_meta().unwrap();
                 let aggregate_meta = AggregateMeta::downcast_from(meta).unwrap();
                 if let AggregateMeta::AggregateSpilling(partition) = aggregate_meta {
+                    //  we use fixed size partitioning, the different bucket number will caused spilled data can't be merged correctly
+                    debug_assert_eq!(
+                        partition.payloads.len(),
+                        MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM,
+                        "the number of payloads should be equal to MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM for spilling partition"
+                    );
+
                     for (bucket, payload) in partition.payloads.into_iter().enumerate() {
                         if payload.len() == 0 {
                             continue;

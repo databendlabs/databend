@@ -143,6 +143,7 @@ impl AggregatePayloadWriters {
             let start = Instant::now();
             self.writers[bucket].write_block(block)?;
 
+            // TODO: the time recorded may not be accurate due to the serialization is included
             let elapsed = start.elapsed();
             self.write_stats.accumulate(elapsed);
         }
