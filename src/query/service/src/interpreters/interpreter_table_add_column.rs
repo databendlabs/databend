@@ -173,6 +173,8 @@ impl Interpreter for AddTableColumnInterpreter {
 
         let need_update = num_rows > 0 && !self.plan.is_deterministic;
         if need_update && tbl.change_tracking_enabled() {
+            // Rebuild table while change tracking is active may break the consistency
+            // of tracked changes, leading to incorrect change records.
             return Err(ErrorCode::AlterTableError(format!(
                 "Cannot add non-deterministic default column to table '{}' with change tracking enabled",
                 table_info.desc

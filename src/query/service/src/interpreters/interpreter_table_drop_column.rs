@@ -137,7 +137,7 @@ impl Interpreter for DropTableColumnInterpreter {
                 value.parse::<ApproxDistinctColumns>()?
             {
                 if let Some(pos) = cols.iter().position(|x| *x == self.plan.column) {
-                    // remove from the bloom index columns.
+                    // remove from the approx distinct columns.
                     cols.remove(pos);
                     *value = cols.join(",");
                 }
