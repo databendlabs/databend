@@ -59,7 +59,7 @@ impl Interpreter for DescRowAccessPolicyInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
         let policy = handler
-            .get_row_access(meta_api, &self.ctx.get_tenant(), self.plan.name.clone())
+            .get_row_access_policy(meta_api, &self.ctx.get_tenant(), self.plan.name.clone())
             .await;
 
         let policy = match policy {

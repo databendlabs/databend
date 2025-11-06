@@ -20,11 +20,11 @@ use databend_common_column::types::months_days_micros;
 use databend_common_io::Interval;
 
 use super::number::SimpleDomain;
+use super::ArgType;
+use super::DataType;
+use super::SimpleType;
+use super::SimpleValueType;
 use crate::property::Domain;
-use crate::types::ArgType;
-use crate::types::DataType;
-use crate::types::SimpleType;
-use crate::types::SimpleValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;

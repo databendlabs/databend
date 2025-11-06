@@ -26,11 +26,11 @@ use jiff::tz::TimeZone;
 use jiff::Zoned;
 
 use super::number::SimpleDomain;
+use super::ArgType;
+use super::DataType;
+use super::SimpleType;
+use super::SimpleValueType;
 use crate::property::Domain;
-use crate::types::ArgType;
-use crate::types::DataType;
-use crate::types::SimpleType;
-use crate::types::SimpleValueType;
 use crate::utils::date_helper::DateConverter;
 use crate::values::Column;
 use crate::values::Scalar;

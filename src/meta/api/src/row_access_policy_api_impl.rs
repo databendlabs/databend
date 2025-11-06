@@ -14,27 +14,32 @@
 
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReply;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyIdIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 
+use crate::errors::RowAccessPolicyError;
 use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
 use crate::row_access_policy_api::RowAccessPolicyApi;
 use crate::txn_backoff::txn_backoff;
+use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
@@ -44,7 +49,7 @@ use crate::txn_op_builder_util::txn_op_put_pb;
 /// Thus every type that impl kvapi::KVApi impls RowAccessPolicyApi.
 #[tonic::async_trait]
 impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
-    async fn create_row_access(
+    async fn create_row_access_policy(
         &self,
         req: CreateRowAccessPolicyReq,
     ) -> Result<
@@ -120,42 +125,66 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
         Ok(Ok(CreateRowAccessPolicyReply { id: *id }))
     }
 
-    async fn drop_row_access(
+    async fn drop_row_access_policy(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
-    ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaTxnError> {
+    ) -> Result<
+        Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, RowAccessPolicyError>,
+        MetaTxnError,
+    > {
         debug!(name_ident :? =(name_ident); "RowAccessPolicyApi: {}", func_name!());
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            let mut txn = TxnRequest::default();
-
+            // Check if policy exists
             let res = self.get_id_and_value(name_ident).await?;
-            debug!(res :? = res, name_key :? =(name_ident); "{}", func_name!());
-
             let Some((seq_id, seq_meta)) = res else {
-                return Ok(None);
+                return Ok(Ok(None));
             };
 
-            let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
+            let policy_id = *seq_id.data;
+            let tenant = name_ident.tenant();
+            let table_policy_ref_prefix = DirName::new(RowAccessPolicyTableIdIdent::new_generic(
+                tenant.clone(),
+                RowAccessPolicyIdTableId {
+                    policy_id,
+                    table_id: 0,
+                },
+            ));
+
+            // List all table-policy references
+            let table_policy_refs = self.list_pb_vec(&table_policy_ref_prefix).await?;
+
+            // Policy is in use - cannot drop
+            if !table_policy_refs.is_empty() {
+                return Ok(Err(RowAccessPolicyError::policy_in_use(
+                    tenant.tenant_name().to_string(),
+                    name_ident.row_access_name().to_string(),
+                )));
+            }
+
+            // No references - drop the policy
+            let id_ident = seq_id.data.into_t_ident(tenant);
+            let mut txn = TxnRequest::default();
+
+            // Ensure no new references were created
+            txn.condition
+                .push(txn_cond_eq_keys_with_prefix(&table_policy_ref_prefix, 0));
 
             txn_delete_exact(&mut txn, name_ident, seq_id.seq);
             txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
 
-            // TODO(eason): need to remove row policy from table meta
-
             let (succ, _responses) = send_txn(self, txn).await?;
-            debug!(succ = succ;"{}", func_name!());
-
             if succ {
-                return Ok(Some((seq_id, seq_meta)));
+                return Ok(Ok(Some((seq_id, seq_meta))));
             }
+            // Transaction failed, retry
         }
     }
 
-    async fn get_row_access(
+    async fn get_row_access_policy(
         &self,
         name_ident: &RowAccessPolicyNameIdent,
     ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaError> {
@@ -166,7 +195,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
         Ok(res)
     }
 
-    async fn get_row_access_by_id(
+    async fn get_row_access_policy_by_id(
         &self,
         tenant: &Tenant,
         policy_id: u64,

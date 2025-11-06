@@ -19,16 +19,19 @@ use std::ops::Range;
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
+use databend_common_exception::Result;
 
+use super::column_type_error;
+use super::domain_type_error;
 use super::AccessType;
 use super::AnyType;
+use super::ArgType;
+use super::BuilderExt;
+use super::DataType;
+use super::GenericMap;
 use super::ReturnType;
+use super::ValueType;
 use crate::property::Domain;
-use crate::types::ArgType;
-use crate::types::BuilderExt;
-use crate::types::DataType;
-use crate::types::GenericMap;
-use crate::types::ValueType;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -54,34 +57,37 @@ impl<T: AccessType> AccessType for NullableType<T> {
         scalar.as_ref().map(T::to_scalar_ref)
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Null => Some(None),
-            scalar => Some(Some(T::try_downcast_scalar(scalar)?)),
+            ScalarRef::Null => Ok(None),
+            scalar => Ok(Some(T::try_downcast_scalar(scalar)?)),
         }
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        NullableColumn::try_downcast(col.as_nullable()?)
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        let nullable = col
+            .as_nullable()
+            .ok_or_else(|| column_type_error::<Self>(col))?;
+        NullableColumn::try_downcast(nullable)
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         match domain {
             Domain::Nullable(NullableDomain {
                 has_null,
                 value: Some(value),
-            }) => Some(NullableDomain {
+            }) => Ok(NullableDomain {
                 has_null: *has_null,
                 value: Some(Box::new(T::try_downcast_domain(value)?)),
             }),
             Domain::Nullable(NullableDomain {
                 has_null,
                 value: None,
-            }) => Some(NullableDomain {
+            }) => Ok(NullableDomain {
                 has_null: *has_null,
                 value: None,
             }),
-            _ => None,
+            _ => Err(domain_type_error::<Self>(domain)),
         }
     }
 
@@ -381,10 +387,10 @@ impl<T: ArgType> NullableColumn<T> {
 }
 
 impl NullableColumn<AnyType> {
-    pub fn try_downcast<T: AccessType>(&self) -> Option<NullableColumn<T>> {
+    pub fn try_downcast<T: AccessType>(&self) -> Result<NullableColumn<T>> {
         let inner = T::try_downcast_column(&self.column)?;
         debug_assert_eq!(T::column_len(&inner), self.validity.len());
-        Some(NullableColumn {
+        Ok(NullableColumn {
             column: inner,
             validity: self.validity.clone(),
         })

@@ -672,10 +672,9 @@ fn extract_params<T: AccessType>(
 ) -> Result<Vec<T::Scalar>> {
     let mut filter_values = Vec::with_capacity(params.len());
     for (i, param) in params.iter().enumerate() {
-        let val_opt = T::try_downcast_scalar(&param.as_ref()).map(|s| T::to_owned_scalar(s));
-        match val_opt {
-            Some(val) => filter_values.push(val),
-            None => {
+        match T::try_downcast_scalar(&param.as_ref()) {
+            Ok(scalar) => filter_values.push(T::to_owned_scalar(scalar)),
+            Err(_) => {
                 return Err(ErrorCode::BadDataValueType(format!(
                     "{} param({}) type mismatch, expect: '{:?}', but got: '{:?}'",
                     display_name,
