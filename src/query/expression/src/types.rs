@@ -412,6 +412,7 @@ impl DataType {
             .to_string(),
             DataType::String => "VARCHAR".to_string(),
             DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
+            DataType::TimestampTz => "TIMEZONE_TZ".to_string(),
             _ => self.to_string().to_uppercase(),
         }
     }
