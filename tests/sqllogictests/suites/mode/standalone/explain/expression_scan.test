@@ -87,11 +87,11 @@ HashJoin
         ├── output columns: [t1.c (#2), t1.b (#1)]
         ├── group by: [c, b]
         ├── aggregate functions: []
-        ├── estimated rows: 0.00
+        ├── estimated rows: 1.00
         └── AggregatePartial
             ├── group by: [c, b]
             ├── aggregate functions: []
-            ├── estimated rows: 0.00
+            ├── estimated rows: 1.00
             └── CacheScan
                 ├── output columns: [t1.c (#2), t1.b (#1)]
                 ├── cache index: 0
@@ -132,11 +132,11 @@ HashJoin
             ├── output columns: [t1.c (#2), t1.b (#1)]
             ├── group by: [c, b]
             ├── aggregate functions: []
-            ├── estimated rows: 0.00
+            ├── estimated rows: 1.00
             └── AggregatePartial
                 ├── group by: [c, b]
                 ├── aggregate functions: []
-                ├── estimated rows: 0.00
+                ├── estimated rows: 1.00
                 └── CacheScan
                     ├── output columns: [t1.c (#2), t1.b (#1)]
                     ├── cache index: 0
@@ -187,11 +187,11 @@ HashJoin
 │               ├── output columns: [t1.c (#2), t1.b (#1)]
 │               ├── group by: [c, b]
 │               ├── aggregate functions: []
-│               ├── estimated rows: 0.00
+│               ├── estimated rows: 1.00
 │               └── AggregatePartial
 │                   ├── group by: [c, b]
 │                   ├── aggregate functions: []
-│                   ├── estimated rows: 0.00
+│                   ├── estimated rows: 1.00
 │                   └── CacheScan
 │                       ├── output columns: [t1.c (#2), t1.b (#1)]
 │                       ├── cache index: 0
@@ -204,11 +204,11 @@ HashJoin
         ├── output columns: [t1.c (#2), t1.b (#1)]
         ├── group by: [c, b]
         ├── aggregate functions: []
-        ├── estimated rows: 0.00
+        ├── estimated rows: 1.00
         └── AggregatePartial
             ├── group by: [c, b]
             ├── aggregate functions: []
-            ├── estimated rows: 0.00
+            ├── estimated rows: 1.00
             └── CacheScan
                 ├── output columns: [t1.c (#2), t1.b (#1)]
                 ├── cache index: 1
@@ -255,11 +255,11 @@ HashJoin
 │           ├── output columns: [t1.c (#2), t1.b (#1)]
 │           ├── group by: [c, b]
 │           ├── aggregate functions: []
-│           ├── estimated rows: 0.00
+│           ├── estimated rows: 1.00
 │           └── AggregatePartial
 │               ├── group by: [c, b]
 │               ├── aggregate functions: []
-│               ├── estimated rows: 0.00
+│               ├── estimated rows: 1.00
 │               └── CacheScan
 │                   ├── output columns: [t1.c (#2), t1.b (#1)]
 │                   ├── cache index: 0
@@ -272,11 +272,11 @@ HashJoin
         ├── output columns: [c1 (#3), t1.b (#1)]
         ├── group by: [c1, b]
         ├── aggregate functions: []
-        ├── estimated rows: 0.00
+        ├── estimated rows: 1.00
         └── AggregatePartial
             ├── group by: [c1, b]
             ├── aggregate functions: []
-            ├── estimated rows: 0.00
+            ├── estimated rows: 1.00
             └── CacheScan
                 ├── output columns: [c1 (#3), t1.b (#1)]
                 ├── cache index: 1

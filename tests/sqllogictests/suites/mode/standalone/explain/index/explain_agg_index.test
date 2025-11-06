@@ -153,7 +153,7 @@ HashJoin
 ├── keys is null equal: [false, false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:b (#4), probe key:b (#1), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:b (#4), probe key:b (#1), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── AggregateFinal(Build)
 │   ├── output columns: [SUM(a) (#5), t.b (#4)]

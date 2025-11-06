@@ -530,7 +530,7 @@ explain select * from (select number as a from numbers(10)) as t(b) where t.b > 
 Filter
 ├── output columns: [numbers.number (#0)]
 ├── filters: [t.b (#0) > 5]
-├── estimated rows: 0.00
+├── estimated rows: 5.00
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
@@ -697,7 +697,7 @@ explain select t.number from numbers(10) as t where t.number in (select * from u
 Filter
 ├── output columns: [t.number (#0)]
 ├── filters: [(t.number (#0) = 1 OR t.number (#0) = 3)]
-├── estimated rows: 0.01
+├── estimated rows: 7.50
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
