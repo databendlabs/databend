@@ -277,7 +277,7 @@ impl DataType {
             DataType::Number(NumberDataType::Int64) => {
                 Ok(Scalar::Number(NumberScalar::Int64(i64::MAX)))
             }
-            _ => Result::Err(format!(
+            _ => Err(format!(
                 "only support numeric types and time types, but got {:?}",
                 self
             )),
@@ -305,7 +305,7 @@ impl DataType {
             DataType::Number(NumberDataType::Int64) => {
                 Ok(Scalar::Number(NumberScalar::Int64(i64::MIN)))
             }
-            _ => Result::Err(format!(
+            _ => Err(format!(
                 "only support numeric types and time types, but got {:?}",
                 self
             )),
@@ -579,10 +579,10 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar;
     fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_>;
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>>;
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>, ErrorCode>;
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain, ErrorCode>;
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column>;
+    fn try_downcast_column(col: &Column) -> Result<Self::Column, ErrorCode>;
 
     fn column_len(col: &Self::Column) -> usize;
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>>;
@@ -648,6 +648,30 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         !matches!(Self::compare(left, right), Ordering::Greater)
     }
+}
+
+fn scalar_type_error<T>(value: &ScalarRef<'_>) -> ErrorCode {
+    ErrorCode::BadDataValueType(format!(
+        "failed to downcast scalar {:?} into {}",
+        value,
+        std::any::type_name::<T>()
+    ))
+}
+
+fn column_type_error<T>(value: &Column) -> ErrorCode {
+    ErrorCode::BadDataValueType(format!(
+        "failed to downcast column {:?} into {}",
+        value,
+        std::any::type_name::<T>()
+    ))
+}
+
+fn domain_type_error<T>(value: &Domain) -> ErrorCode {
+    ErrorCode::BadDataValueType(format!(
+        "failed to downcast domain {:?} into {}",
+        value,
+        std::any::type_name::<T>()
+    ))
 }
 
 /// [ValueType] includes the builder method of a data type based on [AccessType].

@@ -20,16 +20,19 @@ use databend_common_column::binview::BinaryViewColumnIter;
 use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_exception::Result;
 
+use super::binary::BinaryColumn;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use super::AccessType;
+use super::ArgType;
+use super::BuilderMut;
+use super::ColumnBuilder;
+use super::DataType;
+use super::GenericMap;
+use super::ReturnType;
+use super::ValueType;
 use crate::property::Domain;
-use crate::types::binary::BinaryColumn;
-use crate::types::ArgType;
-use crate::types::BuilderMut;
-use crate::types::ColumnBuilder;
-use crate::types::DataType;
-use crate::types::GenericMap;
-use crate::types::ReturnType;
-use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ScalarRef;
@@ -52,16 +55,24 @@ impl AccessType for StringType {
         scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        scalar.as_string().cloned()
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        scalar
+            .as_string()
+            .cloned()
+            .ok_or_else(|| scalar_type_error::<Self>(scalar))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        col.as_string().cloned()
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        col.as_string()
+            .cloned()
+            .ok_or_else(|| column_type_error::<Self>(col))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_string().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        domain
+            .as_string()
+            .cloned()
+            .ok_or_else(|| domain_type_error::<Self>(domain))
     }
 
     fn column_len(col: &Self::Column) -> usize {

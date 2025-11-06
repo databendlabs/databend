@@ -93,7 +93,7 @@ impl ColumnTable {
             return None;
         }
         let buckets = tuple.pop()?;
-        let buckets = MapType::<UInt32Type, UInt32Type>::try_downcast_column(&buckets)?;
+        let buckets = MapType::<UInt32Type, UInt32Type>::try_downcast_column(&buckets).ok()?;
         let Some(Column::Number(NumberColumn::UInt32(count_end))) = tuple.pop() else {
             return None;
         };
