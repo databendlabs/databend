@@ -81,7 +81,7 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 Filter
 ├── output columns: [t.number (#0)]
 ├── filters: [(is_true(2 (#2)) OR t.number (#0) > 1)]
-├── estimated rows: 0.20
+├── estimated rows: 0.60
 └── HashJoin
     ├── output columns: [t.number (#0), marker (#2)]
     ├── join type: RIGHT MARK
@@ -119,11 +119,11 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── estimated rows: 0.00
+├── estimated rows: 0.50
 ├── Filter(Build)
 │   ├── output columns: []
 │   ├── filters: [count(*) (#2) = 1]
-│   ├── estimated rows: 0.00
+│   ├── estimated rows: 0.50
 │   └── AggregateFinal
 │       ├── output columns: [count(*) (#2)]
 │       ├── group by: []
@@ -137,11 +137,11 @@ HashJoin
 │               ├── output columns: []
 │               ├── limit: 1
 │               ├── offset: 0
-│               ├── estimated rows: 0.00
+│               ├── estimated rows: 0.50
 │               └── Filter
 │                   ├── output columns: []
 │                   ├── filters: [numbers.number (#1) = 0]
-│                   ├── estimated rows: 0.00
+│                   ├── estimated rows: 0.50
 │                   └── TableScan
 │                       ├── table: default.system.numbers
 │                       ├── output columns: [number (#1)]
@@ -173,11 +173,11 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:scalar_subquery_1 (#1), probe key:t.number (#0), filter type:inlist,min_max
-├── estimated rows: 0.00
+├── estimated rows: 1.00
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
 │   ├── filters: [numbers.number (#1) = 0]
-│   ├── estimated rows: 0.00
+│   ├── estimated rows: 0.50
 │   └── TableScan
 │       ├── table: default.system.numbers
 │       ├── output columns: [number (#1)]
@@ -298,11 +298,11 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 0.00
+├── estimated rows: 0.25
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
 │   ├── filters: [numbers.number (#1) < 10, numbers.number (#1) = 0]
-│   ├── estimated rows: 0.00
+│   ├── estimated rows: 0.50
 │   └── TableScan
 │       ├── table: default.system.numbers
 │       ├── output columns: [number (#1)]
@@ -315,7 +315,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.number (#0)]
     ├── filters: [t.number (#0) < 10]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 0.50
     └── TableScan
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
@@ -541,16 +541,20 @@ EvalScalar
     │               ├── limit: 1
     │               ├── offset: 0
     │               ├── estimated rows: 0.00
-    │               └── TableScan
-    │                   ├── table: default.default.t
+    │               └── Filter
     │                   ├── output columns: []
-    │                   ├── read rows: 0
-    │                   ├── read size: 0
-    │                   ├── partitions total: 1
-    │                   ├── partitions scanned: 0
-    │                   ├── pruning stats: [segments: <range pruning: 1 to 0>]
-    │                   ├── push downs: [filters: [is_true(t.i (#1) > 10)], limit: 1]
-    │                   └── estimated rows: 0.00
+    │                   ├── filters: [is_true(t.i (#1) > 10)]
+    │                   ├── estimated rows: 0.00
+    │                   └── TableScan
+    │                       ├── table: default.default.t
+    │                       ├── output columns: [i (#1)]
+    │                       ├── read rows: 0
+    │                       ├── read size: 0
+    │                       ├── partitions total: 1
+    │                       ├── partitions scanned: 0
+    │                       ├── pruning stats: [segments: <range pruning: 1 to 0>]
+    │                       ├── push downs: [filters: [is_true(t.i (#1) > 10)], limit: NONE]
+    │                       └── estimated rows: 4.00
     └── TableScan(Probe)
         ├── table: default.default.t
         ├── output columns: [i (#0)]
