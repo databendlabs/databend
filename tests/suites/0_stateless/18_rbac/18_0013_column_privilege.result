@@ -12,15 +12,15 @@ t
 === use db ===
 Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
 === show columns ===
-dummy	TINYINT UNSIGNED	NO		NULL	NULL
-c1	INT	NO		NULL	NULL
-created_on	TIMESTAMP	NO		NULL	NULL
-inherited_roles	BIGINT UNSIGNED	NO		NULL	NULL
-inherited_roles_name	VARCHAR	NO		NULL	NULL
-name	VARCHAR	NO		NULL	NULL
-update_on	TIMESTAMP	NO		NULL	NULL
-keywords	VARCHAR	NO		NULL	NULL
-reserved	TINYINT UNSIGNED	NO		NULL	NULL
+dummy	tinyint unsigned	NO		NULL	NULL
+c1	int	NO		NULL	NULL
+created_on	timestamp	NO		NULL	NULL
+inherited_roles	bigint unsigned	NO		NULL	NULL
+inherited_roles_name	varchar(16382)	NO		NULL	NULL
+name	varchar(16382)	NO		NULL	NULL
+update_on	timestamp	NO		NULL	NULL
+keywords	varchar(16382)	NO		NULL	NULL
+reserved	tinyint unsigned	NO		NULL	NULL
 Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
 Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for table 'nogrant.t'
 === grant system to a ===

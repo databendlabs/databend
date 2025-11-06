@@ -246,45 +246,43 @@ fn get_hash_values(
             _ => unreachable!(),
         },
         Value::Column(c) => {
-            if let Some(column) = NumberType::<u64>::try_downcast_column(&c) {
-                Ok(column)
-            } else if let Some(mut column) =
-                NullableType::<NumberType<u64>>::try_downcast_column(&c)
-            {
-                let null_map = column.validity;
-                if null_map.null_count() == 0 {
-                    Ok(column.column)
-                } else if null_map.null_count() == null_map.len() {
-                    Ok(vec![default_scatter_index; rows].into())
-                } else {
-                    let mut need_new_vec = true;
-                    if let Some(column) = unsafe { column.column.get_mut() } {
-                        column
-                            .iter_mut()
-                            .zip(null_map.iter())
-                            .for_each(|(x, valid)| {
-                                if valid {
-                                    *x *= valid as u64;
-                                } else {
-                                    *x = default_scatter_index;
-                                }
-                            });
-                        need_new_vec = false;
-                    }
+            if let Ok(column) = NumberType::<u64>::try_downcast_column(&c) {
+                return Ok(column);
+            }
 
-                    if !need_new_vec {
-                        Ok(column.column)
-                    } else {
-                        Ok(column
-                            .column
-                            .iter()
-                            .zip(null_map.iter())
-                            .map(|(x, b)| if b { *x } else { default_scatter_index })
-                            .collect())
-                    }
-                }
+            let mut column = NullableType::<NumberType<u64>>::try_downcast_column(&c).unwrap();
+            let null_map = column.validity;
+            if null_map.null_count() == 0 {
+                return Ok(column.column);
+            }
+            if null_map.null_count() == null_map.len() {
+                return Ok(vec![default_scatter_index; rows].into());
+            }
+
+            let mut need_new_vec = true;
+            if let Some(column) = unsafe { column.column.get_mut() } {
+                column
+                    .iter_mut()
+                    .zip(null_map.iter())
+                    .for_each(|(x, valid)| {
+                        if valid {
+                            *x *= valid as u64;
+                        } else {
+                            *x = default_scatter_index;
+                        }
+                    });
+                need_new_vec = false;
+            }
+
+            if !need_new_vec {
+                Ok(column.column)
             } else {
-                unreachable!()
+                Ok(column
+                    .column
+                    .iter()
+                    .zip(null_map.iter())
+                    .map(|(x, b)| if b { *x } else { default_scatter_index })
+                    .collect())
             }
         }
     }

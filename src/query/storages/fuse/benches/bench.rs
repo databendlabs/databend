@@ -69,7 +69,7 @@ mod dummy {
         let batch = batch.unwrap();
         let schema: TableSchema = batch.schema().as_ref().try_into().unwrap();
         let data_schema = DataSchema::from(&schema);
-        let (block, _) = DataBlock::from_record_batch(&data_schema, &batch).unwrap();
+        let block = DataBlock::from_record_batch(&data_schema, &batch).unwrap();
         (block, schema)
     }
 

@@ -1,0 +1,293 @@
+statement ok
+drop database if exists test_vector_index
+
+statement ok
+create database test_vector_index
+
+statement ok
+use test_vector_index
+
+statement ok
+CREATE TABLE IF NOT EXISTS t(id Int, embedding Vector(8), VECTOR INDEX idx (embedding) m=10 ef_construct=40 distance='cosine') Engine = Fuse
+
+query TT
+SHOW CREATE TABLE t
+----
+t CREATE TABLE t ( id INT NULL, embedding VECTOR(8) NULL, SYNC VECTOR INDEX idx (embedding) distance = 'cosine', ef_construct = '40', m = '10' ) ENGINE=FUSE
+
+statement ok
+DROP VECTOR INDEX idx ON t;
+
+statement error
+CREATE VECTOR INDEX idx2 ON t(embedding) m=10 ef_construct=5
+
+statement error
+CREATE VECTOR INDEX idx2 ON t(embedding) m=0 ef_construct=5 distance='cosine,l1,l2';
+
+statement ok
+CREATE VECTOR INDEX idx2 ON t(embedding) m=10 ef_construct=40 distance='cosine,l1,l2';
+
+statement error
+DROP INVERTED INDEX idx2 ON t;
+
+query TT
+SHOW CREATE TABLE t
+----
+t CREATE TABLE t ( id INT NULL, embedding VECTOR(8) NULL, SYNC VECTOR INDEX idx2 (embedding) distance = 'cosine,l1,l2', ef_construct = '40', m = '10' ) ENGINE=FUSE
+
+statement ok
+INSERT INTO t VALUES
+(1, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]),
+(2, [0.17790798, 0.0132427, 0.55352279, 0.49129727, 0.74246407, 0.97345777, 0.83489323, 0.86012174]),
+(3, [0.2703968, 0.26768266, 0.96587005, 0.04760408, 0.92289409, 0.15799311, 0.86381163, 0.2922287]),
+(4, [0.0810719, 0.27882267, 0.6015564, 0.34236571, 0.58889543, 0.83293431, 0.67012723, 0.76303241])
+
+statement ok
+INSERT INTO t VALUES
+(5, [0.66399931, 0.35041433, 0.2159864, 0.89537508, 0.44577037, 0.57896497, 0.36630178, 0.33816571]),
+(6, [0.32052319, 0.38567453, 0.62853221, 0.84816365, 0.15853234, 0.33207714, 0.7673085, 0.69513879]),
+(7, [0.82590676, 0.35860656, 0.6277274, 0.95148122, 0.81893313, 0.91440945, 0.15803721, 0.5866869]),
+(8, [0.42135513, 0.05637937, 0.88864157, 0.59217909, 0.98435169, 0.39234101, 0.41490889,  0.02760555])
+
+statement ok
+INSERT INTO t VALUES
+(9, [0.61418788, 0.34545306, 0.14638622, 0.53249639, 0.09139293, 0.84940919, 0.105433, 0.4156201]),
+(10, [0.21828953, 0.87852734, 0.64221122, 0.24536394, 0.81689593, 0.86341877, 0.7218334, 0.45028494]),
+(11, [0.43279006, 0.45523681, 0.76060274, 0.66284758, 0.19131476, 0.13564463, 0.88712212, 0.93279565]),
+(12, [0.79671359, 0.86079789, 0.94477631, 0.5116732, 0.29733205, 0.33645561, 0.41380333, 0.75909903])
+
+statement ok
+INSERT INTO t VALUES
+(13, [0.94666755, 0.39522571, 0.39857241, 0.88080323, 0.53470771, 0.09486194, 0.17524627, 0.86497559]),
+(14, [0.8397819, 0.37221789, 0.32885295, 0.20470829, 0.49838217, 0.00736057, 0.45418757, 0.6956924 ]),
+(15, [0.13230447, 0.630588, 0.10812326, 0.21558228, 0.83768057, 0.48870546, 0.65021806, 0.31626541]),
+(16, [0.2667851, 0.01529589, 0.98994706, 0.31870983, 0.31783372, 0.34863699, 0.30254189, 0.84441678])
+
+query TB
+select name, vector_index_size > 13000 from system.tables where name='t' and database='test_vector_index';
+----
+t 1
+
+query IIB
+select block_count, row_count, vector_index_size > 3000 from fuse_segment('test_vector_index', 't');
+----
+1 4 1
+1 4 1
+1 4 1
+1 4 1
+
+query IIB
+select block_count, row_count, vector_index_size is not null from fuse_snapshot('test_vector_index', 't');
+----
+4 16 1
+3 12 1
+2 8 1
+1 4 1
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(id Int, embedding Vector(8)) Engine = Fuse
+
+statement ok
+INSERT INTO t1 SELECT id, embedding FROM t
+
+query IF
+SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
+----
+1 0.009774268
+10 0.033747792
+12 0.060161233
+11 0.14048636
+8 0.14554787
+
+query IF
+SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
+----
+1 0.0
+10 0.0592916
+12 0.085179806
+8 0.13477594
+3 0.13801938
+
+query IF
+SELECT id, cosine_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
+----
+4 0.043031156
+11 0.05496204
+10 0.056846976
+2 0.085320055
+16 0.111266375
+
+query IF
+SELECT id, cosine_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
+----
+4 0.031086385
+2 0.075579524
+10 0.09369081
+11 0.097252846
+16 0.105270445
+
+query IF
+SELECT id, l1_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
+----
+1 0.0
+10 1.5320582
+12 1.7202058
+8 1.770357
+15 1.8413826
+
+query IF
+SELECT id, l1_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
+----
+1 1.4901161e-7
+10 1.5290257
+12 1.7164081
+8 1.7851611
+15 1.8448958
+
+query IF
+SELECT id, l1_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
+----
+4 0.87704676
+6 1.559421
+16 1.6866446
+11 1.7874013
+10 1.8277186
+
+query IF
+SELECT id, l1_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
+----
+4 0.86807996
+6 1.571893
+16 1.6951541
+2 1.8405688
+11 1.8465424
+
+query IF
+SELECT id, l2_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
+----
+1 0.052975703
+10 0.73442644
+12 0.84724534
+8 0.92271036
+3 0.9368646
+
+query IF
+SELECT id, l2_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
+----
+1 8.940697e-8
+10 0.63450795
+12 0.7636615
+8 0.91897535
+3 0.93300396
+
+query IF
+SELECT id, l2_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
+----
+4 0.41017252
+16 0.69951516
+6 0.73418504
+2 0.7379028
+11 0.8144757
+
+query IF
+SELECT id, l2_distance(embedding, [0.02559146, 0.38549544, 0.77889671, 0.31591033, 0.48453478, 0.51902057, 0.74154714, 0.75059576]::vector(8)) AS similarity FROM t1 ORDER BY similarity ASC LIMIT 5;
+----
+4 0.40161562
+16 0.7057761
+2 0.7328551
+6 0.73338425
+11 0.76073563
+
+
+query IF
+SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity DESC LIMIT 3;
+----
+9 0.2568838
+16 0.25626028
+13 0.24121934
+
+query IF
+SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 ORDER BY similarity DESC LIMIT 3;
+----
+9 0.286018
+16 0.24571353
+13 0.23111635
+
+query IF
+SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t WHERE similarity > 0.1 ORDER BY similarity ASC LIMIT 3;
+----
+11 0.14048636
+8 0.14554787
+3 0.14645952
+
+query IF
+SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t1 WHERE similarity > 0.1 ORDER BY similarity ASC LIMIT 3;
+----
+8 0.13477594
+3 0.13801938
+15 0.13881427
+
+statement ok
+CREATE TABLE IF NOT EXISTS t2(id Int, embedding1 Vector(4), embedding2 Vector(4));
+
+statement ok
+INSERT INTO t2 VALUES
+(1, [0.50515236, 0.8561939, 0.87169914, 0.55843271], [0.73689797, 0.49985862, 0.64527255, 0.29313098]),
+(2, [0.17790798, 0.0132427, 0.55352279, 0.49129727], [0.74246407, 0.97345777, 0.83489323, 0.86012174]),
+(3, [0.2703968, 0.26768266, 0.96587005, 0.04760408], [0.92289409, 0.15799311, 0.86381163, 0.2922287]),
+(4, [0.0810719, 0.27882267, 0.6015564, 0.34236571], [0.58889543, 0.83293431, 0.67012723, 0.76303241])
+
+statement ok
+INSERT INTO t2 VALUES
+(5, [0.66399931, 0.35041433, 0.2159864, 0.89537508], [0.44577037, 0.57896497, 0.36630178, 0.33816571]),
+(6, [0.32052319, 0.38567453, 0.62853221, 0.84816365], [0.15853234, 0.33207714, 0.7673085, 0.69513879]),
+(7, [0.82590676, 0.35860656, 0.6277274, 0.95148122], [0.81893313, 0.91440945, 0.15803721, 0.5866869]),
+(8, [0.42135513, 0.05637937, 0.88864157, 0.59217909], [0.98435169, 0.39234101, 0.41490889,  0.02760555])
+
+statement ok
+CREATE VECTOR INDEX idx1 ON t2(embedding1) distance='l1,l2'
+
+statement ok
+CREATE VECTOR INDEX idx2 ON t2(embedding2) distance='cosine'
+
+query B
+SELECT vector_index_size IS NULL FROM fuse_block('test_vector_index', 't2')
+----
+1
+1
+
+statement ok
+REFRESH VECTOR INDEX idx1 ON t2
+
+query B
+SELECT vector_index_size > 2000 FROM fuse_block('test_vector_index', 't2')
+----
+1
+1
+
+statement ok
+REFRESH VECTOR INDEX idx2 ON t2
+
+query B
+SELECT vector_index_size > 3000 FROM fuse_block('test_vector_index', 't2')
+----
+1
+1
+
+query IF
+SELECT id, l1_distance(embedding1, [0.50515236, 0.8561939, 0.87169914, 0.55843271]::vector(4)) AS similarity FROM t2 ORDER BY similarity ASC LIMIT 1;
+----
+1 0.0
+
+query IF
+SELECT id, cosine_distance(embedding2, [0.50515236, 0.8561939, 0.87169914, 0.55843271]::vector(4)) AS similarity FROM t2 ORDER BY similarity ASC LIMIT 1;
+----
+5 0.03522873
+
+statement ok
+use default
+
+statement ok
+drop database test_vector_index
+
+

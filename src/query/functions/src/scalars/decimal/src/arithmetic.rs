@@ -221,7 +221,7 @@ where
                 // round_div(-5, 2) --> -3
                 // round_div(5, -2) --> -3
                 // round_div(-5, -2) --> 3
-                if std::intrinsics::unlikely(b == zero) {
+                if std::hint::unlikely(b == zero) {
                     ctx.set_error(result.len(), "divided by zero");
                     result.push(C::compute(one));
                 } else {

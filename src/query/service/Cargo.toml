@@ -101,14 +101,12 @@ databend-common-telemetry = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-common-version = { workspace = true }
-databend-enterprise-aggregating-index = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-hilbert-clustering = { workspace = true }
 databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-row-access-policy-feature = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
-databend-enterprise-table-index = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
@@ -183,6 +181,7 @@ xorf = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
 goldenfile = { workspace = true }
 hex = { workspace = true }
 hyper-util = { workspace = true }
@@ -195,6 +194,7 @@ proptest = { workspace = true }
 reqwest = { workspace = true }
 serde_json.workspace = true
 serde_yaml = { workspace = true }
+tantivy = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 tower = { workspace = true }

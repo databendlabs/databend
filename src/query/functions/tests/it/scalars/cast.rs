@@ -16,6 +16,7 @@ use std::io::Write;
 
 use databend_common_expression::types::*;
 use databend_common_expression::Column;
+use databend_common_expression::Domain;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use goldenfile::Mint;
@@ -761,6 +762,16 @@ fn test_cast_between_binary_and_string(file: &mut impl Write, is_try: bool) {
 fn test_decimal_to_decimal() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("decimal_to_decimal_cast.txt").unwrap();
+
+    run_ast_with_context(file, "a::decimal(15,2)", TestContext {
+        columns: &[("a", UInt64Type::from_data(vec![0_u64, 100]))],
+        input_domains: Some(&[(
+            "a",
+            Domain::Number(NumberDomain::UInt64(UInt64Type::full_domain())),
+        )]),
+        func_ctx: FunctionContext::default(),
+        strict_eval: false,
+    });
 
     for is_try in [false, true] {
         test_cast_decimal_basic(file, is_try);

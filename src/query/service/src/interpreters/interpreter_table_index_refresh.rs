@@ -18,13 +18,11 @@ use databend_common_ast::ast;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
+use databend_common_storages_fuse::operations::do_refresh_table_index;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
-use databend_enterprise_table_index::get_table_index_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -53,26 +51,6 @@ impl Interpreter for RefreshTableIndexInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        match self.plan.index_type {
-            ast::TableIndexType::Inverted => {
-                LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
-            }
-            ast::TableIndexType::Ngram => {
-                LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::NgramIndex)?;
-            }
-            ast::TableIndexType::Vector => {
-                LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VectorIndex)?;
-            }
-            ast::TableIndexType::Aggregating => {
-                return Err(ErrorCode::RefreshIndexError(
-                    "Don't support refresh aggregating index",
-                ));
-            }
-        }
-
         let table = self
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
@@ -135,17 +113,15 @@ impl Interpreter for RefreshTableIndexInterpreter {
             }
             _ => {
                 assert!(segment_locs.is_none());
-                let handler = get_table_index_handler();
-                let _ = handler
-                    .do_refresh_table_index(
-                        index_type,
-                        fuse_table,
-                        self.ctx.clone(),
-                        index_name,
-                        index_schema.into(),
-                        &mut build_res.main_pipeline,
-                    )
-                    .await?;
+                do_refresh_table_index(
+                    fuse_table,
+                    self.ctx.clone(),
+                    index_name,
+                    index_type,
+                    index_schema.into(),
+                    &mut build_res.main_pipeline,
+                )
+                .await?;
             }
         }
 

@@ -421,7 +421,7 @@ where T: Decimal
             }
             let avg_val = match sum
                 .checked_mul(T::e(scale_add))
-                .and_then(|v| v.checked_div(T::from_i128(window_size as u64)))
+                .and_then(|v| v.checked_div(T::from_i64(window_size as i64)))
             {
                 Some(value) => value,
                 None => {

@@ -25,6 +25,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -104,6 +105,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
         let mut updated_on = vec![];
         let mut table_version = vec![];
         let mut snapshot_location = vec![];
+        let mut has_data = vec![];
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads));
@@ -235,7 +237,8 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                         }
                         comment.push(stream_info.meta.comment.clone());
 
-                        table_version.push(stream_table.offset().ok());
+                        let offset = stream_table.offset().ok();
+                        table_version.push(offset);
                         table_id.push(source_tb_id);
                         snapshot_location.push(stream_table.snapshot_loc());
 
@@ -244,6 +247,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                         let table = table.clone();
                         let handler = runtime.spawn(async move {
                             let mut reason = "".to_string();
+                            let mut has_data = false;
                             // safe unwrap.
                             let stream_table = StreamTable::try_from_table(table.as_ref()).unwrap();
                             match stream_table.source_table(ctx).await {
@@ -258,23 +262,28 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                                             .err()
                                             .map_or("".to_string(), |e| e.display_text());
                                     }
+                                    if let Some(ver) = offset {
+                                        has_data = fuse_table.get_table_info().ident.seq != ver;
+                                    }
                                 }
                                 Err(e) => {
                                     reason = e.display_text();
                                 }
                             }
                             drop(permit);
-                            reason
+                            (reason, has_data)
                         });
                         handlers.push(handler);
                     }
                 }
             }
 
-            let mut joint = futures::future::try_join_all(handlers)
+            let joint = futures::future::try_join_all(handlers)
                 .await
                 .unwrap_or_default();
-            invalid_reason.append(&mut joint);
+            let (mut reasons, mut flags): (Vec<String>, Vec<bool>) = joint.into_iter().unzip();
+            invalid_reason.append(&mut reasons);
+            has_data.append(&mut flags);
         }
 
         let mut source_db_ids = source_db_id_set.into_iter().collect::<Vec<u64>>();
@@ -328,6 +337,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                 UInt64Type::from_opt_data(table_version),
                 StringType::from_opt_data(snapshot_location),
                 StringType::from_data(invalid_reason),
+                BooleanType::from_data(has_data),
                 StringType::from_opt_data(owner),
             ]))
         } else {
@@ -375,6 +385,7 @@ impl<const T: bool> StreamsTable<T> {
                     TableDataType::Nullable(Box::new(TableDataType::String)),
                 ),
                 TableField::new("invalid_reason", TableDataType::String),
+                TableField::new("has_data", TableDataType::Boolean),
                 TableField::new(
                     "owner",
                     TableDataType::Nullable(Box::new(TableDataType::String)),

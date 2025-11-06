@@ -224,7 +224,6 @@ impl StreamBlockBuilder {
 
         let virtual_column_builder = properties.virtual_column_builder.clone();
         let vector_index_builder = VectorIndexBuilder::try_create(
-            properties.ctx.clone(),
             &properties.table_indexes,
             properties.source_schema.clone(),
             true,

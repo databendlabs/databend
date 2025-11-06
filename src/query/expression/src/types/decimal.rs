@@ -49,17 +49,20 @@ use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::column_type_error;
 use super::compute_view::Compute;
 use super::compute_view::ComputeView;
+use super::domain_type_error;
+use super::scalar_type_error;
 use super::AccessType;
 use super::AnyType;
+use super::DataType;
 use super::NumberType;
 use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
 use super::ValueType;
-use crate::types::DataType;
-use crate::types::F64;
+use super::F64;
 use crate::utils::arrow::buffer_into_mut;
 use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
@@ -98,16 +101,24 @@ impl<Num: Decimal> AccessType for CoreDecimal<Num> {
         *scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        Num::try_downcast_scalar(scalar.as_decimal()?)
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        let decimal = scalar
+            .as_decimal()
+            .ok_or_else(|| scalar_type_error::<Self>(scalar))?;
+        Num::try_downcast_scalar(decimal).ok_or_else(|| scalar_type_error::<Self>(scalar))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        Num::try_downcast_domain(domain.as_decimal()?)
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        let decimal = domain
+            .as_decimal()
+            .ok_or_else(|| domain_type_error::<Self>(domain))?;
+        Num::try_downcast_domain(decimal).ok_or_else(|| domain_type_error::<Self>(domain))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        Num::try_downcast_column(col).map(|(col, _)| col)
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        Num::try_downcast_column(col)
+            .map(|(col, _)| col)
+            .ok_or_else(|| column_type_error::<Self>(col))
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -222,22 +233,32 @@ impl<Num: Decimal> AccessType for CoreScalarDecimal<Num> {
         *scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        let scalar = scalar.as_decimal()?;
-        Num::try_downcast_scalar(scalar).map(|v| (v, scalar.size()))
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        let decimal = scalar
+            .as_decimal()
+            .ok_or_else(|| scalar_type_error::<Self>(scalar))?;
+        Num::try_downcast_scalar(decimal)
+            .map(|v| (v, decimal.size()))
+            .ok_or_else(|| scalar_type_error::<Self>(scalar))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        let size = domain.as_decimal()?.decimal_size();
-        let domain = Num::try_downcast_domain(domain.as_decimal()?)?;
-        Some(SimpleDomain {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        let decimal = domain
+            .as_decimal()
+            .ok_or_else(|| domain_type_error::<Self>(domain))?;
+        let size = decimal.decimal_size();
+        let domain =
+            Num::try_downcast_domain(decimal).ok_or_else(|| domain_type_error::<Self>(domain))?;
+        Ok(SimpleDomain {
             min: (domain.min, size),
             max: (domain.max, size),
         })
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        Num::try_downcast_column(col).map(|(col, x)| col.into_iter().map(|v| (v, x)).collect())
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        Num::try_downcast_column(col)
+            .map(|(col, x)| col.into_iter().map(|v| (v, x)).collect())
+            .ok_or_else(|| column_type_error::<Self>(col))
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -610,8 +631,9 @@ pub trait Decimal:
     fn from_float(value: f64) -> Self;
 
     fn from_i64(value: i64) -> Self;
-    fn from_i128<U: Into<i128>>(value: U) -> Self;
-    fn from_i256(value: i256) -> Self;
+    fn from_i128(value: impl Into<i128>) -> Option<Self>;
+    fn from_i128_uncheck(value: i128) -> Self;
+    fn from_i256_uncheck(value: i256) -> Self;
     fn from_bigint(value: BigInt) -> Option<Self>;
 
     fn de_binary(bytes: &mut &[u8]) -> Self;
@@ -800,12 +822,17 @@ impl Decimal for i64 {
     }
 
     #[inline]
-    fn from_i128<U: Into<i128>>(value: U) -> Self {
-        value.into() as i64
+    fn from_i128(value: impl Into<i128>) -> Option<Self> {
+        i64::try_from(value.into()).ok()
     }
 
     #[inline]
-    fn from_i256(value: i256) -> Self {
+    fn from_i128_uncheck(value: i128) -> Self {
+        value as i64
+    }
+
+    #[inline]
+    fn from_i256_uncheck(value: i256) -> Self {
         value.as_i64()
     }
 
@@ -1092,7 +1119,7 @@ impl Decimal for i128 {
 
     #[inline]
     fn as_decimal<D: Decimal>(self) -> D {
-        D::from_i128(self)
+        D::from_i128_uncheck(self)
     }
 
     fn from_float(value: f64) -> Self {
@@ -1132,12 +1159,17 @@ impl Decimal for i128 {
     }
 
     #[inline]
-    fn from_i128<U: Into<i128>>(value: U) -> Self {
-        value.into()
+    fn from_i128(value: impl Into<i128>) -> Option<Self> {
+        Some(value.into())
     }
 
     #[inline]
-    fn from_i256(value: i256) -> Self {
+    fn from_i128_uncheck(value: i128) -> Self {
+        value
+    }
+
+    #[inline]
+    fn from_i256_uncheck(value: i256) -> Self {
         value.as_i128()
     }
 
@@ -1397,12 +1429,17 @@ impl Decimal for i256 {
     }
 
     #[inline]
-    fn from_i128<U: Into<i128>>(value: U) -> Self {
-        i256::from(value.into())
+    fn from_i128(value: impl Into<i128>) -> Option<Self> {
+        Some(i256::from(value.into()))
     }
 
     #[inline]
-    fn from_i256(value: i256) -> Self {
+    fn from_i128_uncheck(value: i128) -> Self {
+        i256::from(value)
+    }
+
+    #[inline]
+    fn from_i256_uncheck(value: i256) -> Self {
         value
     }
 
@@ -1531,7 +1568,7 @@ impl Decimal for i256 {
 
     #[inline]
     fn as_decimal<D: Decimal>(self) -> D {
-        D::from_i256(self)
+        D::from_i256_uncheck(self)
     }
 }
 
@@ -3116,8 +3153,8 @@ decimal_convert_type!(i256, i64, Decimal256As64Type, I256ToI64);
 
 #[cfg(test)]
 mod tests {
+    use super::ValueType;
     use super::*;
-    use crate::types::ValueType;
 
     #[test]
     fn test_decimal_cast() {

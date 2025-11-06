@@ -16,7 +16,7 @@ mod aggregate_exchange_injector;
 mod aggregate_meta;
 mod aggregator_params;
 mod build_partition_bucket;
-mod new_final_aggregate;
+mod new_aggregate;
 mod serde;
 mod transform_aggregate_expand;
 mod transform_aggregate_final;

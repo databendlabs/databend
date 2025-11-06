@@ -75,11 +75,9 @@ members = [
     "src/query/users",
     "src/query/ee_features/attach_table",
     "src/query/ee_features/vacuum_handler",
-    "src/query/ee_features/aggregating_index",
     "src/query/ee_features/data_mask",
     "src/query/ee_features/storage_encryption",
     "src/query/ee_features/stream_handler",
-    "src/query/ee_features/table_index",
     "src/query/ee_features/virtual_column",
     "src/query/ee_features/resources_management",
     "src/query/service",
@@ -185,7 +183,6 @@ databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
 databend-common-version = { path = "src/common/version" }
-databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregating_index" }
 databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
 databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
@@ -196,7 +193,6 @@ databend-enterprise-resources-management = { path = "src/query/ee_features/resou
 databend-enterprise-row-access-policy-feature = { path = "src/query/ee_features/row_access_policy" }
 databend-enterprise-storage-encryption = { path = "src/query/ee_features/storage_encryption" }
 databend-enterprise-stream-handler = { path = "src/query/ee_features/stream_handler" }
-databend-enterprise-table-index = { path = "src/query/ee_features/table_index" }
 databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_handler" }
 databend-enterprise-virtual-column = { path = "src/query/ee_features/virtual_column" }
 databend-functions-scalar-arithmetic = { path = "src/query/functions/src/scalars/arithmetic" }
@@ -418,7 +414,7 @@ openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
 ] }
-opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", rev = "a1fb4da", features = ["tls"] }
+opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", tag = "v0.9.0", features = ["tls"] }
 orc-rust = "0.6.0"
 ordered-float = { version = "5.0.0", default-features = false }
 ordq = "0.2.0"

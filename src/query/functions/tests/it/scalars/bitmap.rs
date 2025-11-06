@@ -37,6 +37,7 @@ fn test_bitmap() {
     test_bitmap_subset_limit(file);
     test_bitmap_subset_in_range(file);
     test_bitmap_op(file);
+    test_bitmap_to_array(file);
 }
 
 fn test_build_bitmap(file: &mut impl Write) {
@@ -139,4 +140,12 @@ fn test_bitmap_op(file: &mut impl Write) {
         "bitmap_and_not(build_bitmap([1,3,5]), build_bitmap([1,5]))",
         &[],
     );
+}
+
+fn test_bitmap_to_array(file: &mut impl Write) {
+    run_ast(file, "bitmap_to_array(build_bitmap([1,4,5]))", &[]);
+    run_ast(file, "bitmap_to_array(build_bitmap([a, b]))", &[
+        ("a", UInt16Type::from_data(vec![1u16, 2, 3])),
+        ("b", UInt16Type::from_data(vec![1u16, 5, 6])),
+    ]);
 }
