@@ -802,15 +802,13 @@ impl NativeDeserializeDataTransform {
             let offsets = if let Some(count) = self.read_state.filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
                 RoaringTreemap::from_sorted_iter(
-                    filter_executor.mutable_true_selection()[0..count]
+                    filter_executor.true_selection()[0..count]
                         .iter()
                         .map(|idx| *idx as u64 + offset),
                 )
                 .unwrap()
             } else {
-                let mut offsets = RoaringTreemap::new();
-                offsets.insert_range(offset..offset + origin_num_rows as u64);
-                offsets
+                RoaringTreemap::from_sorted_iter(offset..offset + origin_num_rows as u64).unwrap()
             };
             Some(offsets)
         } else {
