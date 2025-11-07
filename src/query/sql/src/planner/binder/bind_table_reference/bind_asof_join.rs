@@ -58,7 +58,7 @@ impl Binder {
 
         let mut range_condition = None;
         for condition in join.non_equi_conditions.iter() {
-            if let Some(func) = check_range_condition(condition, &left_prop, &right_prop) {
+            if let Some(func) = is_range_join_condition(condition, &left_prop, &right_prop) {
                 if range_condition.is_some() {
                     return Err(ErrorCode::Internal("Multiple inequalities condition!"));
                 }
@@ -217,7 +217,7 @@ impl Binder {
     }
 }
 
-fn check_range_condition<'a>(
+pub fn is_range_join_condition<'a>(
     expr: &'a ScalarExpr,
     left_prop: &RelationalProperty,
     right_prop: &RelationalProperty,
@@ -228,16 +228,27 @@ fn check_range_condition<'a>(
     if !matches!(func.func_name.as_str(), GT | LT | GTE | LTE) {
         return None;
     }
-    let [left, right] = func.arguments.as_slice() else {
+    let [a, b] = func.arguments.as_slice() else {
         unreachable!()
     };
 
-    matches!(
-        (
-            JoinPredicate::new(left, left_prop, right_prop),
-            JoinPredicate::new(right, left_prop, right_prop),
-        ),
-        (JoinPredicate::Left(_), JoinPredicate::Right(_))
-    )
-    .then_some(func)
+    match JoinPredicate::new(a, left_prop, right_prop) {
+        JoinPredicate::Left(_)
+            if matches!(
+                JoinPredicate::new(b, left_prop, right_prop),
+                JoinPredicate::Right(_)
+            ) =>
+        {
+            Some(func)
+        }
+        JoinPredicate::Right(_)
+            if matches!(
+                JoinPredicate::new(b, left_prop, right_prop),
+                JoinPredicate::Left(_)
+            ) =>
+        {
+            Some(func)
+        }
+        _ => None,
+    }
 }

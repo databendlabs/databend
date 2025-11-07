@@ -14,9 +14,8 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_sql::binder::JoinPredicate;
+use databend_common_sql::binder::is_range_join_condition;
 use databend_common_sql::optimizer::ir::RelExpr;
-use databend_common_sql::optimizer::ir::RelationalProperty;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
@@ -68,7 +67,9 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         .non_equi_conditions
         .iter()
         .cloned()
-        .partition::<Vec<_>, _>(|condition| is_range_condition(condition, &left_prop, &right_prop));
+        .partition::<Vec<_>, _>(|condition| {
+            is_range_join_condition(condition, &left_prop, &right_prop).is_some()
+        });
 
     if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
         return Ok(PhysicalJoinType::RangeJoin(
@@ -78,30 +79,6 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     }
     // Leverage hash join to execute nested loop join
     Ok(PhysicalJoinType::Hash)
-}
-
-fn is_range_condition(
-    expr: &ScalarExpr,
-    left_prop: &RelationalProperty,
-    right_prop: &RelationalProperty,
-) -> bool {
-    let ScalarExpr::FunctionCall(func) = expr else {
-        return false;
-    };
-    if !matches!(func.func_name.as_str(), "gt" | "lt" | "gte" | "lte") {
-        return false;
-    }
-    let [left, right] = func.arguments.as_slice() else {
-        unreachable!()
-    };
-
-    matches!(
-        (
-            JoinPredicate::new(left, left_prop, right_prop),
-            JoinPredicate::new(right, left_prop, right_prop),
-        ),
-        (JoinPredicate::Left(_), JoinPredicate::Right(_))
-    )
 }
 
 impl PhysicalPlanBuilder {
@@ -166,7 +143,9 @@ impl PhysicalPlanBuilder {
                     }
                     .into()
                 }))
-                .partition(|condition| is_range_condition(condition, &left_prop, &right_prop));
+                .partition(|condition| {
+                    is_range_join_condition(condition, &left_prop, &right_prop).is_some()
+                });
 
             self.build_range_join(
                 join.join_type,
