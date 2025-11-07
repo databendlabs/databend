@@ -280,6 +280,7 @@ async fn build_update_table_meta_req(
         table_meta_timestamps,
         table_stats_gen,
     )?;
+    snapshot.ensure_segments_unique()?;
 
     // write snapshot
     let dal = fuse_table.get_operator();

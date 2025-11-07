@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::io::Cursor;
 use std::io::Read;
 use std::sync::Arc;
@@ -143,6 +144,8 @@ impl TableSnapshot {
             return Err(ErrorCode::TransactionTimeout(err_msg));
         }
 
+        ensure_segments_unique(&segments)?;
+
         Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
@@ -244,8 +247,11 @@ impl TableSnapshot {
         let compression = MetaCompression::try_from(r.read_scalar::<u8>()?)?;
         let snapshot_size: u64 = r.read_scalar::<u64>()?;
 
-        read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)
-            .map_err(|x| x.add_message("fail to deserialize table snapshot"))
+        let snapshot: TableSnapshot =
+            read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)
+                .map_err(|x| x.add_message("fail to deserialize table snapshot"))?;
+        snapshot.ensure_segments_unique()?;
+        Ok(snapshot)
     }
 
     #[inline]
@@ -257,11 +263,36 @@ impl TableSnapshot {
     pub fn table_statistics_location(&self) -> Option<String> {
         self.table_statistics_location.clone()
     }
+
+    #[inline]
+    pub fn ensure_segments_unique(&self) -> Result<()> {
+        ensure_segments_unique(&self.segments)
+    }
+}
+
+fn ensure_segments_unique(segments: &[Location]) -> Result<()> {
+    if segments.len() < 2 {
+        return Ok(());
+    }
+
+    let mut seen = HashSet::with_capacity(segments.len());
+    for loc in segments {
+        let key = loc.0.as_str();
+        if !seen.insert(key) {
+            return Err(ErrorCode::Internal(format!(
+                "duplicate segment location {} detected while constructing snapshot",
+                key
+            )));
+        }
+    }
+    Ok(())
 }
 
 // use the chain of converters, for versions before v3
 impl From<v2::TableSnapshot> for TableSnapshot {
     fn from(s: v2::TableSnapshot) -> Self {
+        ensure_segments_unique(&s.segments)
+            .expect("duplicate segment location found while converting snapshot from v2");
         Self {
             // NOTE: it is important to let the format_version return from here
             // carries the format_version of snapshot being converted.
@@ -284,6 +315,8 @@ where T: Into<v3::TableSnapshot>
 {
     fn from(s: T) -> Self {
         let s: v3::TableSnapshot = s.into();
+        ensure_segments_unique(&s.segments)
+            .expect("duplicate segment location found while converting snapshot from v3");
         Self {
             // NOTE: it is important to let the format_version return from here
             // carries the format_version of snapshot being converted.

@@ -307,6 +307,7 @@ async fn try_rebuild_req(
             latest_snapshot.table_statistics_location(),
             table_meta_timestamps,
         )?;
+        merged_snapshot.ensure_segments_unique()?;
 
         // write snapshot
         let dal = latest_table.get_operator();
