@@ -673,40 +673,41 @@ UPDATE SET
 ----
 CommitSink
 └── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: data_main]
+    ├── target table: [catalog: default] [database: test_virtual_db] [table: data_main]
     └── MutationManipulate
-        ├── matched update: [condition: None, update set data_object = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), object_insert(target.data_object (#6), 'metadata', object_insert(object_insert(get_by_keypath(target.data_object (#6), '{"metadata"}'), 'reference_time', CAST(source.reference_time (#3) AS Variant), true), 'time_difference', if(CAST(is_not_null((TRY_CAST(get_by_keypath(target.data_object (#6), '{"metadata","timestamp"}') AS UInt8 NULL) - CAST(source.reference_time (#3) AS UInt64 NULL)) / 24 / 60 / 60 / NULL) AS Boolean NULL), CAST(assume_not_null((TRY_CAST(get_by_keypath(target.data_object (#6), '{"metadata","timestamp"}') AS UInt8 NULL) - CAST(source.reference_time (#3) AS UInt64 NULL)) / 24 / 60 / 60 / NULL) AS Float64 NULL), NULL), true), true), target.data_object (#6))]
+        ├── matched update: [condition: None, update set data_object = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), object_insert(target.data_object (#7), 'metadata', object_insert(object_insert(get_by_keypath(target.data_object (#7), '{"metadata"}'), 'reference_time', CAST(source.reference_time (#4) AS Variant), true), 'time_difference', if(CAST(is_not_null((TRY_CAST(get_by_keypath(target.data_object (#7), '{"metadata","timestamp"}') AS UInt8 NULL) - CAST(source.reference_time (#4) AS UInt64 NULL)) / 24 / 60 / 60 / NULL) AS Boolean NULL), CAST(assume_not_null((TRY_CAST(get_by_keypath(target.data_object (#7), '{"metadata","timestamp"}') AS UInt8 NULL) - CAST(source.reference_time (#4) AS UInt64 NULL)) / 24 / 60 / 60 / NULL) AS Float64 NULL), NULL), true), true), target.data_object (#7))]
         └── RowFetch
-            ├── output columns: [target.record_id (#4), target.category_id (#5), target._row_id (#7), record_id (#1), category_id (#2), reference_time (#3), target.data_object (#6)]
+            ├── output columns: [target.record_id (#5), target.category_id (#6), target._row_id (#8), data_staging.data_object['metadata']['category_id'] (#1), data_staging.data_object['unique_key'] (#3), reference_time (#4), target.data_object (#7)]
             ├── columns to fetch: [data_object]
             └── HashJoin
-                ├── output columns: [target.record_id (#4), target.category_id (#5), target._row_id (#7), record_id (#1), category_id (#2), reference_time (#3)]
+                ├── output columns: [target.record_id (#5), target.category_id (#6), target._row_id (#8), data_staging.data_object['metadata']['category_id'] (#1), data_staging.data_object['unique_key'] (#3), reference_time (#4)]
                 ├── join type: INNER
-                ├── build keys: [CAST(source.record_id (#1) AS String NULL), CAST(source.category_id (#2) AS String NULL)]
-                ├── probe keys: [target.record_id (#4), target.category_id (#5)]
+                ├── build keys: [CAST(source.record_id (#3) AS String NULL), CAST(source.category_id (#1) AS String NULL)]
+                ├── probe keys: [target.record_id (#5), target.category_id (#6)]
                 ├── keys is null equal: [false, false]
                 ├── filters: []
                 ├── build join filters:
-                │   ├── filter id:0, build key:CAST(source.record_id (#1) AS String NULL), probe key:target.record_id (#4), filter type:inlist,min_max
-                │   └── filter id:1, build key:CAST(source.category_id (#2) AS String NULL), probe key:target.category_id (#5), filter type:inlist,min_max
+                │   ├── filter id:0, build key:CAST(source.record_id (#3) AS String NULL), probe key:target.record_id (#5), filter type:inlist,min_max
+                │   └── filter id:1, build key:CAST(source.category_id (#1) AS String NULL), probe key:target.category_id (#6), filter type:inlist,min_max
                 ├── estimated rows: 1.00
                 ├── EvalScalar(Build)
-                │   ├── output columns: [record_id (#1), category_id (#2), reference_time (#3)]
-                │   ├── expressions: [get_by_keypath(data_staging.data_object (#0), '{"unique_key"}'), get_by_keypath(data_staging.data_object (#0), '{"metadata","category_id"}'), 1624900000000]
+                │   ├── output columns: [data_staging.data_object['metadata']['category_id'] (#1), data_staging.data_object['unique_key'] (#3), reference_time (#4)]
+                │   ├── expressions: [1624900000000]
                 │   ├── estimated rows: 1.00
                 │   └── TableScan
-                │       ├── table: default.default.data_staging
-                │       ├── output columns: [data_object (#0)]
+                │       ├── table: default.test_virtual_db.data_staging
+                │       ├── output columns: [data_object['metadata']['category_id'] (#1), data_object['unique_key'] (#3)]
                 │       ├── read rows: 1
                 │       ├── read size: < 1 KiB
                 │       ├── partitions total: 1
                 │       ├── partitions scanned: 1
                 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
                 │       ├── push downs: [filters: [], limit: NONE]
+                │       ├── virtual columns: [data_object['metadata']['category_id'], data_object['unique_key']]
                 │       └── estimated rows: 1.00
                 └── TableScan(Probe)
-                    ├── table: default.default.data_main
-                    ├── output columns: [record_id (#4), category_id (#5), _row_id (#7)]
+                    ├── table: default.test_virtual_db.data_main
+                    ├── output columns: [record_id (#5), category_id (#6), _row_id (#8)]
                     ├── read rows: 1
                     ├── read size: < 1 KiB
                     ├── partitions total: 1
