@@ -180,8 +180,8 @@ impl DictionaryOperator {
                 Value::Column(column) => {
                     let (_, validity) = column.validity();
                     let column = match StringType::try_downcast_column(&column.remove_nullable()) {
-                        Some(col) => col,
-                        None => {
+                        Ok(col) => col,
+                        Err(_) => {
                             return Err(ErrorCode::DictionarySourceError(format!(
                                 "Redis dictionary operator currently does not support column type {}",
                                 column.data_type(),

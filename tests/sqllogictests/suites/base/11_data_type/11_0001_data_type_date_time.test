@@ -81,9 +81,8 @@ select '2021-01-01T00:00:00+00:00'::timestamp = '2021-01-01T01:00:00+01:00'::tim
 ----
 1
 
-# FIXME: After Parser update then remove ::STRING
 query T
-select '2044-05-06 03:25:02.868894'::TIMESTAMP_TZ::STRING
+select '2044-05-06 03:25:02.868894'::TIMESTAMP_TZ
 ----
 2044-05-06 03:25:02.868894 +0000
 

@@ -60,9 +60,11 @@ where
         T::upcast_column_with_type(self.inner.clone(), &T::data_type())
     }
 
-    fn try_from_column(col: &Column) -> Option<Self> {
-        let inner = T::try_downcast_column(col)?;
-        Some(Self { inner })
+    fn from_column(col: &Column) -> Result<Self> {
+        match T::try_downcast_column(col) {
+            Ok(inner) => Ok(Self { inner }),
+            Err(err) => Err(err.add_message("Order column type mismatched.")),
+        }
     }
 
     fn slice(&self, range: Range<usize>) -> Self {
@@ -112,9 +114,11 @@ where
         T::upcast_column_with_type(self.inner.clone(), &T::data_type())
     }
 
-    fn try_from_column(col: &Column) -> Option<Self> {
-        let inner = T::try_downcast_column(col)?;
-        Some(Self { inner })
+    fn from_column(col: &Column) -> Result<Self> {
+        match T::try_downcast_column(col) {
+            Ok(inner) => Ok(Self { inner }),
+            Err(err) => Err(err.add_message("Order column type mismatched.")),
+        }
     }
 
     fn slice(&self, range: Range<usize>) -> Self {

@@ -20,10 +20,13 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::types::AccessType;
-use crate::types::BuilderMut;
-use crate::types::DataType;
-use crate::types::ValueType;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
+use super::AccessType;
+use super::BuilderMut;
+use super::DataType;
+use super::ValueType;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
@@ -107,32 +110,42 @@ impl<const N: usize> AccessType for OpaqueType<N> {
         scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        let scalar = scalar.as_opaque()?;
-        with_opaque_type!(|T| match scalar {
-            OpaqueScalarRef::T(v) => Some(reinterpret_ref(v)),
-        })
-    }
-
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        if domain.is_undefined() {
-            Some(())
-        } else {
-            None
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        let opaque = scalar
+            .as_opaque()
+            .ok_or_else(|| scalar_type_error::<Self>(scalar))?;
+        match (opaque, N) {
+            (OpaqueScalarRef::Opaque1(v), 1) => Ok(reinterpret_ref(v)),
+            (OpaqueScalarRef::Opaque2(v), 2) => Ok(reinterpret_ref(v)),
+            (OpaqueScalarRef::Opaque3(v), 3) => Ok(reinterpret_ref(v)),
+            (OpaqueScalarRef::Opaque4(v), 4) => Ok(reinterpret_ref(v)),
+            (OpaqueScalarRef::Opaque5(v), 5) => Ok(reinterpret_ref(v)),
+            (OpaqueScalarRef::Opaque6(v), 6) => Ok(reinterpret_ref(v)),
+            _ => Err(scalar_type_error::<Self>(scalar)),
         }
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        let opaque_col = col.as_opaque()?;
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        if domain.is_undefined() {
+            Ok(())
+        } else {
+            Err(domain_type_error::<Self>(domain))
+        }
+    }
+
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        let opaque_col = col
+            .as_opaque()
+            .ok_or_else(|| column_type_error::<Self>(col))?;
         unsafe {
             match (opaque_col, N) {
-                (OpaqueColumn::Opaque1(buffer), 1) => Some(std::mem::transmute(buffer.clone())),
-                (OpaqueColumn::Opaque2(buffer), 2) => Some(std::mem::transmute(buffer.clone())),
-                (OpaqueColumn::Opaque3(buffer), 3) => Some(std::mem::transmute(buffer.clone())),
-                (OpaqueColumn::Opaque4(buffer), 4) => Some(std::mem::transmute(buffer.clone())),
-                (OpaqueColumn::Opaque5(buffer), 5) => Some(std::mem::transmute(buffer.clone())),
-                (OpaqueColumn::Opaque6(buffer), 6) => Some(std::mem::transmute(buffer.clone())),
-                _ => None,
+                (OpaqueColumn::Opaque1(buffer), 1) => Ok(std::mem::transmute(buffer.clone())),
+                (OpaqueColumn::Opaque2(buffer), 2) => Ok(std::mem::transmute(buffer.clone())),
+                (OpaqueColumn::Opaque3(buffer), 3) => Ok(std::mem::transmute(buffer.clone())),
+                (OpaqueColumn::Opaque4(buffer), 4) => Ok(std::mem::transmute(buffer.clone())),
+                (OpaqueColumn::Opaque5(buffer), 5) => Ok(std::mem::transmute(buffer.clone())),
+                (OpaqueColumn::Opaque6(buffer), 6) => Ok(std::mem::transmute(buffer.clone())),
+                _ => Err(column_type_error::<Self>(col)),
             }
         }
     }
@@ -527,13 +540,13 @@ impl OpaqueColumnBuilder {
     }
 }
 
-impl<const N: usize> crate::types::ReturnType for OpaqueType<N> {
-    fn create_builder(capacity: usize, _: &crate::types::GenericMap) -> Self::ColumnBuilder {
+impl<const N: usize> super::ReturnType for OpaqueType<N> {
+    fn create_builder(capacity: usize, _: &super::GenericMap) -> Self::ColumnBuilder {
         Vec::with_capacity(capacity)
     }
 }
 
-impl<const N: usize> crate::types::ArgType for OpaqueType<N> {
+impl<const N: usize> super::ArgType for OpaqueType<N> {
     fn data_type() -> DataType {
         DataType::Opaque(N)
     }

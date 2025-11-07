@@ -15,15 +15,20 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
+use databend_common_exception::Result;
+
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use super::AccessType;
+use super::ArgType;
+use super::BuilderMut;
+use super::DataType;
+use super::GenericMap;
+use super::ReturnType;
+use super::ScalarRef;
+use super::ValueType;
 use crate::property::Domain;
-use crate::types::ArgType;
-use crate::types::BuilderMut;
-use crate::types::DataType;
-use crate::types::GenericMap;
-use crate::types::ReturnType;
-use crate::types::ScalarRef;
-use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -50,19 +55,24 @@ impl AccessType for BinaryType {
         scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        scalar.as_binary().cloned()
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        scalar
+            .as_binary()
+            .cloned()
+            .ok_or_else(|| scalar_type_error::<Self>(scalar))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        col.as_binary().cloned()
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        col.as_binary()
+            .cloned()
+            .ok_or_else(|| column_type_error::<Self>(col))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         if domain.is_undefined() {
-            Some(())
+            Ok(())
         } else {
-            None
+            Err(domain_type_error::<Self>(domain))
         }
     }
 

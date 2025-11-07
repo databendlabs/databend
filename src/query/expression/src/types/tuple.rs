@@ -17,6 +17,11 @@ use std::iter::Map;
 use std::iter::Zip;
 use std::marker::PhantomData;
 
+use databend_common_exception::Result;
+
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use super::AccessType;
 use super::AnyType;
 use crate::Column;
@@ -52,23 +57,32 @@ where A: AccessType
         A::to_scalar_ref(scalar)
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        let [a] = scalar.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        let Some(tuple) = scalar.as_tuple() else {
+            return Err(scalar_type_error::<Self>(scalar));
+        };
+        let [a] = tuple.as_slice() else {
+            return Err(scalar_type_error::<Self>(scalar));
         };
         A::try_downcast_scalar(a)
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        let [a] = domain.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        let Some(tuple) = domain.as_tuple() else {
+            return Err(domain_type_error::<Self>(domain));
+        };
+        let [a] = tuple.as_slice() else {
+            return Err(domain_type_error::<Self>(domain));
         };
         A::try_downcast_domain(a)
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        let [a] = col.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        let Some(tuple) = col.as_tuple() else {
+            return Err(column_type_error::<Self>(col));
+        };
+        let [a] = tuple.as_slice() else {
+            return Err(column_type_error::<Self>(col));
         };
         A::try_downcast_column(a)
     }
@@ -120,25 +134,34 @@ where
         (A::to_scalar_ref(a), B::to_scalar_ref(b))
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        let [a, b] = scalar.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        let Some(tuple) = scalar.as_tuple() else {
+            return Err(scalar_type_error::<Self>(scalar));
         };
-        Some((A::try_downcast_scalar(a)?, B::try_downcast_scalar(b)?))
+        let [a, b] = tuple.as_slice() else {
+            return Err(scalar_type_error::<Self>(scalar));
+        };
+        Ok((A::try_downcast_scalar(a)?, B::try_downcast_scalar(b)?))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        let [a, b] = domain.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        let Some(tuple) = domain.as_tuple() else {
+            return Err(domain_type_error::<Self>(domain));
         };
-        Some((A::try_downcast_domain(a)?, B::try_downcast_domain(b)?))
+        let [a, b] = tuple.as_slice() else {
+            return Err(domain_type_error::<Self>(domain));
+        };
+        Ok((A::try_downcast_domain(a)?, B::try_downcast_domain(b)?))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        let [a, b] = col.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        let Some(tuple) = col.as_tuple() else {
+            return Err(column_type_error::<Self>(col));
         };
-        Some((A::try_downcast_column(a)?, B::try_downcast_column(b)?))
+        let [a, b] = tuple.as_slice() else {
+            return Err(column_type_error::<Self>(col));
+        };
+        Ok((A::try_downcast_column(a)?, B::try_downcast_column(b)?))
     }
 
     fn column_len((a, _b): &Self::Column) -> usize {
@@ -207,33 +230,42 @@ where
         )
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        let [a, b, c] = scalar.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        let Some(tuple) = scalar.as_tuple() else {
+            return Err(scalar_type_error::<Self>(scalar));
         };
-        Some((
+        let [a, b, c] = tuple.as_slice() else {
+            return Err(scalar_type_error::<Self>(scalar));
+        };
+        Ok((
             A::try_downcast_scalar(a)?,
             B::try_downcast_scalar(b)?,
             C::try_downcast_scalar(c)?,
         ))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        let [a, b, c] = domain.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        let Some(tuple) = domain.as_tuple() else {
+            return Err(domain_type_error::<Self>(domain));
         };
-        Some((
+        let [a, b, c] = tuple.as_slice() else {
+            return Err(domain_type_error::<Self>(domain));
+        };
+        Ok((
             A::try_downcast_domain(a)?,
             B::try_downcast_domain(b)?,
             C::try_downcast_domain(c)?,
         ))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        let [a, b, c] = col.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        let Some(tuple) = col.as_tuple() else {
+            return Err(column_type_error::<Self>(col));
         };
-        Some((
+        let [a, b, c] = tuple.as_slice() else {
+            return Err(column_type_error::<Self>(col));
+        };
+        Ok((
             A::try_downcast_column(a)?,
             B::try_downcast_column(b)?,
             C::try_downcast_column(c)?,
@@ -327,11 +359,14 @@ where
         )
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        let [a, b, c, d] = scalar.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        let Some(tuple) = scalar.as_tuple() else {
+            return Err(scalar_type_error::<Self>(scalar));
         };
-        Some((
+        let [a, b, c, d] = tuple.as_slice() else {
+            return Err(scalar_type_error::<Self>(scalar));
+        };
+        Ok((
             A::try_downcast_scalar(a)?,
             B::try_downcast_scalar(b)?,
             C::try_downcast_scalar(c)?,
@@ -339,11 +374,14 @@ where
         ))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        let [a, b, c, d] = domain.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        let Some(tuple) = domain.as_tuple() else {
+            return Err(domain_type_error::<Self>(domain));
         };
-        Some((
+        let [a, b, c, d] = tuple.as_slice() else {
+            return Err(domain_type_error::<Self>(domain));
+        };
+        Ok((
             A::try_downcast_domain(a)?,
             B::try_downcast_domain(b)?,
             C::try_downcast_domain(c)?,
@@ -351,11 +389,14 @@ where
         ))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        let [a, b, c, d] = col.as_tuple()?.as_slice() else {
-            return None;
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        let Some(tuple) = col.as_tuple() else {
+            return Err(column_type_error::<Self>(col));
         };
-        Some((
+        let [a, b, c, d] = tuple.as_slice() else {
+            return Err(column_type_error::<Self>(col));
+        };
+        Ok((
             A::try_downcast_column(a)?,
             B::try_downcast_column(b)?,
             C::try_downcast_column(c)?,
