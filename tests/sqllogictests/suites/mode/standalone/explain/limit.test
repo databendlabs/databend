@@ -75,20 +75,20 @@ Limit
 ├── output columns: [t.number (#0)]
 ├── limit: 3
 ├── offset: 0
-├── estimated rows: 0.20
+├── estimated rows: 1.00
 └── Sort(Single)
     ├── output columns: [t.number (#0)]
     ├── sort keys: [number DESC NULLS LAST]
-    ├── estimated rows: 0.20
+    ├── estimated rows: 1.00
     └── AggregateFinal
         ├── output columns: [t.number (#0)]
         ├── group by: [number]
         ├── aggregate functions: []
-        ├── estimated rows: 0.20
+        ├── estimated rows: 1.00
         └── AggregatePartial
             ├── group by: [number]
             ├── aggregate functions: []
-            ├── estimated rows: 0.20
+            ├── estimated rows: 1.00
             ├── rank limit: 3
             └── Filter
                 ├── output columns: [t.number (#0)]
@@ -168,62 +168,62 @@ query T
 explain select * from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 1
 ----
 Limit
-├── output columns: [c (#4), count(t1.number) (#1)]
+├── output columns: [count(t1.number) (#1), c (#4)]
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 1.00
 └── Sort(Single)
-    ├── output columns: [c (#4), count(t1.number) (#1)]
+    ├── output columns: [count(t1.number) (#1), c (#4)]
     ├── sort keys: [count(t1.number) ASC NULLS LAST]
-    ├── estimated rows: 2.00
+    ├── estimated rows: 1.00
     └── HashJoin
-        ├── output columns: [c (#4), count(t1.number) (#1)]
-        ├── join type: RIGHT OUTER
-        ├── build keys: [CAST(t3.c1 (#1) AS UInt64 NULL)]
-        ├── probe keys: [t4.c (#4)]
+        ├── output columns: [count(t1.number) (#1), c (#4)]
+        ├── join type: LEFT OUTER
+        ├── build keys: [t4.c (#4)]
+        ├── probe keys: [CAST(t3.c1 (#1) AS UInt64 NULL)]
         ├── keys is null equal: [false]
         ├── filters: []
-        ├── estimated rows: 2.00
-        ├── AggregateFinal(Build)
-        │   ├── output columns: [count(t1.number) (#1), t1.number (#0)]
-        │   ├── group by: [number]
-        │   ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        ├── EvalScalar(Build)
+        │   ├── output columns: [c (#4)]
+        │   ├── expressions: [CAST(t4.c (#3) AS UInt64 NULL)]
         │   ├── estimated rows: 1.00
-        │   └── AggregatePartial
+        │   └── AggregateFinal
+        │       ├── output columns: [count(t.number) (#3), t.number (#2)]
         │       ├── group by: [number]
         │       ├── aggregate functions: [count()]
         │       ├── estimated rows: 1.00
-        │       └── TableScan
-        │           ├── table: default.system.numbers
-        │           ├── output columns: [number (#0)]
-        │           ├── read rows: 1
-        │           ├── read size: < 1 KiB
-        │           ├── partitions total: 1
-        │           ├── partitions scanned: 1
-        │           ├── push downs: [filters: [], limit: NONE]
-        │           └── estimated rows: 1.00
-        └── EvalScalar(Probe)
-            ├── output columns: [c (#4)]
-            ├── expressions: [CAST(t4.c (#3) AS UInt64 NULL)]
-            ├── estimated rows: 2.00
-            └── AggregateFinal
-                ├── output columns: [count(t.number) (#3), t.number (#2)]
+        │       └── AggregatePartial
+        │           ├── group by: [number]
+        │           ├── aggregate functions: [count()]
+        │           ├── estimated rows: 1.00
+        │           └── TableScan
+        │               ├── table: default.system.numbers
+        │               ├── output columns: [number (#2)]
+        │               ├── read rows: 2
+        │               ├── read size: < 1 KiB
+        │               ├── partitions total: 1
+        │               ├── partitions scanned: 1
+        │               ├── push downs: [filters: [], limit: NONE]
+        │               └── estimated rows: 2.00
+        └── AggregateFinal(Probe)
+            ├── output columns: [count(t1.number) (#1), t1.number (#0)]
+            ├── group by: [number]
+            ├── aggregate functions: [count()]
+            ├── estimated rows: 1.00
+            └── AggregatePartial
                 ├── group by: [number]
                 ├── aggregate functions: [count()]
-                ├── estimated rows: 2.00
-                └── AggregatePartial
-                    ├── group by: [number]
-                    ├── aggregate functions: [count()]
-                    ├── estimated rows: 2.00
-                    └── TableScan
-                        ├── table: default.system.numbers
-                        ├── output columns: [number (#2)]
-                        ├── read rows: 2
-                        ├── read size: < 1 KiB
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 2.00
+                ├── estimated rows: 1.00
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── output columns: [number (#0)]
+                    ├── read rows: 1
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 1.00
 
 query T
 explain select c1 from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 0

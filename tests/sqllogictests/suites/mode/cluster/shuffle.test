@@ -25,14 +25,14 @@ explain select * from (select t1.number, t2.number from t1 right outer join (SEL
 Sort(Final)
 ├── output columns: [t1.number (#0), t2.number (#1)]
 ├── sort keys: [number ASC NULLS LAST]
-├── estimated rows: 0.01
+├── estimated rows: 7.00
 └── Exchange
     ├── output columns: [t1.number (#0), t2.number (#1), #_order_col]
     ├── exchange type: Merge
     └── Sort(Partial)
         ├── output columns: [t1.number (#0), t2.number (#1), #_order_col]
         ├── sort keys: [number ASC NULLS LAST]
-        ├── estimated rows: 0.01
+        ├── estimated rows: 7.00
         └── HashJoin
             ├── output columns: [t1.number (#0), t2.number (#1)]
             ├── join type: RIGHT OUTER
@@ -42,11 +42,11 @@ Sort(Final)
             ├── filters: []
             ├── build join filters(distributed):
             │   └── filter id:0, build key:t2.number (#1), probe key:t1.number (#0), filter type:inlist,min_max
-            ├── estimated rows: 0.01
+            ├── estimated rows: 7.00
             ├── Filter(Build)
             │   ├── output columns: [t2.number (#1)]
             │   ├── filters: [row_number() OVER (PARTITION BY number ORDER BY number DESC) (#2) = 1]
-            │   ├── estimated rows: 0.01
+            │   ├── estimated rows: 7.00
             │   └── Window
             │       ├── output columns: [t2.number (#1), row_number() OVER (PARTITION BY number ORDER BY number DESC) (#2)]
             │       ├── aggregate function: [row_number]

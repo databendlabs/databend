@@ -81,7 +81,7 @@ explain select t.number from numbers(1) as t where exists (select t1.number from
 Filter
 ├── output columns: [t.number (#0)]
 ├── filters: [(is_true(2 (#2)) OR t.number (#0) > 1)]
-├── estimated rows: 0.20
+├── estimated rows: 0.60
 └── HashJoin
     ├── output columns: [t.number (#0), marker (#2)]
     ├── join type: RIGHT MARK
@@ -119,11 +119,11 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── estimated rows: 0.00
+├── estimated rows: 0.50
 ├── Filter(Build)
 │   ├── output columns: []
 │   ├── filters: [count(*) (#2) = 1]
-│   ├── estimated rows: 0.00
+│   ├── estimated rows: 0.50
 │   └── AggregateFinal
 │       ├── output columns: [count(*) (#2)]
 │       ├── group by: []
@@ -137,11 +137,11 @@ HashJoin
 │               ├── output columns: []
 │               ├── limit: 1
 │               ├── offset: 0
-│               ├── estimated rows: 0.00
+│               ├── estimated rows: 0.50
 │               └── Filter
 │                   ├── output columns: []
 │                   ├── filters: [numbers.number (#1) = 0]
-│                   ├── estimated rows: 0.00
+│                   ├── estimated rows: 0.50
 │                   └── TableScan
 │                       ├── table: default.system.numbers
 │                       ├── output columns: [number (#1)]
@@ -173,11 +173,11 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:scalar_subquery_1 (#1), probe key:t.number (#0), filter type:inlist,min_max
-├── estimated rows: 0.00
+├── estimated rows: 1.00
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
 │   ├── filters: [numbers.number (#1) = 0]
-│   ├── estimated rows: 0.00
+│   ├── estimated rows: 0.50
 │   └── TableScan
 │       ├── table: default.system.numbers
 │       ├── output columns: [number (#1)]
@@ -323,11 +323,11 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 0.00
+├── estimated rows: 0.25
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
 │   ├── filters: [numbers.number (#1) < 10, numbers.number (#1) = 0]
-│   ├── estimated rows: 0.00
+│   ├── estimated rows: 0.50
 │   └── TableScan
 │       ├── table: default.system.numbers
 │       ├── output columns: [number (#1)]
@@ -340,7 +340,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.number (#0)]
     ├── filters: [t.number (#0) < 10]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 0.50
     └── TableScan
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
@@ -530,7 +530,7 @@ explain select * from (select number as a from numbers(10)) as t(b) where t.b > 
 Filter
 ├── output columns: [numbers.number (#0)]
 ├── filters: [t.b (#0) > 5]
-├── estimated rows: 0.00
+├── estimated rows: 5.00
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
@@ -697,7 +697,7 @@ explain select t.number from numbers(10) as t where t.number in (select * from u
 Filter
 ├── output columns: [t.number (#0)]
 ├── filters: [(t.number (#0) = 1 OR t.number (#0) = 3)]
-├── estimated rows: 0.01
+├── estimated rows: 7.50
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]

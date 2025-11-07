@@ -98,22 +98,22 @@ EXPLAIN SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914
 RowFetch
 ├── output columns: [t._vector_score (#2), t._row_id (#3), t.id (#0)]
 ├── columns to fetch: [id]
-├── estimated rows: 0.01
+├── estimated rows: 3.00
 └── Limit
     ├── output columns: [t._vector_score (#2), t._row_id (#3)]
     ├── limit: 3
     ├── offset: 0
-    ├── estimated rows: 0.01
+    ├── estimated rows: 3.00
     └── Sort(Single)
         ├── output columns: [t._vector_score (#2), t._row_id (#3)]
         ├── sort keys: [_vector_score ASC NULLS LAST]
-        ├── estimated rows: 0.01
+        ├── estimated rows: 8.00
         └── Filter
             ├── output columns: [t._vector_score (#2), t._row_id (#3)]
             ├── filters: [t._vector_score (#2) > 0.1]
-            ├── estimated rows: 0.01
+            ├── estimated rows: 8.00
             └── TableScan
-            	├── table: default.test_vector_index_db.t
+                ├── table: default.test_vector_index_db.t
                 ├── output columns: [_vector_score (#2), _row_id (#3)]
                 ├── read rows: 12
                 ├── read size: 0
