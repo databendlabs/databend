@@ -391,6 +391,7 @@ impl DataType {
     pub fn wrapped_display(&self) -> String {
         match self {
             DataType::Nullable(inner_ty) => format!("Nullable({})", inner_ty.wrapped_display()),
+            DataType::TimestampTz => "Timestamp_Tz".to_string(),
             _ => format!("{}", self),
         }
     }
@@ -412,6 +413,7 @@ impl DataType {
             .to_string(),
             DataType::String => "VARCHAR".to_string(),
             DataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
+            DataType::TimestampTz => "TIMESTAMP_TZ".to_string(),
             _ => self.to_string().to_uppercase(),
         }
     }
