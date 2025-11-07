@@ -18,7 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline::core::Event;
 
 use super::split_partitioned_meta_into_datablocks;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;

@@ -20,7 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::ROW_ID_COL_NAME;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::filters::TransformLimit;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnEntry;

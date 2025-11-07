@@ -18,10 +18,10 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storages_basic::MemoryTable;
 
 use crate::sessions::QueryContext;
@@ -38,11 +38,15 @@ impl TransformRecursiveCteScan {
         output_port: Arc<OutputPort>,
         table_name: String,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output_port, TransformRecursiveCteScan {
-            ctx,
-            table: None,
-            table_name,
-        })
+        AsyncSourcer::create(
+            ctx.get_scan_progress(),
+            output_port,
+            TransformRecursiveCteScan {
+                ctx,
+                table: None,
+                table_name,
+            },
+        )
     }
 }
 

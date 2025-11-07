@@ -21,13 +21,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sinks::AsyncSink;
-use databend_common_pipeline_sinks::AsyncSinker;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::AsyncSink;
+use databend_common_pipeline::sinks::AsyncSinker;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 
 pub struct BroadcastSourceProcessor {
     pub receiver: Receiver<BlockMetaInfoPtr>,
@@ -39,7 +39,7 @@ impl BroadcastSourceProcessor {
         receiver: Receiver<BlockMetaInfoPtr>,
         output_port: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx, output_port, Self { receiver })
+        AsyncSourcer::create(ctx.get_scan_progress(), output_port, Self { receiver })
     }
 }
 

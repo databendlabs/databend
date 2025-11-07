@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_core::LockGuard;
+use databend_common_pipeline::core::LockGuard;
 
 use crate::locks::LockManager;
 

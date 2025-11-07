@@ -16,9 +16,9 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::create_resize_item;
-use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::basic::create_resize_item;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 
 use super::exchange_params::ExchangeParams;

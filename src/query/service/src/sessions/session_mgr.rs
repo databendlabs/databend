@@ -35,7 +35,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_metrics::session::*;
-use databend_common_pipeline_core::PlanProfile;
+use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;

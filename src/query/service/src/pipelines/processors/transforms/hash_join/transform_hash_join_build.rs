@@ -19,15 +19,15 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 
 use super::runtime_filter::build_and_push_down_runtime_filter;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
-use crate::pipelines::processors::Event;
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::Processor;
 
 /// There are three types of hash table:
 /// 1. FirstRound: it is the first time the hash table is constructed.

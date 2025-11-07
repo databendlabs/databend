@@ -15,7 +15,7 @@
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 
 use crate::processors::AccumulatingTransform;
 use crate::processors::BlockCompactMeta;

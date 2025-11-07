@@ -22,7 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::PlanProfile;
+use databend_common_pipeline::core::PlanProfile;
 use itertools::Itertools;
 
 use super::physical_plans::AddStreamColumn;

@@ -27,7 +27,7 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::ParquetFileFormatParams;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::blocks::TransformCastSchema;
 use databend_common_pipeline_transforms::columns::TransformAddConstColumns;
 use databend_common_pipeline_transforms::columns::TransformNullIf;

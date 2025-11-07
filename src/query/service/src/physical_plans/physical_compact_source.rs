@@ -27,8 +27,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_sources::EmptySource;
-use databend_common_pipeline_sources::PrefetchAsyncSourcer;
+use databend_common_pipeline::sources::EmptySource;
+use databend_common_pipeline::sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -168,7 +168,7 @@ impl IPhysicalPlan for CompactSource {
                     block_reader.clone(),
                     1,
                 );
-                PrefetchAsyncSourcer::create(builder.ctx.clone(), output, source)
+                PrefetchAsyncSourcer::create(builder.ctx.get_scan_progress(), output, source)
             },
             max_threads,
         )?;

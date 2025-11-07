@@ -23,10 +23,10 @@ use databend_common_expression::BlockRowIndex;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sinks::AsyncSink;
-use databend_common_pipeline_sinks::AsyncSinker;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::AsyncSink;
+use databend_common_pipeline::sinks::AsyncSinker;
 use opendal::Operator;
 
 use crate::io;

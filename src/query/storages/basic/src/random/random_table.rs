@@ -31,12 +31,12 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::RandomOptions;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_core::SourcePipeBuilder;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::SourcePipeBuilder;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
@@ -245,7 +245,7 @@ impl RandomSource {
         rows: usize,
         random_options: RandomOptions,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, RandomSource {
+        SyncSourcer::create(ctx.get_scan_progress(), output, RandomSource {
             schema,
             rows,
             random_options,

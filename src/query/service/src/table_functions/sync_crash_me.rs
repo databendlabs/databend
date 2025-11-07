@@ -19,6 +19,7 @@ use std::task::Context;
 use std::task::Poll;
 
 use chrono::DateTime;
+use databend_common_base::base::Progress;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -32,13 +33,13 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 use futures::Stream;
 
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::TableFunction;
@@ -125,7 +126,13 @@ impl Table for SyncCrashMeTable {
         _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
-            |output| SyncCrashMeSource::create(ctx.clone(), output, self.panic_message.clone()),
+            |output| {
+                SyncCrashMeSource::create(
+                    ctx.get_scan_progress(),
+                    output,
+                    self.panic_message.clone(),
+                )
+            },
             1,
         )?;
 
@@ -139,11 +146,11 @@ struct SyncCrashMeSource {
 
 impl SyncCrashMeSource {
     pub fn create(
-        ctx: Arc<dyn TableContext>,
+        scan: Arc<Progress>,
         output: Arc<OutputPort>,
         message: Option<String>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, SyncCrashMeSource { message })
+        SyncSourcer::create(scan, output, SyncCrashMeSource { message })
     }
 }
 
