@@ -134,6 +134,12 @@ impl Interpreter for AddTableColumnInterpreter {
         // need rebuild the table to generate stored computed column.
         if num_rows > 0 && matches!(field.computed_expr, Some(ComputedExpr::Stored(_))) {
             let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
+            if fuse_table.change_tracking_enabled() {
+                return Err(ErrorCode::AlterTableError(format!(
+                    "Cannot add stored computed column to table '{}' with change tracking enabled",
+                    table_info.desc
+                )));
+            }
             let base_snapshot = fuse_table.read_table_snapshot().await?;
             let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
             let table_meta_timestamps = self
@@ -165,6 +171,16 @@ impl Interpreter for AddTableColumnInterpreter {
             .await;
         }
 
+        let need_update = num_rows > 0 && !self.plan.is_deterministic;
+        if need_update && tbl.change_tracking_enabled() {
+            // Rebuild table while change tracking is active may break the consistency
+            // of tracked changes, leading to incorrect change records.
+            return Err(ErrorCode::AlterTableError(format!(
+                "Cannot add non-deterministic default column to table '{}' with change tracking enabled",
+                table_info.desc
+            )));
+        }
+
         let new_table_meta = table_info.meta.clone();
         commit_table_meta(
             &self.ctx,
@@ -177,7 +193,7 @@ impl Interpreter for AddTableColumnInterpreter {
 
         // If the column is not deterministic and table is non-empty,
         // update to refresh the value with default expr.
-        if num_rows > 0 && !self.plan.is_deterministic {
+        if need_update {
             self.ctx
                 .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
             let query = format!(
