@@ -514,7 +514,7 @@ impl Binder {
             })
             .collect();
         let policy = policy.policy_id;
-        let res = databend_common_base::runtime::block_on(handler.get_row_access_by_id(
+        let res = databend_common_base::runtime::block_on(handler.get_row_access_policy_by_id(
             meta_api,
             &self.ctx.get_tenant(),
             policy,

@@ -416,15 +416,15 @@ pub fn register_decimal_to_string(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(move |args, ctx| {
-                    if let Some(arg) = args[0].try_downcast::<Decimal64Type>() {
+                    if let Ok(arg) = args[0].try_downcast::<Decimal64Type>() {
                         let arg_type = DecimalDataType::Decimal64(size);
                         return decimal_to_string(arg, arg_type, ctx).upcast();
                     };
-                    if let Some(arg) = args[0].try_downcast::<Decimal128Type>() {
+                    if let Ok(arg) = args[0].try_downcast::<Decimal128Type>() {
                         let arg_type = DecimalDataType::Decimal128(size);
                         return decimal_to_string(arg, arg_type, ctx).upcast();
                     };
-                    if let Some(arg) = args[0].try_downcast::<Decimal256Type>() {
+                    if let Ok(arg) = args[0].try_downcast::<Decimal256Type>() {
                         let arg_type = DecimalDataType::Decimal256(size);
                         return decimal_to_string(arg, arg_type, ctx).upcast();
                     };

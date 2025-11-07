@@ -32,7 +32,7 @@ query
 SELECT id, score(), content FROM t WHERE match(content, 'test')
 ----
 
-query IFT
+query
 SELECT id, score(), content FROM t WHERE match(content, 'the')
 ----
 
@@ -47,7 +47,7 @@ SELECT id, score(), content FROM t WHERE match(content, 'word')
 2 1.5948367 A picture is worth a thousand words
 4 1.6550698 Actions speak louder than words
 
-query IFT
+query
 SELECT id, score(), content FROM t WHERE match(content, 'box')
 ----
 
@@ -133,17 +133,17 @@ SELECT id, score(), content FROM t WHERE match(content, '文化 博大精深') O
 15 2.063777 中国的茶文化源远流长，品茶已经成为一种生活方式。
 28 7.61753 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
-query IFT
+query
 SELECT id, score(), content FROM t WHERE match(content, '化博') ORDER BY score()
 ----
 
 
-query IFT
+query
 SELECT id, score(), content FROM t WHERE match(content, '。') ORDER BY score()
 ----
 
 
-query IFT
+query
 SELECT id, score(), content FROM t WHERE match(content, '不存在') ORDER BY score()
 ----
 
@@ -151,7 +151,7 @@ SELECT id, score(), content FROM t WHERE match(content, '不存在') ORDER BY sc
 statement error 1903
 SELECT id, score(), content FROM t WHERE match(content, '()')
 
-query IFT
+query
 SELECT id, score(), content FROM t WHERE match(content, '()', 'lenient=true')
 ----
 
@@ -198,7 +198,7 @@ SELECT id, score(), content FROM t WHERE match(content, 'the')
 6 2.033073 Beauty is in the eye of the beholder
 10 2.033073 An apple a day keeps the doctor away
 
-query IFT
+query
 SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
 
@@ -306,7 +306,7 @@ SELECT id, score(), title FROM books WHERE query('title:python OR rust') ORDER B
 6 0.96639454 Flask Web开发：基于Python的Web应用开发实战（第2版）
 13 0.8931828 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
 
-query IFT
+query
 SELECT id, score(), title FROM books WHERE query('title:python AND rust') ORDER BY score() DESC
 ----
 
@@ -486,9 +486,31 @@ CREATE INVERTED INDEX IF NOT EXISTS idx ON t2(body) tokenizer = 'chinese'
 statement ok
 INSERT INTO t2 VALUES (1, null)
 
-query IT
+query
 select * from t2 where query('body:test');
 ----
+
+statement ok
+CREATE TABLE t_native (id int, content string, INVERTED INDEX idx1 (content)) storage_format = 'native' row_per_page = 2;
+
+statement ok
+INSERT INTO t_native VALUES 
+(1, 'The quick brown fox jumps over the lazy dog'),
+(2, 'A picture is worth a thousand words'),
+(3, 'The early bird catches the worm'),
+(4, 'Actions speak louder than words'),
+(5, 'Time flies like an arrow; fruit flies like a banana'),
+(6, 'Beauty is in the eye of the beholder'),
+(7, 'When life gives you lemons, make lemonade'),
+(8, 'Put all your eggs in one basket'),
+(9, 'You can not judge a book by its cover'),
+(10, 'An apple a day keeps the doctor away')
+
+query IT
+select * from t_native where query('content:book OR content:basket');
+----
+8 Put all your eggs in one basket
+9 You can not judge a book by its cover
 
 statement ok
 use default

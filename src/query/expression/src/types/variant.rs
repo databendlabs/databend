@@ -16,6 +16,7 @@ use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+use databend_common_exception::Result;
 use databend_common_io::deserialize_bitmap;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
@@ -27,21 +28,24 @@ use jsonb::Value;
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
 use super::binary::BinaryColumnIter;
+use super::column_type_error;
 use super::date::date_to_string;
+use super::domain_type_error;
+use super::map::KvPair;
 use super::number::NumberScalar;
+use super::scalar_type_error;
 use super::timestamp::timestamp_to_string;
 use super::AccessType;
+use super::AnyType;
+use super::ArgType;
+use super::BuilderMut;
+use super::DataType;
+use super::DecimalScalar;
+use super::GenericMap;
+use super::ReturnType;
+use super::ValueType;
+use super::VectorScalarRef;
 use crate::property::Domain;
-use crate::types::map::KvPair;
-use crate::types::AnyType;
-use crate::types::ArgType;
-use crate::types::BuilderMut;
-use crate::types::DataType;
-use crate::types::DecimalScalar;
-use crate::types::GenericMap;
-use crate::types::ReturnType;
-use crate::types::ValueType;
-use crate::types::VectorScalarRef;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
@@ -70,19 +74,24 @@ impl AccessType for VariantType {
         scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        scalar.as_variant().cloned()
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        scalar
+            .as_variant()
+            .cloned()
+            .ok_or_else(|| scalar_type_error::<Self>(scalar))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        col.as_variant().cloned()
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        col.as_variant()
+            .cloned()
+            .ok_or_else(|| column_type_error::<Self>(col))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         if domain.is_undefined() {
-            Some(())
+            Ok(())
         } else {
-            None
+            Err(domain_type_error::<Self>(domain))
         }
     }
 

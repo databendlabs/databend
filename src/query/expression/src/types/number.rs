@@ -33,11 +33,11 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::decimal::DecimalSize;
+use super::ArgType;
+use super::DataType;
+use super::SimpleType;
+use super::SimpleValueType;
 use crate::property::Domain;
-use crate::types::ArgType;
-use crate::types::DataType;
-use crate::types::SimpleType;
-use crate::types::SimpleValueType;
 use crate::utils::arrow::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;

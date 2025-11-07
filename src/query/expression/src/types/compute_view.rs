@@ -17,19 +17,23 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use databend_common_exception::Result;
 use num_traits::AsPrimitive;
 
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
+use super::string::StringDomain;
+use super::string::StringIterator;
 use super::AccessType;
 use super::AnyType;
 use super::ArgType;
+use super::Number;
 use super::NumberType;
+use super::SimpleDomain;
 use super::StringColumn;
 use super::StringType;
 use crate::display::scalar_ref_to_string;
-use crate::types::string::StringDomain;
-use crate::types::string::StringIterator;
-use crate::types::Number;
-use crate::types::SimpleDomain;
 use crate::Column;
 use crate::Domain;
 use crate::ScalarRef;
@@ -80,15 +84,15 @@ where
         T::to_scalar_ref(scalar)
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        F::try_downcast_scalar(scalar).map(|v| C::compute(v))
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        F::try_downcast_scalar(scalar).map(C::compute)
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
         F::try_downcast_column(col)
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         F::try_downcast_domain(domain).map(|domain| C::compute_domain(&domain))
     }
 
@@ -195,16 +199,24 @@ impl AccessType for OwnedStringType {
         scalar.clone()
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        scalar.as_string().map(|s| s.to_string())
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        scalar
+            .as_string()
+            .map(|s| s.to_string())
+            .ok_or_else(|| scalar_type_error::<Self>(scalar))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        col.as_string().cloned()
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        col.as_string()
+            .cloned()
+            .ok_or_else(|| column_type_error::<Self>(col))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_string().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        domain
+            .as_string()
+            .cloned()
+            .ok_or_else(|| domain_type_error::<Self>(domain))
     }
 
     fn column_len(col: &Self::Column) -> usize {

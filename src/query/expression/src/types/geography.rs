@@ -29,17 +29,20 @@ use geozero::ToWkt;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::binary::BinaryColumn;
+use super::binary::BinaryColumnBuilder;
 use super::binary::BinaryColumnIter;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use super::AccessType;
+use super::ArgType;
+use super::BuilderMut;
+use super::DataType;
+use super::GenericMap;
+use super::ReturnType;
+use super::ValueType;
 use crate::property::Domain;
-use crate::types::binary::BinaryColumn;
-use crate::types::binary::BinaryColumnBuilder;
-use crate::types::ArgType;
-use crate::types::BuilderMut;
-use crate::types::DataType;
-use crate::types::GenericMap;
-use crate::types::ReturnType;
-use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
@@ -126,19 +129,24 @@ impl AccessType for GeographyType {
         scalar.as_ref()
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        scalar.as_geography().cloned()
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        scalar
+            .as_geography()
+            .cloned()
+            .ok_or_else(|| scalar_type_error::<Self>(scalar))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        col.as_geography().cloned()
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        col.as_geography()
+            .cloned()
+            .ok_or_else(|| column_type_error::<Self>(col))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         if domain.is_undefined() {
-            Some(())
+            Ok(())
         } else {
-            None
+            Err(domain_type_error::<Self>(domain))
         }
     }
 
