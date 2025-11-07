@@ -472,7 +472,6 @@ pub fn bind_values(
         bind_expression_scan(
             metadata,
             bind_context,
-            span,
             num_values,
             num_columns,
             column_scalars,
@@ -497,7 +496,6 @@ pub fn bind_values(
 pub fn bind_expression_scan(
     metadata: MetadataRef,
     bind_context: &mut BindContext,
-    span: Span,
     num_values: usize,
     num_columns: usize,
     column_scalars: Vec<Vec<(ScalarExpr, DataType)>>,
@@ -551,14 +549,7 @@ pub fn bind_expression_scan(
             Visibility::Visible,
         )
         .build();
-        let _ = metadata.add_derived_column(
-            field.name().clone(),
-            field.data_type().clone(),
-            Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span,
-                column: column_binding.clone(),
-            })),
-        );
+        let _ = metadata.add_derived_column(field.name().clone(), field.data_type().clone());
         bind_context.add_column_binding(column_binding);
         column_indexes.push(index);
     }
@@ -585,14 +576,7 @@ pub fn bind_expression_scan(
         )
         .build();
 
-        let _ = metadata.add_derived_column(
-            name,
-            data_type,
-            Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span,
-                column: new_column_binding.clone(),
-            })),
-        );
+        let _ = metadata.add_derived_column(name, data_type);
         bind_context.add_column_binding(new_column_binding);
         column_indexes.push(new_column_index);
 
@@ -690,14 +674,8 @@ pub fn bind_constant_scan(
             Visibility::Visible,
         )
         .build();
-        let _ = metadata.add_derived_column(
-            value_field.name().clone(),
-            value_field.data_type().clone(),
-            Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span,
-                column: column_binding.clone(),
-            })),
-        );
+        let _ = metadata
+            .add_derived_column(value_field.name().clone(), value_field.data_type().clone());
         bind_context.add_column_binding(column_binding);
 
         let field = DataField::new(&index.to_string(), value_field.data_type().clone());

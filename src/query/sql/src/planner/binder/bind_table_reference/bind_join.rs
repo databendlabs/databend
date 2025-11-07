@@ -259,11 +259,10 @@ impl Binder {
             }
             // If the column is not nullable, generate a new column wrap nullable.
             let target_type = column.data_type.wrap_nullable();
-            let new_index = self.metadata.write().add_derived_column(
-                column.column_name.clone(),
-                target_type.clone(),
-                None,
-            );
+            let new_index = self
+                .metadata
+                .write()
+                .add_derived_column(column.column_name.clone(), target_type.clone());
             let old_scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: None,
                 column: column.clone(),

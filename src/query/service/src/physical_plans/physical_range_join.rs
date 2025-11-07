@@ -133,7 +133,7 @@ impl IPhysicalPlan for RangeJoin {
             right: right_child,
             conditions: self.conditions.clone(),
             other_conditions: self.other_conditions.clone(),
-            join_type: self.join_type.clone(),
+            join_type: self.join_type,
             range_join_type: self.range_join_type.clone(),
             output_schema: self.output_schema.clone(),
             stat_info: self.stat_info.clone(),
@@ -264,7 +264,7 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|scalar| resolve_scalar(scalar, &merged_schema))
                 .collect::<Result<_>>()?,
-            join_type: join_type.clone(),
+            join_type,
             range_join_type,
             output_schema: Arc::new(DataSchema::new(output_schema)),
             stat_info: Some(self.build_plan_stat_info(s_expr)?),

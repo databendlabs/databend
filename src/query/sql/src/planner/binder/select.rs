@@ -479,7 +479,6 @@ impl Binder {
             let column_binding = self.create_derived_column_binding(
                 left_col.column_name.clone(),
                 coercion_types[idx].clone(),
-                None,
             );
             new_bind_context.add_column_binding(column_binding);
         }

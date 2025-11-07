@@ -367,11 +367,10 @@ impl<'a> WindowRewriter<'a> {
             });
         }
 
-        let index = self.metadata.write().add_derived_column(
-            window.display_name.clone(),
-            window.func.return_type(),
-            Some(ScalarExpr::WindowFunction(window.clone())),
-        );
+        let index = self
+            .metadata
+            .write()
+            .add_derived_column(window.display_name.clone(), window.func.return_type());
 
         // create window info
         let window_info = WindowFunctionInfo {
@@ -468,11 +467,10 @@ impl<'a> WindowRewriter<'a> {
             }
 
             let ty = arg.data_type()?;
-            let index = self.metadata.write().add_derived_column(
-                name.to_string(),
-                ty.clone(),
-                Some(arg.clone()),
-            );
+            let index = self
+                .metadata
+                .write()
+                .add_derived_column(name.to_string(), ty.clone());
 
             // Generate a ColumnBinding for each argument of aggregates
             let column = ColumnBindingBuilder::new(
