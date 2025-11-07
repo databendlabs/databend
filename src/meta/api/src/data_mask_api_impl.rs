@@ -24,6 +24,7 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
@@ -92,6 +93,17 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 };
             }
 
+            let row_access_name_ident = RowAccessPolicyNameIdent::new(
+                name_ident.tenant().clone(),
+                name_ident.data_mask_name().to_string(),
+            );
+            if self.get_pb(&row_access_name_ident).await?.is_some() {
+                return Err(AppError::DatamaskAlreadyExists(
+                    name_ident.exist_error("name conflicts with an existing row access policy"),
+                )
+                .into());
+            }
+
             // Create data mask by inserting these record:
             // name -> id
             // id -> policy
@@ -113,6 +125,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 let meta: DatamaskMeta = req.data_mask_meta.clone();
                 let id_list = MaskpolicyTableIdList::default();
                 txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
+                txn.condition
+                    .push(txn_cond_eq_seq(&row_access_name_ident, 0));
                 txn.if_then.extend(vec![
                     txn_op_put_pb(name_ident, &id, None)?,  // name -> db_id
                     txn_op_put_pb(&id_ident, &meta, None)?, // id -> meta

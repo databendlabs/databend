@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
@@ -86,6 +87,16 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
                 }
             }
 
+            let mask_name_ident = DataMaskNameIdent::new(
+                name_ident.tenant().clone(),
+                name_ident.row_access_name().to_string(),
+            );
+            if self.get_pb(&mask_name_ident).await?.is_some() {
+                return Ok(Err(
+                    name_ident.exist_error("name conflicts with an existing masking policy")
+                ));
+            }
+
             // Create row policy by inserting these record:
             // name -> id
             // id -> policy
@@ -102,6 +113,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             {
                 let meta: RowAccessPolicyMeta = req.row_access_policy_meta.clone();
                 txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
+                txn.condition.push(txn_cond_eq_seq(&mask_name_ident, 0));
                 txn.if_then.extend(vec![
                     txn_op_put_pb(name_ident, &id, None)?,  // name -> policy_id
                     txn_op_put_pb(&id_ident, &meta, None)?, // id -> meta
