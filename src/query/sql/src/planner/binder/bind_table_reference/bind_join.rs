@@ -152,7 +152,7 @@ impl Binder {
 
         let join_type = join_type(&join.op);
         let s_expr = self.bind_join_with_type(
-            join_type.clone(),
+            join_type,
             join_conditions,
             left_child,
             right_child,
@@ -161,7 +161,7 @@ impl Binder {
         )?;
 
         let mut bind_context = join_bind_context(
-            &join_type,
+            join_type,
             bind_context,
             left_context.clone(),
             right_context.clone(),
@@ -212,19 +212,15 @@ impl Binder {
 
         let join_type = join_type(&join_op);
         let s_expr = self.bind_join_with_type(
-            join_type.clone(),
+            join_type,
             join_conditions,
             left_child,
             right_child,
             vec![],
             None,
         )?;
-        let bind_context = join_bind_context(
-            &join_type,
-            bind_context,
-            left_context.clone(),
-            right_context,
-        );
+        let bind_context =
+            join_bind_context(join_type, bind_context, left_context.clone(), right_context);
         Ok((s_expr, bind_context))
     }
 
@@ -354,31 +350,31 @@ impl Binder {
     pub(crate) fn bind_join_with_type(
         &mut self,
         mut join_type: JoinType,
-        join_conditions: JoinConditions,
+        JoinConditions {
+            mut left_conditions,
+            mut right_conditions,
+            mut non_equi_conditions,
+            other_conditions,
+        }: JoinConditions,
         mut left_child: SExpr,
         mut right_child: SExpr,
         mut is_null_equal: Vec<usize>,
         build_side_cache_info: Option<HashJoinBuildCacheInfo>,
     ) -> Result<SExpr> {
-        let mut left_conditions = join_conditions.left_conditions;
-        let mut right_conditions = join_conditions.right_conditions;
-        let mut non_equi_conditions = join_conditions.non_equi_conditions;
-        let other_conditions = join_conditions.other_conditions;
-
-        if join_type == JoinType::Cross
-            && (!left_conditions.is_empty() || !right_conditions.is_empty())
-        {
-            return Err(ErrorCode::SemanticError(
-                "Join conditions should be empty in cross join",
-            ));
-        }
-        if matches!(
-            join_type,
+        match join_type {
+            JoinType::Cross if !left_conditions.is_empty() || !right_conditions.is_empty() => {
+                return Err(ErrorCode::SemanticError(
+                    "Join conditions should be empty in cross join",
+                ));
+            }
             JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
-        ) && non_equi_conditions.is_empty()
-        {
-            return Err(ErrorCode::SemanticError("Missing inequality condition!"));
+                if non_equi_conditions.is_empty() =>
+            {
+                return Err(ErrorCode::SemanticError("Missing inequality condition!"));
+            }
+            _ => (),
         }
+
         self.push_down_other_conditions(
             &join_type,
             &mut left_child,
@@ -456,11 +452,19 @@ impl Binder {
             single_to_inner: None,
             build_side_cache_info,
         };
-        Ok(SExpr::create_binary(
-            Arc::new(logical_join.into()),
-            Arc::new(left_child),
-            Arc::new(right_child),
-        ))
+
+        if matches!(
+            logical_join.join_type,
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+        ) {
+            self.rewrite_asof(logical_join, left_child, right_child)
+        } else {
+            Ok(SExpr::create_binary(
+                Arc::new(logical_join.into()),
+                Arc::new(left_child),
+                Arc::new(right_child),
+            ))
+        }
     }
 
     fn push_down_other_conditions(
@@ -1038,7 +1042,7 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
 }
 
 fn join_bind_context(
-    join_type: &JoinType,
+    join_type: JoinType,
     bind_context: BindContext,
     left_context: BindContext,
     right_context: BindContext,

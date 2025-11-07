@@ -505,8 +505,8 @@ impl PhysicalPlanBuilder {
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<(PhysicalPlan, PhysicalPlan)> {
-        let probe_side = self.build(s_expr.child(0)?, left_required).await?;
-        let build_side = self.build(s_expr.child(1)?, right_required).await?;
+        let probe_side = self.build(s_expr.left_child(), left_required).await?;
+        let build_side = self.build(s_expr.right_child(), right_required).await?;
 
         Ok((probe_side, build_side))
     }
@@ -537,7 +537,7 @@ impl PhysicalPlanBuilder {
     /// * `Result<DataSchemaRef>` - The prepared schema for the build side
     pub fn prepare_build_schema(
         &self,
-        join_type: &JoinType,
+        join_type: JoinType,
         build_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
@@ -577,7 +577,7 @@ impl PhysicalPlanBuilder {
     /// * `Result<DataSchemaRef>` - The prepared schema for the probe side
     pub fn prepare_probe_schema(
         &self,
-        join_type: &JoinType,
+        join_type: JoinType,
         probe_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
@@ -1252,8 +1252,8 @@ impl PhysicalPlanBuilder {
         self.unify_keys(&mut probe_side, &mut build_side)?;
 
         // Step 4: Prepare schemas for both sides
-        let build_schema = self.prepare_build_schema(&join.join_type, &build_side)?;
-        let probe_schema = self.prepare_probe_schema(&join.join_type, &probe_side)?;
+        let build_schema = self.prepare_build_schema(join.join_type, &build_side)?;
+        let probe_schema = self.prepare_probe_schema(join.join_type, &probe_side)?;
 
         // Step 5: Process join conditions
         let (

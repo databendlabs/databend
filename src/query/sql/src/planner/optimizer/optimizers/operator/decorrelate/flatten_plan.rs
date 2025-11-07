@@ -441,7 +441,7 @@ impl SubqueryDecorrelatorOptimizer {
                         vec![],
                     ),
                     non_equi_conditions,
-                    join_type: join.join_type.clone(),
+                    join_type: join.join_type,
                     marker_index: join.marker_index,
                     from_correlated_subquery: false,
                     need_hold_hash_table: false,

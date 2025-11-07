@@ -240,7 +240,7 @@ impl<'a> WindowRewriter<'a> {
         }
     }
 
-    fn replace_window_function(&mut self, window: &WindowFunc) -> Result<WindowFunc> {
+    pub fn replace_window_function(&mut self, window: &WindowFunc) -> Result<WindowFunc> {
         let mut replaced_partition_items: Vec<ScalarExpr> =
             Vec::with_capacity(window.partition_by.len());
         let mut replaced_order_by_items: Vec<WindowOrderBy> =

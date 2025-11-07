@@ -18,6 +18,7 @@ use databend_common_sql::binder::JoinPredicate;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::RelationalProperty;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
@@ -27,31 +28,26 @@ use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 
-pub enum PhysicalJoinType {
+enum PhysicalJoinType {
     Hash,
     // The first arg is range conditions, the second arg is other conditions
     RangeJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
-    AsofJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
 }
 
 // Choose physical join type by join conditions
-pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
-    let check_asof = matches!(
-        join.join_type,
-        JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
-    );
-
+fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     if join.equi_conditions.is_empty() && join.join_type.is_any_join() {
         return Err(ErrorCode::SemanticError(
             "ANY JOIN only supports equality-based hash joins",
         ));
     }
-    if !join.equi_conditions.is_empty() && !check_asof {
+
+    if !join.equi_conditions.is_empty() {
         // Contain equi condition, use hash join
         return Ok(PhysicalJoinType::Hash);
     }
 
-    if join.build_side_cache_info.is_some() && !check_asof {
+    if join.build_side_cache_info.is_some() {
         // There is a build side cache, use hash join.
         return Ok(PhysicalJoinType::Hash);
     }
@@ -59,9 +55,8 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     let left_rel_expr = RelExpr::with_s_expr(s_expr.child(0)?);
     let right_rel_expr = RelExpr::with_s_expr(s_expr.child(1)?);
     let right_stat_info = right_rel_expr.derive_cardinality()?;
-    if !check_asof
-        && (matches!(right_stat_info.statistics.precise_cardinality, Some(1))
-            || right_stat_info.cardinality == 1.0)
+    if matches!(right_stat_info.statistics.precise_cardinality, Some(1))
+        || right_stat_info.cardinality == 1.0
     {
         // If the output rows of build side is equal to 1, we use CROSS JOIN + FILTER instead of RANGE JOIN.
         return Ok(PhysicalJoinType::Hash);
@@ -82,12 +77,6 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     }
     if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
         return Ok(PhysicalJoinType::RangeJoin(
-            range_conditions,
-            other_conditions,
-        ));
-    }
-    if check_asof {
-        return Ok(PhysicalJoinType::AsofJoin(
             range_conditions,
             other_conditions,
         ));
@@ -175,27 +164,72 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         // Choose physical join type by join conditions
-        let physical_join = physical_join(join, s_expr)?;
-        match physical_join {
-            PhysicalJoinType::Hash => {
-                self.build_hash_join(
-                    join,
-                    s_expr,
-                    required,
-                    others_required,
-                    left_required,
-                    right_required,
-                    stat_info,
+        if matches!(
+            join.join_type,
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+        ) {
+            let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
+            let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+            let left_prop = left_rel_expr.derive_relational_prop()?;
+            let right_prop = right_rel_expr.derive_relational_prop()?;
+            let mut range_conditions = vec![];
+            let mut other_conditions = vec![];
+
+            for condition in join.equi_conditions.iter().cloned() {
+                other_conditions.push(
+                    FunctionCall {
+                        span: condition.left.span(),
+                        func_name: "eq".to_string(),
+                        params: vec![],
+                        arguments: vec![condition.left, condition.right],
+                    }
+                    .into(),
+                );
+            }
+            for condition in join.non_equi_conditions.iter() {
+                check_condition(
+                    condition,
+                    &left_prop,
+                    &right_prop,
+                    &mut range_conditions,
+                    &mut other_conditions,
                 )
-                .await
             }
-            PhysicalJoinType::AsofJoin(range, other) => {
-                self.build_asof_join(join, s_expr, (left_required, right_required), range, other)
+
+            self.build_range_join(
+                join.join_type,
+                s_expr,
+                left_required,
+                right_required,
+                range_conditions,
+                other_conditions,
+            )
+            .await
+        } else {
+            match physical_join(join, s_expr)? {
+                PhysicalJoinType::Hash => {
+                    self.build_hash_join(
+                        join,
+                        s_expr,
+                        required,
+                        others_required,
+                        left_required,
+                        right_required,
+                        stat_info,
+                    )
                     .await
-            }
-            PhysicalJoinType::RangeJoin(range, other) => {
-                self.build_range_join(join, s_expr, left_required, right_required, range, other)
+                }
+                PhysicalJoinType::RangeJoin(range, other) => {
+                    self.build_range_join(
+                        join.join_type,
+                        s_expr,
+                        left_required,
+                        right_required,
+                        range,
+                        other,
+                    )
                     .await
+                }
             }
         }
     }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod bind;
+mod bind_asof_join;
 mod bind_cte;
 mod bind_join;
 mod bind_location;
