@@ -68,6 +68,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 similar = { workspace = true }
 simsearch = { workspace = true }
+tantivy-query-grammar = { workspace = true }
 unicase = { workspace = true }
 url = { workspace = true }
 

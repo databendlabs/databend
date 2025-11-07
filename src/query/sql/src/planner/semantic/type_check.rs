@@ -134,6 +134,9 @@ use jsonb::keypath::KeyPaths;
 use serde_json::json;
 use serde_json::to_string;
 use simsearch::SimSearch;
+use tantivy_query_grammar::parse_query;
+use tantivy_query_grammar::UserInputAst;
+use tantivy_query_grammar::UserInputLeaf;
 use unicase::Ascii;
 
 use super::name_resolution::NameResolutionContext;
@@ -2657,28 +2660,65 @@ impl<'a> TypeChecker<'a> {
             .set_span(query_scalar.span()));
         };
 
-        let field_strs: Vec<&str> = query_text.split(' ').collect();
-        let mut column_refs = Vec::with_capacity(field_strs.len());
-        for field_str in field_strs {
-            if !field_str.contains(':') {
-                continue;
+        // Extract the first subfield from the query field as the field name,
+        // as queries may contain dot separators when the field is JSON type.
+        // For example: The value of the `info` field is: `{“tags”:{“id”:10,“env”:“prod”,‘name’:“test”}}`
+        // The query statement can be written as `info.tags.env:prod`, the field `info` can be extracted.
+        fn extract_first_subfield(field: &str) -> String {
+            field.split('.').next().unwrap_or(field).to_string()
+        }
+
+        fn collect_fields(ast: &UserInputAst, fields: &mut HashSet<String>) {
+            match ast {
+                UserInputAst::Clause(clauses) => {
+                    for (_, sub_ast) in clauses {
+                        collect_fields(sub_ast, fields);
+                    }
+                }
+                UserInputAst::Boost(inner_ast, _) => {
+                    collect_fields(inner_ast, fields);
+                }
+                UserInputAst::Leaf(leaf) => match &**leaf {
+                    UserInputLeaf::Literal(literal) => {
+                        if let Some(field) = &literal.field_name {
+                            fields.insert(extract_first_subfield(field));
+                        }
+                    }
+                    UserInputLeaf::Range { field, .. } => {
+                        if let Some(field) = field {
+                            fields.insert(extract_first_subfield(field));
+                        }
+                    }
+                    UserInputLeaf::Set { field, .. } => {
+                        if let Some(field) = field {
+                            fields.insert(extract_first_subfield(field));
+                        }
+                    }
+                    UserInputLeaf::Exists { field } => {
+                        fields.insert(extract_first_subfield(field));
+                    }
+                    UserInputLeaf::Regex { field, .. } => {
+                        if let Some(field) = field {
+                            fields.insert(extract_first_subfield(field));
+                        }
+                    }
+                    UserInputLeaf::All => {}
+                },
             }
-            let field_names: Vec<&str> = field_str.split(':').collect();
-            // if the field is JSON type, must specify the key path in the object
-            // for example:
-            // the field `info` has the value: `{"tags":{"id":10,"env":"prod","name":"test"}}`
-            // a query can be written like this `info.tags.env:prod`
-            let field_name = field_names[0].trim();
-            let sub_field_names: Vec<&str> = field_name.split('.').collect();
+        }
+
+        let query_ast = parse_query(query_text).unwrap();
+        let mut fields = HashSet::new();
+        collect_fields(&query_ast, &mut fields);
+
+        let mut column_refs = Vec::with_capacity(fields.len());
+        for field in fields.into_iter() {
             let column_expr = Expr::ColumnRef {
                 span: query_scalar.span(),
                 column: ColumnRef {
                     database: None,
                     table: None,
-                    column: ColumnID::Name(Identifier::from_name(
-                        query_scalar.span(),
-                        sub_field_names[0].trim(),
-                    )),
+                    column: ColumnID::Name(Identifier::from_name(query_scalar.span(), field)),
                 },
             };
             let box (field_scalar, _) = self.resolve(&column_expr)?;
