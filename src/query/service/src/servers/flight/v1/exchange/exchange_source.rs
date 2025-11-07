@@ -17,11 +17,11 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::PipeItem;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 
 use super::exchange_params::ExchangeParams;

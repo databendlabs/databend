@@ -35,11 +35,11 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storages_fuse::table_functions::string_literal;
 use databend_common_storages_fuse::table_functions::string_value;
 
@@ -155,7 +155,7 @@ impl StreamStatusDataSource {
     ) -> Result<ProcessorPtr> {
         let (cat_name, db_name, stream_name) =
             Self::extract_fully_qualified_stream_name(ctx.as_ref(), stream_name.as_str())?;
-        AsyncSourcer::create(ctx.clone(), output, StreamStatusDataSource {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, StreamStatusDataSource {
             ctx,
             finish: false,
             cat_name,

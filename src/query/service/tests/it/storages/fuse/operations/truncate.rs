@@ -186,7 +186,7 @@ async fn test_fuse_table_truncate_appending_concurrently() -> Result<()> {
 }
 
 async fn truncate_table(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<()> {
-    let mut pipeline = databend_common_pipeline_core::Pipeline::create();
+    let mut pipeline = databend_common_pipeline::core::Pipeline::create();
     table.truncate(ctx.clone(), &mut pipeline).await?;
     if !pipeline.is_empty() {
         pipeline.set_max_threads(1);

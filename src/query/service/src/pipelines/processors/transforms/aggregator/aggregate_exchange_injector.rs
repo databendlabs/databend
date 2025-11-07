@@ -22,8 +22,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_settings::FlightCompression;
 use databend_common_storage::DataOperator;
 

@@ -69,7 +69,7 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;

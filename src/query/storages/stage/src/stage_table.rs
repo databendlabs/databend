@@ -34,7 +34,7 @@ use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_orc::OrcTableForCopy;

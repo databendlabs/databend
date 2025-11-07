@@ -22,7 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_metrics::storage::*;
-use databend_common_pipeline_sources::PrefetchAsyncSource;
+use databend_common_pipeline::sources::PrefetchAsyncSource;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::UnknownMode;
 use databend_common_sql::StreamContext;

@@ -26,7 +26,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::schema::Constraint;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::columns::TransformAddConstColumns;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::ConstraintExprBinder;
@@ -157,7 +157,7 @@ impl Interpreter for InsertInterpreter {
                 build_res.main_pipeline.add_source(
                     |output| {
                         let inner = ValueSource::new(rows.clone(), self.plan.dest_schema());
-                        AsyncSourcer::create(self.ctx.clone(), output, inner)
+                        AsyncSourcer::create(self.ctx.get_scan_progress(), output, inner)
                     },
                     1,
                 )?;
@@ -176,7 +176,7 @@ impl Interpreter for InsertInterpreter {
                             self.plan.dest_schema(),
                             *start,
                         );
-                        AsyncSourcer::create(self.ctx.clone(), output, inner)
+                        AsyncSourcer::create(self.ctx.get_scan_progress(), output, inner)
                     },
                     1,
                 )?;

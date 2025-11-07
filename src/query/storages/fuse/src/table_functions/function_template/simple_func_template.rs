@@ -28,11 +28,11 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 
 use crate::sessions::TableContext;
 use crate::table_functions::TableArgs;
@@ -216,7 +216,7 @@ where T: SimpleTableFunc
         func: Arc<T>,
         plan: DataSourcePlan,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, SimpleFunctionSource {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, SimpleFunctionSource {
             func,
             ctx,
             finish: false,

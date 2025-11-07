@@ -17,10 +17,10 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_core::SourcePipeBuilder;
-use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::SourcePipeBuilder;
+use databend_common_pipeline::sources::OneBlockSource;
 
 use crate::interpreters::CreateTableInterpreter;
 use crate::pipelines::processors::transforms::HashJoinBuildState;

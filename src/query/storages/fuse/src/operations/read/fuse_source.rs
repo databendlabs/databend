@@ -25,10 +25,10 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_core::SourcePipeBuilder;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::SourcePipeBuilder;
 use log::info;
 
 use super::parquet_data_transform_reader::ReadStats;

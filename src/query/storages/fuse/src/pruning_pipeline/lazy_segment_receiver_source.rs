@@ -18,10 +18,10 @@ use async_channel::Receiver;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 
 use crate::pruning_pipeline::LazySegmentMeta;
 use crate::SegmentLocation;
@@ -36,7 +36,7 @@ impl LazySegmentReceiverSource {
         receiver: Receiver<SegmentLocation>,
         output_port: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx, output_port, Self {
+        AsyncSourcer::create(ctx.get_scan_progress(), output_port, Self {
             meta_receiver: receiver,
         })
     }

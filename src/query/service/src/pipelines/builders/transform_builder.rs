@@ -22,7 +22,9 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::blocks::TransformCastSchema;
 use databend_common_pipeline_transforms::filters::TransformFilter;
@@ -46,8 +48,6 @@ use databend_storages_common_table_meta::meta::Statistics;
 use meta::TableMetaTimestamps;
 
 use crate::pipelines::processors::transforms::TransformResortAddOn;
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

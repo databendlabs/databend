@@ -19,8 +19,8 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_sql::plans::TruncateMode;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 

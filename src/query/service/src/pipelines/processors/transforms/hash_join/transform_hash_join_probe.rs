@@ -21,6 +21,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 
@@ -29,10 +33,6 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
-use crate::pipelines::processors::Event;
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::Processor;
 
 enum FinalScanType {
     HashJoin,

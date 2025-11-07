@@ -14,9 +14,10 @@
 
 use std::any::Any;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::NameResolutionContext;
 
@@ -64,7 +65,7 @@ impl IPhysicalPlan for ReplaceAsyncSourcer {
                 match &self.source {
                     InsertValue::Values { rows } => {
                         let inner = ValueSource::new(rows.clone(), self.schema.clone());
-                        AsyncSourcer::create(builder.ctx.clone(), output, inner)
+                        AsyncSourcer::create(builder.ctx.get_scan_progress(), output, inner)
                     }
                     InsertValue::RawValues { data, start } => {
                         let inner = RawValueSource::new(
@@ -74,7 +75,7 @@ impl IPhysicalPlan for ReplaceAsyncSourcer {
                             self.schema.clone(),
                             *start,
                         );
-                        AsyncSourcer::create(builder.ctx.clone(), output, inner)
+                        AsyncSourcer::create(builder.ctx.get_scan_progress(), output, inner)
                     }
                 }
             },

@@ -44,10 +44,10 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
 use databend_common_sql::plans::WindowFuncFrameUnits;
 
 use super::frame_bound::FrameBound;
@@ -1495,11 +1495,11 @@ mod tests {
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
     use databend_common_functions::aggregates::AggregateFunctionFactory;
-    use databend_common_pipeline_core::processors::connect;
-    use databend_common_pipeline_core::processors::Event;
-    use databend_common_pipeline_core::processors::InputPort;
-    use databend_common_pipeline_core::processors::OutputPort;
-    use databend_common_pipeline_core::processors::Processor;
+    use databend_common_pipeline::core::port::connect;
+    use databend_common_pipeline::core::Event;
+    use databend_common_pipeline::core::InputPort;
+    use databend_common_pipeline::core::OutputPort;
+    use databend_common_pipeline::core::Processor;
     use databend_common_sql::plans::WindowFuncFrameUnits;
 
     use super::TransformWindow;

@@ -29,7 +29,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;

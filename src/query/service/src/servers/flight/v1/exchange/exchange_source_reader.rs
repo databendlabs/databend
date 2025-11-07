@@ -19,12 +19,12 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::EventCause;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::EventCause;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::PipeItem;
+use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::ProcessorPtr;
 use log::info;
 
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;

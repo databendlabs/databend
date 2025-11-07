@@ -47,11 +47,11 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 
 pub struct TaskDependentsTable {
     table_info: TableInfo,
@@ -171,7 +171,7 @@ impl TaskDependentsSource {
         task_name: String,
         recursive: bool,
     ) -> databend_common_exception::Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, TaskDependentsSource {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, TaskDependentsSource {
             ctx,
             task_name,
             recursive,
