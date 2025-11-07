@@ -154,8 +154,8 @@ impl Binder {
         let s_expr = self.bind_join_with_type(
             join_type,
             join_conditions,
-            left_child,
-            right_child,
+            (left_child, &mut left_context),
+            (right_child, &mut right_context),
             vec![],
             build_side_cache_info,
         )?;
@@ -178,8 +178,8 @@ impl Binder {
     pub(crate) async fn bind_merge_into_join(
         &mut self,
         bind_context: &mut BindContext,
-        left_context: BindContext,
-        right_context: BindContext,
+        mut left_context: BindContext,
+        mut right_context: BindContext,
         left_child: SExpr,
         right_child: SExpr,
         join_op: JoinOperator,
@@ -214,8 +214,8 @@ impl Binder {
         let s_expr = self.bind_join_with_type(
             join_type,
             join_conditions,
-            left_child,
-            right_child,
+            (left_child, &mut left_context),
+            (right_child, &mut right_context),
             vec![],
             None,
         )?;
@@ -355,8 +355,8 @@ impl Binder {
             mut non_equi_conditions,
             other_conditions,
         }: JoinConditions,
-        mut left_child: SExpr,
-        mut right_child: SExpr,
+        (mut left_child, _): (SExpr, &mut BindContext),
+        (mut right_child, right_context): (SExpr, &mut BindContext),
         mut is_null_equal: Vec<usize>,
         build_side_cache_info: Option<HashJoinBuildCacheInfo>,
     ) -> Result<SExpr> {
@@ -453,7 +453,7 @@ impl Binder {
         };
 
         if logical_join.join_type.is_asof_join() {
-            self.rewrite_asof(logical_join, left_child, right_child)
+            self.rewrite_asof(logical_join, left_child, (right_child, right_context))
         } else {
             Ok(SExpr::create_binary(
                 Arc::new(logical_join.into()),

@@ -64,17 +64,12 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
 
     let left_prop = left_rel_expr.derive_relational_prop()?;
     let right_prop = right_rel_expr.derive_relational_prop()?;
-    let mut range_conditions = vec![];
-    let mut other_conditions = vec![];
-    for condition in join.non_equi_conditions.iter() {
-        check_condition(
-            condition,
-            &left_prop,
-            &right_prop,
-            &mut range_conditions,
-            &mut other_conditions,
-        )
-    }
+    let (range_conditions, other_conditions) = join
+        .non_equi_conditions
+        .iter()
+        .cloned()
+        .partition::<Vec<_>, _>(|condition| is_range_condition(condition, &left_prop, &right_prop));
+
     if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
         return Ok(PhysicalJoinType::RangeJoin(
             range_conditions,
@@ -85,38 +80,28 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     Ok(PhysicalJoinType::Hash)
 }
 
-fn check_condition(
+fn is_range_condition(
     expr: &ScalarExpr,
     left_prop: &RelationalProperty,
     right_prop: &RelationalProperty,
-    range_conditions: &mut Vec<ScalarExpr>,
-    other_conditions: &mut Vec<ScalarExpr>,
-) {
-    if let ScalarExpr::FunctionCall(func) = expr {
-        if func.arguments.len() != 2
-            || !matches!(func.func_name.as_str(), "gt" | "lt" | "gte" | "lte")
-        {
-            other_conditions.push(expr.clone());
-            return;
-        }
-        let mut left = false;
-        let mut right = false;
-        for arg in func.arguments.iter() {
-            let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
-            match join_predicate {
-                JoinPredicate::Left(_) => left = true,
-                JoinPredicate::Right(_) => right = true,
-                JoinPredicate::Both { .. } | JoinPredicate::Other(_) | JoinPredicate::ALL(_) => {
-                    return;
-                }
-            }
-        }
-        if left && right {
-            range_conditions.push(expr.clone());
-            return;
-        }
+) -> bool {
+    let ScalarExpr::FunctionCall(func) = expr else {
+        return false;
+    };
+    if !matches!(func.func_name.as_str(), "gt" | "lt" | "gte" | "lte") {
+        return false;
     }
-    other_conditions.push(expr.clone());
+    let [left, right] = func.arguments.as_slice() else {
+        unreachable!()
+    };
+
+    matches!(
+        (
+            JoinPredicate::new(left, left_prop, right_prop),
+            JoinPredicate::new(right, left_prop, right_prop),
+        ),
+        (JoinPredicate::Left(_), JoinPredicate::Right(_))
+    )
 }
 
 impl PhysicalPlanBuilder {
@@ -165,33 +150,23 @@ impl PhysicalPlanBuilder {
         // 2. Build physical plan.
         // Choose physical join type by join conditions
         if join.join_type.is_asof_join() {
-            let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
-            let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
-            let left_prop = left_rel_expr.derive_relational_prop()?;
-            let right_prop = right_rel_expr.derive_relational_prop()?;
-            let mut range_conditions = vec![];
-            let mut other_conditions = vec![];
+            let left_prop = s_expr.left_child().derive_relational_prop()?;
+            let right_prop = s_expr.right_child().derive_relational_prop()?;
 
-            for condition in join.equi_conditions.iter().cloned() {
-                other_conditions.push(
+            let (range_conditions, other_conditions) = join
+                .non_equi_conditions
+                .iter()
+                .cloned()
+                .chain(join.equi_conditions.iter().cloned().map(|condition| {
                     FunctionCall {
                         span: condition.left.span(),
                         func_name: "eq".to_string(),
                         params: vec![],
                         arguments: vec![condition.left, condition.right],
                     }
-                    .into(),
-                );
-            }
-            for condition in join.non_equi_conditions.iter() {
-                check_condition(
-                    condition,
-                    &left_prop,
-                    &right_prop,
-                    &mut range_conditions,
-                    &mut other_conditions,
-                )
-            }
+                    .into()
+                }))
+                .partition(|condition| is_range_condition(condition, &left_prop, &right_prop));
 
             self.build_range_join(
                 join.join_type,
