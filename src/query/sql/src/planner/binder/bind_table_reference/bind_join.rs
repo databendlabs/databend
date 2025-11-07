@@ -452,10 +452,7 @@ impl Binder {
             build_side_cache_info,
         };
 
-        if matches!(
-            logical_join.join_type,
-            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
-        ) {
+        if logical_join.join_type.is_asof_join() {
             self.rewrite_asof(logical_join, left_child, right_child)
         } else {
             Ok(SExpr::create_binary(

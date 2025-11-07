@@ -164,10 +164,7 @@ impl PhysicalPlanBuilder {
 
         // 2. Build physical plan.
         // Choose physical join type by join conditions
-        if matches!(
-            join.join_type,
-            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
-        ) {
+        if join.join_type.is_asof_join() {
             let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
             let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
             let left_prop = left_rel_expr.derive_relational_prop()?;

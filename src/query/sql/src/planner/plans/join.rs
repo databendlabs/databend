@@ -118,6 +118,13 @@ impl JoinType {
             JoinType::InnerAny | JoinType::LeftAny | JoinType::RightAny
         )
     }
+
+    pub fn is_asof_join(&self) -> bool {
+        matches!(
+            self,
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+        )
+    }
 }
 
 impl Display for JoinType {
