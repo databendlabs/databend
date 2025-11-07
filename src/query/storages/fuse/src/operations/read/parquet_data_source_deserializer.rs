@@ -42,7 +42,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::IndexType;
 use roaring::RoaringTreemap;
 use xorf::BinaryFuse16;
 
