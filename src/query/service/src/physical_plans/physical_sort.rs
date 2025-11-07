@@ -378,13 +378,11 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         sort: &databend_common_sql::plans::Sort,
-        mut required: ColumnSet,
+        required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        sort.items.iter().for_each(|s| {
-            required.insert(s.index);
-        });
+        let child_required = self.derive_single_child_required_columns(s_expr, &required)?;
 
         // If the query will be optimized by lazy reading, we don't need to do pre-projection.
         let pre_projection: Option<Vec<usize>> = if self.metadata.read().lazy_columns().is_empty() {
@@ -418,7 +416,9 @@ impl PhysicalPlanBuilder {
                 None => SortStep::Single,
             };
 
-            let input_plan = self.build(s_expr.unary_child(), required).await?;
+            let input_plan = self
+                .build(s_expr.unary_child(), child_required.clone())
+                .await?;
 
             return Ok(PhysicalPlan::new(WindowPartition {
                 meta: PhysicalPlanMeta::new("WindowPartition"),
@@ -444,7 +444,7 @@ impl PhysicalPlanBuilder {
         let enable_fixed_rows = settings.get_enable_fixed_rows_sort()?;
 
         let Some(after_exchange) = sort.after_exchange else {
-            let input_plan = self.build(s_expr.unary_child(), required).await?;
+            let input_plan = self.build(s_expr.unary_child(), child_required).await?;
             return Ok(PhysicalPlan::new(Sort {
                 input: input_plan,
                 order_by,
@@ -459,7 +459,7 @@ impl PhysicalPlanBuilder {
         };
 
         if !settings.get_enable_shuffle_sort()? || settings.get_max_threads()? == 1 {
-            let input_plan = self.build(s_expr.unary_child(), required).await?;
+            let input_plan = self.build(s_expr.unary_child(), child_required).await?;
             return if !after_exchange {
                 Ok(PhysicalPlan::new(Sort {
                     input: input_plan,
@@ -488,7 +488,7 @@ impl PhysicalPlanBuilder {
         }
 
         if after_exchange {
-            let input_plan = self.build(s_expr.unary_child(), required).await?;
+            let input_plan = self.build(s_expr.unary_child(), child_required).await?;
             return Ok(PhysicalPlan::new(Sort {
                 input: input_plan,
                 order_by,
@@ -502,7 +502,7 @@ impl PhysicalPlanBuilder {
             }));
         }
 
-        let input_plan = self.build(s_expr.unary_child(), required).await?;
+        let input_plan = self.build(s_expr.unary_child(), child_required).await?;
         let sample = PhysicalPlan::new(Sort {
             input: input_plan,
             order_by: order_by.clone(),

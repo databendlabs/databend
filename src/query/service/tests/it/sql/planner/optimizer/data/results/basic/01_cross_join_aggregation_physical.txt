@@ -1,44 +1,44 @@
-AggregateFinal
-├── output columns: [SUM(i1.i) (#2), MIN(i1.i) (#3), MAX(i2.i) (#4)]
-├── group by: []
-├── aggregate functions: [sum(i), min(i), max(i)]
-├── estimated rows: 1.00
-└── Exchange
+Sequence
+├── MaterializedCTE: cte_cse_0
+│   └── TableScan
+│       ├── table: default.default.integers
+│       ├── output columns: [i (#0)]
+│       ├── read rows: 5000
+│       ├── read size: 20.15 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 5000.00
+└── AggregateFinal
     ├── output columns: [SUM(i1.i) (#2), MIN(i1.i) (#3), MAX(i2.i) (#4)]
-    ├── exchange type: Merge
-    └── AggregatePartial
-        ├── group by: []
-        ├── aggregate functions: [sum(i), min(i), max(i)]
-        ├── estimated rows: 1.00
-        └── HashJoin
-            ├── output columns: [i1.i (#0), i2.i (#1)]
-            ├── join type: CROSS
-            ├── build keys: []
-            ├── probe keys: []
-            ├── keys is null equal: []
-            ├── filters: []
-            ├── estimated rows: 25000000.00
-            ├── Exchange(Build)
-            │   ├── output columns: [i2.i (#1)]
-            │   ├── exchange type: Broadcast
-            │   └── TableScan
-            │       ├── table: default.default.integers
-            │       ├── output columns: [i (#1)]
-            │       ├── read rows: 5000
-            │       ├── read size: 20.15 KiB
-            │       ├── partitions total: 1
-            │       ├── partitions scanned: 1
-            │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            │       ├── push downs: [filters: [], limit: NONE]
-            │       └── estimated rows: 5000.00
-            └── TableScan(Probe)
-                ├── table: default.default.integers
-                ├── output columns: [i (#0)]
-                ├── read rows: 5000
-                ├── read size: 20.15 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 5000.00
+    ├── group by: []
+    ├── aggregate functions: [sum(i), min(i), max(i)]
+    ├── estimated rows: 1.00
+    └── Exchange
+        ├── output columns: [SUM(i1.i) (#2), MIN(i1.i) (#3), MAX(i2.i) (#4)]
+        ├── exchange type: Merge
+        └── AggregatePartial
+            ├── group by: []
+            ├── aggregate functions: [sum(i), min(i), max(i)]
+            ├── estimated rows: 1.00
+            └── HashJoin
+                ├── output columns: [i1.i (#0), i2.i (#1)]
+                ├── join type: CROSS
+                ├── build keys: []
+                ├── probe keys: []
+                ├── keys is null equal: []
+                ├── filters: []
+                ├── estimated rows: 25000000.00
+                ├── Exchange(Build)
+                │   ├── output columns: [i2.i (#1)]
+                │   ├── exchange type: Broadcast
+                │   └── MaterializeCTERef
+                │       ├── cte_name: cte_cse_0
+                │       ├── cte_schema: [i (#1)]
+                │       └── estimated rows: 5000.00
+                └── MaterializeCTERef(Probe)
+                    ├── cte_name: cte_cse_0
+                    ├── cte_schema: [i (#0)]
+                    └── estimated rows: 5000.00
 

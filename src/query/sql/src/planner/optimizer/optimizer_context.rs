@@ -36,6 +36,7 @@ pub struct OptimizerContext {
     enable_distributed_optimization: RwLock<bool>,
     enable_join_reorder: RwLock<bool>,
     enable_dphyp: RwLock<bool>,
+    enable_experimental_common_subexpression_elimination: RwLock<bool>,
     max_push_down_limit: RwLock<usize>,
     planning_agg_index: RwLock<bool>,
     #[educe(Debug(ignore))]
@@ -59,6 +60,7 @@ impl OptimizerContext {
             enable_distributed_optimization: RwLock::new(false),
             enable_join_reorder: RwLock::new(true),
             enable_dphyp: RwLock::new(true),
+            enable_experimental_common_subexpression_elimination: RwLock::new(true),
             max_push_down_limit: RwLock::new(10000),
             sample_executor: RwLock::new(None),
             planning_agg_index: RwLock::new(false),
@@ -70,6 +72,9 @@ impl OptimizerContext {
     pub fn with_settings(self: Arc<Self>, settings: &Settings) -> Result<Arc<Self>> {
         self.set_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? });
         *self.enable_dphyp.write() = settings.get_enable_dphyp()?;
+        *self
+            .enable_experimental_common_subexpression_elimination
+            .write() = settings.get_enable_experimental_common_subexpression_elimination()?;
         *self.max_push_down_limit.write() = settings.get_max_push_down_limit()?;
         *self.enable_trace.write() = settings.get_enable_optimizer_trace()?;
 
@@ -104,6 +109,12 @@ impl OptimizerContext {
 
     pub fn get_enable_dphyp(&self) -> bool {
         *self.enable_dphyp.read()
+    }
+
+    pub fn get_enable_experimental_common_subexpression_elimination(&self) -> bool {
+        *self
+            .enable_experimental_common_subexpression_elimination
+            .read()
     }
 
     pub fn set_sample_executor(
