@@ -37,6 +37,7 @@ use crate::plans::Sort;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
+use crate::plans::WindowFuncType;
 
 impl<I: IdHumanizer> OperatorHumanizer<I> for DefaultOperatorHumanizer {
     fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> FormatTreeNode {
@@ -146,6 +147,61 @@ fn format_scalar_item<I: IdHumanizer>(id_humanizer: &I, item: &ScalarItem) -> St
         format_scalar(id_humanizer, &item.scalar),
         item.index
     )
+}
+
+fn format_window_function_type<I: IdHumanizer>(
+    id_humanizer: &I,
+    func_type: &WindowFuncType,
+) -> String {
+    match func_type {
+        WindowFuncType::Aggregate(agg) => {
+            let params = agg
+                .params
+                .iter()
+                .map(|arg| arg.to_string())
+                .collect::<Vec<String>>()
+                .join(", ");
+            let args = agg
+                .args
+                .iter()
+                .map(|item| format_scalar(id_humanizer, item))
+                .collect::<Vec<String>>()
+                .join(", ");
+            format!("{}(param: {}, args: {})", agg.func_name, params, args)
+        }
+        WindowFuncType::RowNumber => "row_number".to_string(),
+        WindowFuncType::Rank => "rank".to_string(),
+        WindowFuncType::DenseRank => "dense_rank".to_string(),
+        WindowFuncType::PercentRank => "percent_rank".to_string(),
+        WindowFuncType::LagLead(ll) => {
+            let func_name = if ll.is_lag {
+                "lag".to_string()
+            } else {
+                "lead".to_string()
+            };
+            let arg = format_scalar(id_humanizer, ll.arg.as_ref());
+            let default = ll.default.as_ref().map_or("NULL".to_string(), |item| {
+                format_scalar(id_humanizer, item.as_ref())
+            });
+            format!(
+                "{}(args: {}, offset: {}, default: {})",
+                func_name, arg, ll.offset, default
+            )
+        }
+        WindowFuncType::NthValue(nth) => {
+            let func_name = nth.n.map_or("last_value".to_string(), |n| {
+                if n == 1 {
+                    "first_value".to_string()
+                } else {
+                    format!("{}th_value", n)
+                }
+            });
+            let arg = format_scalar(id_humanizer, nth.arg.as_ref());
+            format!("{}({})", func_name, arg)
+        }
+        WindowFuncType::Ntile(ntile) => format!("{} tiles", ntile.n),
+        WindowFuncType::CumeDist => "cume_dist".to_string(),
+    }
 }
 
 fn scan_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Scan) -> FormatTreeNode {
@@ -368,7 +424,10 @@ fn sort_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Sort) -> FormatTre
                 "window top: {}",
                 window.top.map_or("NONE".to_string(), |n| n.to_string())
             )),
-            FormatTreeNode::new(format!("window function: {:?}", window.func)),
+            FormatTreeNode::new(format!(
+                "window function: {}",
+                format_window_function_type(id_humanizer, &window.func)
+            )),
         ],
         None => vec![
             FormatTreeNode::new(format!("sort keys: [{}]", scalars)),

@@ -270,7 +270,7 @@ pub fn format_partial_tree(
             let filter = plan
                 .predicates
                 .iter()
-                .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
                 .join(", ");
             let mut children = vec![FormatTreeNode::new(format!("filters: [{filter}]"))];
             if let Some(info) = &plan.stat_info {
@@ -346,7 +346,10 @@ pub fn format_partial_tree(
             let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
             let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
             if let Some(filters) = &plan.filters {
-                let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display();
+                let filter = filters
+                    .filter
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .typed_sql_display();
                 children.push(FormatTreeNode::new(format!("filters: [{filter}]")));
             }
             append_output_rows_info(&mut children, profs, plan.plan_id);
@@ -487,7 +490,7 @@ fn to_format_tree(
                     children.push(FormatTreeNode::new(format!(
                         "branch {}: {}",
                         i,
-                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                        predicate.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display()
                     )));
                 } else {
                     children.push(FormatTreeNode::new(format!("branch {}: None", i)));
@@ -513,7 +516,7 @@ fn to_format_tree(
                         eval_scalar
                             .remote_exprs
                             .iter()
-                            .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                            .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
                             .join(", ")
                     )));
                 } else {
@@ -656,7 +659,12 @@ fn format_mutation_source(
     let filters = plan
         .filters
         .as_ref()
-        .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .map(|filters| {
+            filters
+                .filter
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .typed_sql_display()
+        })
         .unwrap_or_default();
     let mut children = vec![
         FormatTreeNode::new(format!("table: {table_name}")),
@@ -732,7 +740,7 @@ fn format_merge_into(
                 |predicate| {
                     format!(
                         "condition: {}",
-                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                        predicate.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display()
                     )
                 },
             );
@@ -750,7 +758,7 @@ fn format_merge_into(
                         format!(
                             "{} = {}",
                             target_schema.field(*field_idx).name(),
-                            expr.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                            expr.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display()
                         )
                     })
                     .join(",");
@@ -769,7 +777,7 @@ fn format_merge_into(
                 |predicate| {
                     format!(
                         "condition: {}",
-                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                        predicate.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display()
                     )
                 },
             );
@@ -782,7 +790,7 @@ fn format_merge_into(
             let values_format = evaluator
                 .2
                 .iter()
-                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
                 .join(",");
             let unmatched_format = format!(
                 "insert into ({}) values({})",
@@ -882,10 +890,12 @@ fn table_scan_to_format_tree(
         .push_downs
         .as_ref()
         .and_then(|extras| {
-            extras
-                .filters
-                .as_ref()
-                .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            extras.filters.as_ref().map(|filters| {
+                filters
+                    .filter
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .typed_sql_display()
+            })
         })
         .unwrap_or_default();
 
@@ -962,12 +972,12 @@ fn table_scan_to_format_tree(
         let agg_sel = agg_index
             .selection
             .iter()
-            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
             .join(", ");
         let agg_filter = agg_index
             .filter
             .as_ref()
-            .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).sql_display());
+            .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display());
         let text = if let Some(f) = agg_filter {
             format!("rewritten query: [selection: [{agg_sel}], filter: {f}]")
         } else {
@@ -1026,7 +1036,7 @@ fn expression_scan_to_format_tree(
     for (i, value) in plan.values.iter().enumerate() {
         let column = value
             .iter()
-            .map(|val| val.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .map(|val| val.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
             .join(", ");
         children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
     }
@@ -1076,7 +1086,7 @@ fn filter_to_format_tree(
     let filter = plan
         .predicates
         .iter()
-        .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
         .join(", ");
     let mut children = vec![
         FormatTreeNode::new(format!(
@@ -1113,7 +1123,7 @@ fn eval_scalar_to_format_tree(
     let scalars = plan
         .exprs
         .iter()
-        .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
         .collect::<Vec<_>>()
         .join(", ");
     let mut children = vec![
@@ -1548,11 +1558,11 @@ fn range_join_to_format_tree(
             let left = condition
                 .left_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
-                .sql_display();
+                .typed_sql_display();
             let right = condition
                 .right_expr
                 .as_expr(&BUILTIN_FUNCTIONS)
-                .sql_display();
+                .typed_sql_display();
             format!("{left} {:?} {right}", condition.operator)
         })
         .collect::<Vec<_>>()
@@ -1560,7 +1570,7 @@ fn range_join_to_format_tree(
     let other_conditions = plan
         .other_conditions
         .iter()
-        .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -1615,20 +1625,20 @@ fn hash_join_to_format_tree(
     let build_keys = plan
         .build_keys
         .iter()
-        .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
         .collect::<Vec<_>>()
         .join(", ");
     let probe_keys = plan
         .probe_keys
         .iter()
-        .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
         .collect::<Vec<_>>()
         .join(", ");
     let is_null_equal = plan.is_null_equal.iter().map(|b| format!("{b}")).join(", ");
     let filters = plan
         .non_equi_conditions
         .iter()
-        .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -1643,8 +1653,8 @@ fn hash_join_to_format_tree(
         let mut s = format!(
             "filter id:{}, build key:{}, probe key:{}, filter type:",
             rf.id,
-            rf.build_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
-            rf.probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+            rf.build_key.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display(),
+            rf.probe_key.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display(),
         );
         if rf.enable_bloom_runtime_filter {
             s += "bloom,";
@@ -1728,7 +1738,7 @@ fn exchange_to_format_tree(
                 "Hash({})",
                 plan.keys
                     .iter()
-                    .map(|key| { key.as_expr(&BUILTIN_FUNCTIONS).sql_display() })
+                    .map(|key| { key.as_expr(&BUILTIN_FUNCTIONS).typed_sql_display() })
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -1958,7 +1968,7 @@ fn project_set_to_format_tree(
         "set returning functions: {}",
         plan.srf_exprs
             .iter()
-            .map(|(expr, _)| expr.clone().as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .map(|(expr, _)| expr.clone().as_expr(&BUILTIN_FUNCTIONS).typed_sql_display())
             .collect::<Vec<_>>()
             .join(", ")
     ))]);
