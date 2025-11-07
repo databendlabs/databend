@@ -29,6 +29,7 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
+use log::info;
 use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;
 
@@ -293,7 +294,10 @@ impl NewAggregateSpiller {
 
         let (payloads, write_stats) = self.payload_writers.finalize()?;
         self.flush_write_profile(write_stats);
-
+        info!(
+            "[NewAggregateSpiller] spill finish with {} payloads",
+            payloads.len()
+        );
         Ok(payloads)
     }
 

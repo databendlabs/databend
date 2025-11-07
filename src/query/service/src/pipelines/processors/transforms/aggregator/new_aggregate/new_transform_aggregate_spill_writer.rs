@@ -18,9 +18,9 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
 
@@ -63,7 +63,7 @@ impl AccumulatingTransform for NewTransformAggregateSpillWriter {
                 if let AggregateMeta::AggregateSpilling(partition) = aggregate_meta {
                     //  we use fixed size partitioning, the different bucket number will caused spilled data can't be merged correctly
                     debug_assert_eq!(
-                        partition.payloads.len(),
+                        partition.payloads.len() as u64,
                         MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM,
                         "the number of payloads should be equal to MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM for spilling partition"
                     );
@@ -90,7 +90,7 @@ impl AccumulatingTransform for NewTransformAggregateSpillWriter {
         let mut spilled_blocks = Vec::with_capacity(spilled_payloads.len());
         for payload in spilled_payloads {
             spilled_blocks.push(DataBlock::empty_with_meta(
-                AggregateMeta::create_new_spilled(payload),
+                AggregateMeta::create_new_bucket_spilled(payload),
             ));
         }
 

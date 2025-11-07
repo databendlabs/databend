@@ -190,9 +190,10 @@ impl IPhysicalPlan for AggregatePartial {
             &self.agg_funcs,
             enable_experimental_aggregate_hashtable,
             builder.is_exchange_parent(),
-            max_block_rows,
             max_spill_io_requests as usize,
             enable_experiment_aggregate,
+            max_block_rows,
+            max_block_bytes,
         )?;
 
         if params.group_columns.is_empty() {

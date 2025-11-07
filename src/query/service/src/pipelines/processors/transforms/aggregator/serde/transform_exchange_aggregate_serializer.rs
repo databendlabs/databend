@@ -25,20 +25,23 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::ReturnType;
+use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::PartitionedPayload;
+use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
-use databend_common_pipeline_transforms::processors::BlockMetaTransform;
-use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::AccumulatingTransform;
+use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_settings::FlightCompression;
+use databend_common_storages_parquet::serialize_row_group_meta_to_bytes;
 use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
@@ -48,11 +51,13 @@ use crate::pipelines::processors::transforms::aggregator::agg_spilling_aggregate
 use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::compute_block_number;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
+use crate::pipelines::processors::transforms::aggregator::new_aggregate::NewAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FlightSerialized;
 use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
 use crate::pipelines::processors::transforms::aggregator::SerializeAggregateStream;
+use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::sessions::QueryContext;
@@ -60,13 +65,18 @@ use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
 
+enum SpillerVer {
+    Old(Arc<Spiller>),
+    New(Vec<NewAggregateSpiller>),
+}
+
 pub struct TransformExchangeAggregateSerializer {
     ctx: Arc<QueryContext>,
     local_pos: usize,
     options: IpcWriteOptions,
 
     params: Arc<AggregatorParams>,
-    spiller: Arc<Spiller>,
+    spiller: SpillerVer,
 }
 
 impl TransformExchangeAggregateSerializer {
@@ -80,8 +90,8 @@ impl TransformExchangeAggregateSerializer {
         location_prefix: String,
         params: Arc<AggregatorParams>,
         compression: Option<FlightCompression>,
-        _schema: DataSchemaRef,
         local_pos: usize,
+        partition_streams: Vec<SharedPartitionStream>,
     ) -> Result<Box<dyn Processor>> {
         let compression = match compression {
             None => None,
@@ -90,91 +100,210 @@ impl TransformExchangeAggregateSerializer {
                 FlightCompression::Zstd => Some(CompressionType::ZSTD),
             },
         };
-        let config = SpillerConfig {
-            spiller_type: SpillerType::Aggregation,
-            location_prefix,
-            disk_spill: None,
-            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+
+        let spiller = if params.enable_experiment_aggregate {
+            let spillers = partition_streams
+                .into_iter()
+                .map(|stream| {
+                    NewAggregateSpiller::try_create(
+                        ctx.clone(),
+                        MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
+                        stream.clone(),
+                    )
+                })
+                .collect::<Result<Vec<NewAggregateSpiller>>>()?;
+            SpillerVer::New(spillers)
+        } else {
+            let config = SpillerConfig {
+                spiller_type: SpillerType::Aggregation,
+                location_prefix,
+                disk_spill: None,
+                use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+            };
+
+            let spiller = Spiller::create(ctx.clone(), operator, config.clone())?;
+            SpillerVer::Old(Arc::new(spiller))
         };
 
-        let spiller = Spiller::create(ctx.clone(), operator, config.clone())?;
-        Ok(BlockMetaTransformer::create(
+        Ok(AccumulatingTransformer::create(
             input,
             output,
             TransformExchangeAggregateSerializer {
                 ctx,
                 params,
                 local_pos,
-                spiller: spiller.into(),
+                spiller,
                 options: IpcWriteOptions::default()
                     .try_with_compression(compression)
                     .unwrap(),
             },
         ))
     }
+    fn finish_local_new_spiller(spiller: &mut NewAggregateSpiller) -> Result<FlightSerialized> {
+        let spilled_payloads = spiller.spill_finish()?;
+        let block = if spilled_payloads.is_empty() {
+            DataBlock::empty()
+        } else {
+            DataBlock::empty_with_meta(AggregateMeta::create_new_spilled(spilled_payloads))
+        };
+        Ok(FlightSerialized::DataBlock(block))
+    }
+
+    fn finish_exchange_new_spiller(
+        spiller: &mut NewAggregateSpiller,
+        write_options: &IpcWriteOptions,
+    ) -> Result<FlightSerialized> {
+        let spilled_payloads = spiller.spill_finish()?;
+        if spilled_payloads.is_empty() {
+            return Ok(FlightSerialized::DataBlock(serialize_block(
+                -1,
+                DataBlock::empty(),
+                write_options,
+            )?));
+        }
+
+        let mut bucket_column = Vec::with_capacity(spilled_payloads.len());
+        let mut row_group_column = Vec::with_capacity(spilled_payloads.len());
+        let mut location_column = Vec::with_capacity(spilled_payloads.len());
+        for payload in spilled_payloads {
+            bucket_column.push(payload.bucket as i64);
+            location_column.push(payload.location);
+            row_group_column.push(serialize_row_group_meta_to_bytes(&payload.row_group)?);
+        }
+
+        let data_block = DataBlock::new_from_columns(vec![
+            Int64Type::from_data(bucket_column),
+            StringType::from_data(location_column),
+            BinaryType::from_data(row_group_column),
+        ]);
+        let meta = AggregateSerdeMeta::create_new_spilled();
+        let data_block = data_block.add_meta(Some(meta))?;
+        Ok(FlightSerialized::DataBlock(serialize_block(
+            -1,
+            data_block,
+            write_options,
+        )?))
+    }
 }
 
-impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSerializer {
+impl AccumulatingTransform for TransformExchangeAggregateSerializer {
     const NAME: &'static str = "TransformExchangeAggregateSerializer";
 
-    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<Vec<DataBlock>> {
-        let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());
-        for (index, mut block) in meta.blocks.into_iter().enumerate() {
-            if block.is_empty() && block.get_meta().is_none() {
-                serialized_blocks.push(FlightSerialized::DataBlock(block));
-                continue;
-            }
-
-            match block.take_meta().and_then(AggregateMeta::downcast_from) {
-                Some(AggregateMeta::AggregateSpilling(payload)) => {
-                    serialized_blocks.push(FlightSerialized::Future(
-                        match index == self.local_pos {
-                            true => local_agg_spilling_aggregate_payload(
-                                self.ctx.clone(),
-                                self.spiller.clone(),
-                                payload,
-                            )?,
-                            false => exchange_agg_spilling_aggregate_payload(
-                                self.ctx.clone(),
-                                self.spiller.clone(),
-                                payload,
-                            )?,
-                        },
-                    ));
-                }
-
-                Some(AggregateMeta::AggregatePayload(p)) => {
-                    let (bucket, max_partition_count) = (p.bucket, p.max_partition_count);
-
-                    if index == self.local_pos {
-                        serialized_blocks.push(FlightSerialized::DataBlock(
-                            block.add_meta(Some(Box::new(AggregateMeta::AggregatePayload(p))))?,
-                        ));
+    fn transform(&mut self, mut data: DataBlock) -> Result<Vec<DataBlock>> {
+        if let Some(block_meta) = data.take_meta() {
+            if ExchangeShuffleMeta::downcast_ref_from(&block_meta).is_some() {
+                let meta = ExchangeShuffleMeta::downcast_from(block_meta).unwrap();
+                let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());
+                for (index, mut block) in meta.blocks.into_iter().enumerate() {
+                    if block.is_empty() && block.get_meta().is_none() {
+                        serialized_blocks.push(FlightSerialized::DataBlock(block));
                         continue;
                     }
 
-                    let block_number = compute_block_number(bucket, max_partition_count)?;
-                    let stream = SerializeAggregateStream::create(
-                        &self.params,
-                        SerializePayload::AggregatePayload(p),
-                    );
-                    let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
-                    debug_assert!(!stream_blocks.is_empty());
-                    let mut c = DataBlock::concat(&stream_blocks)?;
-                    if let Some(meta) = stream_blocks[0].take_meta() {
-                        c.replace_meta(meta);
+                    match block.take_meta().and_then(AggregateMeta::downcast_from) {
+                        Some(AggregateMeta::AggregateSpilling(partitioned_payload)) => {
+                            match &mut self.spiller {
+                                SpillerVer::Old(spiller) => {
+                                    serialized_blocks.push(FlightSerialized::Future(
+                                        match index == self.local_pos {
+                                            true => local_agg_spilling_aggregate_payload(
+                                                self.ctx.clone(),
+                                                spiller.clone(),
+                                                partitioned_payload,
+                                            )?,
+                                            false => exchange_agg_spilling_aggregate_payload(
+                                                self.ctx.clone(),
+                                                spiller.clone(),
+                                                partitioned_payload,
+                                            )?,
+                                        },
+                                    ));
+                                }
+                                SpillerVer::New(spillers) => {
+                                    for (bucket, payload) in
+                                        partitioned_payload.payloads.into_iter().enumerate()
+                                    {
+                                        if payload.len() == 0 {
+                                            continue;
+                                        }
+
+                                        let data_block = payload
+                                            .aggregate_flush_all()?
+                                            .consume_convert_to_full();
+                                        spillers[index].spill(bucket, data_block)?;
+                                    }
+                                    let block = if index == self.local_pos {
+                                        DataBlock::empty()
+                                    } else {
+                                        serialize_block(-1, DataBlock::empty(), &self.options)?
+                                    };
+                                    serialized_blocks.push(FlightSerialized::DataBlock(block));
+                                }
+                            }
+                        }
+
+                        Some(AggregateMeta::AggregatePayload(p)) => {
+                            let (bucket, max_partition_count) = (p.bucket, p.max_partition_count);
+
+                            if index == self.local_pos {
+                                serialized_blocks.push(FlightSerialized::DataBlock(
+                                    block.add_meta(Some(Box::new(
+                                        AggregateMeta::AggregatePayload(p),
+                                    )))?,
+                                ));
+                                continue;
+                            }
+
+                            let block_number = compute_block_number(bucket, max_partition_count)?;
+                            let stream = SerializeAggregateStream::create(
+                                &self.params,
+                                SerializePayload::AggregatePayload(p),
+                            );
+                            let mut stream_blocks =
+                                stream.into_iter().collect::<Result<Vec<_>>>()?;
+                            debug_assert!(!stream_blocks.is_empty());
+                            let mut c = DataBlock::concat(&stream_blocks)?;
+                            if let Some(meta) = stream_blocks[0].take_meta() {
+                                c.replace_meta(meta);
+                            }
+                            let c = serialize_block(block_number, c, &self.options)?;
+                            serialized_blocks.push(FlightSerialized::DataBlock(c));
+                        }
+
+                        _ => unreachable!(),
+                    };
+                }
+                return Ok(vec![DataBlock::empty_with_meta(
+                    FlightSerializedMeta::create(serialized_blocks),
+                )]);
+            }
+
+            data = data.add_meta(Some(block_meta))?;
+        }
+        Ok(vec![data])
+    }
+
+    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
+        match &mut self.spiller {
+            SpillerVer::Old(_) => Ok(vec![]),
+            SpillerVer::New(spillers) => {
+                let mut serialized_blocks = vec![];
+                let write_options = exchange_defines::spilled_write_options();
+
+                for (index, spiller) in spillers.iter_mut().enumerate() {
+                    if index == self.local_pos {
+                        serialized_blocks.push(Self::finish_local_new_spiller(spiller)?);
+                    } else {
+                        serialized_blocks
+                            .push(Self::finish_exchange_new_spiller(spiller, &write_options)?);
                     }
-                    let c = serialize_block(block_number, c, &self.options)?;
-                    serialized_blocks.push(FlightSerialized::DataBlock(c));
                 }
 
-                _ => unreachable!(),
-            };
+                Ok(vec![DataBlock::empty_with_meta(
+                    FlightSerializedMeta::create(serialized_blocks),
+                )])
+            }
         }
-
-        Ok(vec![DataBlock::empty_with_meta(
-            FlightSerializedMeta::create(serialized_blocks),
-        )])
     }
 }
 

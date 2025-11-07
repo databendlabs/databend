@@ -36,6 +36,7 @@ pub mod parquet_reader;
 mod parquet_table;
 mod partition;
 mod pruning;
+mod row_group_serde;
 mod source;
 mod statistics;
 mod transformer;
@@ -60,5 +61,9 @@ pub use parquet_variant_table::ParquetVariantTable;
 // for it test
 pub use pruning::ParquetPruner;
 pub use read_settings::ReadSettings;
+pub use row_group_serde::deserialize_row_group_meta;
+pub use row_group_serde::deserialize_row_group_meta_from_bytes;
+pub use row_group_serde::serialize_row_group_meta;
+pub use row_group_serde::serialize_row_group_meta_to_bytes;
 pub use source::ParquetSource;
 pub use source::ParquetSourceType;
