@@ -21,6 +21,7 @@ use databend_common_expression::types::*;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::StateAddr;
 
 use super::aggregate_scalar_state::ChangeIf;
@@ -78,16 +79,16 @@ where
 
     fn add_batch(
         &mut self,
-        other: T::Column,
+        other: ColumnView<T>,
         validity: Option<&Bitmap>,
         _: &Self::FunctionInfo,
     ) -> Result<()> {
-        let column_len = T::column_len(&other);
+        let column_len = other.len();
         if column_len == 0 {
             return Ok(());
         }
 
-        let column_iter = T::iter_column(&other);
+        let column_iter = other.iter();
         match validity {
             Some(validity)
                 if validity.null_count() > 0 && validity.null_count() < validity.len() =>

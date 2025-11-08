@@ -60,30 +60,6 @@ where T: ToStringType
         Ok(())
     }
 
-    fn add_batch(
-        &mut self,
-        other: T::Column,
-        validity: Option<&Bitmap>,
-        delimiter: &String,
-    ) -> Result<()> {
-        match validity {
-            Some(validity) => {
-                for (value, valid) in T::iter_column(&other).zip(validity.iter()) {
-                    if valid {
-                        write!(self.values, "{}{delimiter}", T::format(&value)).unwrap();
-                    }
-                }
-            }
-            None => {
-                for value in T::iter_column(&other) {
-                    write!(self.values, "{}{delimiter}", T::format(&value)).unwrap();
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         self.values.push_str(&rhs.values);
         Ok(())

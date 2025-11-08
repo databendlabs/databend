@@ -22,6 +22,7 @@ use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
@@ -96,10 +97,14 @@ impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for BooleanState<I
 
     fn add_batch(
         &mut self,
-        other: Bitmap,
+        other: ColumnView<BooleanType>,
         validity: Option<&Bitmap>,
         _: &Self::FunctionInfo,
     ) -> Result<()> {
+        let other = match other {
+            ColumnView::Const(b, n) => Bitmap::new_constant(b, n),
+            ColumnView::Column(column) => column,
+        };
         if IS_AND {
             self.value &= boolean_batch::<IS_AND>(other, validity);
         } else {

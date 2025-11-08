@@ -27,6 +27,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
@@ -84,16 +85,16 @@ where C: ChangeIf<StringType>
 
     fn add_batch(
         &mut self,
-        other: StringColumn,
+        other: ColumnView<StringType>,
         validity: Option<&Bitmap>,
         _: &Self::FunctionInfo,
     ) -> Result<()> {
-        let column_len = StringType::column_len(&other);
+        let column_len = other.len();
         if column_len == 0 {
             return Ok(());
         }
 
-        let column_iter = 0..other.len();
+        let column_iter = 0..column_len;
         if let Some(validity) = validity {
             if validity.null_count() == column_len {
                 return Ok(());
@@ -103,7 +104,11 @@ where C: ChangeIf<StringType>
                 .filter(|(_, valid)| *valid)
                 .map(|(idx, _)| idx)
                 .reduce(|l, r| {
-                    if !C::change_if_ordering(StringColumn::compare(&other, l, &other, r)) {
+                    let ordering = match &other {
+                        ColumnView::Const(_, _) => std::cmp::Ordering::Equal,
+                        ColumnView::Column(other) => StringColumn::compare(other, l, other, r),
+                    };
+                    if !C::change_if_ordering(ordering) {
                         l
                     } else {
                         r
@@ -114,7 +119,11 @@ where C: ChangeIf<StringType>
             }
         } else {
             let v = column_iter.reduce(|l, r| {
-                if !C::change_if_ordering(StringColumn::compare(&other, l, &other, r)) {
+                let ordering = match &other {
+                    ColumnView::Const(_, _) => std::cmp::Ordering::Equal,
+                    ColumnView::Column(other) => StringColumn::compare(other, l, other, r),
+                };
+                if !C::change_if_ordering(ordering) {
                     l
                 } else {
                     r
@@ -240,16 +249,16 @@ where
 
     fn add_batch(
         &mut self,
-        other: T::Column,
+        other: ColumnView<T>,
         validity: Option<&Bitmap>,
         _: &Self::FunctionInfo,
     ) -> Result<()> {
-        let column_len = T::column_len(&other);
+        let column_len = other.len();
         if column_len == 0 {
             return Ok(());
         }
 
-        let column_iter = T::iter_column(&other);
+        let column_iter = other.iter();
         if let Some(v) = validity {
             if v.true_count() as f64 / v.len() as f64 >= SELECTIVITY_THRESHOLD {
                 let value = column_iter
@@ -263,8 +272,7 @@ where
                 }
             } else {
                 for idx in TrueIdxIter::new(v.len(), Some(v)) {
-                    let v = unsafe { T::index_column_unchecked(&other, idx) };
-                    self.add(v, &())?;
+                    self.add(unsafe { other.index_unchecked(idx) }, &())?;
                 }
             };
         } else {

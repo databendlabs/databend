@@ -29,6 +29,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
@@ -99,28 +100,35 @@ where
     }
 }
 
-impl<T, N> UnaryState<T, N> for NumberSumState<N>
+impl<T, N> UnaryState<NumberType<T>, NumberType<N>> for NumberSumState<NumberType<N>>
 where
-    T: ArgType,
-    N: ArgType,
-    T::Scalar: Number + AsPrimitive<N::Scalar>,
-    N::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
-    for<'a> T::ScalarRef<'a>: Number + AsPrimitive<N::Scalar>,
+    T: Number + AsPrimitive<N>,
+    N: Number + AsPrimitive<f64> + std::ops::AddAssign,
 {
-    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
+    fn add(&mut self, other: T, _: &Self::FunctionInfo) -> Result<()> {
         self.value += other.as_();
         Ok(())
     }
 
     fn add_batch(
         &mut self,
-        other: T::Column,
+        other: ColumnView<NumberType<T>>,
         validity: Option<&Bitmap>,
         _: &Self::FunctionInfo,
     ) -> Result<()> {
-        let col = T::upcast_column(other);
-        let buffer = NumberType::<T::Scalar>::try_downcast_column(&col).unwrap();
-        self.value += sum_batch::<T::Scalar, N::Scalar>(buffer, validity);
+        match other {
+            ColumnView::Const(v, n) => {
+                let sum: N = v.as_();
+                let count = validity.map(|v| v.true_count()).unwrap_or(n);
+                for _ in 0..count {
+                    self.value += sum;
+                }
+            }
+            ColumnView::Column(buffer) => {
+                self.value += sum_batch::<T, N>(buffer, validity);
+            }
+        }
+
         Ok(())
     }
 
@@ -131,10 +139,10 @@ where
 
     fn merge_result(
         &mut self,
-        mut builder: N::ColumnBuilderMut<'_>,
+        mut builder: <NumberType<N> as ValueType>::ColumnBuilderMut<'_>,
         _: &Self::FunctionInfo,
     ) -> Result<()> {
-        builder.push_item(N::to_scalar_ref(&self.value));
+        builder.push(self.value);
         Ok(())
     }
 }
@@ -210,7 +218,7 @@ where T: Decimal + std::ops::AddAssign
 
     fn add_batch(
         &mut self,
-        other: Buffer<T>,
+        other: ColumnView<DecimalType<T>>,
         validity: Option<&Bitmap>,
         function_data: &Self::FunctionInfo,
     ) -> Result<()> {
@@ -221,13 +229,13 @@ where T: Decimal + std::ops::AddAssign
                 Some(validity) if validity.null_count() > 0 => {
                     buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
                         if b {
-                            sum += *t;
+                            sum += t;
                         }
                     });
                 }
                 _ => {
                     buffer.iter().for_each(|t| {
-                        sum += *t;
+                        sum += t;
                     });
                 }
             }
@@ -237,13 +245,13 @@ where T: Decimal + std::ops::AddAssign
                 Some(validity) => {
                     for (data, valid) in other.iter().zip(validity.iter()) {
                         if valid {
-                            self.add(*data, function_data)?;
+                            self.add(data, function_data)?;
                         }
                     }
                 }
                 None => {
                     for value in other.iter() {
-                        self.add(*value, function_data)?;
+                        self.add(value, function_data)?;
                     }
                 }
             }
@@ -308,32 +316,6 @@ pub struct IntervalSumState {
 impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
     fn add(&mut self, other: months_days_micros, _: &Self::FunctionInfo) -> Result<()> {
         self.value += other;
-        Ok(())
-    }
-
-    fn add_batch(
-        &mut self,
-        other: Buffer<months_days_micros>,
-        validity: Option<&Bitmap>,
-        _: &Self::FunctionInfo,
-    ) -> Result<()> {
-        let col = IntervalType::upcast_column_with_type(other, &DataType::Interval);
-        let buffer = IntervalType::try_downcast_column(&col).unwrap();
-        match validity {
-            Some(validity) if validity.null_count() > 0 => {
-                buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
-                    if b {
-                        self.value += *t;
-                    }
-                });
-            }
-            _ => {
-                buffer.iter().for_each(|t| {
-                    self.value += *t;
-                });
-            }
-        }
-
         Ok(())
     }
 

@@ -27,6 +27,7 @@ use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use rand::prelude::SliceRandom;
@@ -113,11 +114,11 @@ where
 
     fn add_batch(
         &mut self,
-        other: T::Column,
+        other: ColumnView<T>,
         validity: Option<&Bitmap>,
         range_bound_data: &RangeBoundData,
     ) -> Result<()> {
-        let column_len = T::column_len(&other);
+        let column_len = other.len();
         let unset_bits = validity.map_or(0, |v| v.null_count());
         if unset_bits == column_len {
             return Ok(());
@@ -146,7 +147,7 @@ where
 
         let sample_values = sampled_indices
             .iter()
-            .map(|i| T::to_owned_scalar(unsafe { T::index_column_unchecked(&other, *i) }))
+            .map(|i| T::to_owned_scalar(unsafe { other.index_unchecked(*i) }))
             .collect::<Vec<_>>();
 
         self.total_rows += valid_size;

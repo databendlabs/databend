@@ -29,6 +29,7 @@ use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
@@ -49,20 +50,20 @@ where
 
     fn add_batch(
         &mut self,
-        other: T::Column,
+        other: ColumnView<T>,
         validity: Option<&Bitmap>,
         function_data: &Self::FunctionInfo,
     ) -> Result<()> {
         match validity {
             Some(validity) => {
-                for (data, valid) in T::iter_column(&other).zip(validity.iter()) {
+                for (data, valid) in other.iter().zip(validity.iter()) {
                     if valid {
                         self.add(data, function_data)?;
                     }
                 }
             }
             None => {
-                for value in T::iter_column(&other) {
+                for value in other.iter() {
                     self.add(value, function_data)?;
                 }
             }
@@ -189,7 +190,7 @@ where
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
+        let column = columns[0].downcast().unwrap();
         let state: &mut S = place.get::<S>();
 
         state.add_batch(column, validity, &self.function_info)
