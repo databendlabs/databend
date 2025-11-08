@@ -660,7 +660,7 @@ state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.g
 sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" }
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d", package = "tantivy-common" }
-tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d", package = "tantivy-query-grammar" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "ac27464" }
+tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d", package = "tantivy-query-grammar" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

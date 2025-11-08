@@ -134,7 +134,7 @@ use jsonb::keypath::KeyPaths;
 use serde_json::json;
 use serde_json::to_string;
 use simsearch::SimSearch;
-use tantivy_query_grammar::parse_query;
+use tantivy_query_grammar::parse_query_lenient;
 use tantivy_query_grammar::UserInputAst;
 use tantivy_query_grammar::UserInputLeaf;
 use unicase::Ascii;
@@ -2707,7 +2707,17 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        let query_ast = parse_query(query_text).unwrap();
+        let (query_ast, errs) = parse_query_lenient(query_text);
+        if !errs.is_empty() {
+            let err_msg = errs
+                .into_iter()
+                .map(|err| format!("{} pos {}", err.message, err.pos))
+                .join(", ");
+            return Err(
+                ErrorCode::SemanticError(format!("invalid query: {err_msg}",))
+                    .set_span(query_scalar.span()),
+            );
+        }
         let mut fields = HashSet::new();
         collect_fields(&query_ast, &mut fields);
 
