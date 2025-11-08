@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::alloc::Layout;
-use std::any::Any;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
@@ -36,6 +35,7 @@ use databend_common_expression::StateSerdeItem;
 
 use super::AggrState;
 use super::AggrStateLoc;
+use super::SerializeInfo;
 use super::StateSerde;
 
 pub(super) trait UnaryState<T, R>: StateSerde + Default + Send + 'static
@@ -43,17 +43,15 @@ where
     T: AccessType,
     R: ValueType,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        function_data: Option<&dyn FunctionData>,
-    ) -> Result<()>;
+    type FunctionInfo: Send + Sync = ();
+
+    fn add(&mut self, other: T::ScalarRef<'_>, function_data: &Self::FunctionInfo) -> Result<()>;
 
     fn add_batch(
         &mut self,
         other: T::Column,
         validity: Option<&Bitmap>,
-        function_data: Option<&dyn FunctionData>,
+        function_data: &Self::FunctionInfo,
     ) -> Result<()> {
         match validity {
             Some(validity) => {
@@ -77,12 +75,8 @@ where
     fn merge_result(
         &mut self,
         builder: R::ColumnBuilderMut<'_>,
-        function_data: Option<&dyn FunctionData>,
+        function_info: &Self::FunctionInfo,
     ) -> Result<()>;
-}
-
-pub trait FunctionData: Send + Sync {
-    fn as_any(&self) -> &dyn Any;
 }
 
 pub(super) struct AggregateUnaryFunction<S, T, R>
@@ -93,7 +87,8 @@ where
 {
     display_name: String,
     return_type: DataType,
-    function_data: Option<Box<dyn FunctionData>>,
+    function_info: S::FunctionInfo,
+    serialize_info: Option<Box<dyn SerializeInfo>>,
     need_drop: bool,
     _p: PhantomData<fn(S, T, R)>,
 }
@@ -111,43 +106,57 @@ where
 
 impl<S, T, R> AggregateUnaryFunction<S, T, R>
 where
+    S: UnaryState<T, R, FunctionInfo = ()> + 'static,
+    T: AccessType,
+    R: ValueType,
+{
+    pub fn new(display_name: &str, return_type: DataType) -> Self {
+        Self::with_function_info(display_name, return_type, ())
+    }
+
+    pub fn create(display_name: &str, return_type: DataType) -> Result<AggregateFunctionRef> {
+        Self::with_function_info(display_name, return_type, ()).finish()
+    }
+}
+
+impl<S, T, R> AggregateUnaryFunction<S, T, R>
+where
     S: UnaryState<T, R> + 'static,
     T: AccessType,
     R: ValueType,
 {
-    pub(crate) fn create(
+    pub fn with_function_info(
         display_name: &str,
         return_type: DataType,
-    ) -> AggregateUnaryFunction<S, T, R> {
+        function_info: S::FunctionInfo,
+    ) -> Self {
         AggregateUnaryFunction {
             display_name: display_name.to_string(),
             return_type,
-            function_data: None,
+            function_info,
+            serialize_info: None,
             need_drop: false,
             _p: PhantomData,
         }
     }
 
-    pub(crate) fn with_function_data(
-        mut self,
-        function_data: Box<dyn FunctionData>,
-    ) -> AggregateUnaryFunction<S, T, R> {
-        self.function_data = Some(function_data);
+    pub fn with_serialize_info(mut self, serialize_info: Box<dyn SerializeInfo>) -> Self {
+        self.serialize_info = Some(serialize_info);
         self
     }
 
-    pub(crate) fn with_need_drop(mut self, need_drop: bool) -> AggregateUnaryFunction<S, T, R> {
+    pub fn with_need_drop(mut self, need_drop: bool) -> Self {
         self.need_drop = need_drop;
         self
     }
 
-    pub(crate) fn finish(self) -> Result<AggregateFunctionRef> {
+    pub fn finish(self) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(self))
     }
 
     fn do_merge_result(&self, state: &mut S, builder: &mut ColumnBuilder) -> Result<()> {
         let builder = R::downcast_builder(builder);
-        state.merge_result(builder, self.function_data.as_deref())
+        state.merge_result(builder, &self.function_info)
     }
 }
 
@@ -183,7 +192,7 @@ where
         let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
         let state: &mut S = place.get::<S>();
 
-        state.add_batch(column, validity, self.function_data.as_deref())
+        state.add_batch(column, validity, &self.function_info)
     }
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
@@ -191,7 +200,7 @@ where
         let value = view.index(row).unwrap();
 
         let state: &mut S = place.get::<S>();
-        state.add(value, self.function_data.as_deref())?;
+        state.add(value, &self.function_info)?;
         Ok(())
     }
 
@@ -206,14 +215,14 @@ where
 
         for (v, place) in view.iter().zip(places.iter()) {
             let state: &mut S = AggrState::new(*place, loc).get::<S>();
-            state.add(v, self.function_data.as_deref())?;
+            state.add(v, &self.function_info)?;
         }
 
         Ok(())
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        S::serialize_type(self.function_data.as_deref())
+        S::serialize_type(self.serialize_info.as_deref())
     }
 
     fn batch_serialize(

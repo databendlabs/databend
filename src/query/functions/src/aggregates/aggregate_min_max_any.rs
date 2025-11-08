@@ -50,7 +50,7 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
@@ -68,7 +68,7 @@ where C: ChangeIf<StringType>
 impl<C> UnaryState<StringType, StringType> for MinMaxStringState<C>
 where C: ChangeIf<StringType>
 {
-    fn add(&mut self, other: &str, _function_data: Option<&dyn FunctionData>) -> Result<()> {
+    fn add(&mut self, other: &str, _: &Self::FunctionInfo) -> Result<()> {
         match &self.value {
             Some(v) => {
                 if C::change_if(&StringType::to_scalar_ref(v), &other) {
@@ -86,7 +86,7 @@ where C: ChangeIf<StringType>
         &mut self,
         other: StringColumn,
         validity: Option<&Bitmap>,
-        function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         let column_len = StringType::column_len(&other);
         if column_len == 0 {
@@ -110,7 +110,7 @@ where C: ChangeIf<StringType>
                     }
                 });
             if let Some(v) = v {
-                let _ = self.add(other.index(v).unwrap(), function_data);
+                self.add(other.index(v).unwrap(), &())?;
             }
         } else {
             let v = column_iter.reduce(|l, r| {
@@ -121,7 +121,7 @@ where C: ChangeIf<StringType>
                 }
             });
             if let Some(v) = v {
-                let _ = self.add(other.index(v).unwrap(), function_data);
+                self.add(other.index(v).unwrap(), &())?;
             }
         }
         Ok(())
@@ -129,7 +129,7 @@ where C: ChangeIf<StringType>
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         if let Some(v) = &rhs.value {
-            self.add(v.as_str(), None)?;
+            self.add(v.as_str(), &())?;
         }
         Ok(())
     }
@@ -137,7 +137,7 @@ where C: ChangeIf<StringType>
     fn merge_result(
         &mut self,
         mut builder: BuilderMut<'_, StringType>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         if let Some(v) = &self.value {
             builder.push_item(v.as_str());
@@ -151,7 +151,7 @@ where C: ChangeIf<StringType>
 impl<C> StateSerde for MinMaxStringState<C>
 where C: ChangeIf<StringType>
 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::String.wrap_nullable().into()]
     }
 
@@ -224,11 +224,7 @@ where
     T::Scalar: BorshSerialize + BorshDeserialize,
     C: ChangeIf<T>,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         match &self.value {
             Some(v) => {
                 if C::change_if(&T::to_scalar_ref(v), &other) {
@@ -246,7 +242,7 @@ where
         &mut self,
         other: T::Column,
         validity: Option<&Bitmap>,
-        function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         let column_len = T::column_len(&other);
         if column_len == 0 {
@@ -263,18 +259,18 @@ where
                     .reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
 
                 if let Some(value) = value {
-                    self.add(value, function_data)?;
+                    self.add(value, &())?;
                 }
             } else {
                 for idx in TrueIdxIter::new(v.len(), Some(v)) {
                     let v = unsafe { T::index_column_unchecked(&other, idx) };
-                    self.add(v, function_data)?;
+                    self.add(v, &())?;
                 }
             };
         } else {
             let v = column_iter.reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
             if let Some(v) = v {
-                self.add(v, function_data)?;
+                self.add(v, &())?;
             }
         }
         Ok(())
@@ -282,7 +278,7 @@ where
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         if let Some(v) = &rhs.value {
-            self.add(T::to_scalar_ref(v), None)?;
+            self.add(T::to_scalar_ref(v), &())?;
         }
         Ok(())
     }
@@ -290,7 +286,7 @@ where
     fn merge_result(
         &mut self,
         mut builder: T::ColumnBuilderMut<'_>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         if let Some(v) = &self.value {
             builder.push_item(T::to_scalar_ref(v));
@@ -308,8 +304,8 @@ where
     T::Scalar: BorshSerialize + BorshDeserialize,
     C: ChangeIf<T>,
 {
-    fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
-        let data_type = function_data
+    fn serialize_type(info: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
+        let data_type = info
             .and_then(|data| data.as_any().downcast_ref::<DataType>())
             .cloned()
             .unwrap();
@@ -393,22 +389,19 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
             with_simple_no_number_no_string_mapped_type!(|T| match data_type {
                 DataType::T => {
                     let return_type = data_type.clone();
-                    AggregateUnaryFunction::<MinMaxAnyState<T, CMP>, T, T>::create(
+                    AggregateUnaryFunction::<MinMaxAnyState<T, CMP>, T, T>::new(
                         display_name,
                         return_type,
                     )
+                    .with_serialize_info(Box::new(data_type))
                     .with_need_drop(need_drop)
-                    .with_function_data(Box::new(data_type))
                     .finish()
                 }
                 DataType::String => {
                     let return_type = data_type.clone();
-                    AggregateUnaryFunction::<
-                        MinMaxStringState<CMP>,
-                        StringType,
-                        StringType,
-                    >::create(
-                        display_name, return_type
+                    AggregateUnaryFunction::<MinMaxStringState<CMP>, StringType, StringType>::new(
+                        display_name,
+                        return_type,
                     )
                     .with_need_drop(need_drop)
                     .finish()
@@ -421,8 +414,8 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                                 MinMaxAnyState<NumberType<NUM>, CMP>,
                                 NumberType<NUM>,
                                 NumberType<NUM>,
-                            >::create(display_name, return_type)
-                            .with_function_data(Box::new(data_type))
+                            >::new(display_name, return_type)
+                            .with_serialize_info(Box::new(data_type))
                             .finish()
                         }
                     })
@@ -436,22 +429,17 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                                 DecimalType<DECIMAL>,
                                 DecimalType<DECIMAL>,
                             >::create(display_name, return_type)
-                            .with_function_data(Box::new(data_type))
-                            .finish()
                         }
                     })
                 }
                 _ => {
                     let return_type = data_type.clone();
-                    AggregateUnaryFunction::<
-                        MinMaxAnyState<AnyType, CMP>,
-                        AnyType,
-                        AnyType,
-                    >::create(
-                        display_name, return_type
+                    AggregateUnaryFunction::<MinMaxAnyState<AnyType, CMP>, AnyType, AnyType>::new(
+                        display_name,
+                        return_type,
                     )
+                    .with_serialize_info(Box::new(data_type))
                     .with_need_drop(need_drop)
-                    .with_function_data(Box::new(data_type))
                     .finish()
                 }
             })

@@ -34,8 +34,8 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
 use super::QuantileData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
@@ -80,11 +80,9 @@ where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Ord,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    type FunctionInfo = QuantileData;
+
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         self.value.push(T::to_owned_scalar(other));
         Ok(())
     }
@@ -96,15 +94,9 @@ where
     fn merge_result(
         &mut self,
         mut builder: ArrayColumnBuilderMut<'_, T>,
-        function_data: Option<&dyn FunctionData>,
+        quantile_disc_data: &QuantileData,
     ) -> Result<()> {
         let value_len = self.value.len();
-        let quantile_disc_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<QuantileData>()
-        };
         if quantile_disc_data.levels.len() > 1 {
             let indices = quantile_disc_data
                 .levels
@@ -131,7 +123,7 @@ where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }
 
@@ -167,11 +159,9 @@ where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Ord,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    type FunctionInfo = QuantileData;
+
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         self.value.push(T::to_owned_scalar(other));
         Ok(())
     }
@@ -188,15 +178,9 @@ where
     fn merge_result(
         &mut self,
         mut builder: T::ColumnBuilderMut<'_>,
-        function_data: Option<&dyn FunctionData>,
+        quantile_disc_data: &QuantileData,
     ) -> Result<()> {
         let value_len = self.value.len();
-        let quantile_disc_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<QuantileData>()
-        };
 
         let idx = ((value_len - 1) as f64 * quantile_disc_data.levels[0]).floor() as usize;
         if idx >= value_len {
@@ -229,10 +213,11 @@ pub fn try_create_aggregate_quantile_disc_function(
                             QuantileState<NumberType<NUM_TYPE>>,
                             NumberType<NUM_TYPE>,
                             ArrayType<NumberType<NUM_TYPE>>,
-                        >::create(
-                            display_name, DataType::Array(Box::new(data_type))
+                        >::with_function_info(
+                            display_name,
+                            DataType::Array(Box::new(data_type)),
+                            QuantileData { levels },
                         )
-                        .with_function_data(Box::new(QuantileData { levels }))
                         .with_need_drop(true)
                         .finish()
                     } else {
@@ -240,8 +225,9 @@ pub fn try_create_aggregate_quantile_disc_function(
                             QuantileState<NumberType<NUM_TYPE>>,
                             NumberType<NUM_TYPE>,
                             NumberType<NUM_TYPE>,
-                        >::create(display_name, data_type)
-                        .with_function_data(Box::new(QuantileData { levels }))
+                        >::with_function_info(
+                            display_name, data_type, QuantileData { levels }
+                        )
                         .with_need_drop(true)
                         .finish()
                     }
@@ -257,10 +243,11 @@ pub fn try_create_aggregate_quantile_disc_function(
                             QuantileState<DecimalType<DECIMAL>>,
                             DecimalType<DECIMAL>,
                             ArrayType<DecimalType<DECIMAL>>,
-                        >::create(
-                            display_name, DataType::Array(Box::new(data_type))
+                        >::with_function_info(
+                            display_name,
+                            DataType::Array(Box::new(data_type)),
+                            QuantileData { levels },
                         )
-                        .with_function_data(Box::new(QuantileData { levels }))
                         .with_need_drop(true)
                         .finish()
                     } else {
@@ -268,8 +255,9 @@ pub fn try_create_aggregate_quantile_disc_function(
                             QuantileState<DecimalType<DECIMAL>>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::create(display_name, data_type)
-                        .with_function_data(Box::new(QuantileData { levels }))
+                        >::with_function_info(
+                            display_name, data_type, QuantileData { levels }
+                        )
                         .with_need_drop(true)
                         .finish()
                     }

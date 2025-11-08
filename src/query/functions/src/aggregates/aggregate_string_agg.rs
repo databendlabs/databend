@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::fmt::Display;
 use std::fmt::Write;
 
@@ -42,7 +41,7 @@ use super::batch_serialize1;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::UnaryState;
 
@@ -51,34 +50,12 @@ struct StringAggState {
     values: String,
 }
 
-struct StringAggFunctionData {
-    delimiter: String,
-}
-
-impl FunctionData for StringAggFunctionData {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-impl StringAggState {
-    fn delimiter(function_data: Option<&dyn FunctionData>) -> &str {
-        &function_data
-            .and_then(|data| data.as_any().downcast_ref::<StringAggFunctionData>())
-            .expect("string_agg function data is missing")
-            .delimiter
-    }
-}
-
 impl<T> UnaryState<T, StringType> for StringAggState
 where T: ToStringType
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
-        let delimiter = Self::delimiter(function_data);
+    type FunctionInfo = String;
+
+    fn add(&mut self, other: T::ScalarRef<'_>, delimiter: &String) -> Result<()> {
         write!(self.values, "{}{delimiter}", T::format(&other)).unwrap();
         Ok(())
     }
@@ -87,9 +64,8 @@ where T: ToStringType
         &mut self,
         other: T::Column,
         validity: Option<&Bitmap>,
-        function_data: Option<&dyn FunctionData>,
+        delimiter: &String,
     ) -> Result<()> {
-        let delimiter = Self::delimiter(function_data);
         match validity {
             Some(validity) => {
                 for (value, valid) in T::iter_column(&other).zip(validity.iter()) {
@@ -116,9 +92,8 @@ where T: ToStringType
     fn merge_result(
         &mut self,
         mut builder: BuilderMut<'_, StringType>,
-        function_data: Option<&dyn FunctionData>,
+        delimiter: &String,
     ) -> Result<()> {
-        let delimiter = Self::delimiter(function_data);
         if self.values.is_empty() {
             builder.put_and_commit("");
         } else {
@@ -158,7 +133,7 @@ impl ToStringType for AnyType {
 }
 
 impl StateSerde for StringAggState {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::String.into()]
     }
 
@@ -207,23 +182,23 @@ pub fn try_create_aggregate_string_agg_function(
         ],
         match value_type {
             DataType::T => {
-                AggregateUnaryFunction::<StringAggState, T, StringType>::create(
+                AggregateUnaryFunction::<StringAggState, T, StringType>::with_function_info(
                     display_name,
                     DataType::String,
+                    delimiter,
                 )
                 .with_need_drop(true)
-                .with_function_data(Box::new(StringAggFunctionData { delimiter }))
                 .finish()
             },
             DataType::Number(num_type) => {
                 with_number_mapped_type!(|NUM| match num_type {
                     NumberDataType::NUM => {
-                        AggregateUnaryFunction::<StringAggState, NumberType<NUM>, StringType>::create(
+                        AggregateUnaryFunction::<StringAggState, NumberType<NUM>, StringType>::with_function_info(
                             display_name,
                             DataType::String,
+                            delimiter,
                         )
                         .with_need_drop(true)
-                        .with_function_data(Box::new(StringAggFunctionData { delimiter }))
                         .finish()
                     }
                 })
@@ -233,12 +208,12 @@ pub fn try_create_aggregate_string_agg_function(
             | DataType::Date
             | DataType::Variant
             | DataType::Interval => {
-                AggregateUnaryFunction::<StringAggState, AnyType, StringType>::create(
+                AggregateUnaryFunction::<StringAggState, AnyType, StringType>::with_function_info(
                     display_name,
                     DataType::String,
+                    delimiter,
                 )
                 .with_need_drop(true)
-                .with_function_data(Box::new(StringAggFunctionData { delimiter }))
                 .finish()
             },
             _ => Err(ErrorCode::BadDataValueType(format!(

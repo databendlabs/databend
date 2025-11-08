@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+
 use adaptors::*;
 pub use aggregate_count::AggregateCountFunction;
 pub use aggregate_function::*;
@@ -30,7 +32,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 
 trait StateSerde {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem>;
+    fn serialize_type(info: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem>;
 
     fn batch_serialize(
         places: &[StateAddr],
@@ -46,7 +48,11 @@ trait StateSerde {
     ) -> Result<()>;
 }
 
-impl FunctionData for DataType {
+trait SerializeInfo: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl SerializeInfo for DataType {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

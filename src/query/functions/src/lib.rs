@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::arc_with_non_send_sync)]
-#![allow(clippy::uninlined_format_args)]
-#![allow(clippy::ptr_arg)]
-#![allow(clippy::type_complexity)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
+#![feature(associated_type_defaults)]
 
 use aggregates::AggregateFunctionFactory;
 use ctor::ctor;

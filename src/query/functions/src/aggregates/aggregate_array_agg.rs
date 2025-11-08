@@ -63,7 +63,7 @@ use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateAddr;
 use super::StateSerde;
 
@@ -132,8 +132,8 @@ where
     Self: ScalarStateFunc<T>,
     T: ValueType,
 {
-    fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
-        let return_type = function_data
+    fn serialize_type(info: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
+        let return_type = info
             .and_then(|data| data.as_any().downcast_ref::<DataType>())
             .cloned()
             .unwrap();
@@ -234,8 +234,8 @@ where T: SimpleType + Debug
 impl<T> StateSerde for ArrayAggStateSimple<T>
 where T: SimpleType
 {
-    fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
-        let data_type = function_data
+    fn serialize_type(info: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
+        let data_type = info
             .and_then(|data| data.as_any().downcast_ref::<DataType>())
             .and_then(|ty| ty.as_array())
             .unwrap()
@@ -336,7 +336,7 @@ where V: ZeroSizeType
 }
 
 impl<const IS_NULL: bool> StateSerde for ArrayAggStateZST<IS_NULL> {
-    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![ArrayType::<BooleanType>::data_type().into()]
     }
 
@@ -464,8 +464,8 @@ where T: ArgType + Debug + std::marker::Send
 impl<T> StateSerde for ArrayAggStateBinary<T>
 where T: ArgType + std::marker::Send
 {
-    fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
-        let data_type = function_data
+    fn serialize_type(info: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
+        let data_type = info
             .and_then(|data| data.as_any().downcast_ref::<DataType>())
             .and_then(|ty| ty.as_array())
             .unwrap()
