@@ -61,8 +61,21 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
         let name_ident = &req.name;
 
+        let row_access_name_ident = RowAccessPolicyNameIdent::new(
+            name_ident.tenant().clone(),
+            name_ident.data_mask_name().to_string(),
+        );
+        if self.get_pb(&row_access_name_ident).await?.is_some() {
+            return Err(AppError::DatamaskAlreadyExists(
+                name_ident.exist_error("name conflicts with an existing row access policy"),
+            )
+            .into());
+        }
+
+        let masking_policy_id = fetch_id(self, IdGenerator::data_mask_id()).await?;
+
         let mut trials = txn_backoff(None, func_name!());
-        let id = loop {
+        loop {
             trials.next().unwrap()?.await;
 
             let mut txn = TxnRequest::default();
@@ -93,25 +106,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 };
             }
 
-            let row_access_name_ident = RowAccessPolicyNameIdent::new(
-                name_ident.tenant().clone(),
-                name_ident.data_mask_name().to_string(),
-            );
-            if self.get_pb(&row_access_name_ident).await?.is_some() {
-                return Err(AppError::DatamaskAlreadyExists(
-                    name_ident.exist_error("name conflicts with an existing row access policy"),
-                )
-                .into());
-            }
-
             // Create data mask by inserting these record:
             // name -> id
             // id -> policy
             // data mask name -> data mask table id list
 
-            let id = fetch_id(self, IdGenerator::data_mask_id()).await?;
-
-            let id = DataMaskId::new(id);
+            let id = DataMaskId::new(masking_policy_id);
             let id_ident = DataMaskIdIdent::new_generic(name_ident.tenant(), id);
             let id_list_key = MaskPolicyTableIdListIdent::new_from(name_ident.clone());
 
@@ -144,12 +144,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 );
 
                 if succ {
-                    break id;
+                    break;
                 }
             }
-        };
+        }
 
-        Ok(CreateDatamaskReply { id: *id })
+        Ok(CreateDatamaskReply {
+            id: masking_policy_id,
+        })
     }
 
     async fn drop_data_mask(

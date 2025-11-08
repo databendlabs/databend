@@ -61,9 +61,20 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
 
         let name_ident = &req.name;
 
-        let id = fetch_id(self, IdGenerator::row_access_id()).await?;
+        let mask_name_ident = DataMaskNameIdent::new(
+            name_ident.tenant().clone(),
+            name_ident.row_access_name().to_string(),
+        );
+        if self.get_pb(&mask_name_ident).await?.is_some() {
+            return Ok(Err(
+                name_ident.exist_error("name conflicts with an existing masking policy")
+            ));
+        }
+
+        let row_access_id = fetch_id(self, IdGenerator::row_access_id()).await?;
+        let policy_id = RowAccessPolicyId::new(row_access_id);
         let mut trials = txn_backoff(None, func_name!());
-        let id = loop {
+        loop {
             trials.next().unwrap()?.await;
 
             let mut txn = TxnRequest::default();
@@ -87,22 +98,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
                 }
             }
 
-            let mask_name_ident = DataMaskNameIdent::new(
-                name_ident.tenant().clone(),
-                name_ident.row_access_name().to_string(),
-            );
-            if self.get_pb(&mask_name_ident).await?.is_some() {
-                return Ok(Err(
-                    name_ident.exist_error("name conflicts with an existing masking policy")
-                ));
-            }
-
             // Create row policy by inserting these record:
             // name -> id
             // id -> policy
 
-            let id = RowAccessPolicyId::new(id);
-            let id_ident = RowAccessPolicyIdIdent::new_generic(name_ident.tenant(), id);
+            let id_ident = RowAccessPolicyIdIdent::new_generic(name_ident.tenant(), policy_id);
 
             debug!(
                 id :? =(&id_ident),
@@ -115,8 +115,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
                 txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
                 txn.condition.push(txn_cond_eq_seq(&mask_name_ident, 0));
                 txn.if_then.extend(vec![
-                    txn_op_put_pb(name_ident, &id, None)?,  // name -> policy_id
-                    txn_op_put_pb(&id_ident, &meta, None)?, // id -> meta
+                    txn_op_put_pb(name_ident, &policy_id, None)?, // name -> policy_id
+                    txn_op_put_pb(&id_ident, &meta, None)?,       // id -> meta
                 ]);
 
                 let (succ, _responses) = send_txn(self, txn).await?;
@@ -129,12 +129,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
                 );
 
                 if succ {
-                    break id;
+                    break;
                 }
             }
-        };
+        }
 
-        Ok(Ok(CreateRowAccessPolicyReply { id: *id }))
+        Ok(Ok(CreateRowAccessPolicyReply { id: row_access_id }))
     }
 
     async fn drop_row_access_policy(
