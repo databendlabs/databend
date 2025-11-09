@@ -31,6 +31,12 @@ pub async fn build_and_push_down_runtime_filter(
 ) -> Result<()> {
     let overall_start = Instant::now();
 
+    let is_spill_happened = join.hash_join_state.need_next_round.load(Ordering::Acquire)
+        || join
+            .hash_join_state
+            .is_spill_happened
+            .load(Ordering::Acquire);
+
     let inlist_threshold = join
         .ctx
         .get_settings()
@@ -49,10 +55,6 @@ pub async fn build_and_push_down_runtime_filter(
         .get_join_runtime_filter_selectivity_threshold()?;
 
     let build_start = Instant::now();
-    let is_spill_happened = join
-        .hash_join_state
-        .is_spill_happened
-        .load(Ordering::Acquire);
     let mut packet = build_runtime_filter_packet(
         build_chunks,
         build_num_rows,
