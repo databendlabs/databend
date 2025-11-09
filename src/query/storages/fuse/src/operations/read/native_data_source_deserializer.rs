@@ -53,17 +53,11 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
 use databend_common_native::read::ColumnIter;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_sql::IndexType;
 use roaring::RoaringTreemap;
 use xorf::BinaryFuse16;
 
