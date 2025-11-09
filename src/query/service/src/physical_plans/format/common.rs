@@ -203,7 +203,7 @@ pub fn append_output_rows_info(
 }
 
 use databend_common_exception::Result;
-use databend_common_pipeline_core::PlanProfile;
+use databend_common_pipeline::core::PlanProfile;
 
 pub struct SimplePhysicalFormat<'a> {
     meta: &'a PhysicalPlanMeta,

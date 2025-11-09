@@ -19,9 +19,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
-use databend_common_pipeline_core::always_callback;
-use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::always_callback;
+use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_settings::Settings;
 
 use super::PipelineBuilderData;

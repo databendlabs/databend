@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc::channel;
 use databend_common_base::base::tokio::sync::mpsc::Receiver;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::DataBlock;
@@ -25,14 +26,14 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::PipeItem;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sinks::SyncSenderSink;
-use databend_common_pipeline_sources::BlocksSource;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::SyncSenderSink;
+use databend_common_pipeline::sources::BlocksSource;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
@@ -41,7 +42,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 
 fn create_source_pipe(ctx: Arc<QueryContext>, data: Vec<Vec<DataBlock>>) -> Result<Pipe> {
-    use parking_lot::Mutex;
+    use std::sync::Mutex;
 
     let size = data.len();
     let mut items = Vec::with_capacity(size);
@@ -50,7 +51,7 @@ fn create_source_pipe(ctx: Arc<QueryContext>, data: Vec<Vec<DataBlock>>) -> Resu
         let output = OutputPort::create();
         items.push(PipeItem::create(
             BlocksSource::create(
-                ctx.clone(),
+                ctx.get_scan_progress(),
                 output.clone(),
                 Arc::new(Mutex::new(VecDeque::from(blocks))),
             )?,

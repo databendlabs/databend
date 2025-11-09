@@ -22,10 +22,10 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MatchSeq;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sinks::AsyncMpscSink;
-use databend_common_pipeline_sinks::AsyncMpscSinker;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::AsyncMpscSink;
+use databend_common_pipeline::sinks::AsyncMpscSinker;
 use databend_common_storage::DataOperator;
 use tokio::time::Instant;
 

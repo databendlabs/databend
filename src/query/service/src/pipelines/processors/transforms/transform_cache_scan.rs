@@ -15,13 +15,14 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::HashJoinState;
@@ -152,7 +153,7 @@ impl TransformCacheScan {
         output_port: Arc<OutputPort>,
         cache_source_state: CacheSourceState,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output_port, TransformCacheScan {
+        AsyncSourcer::create(ctx.get_scan_progress(), output_port, TransformCacheScan {
             cache_source_state,
         })
     }

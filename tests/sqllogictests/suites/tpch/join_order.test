@@ -848,13 +848,13 @@ HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
-│       │   └── HashJoin: INNER
-│       │       ├── Build
-│       │       │   └── Scan: default.tpch_test.lineitem (#3) (read rows: 6001215)
-│       │       └── Probe
-│       │           └── Scan: default.tpch_test.orders (#1) (read rows: 1500000)
+│       │   └── Scan: default.tpch_test.lineitem (#3) (read rows: 6001215)
 │       └── Probe
-│           └── Scan: default.tpch_test.customer (#0) (read rows: 150000)
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── Scan: default.tpch_test.customer (#0) (read rows: 150000)
+│               └── Probe
+│                   └── Scan: default.tpch_test.orders (#1) (read rows: 1500000)
 └── Probe
     └── Scan: default.tpch_test.lineitem (#2) (read rows: 6001215)
 

@@ -33,13 +33,13 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use futures::Stream;
 
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::TableContext;
 use crate::storages::Table;
 
@@ -143,7 +143,9 @@ impl AsyncCrashMeSource {
         output: Arc<OutputPort>,
         message: Option<String>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx, output, AsyncCrashMeSource { message })
+        AsyncSourcer::create(ctx.get_scan_progress(), output, AsyncCrashMeSource {
+            message,
+        })
     }
 }
 

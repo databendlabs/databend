@@ -42,8 +42,8 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::PrefetchAsyncSourcer;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::resolve_file_location;
 use databend_common_storage::init_stage_operator;
@@ -117,7 +117,7 @@ impl InferSchemaTable {
         pipeline.add_source(
             |output| {
                 let reader = BytesReader::try_create(ctx.clone(), operator.clone(), batch_size, 1)?;
-                PrefetchAsyncSourcer::create(ctx.clone(), output, reader)
+                PrefetchAsyncSourcer::create(ctx.get_scan_progress(), output, reader)
             },
             1,
         )?;

@@ -22,10 +22,10 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
 
 use super::core::algorithm::SortAlgorithm;
 use super::core::Merger;
@@ -295,7 +295,7 @@ mod tests {
 
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::FromData;
-    use databend_common_pipeline_core::processors::connect;
+    use databend_common_pipeline::core::port::connect;
 
     use super::*;
     use crate::sorts::core::SimpleRowsAsc;

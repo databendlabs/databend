@@ -39,10 +39,18 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use databend_common_pipeline_core::processors::EventCause;
-use databend_common_pipeline_core::processors::PlanScope;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_core::PlanProfile;
+use databend_common_pipeline::core::port::connect;
+use databend_common_pipeline::core::port_trigger::DirectedEdge;
+use databend_common_pipeline::core::port_trigger::UpdateList;
+use databend_common_pipeline::core::port_trigger::UpdateTrigger;
+use databend_common_pipeline::core::profile::PlanScope;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::EventCause;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::PlanProfile;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_storages_system::QueryExecutionStatsQueue;
 use fastrace::prelude::*;
 use log::debug;
@@ -66,14 +74,6 @@ use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::QueryExecutorTasksQueue;
 use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::WorkersCondvar;
-use crate::pipelines::processors::connect;
-use crate::pipelines::processors::DirectedEdge;
-use crate::pipelines::processors::Event;
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::ProcessorPtr;
-use crate::pipelines::processors::UpdateList;
-use crate::pipelines::processors::UpdateTrigger;
 
 enum State {
     Idle,

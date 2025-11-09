@@ -31,7 +31,7 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_pipeline_sinks::AsyncSink;
+use databend_common_pipeline::sinks::AsyncSink;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;

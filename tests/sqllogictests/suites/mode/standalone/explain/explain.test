@@ -31,7 +31,6 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
-    ├── scan id: 0
     ├── output columns: [a (#0)]
     ├── read rows: 0
     ├── read size: 0
@@ -56,7 +55,7 @@ Filter
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#2)@scan1], filter type:bloom,inlist,min_max
+    │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -64,7 +63,6 @@ Filter
     │   ├── estimated rows: 0.00
     │   └── TableScan
     │       ├── table: default.default.t1
-    │       ├── scan id: 0
     │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 0
     │       ├── read size: 0
@@ -79,7 +77,6 @@ Filter
         ├── estimated rows: 3.40
         └── TableScan
             ├── table: default.default.t2
-            ├── scan id: 1
             ├── output columns: [a (#2), b (#3)]
             ├── read rows: 5
             ├── read size: < 1 KiB
@@ -101,11 +98,10 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#2)@scan1], filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
-│   ├── scan id: 0
 │   ├── output columns: [a (#0), b (#1)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -116,7 +112,6 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
-    ├── scan id: 1
     ├── output columns: [a (#2), b (#3)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -307,7 +302,6 @@ UnionAll
 ├── estimated rows: 6.00
 ├── TableScan
 │   ├── table: default.default.t1
-│   ├── scan id: 0
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -318,7 +312,6 @@ UnionAll
 │   └── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t2
-    ├── scan id: 1
     ├── output columns: [a (#2)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -349,7 +342,6 @@ Filter
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t1
-    │       ├── scan id: 0
     │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 1
     │       ├── read size: < 1 KiB
@@ -364,7 +356,6 @@ Filter
         ├── estimated rows: 4.40
         └── TableScan
             ├── table: default.default.t2
-            ├── scan id: 1
             ├── output columns: [a (#2), b (#3)]
             ├── read rows: 5
             ├── read size: < 1 KiB
@@ -395,7 +386,6 @@ Filter
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t1
-    │       ├── scan id: 0
     │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 1
     │       ├── read size: < 1 KiB
@@ -406,7 +396,6 @@ Filter
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
-        ├── scan id: 1
         ├── output columns: [a (#2), b (#3)]
         ├── read rows: 5
         ├── read size: < 1 KiB
@@ -443,7 +432,6 @@ HashJoin
 │   ├── estimated rows: 5.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t1
-│   │   ├── scan id: 0
 │   │   ├── output columns: [a (#0), b (#1)]
 │   │   ├── read rows: 1
 │   │   ├── read size: < 1 KiB
@@ -454,7 +442,6 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.default.t2
-│       ├── scan id: 1
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 5
 │       ├── read size: < 1 KiB
@@ -465,7 +452,6 @@ HashJoin
 │       └── estimated rows: 5.00
 └── TableScan(Probe)
     ├── table: default.default.t3
-    ├── scan id: 2
     ├── output columns: [a (#4), b (#5)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -504,7 +490,6 @@ HashJoin
 │       │   ├── estimated rows: 1.00
 │       │   └── TableScan
 │       │       ├── table: default.default.t1
-│       │       ├── scan id: 0
 │       │       ├── output columns: [a (#0), b (#1)]
 │       │       ├── read rows: 1
 │       │       ├── read size: < 1 KiB
@@ -519,7 +504,6 @@ HashJoin
 │           ├── estimated rows: 4.40
 │           └── TableScan
 │               ├── table: default.default.t2
-│               ├── scan id: 1
 │               ├── output columns: [a (#2), b (#3)]
 │               ├── read rows: 5
 │               ├── read size: < 1 KiB
@@ -534,7 +518,6 @@ HashJoin
     ├── estimated rows: 8.00
     └── TableScan
         ├── table: default.default.t3
-        ├── scan id: 2
         ├── output columns: [a (#4), b (#5)]
         ├── read rows: 10
         ├── read size: < 1 KiB
@@ -574,7 +557,6 @@ Limit
             │   ├── estimated rows: 1.00
             │   └── TableScan
             │       ├── table: default.default.t1
-            │       ├── scan id: 0
             │       ├── output columns: [a (#0), b (#1)]
             │       ├── read rows: 1
             │       ├── read size: < 1 KiB
@@ -589,7 +571,6 @@ Limit
                 ├── estimated rows: 4.40
                 └── TableScan
                     ├── table: default.default.t2
-                    ├── scan id: 1
                     ├── output columns: [a (#2), b (#3)]
                     ├── read rows: 5
                     ├── read size: < 1 KiB
@@ -616,7 +597,6 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   └── TableScan
 │       ├── table: default.default.t1
-│       ├── scan id: 0
 │       ├── output columns: [a (#0), b (#1)]
 │       ├── read rows: 1
 │       ├── read size: < 1 KiB
@@ -627,7 +607,6 @@ HashJoin
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
-    ├── scan id: 1
     ├── output columns: [a (#2), b (#3)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -660,7 +639,6 @@ AggregateFinal
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.t1
-                ├── scan id: 0
                 ├── output columns: [a (#0)]
                 ├── read rows: 1
                 ├── read size: < 1 KiB
@@ -693,7 +671,6 @@ AggregateFinal
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.t1
-                ├── scan id: 0
                 ├── output columns: [a (#0)]
                 ├── read rows: 1
                 ├── read size: < 1 KiB
@@ -752,7 +729,6 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t4
-    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -780,7 +756,6 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t4
-        ├── scan id: 0
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read size: 0
@@ -802,7 +777,6 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t4
-        ├── scan id: 0
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read size: 0
@@ -849,7 +823,7 @@ Limit
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:a.id (#0), probe targets:[b.id (#2)@scan1], filter type:bloom,inlist,min_max
+    │   └── filter id:0, build key:a.id (#0), probe key:b.id (#2), filter type:inlist,min_max
     ├── estimated rows: 1.00
     ├── Filter(Build)
     │   ├── output columns: [a.id (#0), a.c1 (#1)]
@@ -857,7 +831,6 @@ Limit
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.a
-    │       ├── scan id: 0
     │       ├── output columns: [id (#0), c1 (#1)]
     │       ├── read rows: 1
     │       ├── read size: < 1 KiB
@@ -872,7 +845,6 @@ Limit
         ├── estimated rows: 2.00
         └── TableScan
             ├── table: default.default.b
-            ├── scan id: 1
             ├── output columns: [id (#2), c1 (#3)]
             ├── read rows: 2
             ├── read size: < 1 KiB
@@ -899,7 +871,7 @@ from numbers(10) where number > 5
 Sort(Single)
 ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
 ├── sort keys: [number ASC NULLS LAST]
-├── estimated rows: 0.00
+├── estimated rows: 25.00
 └── HashJoin
     ├── output columns: [numbers.number (#0), pt (#1), register_at (#3)]
     ├── join type: INNER
@@ -908,19 +880,18 @@ Sort(Single)
     ├── keys is null equal: [false, false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:numbers.number (#2), probe targets:[a.number (#0)@scan0], filter type:bloom,inlist,min_max
-    ├── estimated rows: 0.00
+    │   └── filter id:0, build key:numbers.number (#2), probe key:a.number (#0), filter type:inlist,min_max
+    ├── estimated rows: 25.00
     ├── EvalScalar(Build)
     │   ├── output columns: [numbers.number (#2), register_at (#3)]
     │   ├── expressions: [to_yyyymmdd(CAST(numbers.number (#2) AS Timestamp))]
-    │   ├── estimated rows: 0.00
+    │   ├── estimated rows: 5.00
     │   └── Filter
     │       ├── output columns: [numbers.number (#2)]
     │       ├── filters: [numbers.number (#2) > 5]
-    │       ├── estimated rows: 0.00
+    │       ├── estimated rows: 5.00
     │       └── TableScan
     │           ├── table: default.system.numbers
-    │           ├── scan id: 1
     │           ├── output columns: [number (#2)]
     │           ├── read rows: 10
     │           ├── read size: < 1 KiB
@@ -931,14 +902,13 @@ Sort(Single)
     └── EvalScalar(Probe)
         ├── output columns: [numbers.number (#0), pt (#1)]
         ├── expressions: [to_yyyymmdd(CAST(numbers.number (#0) AS Timestamp))]
-        ├── estimated rows: 0.00
+        ├── estimated rows: 5.00
         └── Filter
             ├── output columns: [numbers.number (#0)]
             ├── filters: [numbers.number (#0) > 5]
-            ├── estimated rows: 0.00
+            ├── estimated rows: 5.00
             └── TableScan
                 ├── table: default.system.numbers
-                ├── scan id: 0
                 ├── output columns: [number (#0)]
                 ├── read rows: 10
                 ├── read size: < 1 KiB
@@ -972,8 +942,8 @@ HashJoin
 ├── keys is null equal: [false, false]
 ├── filters: []
 ├── build join filters:
-│   ├── filter id:0, build key:scalar_subquery_2 (#2), probe targets:[a.id (#0)@scan0], filter type:bloom,inlist,min_max
-│   └── filter id:1, build key:id (#2), probe targets:[a.id (#0)@scan0], filter type:bloom,inlist,min_max
+│   ├── filter id:0, build key:scalar_subquery_2 (#2), probe key:a.id (#0), filter type:inlist,min_max
+│   └── filter id:1, build key:id (#2), probe key:a.id (#0), filter type:inlist,min_max
 ├── estimated rows: 0.40
 ├── Filter(Build)
 │   ├── output columns: [b.id (#2)]
@@ -981,7 +951,6 @@ HashJoin
 │   ├── estimated rows: 0.40
 │   └── TableScan
 │       ├── table: default.default.b
-│       ├── scan id: 1
 │       ├── output columns: [id (#2)]
 │       ├── read rows: 2
 │       ├── read size: < 1 KiB
@@ -992,7 +961,6 @@ HashJoin
 │       └── estimated rows: 2.00
 └── TableScan(Probe)
     ├── table: default.default.a
-    ├── scan id: 0
     ├── output columns: [id (#0), c1 (#1)]
     ├── read rows: 3
     ├── read size: < 1 KiB
@@ -1028,7 +996,6 @@ HashJoin
 ├── estimated rows: 3.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
-│   ├── scan id: 0
 │   ├── output columns: [a (#0), b (#1)]
 │   ├── read rows: 3
 │   ├── read size: < 1 KiB
@@ -1067,7 +1034,6 @@ Filter
     ├── estimated rows: 3.00
     ├── TableScan(Build)
     │   ├── table: default.default.t1
-    │   ├── scan id: 0
     │   ├── output columns: [a (#0), b (#1)]
     │   ├── read rows: 3
     │   ├── read size: < 1 KiB
@@ -1128,7 +1094,6 @@ Sort(Single)
     ├── EmptyResultScan(Build)
     └── TableScan(Probe)
         ├── table: default.default.t1
-        ├── scan id: 0
         ├── output columns: [i (#0), j (#1)]
         ├── read rows: 3
         ├── read size: < 1 KiB
@@ -1177,7 +1142,6 @@ Filter
 ├── estimated rows: 1.20
 └── TableScan
     ├── table: default.default.t3
-    ├── scan id: 0
     ├── output columns: [a (#0), b (#1), c (#2)]
     ├── read rows: 3
     ├── read size: < 1 KiB
@@ -1196,7 +1160,6 @@ Filter
 ├── estimated rows: 1.20
 └── TableScan
     ├── table: default.default.t3
-    ├── scan id: 0
     ├── output columns: [a (#0), b (#1), c (#2)]
     ├── read rows: 3
     ├── read size: < 1 KiB
@@ -1215,7 +1178,6 @@ Filter
 ├── estimated rows: 1.20
 └── TableScan
     ├── table: default.default.t3
-    ├── scan id: 0
     ├── output columns: [a (#0), b (#1), c (#2)]
     ├── read rows: 6
     ├── read size: < 1 KiB
@@ -1286,11 +1248,11 @@ HashJoin: RIGHT OUTER
         └── Probe
             └── HashJoin: CROSS
                 ├── Build
-                │   └── HashJoin: LEFT SEMI
+                │   └── HashJoin: RIGHT SEMI
                 │       ├── Build
-                │       │   └── Scan: default.default.sales (#3) (read rows: 500)
+                │       │   └── Scan: default.default.customers (#0) (read rows: 100)
                 │       └── Probe
-                │           └── Scan: default.default.customers (#0) (read rows: 100)
+                │           └── Scan: default.default.sales (#3) (read rows: 500)
                 └── Probe
                     └── Scan: default.default.sales (#1) (read rows: 500)
 
@@ -1352,7 +1314,6 @@ EvalScalar
     │   ├── estimated rows: 0.00
     │   └── TableScan
     │       ├── table: default.default.t2
-    │       ├── scan id: 1
     │       ├── output columns: [b (#1)]
     │       ├── read rows: 0
     │       ├── read size: 0
@@ -1366,7 +1327,6 @@ EvalScalar
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t1
-            ├── scan id: 0
             ├── output columns: [a (#0)]
             ├── read rows: 0
             ├── read size: 0
@@ -1393,105 +1353,101 @@ query T
 explain select * from t2 where c > (select c from t1 where t1.a = t2.a group by c order by count(a));
 ----
 HashJoin
-├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2)]
+├── output columns: [t2.b (#1), t2.c (#2), t2.a (#0)]
 ├── join type: INNER
-├── build keys: [a (#3)]
-├── probe keys: [a (#0)]
+├── build keys: [a (#0)]
+├── probe keys: [a (#3)]
 ├── keys is null equal: [false]
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── build join filters:
-│   └── filter id:0, build key:a (#3), probe targets:[a (#0)@scan0], filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:a (#0), probe key:a (#3), filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
-├── Sort(Single)(Build)
-│   ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
-│   ├── sort keys: [count(a) ASC NULLS LAST]
-│   ├── estimated rows: 0.00
-│   └── AggregateFinal
-│       ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
-│       ├── group by: [c, a]
-│       ├── aggregate functions: [count(a)]
-│       ├── estimated rows: 0.00
-│       └── AggregatePartial
-│           ├── group by: [c, a]
-│           ├── aggregate functions: [count(a)]
-│           ├── estimated rows: 0.00
-│           └── Filter
-│               ├── output columns: [t1.a (#3), t1.c (#5)]
-│               ├── filters: [is_true(t1.a (#3) = t1.a (#3))]
-│               ├── estimated rows: 0.00
-│               └── TableScan
-│                   ├── table: default.default.t1
-│                   ├── scan id: 1
-│                   ├── output columns: [a (#3), c (#5)]
-│                   ├── read rows: 0
-│                   ├── read size: 0
-│                   ├── partitions total: 0
-│                   ├── partitions scanned: 0
-│                   ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
-│                   └── estimated rows: 0.00
-└── TableScan(Probe)
-    ├── table: default.default.t2
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1), c (#2)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#0]
-    └── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── output columns: [a (#0), b (#1), c (#2)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
+└── Sort(Single)(Probe)
+    ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
+    ├── sort keys: [count(a) ASC NULLS LAST]
+    ├── estimated rows: 1.00
+    └── AggregateFinal
+        ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
+        ├── group by: [c, a]
+        ├── aggregate functions: [count(a)]
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: [c, a]
+            ├── aggregate functions: [count(a)]
+            ├── estimated rows: 1.00
+            └── Filter
+                ├── output columns: [t1.a (#3), t1.c (#5)]
+                ├── filters: [is_true(t1.a (#3) = t1.a (#3))]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── output columns: [a (#3), c (#5)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
+                    ├── apply join filters: [#0]
+                    └── estimated rows: 0.00
 
 query T
 explain select * from t2 where c > (select c from t1 where t1.a = t2.a group by c order by count(*));
 ----
 HashJoin
-├── output columns: [t2.a (#0), t2.b (#1), t2.c (#2)]
+├── output columns: [t2.b (#1), t2.c (#2), t2.a (#0)]
 ├── join type: INNER
-├── build keys: [a (#3)]
-├── probe keys: [a (#0)]
+├── build keys: [a (#0)]
+├── probe keys: [a (#3)]
 ├── keys is null equal: [false]
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── build join filters:
-│   └── filter id:0, build key:a (#3), probe targets:[a (#0)@scan0], filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:a (#0), probe key:a (#3), filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
-├── Sort(Single)(Build)
-│   ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
-│   ├── sort keys: [COUNT(*) ASC NULLS LAST]
-│   ├── estimated rows: 0.00
-│   └── AggregateFinal
-│       ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
-│       ├── group by: [c, a]
-│       ├── aggregate functions: [count()]
-│       ├── estimated rows: 0.00
-│       └── AggregatePartial
-│           ├── group by: [c, a]
-│           ├── aggregate functions: [count()]
-│           ├── estimated rows: 0.00
-│           └── Filter
-│               ├── output columns: [t1.a (#3), t1.c (#5)]
-│               ├── filters: [is_true(outer.a (#3) = outer.a (#3))]
-│               ├── estimated rows: 0.00
-│               └── TableScan
-│                   ├── table: default.default.t1
-│                   ├── scan id: 1
-│                   ├── output columns: [a (#3), c (#5)]
-│                   ├── read rows: 0
-│                   ├── read size: 0
-│                   ├── partitions total: 0
-│                   ├── partitions scanned: 0
-│                   ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
-│                   └── estimated rows: 0.00
-└── TableScan(Probe)
-    ├── table: default.default.t2
-    ├── scan id: 0
-    ├── output columns: [a (#0), b (#1), c (#2)]
-    ├── read rows: 0
-    ├── read size: 0
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#0]
-    └── estimated rows: 0.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── output columns: [a (#0), b (#1), c (#2)]
+│   ├── read rows: 0
+│   ├── read size: 0
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 0.00
+└── Sort(Single)(Probe)
+    ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
+    ├── sort keys: [COUNT(*) ASC NULLS LAST]
+    ├── estimated rows: 1.00
+    └── AggregateFinal
+        ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
+        ├── group by: [c, a]
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: [c, a]
+            ├── aggregate functions: [count()]
+            ├── estimated rows: 1.00
+            └── Filter
+                ├── output columns: [t1.a (#3), t1.c (#5)]
+                ├── filters: [is_true(outer.a (#3) = outer.a (#3))]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── output columns: [a (#3), c (#5)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
+                    ├── apply join filters: [#0]
+                    └── estimated rows: 0.00
 
 query T
 explain insert into t2 select * from t1;
@@ -1518,7 +1474,6 @@ explain select * from numbers(0);
 ----
 TableScan
 ├── table: default.system.numbers
-├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 0
 ├── read size: 0
@@ -1532,7 +1487,6 @@ explain select * from numbers(10);
 ----
 TableScan
 ├── table: default.system.numbers
-├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 10
 ├── read size: < 1 KiB
@@ -1546,7 +1500,6 @@ explain select * from numbers(10000);
 ----
 TableScan
 ├── table: default.system.numbers
-├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 10000
 ├── read size: 78.12 KiB
@@ -1560,7 +1513,6 @@ explain select * from numbers(10000000);
 ----
 TableScan
 ├── table: default.system.numbers
-├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 10000000
 ├── read size: 76.29 MiB
@@ -1574,7 +1526,6 @@ explain select * from numbers(10000000000);
 ----
 TableScan
 ├── table: default.system.numbers
-├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 10000000000
 ├── read size: 74.51 GiB
@@ -1588,7 +1539,6 @@ explain select * from numbers(10000000000000);
 ----
 TableScan
 ├── table: default.system.numbers
-├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 10000000000000
 ├── read size: 72.76 TiB
@@ -1602,7 +1552,6 @@ explain select * from numbers(10000000000000000);
 ----
 TableScan
 ├── table: default.system.numbers
-├── scan id: 0
 ├── output columns: [number (#0)]
 ├── read rows: 10000000000000000
 ├── read size: 71.05 PiB
@@ -1668,7 +1617,6 @@ Filter
 ├── estimated rows: 2.00
 └── TableScan
     ├── table: default.default.t
-    ├── scan id: 0
     ├── output columns: [a (#0), a:"1" (#2)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -1687,7 +1635,6 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t
-    ├── scan id: 0
     ├── output columns: [a (#0), a:"1" (#2)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -1706,7 +1653,6 @@ Filter
 ├── estimated rows: 2.00
 └── TableScan
     ├── table: default.default.t
-    ├── scan id: 0
     ├── output columns: [a (#0), a:"2" (#1)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -1730,7 +1676,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:numbers.number (#1), probe targets:[a.number (#0)@scan0], filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:numbers.number (#1), probe key:a.number (#0), filter type:inlist,min_max
 ├── estimated rows: 100.00
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
@@ -1738,7 +1684,6 @@ HashJoin
 │   ├── estimated rows: 10.00
 │   └── TableScan
 │       ├── table: default.system.numbers
-│       ├── scan id: 1
 │       ├── output columns: [number (#1)]
 │       ├── read rows: 10
 │       ├── read size: < 1 KiB
@@ -1752,7 +1697,6 @@ HashJoin
     ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.system.numbers
-        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 10
         ├── read size: < 1 KiB

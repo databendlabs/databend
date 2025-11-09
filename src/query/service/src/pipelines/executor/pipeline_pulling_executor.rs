@@ -27,11 +27,13 @@ use databend_common_base::runtime::TrackingPayload;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sinks::Sink;
-use databend_common_pipeline_sinks::Sinker;
+use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::Sink;
+use databend_common_pipeline::sinks::Sinker;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use parking_lot::Condvar;
@@ -39,8 +41,6 @@ use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::ProcessorPtr;
 use crate::pipelines::PipelineBuildResult;
 
 struct State {

@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::str;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use chrono::Duration;
 use databend_common_ast::ast::Engine;
@@ -54,9 +55,9 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sinks::EmptySink;
-use databend_common_pipeline_sources::BlocksSource;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::EmptySink;
+use databend_common_pipeline::sources::BlocksSource;
 use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
@@ -69,7 +70,6 @@ use jsonb::Number as JsonbNumber;
 use jsonb::Object as JsonbObject;
 use jsonb::Value as JsonbValue;
 use log::info;
-use parking_lot::Mutex;
 use uuid::Uuid;
 
 use crate::clusters::ClusterDiscovery;
@@ -885,7 +885,7 @@ impl TestFixture {
 
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
         build_res.main_pipeline.add_source(
-            |output| BlocksSource::create(ctx.clone(), output, blocks.clone()),
+            |output| BlocksSource::create(ctx.get_scan_progress(), output, blocks.clone()),
             1,
         )?;
 

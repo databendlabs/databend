@@ -2,185 +2,178 @@ Limit
 ├── output columns: [customer.c_customer_id (#79)]
 ├── limit: 100
 ├── offset: 0
-├── estimated rows: 0.00
+├── estimated rows: 100.00
 └── Sort(Final)
     ├── output columns: [customer.c_customer_id (#79)]
     ├── sort keys: [c_customer_id ASC NULLS LAST]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 140917576323806003200.00
     └── Exchange
         ├── output columns: [customer.c_customer_id (#79), #_order_col]
         ├── exchange type: Merge
         └── Sort(Partial)
             ├── output columns: [customer.c_customer_id (#79), #_order_col]
             ├── sort keys: [c_customer_id ASC NULLS LAST]
-            ├── estimated rows: 0.00
+            ├── estimated rows: 140917576323806003200.00
             └── HashJoin
                 ├── output columns: [customer.c_customer_id (#79)]
                 ├── join type: INNER
-                ├── build keys: [ctr1.ctr_customer_sk (#3)]
-                ├── probe keys: [customer.c_customer_sk (#78)]
+                ├── build keys: [customer.c_customer_sk (#78)]
+                ├── probe keys: [ctr1.ctr_customer_sk (#3)]
                 ├── keys is null equal: [false]
                 ├── filters: []
                 ├── build join filters:
-                │   └── filter id:4, build key:ctr1.ctr_customer_sk (#3), probe targets:[customer.c_customer_sk (#78)@scan3], filter type:bloom,inlist,min_max
-                ├── estimated rows: 0.00
+                │   └── filter id:4, build key:customer.c_customer_sk (#78), probe key:ctr1.ctr_customer_sk (#3), filter type:inlist,min_max
+                ├── estimated rows: 140917576323806003200.00
                 ├── Exchange(Build)
-                │   ├── output columns: [store_returns.sr_customer_sk (#3)]
+                │   ├── output columns: [customer.c_customer_sk (#78), customer.c_customer_id (#79)]
                 │   ├── exchange type: Broadcast
-                │   └── HashJoin
-                │       ├── output columns: [store_returns.sr_customer_sk (#3)]
-                │       ├── join type: INNER
-                │       ├── build keys: [sr_store_sk (#103)]
-                │       ├── probe keys: [sr_store_sk (#7)]
-                │       ├── keys is null equal: [false]
-                │       ├── filters: [ctr1.ctr_total_return (#48) > scalar_subquery_147 (#147)]
-                │       ├── build join filters:
-                │       │   └── filter id:3, build key:sr_store_sk (#103), probe targets:[sr_store_sk (#7)@scan0], filter type:bloom,inlist,min_max
-                │       ├── estimated rows: 0.00
-                │       ├── Exchange(Build)
-                │       │   ├── output columns: [sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147), store_returns.sr_store_sk (#103)]
-                │       │   ├── exchange type: Broadcast
-                │       │   └── HashJoin
-                │       │       ├── output columns: [sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147), store_returns.sr_store_sk (#103)]
-                │       │       ├── join type: INNER
-                │       │       ├── build keys: [sr_store_sk (#103)]
-                │       │       ├── probe keys: [store.s_store_sk (#49)]
-                │       │       ├── keys is null equal: [false]
-                │       │       ├── filters: []
-                │       │       ├── build join filters:
-                │       │       │   └── filter id:2, build key:sr_store_sk (#103), probe targets:[store.s_store_sk (#49)@scan2], filter type:bloom,inlist,min_max
-                │       │       ├── estimated rows: 0.00
-                │       │       ├── Exchange(Build)
-                │       │       │   ├── output columns: [store_returns.sr_store_sk (#103), sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147)]
-                │       │       │   ├── exchange type: Broadcast
-                │       │       │   └── EvalScalar
-                │       │       │       ├── output columns: [store_returns.sr_store_sk (#103), sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147)]
-                │       │       │       ├── expressions: [sum(ctr_total_return) (#145) / CAST(if(CAST(count(ctr_total_return) (#146) = 0 AS Boolean NULL), 1, count(ctr_total_return) (#146)) AS UInt64 NULL) * 1.2]
-                │       │       │       ├── estimated rows: 0.00
-                │       │       │       └── AggregateFinal
-                │       │       │           ├── output columns: [sum(ctr_total_return) (#145), count(ctr_total_return) (#146), store_returns.sr_store_sk (#103)]
-                │       │       │           ├── group by: [sr_store_sk]
-                │       │       │           ├── aggregate functions: [sum(Sum(sr_return_amt)), count(Sum(sr_return_amt))]
-                │       │       │           ├── estimated rows: 0.00
-                │       │       │           └── Exchange
-                │       │       │               ├── output columns: [sum(ctr_total_return) (#145), count(ctr_total_return) (#146), store_returns.sr_store_sk (#103)]
-                │       │       │               ├── exchange type: Hash(0)
-                │       │       │               └── AggregatePartial
-                │       │       │                   ├── group by: [sr_store_sk]
-                │       │       │                   ├── aggregate functions: [sum(Sum(sr_return_amt)), count(Sum(sr_return_amt))]
-                │       │       │                   ├── estimated rows: 0.00
-                │       │       │                   └── AggregateFinal
-                │       │       │                       ├── output columns: [Sum(sr_return_amt) (#144), store_returns.sr_customer_sk (#99), store_returns.sr_store_sk (#103)]
-                │       │       │                       ├── group by: [sr_customer_sk, sr_store_sk]
-                │       │       │                       ├── aggregate functions: [sum(sr_return_amt)]
-                │       │       │                       ├── estimated rows: 0.00
-                │       │       │                       └── Exchange
-                │       │       │                           ├── output columns: [Sum(sr_return_amt) (#144), store_returns.sr_customer_sk (#99), store_returns.sr_store_sk (#103)]
-                │       │       │                           ├── exchange type: Hash(0, 1)
-                │       │       │                           └── AggregatePartial
-                │       │       │                               ├── group by: [sr_customer_sk, sr_store_sk]
-                │       │       │                               ├── aggregate functions: [sum(sr_return_amt)]
-                │       │       │                               ├── estimated rows: 0.00
-                │       │       │                               └── HashJoin
-                │       │       │                                   ├── output columns: [store_returns.sr_customer_sk (#99), store_returns.sr_store_sk (#103), store_returns.sr_return_amt (#107)]
-                │       │       │                                   ├── join type: INNER
-                │       │       │                                   ├── build keys: [date_dim.d_date_sk (#116)]
-                │       │       │                                   ├── probe keys: [store_returns.sr_returned_date_sk (#96)]
-                │       │       │                                   ├── keys is null equal: [false]
-                │       │       │                                   ├── filters: []
-                │       │       │                                   ├── build join filters:
-                │       │       │                                   │   └── filter id:1, build key:date_dim.d_date_sk (#116), probe targets:[store_returns.sr_returned_date_sk (#96)@scan4], filter type:bloom,inlist,min_max
-                │       │       │                                   ├── estimated rows: 0.00
-                │       │       │                                   ├── Exchange(Build)
-                │       │       │                                   │   ├── output columns: [date_dim.d_date_sk (#116)]
-                │       │       │                                   │   ├── exchange type: Broadcast
-                │       │       │                                   │   └── TableScan
-                │       │       │                                   │       ├── table: default.default.date_dim
-                │       │       │                                   │       ├── scan id: 5
-                │       │       │                                   │       ├── output columns: [d_date_sk (#116)]
-                │       │       │                                   │       ├── read rows: 0
-                │       │       │                                   │       ├── read size: 0
-                │       │       │                                   │       ├── partitions total: 0
-                │       │       │                                   │       ├── partitions scanned: 0
-                │       │       │                                   │       ├── push downs: [filters: [is_true(date_dim.d_year (#122) = 2001)], limit: NONE]
-                │       │       │                                   │       └── estimated rows: 0.00
-                │       │       │                                   └── TableScan(Probe)
-                │       │       │                                       ├── table: default.default.store_returns
-                │       │       │                                       ├── scan id: 4
-                │       │       │                                       ├── output columns: [sr_returned_date_sk (#96), sr_customer_sk (#99), sr_store_sk (#103), sr_return_amt (#107)]
-                │       │       │                                       ├── read rows: 0
-                │       │       │                                       ├── read size: 0
-                │       │       │                                       ├── partitions total: 0
-                │       │       │                                       ├── partitions scanned: 0
-                │       │       │                                       ├── push downs: [filters: [], limit: NONE]
-                │       │       │                                       ├── apply join filters: [#1]
-                │       │       │                                       └── estimated rows: 0.00
-                │       │       └── TableScan(Probe)
-                │       │           ├── table: default.default.store
-                │       │           ├── scan id: 2
-                │       │           ├── output columns: [s_store_sk (#49)]
-                │       │           ├── read rows: 0
-                │       │           ├── read size: 0
-                │       │           ├── partitions total: 0
-                │       │           ├── partitions scanned: 0
-                │       │           ├── push downs: [filters: [is_true(store.s_state (#73) = 'TN')], limit: NONE]
-                │       │           ├── apply join filters: [#2]
-                │       │           └── estimated rows: 0.16
-                │       └── AggregateFinal(Probe)
-                │           ├── output columns: [Sum(sr_return_amt) (#48), store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7)]
-                │           ├── group by: [sr_customer_sk, sr_store_sk]
-                │           ├── aggregate functions: [sum(sr_return_amt)]
-                │           ├── estimated rows: 841298963.13
-                │           └── Exchange
-                │               ├── output columns: [Sum(sr_return_amt) (#48), store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7)]
-                │               ├── exchange type: Hash(0, 1)
-                │               └── AggregatePartial
-                │                   ├── group by: [sr_customer_sk, sr_store_sk]
-                │                   ├── aggregate functions: [sum(sr_return_amt)]
-                │                   ├── estimated rows: 841298963.13
-                │                   └── HashJoin
-                │                       ├── output columns: [store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7), store_returns.sr_return_amt (#11)]
-                │                       ├── join type: INNER
-                │                       ├── build keys: [date_dim.d_date_sk (#20)]
-                │                       ├── probe keys: [store_returns.sr_returned_date_sk (#0)]
-                │                       ├── keys is null equal: [false]
-                │                       ├── filters: []
-                │                       ├── build join filters:
-                │                       │   └── filter id:0, build key:date_dim.d_date_sk (#20), probe targets:[store_returns.sr_returned_date_sk (#0)@scan0], filter type:bloom,inlist,min_max
-                │                       ├── estimated rows: 841298963.13
-                │                       ├── Exchange(Build)
-                │                       │   ├── output columns: [date_dim.d_date_sk (#20)]
-                │                       │   ├── exchange type: Broadcast
-                │                       │   └── TableScan
-                │                       │       ├── table: default.default.date_dim
-                │                       │       ├── scan id: 1
-                │                       │       ├── output columns: [d_date_sk (#20)]
-                │                       │       ├── read rows: 0
-                │                       │       ├── read size: 0
-                │                       │       ├── partitions total: 0
-                │                       │       ├── partitions scanned: 0
-                │                       │       ├── push downs: [filters: [is_true(date_dim.d_year (#26) = 2001)], limit: NONE]
-                │                       │       └── estimated rows: 29.22
-                │                       └── TableScan(Probe)
-                │                           ├── table: default.default.store_returns
-                │                           ├── scan id: 0
-                │                           ├── output columns: [sr_returned_date_sk (#0), sr_customer_sk (#3), sr_store_sk (#7), sr_return_amt (#11)]
-                │                           ├── read rows: 0
-                │                           ├── read size: 0
-                │                           ├── partitions total: 0
-                │                           ├── partitions scanned: 0
-                │                           ├── push downs: [filters: [], limit: NONE]
-                │                           ├── apply join filters: [#3, #0]
-                │                           └── estimated rows: 28792282.00
-                └── TableScan(Probe)
-                    ├── table: default.default.customer
-                    ├── scan id: 3
-                    ├── output columns: [c_customer_sk (#78), c_customer_id (#79)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [], limit: NONE]
-                    ├── apply join filters: [#4]
-                    └── estimated rows: 2000000.00
+                │   └── TableScan
+                │       ├── table: default.default.customer
+                │       ├── output columns: [c_customer_sk (#78), c_customer_id (#79)]
+                │       ├── read rows: 0
+                │       ├── read size: 0
+                │       ├── partitions total: 0
+                │       ├── partitions scanned: 0
+                │       ├── push downs: [filters: [], limit: NONE]
+                │       └── estimated rows: 2000000.00
+                └── HashJoin(Probe)
+                    ├── output columns: [store_returns.sr_customer_sk (#3)]
+                    ├── join type: INNER
+                    ├── build keys: [sr_store_sk (#103)]
+                    ├── probe keys: [sr_store_sk (#7)]
+                    ├── keys is null equal: [false]
+                    ├── filters: [ctr1.ctr_total_return (#48) > scalar_subquery_147 (#147)]
+                    ├── build join filters:
+                    │   └── filter id:3, build key:sr_store_sk (#103), probe key:sr_store_sk (#7), filter type:inlist,min_max
+                    ├── estimated rows: 70458788161903.00
+                    ├── Exchange(Build)
+                    │   ├── output columns: [sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147), store_returns.sr_store_sk (#103)]
+                    │   ├── exchange type: Broadcast
+                    │   └── HashJoin
+                    │       ├── output columns: [sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147), store_returns.sr_store_sk (#103)]
+                    │       ├── join type: INNER
+                    │       ├── build keys: [sr_store_sk (#103)]
+                    │       ├── probe keys: [store.s_store_sk (#49)]
+                    │       ├── keys is null equal: [false]
+                    │       ├── filters: []
+                    │       ├── build join filters:
+                    │       │   └── filter id:2, build key:sr_store_sk (#103), probe key:store.s_store_sk (#49), filter type:inlist,min_max
+                    │       ├── estimated rows: 201.00
+                    │       ├── Exchange(Build)
+                    │       │   ├── output columns: [store_returns.sr_store_sk (#103), sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147)]
+                    │       │   ├── exchange type: Broadcast
+                    │       │   └── EvalScalar
+                    │       │       ├── output columns: [store_returns.sr_store_sk (#103), sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147)]
+                    │       │       ├── expressions: [sum(ctr_total_return) (#145) / CAST(if(CAST(count(ctr_total_return) (#146) = 0 AS Boolean NULL), 1, count(ctr_total_return) (#146)) AS UInt64 NULL) * 1.2]
+                    │       │       ├── estimated rows: 1.00
+                    │       │       └── AggregateFinal
+                    │       │           ├── output columns: [sum(ctr_total_return) (#145), count(ctr_total_return) (#146), store_returns.sr_store_sk (#103)]
+                    │       │           ├── group by: [sr_store_sk]
+                    │       │           ├── aggregate functions: [sum(Sum(sr_return_amt)), count(Sum(sr_return_amt))]
+                    │       │           ├── estimated rows: 1.00
+                    │       │           └── Exchange
+                    │       │               ├── output columns: [sum(ctr_total_return) (#145), count(ctr_total_return) (#146), store_returns.sr_store_sk (#103)]
+                    │       │               ├── exchange type: Hash(0)
+                    │       │               └── AggregatePartial
+                    │       │                   ├── group by: [sr_store_sk]
+                    │       │                   ├── aggregate functions: [sum(Sum(sr_return_amt)), count(Sum(sr_return_amt))]
+                    │       │                   ├── estimated rows: 1.00
+                    │       │                   └── AggregateFinal
+                    │       │                       ├── output columns: [Sum(sr_return_amt) (#144), store_returns.sr_customer_sk (#99), store_returns.sr_store_sk (#103)]
+                    │       │                       ├── group by: [sr_customer_sk, sr_store_sk]
+                    │       │                       ├── aggregate functions: [sum(sr_return_amt)]
+                    │       │                       ├── estimated rows: 1.00
+                    │       │                       └── Exchange
+                    │       │                           ├── output columns: [Sum(sr_return_amt) (#144), store_returns.sr_customer_sk (#99), store_returns.sr_store_sk (#103)]
+                    │       │                           ├── exchange type: Hash(0, 1)
+                    │       │                           └── AggregatePartial
+                    │       │                               ├── group by: [sr_customer_sk, sr_store_sk]
+                    │       │                               ├── aggregate functions: [sum(sr_return_amt)]
+                    │       │                               ├── estimated rows: 1.00
+                    │       │                               └── HashJoin
+                    │       │                                   ├── output columns: [store_returns.sr_customer_sk (#99), store_returns.sr_store_sk (#103), store_returns.sr_return_amt (#107)]
+                    │       │                                   ├── join type: INNER
+                    │       │                                   ├── build keys: [date_dim.d_date_sk (#116)]
+                    │       │                                   ├── probe keys: [store_returns.sr_returned_date_sk (#96)]
+                    │       │                                   ├── keys is null equal: [false]
+                    │       │                                   ├── filters: []
+                    │       │                                   ├── build join filters:
+                    │       │                                   │   └── filter id:1, build key:date_dim.d_date_sk (#116), probe key:store_returns.sr_returned_date_sk (#96), filter type:bloom,inlist,min_max
+                    │       │                                   ├── estimated rows: 0.00
+                    │       │                                   ├── Exchange(Build)
+                    │       │                                   │   ├── output columns: [date_dim.d_date_sk (#116)]
+                    │       │                                   │   ├── exchange type: Broadcast
+                    │       │                                   │   └── TableScan
+                    │       │                                   │       ├── table: default.default.date_dim
+                    │       │                                   │       ├── output columns: [d_date_sk (#116)]
+                    │       │                                   │       ├── read rows: 0
+                    │       │                                   │       ├── read size: 0
+                    │       │                                   │       ├── partitions total: 0
+                    │       │                                   │       ├── partitions scanned: 0
+                    │       │                                   │       ├── push downs: [filters: [is_true(date_dim.d_year (#122) = 2001)], limit: NONE]
+                    │       │                                   │       └── estimated rows: 0.00
+                    │       │                                   └── TableScan(Probe)
+                    │       │                                       ├── table: default.default.store_returns
+                    │       │                                       ├── output columns: [sr_returned_date_sk (#96), sr_customer_sk (#99), sr_store_sk (#103), sr_return_amt (#107)]
+                    │       │                                       ├── read rows: 0
+                    │       │                                       ├── read size: 0
+                    │       │                                       ├── partitions total: 0
+                    │       │                                       ├── partitions scanned: 0
+                    │       │                                       ├── push downs: [filters: [], limit: NONE]
+                    │       │                                       ├── apply join filters: [#1]
+                    │       │                                       └── estimated rows: 0.00
+                    │       └── TableScan(Probe)
+                    │           ├── table: default.default.store
+                    │           ├── output columns: [s_store_sk (#49)]
+                    │           ├── read rows: 0
+                    │           ├── read size: 0
+                    │           ├── partitions total: 0
+                    │           ├── partitions scanned: 0
+                    │           ├── push downs: [filters: [is_true(store.s_state (#73) = 'TN')], limit: NONE]
+                    │           ├── apply join filters: [#2]
+                    │           └── estimated rows: 201.00
+                    └── AggregateFinal(Probe)
+                        ├── output columns: [Sum(sr_return_amt) (#48), store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7)]
+                        ├── group by: [sr_customer_sk, sr_store_sk]
+                        ├── aggregate functions: [sum(sr_return_amt)]
+                        ├── estimated rows: 350541234636.33
+                        └── Exchange
+                            ├── output columns: [Sum(sr_return_amt) (#48), store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7)]
+                            ├── exchange type: Hash(0, 1)
+                            └── AggregatePartial
+                                ├── group by: [sr_customer_sk, sr_store_sk]
+                                ├── aggregate functions: [sum(sr_return_amt)]
+                                ├── estimated rows: 350541234636.33
+                                └── HashJoin
+                                    ├── output columns: [store_returns.sr_customer_sk (#3), store_returns.sr_store_sk (#7), store_returns.sr_return_amt (#11)]
+                                    ├── join type: INNER
+                                    ├── build keys: [date_dim.d_date_sk (#20)]
+                                    ├── probe keys: [store_returns.sr_returned_date_sk (#0)]
+                                    ├── keys is null equal: [false]
+                                    ├── filters: []
+                                    ├── build join filters:
+                                    │   └── filter id:0, build key:date_dim.d_date_sk (#20), probe key:store_returns.sr_returned_date_sk (#0), filter type:inlist,min_max
+                                    ├── estimated rows: 1051623703909.00
+                                    ├── Exchange(Build)
+                                    │   ├── output columns: [date_dim.d_date_sk (#20)]
+                                    │   ├── exchange type: Broadcast
+                                    │   └── TableScan
+                                    │       ├── table: default.default.date_dim
+                                    │       ├── output columns: [d_date_sk (#20)]
+                                    │       ├── read rows: 0
+                                    │       ├── read size: 0
+                                    │       ├── partitions total: 0
+                                    │       ├── partitions scanned: 0
+                                    │       ├── push downs: [filters: [is_true(date_dim.d_year (#26) = 2001)], limit: NONE]
+                                    │       └── estimated rows: 36524.50
+                                    └── TableScan(Probe)
+                                        ├── table: default.default.store_returns
+                                        ├── output columns: [sr_returned_date_sk (#0), sr_customer_sk (#3), sr_store_sk (#7), sr_return_amt (#11)]
+                                        ├── read rows: 0
+                                        ├── read size: 0
+                                        ├── partitions total: 0
+                                        ├── partitions scanned: 0
+                                        ├── push downs: [filters: [], limit: NONE]
+                                        ├── apply join filters: [#4, #3, #0]
+                                        └── estimated rows: 28792282.00
 

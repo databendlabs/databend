@@ -27,7 +27,7 @@ use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::SNAPSHOT_NAME_COL_NAME;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::Planner;

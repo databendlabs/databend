@@ -55,72 +55,72 @@ AggregateFinal
 ├── output columns: [sc (#9)]
 ├── group by: [sc]
 ├── aggregate functions: []
-├── estimated rows: 0.00
+├── estimated rows: 1.00
 └── AggregatePartial
     ├── group by: [sc]
     ├── aggregate functions: []
-    ├── estimated rows: 0.00
+    ├── estimated rows: 1.00
     └── UnionAll
         ├── output columns: [sc (#9)]
-        ├── estimated rows: 0.00
+        ├── estimated rows: 2.00
         ├── AggregateFinal
         │   ├── output columns: [t.id (#0)]
         │   ├── group by: [id]
         │   ├── aggregate functions: []
-        │   ├── estimated rows: 0.00
+        │   ├── estimated rows: 1.00
         │   └── AggregatePartial
         │       ├── group by: [id]
         │       ├── aggregate functions: []
-        │       ├── estimated rows: 0.00
+        │       ├── estimated rows: 1.00
         │       └── HashJoin
         │           ├── output columns: [t.id (#0)]
-        │           ├── join type: LEFT OUTER
-        │           ├── build keys: [tb.sid (#1)]
-        │           ├── probe keys: [t.id (#0)]
+        │           ├── join type: RIGHT OUTER
+        │           ├── build keys: [t.id (#0)]
+        │           ├── probe keys: [tb.sid (#1)]
         │           ├── keys is null equal: [false]
         │           ├── filters: []
+        │           ├── build join filters:
+        │           │   └── filter id:0, build key:t.id (#0), probe key:tb.sid (#1), filter type:bloom,inlist,min_max
         │           ├── estimated rows: 0.00
-        │           ├── AggregateFinal(Build)
-        │           │   ├── output columns: [t2.sid (#1)]
-        │           │   ├── group by: [sid]
-        │           │   ├── aggregate functions: []
-        │           │   ├── estimated rows: 0.00
-        │           │   └── AggregatePartial
-        │           │       ├── group by: [sid]
-        │           │       ├── aggregate functions: []
-        │           │       ├── estimated rows: 0.00
-        │           │       └── TableScan
-        │           │           ├── table: default.default.t2
-        │           │           ├── scan id: 1
-        │           │           ├── output columns: [sid (#1)]
-        │           │           ├── read rows: 0
-        │           │           ├── read size: 0
-        │           │           ├── partitions total: 0
-        │           │           ├── partitions scanned: 0
-        │           │           ├── push downs: [filters: [is_true(t2.sid (#1) = 1)], limit: NONE]
-        │           │           └── estimated rows: 0.00
-        │           └── TableScan(Probe)
-        │               ├── table: default.default.t1
-        │               ├── scan id: 0
-        │               ├── output columns: [id (#0)]
-        │               ├── read rows: 0
-        │               ├── read size: 0
-        │               ├── partitions total: 0
-        │               ├── partitions scanned: 0
-        │               ├── push downs: [filters: [is_true(t1.id (#0) = 1)], limit: NONE]
-        │               └── estimated rows: 0.00
+        │           ├── TableScan(Build)
+        │           │   ├── table: default.default.t1
+        │           │   ├── output columns: [id (#0)]
+        │           │   ├── read rows: 0
+        │           │   ├── read size: 0
+        │           │   ├── partitions total: 0
+        │           │   ├── partitions scanned: 0
+        │           │   ├── push downs: [filters: [is_true(t1.id (#0) = 1)], limit: NONE]
+        │           │   └── estimated rows: 0.00
+        │           └── AggregateFinal(Probe)
+        │               ├── output columns: [t2.sid (#1)]
+        │               ├── group by: [sid]
+        │               ├── aggregate functions: []
+        │               ├── estimated rows: 1.00
+        │               └── AggregatePartial
+        │                   ├── group by: [sid]
+        │                   ├── aggregate functions: []
+        │                   ├── estimated rows: 1.00
+        │                   └── TableScan
+        │                       ├── table: default.default.t2
+        │                       ├── output columns: [sid (#1)]
+        │                       ├── read rows: 0
+        │                       ├── read size: 0
+        │                       ├── partitions total: 0
+        │                       ├── partitions scanned: 0
+        │                       ├── push downs: [filters: [is_true(t2.sid (#1) = 1)], limit: NONE]
+        │                       ├── apply join filters: [#0]
+        │                       └── estimated rows: 0.00
         └── AggregateFinal
             ├── output columns: [t.id (#7)]
             ├── group by: [id]
             ├── aggregate functions: []
-            ├── estimated rows: 0.00
+            ├── estimated rows: 1.00
             └── AggregatePartial
                 ├── group by: [id]
                 ├── aggregate functions: []
-                ├── estimated rows: 0.00
+                ├── estimated rows: 1.00
                 └── TableScan
                     ├── table: default.default.t1
-                    ├── scan id: 2
                     ├── output columns: [id (#7)]
                     ├── read rows: 0
                     ├── read size: 0

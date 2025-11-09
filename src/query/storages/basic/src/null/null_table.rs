@@ -27,12 +27,12 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sinks::EmptySink;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::EmptySink;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 pub struct NullTable {
@@ -116,7 +116,7 @@ impl NullSource {
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, NullSource {
+        SyncSourcer::create(ctx.get_scan_progress(), output, NullSource {
             finish: false,
             schema,
         })

@@ -104,7 +104,7 @@ EvalScalar
     ├── EvalScalar(Build)
     │   ├── output columns: [c (#8), if(EXISTS (SELECT 1 FROM t1 WHERE t1.a = t2.c), '1', '0') (#5)]
     │   ├── expressions: [if(CAST(is_true(7 (#7)) AS Boolean NULL), '1', '0')]
-    │   ├── estimated rows: 4.00
+    │   ├── estimated rows: 1.33
     │   └── HashJoin
     │       ├── output columns: [c (#8), marker (#7)]
     │       ├── join type: RIGHT MARK
@@ -112,7 +112,7 @@ EvalScalar
     │       ├── probe keys: [c (#8)]
     │       ├── keys is null equal: [false]
     │       ├── filters: []
-    │       ├── estimated rows: 4.00
+    │       ├── estimated rows: 1.33
     │       ├── Filter(Build)
     │       │   ├── output columns: [t1.a (#2)]
     │       │   ├── filters: [is_true(outer.a (#2) = outer.a (#2))]
@@ -135,17 +135,17 @@ EvalScalar
     │           ├── probe keys: []
     │           ├── keys is null equal: []
     │           ├── filters: []
-    │           ├── estimated rows: 4.00
+    │           ├── estimated rows: 1.33
     │           ├── DummyTableScan(Build)
     │           └── AggregateFinal(Probe)
     │               ├── output columns: [c (#8)]
     │               ├── group by: [c]
     │               ├── aggregate functions: []
-    │               ├── estimated rows: 4.00
+    │               ├── estimated rows: 1.33
     │               └── AggregatePartial
     │                   ├── group by: [c]
     │                   ├── aggregate functions: []
-    │                   ├── estimated rows: 4.00
+    │                   ├── estimated rows: 1.33
     │                   └── TableScan
     │                       ├── table: default.default.t2
     │                       ├── scan id: 2
