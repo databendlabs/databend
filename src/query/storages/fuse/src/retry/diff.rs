@@ -17,6 +17,7 @@ use std::collections::HashSet;
 
 use databend_storages_common_table_meta::meta::Location;
 
+#[derive(Clone)]
 pub struct SegmentsDiff {
     appended: Vec<Location>,
     replaced: HashMap<Location, Vec<Location>>,

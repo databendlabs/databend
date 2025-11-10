@@ -132,6 +132,19 @@ drop procedure p1(UInt8, UInt8);
 statement ok
 drop procedure p1(int);
 
+statement ok
+CREATE OR REPLACE PROCEDURE p_decimal_arg(x Decimal(4, 2)) RETURNS Decimal(4, 2) LANGUAGE SQL COMMENT='decimal arg' AS $$
+BEGIN
+    RETURN x;
+END;
+$$;
+
+statement ok
+desc procedure p_decimal_arg(Decimal(4, 2));
+
+statement ok
+drop procedure p_decimal_arg(Decimal(4, 2));
+
 
 statement ok
 drop procedure if exists not_exists_p();
@@ -203,4 +216,3 @@ call procedure p3('x');
 
 statement ok
 drop procedure p3(string);
-

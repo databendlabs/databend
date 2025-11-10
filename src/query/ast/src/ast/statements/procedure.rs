@@ -65,15 +65,41 @@ impl Display for ProcedureLanguage {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Clone, PartialEq, Drive, DriveMut)]
 pub struct ProcedureIdentity {
     pub name: String,
-    pub args_type: String,
+    pub args_type: Vec<TypeName>,
+}
+
+impl std::fmt::Debug for ProcedureIdentity {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProcedureIdentity")
+            .field("name", &self.name)
+            .field(
+                "args_type",
+                &self
+                    .args_type
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect::<Vec<_>>()
+                    .join(","),
+            )
+            .finish()
+    }
 }
 
 impl Display for ProcedureIdentity {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}({})", &self.name, &self.args_type,)
+        write!(
+            f,
+            "{}({})",
+            &self.name,
+            self.args_type
+                .iter()
+                .map(|t| t.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        )
     }
 }
 

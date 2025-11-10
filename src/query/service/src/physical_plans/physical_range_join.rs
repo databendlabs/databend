@@ -30,7 +30,6 @@ use databend_common_sql::binder::JoinPredicate;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::RelationalProperty;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
@@ -134,7 +133,7 @@ impl IPhysicalPlan for RangeJoin {
             right: right_child,
             conditions: self.conditions.clone(),
             other_conditions: self.other_conditions.clone(),
-            join_type: self.join_type.clone(),
+            join_type: self.join_type,
             range_join_type: self.range_join_type.clone(),
             output_schema: self.output_schema.clone(),
             stat_info: self.stat_info.clone(),
@@ -203,15 +202,15 @@ pub struct RangeJoinCondition {
 impl PhysicalPlanBuilder {
     pub async fn build_range_join(
         &mut self,
-        join: &Join,
+        join_type: JoinType,
         s_expr: &SExpr,
         left_required: ColumnSet,
         right_required: ColumnSet,
         mut range_conditions: Vec<ScalarExpr>,
         mut other_conditions: Vec<ScalarExpr>,
     ) -> Result<PhysicalPlan> {
-        let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
-        let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
+        let left_prop = RelExpr::with_s_expr(s_expr.right_child()).derive_relational_prop()?;
+        let right_prop = RelExpr::with_s_expr(s_expr.left_child()).derive_relational_prop()?;
 
         debug_assert!(!range_conditions.is_empty());
 
@@ -230,8 +229,8 @@ impl PhysicalPlanBuilder {
             .build_join_sides(s_expr, left_required, right_required)
             .await?;
 
-        let left_schema = self.prepare_probe_schema(&join.join_type, &left_side)?;
-        let right_schema = self.prepare_build_schema(&join.join_type, &right_side)?;
+        let left_schema = self.prepare_probe_schema(join_type, &left_side)?;
+        let right_schema = self.prepare_build_schema(join_type, &right_side)?;
 
         let mut output_schema = Vec::clone(left_schema.fields());
         output_schema.extend_from_slice(right_schema.fields());
@@ -265,7 +264,7 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|scalar| resolve_scalar(scalar, &merged_schema))
                 .collect::<Result<_>>()?,
-            join_type: join.join_type.clone(),
+            join_type,
             range_join_type,
             output_schema: Arc::new(DataSchema::new(output_schema)),
             stat_info: Some(self.build_plan_stat_info(s_expr)?),

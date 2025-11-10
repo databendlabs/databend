@@ -29,6 +29,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
@@ -44,7 +45,7 @@ use super::AggrStateLoc;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 
 pub struct NumberSumState<N>
@@ -99,32 +100,35 @@ where
     }
 }
 
-impl<T, N> UnaryState<T, N> for NumberSumState<N>
+impl<T, N> UnaryState<NumberType<T>, NumberType<N>> for NumberSumState<NumberType<N>>
 where
-    T: ArgType,
-    N: ArgType,
-    T::Scalar: Number + AsPrimitive<N::Scalar>,
-    N::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
-    for<'a> T::ScalarRef<'a>: Number + AsPrimitive<N::Scalar>,
+    T: Number + AsPrimitive<N>,
+    N: Number + AsPrimitive<f64> + std::ops::AddAssign,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: T, _: &Self::FunctionInfo) -> Result<()> {
         self.value += other.as_();
         Ok(())
     }
 
     fn add_batch(
         &mut self,
-        other: T::Column,
+        other: ColumnView<NumberType<T>>,
         validity: Option<&Bitmap>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
-        let col = T::upcast_column(other);
-        let buffer = NumberType::<T::Scalar>::try_downcast_column(&col).unwrap();
-        self.value += sum_batch::<T::Scalar, N::Scalar>(buffer, validity);
+        match other {
+            ColumnView::Const(v, n) => {
+                let sum: N = v.as_();
+                let count = validity.map(|v| v.true_count()).unwrap_or(n);
+                for _ in 0..count {
+                    self.value += sum;
+                }
+            }
+            ColumnView::Column(buffer) => {
+                self.value += sum_batch::<T, N>(buffer, validity);
+            }
+        }
+
         Ok(())
     }
 
@@ -135,10 +139,10 @@ where
 
     fn merge_result(
         &mut self,
-        mut builder: N::ColumnBuilderMut<'_>,
-        _function_data: Option<&dyn FunctionData>,
+        mut builder: <NumberType<N> as ValueType>::ColumnBuilderMut<'_>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
-        builder.push_item(N::to_scalar_ref(&self.value));
+        builder.push(self.value);
         Ok(())
     }
 }
@@ -148,7 +152,7 @@ where
     N: ArgType,
     N::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
 {
-    fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         std::vec![N::data_type().into()]
     }
 
@@ -196,7 +200,7 @@ impl<const SHOULD_CHECK_OVERFLOW: bool, T> UnaryState<DecimalType<T>, DecimalTyp
     for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
 where T: Decimal + std::ops::AddAssign
 {
-    fn add(&mut self, other: T, _function_data: Option<&dyn FunctionData>) -> Result<()> {
+    fn add(&mut self, other: T, _: &Self::FunctionInfo) -> Result<()> {
         let mut value = T::from_u64_array(self.value);
         value += other;
 
@@ -214,9 +218,9 @@ where T: Decimal + std::ops::AddAssign
 
     fn add_batch(
         &mut self,
-        other: Buffer<T>,
+        other: ColumnView<DecimalType<T>>,
         validity: Option<&Bitmap>,
-        function_data: Option<&dyn FunctionData>,
+        function_data: &Self::FunctionInfo,
     ) -> Result<()> {
         if !SHOULD_CHECK_OVERFLOW {
             let mut sum = T::from_u64_array(self.value);
@@ -225,13 +229,13 @@ where T: Decimal + std::ops::AddAssign
                 Some(validity) if validity.null_count() > 0 => {
                     buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
                         if b {
-                            sum += *t;
+                            sum += t;
                         }
                     });
                 }
                 _ => {
                     buffer.iter().for_each(|t| {
-                        sum += *t;
+                        sum += t;
                     });
                 }
             }
@@ -241,13 +245,13 @@ where T: Decimal + std::ops::AddAssign
                 Some(validity) => {
                     for (data, valid) in other.iter().zip(validity.iter()) {
                         if valid {
-                            self.add(*data, function_data)?;
+                            self.add(data, function_data)?;
                         }
                     }
                 }
                 None => {
                     for value in other.iter() {
-                        self.add(*value, function_data)?;
+                        self.add(value, function_data)?;
                     }
                 }
             }
@@ -257,13 +261,13 @@ where T: Decimal + std::ops::AddAssign
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         let v = T::from_u64_array(rhs.value);
-        self.add(v, None)
+        self.add(v, &())
     }
 
     fn merge_result(
         &mut self,
         mut builder: BuilderMut<'_, DecimalType<T>>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         let v = T::from_u64_array(self.value);
         builder.push(v);
@@ -274,7 +278,7 @@ where T: Decimal + std::ops::AddAssign
 impl<const SHOULD_CHECK_OVERFLOW: bool, T> StateSerde for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
 where T: Decimal + std::ops::AddAssign
 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Decimal(T::default_decimal_size()).into()]
     }
 
@@ -310,38 +314,8 @@ pub struct IntervalSumState {
 }
 
 impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
-    fn add(
-        &mut self,
-        other: months_days_micros,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: months_days_micros, _: &Self::FunctionInfo) -> Result<()> {
         self.value += other;
-        Ok(())
-    }
-
-    fn add_batch(
-        &mut self,
-        other: Buffer<months_days_micros>,
-        validity: Option<&Bitmap>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
-        let col = IntervalType::upcast_column_with_type(other, &DataType::Interval);
-        let buffer = IntervalType::try_downcast_column(&col).unwrap();
-        match validity {
-            Some(validity) if validity.null_count() > 0 => {
-                buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
-                    if b {
-                        self.value += *t;
-                    }
-                });
-            }
-            _ => {
-                buffer.iter().for_each(|t| {
-                    self.value += *t;
-                });
-            }
-        }
-
         Ok(())
     }
 
@@ -354,7 +328,7 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
     fn merge_result(
         &mut self,
         mut builder: BuilderMut<'_, IntervalType>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         builder.push_item(IntervalType::to_scalar_ref(&self.value));
         Ok(())
@@ -362,7 +336,7 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
 }
 
 impl StateSerde for IntervalSumState {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Interval.into()]
     }
 
@@ -414,7 +388,6 @@ pub fn try_create_aggregate_sum_function(
                 NumberType<NUM>,
                 NumberType<TSum>,
             >::create(display_name, return_type)
-            .finish()
         }
         DataType::Interval => {
             let return_type = DataType::Interval;
@@ -422,7 +395,6 @@ pub fn try_create_aggregate_sum_function(
                 display_name,
                 return_type,
             )
-            .finish()
         }
         DataType::Decimal(s) => {
             with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
@@ -439,14 +411,12 @@ pub fn try_create_aggregate_sum_function(
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
                         >::create(display_name, return_type)
-                        .finish()
                     } else {
                         AggregateUnaryFunction::<
                             DecimalSumState<false, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
                         >::create(display_name, return_type)
-                        .finish()
                     }
                 }
             })

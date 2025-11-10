@@ -250,14 +250,14 @@ impl IPhysicalPlan for HashJoin {
             probe_keys: self.probe_keys.clone(),
             is_null_equal: self.is_null_equal.clone(),
             non_equi_conditions: self.non_equi_conditions.clone(),
-            join_type: self.join_type.clone(),
+            join_type: self.join_type,
             marker_index: self.marker_index,
             from_correlated_subquery: self.from_correlated_subquery,
             probe_to_build: self.probe_to_build.clone(),
             output_schema: self.output_schema.clone(),
             need_hold_hash_table: self.need_hold_hash_table,
             stat_info: self.stat_info.clone(),
-            single_to_inner: self.single_to_inner.clone(),
+            single_to_inner: self.single_to_inner,
             build_side_cache_info: self.build_side_cache_info.clone(),
             runtime_filter: self.runtime_filter.clone(),
             broadcast_id: self.broadcast_id,
@@ -455,7 +455,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                factory.create_hash_join(self.join_type.clone(), 0)?,
+                factory.create_hash_join(self.join_type, 0)?,
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
@@ -515,8 +515,8 @@ impl PhysicalPlanBuilder {
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<(PhysicalPlan, PhysicalPlan)> {
-        let probe_side = self.build(s_expr.child(0)?, left_required).await?;
-        let build_side = self.build(s_expr.child(1)?, right_required).await?;
+        let probe_side = self.build(s_expr.left_child(), left_required).await?;
+        let build_side = self.build(s_expr.right_child(), right_required).await?;
 
         Ok((probe_side, build_side))
     }
@@ -547,7 +547,7 @@ impl PhysicalPlanBuilder {
     /// * `Result<DataSchemaRef>` - The prepared schema for the build side
     pub fn prepare_build_schema(
         &self,
-        join_type: &JoinType,
+        join_type: JoinType,
         build_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
@@ -587,7 +587,7 @@ impl PhysicalPlanBuilder {
     /// * `Result<DataSchemaRef>` - The prepared schema for the probe side
     pub fn prepare_probe_schema(
         &self,
-        join_type: &JoinType,
+        join_type: JoinType,
         probe_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
@@ -1239,7 +1239,7 @@ impl PhysicalPlanBuilder {
             probe_projections,
             build: build_side,
             probe: probe_side,
-            join_type: join.join_type.clone(),
+            join_type: join.join_type,
             build_keys: right_join_conditions,
             probe_keys: left_join_conditions,
             is_null_equal,
@@ -1251,7 +1251,7 @@ impl PhysicalPlanBuilder {
             output_schema,
             need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
-            single_to_inner: join.single_to_inner.clone(),
+            single_to_inner: join.single_to_inner,
             build_side_cache_info,
             runtime_filter,
             broadcast_id,
@@ -1281,8 +1281,8 @@ impl PhysicalPlanBuilder {
         self.unify_keys(&mut probe_side, &mut build_side)?;
 
         // Step 4: Prepare schemas for both sides
-        let build_schema = self.prepare_build_schema(&join.join_type, &build_side)?;
-        let probe_schema = self.prepare_probe_schema(&join.join_type, &probe_side)?;
+        let build_schema = self.prepare_build_schema(join.join_type, &build_side)?;
+        let probe_schema = self.prepare_probe_schema(join.join_type, &probe_side)?;
 
         // Step 5: Process join conditions
         let (
