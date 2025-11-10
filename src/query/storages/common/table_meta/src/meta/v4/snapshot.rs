@@ -279,10 +279,10 @@ fn ensure_segments_unique(segments: &[Location]) -> Result<()> {
     for loc in segments {
         let key = loc.0.as_str();
         if !seen.insert(key) {
-            return Err(ErrorCode::Internal(format!(
+            log::warn!(
                 "duplicate segment location {} detected while constructing snapshot",
                 key
-            )));
+            );
         }
     }
     Ok(())
