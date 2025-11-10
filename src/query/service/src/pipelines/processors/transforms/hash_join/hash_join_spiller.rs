@@ -123,7 +123,7 @@ impl HashJoinSpiller {
         }
 
         for data_block in data_blocks {
-            let mut hashes = self.get_hashes(&data_block, &self.join_type)?;
+            let mut hashes = self.get_hashes(&data_block, self.join_type)?;
 
             for hash in hashes.iter_mut() {
                 *hash = Self::get_partition_id(*hash, self.spill_partition_bits as u64);
@@ -143,10 +143,10 @@ impl HashJoinSpiller {
             return Ok(());
         }
 
-        let join_type = self.join_type.clone();
+        let join_type = self.join_type;
         let data_block = DataBlock::concat(&data_blocks)?;
         let partition_data_blocks =
-            self.partition_data_block(&data_block, &join_type, self.spill_partition_bits)?;
+            self.partition_data_block(&data_block, join_type, self.spill_partition_bits)?;
         for (partition_id, data_block) in partition_data_blocks.into_iter().enumerate() {
             if !data_block.is_empty() {
                 self.partition_buffer
@@ -184,7 +184,7 @@ impl HashJoinSpiller {
         let mut partitions_writer = HashMap::<usize, BlocksWriter>::new();
 
         for data_block in data_blocks {
-            let mut hashes = self.get_hashes(&data_block, &self.join_type)?;
+            let mut hashes = self.get_hashes(&data_block, self.join_type)?;
 
             for hash in hashes.iter_mut() {
                 *hash = Self::get_partition_id(*hash, self.spill_partition_bits as u64);
@@ -249,14 +249,14 @@ impl HashJoinSpiller {
         data_blocks: &[DataBlock],
         partition_need_to_spill: Option<&HashSet<usize>>,
     ) -> Result<Vec<DataBlock>> {
-        let join_type = self.join_type.clone();
+        let join_type = self.join_type;
         let mut unspilled_data_blocks = vec![];
 
         let data_block = DataBlock::concat(data_blocks)?;
         let fetch_option =
             PartitionBufferFetchOption::PickPartitionWithThreshold(self.partition_threshold);
         for (partition_id, data_block) in self
-            .partition_data_block(&data_block, &join_type, self.spill_partition_bits)?
+            .partition_data_block(&data_block, join_type, self.spill_partition_bits)?
             .into_iter()
             .enumerate()
         {
@@ -343,10 +343,10 @@ impl HashJoinSpiller {
     fn partition_data_block(
         &mut self,
         data_block: &DataBlock,
-        join_type: &JoinType,
+        join_type: JoinType,
         partition_bits: usize,
     ) -> Result<Vec<DataBlock>> {
-        if join_type == &JoinType::Cross {
+        if join_type == JoinType::Cross {
             Ok(vec![data_block.clone()])
         } else {
             let mut hashes = self.get_hashes(data_block, join_type)?;
@@ -364,7 +364,7 @@ impl HashJoinSpiller {
     }
 
     // Get all hashes for build input data.
-    fn get_hashes(&self, data_block: &DataBlock, join_type: &JoinType) -> Result<Vec<u64>> {
+    fn get_hashes(&self, data_block: &DataBlock, join_type: JoinType) -> Result<Vec<u64>> {
         let mut hashes = Vec::with_capacity(data_block.num_rows());
         get_hashes(
             &self.func_ctx,

@@ -88,7 +88,7 @@ impl JoinNode {
                 vec![],
             ),
             non_equi_conditions: vec![],
-            join_type: self.join_type.clone(),
+            join_type: self.join_type,
             marker_index: None,
             from_correlated_subquery: false,
             need_hold_hash_table: false,

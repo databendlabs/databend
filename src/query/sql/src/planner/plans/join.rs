@@ -42,7 +42,7 @@ use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
     Cross,
     Inner,
@@ -89,7 +89,7 @@ impl JoinType {
             JoinType::RightMark => JoinType::LeftMark,
             JoinType::RightAsof => JoinType::LeftAsof,
             JoinType::LeftAsof => JoinType::RightAsof,
-            _ => self.clone(),
+            _ => *self,
         }
     }
 
@@ -116,6 +116,13 @@ impl JoinType {
         matches!(
             self,
             JoinType::InnerAny | JoinType::LeftAny | JoinType::RightAny
+        )
+    }
+
+    pub fn is_asof_join(&self) -> bool {
+        matches!(
+            self,
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
         )
     }
 }

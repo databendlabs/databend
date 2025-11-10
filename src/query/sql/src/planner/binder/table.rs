@@ -266,11 +266,8 @@ impl Binder {
                 }
                 _ => col.data_type.clone(),
             };
-            let idx = metadata.add_derived_column(
-                col.column_name.clone(),
-                *expand_data_type.clone(),
-                None,
-            );
+            let idx =
+                metadata.add_derived_column(col.column_name.clone(), *expand_data_type.clone());
             new_bind_ctx.columns.push(
                 ColumnBindingBuilder::new(
                     col.column_name.clone(),

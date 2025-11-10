@@ -118,7 +118,7 @@ impl HashJoinDesc {
             .collect();
 
         Ok(HashJoinDesc {
-            join_type: join.join_type.clone(),
+            join_type: join.join_type,
             build_keys,
             probe_keys,
             is_null_equal: join.is_null_equal.clone(),
@@ -128,7 +128,7 @@ impl HashJoinDesc {
                 // marker_index: join.marker_index,
             },
             from_correlated_subquery: join.from_correlated_subquery,
-            single_to_inner: join.single_to_inner.clone(),
+            single_to_inner: join.single_to_inner,
             runtime_filter: (&join.runtime_filter).into(),
             probe_to_build: join.probe_to_build.clone(),
             build_projection: join.build_projections.clone(),

@@ -441,7 +441,7 @@ impl SubqueryDecorrelatorOptimizer {
                         vec![],
                     ),
                     non_equi_conditions,
-                    join_type: join.join_type.clone(),
+                    join_type: join.join_type,
                     marker_index: join.marker_index,
                     from_correlated_subquery: false,
                     need_hold_hash_table: false,
@@ -721,7 +721,7 @@ impl SubqueryDecorrelatorOptimizer {
                 let column_entry = metadata.column(old);
                 let name = column_entry.name();
                 let data_type = column_entry.data_type();
-                let new = metadata.add_derived_column(name, data_type, None);
+                let new = metadata.add_derived_column(name, data_type);
                 self.derived_columns.insert(old, new);
                 new
             }));
@@ -841,7 +841,7 @@ impl SubqueryDecorrelatorOptimizer {
                     let column_entry = metadata.column(*mark);
                     let name = column_entry.name();
                     let data_type = column_entry.data_type();
-                    let new_mark = metadata.add_derived_column(name, data_type, None);
+                    let new_mark = metadata.add_derived_column(name, data_type);
                     self.derived_columns.insert(*mark, new_mark);
                     *mark = new_mark;
                 }
@@ -884,8 +884,7 @@ impl SubqueryDecorrelatorOptimizer {
             .map(|index| {
                 let (value, field) = scan.value(index)?;
                 let name = metadata.column(index).name();
-                let derived_index =
-                    metadata.add_derived_column(name, field.data_type().clone(), None);
+                let derived_index = metadata.add_derived_column(name, field.data_type().clone());
 
                 let field = DataField::new(&derived_index.to_string(), field.data_type().clone());
                 self.derived_columns.insert(index, derived_index);
@@ -910,11 +909,8 @@ impl SubqueryDecorrelatorOptimizer {
             .copied()
             .map(|col| {
                 let column_entry = metadata.column(col).clone();
-                let derived_index = metadata.add_derived_column(
-                    column_entry.name(),
-                    column_entry.data_type(),
-                    None,
-                );
+                let derived_index =
+                    metadata.add_derived_column(column_entry.name(), column_entry.data_type());
                 self.derived_columns.insert(col, derived_index);
                 derived_index
             })
@@ -963,7 +959,7 @@ impl SubqueryDecorrelatorOptimizer {
                 let name = column_entry.name();
                 let data_type = column_entry.data_type();
                 let old = index;
-                let index = metadata.add_derived_column(name, data_type, Some(scalar.clone()));
+                let index = metadata.add_derived_column(name, data_type);
                 self.derived_columns.insert(old, index);
                 Ok(ScalarItem { scalar, index })
             }

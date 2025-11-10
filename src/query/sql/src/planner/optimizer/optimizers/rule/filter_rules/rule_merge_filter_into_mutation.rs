@@ -68,11 +68,10 @@ impl Rule for RuleMergeFilterIntoMutation {
         mutation.predicates = filter.predicates;
 
         if mutation.mutation_type == MutationType::Update {
-            let column_index = self.metadata.write().add_derived_column(
-                "_predicate".to_string(),
-                DataType::Boolean,
-                None,
-            );
+            let column_index = self
+                .metadata
+                .write()
+                .add_derived_column("_predicate".to_string(), DataType::Boolean);
             mutation.predicate_column_index = Some(column_index);
         }
 
