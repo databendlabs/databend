@@ -36,6 +36,8 @@ use logforth::Layout;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
 
+use crate::module_tag::label_for_module;
+
 const PRINTER: DateTimePrinter = DateTimePrinter::new().precision(Some(6));
 
 pub fn format_timestamp(zdt: &Zoned) -> String {
@@ -124,51 +126,18 @@ impl<const FIXED_TIME: bool> Layout for TextLayout<FIXED_TIME> {
         }
 
         let level = record.level();
-        let module = map_module(record.module_path().unwrap_or(""));
+        let module = record.module_path().map(label_for_module).unwrap_or("");
         let log_file = Path::new(record.file().unwrap_or_default())
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or_default();
         let line = record.line().unwrap_or(0);
         let msg = record.args();
-        write!(buf, " {level:>5} {module}: {log_file}:{line} {msg}",)?;
+        write!(buf, " {level:>5} {module}: {log_file}:{line} {msg}")?;
         record.key_values().visit(&mut KvWriter(&mut buf))?;
 
         Ok(buf)
     }
-}
-
-fn map_module(full_name: &str) -> &str {
-    if full_name.starts_with("databend_query") {
-        if full_name.starts_with("databend_query::sessions::query_ctx") {
-            return "[QUERY-CTX]";
-        }
-        if full_name.starts_with("databend_query::sessions::queue_mgr") {
-            return "[QUERY-QUEUE]";
-        }
-        if full_name.starts_with("databend_query::interpreters::interpreter") {
-            return "[INTERPRETER]";
-        }
-        if full_name.starts_with("databend_query::servers::http::v1::query") {
-            return "[HTTP-QUERY]";
-        }
-        if full_name.starts_with("databend_query::pipelines::builders") {
-            return "[BUILD-PIPELINES]";
-        }
-        if full_name.starts_with("databend_query::pipelines::executor::query_pipeline_executor") {
-            return "[PIPELINE-EXECUTOR]";
-        }
-        if full_name.starts_with("databend_query::pipelines::processors::transforms") {
-            return "[TRANSFORMS]";
-        }
-    }
-    if full_name.starts_with("databend_common_pipeline_transforms") {
-        return "[TRANSFORMS]";
-    }
-    if full_name.starts_with("databend_common_sql::planner::planner") {
-        return "[SQL-PLANNER]";
-    }
-    full_name
 }
 
 #[derive(Debug)]

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[QUERY-QUEUE] ...".
+databend_common_tracing::register_module_tag!("[QUERY-QUEUE]");
+
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::future::Future;

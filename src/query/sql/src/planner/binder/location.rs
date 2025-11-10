@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[HISTORY-TABLES] ...".
+databend_common_tracing::register_module_tag!("[HISTORY-TABLES]");
+
 use std::collections::BTreeMap;
 use std::io::Error;
 use std::io::ErrorKind;

@@ -20,6 +20,7 @@ defer = { workspace = true }
 fastrace = { workspace = true }
 fastrace-opentelemetry = { workspace = true }
 itertools = { workspace = true }
+inventory = { workspace = true }
 jiff = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[FUSE-SNAPSHOT] ...".
+databend_common_tracing::register_module_tag!("[FUSE-SNAPSHOT]");
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
