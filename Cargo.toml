@@ -503,6 +503,7 @@ tantivy = "0.25.0"
 tantivy-common = "0.10.0"
 tantivy-fst = "0.5"
 tantivy-jieba = "0.17.0"
+tantivy-query-grammar = "0.25.0"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
 terminal_size = "0.4.2"
@@ -660,5 +661,6 @@ sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" 
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "ac27464" }
+tantivy-query-grammar = { git = "https://github.com/datafuse-extras/tantivy", rev = "9065a4d", package = "tantivy-query-grammar" }
 watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

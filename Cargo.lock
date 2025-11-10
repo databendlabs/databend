@@ -4220,6 +4220,7 @@ dependencies = [
  "sha2",
  "similar",
  "simsearch",
+ "tantivy-query-grammar",
  "unicase",
  "url",
 ]
