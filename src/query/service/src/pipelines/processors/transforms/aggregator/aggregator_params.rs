@@ -48,6 +48,7 @@ pub struct AggregatorParams {
 }
 
 impl AggregatorParams {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input_schema: DataSchemaRef,
         group_data_types: Vec<DataType>,

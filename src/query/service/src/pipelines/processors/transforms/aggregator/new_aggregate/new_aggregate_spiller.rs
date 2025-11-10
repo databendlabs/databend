@@ -26,6 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
+use databend_common_pipeline_transforms::traits::Location;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
@@ -38,6 +39,8 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::sessions::QueryContext;
+use crate::spillers::Layout;
+use crate::spillers::SpillAdapter;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataWriter;
 
@@ -106,15 +109,17 @@ struct AggregatePayloadWriters {
     partition_count: usize,
     writers: Vec<PayloadWriter>,
     write_stats: WriteStats,
+    ctx: Arc<QueryContext>,
 }
 
 impl AggregatePayloadWriters {
-    pub fn create(prefix: &str, partition_count: usize) -> Self {
+    pub fn create(prefix: &str, partition_count: usize, ctx: Arc<QueryContext>) -> Self {
         AggregatePayloadWriters {
             spill_prefix: prefix.to_string(),
             partition_count,
             writers: vec![],
             write_stats: WriteStats::default(),
+            ctx,
         }
     }
 
@@ -144,7 +149,6 @@ impl AggregatePayloadWriters {
             let start = Instant::now();
             self.writers[bucket].write_block(block)?;
 
-            // TODO: the time recorded may not be accurate due to the serialization is included
             let elapsed = start.elapsed();
             self.write_stats.accumulate(elapsed);
         }
@@ -152,15 +156,22 @@ impl AggregatePayloadWriters {
         Ok(())
     }
 
-    pub fn finalize(&mut self) -> Result<(Vec<NewSpilledPayload>, WriteStats)> {
+    pub fn finalize(&mut self) -> Result<Vec<NewSpilledPayload>> {
         let writers = mem::take(&mut self.writers);
         if writers.is_empty() {
-            return Ok((Vec::new(), self.write_stats.take()));
+            return Ok(Vec::new());
         }
 
         let mut spilled_payloads = Vec::new();
         for (partition_id, writer) in writers.into_iter().enumerate() {
             let (path, written_size, row_groups) = writer.close()?;
+
+            self.ctx.add_spill_file(
+                Location::Remote(path.clone()),
+                Layout::Aggregate,
+                written_size,
+            );
+
             if row_groups.is_empty() {
                 continue;
             }
@@ -180,7 +191,9 @@ impl AggregatePayloadWriters {
         }
 
         let stats = self.write_stats.take();
-        Ok((spilled_payloads, stats))
+        flush_write_profile(&self.ctx, stats);
+
+        Ok(spilled_payloads)
     }
 }
 
@@ -252,7 +265,6 @@ impl SharedPartitionStream {
 
 pub struct NewAggregateSpiller {
     pub memory_settings: MemorySettings,
-    ctx: Arc<QueryContext>,
     read_setting: ReadSettings,
     partition_count: usize,
     partition_stream: SharedPartitionStream,
@@ -270,11 +282,10 @@ impl NewAggregateSpiller {
         let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
         let spill_prefix = ctx.query_id_spill_prefix();
 
-        let payload_writers = AggregatePayloadWriters::create(&spill_prefix, partition_count);
+        let payload_writers = AggregatePayloadWriters::create(&spill_prefix, partition_count, ctx);
 
         Ok(Self {
             memory_settings,
-            ctx,
             read_setting,
             partition_count,
             partition_stream,
@@ -292,8 +303,7 @@ impl NewAggregateSpiller {
         let pending_blocks = self.partition_stream.finish();
         self.payload_writers.write_ready_blocks(pending_blocks)?;
 
-        let (payloads, write_stats) = self.payload_writers.finalize()?;
-        self.flush_write_profile(write_stats);
+        let payloads = self.payload_writers.finalize()?;
         info!(
             "[NewAggregateSpiller] spill finish with {} payloads",
             payloads.len()
@@ -315,7 +325,7 @@ impl NewAggregateSpiller {
         let read_bytes = row_group.total_byte_size() as usize;
         let instant = Instant::now();
         let data_block = reader.read(self.read_setting)?;
-        self.flush_read_profile(&instant, read_bytes);
+        flush_read_profile(&instant, read_bytes);
 
         if let Some(block) = data_block {
             Ok(AggregateMeta::Serialized(SerializedPayload {
@@ -327,44 +337,38 @@ impl NewAggregateSpiller {
             Err(ErrorCode::Internal("read empty block from final aggregate"))
         }
     }
+}
 
-    fn flush_read_profile(&self, instant: &Instant, read_bytes: usize) {
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::RemoteSpillReadTime,
-            instant.elapsed().as_millis() as usize,
-        );
+fn flush_read_profile(instant: &Instant, read_bytes: usize) {
+    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
+    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
+    Profile::record_usize_profile(
+        ProfileStatisticsName::RemoteSpillReadTime,
+        instant.elapsed().as_millis() as usize,
+    );
+}
+
+fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats) {
+    if stats.count == 0 && stats.bytes == 0 && stats.rows == 0 {
+        return;
     }
 
-    fn flush_write_profile(&self, stats: WriteStats) {
-        if stats.count == 0 && stats.bytes == 0 && stats.rows == 0 {
-            return;
-        }
+    if stats.count > 0 {
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, stats.count);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RemoteSpillWriteTime,
+            stats.elapsed.as_millis() as usize,
+        );
+    }
+    if stats.bytes > 0 {
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, stats.bytes);
+    }
 
-        if stats.count > 0 {
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteCount,
-                stats.count,
-            );
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteTime,
-                stats.elapsed.as_millis() as usize,
-            );
-        }
-        if stats.bytes > 0 {
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteBytes,
-                stats.bytes,
-            );
-        }
-
-        if stats.rows > 0 || stats.bytes > 0 {
-            let progress_val = ProgressValues {
-                rows: stats.rows,
-                bytes: stats.bytes,
-            };
-            self.ctx.get_aggregate_spill_progress().incr(&progress_val);
-        }
+    if stats.rows > 0 || stats.bytes > 0 {
+        let progress_val = ProgressValues {
+            rows: stats.rows,
+            bytes: stats.bytes,
+        };
+        ctx.get_aggregate_spill_progress().incr(&progress_val);
     }
 }
