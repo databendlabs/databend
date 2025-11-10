@@ -102,9 +102,9 @@ pub async fn build_runtime_filter(
 
     let build_side = s_expr.build_side_child();
     let build_side_data_distribution = build_side.get_data_distribution()?;
-    if !build_side_data_distribution
+    if build_side_data_distribution
         .as_ref()
-        .is_none_or(|e| matches!(e, Exchange::Broadcast | Exchange::Hash(_)))
+        .is_some_and(|e| !matches!(e, Exchange::Broadcast | Exchange::Hash(_)))
     {
         return Ok(Default::default());
     }
