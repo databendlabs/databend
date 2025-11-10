@@ -527,6 +527,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 snapshot,
                 table_info,
             } => {
+                snapshot.ensure_segments_unique()?;
                 let location = self
                     .location_gen
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
