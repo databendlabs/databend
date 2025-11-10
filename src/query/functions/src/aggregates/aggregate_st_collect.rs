@@ -189,7 +189,7 @@ where T: ArgType
 impl<T> StateSerde for StCollectState<T>
 where T: ArgType
 {
-    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn super::SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Array(Box::new(T::data_type())).into()]
     }
 

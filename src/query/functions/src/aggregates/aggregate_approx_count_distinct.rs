@@ -36,7 +36,7 @@ use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::UnaryState;
 
@@ -48,11 +48,7 @@ where
     T: ValueType,
     T::Scalar: Hash,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         self.add_object(&T::to_owned_scalar(other));
         Ok(())
     }
@@ -65,7 +61,7 @@ where
     fn merge_result(
         &mut self,
         mut builder: BuilderMut<'_, UInt64Type>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         builder.push(self.count() as u64);
         Ok(())
@@ -73,7 +69,7 @@ where
 }
 
 impl<const HLL_P: usize> StateSerde for AggregateApproxCountDistinctState<HLL_P> {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }
 
@@ -144,7 +140,7 @@ fn create_templated<const P: usize>(
     let return_type = DataType::Number(NumberDataType::UInt64);
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
-            AggregateUnaryFunction::<HyperLogLog<P>, NumberType<NUM_TYPE>, UInt64Type>::create(
+            AggregateUnaryFunction::<HyperLogLog<P>, NumberType<NUM_TYPE>, UInt64Type>::new(
                 display_name,
                 return_type,
             )
@@ -152,7 +148,7 @@ fn create_templated<const P: usize>(
             .finish()
         }
         DataType::String => {
-            AggregateUnaryFunction::<HyperLogLog<P>, StringType, UInt64Type>::create(
+            AggregateUnaryFunction::<HyperLogLog<P>, StringType, UInt64Type>::new(
                 display_name,
                 return_type,
             )
@@ -160,7 +156,7 @@ fn create_templated<const P: usize>(
             .finish()
         }
         DataType::Date => {
-            AggregateUnaryFunction::<HyperLogLog<P>, DateType, UInt64Type>::create(
+            AggregateUnaryFunction::<HyperLogLog<P>, DateType, UInt64Type>::new(
                 display_name,
                 return_type,
             )
@@ -168,7 +164,7 @@ fn create_templated<const P: usize>(
             .finish()
         }
         DataType::Timestamp => {
-            AggregateUnaryFunction::<HyperLogLog<P>, TimestampType, UInt64Type>::create(
+            AggregateUnaryFunction::<HyperLogLog<P>, TimestampType, UInt64Type>::new(
                 display_name,
                 return_type,
             )
@@ -176,7 +172,7 @@ fn create_templated<const P: usize>(
             .finish()
         }
         _ => {
-            AggregateUnaryFunction::<HyperLogLog<P>, AnyType, UInt64Type>::create(
+            AggregateUnaryFunction::<HyperLogLog<P>, AnyType, UInt64Type>::new(
                 display_name,
                 return_type,
             )

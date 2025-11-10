@@ -20,20 +20,10 @@ use std::ops::Range;
 use databend_common_exception::Result;
 use num_traits::AsPrimitive;
 
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
-use super::string::StringDomain;
-use super::string::StringIterator;
 use super::AccessType;
-use super::AnyType;
-use super::ArgType;
 use super::Number;
 use super::NumberType;
 use super::SimpleDomain;
-use super::StringColumn;
-use super::StringType;
-use crate::display::scalar_ref_to_string;
 use crate::Column;
 use crate::Domain;
 use crate::ScalarRef;
@@ -175,126 +165,5 @@ where
         let min = domain.min.as_();
         let max = domain.max.as_();
         SimpleDomain { min, max }
-    }
-}
-
-/// For number convert
-pub type StringConvertView = ComputeView<StringConvert, AnyType, OwnedStringType>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OwnedStringType;
-
-impl AccessType for OwnedStringType {
-    type Scalar = String;
-    type ScalarRef<'a> = String;
-    type Column = StringColumn;
-    type Domain = StringDomain;
-    type ColumnIterator<'a> = std::iter::Map<StringIterator<'a>, fn(&str) -> String>;
-
-    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        scalar.to_string()
-    }
-
-    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        scalar.clone()
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
-        scalar
-            .as_string()
-            .map(|s| s.to_string())
-            .ok_or_else(|| scalar_type_error::<Self>(scalar))
-    }
-
-    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
-        col.as_string()
-            .cloned()
-            .ok_or_else(|| column_type_error::<Self>(col))
-    }
-
-    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
-        domain
-            .as_string()
-            .cloned()
-            .ok_or_else(|| domain_type_error::<Self>(domain))
-    }
-
-    fn column_len(col: &Self::Column) -> usize {
-        col.len()
-    }
-
-    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.index(index).map(str::to_string)
-    }
-
-    #[inline]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        col.value_unchecked(index).to_string()
-    }
-
-    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
-    }
-
-    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter().map(str::to_string)
-    }
-
-    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        scalar.len()
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
-    }
-
-    #[inline(always)]
-    fn compare(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> Ordering {
-        left.cmp(&right)
-    }
-
-    #[inline(always)]
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left == right
-    }
-
-    #[inline(always)]
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left != right
-    }
-
-    #[inline(always)]
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left > right
-    }
-
-    #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left >= right
-    }
-
-    #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left < right
-    }
-
-    #[inline(always)]
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left <= right
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StringConvert;
-
-impl Compute<AnyType, OwnedStringType> for StringConvert {
-    fn compute<'a>(
-        value: <AnyType as AccessType>::ScalarRef<'a>,
-    ) -> <OwnedStringType as AccessType>::ScalarRef<'a> {
-        scalar_ref_to_string(&value)
-    }
-
-    fn compute_domain(_: &<AnyType as AccessType>::Domain) -> StringDomain {
-        StringType::full_domain()
     }
 }

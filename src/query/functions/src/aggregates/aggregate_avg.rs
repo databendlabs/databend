@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::marker::PhantomData;
 
 use databend_common_exception::ErrorCode;
@@ -38,7 +37,7 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::UnaryState;
 
@@ -73,11 +72,7 @@ where
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
     TSum::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         self.count += 1;
         let other = T::to_owned_scalar(other).as_();
         self.value += other;
@@ -93,7 +88,7 @@ where
     fn merge_result(
         &mut self,
         mut builder: BuilderMut<'_, Float64Type>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         let value = self.value.as_() / (self.count as f64);
         builder.push(F64::from(value));
@@ -108,7 +103,7 @@ where
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
     TSum::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
 {
-    fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         std::vec![
             StateSerdeItem::DataType(TSum::data_type()),
             StateSerdeItem::DataType(UInt64Type::data_type())
@@ -158,12 +153,6 @@ struct DecimalAvgData {
     pub scale_add: u8,
 }
 
-impl FunctionData for DecimalAvgData {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 struct DecimalAvgState<const OVERFLOW: bool, T> {
     pub value: T,
     pub count: u64,
@@ -202,7 +191,9 @@ impl<const OVERFLOW: bool, T> UnaryState<DecimalType<T>, DecimalType<T>>
     for DecimalAvgState<OVERFLOW, T>
 where T: Decimal + std::ops::AddAssign
 {
-    fn add(&mut self, other: T, _function_data: Option<&dyn FunctionData>) -> Result<()> {
+    type FunctionInfo = DecimalAvgData;
+
+    fn add(&mut self, other: T, _: &Self::FunctionInfo) -> Result<()> {
         self.add_internal(1, other)
     }
 
@@ -213,16 +204,8 @@ where T: Decimal + std::ops::AddAssign
     fn merge_result(
         &mut self,
         mut builder: <DecimalType<T> as ValueType>::ColumnBuilderMut<'_>,
-        function_data: Option<&dyn FunctionData>,
+        decimal_avg_data: &DecimalAvgData,
     ) -> Result<()> {
-        // # Safety
-        // `downcast_ref_unchecked` will check type in debug mode using dynamic dispatch,
-        let decimal_avg_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<DecimalAvgData>()
-        };
         match self
             .value
             .checked_mul(T::e(decimal_avg_data.scale_add))
@@ -244,7 +227,7 @@ where T: Decimal + std::ops::AddAssign
 impl<const OVERFLOW: bool, T> StateSerde for DecimalAvgState<OVERFLOW, T>
 where T: Decimal + std::ops::AddAssign
 {
-    fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         std::vec![
             DataType::Decimal(T::default_decimal_size()).into(),
             UInt64Type::data_type().into()
@@ -308,7 +291,6 @@ pub fn try_create_aggregate_avg_function(
                 NumberType<NUM>,
                 Float64Type,
             >::create(display_name, return_type)
-            .finish()
         }
         DataType::Decimal(s) => {
             with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
@@ -326,16 +308,22 @@ pub fn try_create_aggregate_avg_function(
                             DecimalAvgState<true, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::create(display_name, return_type)
-                        .with_function_data(Box::new(DecimalAvgData { scale_add }))
+                        >::with_function_info(
+                            display_name,
+                            return_type,
+                            DecimalAvgData { scale_add },
+                        )
                         .finish()
                     } else {
                         AggregateUnaryFunction::<
                             DecimalAvgState<false, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::create(display_name, return_type)
-                        .with_function_data(Box::new(DecimalAvgData { scale_add }))
+                        >::with_function_info(
+                            display_name,
+                            return_type,
+                            DecimalAvgData { scale_add },
+                        )
                         .finish()
                     }
                 }
