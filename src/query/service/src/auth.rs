@@ -130,14 +130,15 @@ impl AuthMgr {
                 token: t,
                 client_ip,
             } => {
-                let jwt_auth = self
-                    .jwt_auth
-                    .as_ref()
-                    .ok_or_else(|| ErrorCode::AuthenticateFailure("[AUTH] JWT authentication failed: JWT auth is not configured on this server"))?;
+                let jwt_auth = self.jwt_auth.as_ref().ok_or_else(|| {
+                    ErrorCode::AuthenticateFailure(
+                        "JWT authentication failed: JWT auth is not configured on this server",
+                    )
+                })?;
                 let jwt = jwt_auth.parse_jwt_claims(t.as_str()).await?;
                 let user_name = jwt.subject.ok_or_else(|| {
                     ErrorCode::AuthenticateFailure(
-                        "[AUTH] JWT authentication failed: subject claim (user name) is missing in the token",
+                        "JWT authentication failed: subject claim (user name) is missing in the token",
                     )
                 })?;
 
@@ -157,7 +158,7 @@ impl AuthMgr {
                 {
                     Ok(mut user_info) => {
                         if user_info.auth_info != AuthInfo::JWT {
-                            return Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for JWT authentication"));
+                            return Err(ErrorCode::AuthenticateFailure("Authentication failed: user exists but is not configured for JWT authentication"));
                         }
                         if let Some(ensure_user) = jwt.custom.ensure_user {
                             let current_roles = user_info.grants.roles();
@@ -166,7 +167,7 @@ impl AuthMgr {
                                 for role in roles.iter() {
                                     if !current_roles.contains(role) {
                                         info!(
-                                            "[AUTH] JWT grant role to user: {} -> {}",
+                                            "JWT grant role to user: {} -> {}",
                                             user_info.name, role
                                         );
                                         user_api
@@ -185,7 +186,7 @@ impl AuthMgr {
                                 // grant default role to user if not exists
                                 if !current_roles.contains(jwt_default_role) {
                                     info!(
-                                        "[AUTH] JWT grant default role to user: {} -> {}",
+                                        "JWT grant default role to user: {} -> {}",
                                         user_info.name, jwt_default_role
                                     );
                                     user_api
@@ -200,7 +201,7 @@ impl AuthMgr {
                                 // ensure default role to jwt role
                                 if user_info.option.default_role() != Some(jwt_default_role) {
                                     info!(
-                                        "[AUTH] JWT update default role for user: {} -> {}",
+                                        "JWT update default role for user: {} -> {}",
                                         user_info.name, jwt_default_role
                                     );
                                     user_api
@@ -226,7 +227,7 @@ impl AuthMgr {
                             }
                             _ => {
                                 return Err(ErrorCode::AuthenticateFailure(format!(
-                                    "[AUTH] Authentication failed: {}",
+                                    "Authentication failed: {}",
                                     e.message()
                                 )))
                             }
@@ -234,7 +235,7 @@ impl AuthMgr {
                         let ensure_user = jwt
                             .custom
                             .ensure_user
-                            .ok_or_else(|| ErrorCode::AuthenticateFailure(format!("[AUTH] JWT authentication failed: ensure_user claim is missing and user does not exist: {}", e.message())))?;
+                            .ok_or_else(|| ErrorCode::AuthenticateFailure(format!("JWT authentication failed: ensure_user claim is missing and user does not exist: {}", e.message())))?;
                         // create a new user if not exists
                         let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
                         if let Some(ref roles) = ensure_user.roles {
@@ -250,7 +251,7 @@ impl AuthMgr {
                                 .option
                                 .set_default_role(Some(default_role.clone()));
                         }
-                        info!("[AUTH] JWT create user: {}", user_info.name);
+                        info!("JWT create user: {}", user_info.name);
                         user_api
                             .add_user(&tenant, user_info.clone(), &CreateOption::CreateIfNotExists)
                             .await?;
@@ -309,16 +310,16 @@ impl AuthMgr {
                         hash_method: t,
                         ..
                     } => match p {
-                        None => Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: password is required but was not provided")),
+                        None => Err(ErrorCode::AuthenticateFailure("Authentication failed: password is required but was not provided")),
                         Some(p) => {
                             if *h == t.hash(p) {
                                 Ok(())
                             } else {
-                                Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: incorrect password"))
+                                Err(ErrorCode::AuthenticateFailure("Authentication failed: incorrect password"))
                             }
                         }
                     },
-                    _ => Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for password authentication")),
+                    _ => Err(ErrorCode::AuthenticateFailure("Authentication failed: user exists but is not configured for password authentication")),
                 };
                 UserApiProvider::instance()
                     .update_user_login_result(tenant, identity, authed.is_ok(), &user)

@@ -69,10 +69,7 @@ pub async fn hook_compact(
 ) {
     let op_name = trace_ctx.operation_name.clone();
     if let Err(e) = do_hook_compact(ctx, pipeline, compact_target, trace_ctx, lock_opt).await {
-        info!(
-            "[COMPACT-HOOK] Operation {} failed with error (ignored): {}",
-            op_name, e
-        );
+        info!("Operation {} failed with error (ignored): {}", op_name, e);
     }
 }
 
@@ -91,14 +88,21 @@ async fn do_hook_compact(
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
             let op_name = &trace_ctx.operation_name;
-            metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
-            info!("[COMPACT-HOOK] Operation {op_name} completed successfully, starting table optimization job.");
+            metrics_inc_compact_hook_main_operation_time_ms(
+                op_name,
+                trace_ctx.start.elapsed().as_millis() as u64,
+            );
+            info!("Operation {op_name} completed successfully, starting table optimization job.");
 
             let compact_start_at = Instant::now();
             let compaction_limits = match compact_target.mutation_kind {
                 MutationKind::Insert => {
-                    let compaction_num_block_hint = ctx.get_compaction_num_block_hint(&compact_target.table);
-                    info!("[COMPACT-HOOK] Table {} requires compaction of {} blocks", compact_target.table, compaction_num_block_hint);
+                    let compaction_num_block_hint =
+                        ctx.get_compaction_num_block_hint(&compact_target.table);
+                    info!(
+                        "Table {} requires compaction of {} blocks",
+                        compact_target.table, compaction_num_block_hint
+                    );
                     if compaction_num_block_hint == 0 {
                         return Ok(());
                     }
@@ -108,7 +112,8 @@ async fn do_hook_compact(
                     }
                 }
                 _ => {
-                    let auto_compaction_segments_limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
+                    let auto_compaction_segments_limit =
+                        ctx.get_settings().get_auto_compaction_segments_limit()?;
                     CompactionLimits {
                         segment_limit: Some(auto_compaction_segments_limit as usize),
                         block_limit: None,
@@ -122,19 +127,27 @@ async fn do_hook_compact(
             let scan_progress = ctx.get_scan_progress();
             let scan_progress_value = scan_progress.as_ref().get_values();
 
-            match GlobalIORuntime::instance().block_on({
-                compact_table(ctx, compact_target, compaction_limits, lock_opt)
-            }) {
+            match GlobalIORuntime::instance()
+                .block_on({ compact_table(ctx, compact_target, compaction_limits, lock_opt) })
+            {
                 Ok(_) => {
-                    info!("[COMPACT-HOOK] Operation {op_name} and table optimization job completed successfully.");
+                    info!("Operation {op_name} and table optimization job completed successfully.");
                 }
-                Err(e) => { info!("[COMPACT-HOOK] Operation {op_name} completed but table optimization job failed: {:?}", e); }
+                Err(e) => {
+                    info!(
+                        "Operation {op_name} completed but table optimization job failed: {:?}",
+                        e
+                    );
+                }
             }
 
             // reset the progress value
             write_progress.set(&write_progress_value);
             scan_progress.set(&scan_progress_value);
-            metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
+            metrics_inc_compact_hook_compact_time_ms(
+                &trace_ctx.operation_name,
+                compact_start_at.elapsed().as_millis() as u64,
+            );
         }
 
         Ok(())

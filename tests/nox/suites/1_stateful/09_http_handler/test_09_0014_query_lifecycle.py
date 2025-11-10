@@ -219,8 +219,8 @@ def test_query_lifecycle_finalized(rows):
     assert do_hb([resp0]) == (200, {"queries_to_remove": [query_id]})
 
     # Fetch the page 0 result in 404
-    assert get_next_page(f"/v1/query/{query_id}/page/0", node_id) == (404,  {"error":{"code":404,"message":"[HTTP-QUERY] Invalid page number: requested 0, current page is 2"}})
-    assert get_next_page(f"/v1/query/{query_id}/page/{large_page_no}", node_id) == (404, {"error":{"code":404,"message":f"[HTTP-QUERY] Invalid page number: requested {large_page_no}, current page is 2"}})
+    assert get_next_page(f"/v1/query/{query_id}/page/0", node_id) == (404,  {"error":{"code":404,"message":"Invalid page number: requested 0, current page is 2"}})
+    assert get_next_page(f"/v1/query/{query_id}/page/{large_page_no}", node_id) == (404, {"error":{"code":404,"message":f"Invalid page number: requested {large_page_no}, current page is 2"}})
 
     # Finalize the query (CloseReason::Finalized),  support retry
     exp["next_uri"] = None
@@ -233,7 +233,7 @@ def test_query_lifecycle_finalized(rows):
     assert cancel_resp.status_code == 200
 
     # Fetch the page 0 result in 400
-    assert get_next_page(f"/v1/query/{query_id}/page/0", node_id) == (400, {"error":{"code":400,"message":f"[HTTP-QUERY] Query {query_id} is closed for finalized"}})
+    assert get_next_page(f"/v1/query/{query_id}/page/0", node_id) == (400, {"error":{"code":400,"message":f"Query {query_id} is closed for finalized"}})
     assert do_hb([resp0]) == (200, {"queries_to_remove": [query_id]})
     # assert get_query_state(query_id, node_id) == (200, exp_state)
 
@@ -272,7 +272,7 @@ def test_query_lifecycle_canceled():
         assert cancel_resp.status_code == 200, f"Cancel failed: {cancel_resp.text}"
         assert cancel_resp.text == "", f"Cancel failed: {cancel_resp.text}"
 
-    assert get_next_page(f"/v1/query/{query_id}/page/0", node_id) == (400, {"error":{"code":400,"message":f"[HTTP-QUERY] Query {query_id} is closed for canceled"}})
+    assert get_next_page(f"/v1/query/{query_id}/page/0", node_id) == (400, {"error":{"code":400,"message":f"Query {query_id} is closed for canceled"}})
     status_code, resp_state = get_query_state(query_id, node_id)
     assert status_code == 200
     assert resp_state.get("state") == "Failed"
@@ -331,7 +331,7 @@ def test_query_lifecycle_timeout(rows):
     node_id = resp.get("node_id")
     query_id = resp.get("id")
     uri_page_0 = f"/v1/query/{query_id}/page/0"
-    assert get_next_page(uri_page_0, node_id) == (400, {"error":{"code":400,"message":f"[HTTP-QUERY] Query {query_id} is closed for timed out"}})
+    assert get_next_page(uri_page_0, node_id) == (400, {"error":{"code":400,"message":f"Query {query_id} is closed for timed out"}})
 
     assert do_hb([resp]) == (200, {"queries_to_remove": [query_id]})
 

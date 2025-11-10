@@ -36,7 +36,7 @@ pub async fn vacuum_table(
     respect_flash_back: bool,
 ) {
     warn!(
-        "[VACUUM] Vacuuming table: {}, ident: {}",
+        "Vacuuming table: {}, ident: {}",
         fuse_table.table_info.name, fuse_table.table_info.ident
     );
 
@@ -45,12 +45,9 @@ pub async fn vacuum_table(
         .await
     {
         // Vacuum in a best-effort manner, errors are ignored
-        warn!(
-            "[VACUUM] Vacuum table {} failed : {}",
-            fuse_table.table_info.name, e
-        );
+        warn!("Vacuum table {} failed : {}", fuse_table.table_info.name, e);
     } else {
-        info!("[VACUUM] Vacuum table {} done", fuse_table.table_info.name);
+        info!("Vacuum table {} done", fuse_table.table_info.name);
     }
 }
 

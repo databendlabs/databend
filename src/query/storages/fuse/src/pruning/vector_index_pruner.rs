@@ -206,9 +206,9 @@ impl VectorIndexPruner {
                 metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
             }
             if !param.has_filter && param.asc {
-                info!("[FUSE-PRUNER] Vector index hnsw topn prune elapsed: {elapsed}");
+                info!("Vector index hnsw topn prune elapsed: {elapsed}");
             } else {
-                info!("[FUSE-PRUNER] Vector index calculate score topn prune elapsed: {elapsed}");
+                info!("Vector index calculate score topn prune elapsed: {elapsed}");
             }
 
             return Ok(pruned_metas);
@@ -394,7 +394,7 @@ impl VectorIndexPruner {
         {
             metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
         }
-        info!("[FUSE-PRUNER] Vector index calculate score elapsed: {elapsed}");
+        info!("Vector index calculate score elapsed: {elapsed}");
 
         Ok(new_metas)
     }

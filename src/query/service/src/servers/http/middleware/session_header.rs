@@ -116,7 +116,7 @@ impl ClientSession {
 
     fn new_session(typ: ClientSessionType) -> Self {
         let id = Uuid::now_v7().to_string();
-        info!("[HTTP-SESSION] Created new session with ID: {}", id);
+        info!("Created new session with ID: {}", id);
         ClientSession {
             header: ClientSessionHeader {
                 id,
@@ -232,7 +232,7 @@ impl ClientSession {
             }
             Err(err) => {
                 warn!(
-                        "[HTTP-SESSION] Invalid last_refresh_time: detected clock drift or incorrect timestamp, difference: {:?}",
+                        "Invalid last_refresh_time: detected clock drift or incorrect timestamp, difference: {:?}",
                         err.duration()
                     );
             }

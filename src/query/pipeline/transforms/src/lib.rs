@@ -21,7 +21,7 @@
 #![feature(assert_matches)]
 #![feature(debug_closure_helpers)]
 
-// Logs from this crate will show up as "[TRANSFORMS] ...".
+// Logs from this crate will show up as "...".
 databend_common_tracing::register_module_tag!("[TRANSFORMS]");
 
 pub mod processors;

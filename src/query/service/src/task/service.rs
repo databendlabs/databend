@@ -187,10 +187,10 @@ impl TaskService {
                     }
                 }
                 if let Err(err) = task_service.prepare().await {
-                    error!("[PRIVATE-TASKS] prepare failed due to {}", err);
+                    error!("prepare failed due to {}", err);
                 }
                 if let Err(err) = task_service.work(&tenant, runtime).await {
-                    error!("[PRIVATE-TASKS] prepare failed due to {}", err);
+                    error!("prepare failed due to {}", err);
                 }
             },
             None,
@@ -306,7 +306,7 @@ impl TaskService {
                                             Result::Ok(())
                                         };
                                         if let Err(err) = fn_work().await {
-                                            error!("[PRIVATE-TASKS] interval schedule failed due to {}", err);
+                                            error!("interval schedule failed due to {}", err);
                                         }
                                     });
                             }
@@ -354,7 +354,7 @@ impl TaskService {
                                             Result::Ok(())
                                         };
                                         if let Err(err) = fn_work().await {
-                                            error!("[PRIVATE-TASKS] cron schedule failed due to {}", err);
+                                            error!("cron schedule failed due to {}", err);
                                         }
                                     });
                             }
@@ -453,7 +453,7 @@ impl TaskService {
                                 Result::Ok(())
                             };
                             if let Err(err) = fn_work().await {
-                                error!("[PRIVATE-TASKS] execute failed due to {}", err);
+                                error!("execute failed due to {}", err);
                             }
                         },
                         None,

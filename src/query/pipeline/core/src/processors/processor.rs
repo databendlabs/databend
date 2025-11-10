@@ -178,7 +178,7 @@ impl ProcessorPtr {
                             ("error.message", err.display_text()),
                         ]
                     });
-                log::info!(error = err.to_string(); "[PIPELINE-EXECUTOR] Error in process");
+                log::info!(error = err.to_string(); "Error in process");
                 Err(err)
             }
         }
@@ -218,7 +218,7 @@ impl ProcessorPtr {
                             ("error.message", err.display_text()),
                         ]
                     });
-                    log::info!(error = err.to_string(); "[PIPELINE-EXECUTOR] Error in process");
+                    log::info!(error = err.to_string(); "Error in process");
                     Err(err)
                 }
             }

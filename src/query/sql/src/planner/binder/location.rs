@@ -181,7 +181,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let in_history_table_scope = ThreadTracker::capture_log_settings()
         .is_some_and(|settings| settings.level == LevelFilter::Off);
     if in_history_table_scope {
-        info!("[HISTORY-TABLES] Enable credential loader for history tables");
+        info!("Enable credential loader for history tables");
         disable_credential_loader = false;
     }
 

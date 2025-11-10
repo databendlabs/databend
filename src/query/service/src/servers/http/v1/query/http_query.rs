@@ -392,7 +392,7 @@ impl HttpSessionConf {
                     .set_setting(k.to_string(), v.to_string())
                     .or_else(|e| {
                         if e.code() == ErrorCode::UNKNOWN_VARIABLE {
-                            warn!("[HTTP-QUERY] Unknown session setting ignored: {}", k);
+                            warn!("Unknown session setting ignored: {}", k);
                             Ok(())
                         } else {
                             Err(e)
@@ -409,7 +409,7 @@ impl HttpSessionConf {
                     let state = *last_query.client_state.lock();
                     if !matches!(state, ClientState::Closed(_)) {
                         warn!(
-                            "[HTTP-QUERY] Last query id not finished yet, id = {}, state = {:?}",
+                            "Last query id not finished yet, id = {}, state = {:?}",
                             id, state
                         );
                     }
@@ -590,19 +590,20 @@ fn try_set_txn(
             http_query_manager.check_sticky_for_txn(&internal_state.last_node_id)?;
             let last_query_id = internal_state.last_query_ids.first().ok_or_else(|| {
                 ErrorCode::InvalidSessionState(
-                    "[HTTP-QUERY] Invalid transaction state: transaction is active but last_query_ids is empty".to_string(),
+                    "Invalid transaction state: transaction is active but last_query_ids is empty"
+                        .to_string(),
                 )
             })?;
             if let Some(txn_mgr) = http_query_manager.get_txn(last_query_id) {
                 session.set_txn_mgr(txn_mgr);
                 info!(
-                    "[HTTP-QUERY] Query {} continuing transaction from previous query {}",
+                    "Query {} continuing transaction from previous query {}",
                     query_id, last_query_id
                 );
             } else {
                 // the returned TxnState should be Fail
                 return Err(ErrorCode::TransactionTimeout(format!(
-                    "[HTTP-QUERY] Transaction timeout: last_query_id {} not found on this server",
+                    "Transaction timeout: last_query_id {} not found on this server",
                     last_query_id
                 )));
             }
@@ -628,7 +629,7 @@ impl HttpQuery {
         let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
         let sql = &req.sql;
         let node_id = &GlobalConfig::instance().query.node_id;
-        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = sql; "[HTTP-QUERY] Creating new query");
+        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = sql; "Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may look like `INSERT INTO mytbl VALUES;`,
@@ -814,7 +815,7 @@ impl HttpQuery {
             let state = &mut self.execute_state.lock().state;
             let ExecuteState::Starting(state) = state else {
                 return Err(ErrorCode::Internal(
-                    "[HTTP-QUERY] Invalid query state: expected Starting state",
+                    "Invalid query state: expected Starting state",
                 ));
             };
 
@@ -855,10 +856,7 @@ impl HttpQuery {
                         warnings: query_context.pop_warnings(),
                     };
 
-                    error!(
-                        "[HTTP-QUERY] Query state changed to Stopped, failed to start: {:?}",
-                        e
-                    );
+                    error!("Query state changed to Stopped, failed to start: {:?}", e);
                     Executor::start_to_stop(&query_state, ExecuteState::Stopped(Box::new(state)));
                     block_sender_closer.abort();
                 }
@@ -970,7 +968,7 @@ impl HttpQuery {
         if *id != self.client_session_id {
             return Err(poem::error::Error::from_string(
                 format!(
-                    "[HTTP-QUERY] Authentication error: wrong client_session_id, expected {:?}, got {id:?}",
+                    "Authentication error: wrong client_session_id, expected {:?}, got {id:?}",
                     &self.client_session_id
                 ),
                 StatusCode::UNAUTHORIZED,

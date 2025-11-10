@@ -87,10 +87,7 @@ impl SnapshotsIO {
             ver,
             put_cache: true,
         };
-        info!(
-            "[FUSE-SNAPSHOT] Reading snapshot with parameters: {:?}",
-            load_params
-        );
+        info!("Reading snapshot with parameters: {:?}", load_params);
         let snapshot = reader.read(&load_params).await?;
         Ok((snapshot, ver))
     }
@@ -121,7 +118,7 @@ impl SnapshotsIO {
             // Error is directly returned, since it can be ignored through flatten
             // in read_snapshot_lites_ext.
             return Err(ErrorCode::StorageOther(
-                "[FUSE-SNAPSHOT] Invalid snapshot: timestamp must be less than min_snapshot_timestamp",
+                "Invalid snapshot: timestamp must be less than min_snapshot_timestamp",
             ));
         }
         Ok(TableSnapshotLite::from((snapshot.as_ref(), ver)))
@@ -203,7 +200,7 @@ impl SnapshotsIO {
                     snapshot_files.len(),
                     start.elapsed()
                 );
-                info!("[FUSE-SNAPSHOT] {}", status);
+                info!("{}", status);
                 (status_callback)(status);
             }
         }
@@ -267,7 +264,7 @@ impl SnapshotsIO {
             // members of precedents of the current snapshot, though.
             // Error is directly returned, since we can be ignored through flatten.
             return Err(ErrorCode::StorageOther(
-                "[FUSE-SNAPSHOT] Invalid snapshot: timestamp must be less than root snapshot timestamp",
+                "Invalid snapshot: timestamp must be less than root snapshot timestamp",
             ));
         }
         let mut segments = HashSet::new();
@@ -385,7 +382,7 @@ impl SnapshotsIO {
                 },
                 _ => {
                     warn!(
-                        "[FUSE-SNAPSHOT] Non-file entry found in prefix '{}', entry: {:?}",
+                        "Non-file entry found in prefix '{}', entry: {:?}",
                         prefix, de
                     );
                     continue;

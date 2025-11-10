@@ -191,7 +191,7 @@ impl QueryContext {
     }
 
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
-        debug!("[QUERY-CTX] Creating new QueryContext instance");
+        debug!("Creating new QueryContext instance");
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let query_settings = Settings::create(tenant);
@@ -232,7 +232,7 @@ impl QueryContext {
                 Ok(table_function.as_table())
             }
             (Some(_), false) => Err(ErrorCode::InvalidArgument(
-                "[QUERY-CTX] Table args not supported in non-default catalog",
+                "Table args not supported in non-default catalog",
             )),
             // Load table first, if not found, try to load table function.
             (None, true) => {
@@ -289,7 +289,7 @@ impl QueryContext {
             }
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
-                    "[QUERY-CTX] Cannot use database '{}': database does not exist",
+                    "Cannot use database '{}': database does not exist",
                     new_database_name
                 )));
             }
@@ -568,7 +568,7 @@ impl QueryContext {
             let _ = op.write(&meta_path, joined_contents).await?;
             Ok(())
         }) {
-            log::error!("[QUERY-CTX] Failed to create spill meta file: {}", e);
+            log::error!("Failed to create spill meta file: {}", e);
         }
     }
 
@@ -721,7 +721,7 @@ impl TableContext for QueryContext {
     fn set_status_info(&self, info: &str) {
         // set_status_info is not called frequently, so we can use info! here.
         // make it easier to match the status to the log.
-        info!("[QUERY-CTX] Status update: {}", info);
+        info!("Status update: {}", info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }
@@ -842,7 +842,7 @@ impl TableContext for QueryContext {
             .lock()
             .insert(table_name.to_string(), hint);
         info!(
-            "[QUERY-CTX] Set compaction hint for table '{}': old={:?}, new={}",
+            "Set compaction hint for table '{}': old={:?}, new={}",
             table_name, old, hint
         );
     }
@@ -984,14 +984,10 @@ impl TableContext for QueryContext {
     fn get_format_settings(&self) -> Result<FormatSettings> {
         let tz = self.get_settings().get_timezone()?;
         let timezone = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone(
-                "[QUERY-CTX] Invalid timezone format - timezone validation failed",
-            )
+            ErrorCode::InvalidTimezone("Invalid timezone format - timezone validation failed")
         })?;
         let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
-            ErrorCode::InvalidTimezone(
-                "[QUERY-CTX] Invalid timezone format - jiff timezone parsing failed",
-            )
+            ErrorCode::InvalidTimezone("Invalid timezone format - jiff timezone parsing failed")
         })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
         let format_null_as_str = self.get_settings().get_format_null_as_str()?;
@@ -1019,7 +1015,7 @@ impl TableContext for QueryContext {
 
         let tz_string = settings.get_timezone()?;
         let tz = TimeZone::get(&tz_string).map_err(|e| {
-            ErrorCode::InvalidTimezone(format!("[QUERY-CTX] Timezone validation failed: {}", e))
+            ErrorCode::InvalidTimezone(format!("Timezone validation failed: {}", e))
         })?;
         let now = Zoned::now().with_time_zone(TimeZone::UTC);
         let numeric_cast_option = settings.get_numeric_cast_option()?;
@@ -1285,10 +1281,7 @@ impl TableContext for QueryContext {
                 }
                 None => {
                     if let Some(v) = self.get_settings().get_stream_consume_batch_size_hint()? {
-                        info!(
-                            "[QUERY-CTX] Overriding stream max_batch_size with setting value: {}",
-                            v
-                        );
+                        info!("Overriding stream max_batch_size with setting value: {}", v);
                         Some(v)
                     } else {
                         None
@@ -1306,14 +1299,14 @@ impl TableContext for QueryContext {
             if actual_batch_limit != max_batch_size {
                 return Err(ErrorCode::StorageUnsupported(
                     format!(
-                        "[QUERY-CTX] Stream batch size must be consistent within transaction: actual={:?}, requested={:?}",
+                        "Stream batch size must be consistent within transaction: actual={:?}, requested={:?}",
                         actual_batch_limit, max_batch_size
                     )
                 ));
             }
         } else if max_batch_size.is_some() {
             return Err(ErrorCode::StorageUnsupported(
-                "[QUERY-CTX] MAX_BATCH_SIZE parameter only supported for STREAM tables",
+                "MAX_BATCH_SIZE parameter only supported for STREAM tables",
             ));
         }
         Ok(table)
@@ -1330,7 +1323,7 @@ impl TableContext for QueryContext {
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles> {
         if files.is_empty() {
-            info!("[QUERY-CTX] No files to filter for copy operation");
+            info!("No files to filter for copy operation");
             return Ok(FilteredCopyFiles::default());
         }
 
@@ -1389,7 +1382,7 @@ impl TableContext for QueryContext {
                     }
                     if result_size > COPY_MAX_FILES_PER_COMMIT {
                         return Err(ErrorCode::Internal(format!(
-                            "[QUERY-CTX] {}",
+                            "{}",
                             COPY_MAX_FILES_COMMIT_MSG
                         )));
                     }
@@ -1643,7 +1636,7 @@ impl TableContext for QueryContext {
 
             chrono::Duration::from_std(duration).map_err(|e| {
                 ErrorCode::Internal(format!(
-                    "[QUERY-CTX] Unable to construct delta duration of table meta timestamp: {e}",
+                    "Unable to construct delta duration of table meta timestamp: {e}",
                 ))
             })?
         };
@@ -1675,7 +1668,7 @@ impl TableContext for QueryContext {
                     // the safety of vacuum operation.
                     if table_meta_timestamps.segment_block_timestamp < existing_ts {
                         return Err(ErrorCode::Internal(format!(
-                            "[QUERY-CTX] Transaction timestamp violation: table_id = {}, new segment timestamp {:?} is lesser than existing transaction timestamp {:?}",
+                            "Transaction timestamp violation: table_id = {}, new segment timestamp {:?} is lesser than existing transaction timestamp {:?}",
                             table_id, table_meta_timestamps.segment_block_timestamp, existing_ts
                         )));
                     }
@@ -1743,7 +1736,7 @@ impl TableContext for QueryContext {
             }
             // TODO: iceberg doesn't support load from storage directly.
             _ => Err(ErrorCode::Internal(
-                "[QUERY-CTX] Unsupported datalake type for schema loading",
+                "Unsupported datalake type for schema loading",
             )),
         }
     }
@@ -1768,7 +1761,7 @@ impl TableContext for QueryContext {
             FileFormatParams::Parquet(fmt) => {
                 if max_column_position > 1 {
                     Err(ErrorCode::SemanticError(
-                        "[QUERY-CTX] Query from parquet file only support $1 as column position",
+                        "Query from parquet file only support $1 as column position",
                     ))
                 } else if max_column_position == 0 {
                     let settings = self.get_settings();
@@ -1818,14 +1811,15 @@ impl TableContext for QueryContext {
                 }
             }
             FileFormatParams::Orc(..) => {
-                let is_variant =
-                    match max_column_position {
-                        0 => false,
-                        1 => true,
-                        _ => return Err(ErrorCode::SemanticError(
-                            "[QUERY-CTX] Query from ORC file only support $1 as column position",
-                        )),
-                    };
+                let is_variant = match max_column_position {
+                    0 => false,
+                    1 => true,
+                    _ => {
+                        return Err(ErrorCode::SemanticError(
+                            "Query from ORC file only support $1 as column position",
+                        ))
+                    }
+                };
                 let schema = Arc::new(TableSchema::empty());
                 let info = StageTableInfo {
                     schema,
@@ -1869,7 +1863,7 @@ impl TableContext for QueryContext {
                     };
 
                     return Err(ErrorCode::SemanticError(format!(
-                        "[QUERY-CTX] Query from {} file lacks column positions. Specify as $1, $2, etc.",
+                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
                         file_type
                     )));
                 }
@@ -1899,7 +1893,7 @@ impl TableContext for QueryContext {
             }
             _ => {
                 return Err(ErrorCode::Unimplemented(format!(
-                    "[QUERY-CTX] Unsupported file format in query stage. Supported formats: Parquet, NDJson, AVRO, CSV, TSV. Provided: '{}'",
+                    "Unsupported file format in query stage. Supported formats: Parquet, NDJson, AVRO, CSV, TSV. Provided: '{}'",
                     stage_info.file_format_params
                 )));
             }
@@ -2029,9 +2023,9 @@ impl TableContext for QueryContext {
             if query && !consume {
                 continue;
             }
-            let stream = tables.get(stream_key).ok_or_else(|| {
-                ErrorCode::Internal("[QUERY-CTX] Stream reference not found in tables cache")
-            })?;
+            let stream = tables
+                .get(stream_key)
+                .ok_or_else(|| ErrorCode::Internal("Stream reference not found in tables cache"))?;
             streams_meta.push(stream.clone());
         }
         Ok(streams_meta)
