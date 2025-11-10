@@ -3195,7 +3195,7 @@ impl SchemaApiTestSuite {
                     update_on: None,
                 },
             };
-            mt.create_data_mask(req).await?;
+            mt.create_data_mask(req).await.unwrap().unwrap();
 
             let mask1_name_ident = DataMaskNameIdent::new(tenant.clone(), mask_name_1.to_string());
             mask1_id = get_kv_u64_data(mt, &mask1_name_ident).await?;
@@ -3212,7 +3212,7 @@ impl SchemaApiTestSuite {
                     update_on: None,
                 },
             };
-            mt.create_data_mask(req).await?;
+            mt.create_data_mask(req).await.unwrap().unwrap();
 
             let mask2_name_ident = DataMaskNameIdent::new(tenant.clone(), mask_name_2.to_string());
             mask2_id = get_kv_u64_data(mt, &mask2_name_ident).await?;
@@ -3473,7 +3473,7 @@ impl SchemaApiTestSuite {
                     update_on: None,
                 },
             };
-            mt.create_data_mask(req).await?;
+            mt.create_data_mask(req).await.unwrap().unwrap();
             let old_id: u64 = get_kv_u64_data(mt, &name).await?;
 
             let id_key = DataMaskIdIdent::new(&tenant, old_id);
@@ -3493,7 +3493,7 @@ impl SchemaApiTestSuite {
                     update_on: None,
                 },
             };
-            mt.create_data_mask(req).await?;
+            mt.create_data_mask(req).await.unwrap().unwrap();
 
             // assert old id key has been deleted
             let meta: Result<DatamaskMeta, KVAppError> = get_kv_data(mt, &id_key).await;
@@ -3898,7 +3898,9 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         })
-        .await?;
+        .await
+        .unwrap()
+        .unwrap();
         let mask_cleanup_id = get_kv_u64_data(mt, &mask_cleanup_ident).await?;
 
         let set_req = SetTableColumnMaskPolicyReq {
@@ -3961,7 +3963,9 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         })
-        .await?;
+        .await
+        .unwrap()
+        .unwrap();
         let mask_guard_id = get_kv_u64_data(mt, &mask_guard_ident).await?;
 
         table_info = util.get_table().await?;

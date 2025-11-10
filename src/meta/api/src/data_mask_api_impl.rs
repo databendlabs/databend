@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::TxnRetryMaxTimes;
+use databend_common_meta_app::data_mask::data_mask_name_ident;
 use databend_common_meta_app::data_mask::CreateDatamaskReply;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskId;
@@ -28,6 +27,7 @@ use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -40,7 +40,6 @@ use log::debug;
 use crate::data_mask_api::DatamaskApi;
 use crate::errors::MaskingPolicyError;
 use crate::fetch_id;
-use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
 use crate::txn_backoff::txn_backoff;
@@ -57,7 +56,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     async fn create_data_mask(
         &self,
         req: CreateDatamaskReq,
-    ) -> Result<CreateDatamaskReply, KVAppError> {
+    ) -> Result<Result<CreateDatamaskReply, ExistError<data_mask_name_ident::Resource>>, MetaError>
+    {
         debug!(req :? =(&req); "DatamaskApi: {}", func_name!());
 
         let name_ident = &req.name;
@@ -67,10 +67,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             name_ident.data_mask_name().to_string(),
         );
         if self.get_pb(&row_access_name_ident).await?.is_some() {
-            return Err(AppError::DatamaskAlreadyExists(
-                name_ident.exist_error("name conflicts with an existing row access policy"),
-            )
-            .into());
+            return Ok(Err(
+                name_ident.exist_error("name conflicts with an existing masking policy")
+            ));
         }
 
         let masking_policy_id = fetch_id(self, IdGenerator::data_mask_id()).await?;
@@ -85,13 +84,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
         if let Some((seq_id, seq_meta)) = res {
             match req.create_option {
                 CreateOption::Create => {
-                    return Err(AppError::DatamaskAlreadyExists(
-                        name_ident.exist_error(func_name!()),
-                    )
-                    .into());
+                    return Ok(Err(
+                        name_ident.exist_error(format!("{} already exists", req.name))
+                    ));
                 }
                 CreateOption::CreateIfNotExists => {
-                    return Ok(CreateDatamaskReply { id: *seq_id.data });
+                    return Ok(Ok(CreateDatamaskReply { id: *seq_id.data }));
                 }
                 CreateOption::CreateOrReplace => {
                     let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
@@ -142,11 +140,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
         );
 
         if succ {
-            Ok(CreateDatamaskReply {
+            Ok(Ok(CreateDatamaskReply {
                 id: masking_policy_id,
-            })
+            }))
         } else {
-            Err(KVAppError::from(TxnRetryMaxTimes::new(func_name!(), 1)))
+            Ok(Err(
+                name_ident.exist_error(format!("{} already exists", req.name))
+            ))
         }
     }
 
@@ -185,7 +185,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             // Policy is in use - cannot drop
             if !table_policy_refs.is_empty() {
                 return Ok(Err(MaskingPolicyError::policy_in_use(
-                    tenant.tenant_name().to_string(),
                     name_ident.data_mask_name().to_string(),
                 )));
             }
