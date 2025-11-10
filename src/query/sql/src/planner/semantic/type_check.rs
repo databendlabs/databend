@@ -235,6 +235,9 @@ pub struct TypeChecker<'a> {
     // true if currently resolving a masking policy expression.
     // This prevents infinite recursion when a masking policy references the masked column itself.
     in_masking_policy: bool,
+
+    // Skip sequence existence checks when resolving `nextval`.
+    skip_sequence_check: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -260,7 +263,12 @@ impl<'a> TypeChecker<'a> {
             in_window_function: false,
             forbid_udf,
             in_masking_policy: false,
+            skip_sequence_check: false,
         })
+    }
+
+    pub fn set_skip_sequence_check(&mut self, skip: bool) {
+        self.skip_sequence_check = skip;
     }
 
     #[recursive::recursive]
@@ -5613,25 +5621,29 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         };
 
-        let catalog = self.ctx.get_default_catalog()?;
-        let req = GetSequenceReq {
-            ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
-        };
+        if !self.skip_sequence_check {
+            let catalog = self.ctx.get_default_catalog()?;
+            let req = GetSequenceReq {
+                ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
+            };
 
-        let visibility_checker = if self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
-        {
-            Some(databend_common_base::runtime::block_on(async move {
-                self.ctx
-                    .get_visibility_checker(false, Object::Sequence)
-                    .await
-            })?)
-        } else {
-            None
-        };
-        databend_common_base::runtime::block_on(catalog.get_sequence(req, &visibility_checker))?;
+            let visibility_checker = if self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_sequence_privilege_check()?
+            {
+                Some(databend_common_base::runtime::block_on(async move {
+                    self.ctx
+                        .get_visibility_checker(false, Object::Sequence)
+                        .await
+                })?)
+            } else {
+                None
+            };
+            databend_common_base::runtime::block_on(
+                catalog.get_sequence(req, &visibility_checker),
+            )?;
+        }
 
         let return_type = DataType::Number(NumberDataType::UInt64);
         let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);
