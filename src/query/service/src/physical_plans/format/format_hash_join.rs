@@ -86,17 +86,24 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
 
         let mut build_runtime_filters = vec![];
         for rf in self.inner.runtime_filter.filters.iter() {
-            // Format all probe targets
-            let probe_targets_str = rf
+            // Format all probe targets (sorted for stable explain output)
+            let mut probe_targets = rf
                 .probe_targets
                 .iter()
                 .map(|(probe_key, scan_id)| {
-                    format!(
-                        "{}@scan{}",
+                    (
                         probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
-                        scan_id
+                        *scan_id,
                     )
                 })
+                .collect::<Vec<_>>();
+
+            // Sort by scan_id first, then by probe key string
+            probe_targets.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+
+            let probe_targets_str = probe_targets
+                .into_iter()
+                .map(|(probe_key_str, scan_id)| format!("{}@scan{}", probe_key_str, scan_id))
                 .collect::<Vec<_>>()
                 .join(", ");
 
