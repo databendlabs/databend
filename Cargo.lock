@@ -3053,11 +3053,11 @@ dependencies = [
  "indent",
  "itertools 0.13.0",
  "logos",
- "nom 7.1.3",
+ "nom 8.0.0",
+ "nom-language",
  "nom-rule",
  "ordered-float 5.0.0",
  "percent-encoding",
- "pratt",
  "pretty_assertions",
  "recursive",
  "rspack-codespan-reporting",
@@ -10724,14 +10724,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "nom-rule"
-version = "0.4.0"
+name = "nom-language"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c72951bd83c76b88d820f03b38b124f981dc2520070d62170da7012d1ce964ab"
+checksum = "2de2bc5b451bfedaef92c90b8939a8fff5770bdcc1fafd6239d086aab8fa6b29"
 dependencies = [
- "nom 7.1.3",
+ "nom 8.0.0",
+]
+
+[[package]]
+name = "nom-rule"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67df4c3364e754b809f749a0e9c2832154c42f785f187741f536305400b2744c"
+dependencies = [
+ "nom 8.0.0",
  "pratt",
- "proc-macro-error 1.0.4",
+ "proc-macro-error2",
  "proc-macro2",
  "quote",
  "syn 2.0.106",

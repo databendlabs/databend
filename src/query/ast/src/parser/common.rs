@@ -12,20 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
-use nom::branch::alt;
-use nom::combinator::consumed;
-use nom::combinator::map;
-use nom::multi::many1;
+pub use nom::branch::alt;
+pub use nom::branch::permutation;
+pub use nom::combinator::consumed;
+pub use nom::combinator::map;
+pub use nom::combinator::not;
+pub use nom::combinator::value;
+use nom::error::Error as NomError;
+use nom::error::ErrorKind as NomErrorKind;
+pub use nom::multi::many1;
 use nom::sequence::terminated;
-use nom::Offset;
-use nom::Slice;
+use nom::Parser;
 use nom_rule::rule;
-use pratt::PrattError;
-use pratt::PrattParser;
-use pratt::Precedence;
+
+pub fn parser_fn<'a, O, P>(mut parser: P) -> impl FnMut(Input<'a>) -> IResult<'a, O>
+where P: nom::Parser<Input<'a>, Output = O, Error = Error<'a>> {
+    move |input| parser.parse(input)
+}
 
 use crate::ast::quote::QuotedIdent;
 use crate::ast::ColumnID;
@@ -41,10 +44,77 @@ use crate::parser::query::with_options;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
+pub use crate::precedence::Affix;
+pub use crate::precedence::Associativity;
+pub use crate::precedence::Precedence;
 use crate::Range;
 use crate::Span;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
+
+pub type ElementsInput<'a, T> = &'a [WithSpan<'a, T>];
+pub type ElementsError<'a, T> = NomError<ElementsInput<'a, T>>;
+pub type ElementsResult<'a, T, O> = nom::IResult<ElementsInput<'a, T>, O, ElementsError<'a, T>>;
+
+pub fn match_prefix<'a, T>(
+    affix_fn: impl Fn(&T) -> Affix + Copy,
+    precedence: Precedence,
+) -> impl FnMut(ElementsInput<'a, T>) -> ElementsResult<'a, T, WithSpan<'a, T>>
+where
+    T: Clone,
+{
+    match_affix(
+        affix_fn,
+        move |affix| matches!(affix, Affix::Prefix(p) if p == precedence),
+    )
+}
+
+pub fn match_postfix<'a, T>(
+    affix_fn: impl Fn(&T) -> Affix + Copy,
+    precedence: Precedence,
+) -> impl FnMut(ElementsInput<'a, T>) -> ElementsResult<'a, T, WithSpan<'a, T>>
+where
+    T: Clone,
+{
+    match_affix(
+        affix_fn,
+        move |affix| matches!(affix, Affix::Postfix(p) if p == precedence),
+    )
+}
+
+pub fn match_binary<'a, T>(
+    affix_fn: impl Fn(&T) -> Affix + Copy,
+    precedence: Precedence,
+    associativity: Associativity,
+) -> impl FnMut(ElementsInput<'a, T>) -> ElementsResult<'a, T, WithSpan<'a, T>>
+where
+    T: Clone,
+{
+    match_affix(
+        affix_fn,
+        move |affix| matches!(affix, Affix::Infix(p, assoc) if p == precedence && assoc == associativity),
+    )
+}
+
+pub fn match_nilfix<'a, T>(
+    affix_fn: impl Fn(&T) -> Affix + Copy,
+) -> impl FnMut(ElementsInput<'a, T>) -> ElementsResult<'a, T, WithSpan<'a, T>>
+where T: Clone {
+    match_affix(affix_fn, |affix| matches!(affix, Affix::Nilfix))
+}
+
+fn match_affix<'a, T>(
+    affix_fn: impl Fn(&T) -> Affix + Copy,
+    predicate: impl Fn(Affix) -> bool + Copy,
+) -> impl FnMut(ElementsInput<'a, T>) -> ElementsResult<'a, T, WithSpan<'a, T>>
+where
+    T: Clone,
+{
+    move |input| match input.split_first() {
+        Some((elem, rest)) if predicate(affix_fn(&elem.elem)) => Ok((rest, elem.clone())),
+        _ => Err(nom::Err::Error(NomError::new(input, NomErrorKind::Tag))),
+    }
+}
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
     move |i| match i.tokens.first().filter(|token| token.text() == text) {
@@ -85,7 +155,8 @@ pub fn lambda_params(i: Input) -> IResult<Vec<Identifier>> {
     rule!(
         #single_param
         | #multi_params
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn ident(i: Input) -> IResult<Identifier> {
@@ -116,7 +187,8 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
     rule!(
         #plain_ident
         | #anonymous_stage
-    )(i)
+    )
+    .parse(i)
 }
 
 fn plain_identifier(
@@ -134,7 +206,8 @@ fn plain_identifier(
                 quote: None,
                 ident_type: IdentifierType::None,
             },
-        )(i)
+        )
+        .parse(i)
     }
 }
 
@@ -193,7 +266,8 @@ fn identifier_variable(i: Input) -> IResult<Identifier> {
             quote: None,
             ident_type: IdentifierType::Variable,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 fn non_reserved_identifier(
@@ -205,7 +279,8 @@ fn non_reserved_identifier(
             | #quoted_identifier
             | #identifier_hole
             | #identifier_variable
-        )(i)
+        )
+        .parse(i)
     }
 }
 
@@ -228,7 +303,8 @@ fn non_reserved_keyword(
 pub fn database_ref(i: Input) -> IResult<DatabaseRef> {
     map(dot_separated_idents_1_to_2, |(catalog, database)| {
         DatabaseRef { catalog, database }
-    })(i)
+    })
+    .parse(i)
 }
 
 pub fn table_ref(i: Input) -> IResult<TableRef> {
@@ -242,7 +318,8 @@ pub fn table_ref(i: Input) -> IResult<TableRef> {
             table,
             with_options,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn set_type(i: Input) -> IResult<SetType> {
@@ -259,7 +336,8 @@ pub fn set_type(i: Input) -> IResult<SetType> {
             },
             None => SetType::SettingsSession,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {
@@ -279,7 +357,8 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             unpivot: None,
             sample: None,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> {
@@ -304,7 +383,8 @@ pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> 
                 column,
             )
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn column_id(i: Input) -> IResult<ColumnID> {
@@ -333,11 +413,12 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
             )))
         }),
         map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn variable_ident(i: Input) -> IResult<String> {
-    map(rule! { IdentVariable }, |t| t.text()[1..].to_string())(i)
+    map(rule! { IdentVariable }, |t| t.text()[1..].to_string()).parse(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.
@@ -352,7 +433,8 @@ pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Ide
             (ident1, None) => (None, ident1),
             (ident0, Some((_, ident1))) => (Some(ident0), ident1),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 /// Parse one to three idents separated by a dot, fulfilling from the right.
@@ -371,7 +453,8 @@ pub fn dot_separated_idents_1_to_3(
             (ident1, Some((_, ident2, None))) => (None, Some(ident1), ident2),
             (ident0, Some((_, ident1, Some((_, ident2))))) => (Some(ident0), Some(ident1), ident2),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 /// Parse two to four idents separated by a dot, fulfilling from the right.
@@ -396,36 +479,37 @@ pub fn dot_separated_idents_2_to_4(
                 (Some(ident0), Some(ident1), ident2, ident3)
             }
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn comma_separated_list0<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
     separated_list0(match_text(","), item)
 }
 
 pub fn comma_separated_list0_ignore_trailing<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
-) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
     nom::multi::separated_list0(match_text(","), item)
 }
 
 pub fn comma_separated_list1_ignore_trailing<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
-) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
     nom::multi::separated_list1(match_text(","), item)
 }
 
 pub fn semicolon_terminated_list1<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
-) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
     many1(terminated(item, match_text(";")))
 }
 
 pub fn comma_separated_list1<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
-) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
     separated_list1(match_text(","), item)
 }
 
@@ -437,9 +521,9 @@ pub fn separated_list0<I, O, O2, E, F, G>(
     mut f: F,
 ) -> impl FnMut(I) -> nom::IResult<I, Vec<O>, E>
 where
-    I: Clone + nom::InputLength,
-    F: nom::Parser<I, O, E>,
-    G: nom::Parser<I, O2, E>,
+    I: Clone + nom::Input,
+    F: nom::Parser<I, Output = O, Error = E>,
+    G: nom::Parser<I, Output = O2, Error = E>,
     E: nom::error::ParseError<I>,
 {
     move |mut i: I| {
@@ -487,9 +571,9 @@ pub fn separated_list1<I, O, O2, E, F, G>(
     mut f: F,
 ) -> impl FnMut(I) -> nom::IResult<I, Vec<O>, E>
 where
-    I: Clone + nom::InputLength,
-    F: nom::Parser<I, O, E>,
-    G: nom::Parser<I, O2, E>,
+    I: Clone + nom::Input,
+    F: nom::Parser<I, Output = O, Error = E>,
+    G: nom::Parser<I, Output = O2, Error = E>,
     E: nom::error::ParseError<I>,
 {
     move |mut i: I| {
@@ -537,7 +621,7 @@ pub fn map_res<'a, O1, O2, F, G>(
     mut f: G,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, O2>
 where
-    F: nom::Parser<Input<'a>, O1, Error<'a>>,
+    F: nom::Parser<Input<'a>, Output = O1, Error = Error<'a>>,
     G: FnMut(O1) -> Result<O2, nom::Err<ErrorKind>>,
 {
     move |input: Input| {
@@ -565,7 +649,7 @@ pub fn error_hint<'a, O, F>(
     message: &'static str,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, ()>
 where
-    F: nom::Parser<Input<'a>, O, Error<'a>>,
+    F: nom::Parser<Input<'a>, Output = O, Error = Error<'a>>,
 {
     move |input: Input| match match_error.parse(input) {
         Ok(_) => Err(nom::Err::Error(Error::from_error_kind(
@@ -583,106 +667,8 @@ pub fn transform_span(tokens: &[Token]) -> Span {
     })
 }
 
-pub(crate) trait IterProvider<'a> {
-    type Item;
-    type Iter: Iterator<Item = Self::Item> + ExactSizeIterator;
-
-    fn create_iter(self, span: Rc<RefCell<Option<Input<'a>>>>) -> Self::Iter;
-}
-
-impl<'a, T> IterProvider<'a> for Vec<WithSpan<'a, T>>
-where T: Clone
-{
-    type Item = WithSpan<'a, T>;
-    type Iter = ErrorSpan<'a, T, std::vec::IntoIter<WithSpan<'a, T>>>;
-
-    fn create_iter(self, span: Rc<RefCell<Option<Input<'a>>>>) -> Self::Iter {
-        ErrorSpan::new(self.into_iter(), span)
-    }
-}
-
-pub(crate) struct ErrorSpan<'a, T, I: Iterator<Item = WithSpan<'a, T>>> {
-    iter: I,
-    span: Rc<RefCell<Option<Input<'a>>>>,
-}
-
-impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> ErrorSpan<'a, T, I> {
-    fn new(iter: I, span: Rc<RefCell<Option<Input<'a>>>>) -> Self {
-        Self { iter, span }
-    }
-}
-
-impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> Iterator for ErrorSpan<'a, T, I> {
-    type Item = WithSpan<'a, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter
-            .next()
-            .inspect(|item| *self.span.borrow_mut() = Some(item.span))
-    }
-}
-
-impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> ExactSizeIterator for ErrorSpan<'a, T, I> {}
-
-pub fn run_pratt_parser<'a, I, P, E, T>(
-    mut parser: P,
-    parsers: T,
-    rest: Input<'a>,
-    input: Input<'a>,
-) -> IResult<'a, P::Output>
-where
-    E: std::fmt::Debug,
-    P: PrattParser<I, Input = WithSpan<'a, E>, Error = &'static str>,
-    I: Iterator<Item = P::Input> + ExactSizeIterator,
-    T: IterProvider<'a, Item = P::Input, Iter = I>,
-{
-    let span = Rc::new(RefCell::new(None));
-    let mut iter = parsers.create_iter(span.clone()).peekable();
-    let expr = parser
-        .parse_input(&mut iter, Precedence(0))
-        .map_err(|err| {
-            // Rollback parsing footprint on unused expr elements.
-            input.backtrace.clear();
-
-            let err_kind = match err {
-                PrattError::EmptyInput => ErrorKind::Other("expecting an operand"),
-                PrattError::UnexpectedNilfix(i) => {
-                    *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("unable to parse the element")
-                }
-                PrattError::UnexpectedPrefix(i) => {
-                    *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("unable to parse the prefix operator")
-                }
-                PrattError::UnexpectedInfix(i) => {
-                    *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("missing lhs or rhs for the binary operator")
-                }
-                PrattError::UnexpectedPostfix(i) => {
-                    *span.borrow_mut() = Some(i.span);
-                    ErrorKind::Other("unable to parse the postfix operator")
-                }
-                PrattError::UserError(err) => ErrorKind::Other(err),
-            };
-
-            let span = span
-                .take()
-                // It's safe to slice one more token because input must contain EOI.
-                .unwrap_or_else(|| rest.slice(..1));
-
-            nom::Err::Error(Error::from_error_kind(span, err_kind))
-        })?;
-    if let Some(elem) = iter.peek() {
-        // Rollback parsing footprint on unused expr elements.
-        input.backtrace.clear();
-        Ok((input.slice(input.offset(&elem.span)..), expr))
-    } else {
-        Ok((rest, expr))
-    }
-}
-
 pub fn check_template_mode<'a, O, F>(mut parser: F) -> impl FnMut(Input<'a>) -> IResult<'a, O>
-where F: nom::Parser<Input<'a>, O, Error<'a>> {
+where F: nom::Parser<Input<'a>, Output = O, Error = Error<'a>> {
     move |input: Input| {
         parser.parse(input).and_then(|(i, res)| {
             if input.mode.is_template() {
@@ -715,7 +701,7 @@ macro_rules! declare_experimental_feature {
             mut parser: F,
         ) -> impl FnMut(Input<'a>) -> IResult<'a, O>
         where
-            F: nom::Parser<Input<'a>, O, Error<'a>>,
+            F: nom::Parser<Input<'a>, Output = O, Error = Error<'a>>,
         {
             move |input: Input| {
                 parser.parse(input).and_then(|(i, res)| {

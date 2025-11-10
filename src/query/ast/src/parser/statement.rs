@@ -16,12 +16,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use educe::Educe;
-use nom::branch::alt;
-use nom::combinator::consumed;
-use nom::combinator::map;
-use nom::combinator::not;
-use nom::combinator::value;
-use nom::Slice;
+use nom::Parser;
 use nom_rule::rule;
 
 use super::sequence::sequence;
@@ -71,7 +66,8 @@ fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
         |(_, _)| vec![],
     );
     rule!(#procedure_empty_types: "()"
-            | #procedure_type_names: "(<type_name>, ...)")(i)
+            | #procedure_type_names: "(<type_name>, ...)")
+    .parse(i)
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
@@ -903,7 +899,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule!(
             #from_table
             | #from_dot_table
-        )(i)
+        )
+        .parse(i)
     }
 
     let show_columns = map(
@@ -1705,7 +1702,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule!(
             #set_comment
             | #unset_comment
-        )(i)
+        )
+        .parse(i)
     }
     let drop_role = map(
         rule! {
@@ -2423,7 +2421,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 name: Some(name.to_string()),
                 data_type,
             }
-        })(i)
+        })
+        .parse(i)
     }
 
     fn procedure_return(i: Input) -> IResult<Vec<ProcedureType>> {
@@ -2440,7 +2439,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             }]
         });
         rule!(#procedure_single_return: "<type_name>"
-            | #procedure_table_return: "TABLE(<var_name> <type_name>, ...)")(i)
+            | #procedure_table_return: "TABLE(<var_name> <type_name>, ...)")
+        .parse(i)
     }
 
     fn procedure_arg(i: Input) -> IResult<Option<Vec<ProcedureType>>> {
@@ -2457,7 +2457,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             |(_, _)| None,
         );
         rule!(#procedure_empty_args: "()"
-            | #procedure_args: "(<var_name> <type_name>, ...)")(i)
+            | #procedure_args: "(<var_name> <type_name>, ...)")
+        .parse(i)
     }
 
     // CREATE [ OR REPLACE ] PROCEDURE <name> ()
@@ -2534,7 +2535,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     // |(_, _)| vec![],
     // );
     // rule!(#procedure_empty_types: "()"
-    // | #procedure_type_names: "(<type_name>, ...)")(i)
+    // | #procedure_type_names: "(<type_name>, ...)").parse(i)
     // }
 
     let call_procedure = map(
@@ -2840,7 +2841,7 @@ AS
         ),
         rule!(#comment),
         rule!(#vacuum_temporary_tables),
-    ))(i)
+    )).parse(i)
 }
 
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
@@ -2852,7 +2853,8 @@ pub fn statement(i: Input) -> IResult<StatementWithFormat> {
             stmt,
             format: opt_format.map(|(_, format)| format.name),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn parse_create_option(
@@ -2937,7 +2939,8 @@ pub fn conditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statemen
                     source,
                 })
             },
-        )(i)
+        )
+        .parse(i)
     }
 }
 
@@ -2957,7 +2960,8 @@ pub fn unconditional_multi_table_insert() -> impl FnMut(Input) -> IResult<Statem
                     source,
                 })
             },
-        )(i)
+        )
+        .parse(i)
     }
 }
 
@@ -2970,7 +2974,8 @@ fn when_clause(i: Input) -> IResult<WhenClause> {
             condition: expr,
             into_clauses,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 fn into_clause(i: Input) -> IResult<IntoClause> {
@@ -2996,7 +3001,8 @@ fn into_clause(i: Input) -> IResult<IntoClause> {
                 .map(|(_, _, columns, _)| columns)
                 .unwrap_or_default(),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 fn else_clause(i: Input) -> IResult<ElseClause> {
@@ -3005,7 +3011,8 @@ fn else_clause(i: Input) -> IResult<ElseClause> {
             ELSE ~ (#into_clause)+
         },
         |(_, into_clauses)| ElseClause { into_clauses },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
@@ -3052,33 +3059,35 @@ pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> 
                     delete_when: opt_delete_when.map(|(_, _, expr)| expr),
                 })
             },
-        )(i)
+        )
+        .parse(i)
     }
 }
 
 // `VALUES (expr, expr), (expr, expr)`
 pub fn insert_source(i: Input) -> IResult<InsertSource> {
-    let row = map(
+    let row = parser_fn(map(
         rule! {
             "(" ~ #comma_separated_list1(expr) ~ ")"
         },
         |(_, values, _)| values,
-    );
-    let values = map(
+    ));
+    let values = parser_fn(map(
         rule! {
             VALUES ~ #comma_separated_list0(row)
         },
         |(_, rows)| InsertSource::Values { rows },
-    );
+    ));
 
-    let query = map(query, |query| InsertSource::Select {
+    let query = parser_fn(map(query, |query| InsertSource::Select {
         query: Box::new(query),
-    });
+    }));
 
     rule!(
         #values
         | #query
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn insert_source_file(i: Input) -> IResult<InsertSource> {
@@ -3097,7 +3106,8 @@ pub fn insert_source_file(i: Input) -> IResult<InsertSource> {
             location,
             format_options,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 // `INSERT INTO ... VALUES` statement will
@@ -3124,7 +3134,8 @@ pub fn insert_source_fast_values(i: Input) -> IResult<InsertSource> {
         #insert_source_file |
         #values
         | #query
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn mutation_source(i: Input) -> IResult<MutationSource> {
@@ -3149,7 +3160,8 @@ pub fn mutation_source(i: Input) -> IResult<MutationSource> {
     rule!(
         #query
         | #source_table
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn unset_source(i: Input) -> IResult<Vec<Identifier>> {
@@ -3170,7 +3182,8 @@ pub fn unset_source(i: Input) -> IResult<Vec<Identifier>> {
     rule!(
         #var
         | #vars
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn set_stmt_args(i: Input) -> IResult<(Identifier, Box<Expr>)> {
@@ -3179,7 +3192,8 @@ pub fn set_stmt_args(i: Input) -> IResult<(Identifier, Box<Expr>)> {
             #ident ~ "=" ~ #subexpr(0)
         },
         |(id, _, expr)| (id, Box::new(expr)),
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn set_var_hints(i: Input) -> IResult<HintItem> {
@@ -3188,7 +3202,8 @@ pub fn set_var_hints(i: Input) -> IResult<HintItem> {
             SET_VAR ~ ^"(" ~ ^#ident ~ ^"=" ~ #subexpr(0) ~ ^")"
         },
         |(_, _, name, _, expr, _)| HintItem { name, expr },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn hint(i: Input) -> IResult<Hint> {
@@ -3204,7 +3219,7 @@ pub fn hint(i: Input) -> IResult<Hint> {
         },
         |_| Hint { hints_list: vec![] },
     );
-    rule!(#hint|#invalid_hint)(i)
+    rule!(#hint|#invalid_hint).parse(i)
 }
 
 pub fn query_setting(i: Input) -> IResult<(Identifier, Expr)> {
@@ -3213,7 +3228,8 @@ pub fn query_setting(i: Input) -> IResult<(Identifier, Expr)> {
             #ident ~ "=" ~ #subexpr(0)
         },
         |(id, _, value)| (id, value),
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn query_statement_setting(i: Input) -> IResult<Settings> {
@@ -3235,7 +3251,7 @@ pub fn query_statement_setting(i: Input) -> IResult<Settings> {
             }
         },
     );
-    rule!(#query_set: "(SETTING_NAME = VALUE, ...)")(i)
+    rule!(#query_set: "(SETTING_NAME = VALUE, ...)").parse(i)
 }
 pub fn top_n(i: Input) -> IResult<u64> {
     map(
@@ -3250,7 +3266,7 @@ pub fn top_n(i: Input) -> IResult<u64> {
             : "TOP <limit>"
         },
         |(_, _, n)| n,
-    )(i)
+    ).parse(i)
 }
 
 pub fn rest_str(i: Input) -> IResult<(String, usize)> {
@@ -3371,7 +3387,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             };
             (def, constraints)
         },
-    )(i)?;
+    ).parse(i)?;
 
     for constraint in constraints {
         match constraint {
@@ -3472,7 +3488,8 @@ pub fn create_def(i: Input) -> IResult<CreateDefinition> {
         map(rule! { #column_def }, CreateDefinition::Column),
         map(rule! { #table_index_def }, CreateDefinition::TableIndex),
         map(rule! { #constraint_def }, CreateDefinition::Constraint),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn role_name(i: Input) -> IResult<String> {
@@ -3514,7 +3531,8 @@ pub fn role_name(i: Input) -> IResult<String> {
     rule!(
         #role_ident : "<role_name>"
         | #role_lit : "'<role_name>'"
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
@@ -3683,7 +3701,8 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #procedure_privs: "ACCESS PROCEDURE ON PROCEDURE <procedure_identity>"
         | #procedure_all_privs: "ALL [ PRIVILEGES ] ON PROCEDURE <procedure_identity>"
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
@@ -3765,14 +3784,16 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             | #drop
             | #create
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
     alt((
         value(UserPrivilegeType::Read, rule! { READ }),
         value(UserPrivilegeType::Write, rule! { WRITE }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
@@ -3783,11 +3804,12 @@ pub fn priv_share_type(i: Input) -> IResult<ShareGrantObjectPrivilege> {
             ShareGrantObjectPrivilege::ReferenceUsage,
             rule! { REFERENCE_USAGE },
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn alter_add_share_accounts(i: Input) -> IResult<bool> {
-    alt((value(true, rule! { ADD }), value(false, rule! { REMOVE })))(i)
+    alt((value(true, rule! { ADD }), value(false, rule! { REMOVE }))).parse(i)
 }
 
 pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
@@ -3854,7 +3876,8 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         | #connection : "CONNECTION <connection_name>"
         | #seq : "SEQUENCE <seq_name>"
         | #procedure : "PROCEDURE <procedure_identity>"
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
@@ -3883,7 +3906,8 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
         #global : "*.*"
         | #db : "<database>.*"
         | #table : "<database>.<table>"
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
@@ -3921,7 +3945,8 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
         | #warehouse : "WAREHOUSE <warehouse_name>"
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
@@ -3996,7 +4021,8 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         | #table : "<database>.<table>"
         | #object : "STAGE | UDF | WAREHOUSE | CONNECTION | SEQUENCE <object_name>"
         | #procedure : "PROCEDURE <procedure_identity>"
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
@@ -4025,7 +4051,7 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
         #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
         | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> | CONNECTION <connection_name> | SEQUENCE <seq_name> }"
         | #role_granted: "OF ROLE <role_name>"
-    )(i)
+    ).parse(i)
 }
 
 pub fn grant_option(i: Input) -> IResult<PrincipalIdentity> {
@@ -4046,7 +4072,8 @@ pub fn grant_option(i: Input) -> IResult<PrincipalIdentity> {
     rule!(
         #role
         | #user
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
@@ -4115,7 +4142,8 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     rule!(
         #columns
         | #like
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
@@ -4136,7 +4164,8 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     rule!(
         #rename_database
         | #refresh_cache
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
@@ -4285,7 +4314,8 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
         | #convert_stored_computed_column
         | #modify_column_type
         | #modify_column_comment
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
@@ -4465,7 +4495,8 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #drop_row_access_policy
         | #add_row_access_policy
         | #add_constraint
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn match_clause(i: Input) -> IResult<MergeOption> {
@@ -4483,7 +4514,8 @@ pub fn match_clause(i: Input) -> IResult<MergeOption> {
                 operation: match_operation,
             }),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 fn match_operation(i: Input) -> IResult<MatchOperation> {
@@ -4507,7 +4539,8 @@ fn match_operation(i: Input) -> IResult<MatchOperation> {
                 is_star: true,
             },
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
@@ -4561,7 +4594,7 @@ pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
                 })
             },
         ),
-    ))(i)
+    )).parse(i)
 }
 
 pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {
@@ -4570,7 +4603,8 @@ pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {
         map(rule! { AFTER ~ #ident }, |(_, ident)| {
             AddColumnOption::After(ident)
         }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
@@ -4587,7 +4621,8 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
                 target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
             }
         }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn literal_duration(i: Input) -> IResult<Duration> {
@@ -4608,7 +4643,8 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
     rule!(
         #days
         | #seconds
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
@@ -4620,7 +4656,8 @@ pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
             dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
             limit: opt_limit.map(|(_, limit)| limit as usize),
         },
-    ),))(i)
+    ),))
+    .parse(i)
 }
 
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
@@ -4631,7 +4668,8 @@ pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
         |opt_dry_run| VacuumTableOption {
             dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
         },
-    ),))(i)
+    ),))
+    .parse(i)
 }
 
 pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
@@ -4658,7 +4696,7 @@ pub fn task_sql_block(i: Input) -> IResult<TaskSql> {
             TaskSql::ScriptBlock(sql)
         },
     );
-    alt((single_statement, task_block))(i)
+    alt((single_statement, task_block)).parse(i)
 }
 
 pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
@@ -4735,7 +4773,8 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
         | #modify_when
         | #add_after
         | #remove_after
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
@@ -4764,7 +4803,8 @@ pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
     rule!(
         #set
         | #refresh
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
@@ -4779,7 +4819,8 @@ pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
             };
             WarehouseOptions { warehouse }
         },
-    ),))(i)
+    ),))
+    .parse(i)
 }
 
 pub fn assign_nodes_list(i: Input) -> IResult<Vec<(Option<String>, u64)>> {
@@ -4792,7 +4833,8 @@ pub fn assign_nodes_list(i: Input) -> IResult<Vec<(Option<String>, u64)>> {
 
     map(comma_separated_list1(nodes_list), |opts| {
         opts.into_iter().collect()
-    })(i)
+    })
+    .parse(i)
 }
 
 pub fn assign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<String>, u64)>> {
@@ -4807,7 +4849,8 @@ pub fn assign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<
 
     map(comma_separated_list1(nodes_list), |opts| {
         opts.into_iter().collect()
-    })(i)
+    })
+    .parse(i)
 }
 
 pub fn unassign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<String>, u64)>> {
@@ -4822,7 +4865,8 @@ pub fn unassign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Optio
 
     map(comma_separated_list1(nodes_list), |opts| {
         opts.into_iter().collect()
-    })(i)
+    })
+    .parse(i)
 }
 
 pub fn warehouse_cluster_option(i: Input) -> IResult<BTreeMap<String, String>> {
@@ -4836,7 +4880,8 @@ pub fn warehouse_cluster_option(i: Input) -> IResult<BTreeMap<String, String>> {
         opts.into_iter()
             .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
             .collect()
-    })(i)
+    })
+    .parse(i)
 }
 
 pub fn workload_quotas(i: Input) -> IResult<BTreeMap<String, QuotaValueStmt>> {
@@ -4895,14 +4940,16 @@ pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
         | #cron_expr
         | #interval_sec
         | #interval_millis
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn kill_target(i: Input) -> IResult<KillTarget> {
     alt((
         value(KillTarget::Query, rule! { QUERY }),
         value(KillTarget::Connection, rule! { CONNECTION }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn priority(i: Input) -> IResult<Priority> {
@@ -4910,34 +4957,38 @@ pub fn priority(i: Input) -> IResult<Priority> {
         value(Priority::LOW, rule! { LOW }),
         value(Priority::MEDIUM, rule! { MEDIUM }),
         value(Priority::HIGH, rule! { HIGH }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn action(i: Input) -> IResult<SystemAction> {
-    let mut backtrace = map(
+    let mut backtrace = parser_fn(map(
         rule! {
              #switch ~ EXCEPTION_BACKTRACE
         },
         |(switch, _)| SystemAction::Backtrace(switch),
-    );
+    ));
     // add other system action type here
     rule!(
         #backtrace
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn switch(i: Input) -> IResult<bool> {
     alt((
         value(true, rule! { ENABLE }),
         value(false, rule! { DISABLE }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn cluster_type(i: Input) -> IResult<ClusterType> {
     alt((
         value(ClusterType::Linear, rule! { LINEAR }),
         value(ClusterType::Hilbert, rule! { HILBERT }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn limit_where(i: Input) -> IResult<ShowLimit> {
@@ -4948,7 +4999,8 @@ pub fn limit_where(i: Input) -> IResult<ShowLimit> {
         |(_, selection)| ShowLimit::Where {
             selection: Box::new(selection),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn limit_like(i: Input) -> IResult<ShowLimit> {
@@ -4957,14 +5009,16 @@ pub fn limit_like(i: Input) -> IResult<ShowLimit> {
             LIKE ~ #literal_string
         },
         |(_, pattern)| ShowLimit::Like { pattern },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     rule!(
         #limit_like
         | #limit_where
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn show_options(i: Input) -> IResult<ShowOptions> {
@@ -4976,7 +5030,8 @@ pub fn show_options(i: Input) -> IResult<ShowOptions> {
             show_limit,
             limit: opt_limit.map(|(_, limit)| limit),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn show_stats_stmt(i: Input) -> IResult<ShowStatisticsStmt> {
@@ -5001,7 +5056,8 @@ pub fn show_stats_stmt(i: Input) -> IResult<ShowStatisticsStmt> {
                 target: ShowStatsTarget::Table(table),
             },
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
@@ -5015,7 +5071,8 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
                     .map(|(k, _, v)| (k.name.to_lowercase(), v.clone())),
             )
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
@@ -5030,16 +5087,18 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
         opts.into_iter()
             .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
             .collect()
-    })(i)
+    })
+    .parse(i)
 }
 
 pub fn option_to_string(i: Input) -> IResult<String> {
-    let bool_to_string = |i| map(literal_bool, |v| v.to_string())(i);
+    let bool_to_string = |i| map(literal_bool, |v| v.to_string()).parse(i);
 
     rule!(
         #bool_to_string
         | #parameter_to_string
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn engine(i: Input) -> IResult<Engine> {
@@ -5058,24 +5117,26 @@ pub fn engine(i: Input) -> IResult<Engine> {
             ENGINE ~ ^"=" ~ ^#engine
         },
         |(_, _, engine)| engine,
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
-    value(DatabaseEngine::Default, rule! { DEFAULT })(i)
+    value(DatabaseEngine::Default, rule! { DEFAULT }).parse(i)
 }
 
 pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
-    let mut create_db_engine = map(
+    let mut create_db_engine = parser_fn(map(
         rule! {
             ENGINE ~  ^"=" ~ ^#database_engine
         },
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
-    );
+    ));
 
     rule!(
         #create_db_engine
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn catalog_type(i: Input) -> IResult<CatalogType> {
@@ -5083,7 +5144,8 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
         value(CatalogType::Default, rule! { DEFAULT }),
         value(CatalogType::Hive, rule! { HIVE }),
         value(CatalogType::Iceberg, rule! { ICEBERG }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn user_option(i: Input) -> IResult<UserOptionItem> {
@@ -5159,7 +5221,8 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #must_change_password
         | #set_workload_group
         | #unset_workload_group
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
@@ -5171,7 +5234,8 @@ pub fn user_identity(i: Input) -> IResult<UserIdentity> {
             let hostname = "%".to_string();
             UserIdentity { username, hostname }
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn auth_type(i: Input) -> IResult<AuthType> {
@@ -5180,14 +5244,16 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn presign_action(i: Input) -> IResult<PresignAction> {
     alt((
         value(PresignAction::Download, rule! { DOWNLOAD }),
         value(PresignAction::Upload, rule! { UPLOAD }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn presign_location(i: Input) -> IResult<PresignLocation> {
@@ -5208,7 +5274,8 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
             rule! { CONTENT_TYPE ~ ^"=" ~ ^#literal_string },
             |(_, _, v)| PresignOption::ContentType(v),
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
@@ -5231,13 +5298,15 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
             unpivot: None,
             sample: None,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     map(rule! { ( #ident ~ "=" ~ ^#expr ) }, |(name, _, expr)| {
         UpdateExpr { name, expr }
-    })(i)
+    })
+    .parse(i)
 }
 
 pub fn udaf_state_field(i: Input) -> IResult<UDAFStateField> {
@@ -5248,7 +5317,8 @@ pub fn udaf_state_field(i: Input) -> IResult<UDAFStateField> {
             : "`<state name> <type>`"
         },
         |(name, type_name)| UDAFStateField { name, type_name },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn udf_header(i: Input) -> IResult<(String, String)> {
@@ -5257,7 +5327,8 @@ pub fn udf_header(i: Input) -> IResult<(String, String)> {
             #literal_string ~ #match_text("=") ~ ^#literal_string
         },
         |(k, _, v)| (k, v),
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn udf_script_or_address(i: Input) -> IResult<(String, bool)> {
@@ -5278,7 +5349,8 @@ pub fn udf_script_or_address(i: Input) -> IResult<(String, bool)> {
     rule!(
         #script: "AS <language_codes>"
         | #address: "ADDRESS=<udf_server_address>"
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
@@ -5304,7 +5376,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         rule!(
             #scalar: "<return_type>"
             | #table: "TABLE (<return_type>, ...)"
-        )(i)
+        )
+        .parse(i)
     }
 
     let lambda_udf = map(
@@ -5462,7 +5535,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         | #udaf: "(<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
         | #udf: "(<[arg_name] arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
         | #scalar_udf_or_udtf: "(<arg_name arg_type>, ...) RETURNS <return body> AS <sql> }"
-    )(i)
+    ).parse(i)
 }
 
 fn lambda_udf_params(i: Input) -> IResult<LambdaUDFParams> {
@@ -5482,7 +5555,8 @@ fn lambda_udf_params(i: Input) -> IResult<LambdaUDFParams> {
     rule!(
         #names: "(<arg_name>, ...)"
         | #name_with_types: "(<arg_name arg_type>, ...)"
-    )(i)
+    )
+    .parse(i)
 }
 
 fn udf_args(i: Input) -> IResult<UDFArgs> {
@@ -5502,18 +5576,20 @@ fn udf_args(i: Input) -> IResult<UDFArgs> {
     rule!(
         #types: "(<arg_type>, ...)"
         | #name_with_types: "(<arg_name arg_type>, ...)"
-    )(i)
+    )
+    .parse(i)
 }
 
 fn udtf_arg(i: Input) -> IResult<(Identifier, TypeName)> {
-    map(rule! { #ident ~ ^#type_name }, |(name, ty)| (name, ty))(i)
+    map(rule! { #ident ~ ^#type_name }, |(name, ty)| (name, ty)).parse(i)
 }
 
 fn udf_immutable(i: Input) -> IResult<bool> {
     alt((
         value(false, rule! { VOLATILE }),
         value(true, rule! { IMMUTABLE }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn row_access_definition(i: Input) -> IResult<RowAccessPolicyDefinition> {
@@ -5523,7 +5599,8 @@ pub fn row_access_definition(i: Input) -> IResult<RowAccessPolicyDefinition> {
                 name: name.to_string(),
                 data_type,
             }
-        })(i)
+        })
+        .parse(i)
     }
 
     let row_access_def = map(
@@ -5539,14 +5616,16 @@ pub fn row_access_definition(i: Input) -> IResult<RowAccessPolicyDefinition> {
 
     rule!(
         #row_access_def: "AS (<arg_name> <arg_type> [ , ... ]) RETURNS BOOLEAN -> <definition expr>"
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn mutation_update_expr(i: Input) -> IResult<MutationUpdateExpr> {
     map(
         rule! { #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr },
         |((table, name), _, expr)| MutationUpdateExpr { table, name, expr },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
@@ -5594,7 +5673,8 @@ pub fn password_set_options(i: Input) -> IResult<PasswordSetOptions> {
                 comment: opt_comment.map(|opt| opt.2),
             }
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn password_unset_options(i: Input) -> IResult<PasswordUnSetOptions> {
@@ -5642,7 +5722,8 @@ pub fn password_unset_options(i: Input) -> IResult<PasswordUnSetOptions> {
                 comment: opt_comment.is_some(),
             }
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
@@ -5662,7 +5743,8 @@ pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
     rule!(
         #set_options
         | #unset_options
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn explain_option(i: Input) -> IResult<ExplainOption> {
@@ -5677,7 +5759,8 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             DECORRELATED => ExplainOption::Decorrelated,
             _ => unreachable!(),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn create_task_option(i: Input) -> IResult<CreateTaskOption> {
@@ -5735,7 +5818,8 @@ pub fn create_task_option(i: Input) -> IResult<CreateTaskOption> {
             | #comment_opt
         },
         |opt| opt,
-    )(i)
+    )
+    .parse(i)
 }
 
 fn alter_task_set_option(i: Input) -> IResult<AlterTaskSetOption> {
@@ -5779,7 +5863,8 @@ fn alter_task_set_option(i: Input) -> IResult<AlterTaskSetOption> {
             | #comment_opt
         },
         |opt| opt,
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOptions> {
@@ -5812,14 +5897,16 @@ pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOpti
                 opts.iter().map(|((k, v), _)| (k.to_uppercase(), v.clone())),
             )
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn notification_webhook_clause(i: Input) -> IResult<NotificationWebhookOptions> {
     map(
         rule! { WEBHOOK ~ ^"=" ~ ^"(" ~ ^#notification_webhook_options ~ ^")" },
         |(_, _, _, opts, _)| opts,
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions> {
@@ -5854,7 +5941,8 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
             | #comment
         },
         |opts| opts,
-    )(i)
+    )
+    .parse(i)
 }
 
 fn index_type(i: Input) -> IResult<TableIndexType> {
@@ -5862,5 +5950,6 @@ fn index_type(i: Input) -> IResult<TableIndexType> {
         value(TableIndexType::Inverted, rule! { INVERTED }),
         value(TableIndexType::Ngram, rule! { NGRAM }),
         value(TableIndexType::Vector, rule! { VECTOR }),
-    ))(i)
+    ))
+    .parse(i)
 }

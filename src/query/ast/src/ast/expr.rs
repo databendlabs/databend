@@ -20,8 +20,6 @@ use derive_visitor::DriveMut;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
-use pratt::Affix;
-use pratt::Associativity;
 
 use super::ColumnRef;
 use super::OrderByExpr;
@@ -32,6 +30,8 @@ use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Indirection;
 use crate::ast::Query;
+use crate::precedence::Affix;
+use crate::precedence::Associativity;
 use crate::span::merge_span;
 use crate::ParseError;
 use crate::Result;

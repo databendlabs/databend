@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO(xuanwo): Add crate level documents here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Precedence(pub u32);
 
-#[allow(clippy::collapsible_match)]
-pub mod ast;
-pub mod parser;
-mod parser_error;
-pub mod precedence;
-pub mod span;
-mod visitor;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Associativity {
+    Left,
+    Right,
+}
 
-pub use parser_error::ParseError;
-pub use visitor::StatementReplacer;
-pub type Result<T> = std::result::Result<T, ParseError>;
-
-pub use span::Range;
-pub use span::Span;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Affix {
+    Nilfix,
+    Prefix(Precedence),
+    Postfix(Precedence),
+    Infix(Precedence, Associativity),
+}

@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Reverse;
 use std::collections::BTreeMap;
 
-use nom::branch::alt;
-use nom::combinator::consumed;
-use nom::combinator::map;
-use nom::combinator::value;
 use nom::error::context;
+use nom::error::Error as NomError;
+use nom::error::ErrorKind as NomErrorKind;
+use nom::Parser;
+use nom_language::precedence::binary_op as precedence_binary_op;
+use nom_language::precedence::precedence;
+use nom_language::precedence::unary_op as precedence_unary_op;
+use nom_language::precedence::Assoc as NomAssoc;
+use nom_language::precedence::Operation;
 use nom_rule::rule;
-use pratt::Affix;
-use pratt::Associativity;
-use pratt::PrattParser;
-use pratt::Precedence;
 
 use crate::ast::*;
 use crate::parser::common::*;
@@ -36,6 +37,7 @@ use crate::parser::statement::hint;
 use crate::parser::statement::set_table_option;
 use crate::parser::statement::top_n;
 use crate::parser::token::*;
+use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::Range;
 
@@ -43,12 +45,13 @@ pub fn query(i: Input) -> IResult<Query> {
     context(
         "`SELECT ...`",
         map(set_operation, |set_expr| set_expr.into_query()),
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
-    let (rest, set_operation_elements) = rule! { #set_operation_element+ }(i)?;
-    run_pratt_parser(SetOperationParser, set_operation_elements, rest, i)
+    let (rest, set_operation_elements) = rule! { #set_operation_element+ }.parse(i)?;
+    parse_set_operation_elements(set_operation_elements, rest, i)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,6 +86,25 @@ pub enum SetOperationElement {
     },
     IgnoreResult,
     Group(SetExpr),
+}
+
+impl SetOperationElement {
+    fn affix(&self) -> Affix {
+        match self {
+            SetOperationElement::SetOperation { op, .. } => match op {
+                SetOperator::Union | SetOperator::Except => {
+                    Affix::Infix(Precedence(10), Associativity::Left)
+                }
+                SetOperator::Intersect => Affix::Infix(Precedence(20), Associativity::Left),
+            },
+            SetOperationElement::With(_) => Affix::Prefix(Precedence(5)),
+            SetOperationElement::OrderBy { .. }
+            | SetOperationElement::Limit { .. }
+            | SetOperationElement::Offset { .. }
+            | SetOperationElement::IgnoreResult => Affix::Postfix(Precedence(5)),
+            _ => Affix::Nilfix,
+        }
+    }
 }
 
 pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>> {
@@ -232,162 +254,259 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             | #ignore_result
         }),
         |(span, elem)| WithSpan { span, elem },
-    )(i)
+    )
+    .parse(i)
 }
 
-struct SetOperationParser;
+type SetOpInput<'a> = ElementsInput<'a, SetOperationElement>;
+type SetOpError<'a> = ElementsError<'a, SetOperationElement>;
+type SetOpResult<'a, O> = ElementsResult<'a, SetOperationElement, O>;
 
-impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
-    for SetOperationParser
-{
-    type Error = &'static str;
-    type Input = WithSpan<'a, SetOperationElement>;
-    type Output = SetExpr;
+fn set_operation_prefix_parser<'a>() -> impl nom::Parser<
+    SetOpInput<'a>,
+    Output = nom_language::precedence::Unary<
+        WithSpan<'a, SetOperationElement>,
+        Reverse<Precedence>,
+    >,
+    Error = SetOpError<'a>,
+> {
+    precedence_unary_op(
+        Reverse(Precedence(5)),
+        match_prefix(SetOperationElement::affix, Precedence(5)),
+    )
+}
 
-    fn query(&mut self, input: &Self::Input) -> Result<Affix, &'static str> {
-        let affix = match &input.elem {
-            // https://learn.microsoft.com/en-us/sql/t-sql/language-elements/set-operators-except-and-intersect-transact-sql?view=sql-server-2017
-            // If EXCEPT or INTERSECT is used together with other operators in an expression, it's evaluated in the context of the following precedence:
-            // 1. Expressions in parentheses
-            // 2. The INTERSECT operator
-            // 3. EXCEPT and UNION evaluated from left to right based on their position in the expression
-            SetOperationElement::SetOperation { op, .. } => match op {
-                SetOperator::Union | SetOperator::Except => {
-                    Affix::Infix(Precedence(10), Associativity::Left)
-                }
-                SetOperator::Intersect => Affix::Infix(Precedence(20), Associativity::Left),
-            },
-            SetOperationElement::With(_) => Affix::Prefix(Precedence(5)),
-            SetOperationElement::OrderBy { .. } => Affix::Postfix(Precedence(5)),
-            SetOperationElement::Limit { .. } => Affix::Postfix(Precedence(5)),
-            SetOperationElement::Offset { .. } => Affix::Postfix(Precedence(5)),
-            SetOperationElement::IgnoreResult => Affix::Postfix(Precedence(5)),
-            _ => Affix::Nilfix,
-        };
-        Ok(affix)
-    }
+fn set_operation_postfix_parser<'a>() -> impl nom::Parser<
+    SetOpInput<'a>,
+    Output = nom_language::precedence::Unary<
+        WithSpan<'a, SetOperationElement>,
+        Reverse<Precedence>,
+    >,
+    Error = SetOpError<'a>,
+> {
+    precedence_unary_op(
+        Reverse(Precedence(5)),
+        match_postfix(SetOperationElement::affix, Precedence(5)),
+    )
+}
 
-    fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
-        let set_expr = match input.elem {
-            SetOperationElement::Group(expr) => expr,
-            SetOperationElement::SelectStmt {
-                hints,
-                distinct,
-                top_n,
-                select_list,
-                from,
-                selection,
-                group_by,
-                having,
-                window_list,
-                qualify,
-            } => SetExpr::Select(Box::new(SelectStmt {
-                span: transform_span(input.span.tokens),
-                hints,
-                top_n,
-                distinct,
-                select_list,
-                from,
-                selection,
-                group_by,
-                having,
-                window_list,
-                qualify,
-            })),
-            SetOperationElement::Values(values) => SetExpr::Values {
-                span: transform_span(input.span.tokens),
-                values,
-            },
-            _ => unreachable!(),
-        };
-        Ok(set_expr)
-    }
+fn set_operation_binary_parser<'a>() -> impl nom::Parser<
+    SetOpInput<'a>,
+    Output = nom_language::precedence::Binary<
+        WithSpan<'a, SetOperationElement>,
+        Reverse<Precedence>,
+    >,
+    Error = SetOpError<'a>,
+> {
+    alt((
+        precedence_binary_op(
+            Reverse(Precedence(10)),
+            NomAssoc::Left,
+            match_binary(
+                SetOperationElement::affix,
+                Precedence(10),
+                Associativity::Left,
+            ),
+        ),
+        precedence_binary_op(
+            Reverse(Precedence(20)),
+            NomAssoc::Left,
+            match_binary(
+                SetOperationElement::affix,
+                Precedence(20),
+                Associativity::Left,
+            ),
+        ),
+    ))
+}
 
-    fn infix(
-        &mut self,
-        lhs: Self::Output,
-        input: Self::Input,
-        rhs: Self::Output,
-    ) -> Result<Self::Output, &'static str> {
-        let set_expr = match input.elem {
-            SetOperationElement::SetOperation { op, all, .. } => {
-                SetExpr::SetOperation(Box::new(SetOperation {
-                    span: transform_span(input.span.tokens),
-                    op,
-                    all,
-                    left: Box::new(lhs),
-                    right: Box::new(rhs),
-                }))
-            }
-            _ => unreachable!(),
-        };
-        Ok(set_expr)
-    }
-
-    fn prefix(&mut self, op: Self::Input, rhs: Self::Output) -> Result<Self::Output, Self::Error> {
-        let mut query = rhs.into_query();
-        match op.elem {
-            SetOperationElement::With(with) => {
-                if query.with.is_some() {
-                    return Err("duplicated WITH clause");
-                }
-                query.with = Some(with);
-            }
-            _ => unreachable!(),
+fn set_operation_operand_parser<'a>(input: SetOpInput<'a>) -> SetOpResult<'a, SetExpr> {
+    match_nilfix(SetOperationElement::affix)(input).and_then(|(rest, elem)| {
+        match set_operation_primary_expr(elem) {
+            Ok(expr) => Ok((rest, expr)),
+            Err(_) => Err(nom::Err::Failure(NomError::new(
+                input,
+                NomErrorKind::Verify,
+            ))),
         }
-        Ok(SetExpr::Query(Box::new(query)))
-    }
+    })
+}
 
-    fn postfix(&mut self, lhs: Self::Output, op: Self::Input) -> Result<Self::Output, Self::Error> {
-        let mut query = lhs.into_query();
-        match op.elem {
-            SetOperationElement::OrderBy { order_by } => {
-                if !query.order_by.is_empty() {
-                    return Err("duplicated ORDER BY clause");
-                }
-                if !query.limit.is_empty() {
-                    return Err("ORDER BY must appear before LIMIT");
-                }
-                if query.offset.is_some() {
-                    return Err("ORDER BY must appear before OFFSET");
-                }
-                query.order_by = order_by;
-            }
-            SetOperationElement::Limit { limit } => {
-                if query.limit.is_empty() && limit.len() > 2 {
-                    return Err("[LIMIT n OFFSET m] or [LIMIT n,m]");
-                }
-                if !query.limit.is_empty() {
-                    return Err("duplicated LIMIT clause");
-                }
-                if query.offset.is_some() {
-                    return Err("LIMIT must appear before OFFSET");
-                }
-                query.limit = limit;
-            }
-            SetOperationElement::Offset { offset } => {
-                if query.limit.len() == 2 {
-                    return Err("LIMIT n,m should not appear OFFSET");
-                }
-                if query.offset.is_some() {
-                    return Err("duplicated OFFSET clause");
-                }
-                query.offset = Some(offset);
-            }
-            SetOperationElement::IgnoreResult => {
-                query.ignore_result = true;
-            }
-            _ => unreachable!(),
+fn parse_set_operation_elements<'a>(
+    elements: Vec<WithSpan<'a, SetOperationElement>>,
+    rest: Input<'a>,
+    input: Input<'a>,
+) -> IResult<'a, SetExpr> {
+    let mut parser = precedence(
+        set_operation_prefix_parser(),
+        set_operation_postfix_parser(),
+        set_operation_binary_parser(),
+        set_operation_operand_parser,
+        set_operation_fold,
+    );
+
+    match parser(elements.as_slice()) {
+        Ok((remaining, expr)) if remaining.is_empty() => Ok((rest, expr)),
+        Ok((_, _)) => {
+            input.backtrace.clear();
+            Err(nom::Err::Error(Error::from_error_kind(
+                rest,
+                ErrorKind::Other("unable to parse the set expression"),
+            )))
         }
-        Ok(SetExpr::Query(Box::new(query)))
+        Err(_) => {
+            input.backtrace.clear();
+            Err(nom::Err::Error(Error::from_error_kind(
+                rest,
+                ErrorKind::Other("unable to parse the set expression"),
+            )))
+        }
     }
+}
+
+fn set_operation_fold<'a>(
+    operation: Operation<
+        WithSpan<'a, SetOperationElement>,
+        WithSpan<'a, SetOperationElement>,
+        WithSpan<'a, SetOperationElement>,
+        SetExpr,
+    >,
+) -> Result<SetExpr, &'static str> {
+    match operation {
+        Operation::Prefix(op, rhs) => apply_set_operation_prefix(op, rhs),
+        Operation::Postfix(lhs, op) => apply_set_operation_postfix(lhs, op),
+        Operation::Binary(lhs, op, rhs) => apply_set_operation_infix(lhs, op, rhs),
+    }
+}
+
+fn set_operation_primary_expr(
+    input: WithSpan<'_, SetOperationElement>,
+) -> Result<SetExpr, &'static str> {
+    let set_expr = match input.elem {
+        SetOperationElement::Group(expr) => expr,
+        SetOperationElement::SelectStmt {
+            hints,
+            distinct,
+            top_n,
+            select_list,
+            from,
+            selection,
+            group_by,
+            having,
+            window_list,
+            qualify,
+        } => SetExpr::Select(Box::new(SelectStmt {
+            span: transform_span(input.span.tokens),
+            hints,
+            top_n,
+            distinct,
+            select_list,
+            from,
+            selection,
+            group_by,
+            having,
+            window_list,
+            qualify,
+        })),
+        SetOperationElement::Values(values) => SetExpr::Values {
+            span: transform_span(input.span.tokens),
+            values,
+        },
+        _ => unreachable!(),
+    };
+    Ok(set_expr)
+}
+
+fn apply_set_operation_infix(
+    lhs: SetExpr,
+    input: WithSpan<'_, SetOperationElement>,
+    rhs: SetExpr,
+) -> Result<SetExpr, &'static str> {
+    let set_expr = match input.elem {
+        SetOperationElement::SetOperation { op, all, .. } => {
+            SetExpr::SetOperation(Box::new(SetOperation {
+                span: transform_span(input.span.tokens),
+                op,
+                all,
+                left: Box::new(lhs),
+                right: Box::new(rhs),
+            }))
+        }
+        _ => unreachable!(),
+    };
+    Ok(set_expr)
+}
+
+fn apply_set_operation_prefix(
+    op: WithSpan<'_, SetOperationElement>,
+    rhs: SetExpr,
+) -> Result<SetExpr, &'static str> {
+    let mut query = rhs.into_query();
+    match op.elem {
+        SetOperationElement::With(with) => {
+            if query.with.is_some() {
+                return Err("duplicated WITH clause");
+            }
+            query.with = Some(with);
+        }
+        _ => unreachable!(),
+    }
+    Ok(SetExpr::Query(Box::new(query)))
+}
+
+fn apply_set_operation_postfix(
+    lhs: SetExpr,
+    op: WithSpan<'_, SetOperationElement>,
+) -> Result<SetExpr, &'static str> {
+    let mut query = lhs.into_query();
+    match op.elem {
+        SetOperationElement::OrderBy { order_by } => {
+            if !query.order_by.is_empty() {
+                return Err("duplicated ORDER BY clause");
+            }
+            if !query.limit.is_empty() {
+                return Err("ORDER BY must appear before LIMIT");
+            }
+            if query.offset.is_some() {
+                return Err("ORDER BY must appear before OFFSET");
+            }
+            query.order_by = order_by;
+        }
+        SetOperationElement::Limit { limit } => {
+            if query.limit.is_empty() && limit.len() > 2 {
+                return Err("[LIMIT n OFFSET m] or [LIMIT n,m]");
+            }
+            if !query.limit.is_empty() {
+                return Err("duplicated LIMIT clause");
+            }
+            if query.offset.is_some() {
+                return Err("LIMIT must appear before OFFSET");
+            }
+            query.limit = limit;
+        }
+        SetOperationElement::Offset { offset } => {
+            if query.limit.len() == 2 {
+                return Err("LIMIT n,m should not appear OFFSET");
+            }
+            if query.offset.is_some() {
+                return Err("duplicated OFFSET clause");
+            }
+            query.offset = Some(offset);
+        }
+        SetOperationElement::IgnoreResult => {
+            query.ignore_result = true;
+        }
+        _ => unreachable!(),
+    }
+    Ok(SetExpr::Query(Box::new(query)))
 }
 
 pub fn row_values(i: Input) -> IResult<Vec<Expr>> {
     map(
         rule! {"(" ~ #comma_separated_list1(expr) ~ ")"},
         |(_, row_values, _)| row_values,
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn with(i: Input) -> IResult<With> {
@@ -413,7 +532,8 @@ pub fn with(i: Input) -> IResult<With> {
             recursive: recursive.is_some(),
             ctes,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn exclude_col(i: Input) -> IResult<Vec<Identifier>> {
@@ -433,7 +553,8 @@ pub fn exclude_col(i: Input) -> IResult<Vec<Identifier>> {
     rule!(
         #var
         | #vars
-    )(i)
+    )
+    .parse(i)
 }
 
 #[allow(clippy::type_complexity)]
@@ -544,7 +665,8 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         | #columns_regexp
         | #columns_lambda
         | #projection
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
@@ -559,7 +681,8 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
 
     rule!(
         #at_stream | #at_snapshot_or_ts
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
@@ -578,7 +701,8 @@ pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
 
     rule!(
         #at_snapshot | #at_timestamp | #at_offset
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
@@ -606,7 +730,8 @@ pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
     rule!(
         #time_travel
         | #changes
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn alias_name(i: Input) -> IResult<Identifier> {
@@ -631,7 +756,8 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
     rule!(
         #short_alias
         | #as_alias
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn with_options(i: Input) -> IResult<WithOptions> {
@@ -645,7 +771,8 @@ pub fn with_options(i: Input) -> IResult<WithOptions> {
             },
             |(_, _, options, _)| WithOptions { options },
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
@@ -655,7 +782,8 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
             name,
             columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn table_alias_without_as(i: Input) -> IResult<TableAlias> {
@@ -665,7 +793,8 @@ pub fn table_alias_without_as(i: Input) -> IResult<TableAlias> {
             name,
             columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn join_operator(i: Input) -> IResult<JoinOperator> {
@@ -685,7 +814,8 @@ pub fn join_operator(i: Input) -> IResult<JoinOperator> {
         value(JoinOperator::LeftAsof, rule! { ASOF ~ LEFT }),
         value(JoinOperator::RightAsof, rule! { ASOF ~ RIGHT }),
         value(JoinOperator::Asof, rule! { ASOF }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
@@ -705,12 +835,13 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
             asc: opt_asc.map(|asc| asc.kind == ASC),
             nulls_first: opt_nulls_first,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
-    let (rest, table_reference_elements) = rule! { #table_reference_element+ }(i)?;
-    run_pratt_parser(TableReferenceParser, table_reference_elements, rest, i)
+    let (rest, table_reference_elements) = rule! { #table_reference_element+ }.parse(i)?;
+    parse_table_reference_elements(table_reference_elements, rest, i)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -729,7 +860,8 @@ pub fn table_function_param(i: Input) -> IResult<TableFunctionParam> {
 
     rule!(
         #named | #normal
-    )(i)
+    )
+    .parse(i)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -776,6 +908,16 @@ pub enum TableReferenceElement {
         options: Vec<SelectStageOption>,
         alias: Option<TableAlias>,
     },
+}
+
+impl TableReferenceElement {
+    fn affix(&self) -> Affix {
+        match self {
+            TableReferenceElement::Join { .. } => Affix::Infix(Precedence(10), Associativity::Left),
+            TableReferenceElement::JoinCondition(..) => Affix::Postfix(Precedence(5)),
+            _ => Affix::Nilfix,
+        }
+    }
 }
 
 pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceElement>> {
@@ -888,8 +1030,262 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         | #join
         | #join_condition_on
         | #join_condition_using
-    })(i)?;
+    })
+    .parse(i)?;
     Ok((rest, WithSpan { span, elem }))
+}
+
+type TableRefInput<'a> = ElementsInput<'a, TableReferenceElement>;
+type TableRefError<'a> = ElementsError<'a, TableReferenceElement>;
+type TableRefResult<'a, O> = ElementsResult<'a, TableReferenceElement, O>;
+
+fn table_reference_prefix_parser<'a>() -> impl nom::Parser<
+    TableRefInput<'a>,
+    Output = nom_language::precedence::Unary<
+        WithSpan<'a, TableReferenceElement>,
+        Reverse<Precedence>,
+    >,
+    Error = TableRefError<'a>,
+> {
+    nom::combinator::fail::<
+        TableRefInput<'a>,
+        nom_language::precedence::Unary<WithSpan<'a, TableReferenceElement>, Reverse<Precedence>>,
+        TableRefError<'a>,
+    >()
+}
+
+fn table_reference_postfix_parser<'a>() -> impl nom::Parser<
+    TableRefInput<'a>,
+    Output = nom_language::precedence::Unary<
+        WithSpan<'a, TableReferenceElement>,
+        Reverse<Precedence>,
+    >,
+    Error = TableRefError<'a>,
+> {
+    precedence_unary_op(
+        Reverse(Precedence(5)),
+        match_postfix(TableReferenceElement::affix, Precedence(5)),
+    )
+}
+
+fn table_reference_binary_parser<'a>() -> impl nom::Parser<
+    TableRefInput<'a>,
+    Output = nom_language::precedence::Binary<
+        WithSpan<'a, TableReferenceElement>,
+        Reverse<Precedence>,
+    >,
+    Error = TableRefError<'a>,
+> {
+    precedence_binary_op(
+        Reverse(Precedence(10)),
+        NomAssoc::Left,
+        match_binary(
+            TableReferenceElement::affix,
+            Precedence(10),
+            Associativity::Left,
+        ),
+    )
+}
+
+fn table_reference_operand_parser<'a>(
+    input: TableRefInput<'a>,
+) -> TableRefResult<'a, TableReference> {
+    match_nilfix(TableReferenceElement::affix)(input).and_then(|(rest, elem)| {
+        match table_reference_primary_expr(elem) {
+            Ok(expr) => Ok((rest, expr)),
+            Err(_) => Err(nom::Err::Failure(NomError::new(
+                input,
+                NomErrorKind::Verify,
+            ))),
+        }
+    })
+}
+
+fn parse_table_reference_elements<'a>(
+    elements: Vec<WithSpan<'a, TableReferenceElement>>,
+    rest: Input<'a>,
+    input: Input<'a>,
+) -> IResult<'a, TableReference> {
+    let mut parser = precedence(
+        table_reference_prefix_parser(),
+        table_reference_postfix_parser(),
+        table_reference_binary_parser(),
+        table_reference_operand_parser,
+        table_reference_fold,
+    );
+
+    match parser(elements.as_slice()) {
+        Ok((remaining, expr)) if remaining.is_empty() => Ok((rest, expr)),
+        Ok((_, _)) => {
+            input.backtrace.clear();
+            Err(nom::Err::Error(Error::from_error_kind(
+                rest,
+                ErrorKind::Other("unable to parse the table reference"),
+            )))
+        }
+        Err(_) => {
+            input.backtrace.clear();
+            Err(nom::Err::Error(Error::from_error_kind(
+                rest,
+                ErrorKind::Other("unable to parse the table reference"),
+            )))
+        }
+    }
+}
+
+fn table_reference_fold<'a>(
+    operation: Operation<
+        WithSpan<'a, TableReferenceElement>,
+        WithSpan<'a, TableReferenceElement>,
+        WithSpan<'a, TableReferenceElement>,
+        TableReference,
+    >,
+) -> Result<TableReference, &'static str> {
+    match operation {
+        Operation::Prefix(_, _) => Err("unexpected prefix operator"),
+        Operation::Postfix(lhs, op) => apply_table_reference_postfix(lhs, op),
+        Operation::Binary(lhs, op, rhs) => apply_table_reference_infix(lhs, op, rhs),
+    }
+}
+
+fn table_reference_primary_expr(
+    input: WithSpan<'_, TableReferenceElement>,
+) -> Result<TableReference, &'static str> {
+    let table_ref = match input.elem {
+        TableReferenceElement::Group(table_ref) => table_ref,
+        TableReferenceElement::Table {
+            catalog,
+            database,
+            table,
+            alias,
+            temporal,
+            with_options,
+            pivot,
+            unpivot,
+            sample,
+        } => TableReference::Table {
+            span: transform_span(input.span.tokens),
+            catalog,
+            database,
+            table,
+            alias,
+            temporal,
+            with_options,
+            pivot,
+            unpivot,
+            sample,
+        },
+        TableReferenceElement::TableFunction {
+            lateral,
+            name,
+            params,
+            alias,
+            sample,
+        } => {
+            let normal_params = params
+                .iter()
+                .filter_map(|p| match p {
+                    TableFunctionParam::Normal(p) => Some(p.clone()),
+                    _ => None,
+                })
+                .collect();
+            let named_params = params
+                .into_iter()
+                .filter_map(|p| match p {
+                    TableFunctionParam::Named { name, value } => Some((name, value)),
+                    _ => None,
+                })
+                .collect();
+            TableReference::TableFunction {
+                span: transform_span(input.span.tokens),
+                lateral,
+                name,
+                params: normal_params,
+                named_params,
+                alias,
+                sample,
+            }
+        }
+        TableReferenceElement::Subquery {
+            lateral,
+            subquery,
+            alias,
+            pivot,
+            unpivot,
+        } => TableReference::Subquery {
+            span: transform_span(input.span.tokens),
+            lateral,
+            subquery,
+            alias,
+            pivot,
+            unpivot,
+        },
+        TableReferenceElement::Stage {
+            location,
+            options,
+            alias,
+        } => {
+            let options = SelectStageOptions::from(options);
+            TableReference::Location {
+                span: transform_span(input.span.tokens),
+                location,
+                options,
+                alias,
+            }
+        }
+        _ => unreachable!(),
+    };
+    Ok(table_ref)
+}
+
+fn apply_table_reference_infix(
+    lhs: TableReference,
+    input: WithSpan<'_, TableReferenceElement>,
+    rhs: TableReference,
+) -> Result<TableReference, &'static str> {
+    let table_ref = match input.elem {
+        TableReferenceElement::Join { op, natural } => {
+            let condition = if natural {
+                JoinCondition::Natural
+            } else {
+                JoinCondition::None
+            };
+            TableReference::Join {
+                span: transform_span(input.span.tokens),
+                join: Join {
+                    op,
+                    condition,
+                    left: Box::new(lhs),
+                    right: Box::new(rhs),
+                },
+            }
+        }
+        _ => unreachable!(),
+    };
+    Ok(table_ref)
+}
+
+fn apply_table_reference_postfix(
+    mut lhs: TableReference,
+    op: WithSpan<'_, TableReferenceElement>,
+) -> Result<TableReference, &'static str> {
+    match op.elem {
+        TableReferenceElement::JoinCondition(new_condition) => match &mut lhs {
+            TableReference::Join {
+                join: Join { condition, .. },
+                ..
+            } => match *condition {
+                JoinCondition::None => {
+                    *condition = new_condition;
+                    Ok(lhs)
+                }
+                JoinCondition::Natural => Err("join condition conflicting with NATURAL"),
+                _ => Err("join condition already set"),
+            },
+            _ => Err("join condition must apply to a join"),
+        },
+        _ => unreachable!(),
+    }
 }
 
 // PIVOT(expr FOR col IN (ident, ... | subquery))
@@ -903,7 +1299,8 @@ fn pivot(i: Input) -> IResult<Pivot> {
             value_column,
             values,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 fn unpivot_name(i: Input) -> IResult<UnpivotName> {
@@ -927,7 +1324,8 @@ fn unpivot_name(i: Input) -> IResult<UnpivotName> {
     map(
         rule! {#ident ~ (#short_alias | #as_alias)?},
         |(ident, alias)| UnpivotName { ident, alias },
-    )(i)
+    )
+    .parse(i)
 }
 
 // UNPIVOT(ident for ident IN (ident, ...))
@@ -941,7 +1339,7 @@ fn unpivot(i: Input) -> IResult<Unpivot> {
             unpivot_column,
             column_names,
         },
-    )(i)
+    ).parse(i)
 }
 
 fn pivot_values(i: Input) -> IResult<PivotValues> {
@@ -960,7 +1358,8 @@ fn pivot_values(i: Input) -> IResult<PivotValues> {
         map(query, |q| PivotValues::Subquery(Box::new(q))),
         // Parse expression list - must be last
         map(comma_separated_list1(expr), PivotValues::ColumnValues),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 fn get_table_sample(
@@ -980,173 +1379,6 @@ fn get_table_sample(
         return Some(default_sample_conf);
     }
     None
-}
-
-struct TableReferenceParser;
-
-impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
-    for TableReferenceParser
-{
-    type Error = &'static str;
-    type Input = WithSpan<'a, TableReferenceElement>;
-    type Output = TableReference;
-
-    fn query(&mut self, input: &Self::Input) -> Result<Affix, &'static str> {
-        let affix = match &input.elem {
-            TableReferenceElement::Join { .. } => Affix::Infix(Precedence(10), Associativity::Left),
-            TableReferenceElement::JoinCondition(..) => Affix::Postfix(Precedence(5)),
-            _ => Affix::Nilfix,
-        };
-        Ok(affix)
-    }
-
-    fn primary(&mut self, input: Self::Input) -> Result<Self::Output, &'static str> {
-        let table_ref = match input.elem {
-            TableReferenceElement::Group(table_ref) => table_ref,
-            TableReferenceElement::Table {
-                catalog,
-                database,
-                table,
-                alias,
-                temporal,
-                with_options,
-                pivot,
-                unpivot,
-                sample,
-            } => TableReference::Table {
-                span: transform_span(input.span.tokens),
-                catalog,
-                database,
-                table,
-                alias,
-                temporal,
-                with_options,
-                pivot,
-                unpivot,
-                sample,
-            },
-            TableReferenceElement::TableFunction {
-                lateral,
-                name,
-                params,
-                alias,
-                sample,
-            } => {
-                let normal_params = params
-                    .iter()
-                    .filter_map(|p| match p {
-                        TableFunctionParam::Normal(p) => Some(p.clone()),
-                        _ => None,
-                    })
-                    .collect();
-                let named_params = params
-                    .into_iter()
-                    .filter_map(|p| match p {
-                        TableFunctionParam::Named { name, value } => Some((name, value)),
-                        _ => None,
-                    })
-                    .collect();
-                TableReference::TableFunction {
-                    span: transform_span(input.span.tokens),
-                    lateral,
-                    name,
-                    params: normal_params,
-                    named_params,
-                    alias,
-                    sample,
-                }
-            }
-            TableReferenceElement::Subquery {
-                lateral,
-                subquery,
-                alias,
-                pivot,
-                unpivot,
-            } => TableReference::Subquery {
-                span: transform_span(input.span.tokens),
-                lateral,
-                subquery,
-                alias,
-                pivot,
-                unpivot,
-            },
-            TableReferenceElement::Stage {
-                location,
-                options,
-                alias,
-            } => {
-                let options = SelectStageOptions::from(options);
-                TableReference::Location {
-                    span: transform_span(input.span.tokens),
-                    location,
-                    options,
-                    alias,
-                }
-            }
-            _ => unreachable!(),
-        };
-        Ok(table_ref)
-    }
-
-    fn infix(
-        &mut self,
-        lhs: Self::Output,
-        input: Self::Input,
-        rhs: Self::Output,
-    ) -> Result<Self::Output, &'static str> {
-        let table_ref = match input.elem {
-            TableReferenceElement::Join { op, natural } => {
-                let condition = if natural {
-                    JoinCondition::Natural
-                } else {
-                    JoinCondition::None
-                };
-                TableReference::Join {
-                    span: transform_span(input.span.tokens),
-                    join: Join {
-                        op,
-                        condition,
-                        left: Box::new(lhs),
-                        right: Box::new(rhs),
-                    },
-                }
-            }
-            _ => unreachable!(),
-        };
-        Ok(table_ref)
-    }
-
-    fn prefix(
-        &mut self,
-        _op: Self::Input,
-        _rhs: Self::Output,
-    ) -> Result<Self::Output, Self::Error> {
-        unreachable!()
-    }
-
-    fn postfix(
-        &mut self,
-        mut lhs: Self::Output,
-        op: Self::Input,
-    ) -> Result<Self::Output, Self::Error> {
-        match op.elem {
-            TableReferenceElement::JoinCondition(new_condition) => match &mut lhs {
-                TableReference::Join {
-                    join: Join { condition, .. },
-                    ..
-                } => match *condition {
-                    JoinCondition::None => {
-                        *condition = new_condition;
-                        Ok(lhs)
-                    }
-                    JoinCondition::Natural => Err("join condition conflicting with NATURAL"),
-                    _ => Err("join condition already set"),
-                },
-                _ => Err("join condition must apply to a join"),
-            },
-            _ => unreachable!(),
-        }
-    }
 }
 
 pub fn group_by_items(i: Input) -> IResult<GroupBy> {
@@ -1193,7 +1425,8 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
         } else {
             items.into_iter().next().unwrap()
         }
-    })(i)
+    })
+    .parse(i)
 }
 
 pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
@@ -1213,7 +1446,8 @@ pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
         map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
             WindowFrameBound::Following(Some(Box::new(expr)))
         }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameBound)> {
@@ -1225,7 +1459,8 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
         map(rule! { #window_frame_bound }, |s| {
             (s, WindowFrameBound::CurrentRow)
         }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn window_spec(i: Input) -> IResult<WindowSpec> {
@@ -1254,7 +1489,8 @@ pub fn window_spec(i: Input) -> IResult<WindowSpec> {
                 }
             }),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn window_spec_ident(i: Input) -> IResult<Window> {
@@ -1271,7 +1507,8 @@ pub fn window_spec_ident(i: Input) -> IResult<Window> {
             },
             |window_name| Window::WindowReference(WindowRef { window_name }),
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn within_group(i: Input) -> IResult<Vec<OrderByExpr>> {
@@ -1280,7 +1517,8 @@ pub fn within_group(i: Input) -> IResult<Vec<OrderByExpr>> {
         WITHIN ~ GROUP ~ "(" ~ ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) ~ ")"
         },
         |(_, _, _, _, _, order_by, _)| order_by,
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn window_function(i: Input) -> IResult<WindowDesc> {
@@ -1292,7 +1530,8 @@ pub fn window_function(i: Input) -> IResult<WindowDesc> {
             ignore_nulls: opt_ignore_nulls.map(|key| key.0.kind == IGNORE),
             window: window.1,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
@@ -1304,5 +1543,6 @@ pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
             name: ident,
             spec: window,
         },
-    )(i)
+    )
+    .parse(i)
 }

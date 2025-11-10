@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nom::combinator::map;
+use nom::Parser;
 use nom_rule::rule;
 
 use crate::ast::CreateStreamStmt;
@@ -39,7 +39,7 @@ pub fn stream_table(i: Input) -> IResult<Statement> {
          | #drop_stream: "`DROP STREAM [IF EXISTS] [<database>.]<stream>`"
          | #show_streams: "`SHOW [FULL] STREAMS [FROM <database>] [<show_limit>]`"
          | #describe_stream: "`DESCRIBE STREAM [<database>.]<stream>`"
-    )(i)
+    ).parse(i)
 }
 
 fn create_stream(i: Input) -> IResult<Statement> {
@@ -97,7 +97,8 @@ fn drop_stream(i: Input) -> IResult<Statement> {
                 stream,
             })
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 fn show_streams(i: Input) -> IResult<Statement> {
@@ -118,7 +119,7 @@ fn show_streams(i: Input) -> IResult<Statement> {
                 limit,
             })
         },
-    )(i)
+    ).parse(i)
 }
 
 fn describe_stream(i: Input) -> IResult<Statement> {
@@ -133,5 +134,6 @@ fn describe_stream(i: Input) -> IResult<Statement> {
                 stream,
             })
         },
-    )(i)
+    )
+    .parse(i)
 }

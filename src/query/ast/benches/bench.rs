@@ -18,11 +18,11 @@ fn main() {
 
 // bench                     fastest       │ slowest       │ median        │ mean          │ samples │ iters
 // ╰─ dummy                                │               │               │               │         │
-//     ├─ deep_function_call  802.2 µs      │ 1.207 ms      │ 842 µs        │ 850.6 µs      │ 100     │ 100
-//     ├─ deep_query          242.3 µs      │ 426.3 µs      │ 254.2 µs      │ 257.3 µs      │ 100     │ 100
-//     ├─ large_query         1.104 ms      │ 1.264 ms      │ 1.14 ms       │ 1.142 ms      │ 100     │ 100
-//     ├─ large_statement     1.097 ms      │ 1.2 ms        │ 1.15 ms       │ 1.148 ms      │ 100     │ 100
-//     ╰─ wide_expr           282.4 µs      │ 368.6 µs      │ 298 µs        │ 298.7 µs      │ 100     │ 100
+// ├─ deep_function_call  242.8 µs      │ 525.3 µs      │ 258.9 µs      │ 262.8 µs      │ 100     │ 100
+// ├─ deep_query          235.6 µs      │ 364.8 µs      │ 244.8 µs      │ 249.3 µs      │ 100     │ 100
+// ├─ large_query         362.9 µs      │ 451.6 µs      │ 376.5 µs      │ 379.7 µs      │ 100     │ 100
+// ├─ large_statement     364.8 µs      │ 418.4 µs      │ 380.2 µs      │ 382.8 µs      │ 100     │ 100
+// ╰─ wide_expr           96.97 µs      │ 270.2 µs      │ 102.8 µs      │ 105.3 µs      │ 100     │ 100
 
 #[divan::bench_group(max_time = 0.5)]
 mod dummy {

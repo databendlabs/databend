@@ -19,10 +19,10 @@ indent = { workspace = true }
 itertools = { workspace = true }
 logos = { workspace = true }
 nom = { workspace = true }
+nom-language = { workspace = true }
 nom-rule = { workspace = true }
 ordered-float = { workspace = true }
 percent-encoding = { workspace = true }
-pratt = { workspace = true }
 pretty_assertions = { workspace = true }
 recursive = { workspace = true }
 rspack-codespan-reporting = { workspace = true }

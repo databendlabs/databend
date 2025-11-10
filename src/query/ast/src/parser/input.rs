@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Range;
-use std::ops::RangeFrom;
-use std::ops::RangeFull;
-use std::ops::RangeTo;
+use std::iter::Cloned;
+use std::iter::Enumerate;
+use std::ops::Bound;
+use std::ops::RangeBounds;
 
 use enum_as_inner::EnumAsInner;
+use nom::Needed;
+use nom::Offset;
 
 use crate::parser::token::Token;
 use crate::parser::Backtrace;
@@ -40,59 +42,93 @@ impl<'a> std::ops::Deref for Input<'a> {
     }
 }
 
-impl nom::InputLength for Input<'_> {
-    fn input_len(&self) -> usize {
-        self.tokens.input_len()
+impl<'a> Input<'a> {
+    pub fn slice<R>(&self, range: R) -> Self
+    where R: RangeBounds<usize> {
+        let len = self.tokens.len();
+        let start = match range.start_bound() {
+            Bound::Included(&idx) => idx,
+            Bound::Excluded(&idx) => idx + 1,
+            Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            Bound::Included(&idx) => idx + 1,
+            Bound::Excluded(&idx) => idx,
+            Bound::Unbounded => len,
+        };
+
+        Input {
+            tokens: &self.tokens[start.min(len)..end.min(len)],
+            ..*self
+        }
     }
 }
 
-impl nom::Offset for Input<'_> {
+impl<'a> Offset for Input<'a> {
     fn offset(&self, second: &Self) -> usize {
-        let fst = self.tokens.as_ptr();
-        let snd = second.tokens.as_ptr();
-
-        (snd as usize - fst as usize) / std::mem::size_of::<Token>()
+        self.tokens.len().saturating_sub(second.tokens.len())
     }
 }
 
-impl nom::Slice<Range<usize>> for Input<'_> {
-    fn slice(&self, range: Range<usize>) -> Self {
-        Input {
-            tokens: &self.tokens[range],
-            ..*self
+impl<'a> nom::Input for Input<'a> {
+    type Item = Token<'a>;
+    type Iter = Cloned<std::slice::Iter<'a, Token<'a>>>;
+    type IterIndices = Enumerate<Self::Iter>;
+
+    fn input_len(&self) -> usize {
+        self.tokens.len()
+    }
+
+    fn take(&self, index: usize) -> Self {
+        self.slice(..index)
+    }
+
+    fn take_from(&self, index: usize) -> Self {
+        self.slice(index..)
+    }
+
+    fn take_split(&self, index: usize) -> (Self, Self) {
+        (self.slice(index..), self.slice(..index))
+    }
+
+    fn position<P>(&self, predicate: P) -> Option<usize>
+    where P: Fn(Self::Item) -> bool {
+        self.tokens
+            .iter()
+            .position(|token| predicate(token.clone()))
+    }
+
+    fn iter_elements(&self) -> Self::Iter {
+        self.tokens.iter().cloned()
+    }
+
+    fn iter_indices(&self) -> Self::IterIndices {
+        self.iter_elements().enumerate()
+    }
+
+    fn slice_index(&self, count: usize) -> Result<usize, Needed> {
+        if self.tokens.len() >= count {
+            Ok(count)
+        } else {
+            Err(Needed::new(count - self.tokens.len()))
         }
     }
 }
-
-impl nom::Slice<RangeTo<usize>> for Input<'_> {
-    fn slice(&self, range: RangeTo<usize>) -> Self {
-        Input {
-            tokens: &self.tokens[range],
-            ..*self
-        }
-    }
-}
-
-impl nom::Slice<RangeFrom<usize>> for Input<'_> {
-    fn slice(&self, range: RangeFrom<usize>) -> Self {
-        Input {
-            tokens: &self.tokens[range],
-            ..*self
-        }
-    }
-}
-
-impl nom::Slice<RangeFull> for Input<'_> {
-    fn slice(&self, _: RangeFull) -> Self {
-        *self
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct WithSpan<'a, T> {
     pub(crate) span: Input<'a>,
     pub(crate) elem: T,
 }
+
+impl<'a, T: PartialEq> PartialEq for WithSpan<'a, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.elem == other.elem
+            && self.span.tokens.as_ptr() == other.span.tokens.as_ptr()
+            && self.span.tokens.len() == other.span.tokens.len()
+    }
+}
+
+impl<'a, T: Eq> Eq for WithSpan<'a, T> {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, EnumAsInner)]
 pub enum ParseMode {

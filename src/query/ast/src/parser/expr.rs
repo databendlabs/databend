@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Reverse;
+
 use ethnum::i256;
 use itertools::Itertools;
-use nom::branch::alt;
 use nom::combinator::consumed;
-use nom::combinator::map;
-use nom::combinator::value;
 use nom::error::context;
-use nom::Slice;
+use nom::error::Error as NomError;
+use nom::error::ErrorKind as NomErrorKind;
+use nom::Offset;
+use nom::Parser;
+use nom_language::precedence::binary_op as precedence_binary_op;
+use nom_language::precedence::precedence;
+use nom_language::precedence::unary_op as precedence_unary_op;
+use nom_language::precedence::Assoc as NomAssoc;
+use nom_language::precedence::Operation;
 use nom_rule::rule;
-use pratt::Affix;
-use pratt::Associativity;
-use pratt::PrattParser;
-use pratt::Precedence;
 
 use crate::ast::quote::AtString;
 use crate::ast::*;
@@ -38,12 +41,12 @@ use crate::parser::ErrorKind;
 use crate::Span;
 
 pub fn expr(i: Input) -> IResult<Expr> {
-    context("expression", subexpr(0))(i)
+    context("expression", subexpr(0)).parse(i)
 }
 
 pub fn values(i: Input) -> IResult<Vec<Expr>> {
     let values = comma_separated_list0(expr);
-    map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v)(i)
+    map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v).parse(i)
 }
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
@@ -62,7 +65,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             })
         };
 
-        let (rest, mut expr_elements) = rule! { #higher_prec_expr_element+ }(i)?;
+        let (rest, mut expr_elements) = rule! { #higher_prec_expr_element+ }.parse(i)?;
 
         for (prev, curr) in (-1..(expr_elements.len() as isize)).tuple_windows() {
             // If it's following a prefix or infix element or it's the first element, ...
@@ -127,7 +130,171 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             }
         }
 
-        run_pratt_parser(ExprParser, expr_elements, rest, i)
+        parse_expr_elements(expr_elements, rest, i)
+    }
+}
+
+type ExprElementsInput<'a> = ElementsInput<'a, ExprElement>;
+type ExprElementsError<'a> = ElementsError<'a, ExprElement>;
+type ExprElementsResult<'a, O> = ElementsResult<'a, ExprElement, O>;
+
+fn expr_prefix_parser<'a>() -> impl nom::Parser<
+    ExprElementsInput<'a>,
+    Output = nom_language::precedence::Unary<WithSpan<'a, ExprElement>, Reverse<Precedence>>,
+    Error = ExprElementsError<'a>,
+> {
+    alt((
+        precedence_unary_op(
+            Reverse(Precedence(NOT_PREC)),
+            match_prefix(ExprElement::affix, Precedence(NOT_PREC)),
+        ),
+        precedence_unary_op(
+            Reverse(Precedence(50)),
+            match_prefix(ExprElement::affix, Precedence(50)),
+        ),
+        precedence_unary_op(
+            Reverse(Precedence(60)),
+            match_prefix(ExprElement::affix, Precedence(60)),
+        ),
+    ))
+}
+
+fn expr_postfix_parser<'a>() -> impl nom::Parser<
+    ExprElementsInput<'a>,
+    Output = nom_language::precedence::Unary<WithSpan<'a, ExprElement>, Reverse<Precedence>>,
+    Error = ExprElementsError<'a>,
+> {
+    alt((
+        precedence_unary_op(
+            Reverse(Precedence(61)),
+            match_postfix(ExprElement::affix, Precedence(61)),
+        ),
+        precedence_unary_op(
+            Reverse(Precedence(60)),
+            match_postfix(ExprElement::affix, Precedence(60)),
+        ),
+        precedence_unary_op(
+            Reverse(Precedence(BETWEEN_PREC)),
+            match_postfix(ExprElement::affix, Precedence(BETWEEN_PREC)),
+        ),
+        precedence_unary_op(
+            Reverse(Precedence(17)),
+            match_postfix(ExprElement::affix, Precedence(17)),
+        ),
+    ))
+}
+
+fn expr_binary_parser<'a>() -> impl nom::Parser<
+    ExprElementsInput<'a>,
+    Output = nom_language::precedence::Binary<WithSpan<'a, ExprElement>, Reverse<Precedence>>,
+    Error = ExprElementsError<'a>,
+> {
+    alt((
+        precedence_binary_op(
+            Reverse(Precedence(5)),
+            NomAssoc::Left,
+            match_binary(ExprElement::affix, Precedence(5), Associativity::Left),
+        ),
+        precedence_binary_op(
+            Reverse(Precedence(10)),
+            NomAssoc::Left,
+            match_binary(ExprElement::affix, Precedence(10), Associativity::Left),
+        ),
+        precedence_binary_op(
+            Reverse(Precedence(20)),
+            NomAssoc::Left,
+            match_binary(ExprElement::affix, Precedence(20), Associativity::Left),
+        ),
+        precedence_binary_op(
+            Reverse(Precedence(22)),
+            NomAssoc::Left,
+            match_binary(ExprElement::affix, Precedence(22), Associativity::Left),
+        ),
+        precedence_binary_op(
+            Reverse(Precedence(23)),
+            NomAssoc::Left,
+            match_binary(ExprElement::affix, Precedence(23), Associativity::Left),
+        ),
+        precedence_binary_op(
+            Reverse(Precedence(24)),
+            NomAssoc::Left,
+            match_binary(ExprElement::affix, Precedence(24), Associativity::Left),
+        ),
+        precedence_binary_op(
+            Reverse(Precedence(30)),
+            NomAssoc::Left,
+            match_binary(ExprElement::affix, Precedence(30), Associativity::Left),
+        ),
+        precedence_binary_op(
+            Reverse(Precedence(40)),
+            NomAssoc::Left,
+            match_binary(ExprElement::affix, Precedence(40), Associativity::Left),
+        ),
+        precedence_binary_op(
+            Reverse(Precedence(40)),
+            NomAssoc::Right,
+            match_binary(ExprElement::affix, Precedence(40), Associativity::Right),
+        ),
+    ))
+}
+
+fn expr_operand_parser<'a>(input: ExprElementsInput<'a>) -> ExprElementsResult<'a, Expr> {
+    match_nilfix(ExprElement::affix)(input).and_then(|(rest, elem)| match expr_primary(elem) {
+        Ok(expr) => Ok((rest, expr)),
+        Err(_) => Err(nom::Err::Failure(NomError::new(
+            input,
+            NomErrorKind::Verify,
+        ))),
+    })
+}
+
+fn parse_expr_elements<'a>(
+    expr_elements: Vec<WithSpan<'a, ExprElement>>,
+    rest: Input<'a>,
+    input: Input<'a>,
+) -> IResult<'a, Expr> {
+    let mut parser = precedence(
+        expr_prefix_parser(),
+        expr_postfix_parser(),
+        expr_binary_parser(),
+        expr_operand_parser,
+        expr_fold,
+    );
+
+    match parser(expr_elements.as_slice()) {
+        Ok((remaining, expr)) => {
+            if remaining.is_empty() {
+                Ok((rest, expr))
+            } else {
+                input.backtrace.clear();
+                let total = input.offset(&rest);
+                let unused = remaining.iter().map(|e| e.span.tokens.len()).sum::<usize>();
+                let consumed = total.saturating_sub(unused);
+                Ok((input.slice(consumed..), expr))
+            }
+        }
+        Err(_) => {
+            input.backtrace.clear();
+            Err(nom::Err::Error(Error::from_error_kind(
+                rest,
+                ErrorKind::Other("unable to parse the expression"),
+            )))
+        }
+    }
+}
+
+fn expr_fold<'a>(
+    operation: Operation<
+        WithSpan<'a, ExprElement>,
+        WithSpan<'a, ExprElement>,
+        WithSpan<'a, ExprElement>,
+        Expr,
+    >,
+) -> Result<Expr, &'static str> {
+    match operation {
+        Operation::Prefix(op, rhs) => expr_prefix(op, rhs),
+        Operation::Postfix(lhs, op) => expr_postfix(lhs, op),
+        Operation::Binary(lhs, op, rhs) => expr_infix(lhs, op, rhs),
     }
 }
 
@@ -480,6 +647,409 @@ impl ExprElement {
     }
 }
 
+fn expr_primary(elem: WithSpan<'_, ExprElement>) -> Result<Expr, &'static str> {
+    let expr = match elem.elem {
+        ExprElement::ColumnRef { column } => Expr::ColumnRef {
+            span: transform_span(elem.span.tokens),
+            column,
+        },
+        ExprElement::Cast { expr, target_type } => Expr::Cast {
+            span: transform_span(elem.span.tokens),
+            expr,
+            target_type,
+            pg_style: false,
+        },
+        ExprElement::TryCast { expr, target_type } => Expr::TryCast {
+            span: transform_span(elem.span.tokens),
+            expr,
+            target_type,
+        },
+        ExprElement::Extract { field, expr } => Expr::Extract {
+            span: transform_span(elem.span.tokens),
+            kind: field,
+            expr,
+        },
+        ExprElement::DatePart { field, expr } => Expr::DatePart {
+            span: transform_span(elem.span.tokens),
+            kind: field,
+            expr,
+        },
+        ExprElement::Position {
+            substr_expr,
+            str_expr,
+        } => Expr::Position {
+            span: transform_span(elem.span.tokens),
+            substr_expr,
+            str_expr,
+        },
+        ExprElement::SubString {
+            expr,
+            substring_from,
+            substring_for,
+        } => Expr::Substring {
+            span: transform_span(elem.span.tokens),
+            expr,
+            substring_from,
+            substring_for,
+        },
+        ExprElement::Trim { expr, trim_where } => Expr::Trim {
+            span: transform_span(elem.span.tokens),
+            expr,
+            trim_where,
+        },
+        ExprElement::Literal { value } => Expr::Literal {
+            span: transform_span(elem.span.tokens),
+            value,
+        },
+        ExprElement::CountAll { qualified, window } => Expr::CountAll {
+            span: transform_span(elem.span.tokens),
+            qualified,
+            window,
+        },
+        ExprElement::Tuple { exprs } => Expr::Tuple {
+            span: transform_span(elem.span.tokens),
+            exprs,
+        },
+        ExprElement::FunctionCall { func } => Expr::FunctionCall {
+            span: transform_span(elem.span.tokens),
+            func,
+        },
+        ExprElement::Case {
+            operand,
+            conditions,
+            results,
+            else_result,
+        } => Expr::Case {
+            span: transform_span(elem.span.tokens),
+            operand,
+            conditions,
+            results,
+            else_result,
+        },
+        ExprElement::Exists { subquery, not } => Expr::Exists {
+            span: transform_span(elem.span.tokens),
+            not,
+            subquery: Box::new(subquery),
+        },
+        ExprElement::Subquery { subquery, modifier } => Expr::Subquery {
+            span: transform_span(elem.span.tokens),
+            modifier,
+            subquery: Box::new(subquery),
+        },
+        ExprElement::Group(expr) => expr,
+        ExprElement::Array { exprs } => Expr::Array {
+            span: transform_span(elem.span.tokens),
+            exprs,
+        },
+        ExprElement::ListComprehension {
+            source,
+            param,
+            filter,
+            result,
+        } => {
+            let span = transform_span(elem.span.tokens);
+            let mut source = source;
+
+            if let Some(filter) = filter {
+                source = Expr::FunctionCall {
+                    span,
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name(
+                            transform_span(elem.span.tokens),
+                            "array_filter",
+                        ),
+                        args: vec![source],
+                        params: vec![],
+                        order_by: vec![],
+                        window: None,
+                        lambda: Some(Lambda {
+                            params: vec![param.clone()],
+                            expr: Box::new(filter),
+                        }),
+                    },
+                };
+            }
+            Expr::FunctionCall {
+                span,
+                func: FunctionCall {
+                    distinct: false,
+                    name: Identifier::from_name(transform_span(elem.span.tokens), "array_map"),
+                    args: vec![source],
+                    params: vec![],
+                    order_by: vec![],
+                    window: None,
+                    lambda: Some(Lambda {
+                        params: vec![param.clone()],
+                        expr: Box::new(result),
+                    }),
+                },
+            }
+        }
+        ExprElement::Map { kvs } => Expr::Map {
+            span: transform_span(elem.span.tokens),
+            kvs,
+        },
+        ExprElement::Interval { expr, unit } => Expr::Interval {
+            span: transform_span(elem.span.tokens),
+            expr: Box::new(expr),
+            unit,
+        },
+        ExprElement::DateAdd {
+            unit,
+            interval,
+            date,
+        } => Expr::DateAdd {
+            span: transform_span(elem.span.tokens),
+            unit,
+            interval: Box::new(interval),
+            date: Box::new(date),
+        },
+        ExprElement::DateDiff {
+            unit,
+            date_start,
+            date_end,
+        } => Expr::DateDiff {
+            span: transform_span(elem.span.tokens),
+            unit,
+            date_start: Box::new(date_start),
+            date_end: Box::new(date_end),
+        },
+        ExprElement::DateBetween {
+            unit,
+            date_start,
+            date_end,
+        } => Expr::DateBetween {
+            span: transform_span(elem.span.tokens),
+            unit,
+            date_start: Box::new(date_start),
+            date_end: Box::new(date_end),
+        },
+        ExprElement::DateSub {
+            unit,
+            interval,
+            date,
+        } => Expr::DateSub {
+            span: transform_span(elem.span.tokens),
+            unit,
+            interval: Box::new(interval),
+            date: Box::new(date),
+        },
+        ExprElement::DateTrunc { unit, date } => Expr::DateTrunc {
+            span: transform_span(elem.span.tokens),
+            unit,
+            date: Box::new(date),
+        },
+        ExprElement::TimeSlice {
+            unit,
+            date,
+            slice_length,
+            start_or_end,
+        } => Expr::TimeSlice {
+            span: transform_span(elem.span.tokens),
+            unit,
+            date: Box::new(date),
+            slice_length,
+            start_or_end: start_or_end.unwrap_or("start".to_string()),
+        },
+        ExprElement::LastDay { unit, date } => Expr::LastDay {
+            span: transform_span(elem.span.tokens),
+            unit,
+            date: Box::new(date),
+        },
+        ExprElement::PreviousDay { unit, date } => Expr::PreviousDay {
+            span: transform_span(elem.span.tokens),
+            unit,
+            date: Box::new(date),
+        },
+        ExprElement::NextDay { unit, date } => Expr::NextDay {
+            span: transform_span(elem.span.tokens),
+            unit,
+            date: Box::new(date),
+        },
+        ExprElement::Hole { name } => Expr::Hole {
+            span: transform_span(elem.span.tokens),
+            name,
+        },
+        ExprElement::Placeholder => Expr::Placeholder {
+            span: transform_span(elem.span.tokens),
+        },
+        ExprElement::VariableAccess(name) => {
+            let span = transform_span(elem.span.tokens);
+            make_func_get_variable(span, name)
+        }
+        ExprElement::StageLocation { location } => Expr::StageLocation {
+            span: transform_span(elem.span.tokens),
+            location,
+        },
+        _ => unreachable!(),
+    };
+    Ok(expr)
+}
+
+fn expr_infix(lhs: Expr, elem: WithSpan<'_, ExprElement>, rhs: Expr) -> Result<Expr, &'static str> {
+    let expr = match elem.elem {
+        ExprElement::BinaryOp { op } => Expr::BinaryOp {
+            span: transform_span(elem.span.tokens),
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            op,
+        },
+        ExprElement::IsDistinctFrom { not } => Expr::IsDistinctFrom {
+            span: transform_span(elem.span.tokens),
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            not,
+        },
+        ExprElement::JsonOp { op } => Expr::JsonOp {
+            span: transform_span(elem.span.tokens),
+            left: Box::new(lhs),
+            right: Box::new(rhs),
+            op,
+        },
+        _ => unreachable!(),
+    };
+    Ok(expr)
+}
+
+fn expr_prefix(elem: WithSpan<'_, ExprElement>, rhs: Expr) -> Result<Expr, &'static str> {
+    let expr = match elem.elem {
+        ExprElement::UnaryOp { op } => Expr::UnaryOp {
+            span: transform_span(elem.span.tokens),
+            op,
+            expr: Box::new(rhs),
+        },
+        _ => unreachable!(),
+    };
+    Ok(expr)
+}
+
+fn expr_postfix(mut lhs: Expr, elem: WithSpan<'_, ExprElement>) -> Result<Expr, &'static str> {
+    let expr = match elem.elem {
+        ExprElement::MapAccess { accessor } => Expr::MapAccess {
+            span: transform_span(elem.span.tokens),
+            expr: Box::new(lhs),
+            accessor,
+        },
+        ExprElement::DotAccess { key } => {
+            if let Expr::ColumnRef { column, .. } = &mut lhs {
+                if let ColumnID::Name(name) = &column.column {
+                    column.database = column.table.take();
+                    column.table = Some(name.clone());
+                    column.column = key.clone();
+                    return Ok(lhs);
+                }
+            }
+            match key {
+                ColumnID::Name(id) => Expr::MapAccess {
+                    span: transform_span(elem.span.tokens),
+                    expr: Box::new(lhs),
+                    accessor: MapAccessor::Colon { key: id },
+                },
+                _ => return Err("dot access position must be after ident"),
+            }
+        }
+        ExprElement::ChainFunctionCall { name, args, lambda } => Expr::FunctionCall {
+            span: transform_span(elem.span.tokens),
+            func: FunctionCall {
+                distinct: false,
+                name,
+                args: [vec![lhs], args].concat(),
+                params: vec![],
+                order_by: vec![],
+                window: None,
+                lambda,
+            },
+        },
+        ExprElement::IsNull { not } => Expr::IsNull {
+            span: transform_span(elem.span.tokens),
+            expr: Box::new(lhs),
+            not,
+        },
+        ExprElement::InList { list, not } => Expr::InList {
+            span: transform_span(elem.span.tokens),
+            expr: Box::new(lhs),
+            list,
+            not,
+        },
+        ExprElement::InSubquery { subquery, not } => Expr::InSubquery {
+            span: transform_span(elem.span.tokens),
+            expr: Box::new(lhs),
+            subquery,
+            not,
+        },
+        ExprElement::LikeSubquery {
+            subquery,
+            modifier,
+            escape,
+        } => Expr::LikeSubquery {
+            span: transform_span(elem.span.tokens),
+            expr: Box::new(lhs),
+            subquery,
+            modifier,
+            escape,
+        },
+        ExprElement::Escape { escape } => match lhs {
+            Expr::BinaryOp {
+                span,
+                op: BinaryOperator::Like(_),
+                left,
+                right,
+            } => Expr::LikeWithEscape {
+                span,
+                left,
+                right,
+                is_not: false,
+                escape,
+            },
+            Expr::BinaryOp {
+                span,
+                op: BinaryOperator::NotLike(_),
+                left,
+                right,
+            } => Expr::LikeWithEscape {
+                span,
+                left,
+                right,
+                is_not: true,
+                escape,
+            },
+            Expr::BinaryOp {
+                span,
+                op: BinaryOperator::LikeAny(_),
+                left,
+                right,
+            } => Expr::LikeAnyWithEscape {
+                span,
+                left,
+                right,
+                escape,
+            },
+            _ => return Err("escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr"),
+        },
+        ExprElement::Between { low, high, not } => Expr::Between {
+            span: transform_span(elem.span.tokens),
+            expr: Box::new(lhs),
+            low,
+            high,
+            not,
+        },
+        ExprElement::PgCast { target_type } => Expr::Cast {
+            span: transform_span(elem.span.tokens),
+            expr: Box::new(lhs),
+            target_type,
+            pg_style: true,
+        },
+        ExprElement::UnaryOp { op } => Expr::UnaryOp {
+            span: transform_span(elem.span.tokens),
+            op,
+            expr: Box::new(lhs),
+        },
+        _ => unreachable!(),
+    };
+    Ok(expr)
+}
+
 impl Expr {
     pub fn affix(&self) -> Affix {
         match self {
@@ -531,438 +1101,7 @@ impl Expr {
         }
     }
 }
-
-struct ExprParser;
-
-impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprParser {
-    type Error = &'static str;
-    type Input = WithSpan<'a, ExprElement>;
-    type Output = Expr;
-
-    fn query(&mut self, elem: &WithSpan<ExprElement>) -> Result<Affix, &'static str> {
-        Ok(elem.elem.affix())
-    }
-
-    fn primary(&mut self, elem: WithSpan<'a, ExprElement>) -> Result<Expr, &'static str> {
-        let expr = match elem.elem {
-            ExprElement::ColumnRef { column } => Expr::ColumnRef {
-                span: transform_span(elem.span.tokens),
-                column,
-            },
-            ExprElement::Cast { expr, target_type } => Expr::Cast {
-                span: transform_span(elem.span.tokens),
-                expr,
-                target_type,
-                pg_style: false,
-            },
-            ExprElement::TryCast { expr, target_type } => Expr::TryCast {
-                span: transform_span(elem.span.tokens),
-                expr,
-                target_type,
-            },
-            ExprElement::Extract { field, expr } => Expr::Extract {
-                span: transform_span(elem.span.tokens),
-                kind: field,
-                expr,
-            },
-            ExprElement::DatePart { field, expr } => Expr::DatePart {
-                span: transform_span(elem.span.tokens),
-                kind: field,
-                expr,
-            },
-            ExprElement::Position {
-                substr_expr,
-                str_expr,
-            } => Expr::Position {
-                span: transform_span(elem.span.tokens),
-                substr_expr,
-                str_expr,
-            },
-            ExprElement::SubString {
-                expr,
-                substring_from,
-                substring_for,
-            } => Expr::Substring {
-                span: transform_span(elem.span.tokens),
-                expr,
-                substring_from,
-                substring_for,
-            },
-            ExprElement::Trim { expr, trim_where } => Expr::Trim {
-                span: transform_span(elem.span.tokens),
-                expr,
-                trim_where,
-            },
-            ExprElement::Literal { value } => Expr::Literal {
-                span: transform_span(elem.span.tokens),
-                value,
-            },
-            ExprElement::CountAll { qualified, window } => Expr::CountAll {
-                span: transform_span(elem.span.tokens),
-                qualified,
-                window,
-            },
-            ExprElement::Tuple { exprs } => Expr::Tuple {
-                span: transform_span(elem.span.tokens),
-                exprs,
-            },
-            ExprElement::FunctionCall { func } => Expr::FunctionCall {
-                span: transform_span(elem.span.tokens),
-                func,
-            },
-            ExprElement::Case {
-                operand,
-                conditions,
-                results,
-                else_result,
-            } => Expr::Case {
-                span: transform_span(elem.span.tokens),
-                operand,
-                conditions,
-                results,
-                else_result,
-            },
-            ExprElement::Exists { subquery, not } => Expr::Exists {
-                span: transform_span(elem.span.tokens),
-                not,
-                subquery: Box::new(subquery),
-            },
-            ExprElement::Subquery { subquery, modifier } => Expr::Subquery {
-                span: transform_span(elem.span.tokens),
-                modifier,
-                subquery: Box::new(subquery),
-            },
-            ExprElement::Group(expr) => expr,
-            ExprElement::Array { exprs } => Expr::Array {
-                span: transform_span(elem.span.tokens),
-                exprs,
-            },
-            ExprElement::ListComprehension {
-                source,
-                param,
-                filter,
-                result,
-            } => {
-                let span = transform_span(elem.span.tokens);
-                let mut source = source;
-
-                // array_filter(source, filter)
-                if let Some(filter) = filter {
-                    source = Expr::FunctionCall {
-                        span,
-                        func: FunctionCall {
-                            distinct: false,
-                            name: Identifier::from_name(
-                                transform_span(elem.span.tokens),
-                                "array_filter",
-                            ),
-                            args: vec![source],
-                            params: vec![],
-                            order_by: vec![],
-                            window: None,
-                            lambda: Some(Lambda {
-                                params: vec![param.clone()],
-                                expr: Box::new(filter),
-                            }),
-                        },
-                    };
-                }
-                // array_map(source, result)
-                Expr::FunctionCall {
-                    span,
-                    func: FunctionCall {
-                        distinct: false,
-                        name: Identifier::from_name(transform_span(elem.span.tokens), "array_map"),
-                        args: vec![source],
-                        params: vec![],
-                        order_by: vec![],
-                        window: None,
-                        lambda: Some(Lambda {
-                            params: vec![param.clone()],
-                            expr: Box::new(result),
-                        }),
-                    },
-                }
-            }
-            ExprElement::Map { kvs } => Expr::Map {
-                span: transform_span(elem.span.tokens),
-                kvs,
-            },
-            ExprElement::Interval { expr, unit } => Expr::Interval {
-                span: transform_span(elem.span.tokens),
-                expr: Box::new(expr),
-                unit,
-            },
-            ExprElement::DateAdd {
-                unit,
-                interval,
-                date,
-            } => Expr::DateAdd {
-                span: transform_span(elem.span.tokens),
-                unit,
-                interval: Box::new(interval),
-                date: Box::new(date),
-            },
-            ExprElement::DateDiff {
-                unit,
-                date_start,
-                date_end,
-            } => Expr::DateDiff {
-                span: transform_span(elem.span.tokens),
-                unit,
-                date_start: Box::new(date_start),
-                date_end: Box::new(date_end),
-            },
-            ExprElement::DateBetween {
-                unit,
-                date_start,
-                date_end,
-            } => Expr::DateBetween {
-                span: transform_span(elem.span.tokens),
-                unit,
-                date_start: Box::new(date_start),
-                date_end: Box::new(date_end),
-            },
-            ExprElement::DateSub {
-                unit,
-                interval,
-                date,
-            } => Expr::DateSub {
-                span: transform_span(elem.span.tokens),
-                unit,
-                interval: Box::new(interval),
-                date: Box::new(date),
-            },
-            ExprElement::DateTrunc { unit, date } => Expr::DateTrunc {
-                span: transform_span(elem.span.tokens),
-                unit,
-                date: Box::new(date),
-            },
-            ExprElement::TimeSlice {
-                unit,
-                date,
-                slice_length,
-                start_or_end,
-            } => Expr::TimeSlice {
-                span: transform_span(elem.span.tokens),
-                unit,
-                date: Box::new(date),
-                slice_length,
-                start_or_end: start_or_end.unwrap_or("start".to_string()),
-            },
-            ExprElement::LastDay { unit, date } => Expr::LastDay {
-                span: transform_span(elem.span.tokens),
-                unit,
-                date: Box::new(date),
-            },
-            ExprElement::PreviousDay { unit, date } => Expr::PreviousDay {
-                span: transform_span(elem.span.tokens),
-                unit,
-                date: Box::new(date),
-            },
-            ExprElement::NextDay { unit, date } => Expr::NextDay {
-                span: transform_span(elem.span.tokens),
-                unit,
-                date: Box::new(date),
-            },
-            ExprElement::Hole { name } => Expr::Hole {
-                span: transform_span(elem.span.tokens),
-                name,
-            },
-            ExprElement::Placeholder => Expr::Placeholder {
-                span: transform_span(elem.span.tokens),
-            },
-            ExprElement::VariableAccess(name) => {
-                let span = transform_span(elem.span.tokens);
-                make_func_get_variable(span, name)
-            }
-            ExprElement::StageLocation { location } => Expr::StageLocation {
-                span: transform_span(elem.span.tokens),
-                location,
-            },
-            _ => unreachable!(),
-        };
-        Ok(expr)
-    }
-
-    fn infix(
-        &mut self,
-        lhs: Expr,
-        elem: WithSpan<'a, ExprElement>,
-        rhs: Expr,
-    ) -> Result<Expr, &'static str> {
-        let expr = match elem.elem {
-            ExprElement::BinaryOp { op } => Expr::BinaryOp {
-                span: transform_span(elem.span.tokens),
-                left: Box::new(lhs),
-                right: Box::new(rhs),
-                op,
-            },
-            ExprElement::IsDistinctFrom { not } => Expr::IsDistinctFrom {
-                span: transform_span(elem.span.tokens),
-                left: Box::new(lhs),
-                right: Box::new(rhs),
-                not,
-            },
-            ExprElement::JsonOp { op } => Expr::JsonOp {
-                span: transform_span(elem.span.tokens),
-                left: Box::new(lhs),
-                right: Box::new(rhs),
-                op,
-            },
-            _ => unreachable!(),
-        };
-        Ok(expr)
-    }
-
-    fn prefix(&mut self, elem: WithSpan<'a, ExprElement>, rhs: Expr) -> Result<Expr, &'static str> {
-        let expr = match elem.elem {
-            ExprElement::UnaryOp { op } => Expr::UnaryOp {
-                span: transform_span(elem.span.tokens),
-                op,
-                expr: Box::new(rhs),
-            },
-            _ => unreachable!(),
-        };
-        Ok(expr)
-    }
-
-    fn postfix(
-        &mut self,
-        mut lhs: Expr,
-        elem: WithSpan<'a, ExprElement>,
-    ) -> Result<Expr, &'static str> {
-        let expr = match elem.elem {
-            ExprElement::MapAccess { accessor } => Expr::MapAccess {
-                span: transform_span(elem.span.tokens),
-                expr: Box::new(lhs),
-                accessor,
-            },
-            ExprElement::DotAccess { key } => {
-                // `database.table.column` is parsed into [database] [.table] [.column],
-                // so we need to transform it into the right `ColumnRef` form.
-                if let Expr::ColumnRef { column, .. } = &mut lhs {
-                    if let ColumnID::Name(name) = &column.column {
-                        column.database = column.table.take();
-                        column.table = Some(name.clone());
-                        column.column = key.clone();
-                        return Ok(lhs);
-                    }
-                }
-
-                match key {
-                    ColumnID::Name(id) => Expr::MapAccess {
-                        span: transform_span(elem.span.tokens),
-                        expr: Box::new(lhs),
-                        accessor: MapAccessor::Colon { key: id },
-                    },
-                    _ => {
-                        return Err("dot access position must be after ident");
-                    }
-                }
-            }
-            ExprElement::ChainFunctionCall { name, args, lambda } => Expr::FunctionCall {
-                span: transform_span(elem.span.tokens),
-                func: FunctionCall {
-                    distinct: false,
-                    name,
-                    args: [vec![lhs], args].concat(),
-                    params: vec![],
-                    order_by: vec![],
-                    window: None,
-                    lambda,
-                },
-            },
-            ExprElement::IsNull { not } => Expr::IsNull {
-                span: transform_span(elem.span.tokens),
-                expr: Box::new(lhs),
-                not,
-            },
-            ExprElement::InList { list, not } => Expr::InList {
-                span: transform_span(elem.span.tokens),
-                expr: Box::new(lhs),
-                list,
-                not,
-            },
-            ExprElement::InSubquery { subquery, not } => Expr::InSubquery {
-                span: transform_span(elem.span.tokens),
-                expr: Box::new(lhs),
-                subquery,
-                not,
-            },
-            ExprElement::LikeSubquery {
-                subquery,
-                modifier,
-                escape,
-            } => Expr::LikeSubquery {
-                span: transform_span(elem.span.tokens),
-                expr: Box::new(lhs),
-                subquery,
-                modifier,
-                escape,
-            },
-            ExprElement::Escape { escape } => match lhs {
-                Expr::BinaryOp {
-                    span,
-                    op: BinaryOperator::Like(_),
-                    left,
-                    right,
-                } => Expr::LikeWithEscape {
-                    span,
-                    left,
-                    right,
-                    is_not: false,
-                    escape,
-                },
-                Expr::BinaryOp {
-                    span,
-                    op: BinaryOperator::NotLike(_),
-                    left,
-                    right,
-                } => Expr::LikeWithEscape {
-                    span,
-                    left,
-                    right,
-                    is_not: true,
-                    escape,
-                },
-                Expr::BinaryOp {
-                    span,
-                    op: BinaryOperator::LikeAny(_),
-                    left,
-                    right,
-                } => Expr::LikeAnyWithEscape {
-                    span,
-                    left,
-                    right,
-                    escape,
-                },
-                _ => return Err("escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr"),
-            },
-            ExprElement::Between { low, high, not } => Expr::Between {
-                span: transform_span(elem.span.tokens),
-                expr: Box::new(lhs),
-                low,
-                high,
-                not,
-            },
-            ExprElement::PgCast { target_type } => Expr::Cast {
-                span: transform_span(elem.span.tokens),
-                expr: Box::new(lhs),
-                target_type,
-                pg_style: true,
-            },
-            ExprElement::UnaryOp { op } => Expr::UnaryOp {
-                span: transform_span(elem.span.tokens),
-                op,
-                expr: Box::new(lhs),
-            },
-            _ => unreachable!(),
-        };
-        Ok(expr)
-    }
-}
-
+#[allow(unreachable_code)]
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(column_id, |column| ExprElement::ColumnRef {
         column: ColumnRef {
@@ -1003,9 +1142,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, m, _, subquery, _, option_escape)| {
             let modifier = match m.kind {
-                TokenKind::ALL => SubqueryModifier::All,
-                TokenKind::ANY => SubqueryModifier::Any,
-                TokenKind::SOME => SubqueryModifier::Some,
+                ALL => SubqueryModifier::All,
+                ANY => SubqueryModifier::Any,
+                SOME => SubqueryModifier::Some,
                 _ => unreachable!(),
             };
             ExprElement::LikeSubquery {
@@ -1174,9 +1313,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(modifier, _, subquery, _)| {
             let modifier = modifier.map(|m| match m.kind {
-                TokenKind::ALL => SubqueryModifier::All,
-                TokenKind::ANY => SubqueryModifier::Any,
-                TokenKind::SOME => SubqueryModifier::Some,
+                ALL => SubqueryModifier::All,
+                ANY => SubqueryModifier::Any,
+                SOME => SubqueryModifier::Some,
                 _ => unreachable!(),
             });
             ExprElement::Subquery { modifier, subquery }
@@ -1345,13 +1484,17 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let interval = map(
         rule! {
-            INTERVAL ~ #subexpr(0) ~ #interval_kind
+            INTERVAL ~ ^#subexpr(0) ~ #interval_kind?
         },
-        |(_, operand, unit)| ExprElement::Interval {
-            expr: operand,
-            unit,
+        |(_, expr, unit)| match unit {
+            None => ExprElement::Cast {
+                expr: Box::new(expr),
+                target_type: TypeName::Interval,
+            },
+            Some(unit) => ExprElement::Interval { expr, unit },
         },
     );
+
     let date_trunc = map(
         rule! {
             DATE_TRUNC ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ ")"
@@ -1375,38 +1518,36 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule! {
             TRUNC ~ "(" ~  (#subexpr(0) ~ "," ~  #interval_kind)? ~ (#subexpr(0) ~ ("," ~  #subexpr(0))?)? ~ ")"
         },
-        |(s, _, opt_date, opt_numeric, _)| {
-            return match (opt_date, opt_numeric) {
-                (Some((date, _, unit)), None) => ExprElement::DateTrunc { unit, date },
-                (None, Some((expr, opt_expr2))) => {
-                    if let Some((_, expr2)) = opt_expr2 {
-                        ExprElement::FunctionCall {
-                            func: FunctionCall {
-                                distinct: false,
-                                name: Identifier::from_name(Some(s.span), "TRUNCATE"),
-                                args: vec![expr, expr2],
-                                ..Default::default()
-                            },
-                        }
-                    } else {
-                        ExprElement::FunctionCall {
-                            func: FunctionCall {
-                                distinct: false,
-                                name: Identifier::from_name(Some(s.span), "TRUNCATE"),
-                                args: vec![expr],
-                                ..Default::default()
-                            },
-                        }
+        |(s, _, opt_date, opt_numeric, _)| match (opt_date, opt_numeric) {
+            (Some((date, _, unit)), None) => ExprElement::DateTrunc { unit, date },
+            (None, Some((expr, opt_expr2))) => {
+                if let Some((_, expr2)) = opt_expr2 {
+                    ExprElement::FunctionCall {
+                        func: FunctionCall {
+                            distinct: false,
+                            name: Identifier::from_name(Some(s.span), "TRUNCATE"),
+                            args: vec![expr, expr2],
+                            ..Default::default()
+                        },
+                    }
+                } else {
+                    ExprElement::FunctionCall {
+                        func: FunctionCall {
+                            distinct: false,
+                            name: Identifier::from_name(Some(s.span), "TRUNCATE"),
+                            args: vec![expr],
+                            ..Default::default()
+                        },
                     }
                 }
-                _ => ExprElement::DateTrunc {
-                    unit: IntervalKind::UnknownIntervalKind,
-                    date: Expr::Literal {
-                        span: None,
-                        value: Literal::Null,
-                    },
+            }
+            _ => ExprElement::DateTrunc {
+                unit: IntervalKind::UnknownIntervalKind,
+                date: Expr::Literal {
+                    span: None,
+                    value: Literal::Null,
                 },
-            };
+            },
         },
     );
 
@@ -1479,9 +1620,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let interval_expr = map(
+    let inverted_expr = map(
         rule! {
-            INTERVAL ~ #consumed(literal_string)
+            INVERTED ~ #consumed(literal_string)
         },
         |(_, (span, date))| ExprElement::Cast {
             expr: Box::new(Expr::Literal {
@@ -1545,71 +1686,145 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         ExprElement::StageLocation { location }
     });
 
-    map(
-        consumed(alt((
-            // Note: each `alt` call supports maximum of 21 parsers
-            rule!(
-                #is_null : "`... IS [NOT] NULL`"
-                | #in_list : "`[NOT] IN (<expr>, ...)`"
-                | #in_subquery : "`[NOT] IN (SELECT ...)`"
-                | #like_subquery: "`LIKE ANY | ALL | SOME (SELECT ...)`"
-                | #exists : "`[NOT] EXISTS (SELECT ...)`"
-                | #between : "`[NOT] BETWEEN ... AND ...`"
-                | #binary_op : "<operator>"
-                | #json_op : "<operator>"
-                | #unary_op : "<operator>"
-                | #cast : "`CAST(... AS ...)`"
-                | #pg_cast : "`::<type_name>`"
-                | #position : "`POSITION(... IN ...)`"
-                | #variable_access: "`$<ident>`"
-            ),
-            rule! (
-                #date_add : "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_diff : "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_sub : "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_between : "`DATE_BETWEEN((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW), ..., ...,)`"
-                | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
-                | #time_slice : "`TIME_SLICE(<date_or_time_expr>, <slice_length>, (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) [ , <start_or_end> ] )`"
-                | #trunc : "`TRUNC(..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK))`"
-                | #last_day : "`LAST_DAY(..., (YEAR | QUARTER | MONTH | WEEK)))`"
-                | #previous_day : "`PREVIOUS_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
-                | #next_day : "`NEXT_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
-                | #date_expr : "`DATE <str_literal>`"
-                | #timestamp_expr : "`TIMESTAMP <str_literal>`"
-                | #timestamp_tz_expr : "`TIMESTAMP_TZ <str_literal>`"
-                | #interval : "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
-                | #interval_expr : "`INTERVAL <str_literal>`"
-                | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
-                | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
-            ),
-            rule!(
-                #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
-                | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
-                | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
-                | #chain_function_call : "x.function(...)"
-                | #list_comprehensions: "[expr for x in ... [if ...]]"
-                | #count_all_with_window : "`COUNT(*) OVER ...`"
-                | #function_call
-                | #escape: "`ESCAPE '<escape>'`"
-            ),
-            rule!(
-                #case : "`CASE ... END`"
-                | #tuple : "`(<expr> [, ...])`"
-                | #subquery : "`(SELECT ...)`"
-                | #stage_location: "@<location>"
-                | #column_ref : "<column>"
-                | #dot_access : "<dot_access>"
-                | #map_access : "[<key>] | .<key> | :<key>"
-                | #literal : "<literal>"
-                | #current_date: "CURRENT_DATE"
-                | #current_time: "CURRENT_TIME"
-                | #current_timestamp: "CURRENT_TIMESTAMP"
-                | #array : "`[<expr>, ...]`"
-                | #map_expr : "`{ <literal> : <expr>, ... }`"
-            ),
-        ))),
-        |(span, elem)| WithSpan { span, elem },
-    )(i)
+    macro_rules! with_span {
+        ($parser:expr) => {
+            map(consumed($parser), |(span, elem)| WithSpan { span, elem })
+        };
+    }
+
+    macro_rules! try_token {
+        ($token_0:expr, $($pat:pat => $body:expr),+ $(,)?) => {{
+            match $token_0.kind {
+                $(
+                    $pat => Some($body),
+                )+
+                _ => None,
+            }
+        }};
+    }
+
+    if let Some(token_0) = i.tokens.first() {
+        use TokenKind::*;
+
+        macro_rules! try_dispatch {
+            ($($pat:pat => $body:expr),+ $(,)?) => {{
+                if let Some(result) = try_token!(token_0, $($pat => $body),+) {
+                    if matches!(&result, Ok(_) | Err(nom::Err::Failure(_))) {
+                        return result;
+                    }
+                }
+            }};
+        }
+
+        try_dispatch!(
+            IS => with_span!(rule!(#is_null | #is_distinct_from)).parse(i),
+            NOT => with_span!(rule!(
+                #in_list
+                    | #in_subquery
+                    | #exists
+                    | #between
+                    | #binary_op
+                    | #unary_op
+            ))
+            .parse(i),
+            IN => with_span!(rule!(#in_list | #in_subquery)).parse(i),
+            LIKE => with_span!(rule!(#like_subquery | #binary_op)).parse(i),
+            EXISTS => with_span!(exists).parse(i),
+            BETWEEN => with_span!(between).parse(i),
+            CAST | TRY_CAST => with_span!(cast).parse(i),
+            DoubleColon => with_span!(pg_cast).parse(i),
+            POSITION => with_span!(position).parse(i),
+            IdentVariable => with_span!(variable_access).parse(i),
+            ESCAPE => with_span!(escape).parse(i),
+            COUNT => with_span!(rule!{ #count_all_with_window | #function_call}).parse(i),
+            SUBSTRING | SUBSTR => with_span!(substring).parse(i),
+            TRIM => with_span!(trim_from).parse(i),
+            CASE => with_span!(case).parse(i),
+            LParen => with_span!(rule!(#tuple | #subquery)).parse(i),
+            ANY | SOME | ALL => with_span!(subquery).parse(i),
+            Dot => {
+                return with_span!(rule!(#chain_function_call | #dot_access | #map_access)).parse(i);
+            },
+            Colon => {
+                return with_span!(map_access).parse(i);
+            },
+            LBracket => {
+                return with_span!(rule!(#list_comprehensions | #map_access | #array)).parse(i);
+            },
+            LBrace => with_span!(map_expr).parse(i),
+            LiteralAtString => with_span!(stage_location).parse(i),
+            DATEADD | DATE_ADD => with_span!(date_add).parse(i),
+            DATE_DIFF | DATEDIFF => with_span!(date_diff).parse(i),
+            DATESUB | DATE_SUB => with_span!(date_sub).parse(i),
+            DATEBETWEEN | DATE_BETWEEN => with_span!(date_between).parse(i),
+            DATE_TRUNC => with_span!(date_trunc).parse(i),
+            TIME_SLICE => with_span!(time_slice).parse(i),
+            TRUNC => with_span!(trunc).parse(i),
+            LAST_DAY => with_span!(last_day).parse(i),
+            PREVIOUS_DAY => with_span!(previous_day).parse(i),
+            NEXT_DAY => with_span!(next_day).parse(i),
+            DATE => with_span!(date_expr).parse(i),
+            TIMESTAMP => with_span!(timestamp_expr).parse(i),
+            TIMESTAMP_TZ => with_span!(timestamp_tz_expr).parse(i),
+            INVERTED => with_span!(inverted_expr).parse(i),
+            INTERVAL => with_span!(interval).parse(i),
+            DATE_PART | DATEPART => with_span!(date_part).parse(i),
+            EXTRACT => with_span!(extract).parse(i),
+            CURRENT_DATE => with_span!(rule!{ #function_call | #current_date }).parse(i),
+            CURRENT_TIME => with_span!(rule!{ #function_call | #current_time }).parse(i),
+            CURRENT_TIMESTAMP => with_span!(rule!{ #function_call | #current_timestamp }).parse(i),
+            Plus
+                | Minus
+                | Multiply
+                | Divide
+                | IntDiv
+                | DIV
+                | Modulo
+                | StringConcat
+                | Spaceship
+                | L1DISTANCE
+                | L2DISTANCE
+                | Gt
+                | Lt
+                | Gte
+                | Lte
+                | Eq
+                | NotEq
+                | Caret
+                | AND
+                | OR
+                | XOR
+                | REGEXP
+                | RLIKE
+                | BitWiseOr
+                | BitWiseAnd
+                | BitWiseXor
+                | ShiftLeft
+                | ShiftRight
+                | SOUNDS => with_span!(rule!{ #binary_op | #unary_op }).parse(i),
+            RArrow
+                | LongRArrow
+                | HashRArrow
+                | HashLongRArrow
+                | Placeholder
+                | QuestionOr
+                | QuestionAnd
+                | AtArrow
+                | ArrowAt
+                | AtQuestion
+                | AtAt
+                | HashMinus => with_span!(json_op).parse(i),
+            Factorial | SquareRoot | BitWiseNot | CubeRoot | Abs => with_span!(unary_op).parse(i),
+        );
+    }
+
+    with_span!(alt((rule!(
+        #function_call
+        | #map_access : "[<key>] | .<key> | :<key>"
+        | #literal : "<literal>"
+        | #column_ref : "<column>"
+    ),)))
+    .parse(i)
 }
 
 #[inline]
@@ -1681,30 +1896,27 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             ShiftRight => BinaryOperator::BitwiseShiftRight,
         );
         match token_0.kind {
-            TokenKind::LIKE => {
-                return if matches!(
-                    i.tokens.get(1).map(|first| first.kind == TokenKind::ANY),
-                    Some(true)
-                ) {
+            LIKE => {
+                return if matches!(i.tokens.get(1).map(|first| first.kind == ANY), Some(true)) {
                     return_op(i, 2, BinaryOperator::LikeAny(None))
                 } else {
                     return_op(i, 1, BinaryOperator::Like(None))
                 }
             }
-            TokenKind::NOT => match i.tokens.get(1).map(|first| first.kind) {
-                Some(TokenKind::LIKE) => {
+            NOT => match i.tokens.get(1).map(|first| first.kind) {
+                Some(LIKE) => {
                     return return_op(i, 2, BinaryOperator::NotLike(None));
                 }
-                Some(TokenKind::REGEXP) => {
+                Some(REGEXP) => {
                     return return_op(i, 2, BinaryOperator::NotRegexp);
                 }
-                Some(TokenKind::RLIKE) => {
+                Some(RLIKE) => {
                     return return_op(i, 2, BinaryOperator::NotRLike);
                 }
                 _ => (),
             },
-            TokenKind::SOUNDS => {
-                if let Some(TokenKind::LIKE) = i.tokens.get(1).map(|first| first.kind) {
+            SOUNDS => {
+                if let Some(LIKE) = i.tokens.get(1).map(|first| first.kind) {
                     return return_op(i, 2, BinaryOperator::SoundsLike);
                 }
             }
@@ -1714,7 +1926,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
     Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ..."))))
 }
 
-pub(crate) fn json_op(i: Input) -> IResult<JsonOperator> {
+pub fn json_op(i: Input) -> IResult<JsonOperator> {
     if let Some(token_0) = i.tokens.first() {
         op_branch!(
             i, token_0,
@@ -1747,7 +1959,8 @@ pub fn literal(i: Input) -> IResult<Literal> {
         | #boolean
         | #literal_number
         | #null
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn literal_hex_str(i: Input) -> IResult<&str> {
@@ -1769,7 +1982,8 @@ pub fn literal_hex_str(i: Input) -> IResult<&str> {
     rule!(
         #mysql_hex
         | #pg_hex
-    )(i)
+    )
+    .parse(i)
 }
 
 #[allow(clippy::from_str_radix_10)]
@@ -1787,7 +2001,8 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
     rule!(
         #decimal
         | #hex
-    )(i)
+    )
+    .parse(i)
 }
 
 #[allow(clippy::from_str_radix_10)]
@@ -1805,7 +2020,8 @@ pub fn literal_i64(i: Input) -> IResult<i64> {
     rule!(
         #decimal
         | #hex
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn literal_number(i: Input) -> IResult<Literal> {
@@ -1831,11 +2047,12 @@ pub fn literal_number(i: Input) -> IResult<Literal> {
         #decimal_uint
         | #decimal_float
         | #hex_uint
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn literal_bool(i: Input) -> IResult<bool> {
-    alt((value(true, rule! { TRUE }), value(false, rule! { FALSE })))(i)
+    alt((value(true, rule! { TRUE }), value(false, rule! { FALSE }))).parse(i)
 }
 
 pub fn literal_string(i: Input) -> IResult<String> {
@@ -1892,7 +2109,8 @@ pub fn nullable(i: Input) -> IResult<bool> {
     alt((
         value(true, rule! { NULL }),
         value(false, rule! { NOT ~ NULL }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn type_name(i: Input) -> IResult<TypeName> {
@@ -2119,7 +2337,8 @@ pub fn weekday(i: Input) -> IResult<Weekday> {
             Weekday::Saturday,
             rule! { #literal_string_eq_ignore_case("SATURDAY") },
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
@@ -2335,7 +2554,8 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #yearweek_str
             | #millennium_str
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn map_access(i: Input) -> IResult<MapAccessor> {
@@ -2369,7 +2589,8 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         #bracket
         | #dot_number
         | #colon
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn map_element(i: Input) -> IResult<(Literal, Expr)> {
@@ -2378,7 +2599,8 @@ pub fn map_element(i: Input) -> IResult<(Literal, Expr)> {
             #literal ~ ":" ~ #subexpr(0)
         },
         |(key, _, value)| (key, value),
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn function_call(i: Input) -> IResult<ExprElement> {
@@ -2593,7 +2815,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 },
             },
         },
-    )(i)
+    ).parse(i)
 }
 
 pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {

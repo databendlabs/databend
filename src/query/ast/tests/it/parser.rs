@@ -26,6 +26,7 @@ use databend_common_ast::parser::statement::insert_stmt;
 use databend_common_ast::parser::token::*;
 use databend_common_ast::parser::*;
 use goldenfile::Mint;
+use nom::Parser;
 use nom_rule::rule;
 
 fn run_parser<P, O>(file: &mut dyn Write, parser: P, src: &str)
@@ -58,7 +59,7 @@ fn run_parser_with_dialect<P, O>(
     };
     let parser = parser;
     let mut parser = rule! { #parser ~ &EOI };
-    match parser(input) {
+    match parser.parse(input) {
         Ok((i, (output, _))) => {
             assert_eq!(i[0].kind, TokenKind::EOI);
             writeln!(file, "---------- Input ----------").unwrap();
