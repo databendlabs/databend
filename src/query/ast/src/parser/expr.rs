@@ -1478,19 +1478,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let inverted_expr = map(
-        rule! {
-            INVERTED ~ #consumed(literal_string)
-        },
-        |(_, (span, date))| ExprElement::Cast {
-            expr: Box::new(Expr::Literal {
-                span: transform_span(span.tokens),
-                value: Literal::String(date),
-            }),
-            target_type: TypeName::Interval,
-        },
-    );
-
     let is_distinct_from = map(
         rule! {
             IS ~ NOT? ~ DISTINCT ~ FROM
@@ -1620,7 +1607,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         DATE => with_span!(date_expr).parse(i),
         TIMESTAMP => with_span!(timestamp_expr).parse(i),
         TIMESTAMP_TZ => with_span!(timestamp_tz_expr).parse(i),
-        INVERTED => with_span!(inverted_expr).parse(i),
         INTERVAL => with_span!(interval).parse(i),
         DATE_PART | DATEPART => with_span!(date_part).parse(i),
         EXTRACT => with_span!(extract).parse(i),

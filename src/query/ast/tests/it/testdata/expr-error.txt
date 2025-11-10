@@ -29,8 +29,9 @@ error:
   --> SQL:1:14
   |
 1 | CAST(col1 AS foo)
-  | ----         ^^^ unexpected `foo`, expecting `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `BLOB`, `JSON`, `DOUBLE`, `VECTOR`, `LONGBLOB`, `GEOMETRY`, `GEOGRAPHY`, `STAGE_LOCATION`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `REAL`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `TIMESTAMP`, `TIMESTAMP_TZ`, `DATETIME`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `MEDIUMBLOB`, `TINYBLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, or `NULLABLE`
+  | ----         ^^^ unexpected `foo`, expecting `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `BLOB`, `JSON`, `DOUBLE`, `VECTOR`, `LONGBLOB`, `GEOMETRY`, `GEOGRAPHY`, `STAGE_LOCATION`, <Ident>, <LiteralString>, `IDENTIFIER`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `REAL`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `TIMESTAMP`, `TIMESTAMP_TZ`, `DATETIME`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `MEDIUMBLOB`, `TINYBLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, or `NULLABLE`
   | |             
+  | while parsing `function(... [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
   | while parsing expression
 
 
@@ -51,8 +52,9 @@ error:
   --> SQL:1:10
   |
 1 | CAST(col1)
-  | ----     ^ unexpected `)`, expecting `AS`, `,`, `ColumnPosition`, `ROW`, <Ident>, <LiteralString>, `IDENTIFIER`, `[`, <LiteralFloat>, `:`, <LiteralCodeString>, `TRUE`, `FALSE`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, or `NULL`
+  | ----     ^ unexpected `)`, expecting <Ident>, <LiteralString>, `IDENTIFIER`, `ColumnPosition`, `ROW`, `[`, <LiteralFloat>, `:`, <LiteralCodeString>, `TRUE`, `FALSE`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `NULL`, `AS`, or `,`
   | |         
+  | while parsing `function(... [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
   | while parsing expression
 
 
@@ -103,7 +105,6 @@ error:
   --> SQL:3:1
   |
 1 | G.E.B IS NOT NULL
-  | - while parsing expression
 2 | AND col1 NOT BETWEEN col2 AND
 3 | AND 1 + col3 DIV sum(col4)
   | ^^^ expected more tokens for expression

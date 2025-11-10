@@ -1036,11 +1036,12 @@ error:
 CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)
 ---------- Output ---------
 error: 
-  --> SQL:1:65
+  --> SQL:1:51
   |
 1 | CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)
-  | ------                                   --       ---           ^ unexpected end of input, expecting `)`, `(`, `WITHIN`, `IGNORE`, `RESPECT`, `OVER`, `ColumnPosition`, `ROW`, <Ident>, <LiteralString>, `IDENTIFIER`, `[`, <LiteralFloat>, `:`, <LiteralCodeString>, `TRUE`, `FALSE`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `NULL`, or `,`
-  | |                                        |        |             
+  | ------                                   --       ^^^
+  | |                                        |        |
+  | |                                        |        expecting an operand
   | |                                        |        while parsing expression
   | |                                        while parsing AS (<parameter [parameter type]>, ...) -> <definition expr>
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
