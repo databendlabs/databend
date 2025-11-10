@@ -22,6 +22,8 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
 
+use crate::pipelines::processors::transforms::RuntimeFilterDesc;
+
 /// Represents a runtime filter that can be transmitted and merged.
 ///
 /// # Fields
@@ -63,6 +65,24 @@ pub struct JoinRuntimeFilterPacket {
     pub packets: Option<HashMap<usize, RuntimeFilterPacket>>,
     #[serde(default)]
     pub build_rows: usize,
+}
+
+impl JoinRuntimeFilterPacket {
+    pub fn disable_all(descs: &[RuntimeFilterDesc], build_rows: usize) -> Self {
+        let mut packets = HashMap::new();
+        for desc in descs {
+            packets.insert(desc.id, RuntimeFilterPacket {
+                id: desc.id,
+                inlist: None,
+                min_max: None,
+                bloom: None,
+            });
+        }
+        Self {
+            packets: Some(packets),
+            build_rows,
+        }
+    }
 }
 
 #[typetag::serde(name = "join_runtime_filter_packet")]
