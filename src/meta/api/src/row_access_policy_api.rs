@@ -33,7 +33,7 @@ pub trait RowAccessPolicyApi: Send + Sync {
         req: CreateRowAccessPolicyReq,
     ) -> Result<
         Result<CreateRowAccessPolicyReply, ExistError<row_access_policy_name_ident::Resource>>,
-        MetaTxnError,
+        MetaError,
     >;
 
     /// On success, returns the dropped id and row policy.

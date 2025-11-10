@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::app_error::TxnRetryMaxTimes;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
@@ -56,7 +55,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
         req: CreateRowAccessPolicyReq,
     ) -> Result<
         Result<CreateRowAccessPolicyReply, ExistError<row_access_policy_name_ident::Resource>>,
-        MetaTxnError,
+        MetaError,
     > {
         debug!(req :? =(&req); "RowAccessPolicyApi: {}", func_name!());
 
@@ -129,10 +128,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
         if succ {
             Ok(Ok(CreateRowAccessPolicyReply { id: row_access_id }))
         } else {
-            Err(MetaTxnError::TxnRetryMaxTimes(TxnRetryMaxTimes::new(
-                func_name!(),
-                1,
-            )))
+            Ok(Err(
+                name_ident.exist_error(format!("{} already exists", req.name))
+            ))
         }
     }
 
@@ -171,7 +169,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             // Policy is in use - cannot drop
             if !table_policy_refs.is_empty() {
                 return Ok(Err(RowAccessPolicyError::policy_in_use(
-                    tenant.tenant_name().to_string(),
                     name_ident.row_access_name().to_string(),
                 )));
             }
