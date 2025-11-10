@@ -123,7 +123,7 @@ pub struct WithSpan<'a, T> {
 impl<'a, T: PartialEq> PartialEq for WithSpan<'a, T> {
     fn eq(&self, other: &Self) -> bool {
         self.elem == other.elem
-            && self.span.tokens.as_ptr() == other.span.tokens.as_ptr()
+            && std::ptr::eq(self.span.tokens.as_ptr(), other.span.tokens.as_ptr())
             && self.span.tokens.len() == other.span.tokens.len()
     }
 }

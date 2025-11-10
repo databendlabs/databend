@@ -346,7 +346,7 @@ fn parse_set_operation_elements<'a>(
     );
 
     match parser(elements.as_slice()) {
-        Ok((remaining, expr)) if remaining.is_empty() => Ok((rest, expr)),
+        Ok(([], expr)) => Ok((rest, expr)),
         Ok((_, _)) => {
             input.backtrace.clear();
             Err(nom::Err::Error(Error::from_error_kind(
@@ -1115,7 +1115,7 @@ fn parse_table_reference_elements<'a>(
     );
 
     match parser(elements.as_slice()) {
-        Ok((remaining, expr)) if remaining.is_empty() => Ok((rest, expr)),
+        Ok(([], expr)) => Ok((rest, expr)),
         Ok((_, _)) => {
             input.backtrace.clear();
             Err(nom::Err::Error(Error::from_error_kind(
