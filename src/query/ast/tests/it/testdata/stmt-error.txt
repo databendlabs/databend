@@ -608,7 +608,7 @@ error:
   --> SQL:1:41
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS ()
-  | ------                                  ^ expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ...
+  | ------                                  ^ unexpected `)`, expecting `(`, `ColumnPosition`, `ROW`, <Ident>, <LiteralString>, `IDENTIFIER`, `[`, <LiteralFloat>, `:`, <LiteralCodeString>, `TRUE`, `FALSE`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, or `NULL`
   | |                                        
   | while parsing `SELECT ...`
 
@@ -1039,9 +1039,8 @@ error:
   --> SQL:1:65
   |
 1 | CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)
-  | ------                                   --       ----          ^ expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ...
-  | |                                        |        |  |          
-  | |                                        |        |  while parsing `(<expr> [, ...])`
+  | ------                                   --       ---           ^ unexpected end of input, expecting `)`, `(`, `WITHIN`, `IGNORE`, `RESPECT`, `OVER`, `ColumnPosition`, `ROW`, <Ident>, <LiteralString>, `IDENTIFIER`, `[`, <LiteralFloat>, `:`, <LiteralCodeString>, `TRUE`, `FALSE`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `NULL`, or `,`
+  | |                                        |        |             
   | |                                        |        while parsing expression
   | |                                        while parsing AS (<parameter [parameter type]>, ...) -> <definition expr>
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`

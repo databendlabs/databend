@@ -18,7 +18,6 @@
 pub mod ast;
 pub mod parser;
 mod parser_error;
-pub mod precedence;
 pub mod span;
 mod visitor;
 

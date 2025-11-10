@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::Cloned;
 use std::iter::Enumerate;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
 use enum_as_inner::EnumAsInner;
 use nom::Needed;
-use nom::Offset;
 
 use crate::parser::token::Token;
 use crate::parser::Backtrace;
@@ -64,15 +62,18 @@ impl<'a> Input<'a> {
     }
 }
 
-impl<'a> Offset for Input<'a> {
+impl nom::Offset for Input<'_> {
     fn offset(&self, second: &Self) -> usize {
-        self.tokens.len().saturating_sub(second.tokens.len())
+        let fst = self.tokens.as_ptr();
+        let snd = second.tokens.as_ptr();
+
+        (snd as usize - fst as usize) / std::mem::size_of::<Token>()
     }
 }
 
 impl<'a> nom::Input for Input<'a> {
-    type Item = Token<'a>;
-    type Iter = Cloned<std::slice::Iter<'a, Token<'a>>>;
+    type Item = &'a Token<'a>;
+    type Iter = std::slice::Iter<'a, Token<'a>>;
     type IterIndices = Enumerate<Self::Iter>;
 
     fn input_len(&self) -> usize {
@@ -80,7 +81,7 @@ impl<'a> nom::Input for Input<'a> {
     }
 
     fn take(&self, index: usize) -> Self {
-        self.slice(..index)
+        self.slice(0..index)
     }
 
     fn take_from(&self, index: usize) -> Self {
@@ -88,18 +89,27 @@ impl<'a> nom::Input for Input<'a> {
     }
 
     fn take_split(&self, index: usize) -> (Self, Self) {
-        (self.slice(index..), self.slice(..index))
+        let (prefix, suffix) = self.tokens.split_at(index);
+
+        (
+            Input {
+                tokens: prefix,
+                ..*self
+            },
+            Input {
+                tokens: suffix,
+                ..*self
+            },
+        )
     }
 
     fn position<P>(&self, predicate: P) -> Option<usize>
     where P: Fn(Self::Item) -> bool {
-        self.tokens
-            .iter()
-            .position(|token| predicate(token.clone()))
+        self.tokens.iter().position(predicate)
     }
 
     fn iter_elements(&self) -> Self::Iter {
-        self.tokens.iter().cloned()
+        self.tokens.iter()
     }
 
     fn iter_indices(&self) -> Self::IterIndices {
@@ -114,21 +124,12 @@ impl<'a> nom::Input for Input<'a> {
         }
     }
 }
+
 #[derive(Clone, Debug)]
 pub struct WithSpan<'a, T> {
     pub(crate) span: Input<'a>,
     pub(crate) elem: T,
 }
-
-impl<'a, T: PartialEq> PartialEq for WithSpan<'a, T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.elem == other.elem
-            && std::ptr::eq(self.span.tokens.as_ptr(), other.span.tokens.as_ptr())
-            && self.span.tokens.len() == other.span.tokens.len()
-    }
-}
-
-impl<'a, T: Eq> Eq for WithSpan<'a, T> {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, EnumAsInner)]
 pub enum ParseMode {

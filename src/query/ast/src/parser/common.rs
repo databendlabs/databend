@@ -12,18 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 pub use nom::branch::alt;
 pub use nom::branch::permutation;
 pub use nom::combinator::consumed;
 pub use nom::combinator::map;
 pub use nom::combinator::not;
 pub use nom::combinator::value;
-use nom::error::Error as NomError;
-use nom::error::ErrorKind as NomErrorKind;
 pub use nom::multi::many1;
 use nom::sequence::terminated;
+use nom::Offset;
 use nom::Parser;
 use nom_rule::rule;
+use pratt::PrattError;
+use pratt::PrattParser;
+use pratt::Precedence;
 
 pub fn parser_fn<'a, O, P>(mut parser: P) -> impl FnMut(Input<'a>) -> IResult<'a, O>
 where P: nom::Parser<Input<'a>, Output = O, Error = Error<'a>> {
@@ -44,77 +49,10 @@ use crate::parser::query::with_options;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
-pub use crate::precedence::Affix;
-pub use crate::precedence::Associativity;
-pub use crate::precedence::Precedence;
 use crate::Range;
 use crate::Span;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
-
-pub type ElementsInput<'a, T> = &'a [WithSpan<'a, T>];
-pub type ElementsError<'a, T> = NomError<ElementsInput<'a, T>>;
-pub type ElementsResult<'a, T, O> = nom::IResult<ElementsInput<'a, T>, O, ElementsError<'a, T>>;
-
-pub fn match_prefix<'a, T>(
-    affix_fn: impl Fn(&T) -> Affix + Copy,
-    precedence: Precedence,
-) -> impl FnMut(ElementsInput<'a, T>) -> ElementsResult<'a, T, WithSpan<'a, T>>
-where
-    T: Clone,
-{
-    match_affix(
-        affix_fn,
-        move |affix| matches!(affix, Affix::Prefix(p) if p == precedence),
-    )
-}
-
-pub fn match_postfix<'a, T>(
-    affix_fn: impl Fn(&T) -> Affix + Copy,
-    precedence: Precedence,
-) -> impl FnMut(ElementsInput<'a, T>) -> ElementsResult<'a, T, WithSpan<'a, T>>
-where
-    T: Clone,
-{
-    match_affix(
-        affix_fn,
-        move |affix| matches!(affix, Affix::Postfix(p) if p == precedence),
-    )
-}
-
-pub fn match_binary<'a, T>(
-    affix_fn: impl Fn(&T) -> Affix + Copy,
-    precedence: Precedence,
-    associativity: Associativity,
-) -> impl FnMut(ElementsInput<'a, T>) -> ElementsResult<'a, T, WithSpan<'a, T>>
-where
-    T: Clone,
-{
-    match_affix(
-        affix_fn,
-        move |affix| matches!(affix, Affix::Infix(p, assoc) if p == precedence && assoc == associativity),
-    )
-}
-
-pub fn match_nilfix<'a, T>(
-    affix_fn: impl Fn(&T) -> Affix + Copy,
-) -> impl FnMut(ElementsInput<'a, T>) -> ElementsResult<'a, T, WithSpan<'a, T>>
-where T: Clone {
-    match_affix(affix_fn, |affix| matches!(affix, Affix::Nilfix))
-}
-
-fn match_affix<'a, T>(
-    affix_fn: impl Fn(&T) -> Affix + Copy,
-    predicate: impl Fn(Affix) -> bool + Copy,
-) -> impl FnMut(ElementsInput<'a, T>) -> ElementsResult<'a, T, WithSpan<'a, T>>
-where
-    T: Clone,
-{
-    move |input| match input.split_first() {
-        Some((elem, rest)) if predicate(affix_fn(&elem.elem)) => Ok((rest, elem.clone())),
-        _ => Err(nom::Err::Error(NomError::new(input, NomErrorKind::Tag))),
-    }
-}
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
     move |i| match i.tokens.first().filter(|token| token.text() == text) {
@@ -665,6 +603,104 @@ pub fn transform_span(tokens: &[Token]) -> Span {
         start: tokens.first().unwrap().span.start,
         end: tokens.last().unwrap().span.end,
     })
+}
+
+pub(crate) trait IterProvider<'a> {
+    type Item;
+    type Iter: Iterator<Item = Self::Item> + ExactSizeIterator;
+
+    fn create_iter(self, span: Rc<RefCell<Option<Input<'a>>>>) -> Self::Iter;
+}
+
+impl<'a, T> IterProvider<'a> for Vec<WithSpan<'a, T>>
+where T: Clone
+{
+    type Item = WithSpan<'a, T>;
+    type Iter = ErrorSpan<'a, T, std::vec::IntoIter<WithSpan<'a, T>>>;
+
+    fn create_iter(self, span: Rc<RefCell<Option<Input<'a>>>>) -> Self::Iter {
+        ErrorSpan::new(self.into_iter(), span)
+    }
+}
+
+pub(crate) struct ErrorSpan<'a, T, I: Iterator<Item = WithSpan<'a, T>>> {
+    iter: I,
+    span: Rc<RefCell<Option<Input<'a>>>>,
+}
+
+impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> ErrorSpan<'a, T, I> {
+    fn new(iter: I, span: Rc<RefCell<Option<Input<'a>>>>) -> Self {
+        Self { iter, span }
+    }
+}
+
+impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> Iterator for ErrorSpan<'a, T, I> {
+    type Item = WithSpan<'a, T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter
+            .next()
+            .inspect(|item| *self.span.borrow_mut() = Some(item.span))
+    }
+}
+
+impl<'a, T, I: Iterator<Item = WithSpan<'a, T>>> ExactSizeIterator for ErrorSpan<'a, T, I> {}
+
+pub fn run_pratt_parser<'a, I, P, E, T>(
+    mut parser: P,
+    parsers: T,
+    rest: Input<'a>,
+    input: Input<'a>,
+) -> IResult<'a, P::Output>
+where
+    E: std::fmt::Debug,
+    P: PrattParser<I, Input = WithSpan<'a, E>, Error = &'static str>,
+    I: Iterator<Item = P::Input> + ExactSizeIterator,
+    T: IterProvider<'a, Item = P::Input, Iter = I>,
+{
+    let span = Rc::new(RefCell::new(None));
+    let mut iter = parsers.create_iter(span.clone()).peekable();
+    let expr = parser
+        .parse_input(&mut iter, Precedence(0))
+        .map_err(|err| {
+            // Rollback parsing footprint on unused expr elements.
+            input.backtrace.clear();
+
+            let err_kind = match err {
+                PrattError::EmptyInput => ErrorKind::Other("expecting an operand"),
+                PrattError::UnexpectedNilfix(i) => {
+                    *span.borrow_mut() = Some(i.span);
+                    ErrorKind::Other("unable to parse the element")
+                }
+                PrattError::UnexpectedPrefix(i) => {
+                    *span.borrow_mut() = Some(i.span);
+                    ErrorKind::Other("unable to parse the prefix operator")
+                }
+                PrattError::UnexpectedInfix(i) => {
+                    *span.borrow_mut() = Some(i.span);
+                    ErrorKind::Other("missing lhs or rhs for the binary operator")
+                }
+                PrattError::UnexpectedPostfix(i) => {
+                    *span.borrow_mut() = Some(i.span);
+                    ErrorKind::Other("unable to parse the postfix operator")
+                }
+                PrattError::UserError(err) => ErrorKind::Other(err),
+            };
+
+            let span = span
+                .take()
+                // It's safe to slice one more token because input must contain EOI.
+                .unwrap_or_else(|| rest.slice(..1));
+
+            nom::Err::Error(Error::from_error_kind(span, err_kind))
+        })?;
+    if let Some(elem) = iter.peek() {
+        // Rollback parsing footprint on unused expr elements.
+        input.backtrace.clear();
+        Ok((input.slice(input.offset(&elem.span)..), expr))
+    } else {
+        Ok((rest, expr))
+    }
 }
 
 pub fn check_template_mode<'a, O, F>(mut parser: F) -> impl FnMut(Input<'a>) -> IResult<'a, O>

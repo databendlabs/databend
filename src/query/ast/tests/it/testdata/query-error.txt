@@ -93,7 +93,6 @@ error:
 1 | select number + 5 as a, cast(number as float(255))
   | ------                  ----                ^ unexpected `(`, expecting `)`, `NULL`, or `NOT`
   | |                       |                    
-  | |                       while parsing `CAST(... AS ...)`
   | |                       while parsing expression
   | while parsing `SELECT ...`
 
