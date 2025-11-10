@@ -520,7 +520,7 @@ EvalScalar
                 ├── filters: []
                 ├── build join filters:
                 │   ├── filter id:2, build key:a.entity_id (#0), probe targets:[a.entity_id (#9)@scan1, c.entity_id (#18)@scan2], filter type:bloom,inlist,min_max
-                │   └── filter id:3, build key:a.source_id (#1), probe targets:[a.source_id (#10)@scan1, c.source_id (#19)@scan2], filter type:bloom,inlist,min_max
+                │   └── filter id:3, build key:a.source_id (#1), probe targets:[c.source_id (#19)@scan2, a.source_id (#10)@scan1], filter type:bloom,inlist,min_max
                 ├── estimated rows: 0.20
                 ├── Filter(Build)
                 │   ├── output columns: [a.entity_id (#0), a.source_id (#1), a.metadata_object['type'] (#5), a.content_object['category_a'] (#6), a.content_object['category_b'] (#7), a.content_object['event_date'] (#8)]
