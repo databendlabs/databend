@@ -32,7 +32,7 @@ pub mod serde;
 pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;
 pub use data_exchange::MergeExchange;
-pub use data_exchange::ShuffleDataExchange;
+pub use data_exchange::NodeToNodeExchange;
 pub use exchange_injector::DefaultExchangeInjector;
 pub use exchange_injector::ExchangeInjector;
 pub use exchange_manager::DataExchangeManager;

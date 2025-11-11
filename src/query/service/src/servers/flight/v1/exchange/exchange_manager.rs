@@ -1051,7 +1051,7 @@ impl FragmentCoordinator {
                     allow_adjust_parallelism: true,
                 },
             ))),
-            DataExchange::ShuffleDataExchange(exchange) => Ok(Some(
+            DataExchange::NodeToNodeExchange(exchange) => Ok(Some(
                 ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
                     exchange_injector: exchange_injector.clone(),
                     schema: self.physical_plan.output_schema()?,
