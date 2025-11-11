@@ -127,9 +127,12 @@ async fn do_hook_compact(
             let scan_progress = ctx.get_scan_progress();
             let scan_progress_value = scan_progress.as_ref().get_values();
 
-            match GlobalIORuntime::instance()
-                .block_on({ compact_table(ctx, compact_target, compaction_limits, lock_opt) })
-            {
+            match GlobalIORuntime::instance().block_on(compact_table(
+                ctx,
+                compact_target,
+                compaction_limits,
+                lock_opt,
+            )) {
                 Ok(_) => {
                     info!("Operation {op_name} and table optimization job completed successfully.");
                 }
