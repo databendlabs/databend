@@ -57,7 +57,6 @@ mod util;
 const HANDLER_MYSQL: &str = "mysql";
 const HANDLER_HTTP: &str = "http";
 const HANDLER_HYBRID: &str = "hybrid";
-const HANDLER_TTC_RUST: &str = "ttc_rust";
 const TTC_PORT_START: u16 = 9902;
 
 use std::sync::LazyLock;
@@ -136,10 +135,11 @@ pub async fn main() -> Result<()> {
             HANDLER_HYBRID => {
                 run_hybrid_client(args.clone(), &mut containers).await?;
             }
-            HANDLER_TTC_RUST => {}
             handler if handler.starts_with("ttc") => {
-                let image = format!("ghcr.io/databendlabs/{handler}:latest");
-                run_ttc_container(&image, TTC_PORT_START, args.port, &mut containers).await?;
+                if handler != "ttc_dev" {
+                    let image = format!("ghcr.io/databendlabs/{handler}:latest");
+                    run_ttc_container(&image, TTC_PORT_START, args.port, &mut containers).await?;
+                }
                 run_ttc_client(
                     args.clone(),
                     ClientType::Ttc(handler.to_string(), TTC_PORT_START),
