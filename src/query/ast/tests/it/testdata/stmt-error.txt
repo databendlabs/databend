@@ -608,7 +608,7 @@ error:
   --> SQL:1:41
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS ()
-  | ------                                  ^ unexpected `)`, expecting `(`, `ColumnPosition`, `ROW`, <Ident>, <LiteralString>, `IDENTIFIER`, `[`, <LiteralFloat>, `:`, <LiteralCodeString>, `TRUE`, `FALSE`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, or `NULL`
+  | ------                                  ^ expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...
   | |                                        
   | while parsing `SELECT ...`
 

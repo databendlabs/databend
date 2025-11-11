@@ -1838,7 +1838,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
         NULL => null.parse(i),
     );
 
-    Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `LiteralString`, 'LiteralCodeString', 'LiteralInteger', 'LiteralFloat', 'TRUE', 'FALSE', or more ..."))))
+    Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ..."))))
 }
 
 pub fn literal_hex_str(i: Input) -> IResult<&str> {

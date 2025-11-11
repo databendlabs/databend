@@ -52,7 +52,7 @@ error:
   --> SQL:1:10
   |
 1 | CAST(col1)
-  | ----     ^ unexpected `)`, expecting <Ident>, <LiteralString>, `IDENTIFIER`, `ColumnPosition`, `ROW`, `[`, <LiteralFloat>, `:`, <LiteralCodeString>, `TRUE`, `FALSE`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `NULL`, `AS`, or `,`
+  | ----     ^ expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...
   | |         
   | while parsing `function(... [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`
   | while parsing expression
@@ -79,7 +79,7 @@ error:
 1 | $ abc + 3
   | ^
   | |
-  | unexpected `$`, expecting `ColumnPosition`, `ROW`, <Ident>, <LiteralString>, `IDENTIFIER`, `[`, <LiteralFloat>, `:`, <LiteralCodeString>, `TRUE`, `FALSE`, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, or `NULL`
+  | expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...
   | while parsing expression
 
 
