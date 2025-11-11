@@ -144,7 +144,7 @@ fn try_fast_cast_scalar(scalar: &Scalar, dest_type: &DataType) -> Option<Result<
         },
         DataType::Decimal(size) => match scalar {
             Scalar::Null => Some(Ok(Scalar::Null)),
-            Scalar::Decimal(dec) => Some(rescale_decimal_scalar(dec.clone(), *size)),
+            Scalar::Decimal(dec) => Some(rescale_decimal_scalar(*dec, *size)),
             _ => None,
         },
         _ => None,
