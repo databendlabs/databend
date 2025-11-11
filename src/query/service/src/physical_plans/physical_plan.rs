@@ -359,6 +359,7 @@ impl PhysicalPlan {
             profs,
             metadata,
             scan_id_to_runtime_filters: HashMap::new(),
+            runtime_filter_reports: HashMap::new(),
         };
 
         self.formatter()?.format(&mut context)

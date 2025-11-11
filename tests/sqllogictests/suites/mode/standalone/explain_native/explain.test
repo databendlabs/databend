@@ -15,6 +15,7 @@ explain select t1.a from t1 where a > 0
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0)]
 ├── read rows: 0
 ├── read size: 0
@@ -39,10 +40,11 @@ Filter
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:bloom,inlist,min_max
+    │   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#2)@scan1], filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t1
+    │   ├── scan id: 0
     │   ├── output columns: [a (#0), b (#1)]
     │   ├── read rows: 0
     │   ├── read size: 0
@@ -53,6 +55,7 @@ Filter
     │   └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.default.t2
+        ├── scan id: 1
         ├── output columns: [a (#2), b (#3)]
         ├── read rows: 5
         ├── read size: < 1 KiB
@@ -74,10 +77,11 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:inlist,min_max
+│   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#2)@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
+│   ├── scan id: 0
 │   ├── output columns: [a (#0), b (#1)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -88,6 +92,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
+    ├── scan id: 1
     ├── output columns: [a (#2), b (#3)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -278,6 +283,7 @@ UnionAll
 ├── estimated rows: 6.00
 ├── TableScan
 │   ├── table: default.default.t1
+│   ├── scan id: 0
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -288,6 +294,7 @@ UnionAll
 │   └── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t2
+    ├── scan id: 1
     ├── output columns: [a (#2)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -314,6 +321,7 @@ Filter
     ├── estimated rows: 4.40
     ├── TableScan(Build)
     │   ├── table: default.default.t1
+    │   ├── scan id: 0
     │   ├── output columns: [a (#0), b (#1)]
     │   ├── read rows: 1
     │   ├── read size: < 1 KiB
@@ -324,6 +332,7 @@ Filter
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
+        ├── scan id: 1
         ├── output columns: [a (#2), b (#3)]
         ├── read rows: 5
         ├── read size: < 1 KiB
@@ -350,6 +359,7 @@ Filter
     ├── estimated rows: 5.00
     ├── TableScan(Build)
     │   ├── table: default.default.t1
+    │   ├── scan id: 0
     │   ├── output columns: [a (#0), b (#1)]
     │   ├── read rows: 1
     │   ├── read size: < 1 KiB
@@ -360,6 +370,7 @@ Filter
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.default.t2
+        ├── scan id: 1
         ├── output columns: [a (#2), b (#3)]
         ├── read rows: 5
         ├── read size: < 1 KiB
@@ -396,6 +407,7 @@ HashJoin
 │   ├── estimated rows: 5.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t1
+│   │   ├── scan id: 0
 │   │   ├── output columns: [a (#0), b (#1)]
 │   │   ├── read rows: 1
 │   │   ├── read size: < 1 KiB
@@ -406,6 +418,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.default.t2
+│       ├── scan id: 1
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 5
 │       ├── read size: < 1 KiB
@@ -416,6 +429,7 @@ HashJoin
 │       └── estimated rows: 5.00
 └── TableScan(Probe)
     ├── table: default.default.t3
+    ├── scan id: 2
     ├── output columns: [a (#4), b (#5)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -450,6 +464,7 @@ HashJoin
 │       ├── estimated rows: 4.40
 │       ├── TableScan(Build)
 │       │   ├── table: default.default.t1
+│       │   ├── scan id: 0
 │       │   ├── output columns: [a (#0), b (#1)]
 │       │   ├── read rows: 1
 │       │   ├── read size: < 1 KiB
@@ -460,6 +475,7 @@ HashJoin
 │       │   └── estimated rows: 1.00
 │       └── TableScan(Probe)
 │           ├── table: default.default.t2
+│           ├── scan id: 1
 │           ├── output columns: [a (#2), b (#3)]
 │           ├── read rows: 5
 │           ├── read size: < 1 KiB
@@ -470,6 +486,7 @@ HashJoin
 │           └── estimated rows: 4.40
 └── TableScan(Probe)
     ├── table: default.default.t3
+    ├── scan id: 2
     ├── output columns: [a (#4), b (#5)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -505,6 +522,7 @@ Limit
             ├── estimated rows: 4.40
             ├── TableScan(Build)
             │   ├── table: default.default.t1
+            │   ├── scan id: 0
             │   ├── output columns: [a (#0), b (#1)]
             │   ├── read rows: 1
             │   ├── read size: < 1 KiB
@@ -515,6 +533,7 @@ Limit
             │   └── estimated rows: 1.00
             └── TableScan(Probe)
                 ├── table: default.default.t2
+                ├── scan id: 1
                 ├── output columns: [a (#2), b (#3)]
                 ├── read rows: 5
                 ├── read size: < 1 KiB
@@ -537,6 +556,7 @@ HashJoin
 ├── estimated rows: 5.00
 ├── TableScan(Build)
 │   ├── table: default.default.t1
+│   ├── scan id: 0
 │   ├── output columns: [a (#0), b (#1)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -547,6 +567,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t2
+    ├── scan id: 1
     ├── output columns: [a (#2), b (#3)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -579,6 +600,7 @@ AggregateFinal
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.t1
+                ├── scan id: 0
                 ├── output columns: [a (#0)]
                 ├── read rows: 1
                 ├── read size: < 1 KiB
@@ -611,6 +633,7 @@ AggregateFinal
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.t1
+                ├── scan id: 0
                 ├── output columns: [a (#0)]
                 ├── read rows: 1
                 ├── read size: < 1 KiB
@@ -665,6 +688,7 @@ explain select * from t4 where a = 1 and try_cast(get(try_parse_json(b),'bb') as
 ----
 TableScan
 ├── table: default.default.t4
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -688,6 +712,7 @@ EvalScalar
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t4
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -705,6 +730,7 @@ EvalScalar
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t4
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -749,6 +775,7 @@ Sort(Single)
     ├── EmptyResultScan(Build)
     └── TableScan(Probe)
         ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: [i (#0), j (#1)]
         ├── read rows: 3
         ├── read size: < 1 KiB
@@ -775,6 +802,7 @@ EXPLAIN SELECT * FROM t3 WHERE b['k2'] = 'm';
 ----
 TableScan
 ├── table: default.default.t3
+├── scan id: 0
 ├── output columns: [a (#0), b (#1), c (#2)]
 ├── read rows: 3
 ├── read size: < 1 KiB
@@ -789,6 +817,7 @@ EXPLAIN SELECT * FROM t3 WHERE c['k3'] = 'v';
 ----
 TableScan
 ├── table: default.default.t3
+├── scan id: 0
 ├── output columns: [a (#0), b (#1), c (#2)]
 ├── read rows: 3
 ├── read size: < 1 KiB
@@ -803,6 +832,7 @@ EXPLAIN SELECT * FROM t3 WHERE c['k2'] = 100;
 ----
 TableScan
 ├── table: default.default.t3
+├── scan id: 0
 ├── output columns: [a (#0), b (#1), c (#2)]
 ├── read rows: 6
 ├── read size: < 1 KiB
@@ -833,6 +863,7 @@ EXPLAIN SELECT * FROM t WHERE a.1 > 0;
 ----
 TableScan
 ├── table: default.default.t
+├── scan id: 0
 ├── output columns: [a (#0)]
 ├── read rows: 2
 ├── read size: < 1 KiB
@@ -847,6 +878,7 @@ EXPLAIN SELECT * FROM t WHERE a.1 > 1;
 ----
 TableScan
 ├── table: default.default.t
+├── scan id: 0
 ├── output columns: [a (#0)]
 ├── read rows: 2
 ├── read size: < 1 KiB
@@ -861,6 +893,7 @@ EXPLAIN SELECT * FROM t WHERE a.2 > 1;
 ----
 TableScan
 ├── table: default.default.t
+├── scan id: 0
 ├── output columns: [a (#0)]
 ├── read rows: 2
 ├── read size: < 1 KiB

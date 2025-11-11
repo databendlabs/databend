@@ -29,6 +29,7 @@ EvalScalar
             ├── estimated rows: 0.60
             └── TableScan
                 ├── table: default.default.products
+                ├── scan id: 0
                 ├── output columns: [name (#0), details (#1)]
                 ├── read rows: 3
                 ├── read size: < 1 KiB
@@ -60,6 +61,7 @@ EvalScalar
         ├── estimated rows: 0.60
         └── TableScan
             ├── table: default.default.products
+            ├── scan id: 0
             ├── output columns: [name (#0), details (#1)]
             ├── read rows: 3
             ├── read size: < 1 KiB

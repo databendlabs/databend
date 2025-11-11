@@ -206,9 +206,6 @@ impl IPhysicalPlan for TableScan {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let table = builder.ctx.build_table_from_source_plan(&self.source)?;
         builder.ctx.set_partitions(self.source.parts.clone())?;
-        builder
-            .ctx
-            .set_wait_runtime_filter(self.scan_id, builder.contain_sink_processor);
 
         if builder.ctx.get_settings().get_enable_prune_pipeline()? {
             if let Some(prune_pipeline) = table.build_prune_pipeline(

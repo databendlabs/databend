@@ -159,8 +159,6 @@ pub struct QueryContextShared {
 
     pub(super) runtime_filter_ready: Arc<RwLock<HashMap<IndexType, Vec<Arc<RuntimeFilterReady>>>>>,
 
-    pub(super) wait_runtime_filter: Arc<RwLock<HashMap<IndexType, bool>>>,
-
     pub(super) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
 
     // Records query level data cache metrics
@@ -173,6 +171,7 @@ pub struct QueryContextShared {
     pub(super) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
     pub(super) spilled_files: Arc<RwLock<HashMap<spillers::Location, spillers::Layout>>>,
     pub(super) unload_callbacked: AtomicBool,
+    pub(super) runtime_filter_logged: AtomicBool,
     pub(super) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
     pub(super) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
 
@@ -253,7 +252,6 @@ impl QueryContextShared {
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
             runtime_filter_ready: Default::default(),
-            wait_runtime_filter: Default::default(),
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
@@ -261,6 +259,7 @@ impl QueryContextShared {
             cluster_spill_progress: Default::default(),
             spilled_files: Default::default(),
             unload_callbacked: AtomicBool::new(false),
+            runtime_filter_logged: AtomicBool::new(false),
             warehouse_cache: Arc::new(RwLock::new(None)),
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),

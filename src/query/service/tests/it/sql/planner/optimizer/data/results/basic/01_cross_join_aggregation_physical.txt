@@ -23,6 +23,7 @@ AggregateFinal
             │   ├── exchange type: Broadcast
             │   └── TableScan
             │       ├── table: default.default.integers
+            │       ├── scan id: 1
             │       ├── output columns: [i (#1)]
             │       ├── read rows: 5000
             │       ├── read size: 20.15 KiB
@@ -33,6 +34,7 @@ AggregateFinal
             │       └── estimated rows: 5000.00
             └── TableScan(Probe)
                 ├── table: default.default.integers
+                ├── scan id: 0
                 ├── output columns: [i (#0)]
                 ├── read rows: 5000
                 ├── read size: 20.15 KiB

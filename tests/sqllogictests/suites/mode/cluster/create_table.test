@@ -41,6 +41,7 @@ EvalScalar
                             ├── rank limit: 3
                             └── TableScan
                                 ├── table: default.system.numbers
+                                ├── scan id: 0
                                 ├── output columns: [number (#0)]
                                 ├── read rows: 10000000
                                 ├── read size: 76.29 MiB

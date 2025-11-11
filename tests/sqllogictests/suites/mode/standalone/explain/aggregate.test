@@ -12,6 +12,7 @@ AggregateFinal
     ├── estimated rows: 3.33
     └── TableScan
         ├── table: default.system.numbers
+        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 10
         ├── read size: < 1 KiB
@@ -35,6 +36,7 @@ AggregateFinal
     ├── estimated rows: 3.33
     └── TableScan
         ├── table: default.system.numbers
+        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 10
         ├── read size: < 1 KiB
@@ -67,6 +69,7 @@ EvalScalar
             ├── estimated rows: 10.00
             └── TableScan
                 ├── table: default.system.numbers
+                ├── scan id: 0
                 ├── output columns: []
                 ├── read rows: 10
                 ├── read size: < 1 KiB
@@ -94,6 +97,7 @@ EvalScalar
         ├── estimated rows: 3.33
         └── TableScan
             ├── table: default.system.numbers
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 10
             ├── read size: < 1 KiB
@@ -121,6 +125,7 @@ EvalScalar
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.system.columns
+            ├── scan id: 0
             ├── output columns: [name (#0), type (#3)]
             ├── read rows: 0
             ├── read size: 0
@@ -156,6 +161,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.explain_agg_t1
+            ├── scan id: 0
             ├── output columns: [a (#0)]
             ├── read rows: 0
             ├── read size: 0
@@ -182,6 +188,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.explain_agg_t1
+            ├── scan id: 0
             ├── output columns: [a (#0), b (#1)]
             ├── read rows: 0
             ├── read size: 0
@@ -216,6 +223,7 @@ EvalScalar
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.explain_agg_t1
+                    ├── scan id: 0
                     ├── output columns: [a (#0), b (#1)]
                     ├── read rows: 0
                     ├── read size: 0
@@ -246,6 +254,7 @@ Sort(Single)
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.explain_agg_t1
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -277,6 +286,7 @@ Sort(Single)
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.explain_agg_t1
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -307,6 +317,7 @@ Sort(Single)
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.explain_agg_t1
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -337,6 +348,7 @@ Sort(Single)
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.explain_agg_t1
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -367,6 +379,7 @@ Sort(Single)
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.explain_agg_t1
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -410,6 +423,7 @@ AggregateFinal
         ├── estimated rows: 1000.00
         ├── TableScan(Left)
         │   ├── table: default.default.t1
+        │   ├── scan id: 0
         │   ├── output columns: [a (#0)]
         │   ├── read rows: 10
         │   ├── read size: < 1 KiB
@@ -420,6 +434,7 @@ AggregateFinal
         │   └── estimated rows: 10.00
         └── TableScan(Right)
             ├── table: default.default.t2
+            ├── scan id: 1
             ├── output columns: [a (#1)]
             ├── read rows: 100
             ├── read size: < 1 KiB
@@ -456,6 +471,7 @@ EvalScalar
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.default.t
+            ├── scan id: 0
             ├── output columns: [referer (#0), isrefresh (#1)]
             ├── read rows: 0
             ├── read size: 0
@@ -488,6 +504,7 @@ Limit
             ├── rank limit: 10
             └── TableScan
                 ├── table: default.default.t
+                ├── scan id: 0
                 ├── output columns: [referer (#0), isrefresh (#1)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -520,6 +537,7 @@ Limit
             ├── rank limit: 13
             └── TableScan
                 ├── table: default.default.t
+                ├── scan id: 0
                 ├── output columns: [referer (#0), isrefresh (#1)]
                 ├── read rows: 0
                 ├── read size: 0

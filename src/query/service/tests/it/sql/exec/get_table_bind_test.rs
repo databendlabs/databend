@@ -33,7 +33,9 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
@@ -950,16 +952,16 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_wait_runtime_filter(&self, _table_index: usize, _need_to_wait: bool) {
-        todo!()
-    }
-
-    fn get_wait_runtime_filter(&self, _table_index: usize) -> bool {
-        todo!()
-    }
-
     fn clear_runtime_filter(&self) {
         todo!()
+    }
+
+    fn get_runtime_filters(&self, _id: usize) -> Vec<RuntimeFilterEntry> {
+        Vec::<RuntimeFilterEntry>::new()
+    }
+
+    fn runtime_filter_reports(&self) -> HashMap<usize, Vec<RuntimeFilterReport>> {
+        HashMap::new()
     }
 
     fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse16)> {
@@ -1058,6 +1060,10 @@ impl TableContext for CtxDelegation {
 
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
         self.ctx.get_abort_notify()
+    }
+
+    fn assert_no_runtime_filter_state(&self) -> Result<()> {
+        Ok(())
     }
 }
 

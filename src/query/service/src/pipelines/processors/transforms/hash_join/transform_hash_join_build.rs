@@ -300,6 +300,7 @@ impl Processor for TransformHashJoinBuild {
                             .chunks
                             .clone()
                     };
+
                     let build_num_rows = unsafe {
                         (*self.build_state.hash_join_state.build_state.get())
                             .generation_state
