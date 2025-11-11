@@ -20,9 +20,9 @@ use nom::Parser;
 use nom_rule::rule;
 
 use super::sequence::sequence;
+use super::stream::create_stream;
 use super::stream::describe_stream;
 use super::stream::show_streams;
-use super::stream::create_stream;
 use crate::ast::*;
 use crate::parser::comment::comment;
 use crate::parser::common::*;
@@ -35,7 +35,7 @@ use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::query::*;
 use crate::parser::stage::*;
-use crate::parser::stream::{drop_stream};
+use crate::parser::stream::drop_stream;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
@@ -2886,12 +2886,10 @@ AS
         INSPECT => rule!(#inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
             ).parse(i),
     );
-
     Err(nom::Err::Error(Error::from_error_kind(
         i,
         ErrorKind::Other("expecting SQL statement"),
     )))
-
 }
 
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {
