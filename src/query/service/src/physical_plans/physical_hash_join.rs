@@ -1198,7 +1198,7 @@ impl PhysicalPlanBuilder {
         let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
         let broadcast_id = if build_side_data_distribution
             .as_ref()
-            .is_some_and(|e| matches!(e, databend_common_sql::plans::Exchange::Hash(_)))
+            .is_some_and(|e| matches!(e, databend_common_sql::plans::Exchange::NodeToNodeHash(_)))
         {
             Some(self.ctx.get_next_broadcast_id())
         } else {
