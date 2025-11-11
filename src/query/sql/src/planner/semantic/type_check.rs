@@ -3239,12 +3239,17 @@ impl<'a> TypeChecker<'a> {
             _ => args,
         };
 
-        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        let deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
+        if !deterministic {
             self.ctx.set_cacheable(false);
         }
 
-        if let Some(constant) = self.try_fold_constant(&expr, true) {
-            return Ok(constant);
+        let all_constant_args = folded_args.iter().all(Self::scalar_expr_is_constant);
+
+        if deterministic && all_constant_args {
+            if let Some(constant) = self.try_fold_constant(&expr, true) {
+                return Ok(constant);
+            }
         }
 
         if let expr::Expr::Cast(expr::Cast {
@@ -6384,6 +6389,13 @@ impl<'a> TypeChecker<'a> {
         let mut expr = original_expr.clone();
         expr.drive_mut(&mut visitor);
         Ok(expr)
+    }
+
+    fn scalar_expr_is_constant(expr: &ScalarExpr) -> bool {
+        matches!(
+            expr,
+            ScalarExpr::ConstantExpr(_) | ScalarExpr::TypedConstantExpr(_, _)
+        )
     }
 
     fn try_fold_constant<Index: ColumnIndex>(
