@@ -217,7 +217,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `WORKLOAD`, `SCHEMA`, `NETWORK`, `USER`, `ROLE`, `FUNCTION`, `DICTIONARY`, `VIEW`, `INVERTED`, `NGRAM`, `VECTOR`, `SEQUENCE`, `STAGE`, `FILE`, `STREAM`, `PIPE`, `NOTIFICATION`, `CONNECTION`, `ROW`, or `PROCEDURE`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `CATALOG`, `MASKING`, `DATABASE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `WORKLOAD`, `SCHEMA`, `DICTIONARY`, `VIEW`, `INVERTED`, `NGRAM`, `VECTOR`, `STAGE`, `FILE`, `PIPE`, `NOTIFICATION`, `CONNECTION`, `ROW`, `USER`, `ROLE`, `FUNCTION`, `NETWORK`, `PROCEDURE`, `STREAM`, or `SEQUENCE`
 
 
 ---------- Input ----------
@@ -283,7 +283,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expecting `USER`, `STREAM`, `STAGE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `VECTOR`, `NETWORK`, `CATALOG`, `WORKLOAD`, `DATABASE`, `FUNCTION`, `INVERTED`, `PROCEDURE`, `TASK`, `NOTIFICATION`, `NGRAM`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, `CONNECTION`, or `ROW`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `STREAM`, `STAGE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `VECTOR`, `CATALOG`, `NETWORK`, `WORKLOAD`, `DATABASE`, `INVERTED`, `FUNCTION`, `PROCEDURE`, `TASK`, `NOTIFICATION`, `NGRAM`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, `CONNECTION`, or `ROW`
 
 
 ---------- Input ----------
@@ -393,7 +393,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `ROLES`, `TABLE`, `TASKS`, `ONLINE`, `INDEXES`, `COLUMNS`, `WORKLOAD`, `PASSWORD`, `SEQUENCES`, `PROCEDURES`, `PROCESSLIST`, `STAGES`, `TABLES`, `DICTIONARIES`, `ENGINES`, `METRICS`, `SETTINGS`, `VARIABLES`, `WAREHOUSES`, `STATISTICS`, `LOCKS`, `SCHEMAS`, `USERS`, `USER`, `FIELDS`, `VIEWS`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `VIRTUAL`, `NETWORK`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TASKS`, `TABLE`, `ROLES`, `ONLINE`, `INDEXES`, `COLUMNS`, `WORKLOAD`, `PASSWORD`, `SEQUENCES`, `PROCEDURES`, `PROCESSLIST`, `STAGES`, `TABLES`, `DICTIONARIES`, `METRICS`, `ENGINES`, `SETTINGS`, `VARIABLES`, `WAREHOUSES`, `STATISTICS`, `USER`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `FILE`, or `FULL`
 
 
 ---------- Input ----------
@@ -728,9 +728,7 @@ error:
   --> SQL:1:6
   |
 1 | with as t2(tt) as (select a from t) select t2.tt from t2
-  | ---- ^^ unexpected `as`, expecting <LiteralString>, <Ident>, `IDENTIFIER`, or `RECURSIVE`
-  | |     
-  | while parsing `SELECT ...`
+  |      ^^ unexpected `as`, expecting <LiteralString>, <Ident>, `IDENTIFIER`, or `RECURSIVE`
 
 
 ---------- Input ----------

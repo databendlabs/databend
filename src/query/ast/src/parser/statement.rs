@@ -20,6 +20,9 @@ use nom::Parser;
 use nom_rule::rule;
 
 use super::sequence::sequence;
+use super::stream::describe_stream;
+use super::stream::show_streams;
+use super::stream::create_stream;
 use crate::ast::*;
 use crate::parser::comment::comment;
 use crate::parser::common::*;
@@ -32,7 +35,7 @@ use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::query::*;
 use crate::parser::stage::*;
-use crate::parser::stream::stream_table;
+use crate::parser::stream::{drop_stream};
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
@@ -68,6 +71,10 @@ fn procedure_type_name(i: Input) -> IResult<Vec<TypeName>> {
     rule!(#procedure_empty_types: "()"
             | #procedure_type_names: "(<type_name>, ...)")
     .parse(i)
+}
+
+fn query_statement(i: Input) -> IResult<Statement> {
+    map(query, |query| Statement::Query(Box::new(query))).parse(i)
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
@@ -2397,9 +2404,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let begin = value(Statement::Begin, rule! { BEGIN ~ TRANSACTION? });
-    let commit = value(Statement::Commit, rule! { COMMIT });
-    let abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
+    let mut begin = value(Statement::Begin, rule! { BEGIN ~ TRANSACTION? });
+    let mut commit = value(Statement::Commit, rule! { COMMIT });
+    let mut abort = value(Statement::Abort, rule! { ABORT | ROLLBACK });
 
     let execute_immediate = map(
         rule! {
@@ -2574,7 +2581,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let describe_procedure = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ ^PROCEDURE ~ #ident ~ #procedure_type_name
+            ( DESC | DESCRIBE ) ~ PROCEDURE ~ #ident ~ #procedure_type_name
         },
         |(_, _, name, args)| {
             Statement::DescProcedure(DescProcedureStmt {
@@ -2593,199 +2600,174 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    alt((
-        // query, explain, report, show
-        rule!(
-            #map(query, |query| Statement::Query(Box::new(query)))
-            | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+    try_dispatch!(i, false,
+        SELECT | VALUES => query_statement(i),
+        WITH => rule!(
+            #delete
+            | #update
+            | #insert_stmt(false, false)
+            | #copy_into
+            | #query_statement
+        ).parse(i),
+        HintPrefix | LParen | FROM => query_statement(i),
+        EXPLAIN => rule!(
+            #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
-            | #report: "`REPORT ISSUE <statement>`"
-            | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
-            | #show_variables : "`SHOW VARIABLES [<show_limit>]`"
-            | #show_stages : "`SHOW STAGES`"
-            | #show_engines : "`SHOW ENGINES`"
-            | #show_process_list : "`SHOW PROCESSLIST`"
-            | #show_metrics : "`SHOW METRICS`"
-            | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
-            | #show_indexes : "`SHOW INDEXES`"
-            | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
-            | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
-            | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
-            | #set_priority: "`SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>`"
-            | #system_action: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
-        ),
-        // use
-        rule!(
+        ).parse(i),
+        REPORT => rule!(#report: "`REPORT ISSUE <statement>`").parse(i),
+        SETTINGS => rule!(#query_setting : "SETTINGS ( {<name> = <value> | (<name>, ...) = (<value>, ...)} )  Statement").parse(i),
+        CATALOG => rule!(#use_catalog: "`USE CATALOG <catalog>`").parse(i),
+        SHOW => rule!(
+            (
+                #show_tasks : "`SHOW TASKS [<show_limit>]`"
+                | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
+                | #show_variables : "`SHOW VARIABLES [<show_limit>]`"
+                | #show_stages : "`SHOW STAGES`"
+                | #show_process_list : "`SHOW PROCESSLIST`"
+                | #show_metrics : "`SHOW METRICS`"
+                | #show_engines : "`SHOW ENGINES`"
+                | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
+                | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
+                | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
+                | #show_indexes : "`SHOW INDEXES`"
+                | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
+            )
+            | (
+                #show_catalogs : "`SHOW CATALOGS [<show_limit>]`"
+                | #show_create_catalog : "`SHOW CREATE CATALOG <catalog>`"
+                | #show_online_nodes: "`SHOW ONLINE NODES`"
+                | #show_warehouses: "`SHOW WAREHOUSES`"
+                | #show_workload_groups: "`SHOW WORKLOAD GROUPS`"
+                | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
+                | #show_drop_databases : "`SHOW DROP DATABASES [FROM <database>] [<show_limit>]`"
+                | #show_create_database : "`SHOW CREATE DATABASE <database>`"
+            )
+            | (
+                #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
+                | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
+                | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
+                | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
+                | #show_statistics: "`SHOW STATISTICS [FROM DATABASE [<catalog>.]<database> | FROM TABLE [<catalog>.]<database>.<table>]`"
+                | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
+                | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
+                | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
+                | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
+            )
+            | (
+                #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
+                | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
+                | #show_users : "`SHOW USERS`"
+                | #show_roles : "`SHOW ROLES`"
+                | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
+                | #show_connections: "`SHOW CONNECTIONS`"
+                | #show_file_formats: "`SHOW FILE FORMATS`"
+                | #show_network_policies: "`SHOW NETWORK POLICIES`"
+                | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
+                | #show_procedures : "`SHOW PROCEDURES [<show_options>]()`"
+                | #show_streams: "`SHOW [FULL] STREAMS [FROM <database>] [<show_limit>]`"
+                | #sequence
+            )
+        ).parse(i),
+        USE => rule!(
                 #use_catalog: "`USE CATALOG <catalog>`"
                 | #use_warehouse: "`USE WAREHOUSE <warehouse>`"
                 | #use_database : "`USE <database>`"
-        ),
-        // warehouse
-        rule!(
-            #show_warehouses: "`SHOW WAREHOUSES`"
-            | #show_online_nodes: "`SHOW ONLINE NODES`"
-            | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
-            | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
-            | #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
-            | #resume_warehouse: "`RESUME WAREHOUSE <warehouse>`"
-            | #suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`"
-            | #inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
-            | #add_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> ADD CLUSTER <cluster> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [cluster_size = <cluster_size>]`"
-            | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
-            | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
-            | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
-            | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
-        ),
-        // workload group
-        rule!(
-            #show_workload_groups: "`SHOW WORKLOAD GROUPS`"
-            | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
-            | #drop_workload_group: "`DROP WORKLOAD GROUP [IF EXISTS] <name>`"
-            | #rename_workload_group: "`RENAME WORKLOAD GROUP <old_name> TO <new_name>`"
-            | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
-            | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
-        ),
-        // database
-        rule!(
-            #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
-            | #undrop_database : "`UNDROP DATABASE <database>`"
-            | #show_create_database : "`SHOW CREATE DATABASE <database>`"
-            | #show_drop_databases : "`SHOW DROP DATABASES [FROM <database>] [<show_limit>]`"
-            | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
-            | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
-            | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
-        ),
-        // network policy / password policy
-        rule!(
-            #create_network_policy: "`CREATE NETWORK POLICY [IF NOT EXISTS] name ALLOWED_IP_LIST = ('ip1' [, 'ip2']) [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
-            | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
-            | #drop_network_policy: "`DROP NETWORK POLICY [IF EXISTS] name`"
-            | #describe_network_policy: "`DESC NETWORK POLICY name`"
-            | #show_network_policies: "`SHOW NETWORK POLICIES`"
-            | #create_password_policy: "`CREATE PASSWORD POLICY [IF NOT EXISTS] name [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
-            | #alter_password_policy: "`ALTER PASSWORD POLICY [IF EXISTS] name SET [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
-            | #drop_password_policy: "`DROP PASSWORD POLICY [IF EXISTS] name`"
-            | #describe_password_policy: "`DESC PASSWORD POLICY name`"
-            | #show_password_policies: "`SHOW PASSWORD POLICIES [<show_options>]`"
-        ),
-        rule!(
-            #conditional_multi_table_insert() : "`INSERT [OVERWRITE] {FIRST|ALL} { WHEN <condition> THEN intoClause [ ... ] } [ ... ] [ ELSE intoClause ] <subquery>`"
-            | #unconditional_multi_table_insert() : "`INSERT [OVERWRITE] ALL intoClause [ ... ] <subquery>`"
-            | #insert_stmt(false, false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (VALUES <values> | <query>)`"
-            | #replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
-            | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
-            | #delete : "`DELETE FROM <table> [WHERE ...]`"
-            | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
-            | #begin
-            | #commit
-            | #abort
-        ),
-        rule!(
-            #show_users : "`SHOW USERS`"
-            | #describe_user: "`DESCRIBE USER <user_name>`"
-            | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
-            | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
-            | #drop_user : "`DROP USER [IF EXISTS] '<username>'`"
-            | #show_roles : "`SHOW ROLES`"
-            | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`"
-            | #alter_role : "`ALTER ROLE [IF EXISTS] <role_name> SET COMMENT = '<string_literal>' | UNSET COMMENT`"
-            | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`"
-            | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
-            | #alter_udf : "`ALTER FUNCTION <udf_name> <udf_definition> [DESC = <description>]`"
+        ).parse(i),
+        KILL => rule!(#kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`").parse(i),
+        SET => rule!(
+            #set_priority: "`SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
             | #set_secondary_specify_roles: "`SET SECONDARY ROLES [role_name,...]`"
-            | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
-        ),
-        rule!(
-            #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
-            | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
-            | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
-            | #describe_view : "`DESCRIBE VIEW [<database>.]<view>`"
-            | #describe_table : "`DESCRIBE [<database>.]<table>`"
-            | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
-            | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
-            | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
-            | #attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
-            | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
-            | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
-            | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
-            | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
-            | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
-            | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
-            | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+            | #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
+            | #use_catalog: "`USE CATALOG <catalog>`"
+        ).parse(i),
+        UNSET => rule!(#unset_stmt : "`UNSET [variable] {<name> | (<name>, ...)}`").parse(i),
+        SYSTEM => rule!(#system_action: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
+            ).parse(i),
+        MERGE => rule!(#merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
+            ).parse(i),
+        DELETE => rule!(#delete : "`DELETE FROM <table> [WHERE ...]`"
+            ).parse(i),
+        UPDATE => rule!(#update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
+            ).parse(i),
+        INSERT => rule!(
+            #conditional_multi_table_insert() : "`INSERT [OVERWRITE] {FIRST|ALL} { WHEN <condition> THEN intoClause [ ... ] } [ ... ] [ ELSE intoClause ] <subquery>`"
+            | #unconditional_multi_table_insert() : "`INSERT [OVERWRITE] ALL intoClause [ ... ] <subquery>`"
+            | #insert_stmt(false, false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (VALUES <values> | <query>)`"
+        ).parse(i),
+        REPLACE => rule!(#replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            ).parse(i),
+        COPY => rule!(#copy_into).parse(i),
+        BEGIN => rule!(#begin).parse(i),
+        COMMIT => rule!(#commit).parse(i),
+        ABORT | ROLLBACK => rule!(#abort).parse(i),
+        TRUNCATE => rule!(#truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
+            ).parse(i),
+        OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+            ).parse(i),
+        VACUUM => rule!(
+            #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN | DRY RUN SUMMARY]`"
-            | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
-            | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
-            | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
-        ),
-        // dictionary
-        rule!(
-            #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
-            | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
-            | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
-            | #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
-            | #rename_dictionary: "`RENAME DICTIONARY [<database>.]<old_dict_name> TO <new_dict_name>`"
-        ),
-        // view,index
-        rule!(
-            #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
-            | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
-            | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
-            | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
-            | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
-            | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
-            | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
-            | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
-            | #drop_table_index: "`DROP <index_type> INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
+            | #vacuum_temporary_tables
+        ).parse(i),
+        ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
+            ).parse(i),
+        EXISTS => rule!(#exists_table : "`EXISTS TABLE [<database>.]<table>`"
+            ).parse(i),
+        UNDROP => rule!(
+            #undrop_database : "`UNDROP DATABASE <database>`"
+            | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
+        ).parse(i),
+        ATTACH => rule!(#attach_table : "`ATTACH TABLE [<database>.]<table> <uri>`"
+            ).parse(i),
+        REFRESH => rule!(
+            #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
-            | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
-            | #show_statistics: "`SHOW STATISTICS [FROM DATABASE [<catalog>.]<database> | FROM TABLE [<catalog>.]<database>.<table>]`"
-            | #sequence
-        ),
-        rule!(
-            #create_stage: "`CREATE [OR REPLACE] STAGE [ IF NOT EXISTS ] <stage_name>
-                [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
-                [ COPY_OPTIONS = ( copyOptions ) ]
-                [ COMMENT = '<string_literal>' ]`"
-            | #desc_stage: "`DESC STAGE <stage_name>`"
-            | #list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
-            | #remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
-            | #drop_stage: "`DROP STAGE <stage_name>`"
-            | #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
-            | #show_file_formats: "`SHOW FILE FORMATS`"
-            | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
-            | #copy_into
-            | #call: "`CALL <procedure_name>(<parameter>, ...)`"
-            | #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
-            | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
-            | #revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+        ).parse(i),
+        LIST => rule!(#list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
+            ).parse(i),
+        REMOVE => rule!(#remove_stage: "`REMOVE @<stage_name> [pattern = '<pattern>']`"
+            ).parse(i),
+        PRESIGN => rule!(#presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
+            ).parse(i),
+        CALL => rule!(
+            #call: "`CALL <procedure_name>(<parameter>, ...)`"
+            | #call_procedure : "`CALL PROCEDURE <procedure_name>()`"
+        ).parse(i),
+        EXECUTE => rule!(
+            #execute_task: "`EXECUTE TASK <name>`"
+            | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
+        ).parse(i),
+        GRANT => rule!(
+            #grant : "`GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`"
             | #grant_ownership : "GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>"
-            | #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
-        ),
-        // data mask
-        rule!(
-            #create_data_mask_policy: "`CREATE MASKING POLICY [IF NOT EXISTS] mask_name as (val1 val_type1 [, val type]) return type -> case`"
-            | #drop_data_mask_policy: "`DROP MASKING POLICY [IF EXISTS] mask_name`"
+        ).parse(i),
+        REVOKE => rule!(#revoke : "`REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`"
+            ).parse(i),
+        COMMENT => rule!(#comment).parse(i),
+        DESC | DESCRIBE => rule!(
+            #desc_task : "`DESC | DESCRIBE TASK <name>`"
+            | #describe_table : "`DESCRIBE [<database>.]<table>`"
+            | #describe_view : "`DESCRIBE VIEW [<database>.]<view>`"
+            | #describe_user: "`DESCRIBE USER <user_name>`"
+            | #describe_row_access : "`DESC[RIBE] ROW ACCESS POLICY <name>`"
+            | #desc_stage: "`DESC STAGE <stage_name>`"
             | #describe_data_mask_policy: "`DESC MASKING POLICY mask_name`"
-        ),
-        rule!(
-            #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
-            | #unset_stmt : "`UNSET [variable] {<name> | (<name>, ...)}`"
-            | #query_setting : "SETTINGS ( {<name> = <value> | (<name>, ...) = (<value>, ...)} )  Statement"
-        ),
-        // catalog
-        rule!(
-         #show_catalogs : "`SHOW CATALOGS [<show_limit>]`"
-        | #show_create_catalog : "`SHOW CREATE CATALOG <catalog>`"
-        | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
-        | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
-        ),
-        rule!(
-            #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
+            | #describe_network_policy: "`DESC NETWORK POLICY name`"
+            | #describe_password_policy: "`DESC PASSWORD POLICY name`"
+            | #desc_pipe : "`DESC | DESCRIBE PIPE <name>`"
+            | #desc_notification : "`DESC | DESCRIBE NOTIFICATION INTEGRATION <name>`"
+            | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
+            | #describe_procedure : "`DESC PROCEDURE <procedure_name>()`"
+            | #describe_stream : "`DESCRIBE STREAM [<database>.]<stream>`"
+            | #sequence
+        ).parse(i),
+        CREATE => rule!(
+            (
+                #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
   [ { WAREHOUSE = <string> } ]
   [ SCHEDULE = { <num> MINUTE | USING CRON <expr> <time_zone> } ]
   [ AFTER <string>, <string>...]
@@ -2795,53 +2777,121 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
-         | #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
-         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql> | MODIFY WHEN <boolean_expr> | ADD/REMOVE AFTER <string>, <string>...`"
-         | #show_tasks : "`SHOW TASKS [<show_limit>]`"
-         | #desc_task : "`DESC | DESCRIBE TASK <name>`"
-         | #execute_task: "`EXECUTE TASK <name>`"
-        ),
-        // stream, dynamic tables.
-        rule!(
-            #stream_table
-            | #dynamic_table
-        ),
-        rule!(
-            #create_pipe : "`CREATE PIPE [ IF NOT EXISTS ] <name>
+                | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
+                | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
+                | #create_workload_group: "`CREATE WORKLOAD GROUP [IF NOT EXISTS] <name> WITH [<workload_group_quotas>]`"
+                | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
+                | #create_table : "`CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
+                | #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
+                | #create_view : "`CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+                | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
+                | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
+            )
+            | (
+                #create_stage: "`CREATE [OR REPLACE] STAGE [ IF NOT EXISTS ] <stage_name>
+                [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
+                [ COPY_OPTIONS = ( copyOptions ) ]
+                [ COMMENT = '<string_literal>' ]`"
+                | #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
+                | #create_pipe : "`CREATE PIPE [ IF NOT EXISTS ] <name>
   [ AUTO_INGEST = [ TRUE | FALSE ] ]
   [ COMMENT = '<string_literal>' ]
 AS
   <copy_sql>`"
-            | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
-            | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
-            | #desc_pipe : "`DESC | DESCRIBE PIPE <name>`"
-            | #create_notification : "`CREATE NOTIFICATION INTEGRATION [ IF NOT EXISTS ] <name>
+                | #create_notification : "`CREATE NOTIFICATION INTEGRATION [ IF NOT EXISTS ] <name>
     TYPE = <type>
     ENABLED = <bool>
     [ WEBHOOK = ( url = <string_literal>, method = <string_literal>, authorization_header = <string_literal> ) ]
     [ COMMENT = '<string_literal>' ]`"
+                | #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
+                | #create_row_access : "`CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
+                | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
+                | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`"
+                | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`"
+                | #create_data_mask_policy: "`CREATE MASKING POLICY [IF NOT EXISTS] mask_name as (val1 val_type1 [, val type]) return type -> case`"
+                | #create_network_policy: "`CREATE NETWORK POLICY [IF NOT EXISTS] name ALLOWED_IP_LIST = ('ip1' [, 'ip2']) [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
+                | #create_password_policy: "`CREATE PASSWORD POLICY [IF NOT EXISTS] name [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
+                | #create_procedure : "`CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`"
+            )
+            | (
+                #dynamic_table
+                | #create_stream: "`CREATE [OR REPLACE] STREAM [IF NOT EXISTS] [<database>.]<stream> ON TABLE [<database>.]<table> [<travel_point>] [COMMENT = '<string_literal>']`"
+                | #sequence
+            )
+        ).parse(i),
+        DROP => rule!(
+            (
+                #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
+                | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
+                | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
+                | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
+                | #drop_workload_group: "`DROP WORKLOAD GROUP [ IF EXISTS ] <name>`"
+                | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
+                | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
+                | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
+                | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
+                | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
+                | #drop_table_index: "`DROP <index_type> INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
+            )
+            | (
+                #drop_stage: "`DROP STAGE <stage_name>`"
+                | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
+                | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
+                | #drop_notification : "`DROP NOTIFICATION INTEGRATION [ IF EXISTS ] <name>`"
+                | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
+                | #drop_row_access : "`DROP ROW ACCESS POLICY [ IF EXISTS ] <name>`"
+                | #drop_user : "`DROP USER [IF EXISTS] '<username>'`"
+                | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
+                | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
+                | #drop_data_mask_policy: "`DROP MASKING POLICY [IF EXISTS] mask_name`"
+                | #drop_network_policy: "`DROP NETWORK POLICY [IF EXISTS] name`"
+                | #drop_password_policy: "`DROP PASSWORD POLICY [IF EXISTS] name`"
+                | #drop_procedure : "`DROP PROCEDURE <procedure_name>()`"
+            )
+            | (
+                #drop_stream: "`DROP STREAM [IF EXISTS] [<database>.]<stream>`"
+                | #sequence
+            )
+        ).parse(i),
+        ALTER => rule!(
+            #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql> | MODIFY WHEN <boolean_expr> | ADD/REMOVE AFTER <string>, <string>...`"
+            | #add_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> ADD CLUSTER <cluster> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [cluster_size = <cluster_size>]`"
+            | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
+            | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
+            | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+            | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+            | #set_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> SET [<workload_group_quotas>]`"
+            | #unset_workload_group_quotas: "`ALTER WORKLOAD GROUP <name> UNSET {<name> | (<name>, ...)}`"
+            | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
+            | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
+            | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+            | #alter_user : "`ALTER USER ('<username>' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
+            | #alter_role : "`ALTER ROLE [IF EXISTS] <role_name> SET COMMENT = '<string_literal>' | UNSET COMMENT`"
+            | #alter_udf : "`ALTER FUNCTION <udf_name> <udf_definition> [DESC = <description>]`"
+            | #alter_network_policy: "`ALTER NETWORK POLICY [IF EXISTS] name SET [ALLOWED_IP_LIST = ('ip1' [, 'ip2'])] [BLOCKED_IP_LIST = ('ip1' [, 'ip2'])] [COMMENT = '<string_literal>']`"
+            | #alter_password_policy: "`ALTER PASSWORD POLICY [IF EXISTS] name SET [PASSWORD_MIN_LENGTH = <u64_literal>] ... [COMMENT = '<string_literal>']`"
+            | #alter_pipe : "`ALTER PIPE [ IF EXISTS ] <name> SET <option> = <value>` | REFRESH <option> = <value>`"
             | #alter_notification : "`ALTER NOTIFICATION INTEGRATION [ IF EXISTS ] <name> SET <option> = <value>`"
-            | #desc_notification : "`DESC | DESCRIBE NOTIFICATION INTEGRATION <name>`"
-            | #drop_notification : "`DROP NOTIFICATION INTEGRATION [ IF EXISTS ] <name>`"
-        ),
-        rule!(
-            #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
-            | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
-            | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
-            | #show_connections: "`SHOW CONNECTIONS`"
-            | #create_row_access : "`CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
-            | #drop_row_access : "`DROP ROW ACCESS POLICY [ IF EXISTS ] <name>`"
-            | #describe_row_access : "`DESC[RIBE] ROW ACCESS POLICY <name>`"
-            | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
-            | #create_procedure : "`CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`"
-            | #drop_procedure : "`DROP PROCEDURE <procedure_name>()`"
-            | #show_procedures : "`SHOW PROCEDURES [<show_options>]()`"
-            | #describe_procedure : "`DESC PROCEDURE <procedure_name>()`"
-            | #call_procedure : "`CALL PROCEDURE <procedure_name>()`"
-        ),
-        rule!(#comment),
-        rule!(#vacuum_temporary_tables),
-    )).parse(i)
+        ).parse(i),
+        RENAME => rule!(
+            #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
+            | #rename_workload_group: "`RENAME WORKLOAD GROUP <old_name> TO <new_name>`"
+            | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
+            | #rename_dictionary: "`RENAME DICTIONARY [<database>.]<old_dict_name> TO <new_dict_name>`"
+        ).parse(i),
+        RESUME => rule!(#resume_warehouse: "`RESUME WAREHOUSE <warehouse>`"
+            ).parse(i),
+        SUSPEND => rule!(#suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`"
+            ).parse(i),
+        INSPECT => rule!(#inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
+            ).parse(i),
+    );
+
+    Err(nom::Err::Error(Error::from_error_kind(
+        i,
+        ErrorKind::Other("expecting SQL statement"),
+    )))
+
 }
 
 pub fn statement(i: Input) -> IResult<StatementWithFormat> {

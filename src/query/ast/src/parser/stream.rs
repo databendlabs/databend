@@ -33,16 +33,7 @@ use crate::parser::statement::show_limit;
 use crate::parser::token::TokenKind::*;
 use crate::parser::Input;
 
-pub fn stream_table(i: Input) -> IResult<Statement> {
-    rule!(
-         #create_stream: "`CREATE [OR REPLACE] STREAM [IF NOT EXISTS] [<database>.]<stream> ON TABLE [<database>.]<table> [<travel_point>] [COMMENT = '<string_literal>']`"
-         | #drop_stream: "`DROP STREAM [IF EXISTS] [<database>.]<stream>`"
-         | #show_streams: "`SHOW [FULL] STREAMS [FROM <database>] [<show_limit>]`"
-         | #describe_stream: "`DESCRIBE STREAM [<database>.]<stream>`"
-    ).parse(i)
-}
-
-fn create_stream(i: Input) -> IResult<Statement> {
+pub fn create_stream(i: Input) -> IResult<Statement> {
     map_res(
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -84,7 +75,7 @@ fn create_stream(i: Input) -> IResult<Statement> {
     )(i)
 }
 
-fn drop_stream(i: Input) -> IResult<Statement> {
+pub fn drop_stream(i: Input) -> IResult<Statement> {
     map(
         rule! {
             DROP ~ STREAM ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
@@ -101,7 +92,7 @@ fn drop_stream(i: Input) -> IResult<Statement> {
     .parse(i)
 }
 
-fn show_streams(i: Input) -> IResult<Statement> {
+pub fn show_streams(i: Input) -> IResult<Statement> {
     map(
         rule! {
             SHOW ~ FULL? ~ STREAMS ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
@@ -122,7 +113,7 @@ fn show_streams(i: Input) -> IResult<Statement> {
     ).parse(i)
 }
 
-fn describe_stream(i: Input) -> IResult<Statement> {
+pub fn describe_stream(i: Input) -> IResult<Statement> {
     map(
         rule! {
             ( DESC | DESCRIBE ) ~ STREAM ~ #dot_separated_idents_1_to_3

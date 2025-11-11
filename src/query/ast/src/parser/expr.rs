@@ -40,23 +40,6 @@ macro_rules! with_span {
     };
 }
 
-macro_rules! try_dispatch {
-    ($input:expr, $($pat:pat => $body:expr),+ $(,)?) => {{
-        if let Some(token_0) = $input.tokens.first() {
-            use TokenKind::*;
-
-            if let Some(result) = match token_0.kind {
-                $($pat => Some($body),)+
-                _ => None,
-            } {
-                if result.is_ok() {
-                    return result;
-                }
-            }
-        }
-    }};
-}
-
 pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0)).parse(i)
 }
@@ -1562,7 +1545,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         ExprElement::StageLocation { location }
     });
 
-    try_dispatch!(i,
+    try_dispatch!(i, true,
         IS => with_span!(rule!(#is_null | #is_distinct_from)).parse(i),
         NOT => with_span!(rule!(
             #in_list
@@ -1828,7 +1811,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
         |token| parse_float(token.text()).map_err(nom::Err::Failure),
     );
 
-    try_dispatch!(i,
+    try_dispatch!(i, true,
         LiteralString => string.parse(i),
         LiteralCodeString => code_string.parse(i),
         LiteralInteger => decimal_uint.parse(i),
