@@ -3412,6 +3412,15 @@ impl<'a> TypeChecker<'a> {
                 // Omit unary + operator
                 self.resolve(child)
             }
+            UnaryOperator::Minus => {
+                if let Expr::Literal { value, .. } = child {
+                    let box (value, data_type) = self.resolve_minus_literal_scalar(span, value)?;
+                    let scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr { span, value });
+                    return Ok(Box::new((scalar_expr, data_type)));
+                }
+                let name = op.to_func_name();
+                self.resolve_function(span, name.as_str(), vec![], &[child])
+            }
             other => {
                 let name = other.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[child])
@@ -4818,6 +4827,45 @@ impl<'a> TypeChecker<'a> {
             Literal::String(string) => Scalar::String(string.clone()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
+        };
+        let value = shrink_scalar(value);
+        let data_type = value.as_ref().infer_data_type();
+        Ok(Box::new((value, data_type)))
+    }
+
+    pub fn resolve_minus_literal_scalar(
+        &self,
+        span: Span,
+        literal: &databend_common_ast::ast::Literal,
+    ) -> Result<Box<(Scalar, DataType)>> {
+        let value = match literal {
+            Literal::UInt64(v) => {
+                if *v <= i64::MAX as u64 {
+                    Scalar::Number(NumberScalar::Int64(-(*v as i64)))
+                } else {
+                    Scalar::Decimal(DecimalScalar::Decimal128(
+                        -(*v as i128),
+                        DecimalSize::new_unchecked(i128::MAX_PRECISION, 0),
+                    ))
+                }
+            }
+            Literal::Decimal256 {
+                value,
+                precision,
+                scale,
+            } => Scalar::Decimal(DecimalScalar::Decimal256(
+                i256(*value).checked_mul(i256::minus_one()).unwrap(),
+                DecimalSize::new_unchecked(*precision, *scale),
+            )),
+            Literal::Float64(v) => Scalar::Number(NumberScalar::Float64((-*v).into())),
+            Literal::Null => Scalar::Null,
+            Literal::String(_) | Literal::Boolean(_) => {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Invalid minus operator for {}",
+                    literal
+                ))
+                .set_span(span));
+            }
         };
         let value = shrink_scalar(value);
         let data_type = value.as_ref().infer_data_type();
