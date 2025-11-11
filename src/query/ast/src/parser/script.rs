@@ -17,6 +17,8 @@ use nom_rule::rule;
 
 use crate::ast::*;
 use crate::parser::common::*;
+use crate::parser::error::Error;
+use crate::parser::error::ErrorKind;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::statement::*;
@@ -157,6 +159,15 @@ pub fn script_stmts(i: Input) -> IResult<Vec<ScriptStatement>> {
 }
 
 pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
+    if let Some(token) = i.tokens.first() {
+        let kind = token.kind;
+        if matches!(kind, END | ELSE | ELSEIF | WHEN | UNTIL) {
+            return Err(nom::Err::Error(Error::from_error_kind(
+                i,
+                ErrorKind::Other("block terminator"),
+            )));
+        }
+    }
     let let_var_stmt = map(
         rule! {
             LET ~ #declare_var

@@ -34,6 +34,29 @@ use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::Span;
 
+macro_rules! with_span {
+    ($parser:expr) => {
+        map(consumed($parser), |(span, elem)| WithSpan { span, elem })
+    };
+}
+
+macro_rules! try_dispatch {
+    ($input:expr, $($pat:pat => $body:expr),+ $(,)?) => {{
+        if let Some(token_0) = $input.tokens.first() {
+            use TokenKind::*;
+
+            if let Some(result) = match token_0.kind {
+                $($pat => Some($body),)+
+                _ => None,
+            } {
+                if result.is_ok() {
+                    return result;
+                }
+            }
+        }
+    }};
+}
+
 pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0)).parse(i)
 }
@@ -1214,7 +1237,15 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let variable_access = map(variable_ident, ExprElement::VariableAccess);
 
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
-    let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
+    let bracket_map_access = map(map_access_bracket, |accessor| ExprElement::MapAccess {
+        accessor,
+    });
+    let dot_number_map_access = map(map_access_dot_number, |accessor| ExprElement::MapAccess {
+        accessor,
+    });
+    let colon_map_access = map(map_access_colon, |accessor| ExprElement::MapAccess {
+        accessor,
+    });
     let dot_access = map(
         rule! {
            "." ~ #column_id
@@ -1531,30 +1562,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         ExprElement::StageLocation { location }
     });
 
-    macro_rules! with_span {
-        ($parser:expr) => {
-            map(consumed($parser), |(span, elem)| WithSpan { span, elem })
-        };
-    }
-
-    macro_rules! try_dispatch {
-        ($($pat:pat => $body:expr),+ $(,)?) => {{
-            if let Some(token_0) = i.tokens.first() {
-                use TokenKind::*;
-
-                if let Some(result) = match token_0.kind {
-                    $($pat => Some($body),)+
-                    _ => None,
-                } {
-                    if result.is_ok() {
-                        return result;
-                    }
-                }
-            }
-        }};
-    }
-
-    try_dispatch!(
+    try_dispatch!(i,
         IS => with_span!(rule!(#is_null | #is_distinct_from)).parse(i),
         NOT => with_span!(rule!(
             #in_list
@@ -1584,13 +1592,17 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         LParen => with_span!(rule!(#tuple | #subquery)).parse(i),
         ANY | SOME | ALL => with_span!(subquery).parse(i),
         Dot => {
-            return with_span!(rule!(#chain_function_call | #dot_access | #map_access)).parse(i);
+            return with_span!(rule!(#chain_function_call | #dot_access | #dot_number_map_access))
+                .parse(i);
         },
         Colon => {
-            return with_span!(map_access).parse(i);
+            return with_span!(colon_map_access).parse(i);
         },
         LBracket => {
-            return with_span!(rule!(#list_comprehensions | #map_access | #array)).parse(i);
+            return with_span!(rule!(
+                #list_comprehensions | #bracket_map_access | #array
+            ))
+            .parse(i);
         },
         LBrace => with_span!(map_expr).parse(i),
         LiteralAtString => with_span!(stage_location).parse(i),
@@ -1669,7 +1681,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     with_span!(alt((rule!(
         #column_ref : "<column>"
-        | #map_access : "[<key>] | .<key> | :<key>"
+        | #dot_number_map_access : ".<key>"
         | #literal : "<literal>"
     ),)))
     .parse(i)
@@ -1796,19 +1808,37 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
 }
 
 pub fn literal(i: Input) -> IResult<Literal> {
-    let string = map(literal_string, Literal::String);
-    let code_string = map(code_string, Literal::String);
-    let boolean = map(literal_bool, Literal::Boolean);
-    let null = value(Literal::Null, rule! { NULL });
+    let mut string = map(literal_string, Literal::String);
+    let mut code_string = map(code_string, Literal::String);
+    let mut boolean = map(literal_bool, Literal::Boolean);
+    let mut null = value(Literal::Null, rule! { NULL });
+    let mut decimal_uint = map_res(
+        rule! {
+            LiteralInteger
+        },
+        |token| parse_uint(token.text(), 10).map_err(nom::Err::Failure),
+    );
+    let mut hex_uint = map_res(literal_hex_str, |str| {
+        parse_uint(str, 16).map_err(nom::Err::Failure)
+    });
+    let mut decimal_float = map_res(
+        rule! {
+           LiteralFloat
+        },
+        |token| parse_float(token.text()).map_err(nom::Err::Failure),
+    );
 
-    rule!(
-        #string
-        | #code_string
-        | #boolean
-        | #literal_number
-        | #null
-    )
-    .parse(i)
+    try_dispatch!(i,
+        LiteralString => string.parse(i),
+        LiteralCodeString => code_string.parse(i),
+        LiteralInteger => decimal_uint.parse(i),
+        LiteralFloat => decimal_float.parse(i),
+        MySQLLiteralHex | PGLiteralHex => hex_uint(i),
+        TRUE | FALSE => boolean.parse(i),
+        NULL => null.parse(i),
+    );
+
+    Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `LiteralString`, 'LiteralCodeString', 'LiteralInteger', 'LiteralFloat', 'TRUE', 'FALSE', or more ..."))))
 }
 
 pub fn literal_hex_str(i: Input) -> IResult<&str> {
@@ -1868,33 +1898,6 @@ pub fn literal_i64(i: Input) -> IResult<i64> {
     rule!(
         #decimal
         | #hex
-    )
-    .parse(i)
-}
-
-pub fn literal_number(i: Input) -> IResult<Literal> {
-    let decimal_uint = map_res(
-        rule! {
-            LiteralInteger
-        },
-        |token| parse_uint(token.text(), 10).map_err(nom::Err::Failure),
-    );
-
-    let hex_uint = map_res(literal_hex_str, |str| {
-        parse_uint(str, 16).map_err(nom::Err::Failure)
-    });
-
-    let decimal_float = map_res(
-        rule! {
-           LiteralFloat
-        },
-        |token| parse_float(token.text()).map_err(nom::Err::Failure),
-    );
-
-    rule!(
-        #decimal_uint
-        | #decimal_float
-        | #hex_uint
     )
     .parse(i)
 }
@@ -2406,37 +2409,34 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     .parse(i)
 }
 
-pub fn map_access(i: Input) -> IResult<MapAccessor> {
-    let bracket = map(
+fn map_access_bracket(i: Input) -> IResult<MapAccessor> {
+    map(
         rule! {
-           "[" ~ #subexpr(0) ~ "]"
+            "[" ~ #subexpr(0) ~ "]"
         },
         |(_, key, _)| MapAccessor::Bracket { key: Box::new(key) },
-    );
-    let dot_number = map_res(
-        rule! {
-           LiteralFloat
-        },
-        |key| {
-            if key.text().starts_with('.') {
-                if let Ok(key) = (key.text()[1..]).parse::<u64>() {
-                    return Ok(MapAccessor::DotNumber { key });
-                }
+    )
+    .parse(i)
+}
+
+fn map_access_dot_number(i: Input) -> IResult<MapAccessor> {
+    map_res(rule! { LiteralFloat }, |key| {
+        if key.text().starts_with('.') {
+            if let Ok(key) = (key.text()[1..]).parse::<u64>() {
+                return Ok(MapAccessor::DotNumber { key });
             }
-            Err(nom::Err::Error(ErrorKind::ExpectText(".")))
-        },
-    );
-    let colon = map(
+        }
+        Err(nom::Err::Error(ErrorKind::ExpectText(".")))
+    })
+    .parse(i)
+}
+
+fn map_access_colon(i: Input) -> IResult<MapAccessor> {
+    map(
         rule! {
-         ":" ~ #ident
+            ":" ~ #ident
         },
         |(_, key)| MapAccessor::Colon { key },
-    );
-
-    rule!(
-        #bracket
-        | #dot_number
-        | #colon
     )
     .parse(i)
 }
