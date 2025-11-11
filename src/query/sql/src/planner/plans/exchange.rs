@@ -27,10 +27,10 @@ use crate::plans::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Exchange {
-    Hash(Vec<ScalarExpr>),
     Broadcast,
     Merge,
     MergeSort, // For distributed sort
+    NodeToNodeHash(Vec<ScalarExpr>),
 }
 
 impl Operator for Exchange {
@@ -39,7 +39,7 @@ impl Operator for Exchange {
     }
 
     fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
-        if let Exchange::Hash(hash_keys) = self {
+        if let Exchange::NodeToNodeHash(hash_keys) = self {
             Box::new(hash_keys.iter())
         } else {
             Box::new(std::iter::empty())
@@ -53,7 +53,9 @@ impl Operator for Exchange {
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         Ok(PhysicalProperty {
             distribution: match self {
-                Exchange::Hash(hash_keys) => Distribution::Hash(hash_keys.clone()),
+                Exchange::NodeToNodeHash(hash_keys) => {
+                    Distribution::NodeToNodeHash(hash_keys.clone())
+                }
                 Exchange::Broadcast => Distribution::Broadcast,
                 Exchange::Merge | Exchange::MergeSort => Distribution::Serial,
             },

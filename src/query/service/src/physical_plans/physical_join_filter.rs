@@ -191,12 +191,12 @@ impl JoinRuntimeFilter {
 
             let enable_min_max_runtime_filter = build_side_data_distribution
                 .as_ref()
-                .is_none_or(|e| matches!(e, Exchange::Broadcast | Exchange::Hash(_)))
+                .is_none_or(|e| matches!(e, Exchange::Broadcast | Exchange::NodeToNodeHash(_)))
                 && Self::is_type_supported_for_min_max_filter(&data_type);
 
             let enable_inlist_runtime_filter = build_side_data_distribution
                 .as_ref()
-                .is_none_or(|e| matches!(e, Exchange::Broadcast | Exchange::Hash(_)));
+                .is_none_or(|e| matches!(e, Exchange::Broadcast | Exchange::NodeToNodeHash(_)));
 
             // Create and add the runtime filter
             let runtime_filter = PhysicalRuntimeFilter {

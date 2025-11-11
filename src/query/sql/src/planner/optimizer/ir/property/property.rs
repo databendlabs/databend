@@ -94,7 +94,7 @@ pub enum Distribution {
     Random,
     Serial,
     Broadcast,
-    Hash(Vec<ScalarExpr>),
+    NodeToNodeHash(Vec<ScalarExpr>),
 }
 
 impl Default for Distribution {
@@ -113,11 +113,12 @@ impl Distribution {
             | (Distribution::Random, _)
             | (Distribution::Serial, Distribution::Serial)
             | (Distribution::Broadcast, Distribution::Broadcast)
-            | (Distribution::Hash(_), Distribution::Broadcast) => true,
+            | (Distribution::NodeToNodeHash(_), Distribution::Broadcast) => true,
 
-            (Distribution::Hash(ref keys), Distribution::Hash(ref other_keys)) => {
-                keys == other_keys
-            }
+            (
+                Distribution::NodeToNodeHash(ref keys),
+                Distribution::NodeToNodeHash(ref other_keys),
+            ) => keys == other_keys,
             _ => false,
         }
     }
@@ -130,7 +131,7 @@ impl Display for Distribution {
             Distribution::Random => write!(f, "Random"),
             Distribution::Serial => write!(f, "Serial"),
             Distribution::Broadcast => write!(f, "Broadcast"),
-            Distribution::Hash(ref keys) => write!(
+            Distribution::NodeToNodeHash(ref keys) => write!(
                 f,
                 "Hash({})",
                 keys.iter()

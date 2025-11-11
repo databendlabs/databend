@@ -69,7 +69,9 @@ impl Enforcer for DistributionEnforcer {
         match &self.0 {
             Distribution::Serial => Ok(Exchange::Merge.into()),
             Distribution::Broadcast => Ok(Exchange::Broadcast.into()),
-            Distribution::Hash(hash_keys) => Ok(Exchange::Hash(hash_keys.clone()).into()),
+            Distribution::NodeToNodeHash(hash_keys) => {
+                Ok(Exchange::NodeToNodeHash(hash_keys.clone()).into())
+            }
             Distribution::Random | Distribution::Any => Err(ErrorCode::Internal(
                 "Cannot enforce random or any distribution",
             )),
@@ -120,8 +122,10 @@ impl PropertyEnforcer {
         if let RelOperator::Join(_) = &plan {
             let (probe_required_property, build_required_property) =
                 required_properties.split_at_mut(1);
-            if let Distribution::Hash(probe_keys) = &mut probe_required_property[0].distribution
-                && let Distribution::Hash(build_keys) = &mut build_required_property[0].distribution
+            if let Distribution::NodeToNodeHash(probe_keys) =
+                &mut probe_required_property[0].distribution
+                && let Distribution::NodeToNodeHash(build_keys) =
+                    &mut build_required_property[0].distribution
             {
                 let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
                 for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
