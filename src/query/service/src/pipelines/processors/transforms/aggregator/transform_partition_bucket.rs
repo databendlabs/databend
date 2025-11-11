@@ -24,10 +24,10 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::PayloadFlushState;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
 
 use super::AggregatePayload;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
@@ -237,6 +237,7 @@ impl TransformPartitionBucket {
                         }
                         unreachable!()
                     }
+                    AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                     AggregateMeta::Spilled(_) => {
                         let meta = data_block.take_meta().unwrap();
 
@@ -545,6 +546,7 @@ impl Processor for TransformPartitionBucket {
                 AggregateMeta::Partitioned { .. } => unreachable!(),
                 AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(_) => unreachable!(),
+                AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                 AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
                 AggregateMeta::AggregatePayload(payload) => self.partition_payload(payload)?,
             };

@@ -6,7 +6,7 @@ CreateTableAsSelect:
 Filter
 ├── output columns: [numbers.number (#0)]
 ├── filters: [numbers.number (#0) > 5]
-├── estimated rows: 0.00
+├── estimated rows: 5.00
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]

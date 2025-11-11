@@ -21,7 +21,9 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 
+use crate::errors::MaskingPolicyError;
 use crate::kv_app_error::KVAppError;
+use crate::meta_txn_error::MetaTxnError;
 
 #[async_trait::async_trait]
 pub trait DatamaskApi: Send + Sync {
@@ -35,7 +37,10 @@ pub trait DatamaskApi: Send + Sync {
     async fn drop_data_mask(
         &self,
         name_ident: &DataMaskNameIdent,
-    ) -> Result<Option<(SeqV<DataMaskId>, SeqV<DatamaskMeta>)>, KVAppError>;
+    ) -> Result<
+        Result<Option<(SeqV<DataMaskId>, SeqV<DatamaskMeta>)>, MaskingPolicyError>,
+        MetaTxnError,
+    >;
 
     async fn get_data_mask(
         &self,

@@ -266,11 +266,8 @@ impl Binder {
                 }
                 _ => col.data_type.clone(),
             };
-            let idx = metadata.add_derived_column(
-                col.column_name.clone(),
-                *expand_data_type.clone(),
-                None,
-            );
+            let idx =
+                metadata.add_derived_column(col.column_name.clone(), *expand_data_type.clone());
             new_bind_ctx.columns.push(
                 ColumnBindingBuilder::new(
                     col.column_name.clone(),
@@ -514,7 +511,7 @@ impl Binder {
             })
             .collect();
         let policy = policy.policy_id;
-        let res = databend_common_base::runtime::block_on(handler.get_row_access_by_id(
+        let res = databend_common_base::runtime::block_on(handler.get_row_access_policy_by_id(
             meta_api,
             &self.ctx.get_tenant(),
             policy,

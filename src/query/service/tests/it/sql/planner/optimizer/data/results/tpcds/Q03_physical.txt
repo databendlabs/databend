@@ -6,70 +6,70 @@ Limit
 └── Sort(Final)
     ├── output columns: [SUM(ss_ext_sales_price) (#73), dt.d_year (#6), item.i_brand (#59), item.i_brand_id (#58)]
     ├── sort keys: [d_year ASC NULLS LAST, SUM(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST]
-    ├── estimated rows: 143057683321996.78
+    ├── estimated rows: 59607368050831984.00
     └── Exchange
         ├── output columns: [SUM(ss_ext_sales_price) (#73), dt.d_year (#6), item.i_brand (#59), item.i_brand_id (#58), #_order_col]
         ├── exchange type: Merge
         └── Sort(Partial)
             ├── output columns: [SUM(ss_ext_sales_price) (#73), dt.d_year (#6), item.i_brand (#59), item.i_brand_id (#58), #_order_col]
             ├── sort keys: [d_year ASC NULLS LAST, SUM(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST]
-            ├── estimated rows: 143057683321996.78
+            ├── estimated rows: 59607368050831984.00
             └── AggregateFinal
                 ├── output columns: [SUM(ss_ext_sales_price) (#73), dt.d_year (#6), item.i_brand (#59), item.i_brand_id (#58)]
                 ├── group by: [d_year, i_brand, i_brand_id]
                 ├── aggregate functions: [sum(ss_ext_sales_price)]
-                ├── estimated rows: 143057683321996.78
+                ├── estimated rows: 59607368050831984.00
                 └── Exchange
                     ├── output columns: [SUM(ss_ext_sales_price) (#73), dt.d_year (#6), item.i_brand (#59), item.i_brand_id (#58)]
                     ├── exchange type: Hash(0, 1, 2)
                     └── AggregatePartial
                         ├── group by: [d_year, i_brand, i_brand_id]
                         ├── aggregate functions: [sum(ss_ext_sales_price)]
-                        ├── estimated rows: 143057683321996.78
+                        ├── estimated rows: 59607368050831984.00
                         └── HashJoin
-                            ├── output columns: [store_sales.ss_ext_sales_price (#43), item.i_brand_id (#58), item.i_brand (#59), dt.d_year (#6)]
+                            ├── output columns: [store_sales.ss_ext_sales_price (#43), dt.d_year (#6), item.i_brand_id (#58), item.i_brand (#59)]
                             ├── join type: INNER
-                            ├── build keys: [dt.d_date_sk (#0)]
-                            ├── probe keys: [store_sales.ss_sold_date_sk (#28)]
+                            ├── build keys: [item.i_item_sk (#51)]
+                            ├── probe keys: [store_sales.ss_item_sk (#30)]
                             ├── keys is null equal: [false]
                             ├── filters: []
                             ├── build join filters:
-                            │   └── filter id:1, build key:dt.d_date_sk (#0), probe key:store_sales.ss_sold_date_sk (#28), filter type:inlist,min_max
-                            ├── estimated rows: 143057683321996.78
+                            │   └── filter id:1, build key:item.i_item_sk (#51), probe key:store_sales.ss_item_sk (#30), filter type:inlist,min_max
+                            ├── estimated rows: 178822104152495968.00
                             ├── Exchange(Build)
-                            │   ├── output columns: [dt.d_date_sk (#0), dt.d_year (#6)]
+                            │   ├── output columns: [item.i_item_sk (#51), item.i_brand_id (#58), item.i_brand (#59)]
                             │   ├── exchange type: Broadcast
                             │   └── TableScan
-                            │       ├── table: default.default.date_dim
-                            │       ├── output columns: [d_date_sk (#0), d_year (#6)]
+                            │       ├── table: default.default.item
+                            │       ├── output columns: [i_item_sk (#51), i_brand_id (#58), i_brand (#59)]
                             │       ├── read rows: 0
                             │       ├── read size: 0
                             │       ├── partitions total: 0
                             │       ├── partitions scanned: 0
-                            │       ├── push downs: [filters: [is_true(date_dim.d_moy (#8) = 11)], limit: NONE]
-                            │       └── estimated rows: 6087.42
+                            │       ├── push downs: [filters: [is_true(item.i_manufact_id (#64) = 128)], limit: NONE]
+                            │       └── estimated rows: 102000.00
                             └── HashJoin(Probe)
-                                ├── output columns: [store_sales.ss_sold_date_sk (#28), store_sales.ss_ext_sales_price (#43), item.i_brand_id (#58), item.i_brand (#59)]
+                                ├── output columns: [store_sales.ss_item_sk (#30), store_sales.ss_ext_sales_price (#43), dt.d_year (#6)]
                                 ├── join type: INNER
-                                ├── build keys: [item.i_item_sk (#51)]
-                                ├── probe keys: [store_sales.ss_item_sk (#30)]
+                                ├── build keys: [dt.d_date_sk (#0)]
+                                ├── probe keys: [store_sales.ss_sold_date_sk (#28)]
                                 ├── keys is null equal: [false]
                                 ├── filters: []
                                 ├── build join filters:
-                                │   └── filter id:0, build key:item.i_item_sk (#51), probe key:store_sales.ss_item_sk (#30), filter type:inlist,min_max
-                                ├── estimated rows: 23500557158.40
+                                │   └── filter id:0, build key:dt.d_date_sk (#0), probe key:store_sales.ss_sold_date_sk (#28), filter type:inlist,min_max
+                                ├── estimated rows: 1753157883848.00
                                 ├── Exchange(Build)
-                                │   ├── output columns: [item.i_item_sk (#51), item.i_brand_id (#58), item.i_brand (#59)]
+                                │   ├── output columns: [dt.d_date_sk (#0), dt.d_year (#6)]
                                 │   ├── exchange type: Broadcast
                                 │   └── TableScan
-                                │       ├── table: default.default.item
-                                │       ├── output columns: [i_item_sk (#51), i_brand_id (#58), i_brand (#59)]
+                                │       ├── table: default.default.date_dim
+                                │       ├── output columns: [d_date_sk (#0), d_year (#6)]
                                 │       ├── read rows: 0
                                 │       ├── read size: 0
                                 │       ├── partitions total: 0
                                 │       ├── partitions scanned: 0
-                                │       ├── push downs: [filters: [is_true(item.i_manufact_id (#64) = 128)], limit: NONE]
-                                │       └── estimated rows: 81.60
+                                │       ├── push downs: [filters: [is_true(date_dim.d_moy (#8) = 11)], limit: NONE]
+                                │       └── estimated rows: 6087.42
                                 └── TableScan(Probe)
                                     ├── table: default.default.store_sales
                                     ├── output columns: [ss_sold_date_sk (#28), ss_item_sk (#30), ss_ext_sales_price (#43)]

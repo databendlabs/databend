@@ -51,12 +51,13 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
 use databend_common_native::read::ColumnIter;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::IndexType;
+use roaring::RoaringTreemap;
 use xorf::BinaryFuse16;
 
 use super::native_data_source::NativeDataSource;
@@ -797,15 +798,17 @@ impl NativeDeserializeDataTransform {
         let mut block = block.resort(&self.src_schema, &self.output_schema)?;
         let fuse_part = FuseBlockPartInfo::from_part(&self.parts[0])?;
         let offsets = if self.block_reader.query_internal_columns() {
-            let offset = self.read_state.offset;
+            let offset = self.read_state.offset as u64;
             let offsets = if let Some(count) = self.read_state.filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
-                filter_executor.mutable_true_selection()[0..count]
-                    .iter()
-                    .map(|idx| *idx as usize + offset)
-                    .collect::<Vec<_>>()
+                RoaringTreemap::from_sorted_iter(
+                    filter_executor.true_selection()[0..count]
+                        .iter()
+                        .map(|idx| *idx as u64 + offset),
+                )
+                .unwrap()
             } else {
-                (offset..offset + origin_num_rows).collect()
+                RoaringTreemap::from_sorted_iter(offset..offset + origin_num_rows as u64).unwrap()
             };
             Some(offsets)
         } else {

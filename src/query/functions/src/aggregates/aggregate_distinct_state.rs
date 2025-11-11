@@ -43,7 +43,7 @@ use siphasher::sip128::SipHasher24;
 use super::batch_merge1;
 use super::batch_serialize1;
 use super::borsh_partial_deserialize;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateAddr;
 use super::StateSerde;
 
@@ -146,7 +146,7 @@ impl DistinctStateFunc for AggregateDistinctState {
 }
 
 impl StateSerde for AggregateDistinctState {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Array(Box::new(DataType::Binary)).into()]
     }
 
@@ -190,6 +190,7 @@ pub struct AggregateDistinctStringState {
 
 impl DistinctStateFunc for AggregateDistinctStringState {
     fn new() -> Self {
+        #![allow(clippy::arc_with_non_send_sync)]
         AggregateDistinctStringState {
             set: ShortStringHashSet::<[u8]>::with_capacity(4, Arc::new(Bump::new())),
         }
@@ -251,7 +252,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
 }
 
 impl StateSerde for AggregateDistinctStringState {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Array(Box::new(DataType::Binary)).into()]
     }
 
@@ -356,7 +357,7 @@ where T: Number + HashtableKeyable
 impl<T> StateSerde for AggregateDistinctNumberState<T>
 where T: Number + HashtableKeyable
 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Array(Box::new(NumberType::<T>::data_type())).into()]
     }
 
@@ -493,7 +494,7 @@ impl AggregateUniqStringState {
 }
 
 impl StateSerde for AggregateUniqStringState {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }
 

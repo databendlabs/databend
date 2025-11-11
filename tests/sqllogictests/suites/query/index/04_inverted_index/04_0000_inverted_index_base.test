@@ -28,42 +28,42 @@ SHOW CREATE TABLE t
 ----
 t CREATE TABLE t ( id INT NULL, content VARCHAR NULL, SYNC INVERTED INDEX idx1 (content) filters = 'english_stop,english_stemmer,chinese_stop', tokenizer = 'chinese' ) ENGINE=FUSE
 
-query 
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'test')
 ----
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'the')
 ----
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
 5 2.4594712 Time flies like an arrow; fruit flies like a banana
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'word')
 ----
 2 1.5948367 A picture is worth a thousand words
 4 1.6550698 Actions speak louder than words
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'box')
 ----
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'box', 'fuzziness=1')
 ----
 1 1.0 The quick brown fox jumps over the lazy dog
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'action works', 'fuzziness=1')
 ----
 2 1.0 A picture is worth a thousand words
 3 1.0 The early bird catches the worm
 4 2.0 Actions speak louder than words
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'action works', 'fuzziness=1;operator=AND')
 ----
 4 2.0 Actions speak louder than words
@@ -94,7 +94,7 @@ INSERT INTO t VALUES
 (29, '每个人的人生都是一部独特的传奇，我们需要珍惜每一个瞬间，用心去感受生活的美好。'),
 (30, '张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。')
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
 21 1.1111465 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
@@ -103,29 +103,29 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score
 12 1.4482267 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '北京') ORDER BY score()
 ----
 30 1.7396812 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
 12 1.9475443 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '北京大学') ORDER BY score()
 ----
 30 5.2190437 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '北京 大', 'fuzziness=1;operator=AND') ORDER BY id
 ----
 12 2.0 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 30 2.0 张华考上了北京大学，李萍进了中等技术学校，我在百货公司当售货员，我们都有光明的前途。
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '文化博大精深') ORDER BY score()
 ----
 28 7.61753 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '文化 博大精深') ORDER BY score()
 ----
 21 1.1111465 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
@@ -133,17 +133,17 @@ SELECT id, score(), content FROM t WHERE match(content, '文化 博大精深') O
 15 2.063777 中国的茶文化源远流长，品茶已经成为一种生活方式。
 28 7.61753 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '化博') ORDER BY score()
 ----
 
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '。') ORDER BY score()
 ----
 
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '不存在') ORDER BY score()
 ----
 
@@ -151,7 +151,7 @@ SELECT id, score(), content FROM t WHERE match(content, '不存在') ORDER BY sc
 statement error 1903
 SELECT id, score(), content FROM t WHERE match(content, '()')
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '()', 'lenient=true')
 ----
 
@@ -159,7 +159,7 @@ SELECT id, score(), content FROM t WHERE match(content, '()', 'lenient=true')
 statement ok
 UPDATE t SET content = '科技创新是推动社会进步的重要动力，我们应该积极支持和推动科技创新。' WHERE id=24
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
 21 1.6232129 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
@@ -167,7 +167,7 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score
 12 1.9674243 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 15 2.0775645 中国的茶文化源远流长，品茶已经成为一种生活方式。
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '科技') ORDER BY score()
 ----
 13 2.8710475 随着科技的发展，人们的生活变得越来越便利。
@@ -176,7 +176,7 @@ SELECT id, score(), content FROM t WHERE match(content, '科技') ORDER BY score
 statement ok
 DELETE FROM t WHERE id=21
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
 28 2.0144506 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
@@ -190,7 +190,7 @@ CREATE OR REPLACE INVERTED INDEX idx1 ON t(content) tokenizer = 'chinese' index_
 statement ok
 REFRESH INVERTED INDEX idx1 ON t
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'the')
 ----
 1 1.9382918 The quick brown fox jumps over the lazy dog
@@ -198,7 +198,7 @@ SELECT id, score(), content FROM t WHERE match(content, 'the')
 6 2.033073 Beauty is in the eye of the beholder
 10 2.033073 An apple a day keeps the doctor away
 
-query IFT
+query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'fly')
 ----
 
@@ -237,7 +237,7 @@ INSERT INTO books VALUES
 (19, 'Time Series Databases', 'Ted Dunning, Ellen Friedman', 'Time series data is of growing importance, especially with the rapid expansion of the Internet of Things. This concise guide shows you effective ways to collect, persist, and access large-scale time series data for analysis. You’ll explore the theory behind time series databases and learn practical methods for implementing them. Authors Ted Dunning and Ellen Friedman provide a detailed examination of open source tools such as OpenTSDB and new modifications that greatly speed up data ingestion.'),
 (20, 'CockroachDB: The Definitive Guide', 'Guy Harrison, Jesse Seldess, Ben Darnell', 'Get the lowdown on CockroachDB, the distributed SQL database built to handle the demands of today’s data-driven cloud applications. In this hands-on guide, software developers, architects, and DevOps/SRE teams will learn how to use CockroachDB to create applications that scale elastically and provide seamless delivery for end users while remaining indestructible. Teams will also learn how to migrate existing applications to CockroachDB’s performant, cloud-native data architecture.')
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'python') ORDER BY score() DESC
 ----
 2 8.500097 Python深度学习（第2版）
@@ -250,7 +250,7 @@ SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'py
 3 1.3515654 大模型应用开发极简入门
 7 1.2369337 Apache Pulsar实战
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'ChatGPT') ORDER BY score() DESC
 ----
 1 14.471097 这就是ChatGPT
@@ -258,7 +258,7 @@ SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'Ch
 13 7.9292374 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
 3 1.77537 大模型应用开发极简入门
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', '设计') ORDER BY score() DESC
 ----
 9 14.486509 Vue.js设计与实现
@@ -266,7 +266,7 @@ SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', '�
 8 9.061771 Rust程序设计（第2版）
 7 3.2078874 Apache Pulsar实战
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', '设计 实现') ORDER BY score() DESC
 ----
 9 32.441788 Vue.js设计与实现
@@ -275,7 +275,7 @@ SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', '�
 7 5.9086094 Apache Pulsar实战
 4 2.3153453 白话深度学习的数学
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:python') ORDER BY score() DESC
 ----
 2 1.4378065 Python深度学习（第2版）
@@ -284,7 +284,7 @@ SELECT id, score(), title FROM books WHERE query('title:python') ORDER BY score(
 6 0.96639454 Flask Web开发：基于Python的Web应用开发实战（第2版）
 13 0.8931828 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:pyth', 'fuzziness=2') ORDER BY id
 ----
 2 1.0 Python深度学习（第2版）
@@ -293,7 +293,7 @@ SELECT id, score(), title FROM books WHERE query('title:pyth', 'fuzziness=2') OR
 13 1.0 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
 14 1.0 Building Recommendation Systems in Python and JAX
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:python OR rust') ORDER BY score() DESC
 ----
 17 1.8827661 Rust for Rustaceans
@@ -306,11 +306,11 @@ SELECT id, score(), title FROM books WHERE query('title:python OR rust') ORDER B
 6 0.96639454 Flask Web开发：基于Python的Web应用开发实战（第2版）
 13 0.8931828 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:python AND rust') ORDER BY score() DESC
 ----
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:设计 AND 实现 OR 实战') ORDER BY score() DESC
 ----
 9 5.063791 Vue.js设计与实现
@@ -318,17 +318,17 @@ SELECT id, score(), title FROM books WHERE query('title:设计 AND 实现 OR 实
 5 1.7138567 BERT基础教程：Transformer大模型实战
 6 1.2924166 Flask Web开发：基于Python的Web应用开发实战（第2版）
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:"Rust Atomics"') ORDER BY score() DESC
 ----
 16 5.0420737 Rust Atomics and Locks
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:"Python深度学习"') ORDER BY score() DESC
 ----
 2 6.005718 Python深度学习（第2版）
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:(+python -学习)') ORDER BY score() DESC
 ----
 14 1.1018704 Building Recommendation Systems in Python and JAX
@@ -336,20 +336,20 @@ SELECT id, score(), title FROM books WHERE query('title:(+python -学习)') ORDE
 6 0.96639454 Flask Web开发：基于Python的Web应用开发实战（第2版）
 13 0.8931828 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:+设计 -实现') ORDER BY score() DESC
 ----
 10 2.0477252 前端架构设计
 8 1.8123543 Rust程序设计（第2版）
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:+设计 实现') ORDER BY score() DESC
 ----
 9 5.063791 Vue.js设计与实现
 10 2.0477252 前端架构设计
 8 1.8123543 Rust程序设计（第2版）
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:python^5 description:chatgpt^2.1') ORDER BY score() DESC
 ----
 13 7.890149 Learn AI-Assisted Python Programming: With GitHub Copilot and ChatGPT
@@ -361,7 +361,7 @@ SELECT id, score(), title FROM books WHERE query('title:python^5 description:cha
 12 4.325484 Developing Apps with GPT-4 and ChatGPT
 3 3.106897 大模型应用开发极简入门
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 description:(学习 +神经网络)^1.1') ORDER BY score() DESC
 ----
 9 25.318954 Vue.js设计与实现
@@ -377,7 +377,7 @@ CREATE OR REPLACE INVERTED INDEX idx2 ON books(title, author, description) token
 statement ok
 REFRESH INVERTED INDEX idx2 ON books
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'python') ORDER BY score() DESC
 ----
 2 8.192706 Python深度学习（第2版）
@@ -390,7 +390,7 @@ SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'py
 12 1.3110648 Developing Apps with GPT-4 and ChatGPT
 7 1.2791233 Apache Pulsar实战
 
-query IFT
+query IRT
 SELECT id, score(), title FROM books WHERE query('title:设计 AND 实现 OR 实战') ORDER BY score() DESC
 ----
 9 5.027091 Vue.js设计与实现
@@ -426,37 +426,48 @@ INSERT INTO t1 VALUES
 (9, '{"title":"量子计算的未来","metadata":{"author":"赵六","publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"],"price":29.91}}'),
 (10, '{"title":"网络安全与隐私保护","metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"],"price":29.00}}')
 
-query IFT
+query IRT
 SELECT id, score(), body FROM t1 WHERE query('body.title:energy')
 ----
 2 3.2427819 {"metadata":{"author":"Pamela","price":63.69,"publishedDate":"2023-12-01","tags":["sustainable energy","solutions","environment"]},"title":"Sustainable Energy Solutions"}
 
-query IFT
+query IRT
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:technology')
 ----
 3 2.411387 {"metadata":{"author":"Quincy","price":42.92,"publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
 5 2.411387 {"metadata":{"author":"Samuel","price":69.99,"publishedDate":"2023-12-15","tags":["IoT","applications","technology"]},"title":"Internet of Things Applications"}
 
-query IFT
+query IRT
+SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:technology AND body.metadata.author:Quincy')
+----
+3 5.654169 {"metadata":{"author":"Quincy","price":42.92,"publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
+
+query IRT
+SELECT id, score(), body FROM t1 WHERE query('(body.metadata.tags:technology AND body.metadata.author:Quincy) OR body.metadata.author:Oliver')
+----
+1 3.2427819 {"metadata":{"author":"Oliver","price":15.44,"publishedDate":"2021-06-15","tags":["psychology","persuasion","behavior"]},"title":"The Psychology of Persuasion"}
+3 5.654169 {"metadata":{"author":"Quincy","price":42.92,"publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
+
+query IRT
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:技术')
 ----
 6 2.411387 {"metadata":{"author":"张三","price":154.50,"publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
 10 2.411387 {"metadata":{"author":"刘七","price":29.00,"publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
 
-query IFT
+query IRT
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags: IN [技术 物理学]')
 ----
 6 1.0 {"metadata":{"author":"张三","price":154.50,"publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
 9 1.0 {"metadata":{"author":"赵六","price":29.91,"publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"]},"title":"量子计算的未来"}
 10 1.0 {"metadata":{"author":"刘七","price":29.00,"publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
 
-query IFT
+query IRT
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.price: [40 TO 60]')
 ----
 3 1.0 {"metadata":{"author":"Quincy","price":42.92,"publishedDate":"2022-05-05","tags":["autonomous vehicles","future","technology"]},"title":"The Future of Autonomous Vehicles"}
 8 1.0 {"metadata":{"author":"王五","price":47.70,"publishedDate":"2023-08-15","tags":["物联网","智能家居","生活"]},"title":"物联网与智能家居"}
 
-query IFT
+query IRT
 SELECT id, score(), body FROM t1 WHERE query('body.metadata.price: [29.91 TO 33.90}')
 ----
 9 1.0 {"metadata":{"author":"赵六","price":29.91,"publishedDate":"2023-07-20","tags":["量子计算","未来科技","物理学"]},"title":"量子计算的未来"}
@@ -489,6 +500,28 @@ INSERT INTO t2 VALUES (1, null)
 query IT
 select * from t2 where query('body:test');
 ----
+
+statement ok
+CREATE TABLE t_native (id int, content string, INVERTED INDEX idx1 (content)) storage_format = 'native' row_per_page = 2;
+
+statement ok
+INSERT INTO t_native VALUES 
+(1, 'The quick brown fox jumps over the lazy dog'),
+(2, 'A picture is worth a thousand words'),
+(3, 'The early bird catches the worm'),
+(4, 'Actions speak louder than words'),
+(5, 'Time flies like an arrow; fruit flies like a banana'),
+(6, 'Beauty is in the eye of the beholder'),
+(7, 'When life gives you lemons, make lemonade'),
+(8, 'Put all your eggs in one basket'),
+(9, 'You can not judge a book by its cover'),
+(10, 'An apple a day keeps the doctor away')
+
+query IT
+select * from t_native where query('content:book OR content:basket');
+----
+8 Put all your eggs in one basket
+9 You can not judge a book by its cover
 
 statement ok
 use default

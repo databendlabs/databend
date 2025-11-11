@@ -1,0 +1,137 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+set global enable_experimental_row_access_policy = 1;
+
+statement ok
+drop table if exists employees1;
+
+statement ok
+drop table if exists employees2;
+
+statement ok
+drop row access policy if exists rap_multi_case1;
+
+statement ok
+drop masking policy if exists maska1;
+
+statement ok
+drop masking policy if exists mask_ssn_conditional1;
+
+statement ok
+CREATE ROW ACCESS POLICY rap_multi_case1 AS (UserId string, Department string) RETURNS boolean ->
+  CASE
+    WHEN current_role() = 'admin' THEN true
+    WHEN Department = 'Engineering' THEN true
+    ELSE false
+  END;
+
+statement ok
+CREATE MASKING POLICY maska1 AS (val int) RETURNS int -> CASE WHEN current_role() IN ('non_exists_role') THEN VAL ELSE 200 END comment = 'this is a masking policy';
+
+statement ok
+CREATE MASKING POLICY mask_ssn_conditional1 AS (val STRING, user_role STRING) RETURNS STRING ->
+  CASE
+    WHEN user_role = current_role() THEN val
+    ELSE '***-**-****'
+  END
+COMMENT = 'Mask SSN conditionally based on role';
+
+statement ok
+create table employees1(
+    id int,
+    name string,
+    ssn string,
+    salary int,
+    department string,
+    role string
+);
+
+statement ok
+alter table employees1 modify column ssn set masking policy mask_ssn_conditional1 using (ssn, role);
+
+statement ok
+alter table employees1 modify column salary set masking policy maska1;
+
+statement ok
+alter table employees1 add row access policy rap_multi_case1 on (name, department);
+
+statement ok
+create table employees2(
+    id int,
+    name string,
+    ssn string,
+    salary int,
+    department string,
+    role string
+);
+
+statement ok
+alter table employees2 modify column ssn set masking policy mask_ssn_conditional1 using (ssn, role);
+
+query T
+select * from policy_references(POLICY_NAME => 'maska1');
+----
+maska1 MASKING POLICY default employees1 TABLE salary NULL ACTIVE
+
+query T
+select * from policy_references(POLICY_NAME => 'rap_multi_case1');
+----
+rap_multi_case1 ROW ACCESS POLICY default employees1 TABLE NULL name, department ACTIVE
+
+query T
+select * from policy_references(POLICY_NAME => 'mask_ssn_conditional1');
+----
+mask_ssn_conditional1 MASKING POLICY default employees1 TABLE ssn role ACTIVE
+mask_ssn_conditional1 MASKING POLICY default employees2 TABLE ssn role ACTIVE
+
+query T
+select * from policy_references(REF_ENTITY_NAME => 'default.employees2', REF_ENTITY_DOMAIN => 'TABLE');
+----
+mask_ssn_conditional1 MASKING POLICY default employees2 TABLE ssn role ACTIVE
+
+query T
+select * from policy_references(REF_ENTITY_NAME => 'default.employees1', REF_ENTITY_DOMAIN => 'TABLE');
+----
+mask_ssn_conditional1 MASKING POLICY default employees1 TABLE ssn role ACTIVE
+maska1 MASKING POLICY default employees1 TABLE salary NULL ACTIVE
+rap_multi_case1 ROW ACCESS POLICY default employees1 TABLE NULL name, department ACTIVE
+
+statement ok
+drop table if exists employees1;
+
+statement ok
+drop table if exists employees2;
+
+statement ok
+drop row access policy if exists rap_multi_case1;
+
+statement ok
+drop masking policy if exists maska1;
+
+statement ok
+drop masking policy if exists mask_ssn_conditional1;
+
+statement error 1006
+select count(*) from policy_references(POLICY_NAME => 'pr_mask_policy', REF_ENTITY_NAME => 'pr_table', REF_ENTITY_DOMAIN => 'TABLE');
+
+statement error 1006
+select count(*) from policy_references(REF_ENTITY_NAME => 'pr_table');
+
+statement error 1006
+select count(*) from policy_references(REF_ENTITY_DOMAIN => 'TABLE');
+
+statement error 1006
+select count(*) from policy_references(REF_ENTITY_NAME => 'pr_table', REF_ENTITY_DOMAIN => 'stage');

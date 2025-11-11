@@ -1437,6 +1437,7 @@ impl TableDataType {
             TableDataType::Nullable(inner_ty) => {
                 format!("Nullable({})", inner_ty.wrapped_display())
             }
+            TableDataType::TimestampTz => "Timestamp_Tz".to_string(),
             TableDataType::Tuple { fields_type, .. } => {
                 format!(
                     "Tuple({})",

@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_formats::FileFormatOptionsExt;
 use databend_common_meta_app::principal::StageFileCompression;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::Operator;

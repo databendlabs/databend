@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -160,6 +161,11 @@ pub struct QueryResponse {
     pub data: Arc<BlocksSerializer>,
     pub affect: Option<QueryAffect>,
     pub result_timeout_secs: Option<u64>,
+    // settings also used by driver, may be set in session or global
+    // only include timezone for now
+    // only is_some in the initial response
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settings: Option<BTreeMap<String, String>>,
 
     pub stats: QueryStats,
 
@@ -193,6 +199,7 @@ impl QueryResponse {
         }: HttpQueryResponseInternal,
         is_final: bool,
         body_format: BodyFormat,
+        settings: Option<BTreeMap<String, String>>,
     ) -> Response {
         let (data, next_uri) = if is_final {
             (Arc::new(BlocksSerializer::empty()), None)
@@ -257,6 +264,7 @@ impl QueryResponse {
             error: error.map(QueryError::from_error_code),
             has_result_set,
             result_timeout_secs: Some(result_timeout_secs),
+            settings,
         };
 
         match body_format {
@@ -389,6 +397,7 @@ async fn query_final_handler(
                     response,
                     true,
                     body_format,
+                    None,
                 ))
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -516,6 +525,7 @@ async fn query_page_handler(
                     resp,
                     false,
                     body_format,
+                    None,
                 ))
             }
         }
@@ -574,6 +584,14 @@ pub(crate) async fn query_handler(
                 Ok(req.fail_to_start_sql(err).into_response())
             }
             Ok(mut query) => {
+                let settings = query.execute_state.lock().get_session_state().settings;
+                let tz = settings.get_timezone().unwrap();
+                let driver_settings = if tz == "UTC" {
+                    None
+                } else {
+                    Some(BTreeMap::from_iter([("timezone".to_string(), tz)]))
+                };
+
                 if let Err(err) = query.start_query(sql.clone()).await {
                     let err = err.display_with_sql(&sql);
                     error!("Failed to start SQL query, error: {:?}", err);
@@ -609,10 +627,14 @@ pub(crate) async fn query_handler(
                 query
                     .update_expire_time(false, resp.is_data_drained())
                     .await;
-                Ok(
-                    QueryResponse::from_internal(query.id.to_string(), resp, false, body_format)
-                        .into_response(),
+                Ok(QueryResponse::from_internal(
+                    query.id.to_string(),
+                    resp,
+                    false,
+                    body_format,
+                    driver_settings,
                 )
+                .into_response())
             }
         }
     };

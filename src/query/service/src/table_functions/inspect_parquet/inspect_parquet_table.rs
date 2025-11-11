@@ -38,10 +38,11 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::binder::resolve_stage_location;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_metadata_async;
@@ -49,7 +50,6 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_storages_fuse::table_functions::string_literal;
 use databend_common_users::Object;
 
-use crate::pipelines::processors::OutputPort;
 use crate::sessions::TableContext;
 use crate::table_functions::TableFunction;
 
@@ -186,7 +186,7 @@ impl InspectParquetSource {
         output: Arc<OutputPort>,
         uri: String,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, InspectParquetSource {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, InspectParquetSource {
             is_finished: false,
             ctx,
             uri,

@@ -128,6 +128,7 @@ impl HttpQueryRequest {
             error: Some(QueryError::from_error_code(err)),
             has_result_set: None,
             result_timeout_secs: None,
+            settings: None,
         })
     }
 
@@ -325,6 +326,7 @@ pub struct HttpSessionConf {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secondary_roles: Option<Vec<String>>,
+    // session level settings
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -569,7 +571,7 @@ pub struct HttpQuery {
     // cache only
     pub(crate) result_timeout_secs: u64,
 
-    execute_state: Arc<Mutex<Executor>>,
+    pub(crate) execute_state: Arc<Mutex<Executor>>,
 
     // client states
     client_state: Arc<Mutex<ClientState>>,

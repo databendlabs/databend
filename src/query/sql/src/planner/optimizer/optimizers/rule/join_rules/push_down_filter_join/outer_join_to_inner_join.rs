@@ -100,7 +100,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
         }
     }
 
-    let original_join_type = join.join_type.clone();
+    let original_join_type = join.join_type;
     join.join_type =
         eliminate_outer_join_type(join.join_type, can_filter_left_null, can_filter_right_null);
     if join.join_type == original_join_type {
@@ -111,7 +111,7 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
         original_join_type,
         JoinType::LeftSingle | JoinType::RightSingle
     ) {
-        join.join_type = original_join_type.clone();
+        join.join_type = original_join_type;
         join.single_to_inner = Some(original_join_type);
     }
 

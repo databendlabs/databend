@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod bind;
+mod bind_asof_join;
 mod bind_cte;
 mod bind_join;
 mod bind_location;
@@ -21,5 +22,6 @@ mod bind_subquery;
 mod bind_table;
 mod bind_table_function;
 
+pub use bind_asof_join::is_range_join_condition;
 pub use bind_join::JoinConditions;
 pub use bind_table_function::parse_result_scan_args;

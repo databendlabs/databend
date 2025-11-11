@@ -236,7 +236,7 @@ impl HashJoinState {
     }
 
     pub fn join_type(&self) -> JoinType {
-        self.hash_join_desc.join_type.clone()
+        self.hash_join_desc.join_type
     }
 
     pub fn need_outer_scan(&self) -> bool {

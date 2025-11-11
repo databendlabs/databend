@@ -35,11 +35,11 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 
@@ -245,7 +245,7 @@ impl<Event: SystemLogElement + 'static> SystemLogSource<Event> {
         output: Arc<OutputPort>,
         data: DataBlock,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, Self {
+        SyncSourcer::create(ctx.get_scan_progress(), output, Self {
             data: Some(data),
             _phantom: Default::default(),
         })

@@ -11,11 +11,11 @@ Exchange
     ├── output columns: [numbers_mt.number (#0)]
     ├── group by: [number]
     ├── aggregate functions: []
-    ├── estimated rows: 100000.00
+    ├── estimated rows: 33333.33
     └── AggregatePartial
         ├── group by: [number]
         ├── aggregate functions: []
-        ├── estimated rows: 100000.00
+        ├── estimated rows: 33333.33
         └── Exchange
             ├── output columns: [numbers_mt.number (#0)]
             ├── exchange type: Hash(numbers_mt.number (#0))
@@ -43,14 +43,14 @@ Exchange
     ├── output columns: [numbers_mt.number (#0)]
     ├── group by: [number]
     ├── aggregate functions: []
-    ├── estimated rows: 100000.00
+    ├── estimated rows: 33333.33
     └── Exchange
         ├── output columns: [numbers_mt.number (#0)]
         ├── exchange type: Hash(0)
         └── AggregatePartial
             ├── group by: [number]
             ├── aggregate functions: []
-            ├── estimated rows: 100000.00
+            ├── estimated rows: 33333.33
             └── TableScan
                 ├── table: default.system.numbers_mt
                 ├── output columns: [number (#0)]

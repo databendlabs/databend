@@ -39,11 +39,11 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_sql::validate_function_arg;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::TableContext;
@@ -272,7 +272,7 @@ impl<const INCLUSIVE: bool> RangeSource<INCLUSIVE> {
             ));
         }
 
-        SyncSourcer::create(ctx.clone(), output, Self {
+        SyncSourcer::create(ctx.get_scan_progress(), output, Self {
             current_idx: 0,
             data_type,
             start,

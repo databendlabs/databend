@@ -2489,12 +2489,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             let name = ProcedureIdentity {
                 name: name.to_string(),
                 args_type: if let Some(args) = &args {
-                    args.iter()
-                        .map(|arg| arg.data_type.to_string())
-                        .collect::<Vec<String>>()
-                        .join(",")
+                    args.iter().map(|arg| arg.data_type.clone()).collect()
                 } else {
-                    "".to_string()
+                    vec![]
                 },
             };
             let stmt = CreateProcedureStmt {
@@ -2558,14 +2555,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 if_exists: opt_if_exists.is_some(),
                 name: ProcedureIdentity {
                     name: name.to_string(),
-                    args_type: if args.is_empty() {
-                        "".to_string()
-                    } else {
-                        args.iter()
-                            .map(|arg| arg.to_string())
-                            .collect::<Vec<String>>()
-                            .join(",")
-                    },
+                    args_type: args,
                 },
             })
         },
@@ -2579,14 +2569,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Statement::DescProcedure(DescProcedureStmt {
                 name: ProcedureIdentity {
                     name: name.to_string(),
-                    args_type: if args.is_empty() {
-                        "".to_string()
-                    } else {
-                        args.iter()
-                            .map(|arg| arg.to_string())
-                            .collect::<Vec<String>>()
-                            .join(",")
-                    },
+                    args_type: args,
                 },
             })
         },
@@ -3636,14 +3619,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
             privileges: vec![UserPrivilegeType::AccessProcedure],
             level: AccountMgrLevel::Procedure(ProcedureIdentity {
                 name: name.to_string(),
-                args_type: if args.is_empty() {
-                    "".to_string()
-                } else {
-                    args.iter()
-                        .map(|arg| arg.to_string())
-                        .collect::<Vec<String>>()
-                        .join(",")
-                },
+                args_type: args,
             }),
         },
     );
@@ -3656,14 +3632,7 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
             privileges: vec![UserPrivilegeType::AccessProcedure],
             level: AccountMgrLevel::Procedure(ProcedureIdentity {
                 name: name.to_string(),
-                args_type: if args.is_empty() {
-                    "".to_string()
-                } else {
-                    args.iter()
-                        .map(|arg| arg.to_string())
-                        .collect::<Vec<String>>()
-                        .join(",")
-                },
+                args_type: args,
             }),
         },
     );
@@ -3833,14 +3802,7 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         |(_, name, args)| {
             GrantObjectName::Procedure(ProcedureIdentity {
                 name: name.to_string(),
-                args_type: if args.is_empty() {
-                    "".to_string()
-                } else {
-                    args.iter()
-                        .map(|arg| arg.to_string())
-                        .collect::<Vec<String>>()
-                        .join(",")
-                },
+                args_type: args,
             })
         },
     );
@@ -3979,14 +3941,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         |(_, name, args)| {
             let name = ProcedureIdentity {
                 name: name.to_string(),
-                args_type: if args.is_empty() {
-                    "".to_string()
-                } else {
-                    args.iter()
-                        .map(|arg| arg.to_string())
-                        .collect::<Vec<String>>()
-                        .join(",")
-                },
+                args_type: args,
             };
             AccountMgrLevel::Procedure(name)
         },

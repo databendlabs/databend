@@ -21,8 +21,8 @@ use std::sync::Arc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use log::info;
 

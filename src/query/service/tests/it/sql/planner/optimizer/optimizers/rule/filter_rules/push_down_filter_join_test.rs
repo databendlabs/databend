@@ -252,7 +252,7 @@ fn run_join_filter_test(test_case: &JoinFilterTestCase, metadata: &MetadataRef) 
         left_scan,
         right_scan,
         vec![join_condition],
-        test_case.join_type.clone(),
+        test_case.join_type,
     );
 
     // Create filter

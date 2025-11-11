@@ -56,7 +56,7 @@ impl Interpreter for CreateRowAccessPolicyInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
         if let Err(_e) = handler
-            .create_row_access(meta_api, self.plan.clone().into())
+            .create_row_access_policy(meta_api, self.plan.clone().into())
             .await?
         {
             return if let CreateOption::CreateIfNotExists = self.plan.create_option {

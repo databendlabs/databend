@@ -1,7 +1,8 @@
 statement ok
 set enable_selector_executor = 0;
 
-include ./filter.test
+include filter.test
+include functions/02_0000_function_aggregate_retention.test
 
 statement ok
 unset enable_selector_executor;

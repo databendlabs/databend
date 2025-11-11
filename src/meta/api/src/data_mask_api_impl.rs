@@ -19,6 +19,8 @@ use databend_common_meta_app::data_mask::DataMaskId;
 use databend_common_meta_app::data_mask::DataMaskIdIdent;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
+use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
@@ -26,6 +28,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
@@ -33,10 +36,13 @@ use fastrace::func_name;
 use log::debug;
 
 use crate::data_mask_api::DatamaskApi;
+use crate::errors::MaskingPolicyError;
 use crate::fetch_id;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::meta_txn_error::MetaTxnError;
 use crate::txn_backoff::txn_backoff;
+use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
@@ -135,33 +141,62 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     async fn drop_data_mask(
         &self,
         name_ident: &DataMaskNameIdent,
-    ) -> Result<Option<(SeqV<DataMaskId>, SeqV<DatamaskMeta>)>, KVAppError> {
+    ) -> Result<
+        Result<Option<(SeqV<DataMaskId>, SeqV<DatamaskMeta>)>, MaskingPolicyError>,
+        MetaTxnError,
+    > {
         debug!(name_ident :? =(name_ident); "DatamaskApi: {}", func_name!());
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
-            let mut txn = TxnRequest::default();
 
+            // Check if policy exists
             let res = self.get_id_and_value(name_ident).await?;
-            debug!(res :? = res, name_key :? =(name_ident); "{}", func_name!());
-
             let Some((seq_id, seq_meta)) = res else {
-                return Ok(None);
+                return Ok(Ok(None));
             };
 
-            let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
+            let policy_id = *seq_id.data;
+            let tenant = name_ident.tenant();
+            let table_policy_ref_prefix = DirName::new(MaskPolicyTableIdIdent::new_generic(
+                tenant.clone(),
+                MaskPolicyIdTableId {
+                    policy_id,
+                    table_id: 0,
+                },
+            ));
+
+            // List all table-policy references
+            let table_policy_refs = self.list_pb_vec(&table_policy_ref_prefix).await?;
+
+            // Policy is in use - cannot drop
+            if !table_policy_refs.is_empty() {
+                return Ok(Err(MaskingPolicyError::policy_in_use(
+                    tenant.tenant_name().to_string(),
+                    name_ident.data_mask_name().to_string(),
+                )));
+            }
+
+            // No references - drop the policy
+            let id_ident = seq_id.data.into_t_ident(tenant);
+            let mut txn = TxnRequest::default();
+
+            // Ensure no new references were created
+            txn.condition
+                .push(txn_cond_eq_keys_with_prefix(&table_policy_ref_prefix, 0));
 
             txn_delete_exact(&mut txn, name_ident, seq_id.seq);
             txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-            // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
-            clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
-            let (succ, _responses) = send_txn(self, txn).await?;
-            debug!(succ = succ;"{}", func_name!());
 
+            // TODO: Tentative retention for compatibility. Can be deleted later.
+            clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
+
+            let (succ, _responses) = send_txn(self, txn).await?;
             if succ {
-                return Ok(Some((seq_id, seq_meta)));
+                return Ok(Ok(Some((seq_id, seq_meta))));
             }
+            // Transaction failed, retry
         }
     }
 

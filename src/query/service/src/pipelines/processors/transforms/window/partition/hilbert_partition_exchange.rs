@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::Exchange;
+use databend_common_pipeline::basic::Exchange;
 
 use crate::pipelines::processors::transforms::WindowPartitionMeta;
 

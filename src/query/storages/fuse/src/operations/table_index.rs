@@ -34,9 +34,9 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::AsyncTransform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -188,7 +188,7 @@ pub async fn do_refresh_table_index(
                 block_reader.clone(),
                 index_metas.clone(),
             );
-            AsyncSourcer::create(ctx.clone(), output, inner)
+            AsyncSourcer::create(ctx.get_scan_progress(), output, inner)
         },
         1,
     )?;

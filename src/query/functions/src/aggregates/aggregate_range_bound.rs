@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
@@ -29,6 +27,7 @@ use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use rand::prelude::SliceRandom;
@@ -43,22 +42,16 @@ use super::AggrState;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
 use crate::with_simple_no_number_mapped_type;
 
-struct RangeBoundData {
+pub struct RangeBoundData {
     partitions: usize,
     sample_size: usize,
     data_type: DataType,
-}
-
-impl FunctionData for RangeBoundData {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -91,18 +84,9 @@ where
     T: ReturnType,
     T::Scalar: Ord + BorshSerialize + BorshDeserialize,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
-        let range_bound_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<RangeBoundData>()
-        };
+    type FunctionInfo = RangeBoundData;
 
+    fn add(&mut self, other: T::ScalarRef<'_>, range_bound_data: &RangeBoundData) -> Result<()> {
         let total_sample_size = std::cmp::min(
             range_bound_data.sample_size * range_bound_data.partitions,
             10_000,
@@ -130,23 +114,17 @@ where
 
     fn add_batch(
         &mut self,
-        other: T::Column,
+        other: ColumnView<T>,
         validity: Option<&Bitmap>,
-        function_data: Option<&dyn FunctionData>,
+        range_bound_data: &RangeBoundData,
     ) -> Result<()> {
-        let column_len = T::column_len(&other);
+        let column_len = other.len();
         let unset_bits = validity.map_or(0, |v| v.null_count());
         if unset_bits == column_len {
             return Ok(());
         }
 
         let valid_size = column_len - unset_bits;
-        let range_bound_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<RangeBoundData>()
-        };
         let sample_size = std::cmp::max(valid_size / 100, range_bound_data.sample_size);
 
         let mut indices = validity.map_or_else(
@@ -169,7 +147,7 @@ where
 
         let sample_values = sampled_indices
             .iter()
-            .map(|i| T::to_owned_scalar(unsafe { T::index_column_unchecked(&other, *i) }))
+            .map(|i| T::to_owned_scalar(unsafe { other.index_unchecked(*i) }))
             .collect::<Vec<_>>();
 
         self.total_rows += valid_size;
@@ -188,14 +166,8 @@ where
     fn merge_result(
         &mut self,
         mut builder: ArrayColumnBuilderMut<'_, T>,
-        function_data: Option<&dyn FunctionData>,
+        range_bound_data: &RangeBoundData,
     ) -> Result<()> {
-        let range_bound_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<RangeBoundData>()
-        };
         let step = self.total_rows as f64 / range_bound_data.partitions as f64;
 
         let values = std::mem::take(&mut self.values);
@@ -248,7 +220,7 @@ where
     T: ReturnType,
     T::Scalar: BorshSerialize + BorshDeserialize + Ord,
 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }
 
@@ -287,16 +259,16 @@ pub fn try_create_aggregate_range_bound_function(
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
     let data_type = arguments[0].clone().remove_nullable();
-    let function_data = get_partitions(&params, display_name, data_type.clone())?;
+    let function_info = get_partitions(&params, display_name, data_type.clone())?;
     let return_type = DataType::Array(Box::new(data_type.clone()));
 
     with_simple_no_number_mapped_type!(|T| match data_type {
         DataType::T => {
-            AggregateUnaryFunction::<RangeBoundState<T>, T, ArrayType<T>>::create(
+            AggregateUnaryFunction::<RangeBoundState<T>, T, ArrayType<T>>::with_function_info(
                 display_name,
                 return_type,
+                function_info,
             )
-            .with_function_data(Box::new(function_data))
             .with_need_drop(true)
             .finish()
         }
@@ -307,8 +279,9 @@ pub fn try_create_aggregate_range_bound_function(
                         RangeBoundState<NumberType<NUM>>,
                         NumberType<NUM>,
                         ArrayType<NumberType<NUM>>,
-                    >::create(display_name, return_type)
-                    .with_function_data(Box::new(function_data))
+                    >::with_function_info(
+                        display_name, return_type, function_info
+                    )
                     .with_need_drop(true)
                     .finish()
                 }
@@ -321,20 +294,20 @@ pub fn try_create_aggregate_range_bound_function(
                         RangeBoundState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         ArrayType<DecimalType<DECIMAL>>,
-                    >::create(display_name, return_type)
-                    .with_function_data(Box::new(function_data))
+                    >::with_function_info(
+                        display_name, return_type, function_info
+                    )
                     .with_need_drop(true)
                     .finish()
                 }
             })
         }
         DataType::Binary => {
-            AggregateUnaryFunction::<
-                RangeBoundState<BinaryType>,
-                BinaryType,
-                ArrayType<BinaryType>,
-            >::create(display_name, return_type)
-            .with_function_data(Box::new(function_data))
+            AggregateUnaryFunction::<RangeBoundState<BinaryType>, BinaryType, ArrayType<BinaryType>>::with_function_info(
+                display_name,
+                return_type,
+                function_info,
+            )
             .with_need_drop(true)
             .finish()
         }

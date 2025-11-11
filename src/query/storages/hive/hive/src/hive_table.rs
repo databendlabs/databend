@@ -44,11 +44,11 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ParquetPruner;
@@ -508,7 +508,7 @@ impl HiveSource {
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, HiveSource {
+        SyncSourcer::create(ctx.get_scan_progress(), output, HiveSource {
             finish: false,
             schema,
         })

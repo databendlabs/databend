@@ -27,7 +27,7 @@ use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::PlanProfile;
+use databend_common_pipeline::core::PlanProfile;
 use databend_common_storage::MutationStatus;
 use futures_util::future::Either;
 use log::warn;

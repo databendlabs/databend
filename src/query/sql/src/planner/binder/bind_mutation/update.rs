@@ -257,11 +257,10 @@ impl Binder {
                     let column = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
                     let cast = column.unify_to_data_type(&data_type);
 
-                    let index = self.metadata.write().add_derived_column(
-                        column_name,
-                        *data_type,
-                        Some(cast.clone()),
-                    );
+                    let index = self
+                        .metadata
+                        .write()
+                        .add_derived_column(column_name, *data_type);
                     (Some(cast), index)
                 } else {
                     (None, new)

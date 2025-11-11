@@ -22,6 +22,7 @@ use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
@@ -34,7 +35,7 @@ use super::AggrState;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::UnaryState;
 
@@ -85,7 +86,7 @@ pub fn boolean_batch<const IS_AND: bool>(inner: Bitmap, validity: Option<&Bitmap
 }
 
 impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for BooleanState<IS_AND> {
-    fn add(&mut self, other: bool, _function_data: Option<&dyn FunctionData>) -> Result<()> {
+    fn add(&mut self, other: bool, _: &Self::FunctionInfo) -> Result<()> {
         if IS_AND {
             self.value &= other;
         } else {
@@ -96,10 +97,14 @@ impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for BooleanState<I
 
     fn add_batch(
         &mut self,
-        other: Bitmap,
+        other: ColumnView<BooleanType>,
         validity: Option<&Bitmap>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
+        let other = match other {
+            ColumnView::Const(b, n) => Bitmap::new_constant(b, n),
+            ColumnView::Column(column) => column,
+        };
         if IS_AND {
             self.value &= boolean_batch::<IS_AND>(other, validity);
         } else {
@@ -120,7 +125,7 @@ impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for BooleanState<I
     fn merge_result(
         &mut self,
         mut builder: BuilderMut<'_, BooleanType>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         builder.push(self.value);
         Ok(())
@@ -128,7 +133,7 @@ impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for BooleanState<I
 }
 
 impl<const IS_AND: bool> StateSerde for BooleanState<IS_AND> {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Boolean.into()]
     }
 
@@ -179,7 +184,6 @@ pub fn try_create_aggregate_boolean_function<const IS_AND: bool>(
                 display_name,
                 return_type,
             )
-            .finish()
         }
 
         _ => Err(ErrorCode::BadDataValueType(format!(

@@ -26,11 +26,11 @@ use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::ProcessorPtr;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -162,6 +162,7 @@ impl Processor for TransformSpillReader {
                     self.deserialized_meta =
                         Some(AggregateMeta::create_partitioned(bucket, new_data));
                 }
+                AggregateMeta::NewBucketSpilled(_) => unreachable!(),
             }
         }
 
@@ -176,6 +177,7 @@ impl Processor for TransformSpillReader {
                 AggregateMeta::AggregatePayload(_) => unreachable!(),
                 AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
+                AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
                     let _guard = self.semaphore.acquire().await;
                     let instant = Instant::now();

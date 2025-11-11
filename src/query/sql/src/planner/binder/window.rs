@@ -240,7 +240,7 @@ impl<'a> WindowRewriter<'a> {
         }
     }
 
-    fn replace_window_function(&mut self, window: &WindowFunc) -> Result<WindowFunc> {
+    pub fn replace_window_function(&mut self, window: &WindowFunc) -> Result<WindowFunc> {
         let mut replaced_partition_items: Vec<ScalarExpr> =
             Vec::with_capacity(window.partition_by.len());
         let mut replaced_order_by_items: Vec<WindowOrderBy> =
@@ -367,11 +367,10 @@ impl<'a> WindowRewriter<'a> {
             });
         }
 
-        let index = self.metadata.write().add_derived_column(
-            window.display_name.clone(),
-            window.func.return_type(),
-            Some(ScalarExpr::WindowFunction(window.clone())),
-        );
+        let index = self
+            .metadata
+            .write()
+            .add_derived_column(window.display_name.clone(), window.func.return_type());
 
         // create window info
         let window_info = WindowFunctionInfo {
@@ -468,11 +467,10 @@ impl<'a> WindowRewriter<'a> {
             }
 
             let ty = arg.data_type()?;
-            let index = self.metadata.write().add_derived_column(
-                name.to_string(),
-                ty.clone(),
-                Some(arg.clone()),
-            );
+            let index = self
+                .metadata
+                .write()
+                .add_derived_column(name.to_string(), ty.clone());
 
             // Generate a ColumnBinding for each argument of aggregates
             let column = ColumnBindingBuilder::new(

@@ -20,7 +20,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::IndexType;

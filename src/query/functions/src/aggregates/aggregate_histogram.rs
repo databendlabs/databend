@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::btree_map::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::fmt::Display;
@@ -42,20 +41,14 @@ use super::AggrState;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
 
-struct HistogramData {
-    pub max_num_buckets: u64,
-    pub data_type: DataType,
-}
-
-impl FunctionData for HistogramData {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+pub struct HistogramData {
+    max_num_buckets: u64,
+    data_type: DataType,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -84,11 +77,9 @@ where
     T: ValueType,
     T::Scalar: Ord + BorshSerialize + BorshDeserialize + Serialize + Display,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    type FunctionInfo = HistogramData;
+
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         let other = T::to_owned_scalar(other);
         match self.value_map.entry(other) {
             Entry::Occupied(o) => *o.into_mut() += 1,
@@ -115,15 +106,8 @@ where
     fn merge_result(
         &mut self,
         mut builder: BuilderMut<'_, StringType>,
-        function_data: Option<&dyn FunctionData>,
+        histogram_data: &HistogramData,
     ) -> Result<()> {
-        let histogram_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<HistogramData>()
-        };
-
         let mut buckets = build_histogram(&self.value_map, histogram_data.max_num_buckets);
 
         let format_scalar = |scalar| {
@@ -154,7 +138,7 @@ where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Ord + Display + Serialize,
 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }
 
@@ -202,11 +186,14 @@ pub fn try_create_aggregate_histogram_function(
                 HistogramState<NumberType<NUM>>,
                 NumberType<NUM>,
                 StringType,
-            >::create(display_name, DataType::String)
-            .with_function_data(Box::new(HistogramData {
-                max_num_buckets,
-                data_type,
-            }))
+            >::with_function_info(
+                display_name,
+                DataType::String,
+                HistogramData {
+                    max_num_buckets,
+                    data_type,
+                },
+            )
             .with_need_drop(true)
             .finish()
         }
@@ -217,25 +204,28 @@ pub fn try_create_aggregate_histogram_function(
                         HistogramState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         StringType,
-                    >::create(display_name, DataType::String)
-                    .with_function_data(Box::new(HistogramData {
-                        max_num_buckets,
-                        data_type,
-                    }))
+                    >::with_function_info(
+                        display_name,
+                        DataType::String,
+                        HistogramData {
+                            max_num_buckets,
+                            data_type,
+                        },
+                    )
                     .with_need_drop(true)
                     .finish()
                 }
             })
         }
         DataType::String => {
-            AggregateUnaryFunction::<HistogramState<StringType>, StringType, StringType>::create(
+            AggregateUnaryFunction::<HistogramState<StringType>, StringType, StringType>::with_function_info(
                 display_name,
                 DataType::String,
+                HistogramData {
+                    max_num_buckets,
+                    data_type,
+                },
             )
-            .with_function_data(Box::new(HistogramData {
-                max_num_buckets,
-                data_type,
-            }))
             .with_need_drop(true)
             .finish()
         }
@@ -244,25 +234,26 @@ pub fn try_create_aggregate_histogram_function(
                 HistogramState<TimestampType>,
                 TimestampType,
                 StringType,
-            >::create(
-                display_name, DataType::String
+            >::with_function_info(
+                display_name,
+                DataType::String,
+                HistogramData {
+                    max_num_buckets,
+                    data_type,
+                },
             )
-            .with_function_data(Box::new(HistogramData {
-                max_num_buckets,
-                data_type,
-            }))
             .with_need_drop(true)
             .finish()
         }
         DataType::Date => {
-            AggregateUnaryFunction::<HistogramState<DateType>, DateType, StringType>::create(
+            AggregateUnaryFunction::<HistogramState<DateType>, DateType, StringType>::with_function_info(
                 display_name,
                 DataType::String,
+                HistogramData {
+                    max_num_buckets,
+                    data_type,
+                },
             )
-            .with_function_data(Box::new(HistogramData {
-                max_num_buckets,
-                data_type,
-            }))
             .with_need_drop(true)
             .finish()
         }
@@ -284,7 +275,7 @@ pub fn aggregate_histogram_function_desc() -> AggregateFunctionDescription {
     )
 }
 
-fn get_max_num_buckets(params: &Vec<Scalar>, display_name: &str) -> Result<u64> {
+fn get_max_num_buckets(params: &[Scalar], display_name: &str) -> Result<u64> {
     if params.len() != 1 {
         return Ok(128);
     }

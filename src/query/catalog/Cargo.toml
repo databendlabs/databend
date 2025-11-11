@@ -23,7 +23,7 @@ databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
-databend-common-pipeline-core = { workspace = true }
+databend-common-pipeline = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-users = { workspace = true }
@@ -34,6 +34,7 @@ log = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }
+roaring = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

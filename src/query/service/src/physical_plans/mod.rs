@@ -113,7 +113,6 @@ pub use physical_window_partition::*;
 
 pub mod explain;
 mod format;
-mod physical_asof_join;
 mod physical_cte_consumer;
 mod physical_materialized_cte;
 mod physical_plan;

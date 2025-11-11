@@ -533,14 +533,14 @@ Exchange
             ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
             ├── group by: [a0f]
             ├── aggregate functions: [min(min_arg_0)]
-            ├── estimated rows: 0.00
+            ├── estimated rows: 1.00
             └── Exchange
                 ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
                 ├── exchange type: Hash(0)
                 └── AggregatePartial
                     ├── group by: [a0f]
                     ├── aggregate functions: [min(min_arg_0)]
-                    ├── estimated rows: 0.00
+                    ├── estimated rows: 1.00
                     └── EvalScalar
                         ├── output columns: [a00c.a0f (#2), min_arg_0 (#24)]
                         ├── expressions: [to_yyyymm(CAST(a00c.a0t (#16) AS Date NULL))]

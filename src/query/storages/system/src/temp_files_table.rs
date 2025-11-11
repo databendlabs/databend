@@ -39,11 +39,11 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::EmptySource;
-use databend_common_pipeline_sources::StreamSource;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::EmptySource;
+use databend_common_pipeline::sources::StreamSource;
 use databend_common_storage::DataOperator;
 use futures::stream;
 use futures::stream::Chunks;
@@ -170,7 +170,7 @@ impl TempFilesTable {
                 })?
         };
 
-        StreamSource::create(ctx, Some(stream), output)
+        StreamSource::create(ctx.get_scan_progress(), Some(stream), output)
     }
 
     fn build_block(

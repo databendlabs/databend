@@ -47,8 +47,8 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_storages_factory::Table;
 use url::Url;
 

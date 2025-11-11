@@ -28,7 +28,7 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
@@ -178,6 +178,8 @@ impl IPhysicalPlan for AggregatePartial {
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
 
+        let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
+
         let params = PipelineBuilder::build_aggregator_params(
             self.input.output_schema()?,
             &self.group_by,
@@ -186,6 +188,7 @@ impl IPhysicalPlan for AggregatePartial {
             builder.is_exchange_parent(),
             max_block_size as usize,
             max_spill_io_requests as usize,
+            enable_experiment_aggregate,
         )?;
 
         if params.group_columns.is_empty() {

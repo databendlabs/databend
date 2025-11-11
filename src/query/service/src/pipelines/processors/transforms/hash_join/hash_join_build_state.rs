@@ -870,7 +870,7 @@ impl HashJoinBuildState {
     }
 
     pub(crate) fn join_type(&self) -> JoinType {
-        self.hash_join_state.hash_join_desc.join_type.clone()
+        self.hash_join_state.hash_join_desc.join_type
     }
 
     pub fn runtime_filter_desc(&self) -> &[RuntimeFilterDesc] {

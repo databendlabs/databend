@@ -18,7 +18,7 @@ explain select * from t where c > 6;
 Filter
 ├── output columns: [t.c (#0)]
 ├── filters: [is_true(t.c (#0) > 6)]
-├── estimated rows: 0.00
+├── estimated rows: 0.50
 └── TableScan
     ├── table: default.col_stats_all_null.t
     ├── output columns: [c (#0)]
@@ -50,4 +50,4 @@ TableScan
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <range pruning: 1 to 0>]
 ├── push downs: [filters: [is_true(t.c (#0) > 6)], limit: NONE]
-└── estimated rows: 0.00
+└── estimated rows: 0.50

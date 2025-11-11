@@ -20,7 +20,7 @@ use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortCompare;
-use databend_common_pipeline_core::processors::Exchange;
+use databend_common_pipeline::basic::Exchange;
 
 use super::WindowPartitionMeta;
 use crate::physical_plans::WindowPartitionTopNFunc;

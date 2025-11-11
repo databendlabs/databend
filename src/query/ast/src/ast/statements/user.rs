@@ -104,7 +104,7 @@ impl Display for AlterUserStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct GrantStmt {
     pub source: AccountMgrSource,
     pub principal: PrincipalIdentity,
@@ -120,7 +120,7 @@ impl Display for GrantStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct RevokeStmt {
     pub source: AccountMgrSource,
     pub principal: PrincipalIdentity,
@@ -205,7 +205,7 @@ impl Display for ShowObjectPrivilegesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AccountMgrSource {
     Role {
         role: String,
@@ -239,7 +239,7 @@ impl Display for AccountMgrSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AccountMgrLevel {
     Global,
     Database(Option<String>),

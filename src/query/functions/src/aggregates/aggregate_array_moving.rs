@@ -46,6 +46,7 @@ use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
+use super::SerializeInfo;
 use super::StateAddr;
 use super::StateSerde;
 
@@ -221,7 +222,7 @@ where
     Self: SumState,
     T: Number,
 {
-    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![ArrayType::<NumberType<T>>::data_type().into()]
     }
 
@@ -452,7 +453,7 @@ where
     Self: SumState,
     T: Decimal,
 {
-    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Array(Box::new(DataType::Decimal(T::default_decimal_size()))).into()]
     }
 
