@@ -62,12 +62,14 @@ use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::cast_scalar;
 use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::expr;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_number;
+use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::type_check::convert_escape_pattern;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
@@ -81,6 +83,7 @@ use databend_common_expression::types::F32;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
@@ -4821,16 +4824,80 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((value, data_type)))
     }
 
-    // TODO(leiysky): use an array builder function instead, since we should allow declaring
-    // an array with variable as element.
+    // Fast path for constant arrays so we don't need to go through the scalar `array()` function
+    // (which performs full type-checking and constant-folding). Non-constant elements still use
+    // the generic resolver to preserve the previous behaviour.
     fn resolve_array(&mut self, span: Span, exprs: &[Expr]) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut elems = Vec::with_capacity(exprs.len());
+        let mut constant_values: Option<Vec<(Scalar, DataType)>> =
+            Some(Vec::with_capacity(exprs.len()));
+        let mut element_type: Option<DataType> = None;
+
         for expr in exprs {
-            let box (arg, _data_type) = self.resolve(expr)?;
+            let box (arg, data_type) = self.resolve(expr)?;
+            if let Some(values) = constant_values.as_mut() {
+                let maybe_constant = match &arg {
+                    ScalarExpr::ConstantExpr(constant) => Some(constant.value.clone()),
+                    ScalarExpr::TypedConstantExpr(constant, _) => Some(constant.value.clone()),
+                    _ => None,
+                };
+                if let Some(value) = maybe_constant {
+                    element_type = if let Some(current_ty) = element_type.clone() {
+                        common_super_type(
+                            current_ty.clone(),
+                            data_type.clone(),
+                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                        )
+                    } else {
+                        Some(data_type.clone())
+                    };
+
+                    if element_type.is_some() {
+                        values.push((value, data_type));
+                    } else {
+                        constant_values = None;
+                        element_type = None;
+                    }
+                } else {
+                    constant_values = None;
+                    element_type = None;
+                }
+            }
             elems.push(arg);
         }
 
+        if let (Some(values), Some(element_ty)) = (constant_values, element_type) {
+            let mut casted = Vec::with_capacity(values.len());
+            for (value, ty) in values {
+                if ty == element_ty {
+                    casted.push(value);
+                } else {
+                    casted.push(cast_scalar(span, value, &element_ty, &BUILTIN_FUNCTIONS)?);
+                }
+            }
+            return Ok(Self::build_constant_array(span, element_ty, casted));
+        }
+
         self.resolve_scalar_function_call(span, "array", vec![], elems)
+    }
+
+    fn build_constant_array(
+        span: Span,
+        element_ty: DataType,
+        values: Vec<Scalar>,
+    ) -> Box<(ScalarExpr, DataType)> {
+        let mut builder = ColumnBuilder::with_capacity(&element_ty, values.len());
+        for value in &values {
+            builder.push(value.as_ref());
+        }
+        let scalar = Scalar::Array(builder.build());
+        Box::new((
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                span,
+                value: scalar,
+            }),
+            DataType::Array(Box::new(element_ty)),
+        ))
     }
 
     fn resolve_map(

@@ -27,6 +27,7 @@ pub mod visitor;
 
 use databend_common_ast::Span;
 use databend_common_column::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 pub use self::column_from::*;
@@ -36,8 +37,12 @@ use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::Decimal;
 use crate::types::DecimalDataKind;
+use crate::types::DecimalDataType;
 use crate::types::DecimalSize;
+use crate::types::NumberDataType;
 use crate::types::NumberScalar;
+use crate::types::F32;
+use crate::types::F64;
 use crate::BlockEntry;
 use crate::Column;
 use crate::DataBlock;
@@ -87,9 +92,13 @@ pub fn eval_function(
 pub fn cast_scalar(
     span: Span,
     scalar: Scalar,
-    dest_type: DataType,
+    dest_type: &DataType,
     fn_registry: &FunctionRegistry,
 ) -> Result<Scalar> {
+    if let Some(result) = try_fast_cast_scalar(&scalar, dest_type) {
+        return result;
+    }
+
     let raw_expr = RawExpr::Cast {
         span,
         is_try: false,
@@ -98,13 +107,96 @@ pub fn cast_scalar(
             scalar,
             data_type: None,
         }),
-        dest_type,
+        dest_type: dest_type.clone(),
     };
     let expr = crate::type_check::check(&raw_expr, fn_registry)?;
     let block = DataBlock::empty();
     let func_ctx = &FunctionContext::default();
     let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
     Ok(evaluator.run(&expr)?.into_scalar().unwrap())
+}
+
+fn try_fast_cast_scalar(scalar: &Scalar, dest_type: &DataType) -> Option<Result<Scalar>> {
+    match dest_type {
+        DataType::Null => Some(Ok(Scalar::Null)),
+        DataType::Nullable(inner) => {
+            if matches!(scalar, Scalar::Null) {
+                Some(Ok(Scalar::Null))
+            } else {
+                try_fast_cast_scalar(scalar, inner)
+            }
+        }
+        DataType::Number(NumberDataType::Float32) => match scalar {
+            Scalar::Null => Some(Ok(Scalar::Null)),
+            Scalar::Number(num) => Some(Ok(Scalar::Number(NumberScalar::Float32(num.to_f32())))),
+            Scalar::Decimal(dec) => Some(Ok(Scalar::Number(NumberScalar::Float32(F32::from(
+                dec.to_float32(),
+            ))))),
+            _ => None,
+        },
+        DataType::Number(NumberDataType::Float64) => match scalar {
+            Scalar::Null => Some(Ok(Scalar::Null)),
+            Scalar::Number(num) => Some(Ok(Scalar::Number(NumberScalar::Float64(num.to_f64())))),
+            Scalar::Decimal(dec) => Some(Ok(Scalar::Number(NumberScalar::Float64(F64::from(
+                dec.to_float64(),
+            ))))),
+            _ => None,
+        },
+        DataType::Decimal(size) => match scalar {
+            Scalar::Null => Some(Ok(Scalar::Null)),
+            Scalar::Decimal(dec) => Some(rescale_decimal_scalar(dec.clone(), *size)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn rescale_decimal_scalar(decimal: DecimalScalar, target_size: DecimalSize) -> Result<Scalar> {
+    let from_size = decimal.size();
+    if from_size == target_size {
+        return Ok(Scalar::Decimal(decimal));
+    }
+
+    let source_scale = from_size.scale();
+    let target_scale = target_size.scale();
+    let data_type: DecimalDataType = target_size.into();
+
+    let scaled = match data_type {
+        DecimalDataType::Decimal64(_) => {
+            let value = decimal.as_decimal::<i64>();
+            let adjusted = rescale_decimal_value(value, source_scale, target_scale)?;
+            Scalar::Decimal(DecimalScalar::Decimal64(adjusted, target_size))
+        }
+        DecimalDataType::Decimal128(_) => {
+            let value = decimal.as_decimal::<i128>();
+            let adjusted = rescale_decimal_value(value, source_scale, target_scale)?;
+            Scalar::Decimal(DecimalScalar::Decimal128(adjusted, target_size))
+        }
+        DecimalDataType::Decimal256(_) => {
+            let value = decimal.as_decimal::<i256>();
+            let adjusted = rescale_decimal_value(value, source_scale, target_scale)?;
+            Scalar::Decimal(DecimalScalar::Decimal256(adjusted, target_size))
+        }
+    };
+
+    Ok(scaled)
+}
+
+fn rescale_decimal_value<T: Decimal>(value: T, source_scale: u8, target_scale: u8) -> Result<T> {
+    if source_scale == target_scale {
+        return Ok(value);
+    }
+
+    let diff = target_scale.abs_diff(source_scale);
+    if target_scale > source_scale {
+        value.checked_mul(T::e(diff)).ok_or_else(|| {
+            ErrorCode::Overflow("Decimal literal overflow after scale expansion".to_string())
+        })
+    } else {
+        value.checked_div(T::e(diff)).ok_or_else(|| {
+            ErrorCode::Overflow("Decimal literal overflow after scale reduction".to_string())
+        })
+    }
 }
 
 pub fn column_merge_validity(entry: &BlockEntry, bitmap: Option<Bitmap>) -> Option<Bitmap> {
