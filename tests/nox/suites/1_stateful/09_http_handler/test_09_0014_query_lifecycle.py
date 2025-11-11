@@ -9,9 +9,15 @@ STICKY_HEADER = "X-DATABEND-STICKY-NODE"
 
 timezone = 'Asia/Shanghai'
 
+scan_progress = "scan_progress"
+
 def patch_json(resp):
     if resp.get("stats", {}).get("running_time_ms"):
         resp["stats"]["running_time_ms"] = 0
+
+    # flaky value in cluster
+    if resp.get("stats", {}).get("scan_progress"):
+        resp["stats"]["scan_progress"] = scan_progress
     return resp
 
 def do_query(query, timeout=10, pagination=None, port=8000, patch=True):
@@ -138,7 +144,7 @@ def test_query_lifecycle_finalized(rows):
            "data":[["0"],["1"],["2"],["3"]],
            "result_timeout_secs":timeout,
            "stats":{
-               "scan_progress":progress,
+               "scan_progress": scan_progress,
                "write_progress": {"rows":0, "bytes": 0},
                "result_progress":progress,
                "total_scan":progress,
@@ -166,7 +172,7 @@ def test_query_lifecycle_finalized(rows):
                  "state": "Succeeded",
                  "warnings":[],
                  "stats":{
-                     "scan_progress":progress,
+                     "scan_progress": scan_progress,
                      "write_progress": {"rows":0, "bytes": 0},
                      "result_progress":progress,
                      "total_scan":progress,
