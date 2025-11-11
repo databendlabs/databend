@@ -961,13 +961,17 @@ impl AccessChecker for PrivilegeAccess {
                             return Ok(());
                         }
 
-                        let user_api = UserApiProvider::instance();
-                        let ownerships = user_api
-                            .role_api(&tenant)
-                            .list_ownerships()
-                            .await?;
                         let roles = self.ctx.get_all_effective_roles().await?;
                         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
+                        let user_api = UserApiProvider::instance();
+                        let ownerships = if roles_name.iter().any(|r| r == "account_admin") {
+                            Vec::new()
+                        } else {
+                            user_api
+                                .role_api(&tenant)
+                                .list_ownerships()
+                                .await?
+                        };
                         check_db_tb_ownership_access(&identity, catalog, database, show_db_id, &ownerships, &roles_name)?;
                     }
                     Some(RewriteKind::ShowStreams(database)) => {
@@ -979,13 +983,17 @@ impl AccessChecker for PrivilegeAccess {
                         if has_priv(&tenant, database, None, show_db_id, table_id, grant_set, true).await? {
                             return Ok(());
                         }
-                        let user_api = UserApiProvider::instance();
-                        let ownerships = user_api
-                            .role_api(&tenant)
-                            .list_ownerships()
-                            .await?;
                         let roles = self.ctx.get_all_effective_roles().await?;
                         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
+                        let user_api = UserApiProvider::instance();
+                        let ownerships = if roles_name.iter().any(|r| r == "account_admin") {
+                            Vec::new()
+                        } else {
+                            user_api
+                                .role_api(&tenant)
+                                .list_ownerships()
+                                .await?
+                        };
                         check_db_tb_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
                     }
                     Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
@@ -1140,13 +1148,17 @@ impl AccessChecker for PrivilegeAccess {
                 if has_priv(&tenant, &plan.database, None, show_db_id, None, grant_set, true).await? {
                     return Ok(());
                 }
-                let user_api = UserApiProvider::instance();
-                let ownerships = user_api
-                    .role_api(&tenant)
-                    .list_ownerships()
-                    .await?;
                 let roles = self.ctx.get_all_effective_roles().await?;
                 let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
+                let user_api = UserApiProvider::instance();
+                let ownerships = if roles_name.iter().any(|r| r == "account_admin") {
+                    Vec::new()
+                } else {
+                    user_api
+                        .role_api(&tenant)
+                        .list_ownerships()
+                        .await?
+                };
                 check_db_tb_ownership_access(&identity, &ctl_name, &plan.database, show_db_id, &ownerships, &roles_name)?;
             }
 
