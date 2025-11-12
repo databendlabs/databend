@@ -32,7 +32,7 @@ pub fn blocks_to_parquet(
     blocks: Vec<DataBlock>,
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
-    enable_encoding: bool,
+    enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
@@ -45,7 +45,7 @@ pub fn blocks_to_parquet(
         .set_bloom_filter_enabled(false)
         .set_key_value_metadata(metadata);
 
-    let builder = if enable_encoding {
+    let builder = if enable_dictionary {
         builder
             .set_writer_version(WriterVersion::PARQUET_2_0)
             .set_dictionary_enabled(true)

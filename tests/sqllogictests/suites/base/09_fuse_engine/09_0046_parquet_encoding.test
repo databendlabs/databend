@@ -9,19 +9,19 @@ use test_tbl_opt_parquet_encoding;
 #############################################
 
 statement ok
-create or replace table t_encoded (c int, s string) enable_parquet_encoding = 'true' compression = 'lz4';
+create or replace table t_encoded (c int, s string) enable_parquet_dictionary = 'true' compression = 'lz4';
 
 statement ok
 create or replace table t(c int, s string) compression = 'lz4';
 
 statement ok
-insert into t_encoded(c, s) select number as c, to_string(number) as s from numbers(1000000);
+insert into t_encoded(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
 
 statement ok
 optimize table t_encoded compact;
 
 statement ok
-insert into t(c, s) select number as c, to_string(number) as s from numbers(1000000);
+insert into t(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
 
 statement ok
 optimize table t compact;
@@ -46,7 +46,7 @@ statement ok
 create or replace table tbl (c int, s string) compression = 'lz4';
 
 statement ok
-insert into tbl(c, s) select number as c, to_string(number) as s from numbers(1000000);
+insert into tbl(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
 
 # insertion might be executed in a distributed manner, in this case, data blocks might be fragmented
 statement ok
@@ -64,10 +64,10 @@ statement ok
 truncate table tbl;
 
 statement ok
-ALTER TABLE tbl SET OPTIONS (enable_parquet_encoding = 'true');
+ALTER TABLE tbl SET OPTIONS (enable_parquet_dictionary = 'true');
 
 statement ok
-insert into tbl(c, s) select number as c, to_string(number) as s from numbers(1000000);
+insert into tbl(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
 
 # insertion might be executed in a distributed manner, in this case, data blocks might be fragmented, let's compact them
 statement ok
@@ -91,16 +91,16 @@ create temp table e_tbl_size(s uint64);
 statement ok
 insert into e_tbl_size select bytes_compressed from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1;
 
-# 4. check that table option `enable_parquet_encoding` could be turned off
+# 4. check that table option `enable_parquet_dictionary` could be turned off
 
 statement ok
 truncate table tbl;
 
 statement ok
-ALTER TABLE tbl SET OPTIONS (enable_parquet_encoding = 'false');
+ALTER TABLE tbl SET OPTIONS (enable_parquet_dictionary = 'false');
 
 statement ok
-insert into tbl(c, s) select number as c, to_string(number) as s from numbers(1000000);
+insert into tbl(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
 
 statement ok
 optimize table tbl compact;
@@ -119,6 +119,6 @@ with
 # Test invalid option value
 
 statement error 1001
-ALTER TABLE tbl SET OPTIONS (enable_parquet_encoding = 'invalid');
+ALTER TABLE tbl SET OPTIONS (enable_parquet_dictionary = 'invalid');
 
 

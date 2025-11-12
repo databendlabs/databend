@@ -511,7 +511,7 @@ impl VirtualColumnBuilder {
             vec![virtual_block],
             &mut data,
             write_settings.table_compression,
-            false,
+            write_settings.enable_parquet_dictionary,
             None,
         )?;
 

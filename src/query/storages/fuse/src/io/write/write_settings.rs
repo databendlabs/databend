@@ -28,7 +28,7 @@ pub struct WriteSettings {
     pub max_page_size: usize,
 
     pub block_per_seg: usize,
-    pub enable_parquet_encoding: bool,
+    pub enable_parquet_dictionary: bool,
 }
 
 impl Default for WriteSettings {
@@ -38,7 +38,7 @@ impl Default for WriteSettings {
             table_compression: TableCompression::default(),
             max_page_size: DEFAULT_ROW_PER_PAGE,
             block_per_seg: DEFAULT_BLOCK_PER_SEGMENT,
-            enable_parquet_encoding: false,
+            enable_parquet_dictionary: false,
         }
     }
 }
