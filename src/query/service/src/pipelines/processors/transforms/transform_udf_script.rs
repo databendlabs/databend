@@ -90,14 +90,21 @@ impl ScriptRuntime {
             UDFLanguage::Python => {
                 let code = String::from_utf8(code.to_vec())?;
                 let code = if let Some(temp_dir) = _temp_dir {
+                    let import_dir = temp_dir.path().display();
                     format!(
-                        r#"import sys
-sys._xoptions['databend_import_directory'] = '{}'
-sys.path.append('{}')
-{}"#,
-                        temp_dir.path().display(),
-                        temp_dir.path().display(),
-                        code
+                        r#"import sys, sysconfig
+_databend_std_keys = ("stdlib", "platstdlib", "purelib", "platlib")
+for _databend_key in _databend_std_keys:
+    _databend_path = sysconfig.get_path(_databend_key)
+    if _databend_path and _databend_path not in sys.path:
+        sys.path.append(_databend_path)
+del _databend_std_keys
+sys._xoptions['databend_import_directory'] = '{dir}'
+if '{dir}' not in sys.path:
+    sys.path.append('{dir}')
+{code}"#,
+                        dir = import_dir,
+                        code = code
                     )
                 } else {
                     code
@@ -253,32 +260,44 @@ mod python_pool {
     const RESTRICTED_PYTHON_CODE: &str = r#"
 import os
 import sys
+import sysconfig
 from pathlib import Path
 
 import builtins, sys
 if "DATABEND_RESTRICTED_PYTHON" not in sys._xoptions:
     sys._xoptions['DATABEND_RESTRICTED_PYTHON'] = '1'
 
-    ALLOWED_BASE = Path("/tmp")
+    ALLOWED_BASES = {Path("/tmp")}
+    for key in ("stdlib", "platstdlib", "purelib", "platlib"):
+        path = sysconfig.get_path(key)
+        if path:
+            ALLOWED_BASES.add(Path(path))
+    for prefix in (sys.prefix, sys.exec_prefix, sys.base_prefix, sys.base_exec_prefix):
+        if prefix:
+            base_path = Path(prefix)
+            ALLOWED_BASES.add(base_path)
+            ALLOWED_BASES.add(base_path / f"lib/python{sys.version_info.major}.{sys.version_info.minor}")
+
     _original_open = open
     _original_os_open = os.open if hasattr(os, 'open') else None
 
+    def _ensure_allowed(file_path: Path, target: str):
+        for base in ALLOWED_BASES:
+            try:
+                file_path.relative_to(base)
+                return
+            except ValueError:
+                continue
+        raise PermissionError(f"Access denied: {target} is outside allowed directories")
+
     def safe_open(file, mode='r', **kwargs):
         file_path = Path(file).resolve()
-
-        try:
-            file_path.relative_to(ALLOWED_BASE)
-        except ValueError:
-            raise PermissionError(f"Access denied: {file} is outside allowed directory")
-
+        _ensure_allowed(file_path, file)
         return _original_open(file, mode, **kwargs)
 
     def safe_os_open(path, flags, mode=0o777):
         file_path = Path(path).resolve()
-        try:
-            file_path.relative_to(ALLOWED_BASE)
-        except ValueError:
-            raise PermissionError(f"Access denied: {path} is outside allowed directory")
+        _ensure_allowed(file_path, path)
         return _original_os_open(path, flags, mode)
 
     builtins.open = safe_open
@@ -289,6 +308,92 @@ if "DATABEND_RESTRICTED_PYTHON" not in sys._xoptions:
     for module in dangerous_modules:
         if module in sys.modules:
             del sys.modules[module]
+
+    try:
+        import _contextvars  # noqa: F401
+    except ModuleNotFoundError:
+        import threading
+        import types
+        import weakref
+
+        _MISSING = object()
+        _REGISTERED_VARS = weakref.WeakSet()
+
+        class Token:
+            __slots__ = ("var", "old")
+
+            def __init__(self, var, old):
+                self.var = var
+                self.old = old
+
+        class ContextVar:
+            __slots__ = ("name", "default", "_local")
+
+            def __init__(self, name, *, default=_MISSING):
+                self.name = name
+                self.default = default
+                self._local = threading.local()
+                _REGISTERED_VARS.add(self)
+
+            def get(self, default=_MISSING):
+                value = getattr(self._local, "value", _MISSING)
+                if value is _MISSING:
+                    if default is not _MISSING:
+                        return default
+                    if self.default is _MISSING:
+                        raise LookupError(f"ContextVar {self.name} has no value")
+                    return self.default
+                return value
+
+            def set(self, value):
+                old = getattr(self._local, "value", _MISSING)
+                self._local.value = value
+                return Token(self, old)
+
+            def reset(self, token):
+                if token.var is not self:
+                    raise ValueError("Token does not belong to this ContextVar")
+                if token.old is _MISSING:
+                    if hasattr(self._local, "value"):
+                        del self._local.value
+                else:
+                    self._local.value = token.old
+
+        class Context:
+            def __init__(self, values=None):
+                self._values = values or {}
+
+            def __setitem__(self, key, value):
+                self._values[key] = value
+
+            def items(self):
+                return self._values.items()
+
+            def run(self, callable, *args, **kwargs):
+                tokens = []
+                try:
+                    for var, value in self._values.items():
+                        tokens.append(var.set(value))
+                    return callable(*args, **kwargs)
+                finally:
+                    for token in reversed(tokens):
+                        token.var.reset(token)
+
+        def copy_context():
+            ctx = Context()
+            for var in list(_REGISTERED_VARS):
+                try:
+                    ctx[var] = var.get()
+                except LookupError:
+                    continue
+            return ctx
+
+        module = types.ModuleType("_contextvars")
+        module.ContextVar = ContextVar
+        module.Context = Context
+        module.Token = Token
+        module.copy_context = copy_context
+        sys.modules["_contextvars"] = module
 "#;
 
     impl RuntimeBuilder<arrow_udf_runtime::python::Runtime> for PyRuntimeBuilder {
@@ -386,14 +491,12 @@ impl TransformUdfScript {
                     dependencies.extend_from_slice(packages.as_slice());
 
                     let temp_dir = if !dependencies.is_empty() || !imports_stage_info.is_empty() {
-                        // try to find the temp dir from cache
                         let key = venv::PyVenvKeyEntry {
                             udf_desc: func.clone(),
                         };
                         let mut w = venv::PY_VENV_CACHE.write();
-                        let entry = w.get(&key);
-                        if let Some(entry) = entry {
-                            Some(entry.temp_dir.clone())
+                        if let Some(entry) = w.get(&key) {
+                            Some(entry.materialize().map_err(ErrorCode::from_string)?)
                         } else {
                             let temp_dir = Arc::new(venv::create_venv(PY_VERSION.as_str())?);
                             venv::install_deps(temp_dir.path(), &dependencies)?;
@@ -425,9 +528,12 @@ impl TransformUdfScript {
                                 })?;
                             }
 
-                            w.insert(key, venv::PyVenvCacheEntry {
-                                temp_dir: temp_dir.clone(),
-                            });
+                            let archive_path = venv::archive_env(temp_dir.path())
+                                .map_err(ErrorCode::from_string)?;
+                            w.insert(
+                                key,
+                                venv::PyVenvCacheEntry::new(temp_dir.clone(), archive_path),
+                            );
 
                             Some(temp_dir)
                         }
@@ -596,22 +702,48 @@ impl TransformUdfScript {
 }
 
 mod venv {
+    use std::fs;
+    use std::fs::File;
+    use std::io;
     use std::path::Path;
+    use std::path::PathBuf;
     use std::process::Command;
     use std::sync::Arc;
     use std::sync::LazyLock;
+    use std::sync::Weak;
 
     use databend_common_cache::LruCache;
     use databend_common_cache::MemSized;
+    use parking_lot::Mutex;
     use parking_lot::RwLock;
     use tempfile::TempDir;
+    use uuid::Uuid;
+    use walkdir::WalkDir;
+    use zip::write::FileOptions;
+    use zip::ZipArchive;
+    use zip::ZipWriter;
 
     use crate::physical_plans::UdfFunctionDesc;
+
+    static PY_VENV_ARCHIVE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+        let base = std::env::var("DATABEND_PY_UDF_CACHE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::env::temp_dir()
+                    .join("databend")
+                    .join("python_udf_cache")
+            });
+        if let Err(e) = fs::create_dir_all(&base) {
+            panic!("Failed to create python udf cache dir {:?}: {}", base, e);
+        }
+        base
+    });
 
     pub fn install_deps(temp_dir_path: &Path, deps: &[String]) -> Result<(), String> {
         if deps.is_empty() {
             return Ok(());
         }
+
         let target_path = temp_dir_path.display().to_string();
         let status = Command::new("python")
             .args(["-m", "pip", "install"])
@@ -622,13 +754,66 @@ mod venv {
             .status()
             .map_err(|e| format!("Failed to install dependencies: {}", e))?;
 
-        log::info!("Dependency installation success {}", deps.join(", "));
-
         if status.success() {
+            log::info!("Dependency installation success {}", deps.join(", "));
             Ok(())
         } else {
             Err("Dependency installation failed".into())
         }
+    }
+
+    pub fn archive_env(temp_dir_path: &Path) -> Result<PathBuf, String> {
+        let archive_path = PY_VENV_ARCHIVE_DIR.join(format!("{}.zip", Uuid::now_v7()));
+        let writer = File::create(&archive_path)
+            .map_err(|e| format!("Failed to create python deps archive: {}", e))?;
+        let mut zip = ZipWriter::new(writer);
+        let options = FileOptions::<'static, ()>::default()
+            .compression_method(zip::CompressionMethod::Deflated)
+            .unix_permissions(0o755);
+
+        for entry in WalkDir::new(temp_dir_path).min_depth(1) {
+            let entry = entry.map_err(|e| format!("Failed to scan python deps: {}", e))?;
+            let path = entry.path();
+            let rel_path = path
+                .strip_prefix(temp_dir_path)
+                .map_err(|e| format!("Failed to strip python deps prefix: {}", e))?;
+            let rel_path = rel_path
+                .to_str()
+                .ok_or_else(|| "Python dependency path is not valid UTF-8".to_string())?;
+            let rel_path = rel_path.replace('\\', "/");
+
+            if entry.file_type().is_dir() {
+                zip.add_directory(&rel_path, options)
+                    .map_err(|e| format!("Failed to add directory to archive: {}", e))?;
+                continue;
+            }
+
+            if entry.file_type().is_file() || entry.file_type().is_symlink() {
+                zip.start_file(&rel_path, options)
+                    .map_err(|e| format!("Failed to add file to archive: {}", e))?;
+                let mut file = File::open(path)
+                    .map_err(|e| format!("Failed to read file {:?}: {}", path, e))?;
+                io::copy(&mut file, &mut zip)
+                    .map_err(|e| format!("Failed to write archive entry {:?}: {}", path, e))?;
+            }
+        }
+
+        zip.finish()
+            .map_err(|e| format!("Failed to finalize python deps archive: {}", e))?;
+        Ok(archive_path)
+    }
+
+    pub fn restore_env(archive_path: &Path) -> Result<TempDir, String> {
+        let temp_dir =
+            tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        let reader = File::open(archive_path)
+            .map_err(|e| format!("Failed to read python deps archive: {}", e))?;
+        let mut archive =
+            ZipArchive::new(reader).map_err(|e| format!("Failed to open archive: {}", e))?;
+        archive
+            .extract(temp_dir.path())
+            .map_err(|e| format!("Failed to extract python deps: {}", e))?;
+        Ok(temp_dir)
     }
 
     pub fn create_venv(_python_version: &str) -> Result<TempDir, String> {
@@ -671,9 +856,9 @@ mod venv {
     // cached temp dir for python udf
     // Add this after the PY_VERSION LazyLock declaration
     // A simple LRU cache for Python virtual environments
-    #[derive(Clone)]
     pub(crate) struct PyVenvCacheEntry {
-        pub(crate) temp_dir: Arc<TempDir>,
+        temp_dir: Mutex<Weak<TempDir>>,
+        archive_path: PathBuf,
     }
 
     #[derive(Eq, Hash, PartialEq)]
@@ -689,7 +874,40 @@ mod venv {
 
     impl MemSized for PyVenvCacheEntry {
         fn mem_bytes(&self) -> usize {
-            std::mem::size_of::<PyVenvCacheEntry>()
+            std::mem::size_of::<Mutex<Weak<TempDir>>>() + std::mem::size_of::<PathBuf>()
+        }
+    }
+
+    impl PyVenvCacheEntry {
+        pub fn new(temp_dir: Arc<TempDir>, archive_path: PathBuf) -> Self {
+            Self {
+                temp_dir: Mutex::new(Arc::downgrade(&temp_dir)),
+                archive_path,
+            }
+        }
+
+        pub fn materialize(&self) -> Result<Arc<TempDir>, String> {
+            if let Some(existing) = self.temp_dir.lock().upgrade() {
+                return Ok(existing);
+            }
+
+            let temp_dir = Arc::new(restore_env(&self.archive_path)?);
+            *self.temp_dir.lock() = Arc::downgrade(&temp_dir);
+            Ok(temp_dir)
+        }
+    }
+
+    impl Drop for PyVenvCacheEntry {
+        fn drop(&mut self) {
+            if let Err(e) = fs::remove_file(&self.archive_path) {
+                if !matches!(e.kind(), io::ErrorKind::NotFound) {
+                    log::warn!(
+                        "Failed to remove python udf cache archive {:?}: {}",
+                        self.archive_path,
+                        e
+                    );
+                }
+            }
         }
     }
 

@@ -175,6 +175,7 @@ typetag = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
+zip = { workspace = true }
 xorf = { workspace = true }
 
 [dev-dependencies]
