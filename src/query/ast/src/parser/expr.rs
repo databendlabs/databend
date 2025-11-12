@@ -1220,9 +1220,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let variable_access = map(variable_ident, ExprElement::VariableAccess);
 
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
-    let bracket_map_access = map(map_access_bracket, |accessor| ExprElement::MapAccess {
-        accessor,
-    });
     let dot_number_map_access = map(map_access_dot_number, |accessor| ExprElement::MapAccess {
         accessor,
     });
@@ -1300,7 +1297,16 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             "[" ~ #comma_separated_list0_ignore_trailing(subexpr(0))? ~ ","? ~ ^"]"
         },
         |(_, opt_args, _, _)| {
-            let exprs = opt_args.unwrap_or_default();
+            let mut exprs = opt_args.unwrap_or_default();
+
+            if exprs.len() == 1 {
+                let expr = exprs.pop().unwrap();
+                return ExprElement::MapAccess {
+                    accessor: MapAccessor::Bracket {
+                        key: Box::new(expr),
+                    },
+                };
+            }
             ExprElement::Array { exprs }
         },
     );
@@ -1583,7 +1589,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         LBracket => {
             return with_span!(rule!(
-                #list_comprehensions | #bracket_map_access | #array
+                #list_comprehensions | #array
             ))
             .parse(i);
         },
@@ -2389,16 +2395,6 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #millennium_str
         ),
     ))
-    .parse(i)
-}
-
-fn map_access_bracket(i: Input) -> IResult<MapAccessor> {
-    map(
-        rule! {
-            "[" ~ #subexpr(0) ~ "]"
-        },
-        |(_, key, _)| MapAccessor::Bracket { key: Box::new(key) },
-    )
     .parse(i)
 }
 
