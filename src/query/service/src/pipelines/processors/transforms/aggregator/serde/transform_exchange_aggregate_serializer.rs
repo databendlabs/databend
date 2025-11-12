@@ -21,6 +21,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::ArgType;
@@ -77,6 +78,8 @@ pub struct TransformExchangeAggregateSerializer {
 
     params: Arc<AggregatorParams>,
     spiller: SpillerVer,
+
+    finished: bool,
 }
 
 impl TransformExchangeAggregateSerializer {
@@ -136,9 +139,38 @@ impl TransformExchangeAggregateSerializer {
                 options: IpcWriteOptions::default()
                     .try_with_compression(compression)
                     .unwrap(),
+                finished: false,
             },
         ))
     }
+
+    fn finish(&mut self) -> Result<Vec<FlightSerialized>> {
+        if self.finished {
+            return Ok(vec![]);
+        }
+        self.finished = true;
+
+        if let SpillerVer::New(spillers) = &mut self.spiller {
+            let mut serialized_blocks = vec![];
+            let write_options = exchange_defines::spilled_write_options();
+
+            for (index, spiller) in spillers.iter_mut().enumerate() {
+                if index == self.local_pos {
+                    serialized_blocks.push(Self::finish_local_new_spiller(spiller)?);
+                } else {
+                    serialized_blocks
+                        .push(Self::finish_exchange_new_spiller(spiller, &write_options)?);
+                }
+            }
+
+            return Ok(serialized_blocks);
+        }
+
+        Err(ErrorCode::Internal(
+            "Spiller version is not NewAggregateSpiller",
+        ))
+    }
+
     fn finish_local_new_spiller(spiller: &mut NewAggregateSpiller) -> Result<FlightSerialized> {
         let spilled_payloads = spiller.spill_finish()?;
         let block = if spilled_payloads.is_empty() {
@@ -194,6 +226,7 @@ impl AccumulatingTransform for TransformExchangeAggregateSerializer {
             if ExchangeShuffleMeta::downcast_ref_from(&block_meta).is_some() {
                 let meta = ExchangeShuffleMeta::downcast_from(block_meta).unwrap();
                 let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());
+                let mut spilled_blocks = None;
                 for (index, mut block) in meta.blocks.into_iter().enumerate() {
                     if block.is_empty() && block.get_meta().is_none() {
                         serialized_blocks.push(FlightSerialized::DataBlock(block));
@@ -243,6 +276,14 @@ impl AccumulatingTransform for TransformExchangeAggregateSerializer {
                         }
 
                         Some(AggregateMeta::AggregatePayload(p)) => {
+                            // As soon as a non-spilled AggregatePayload shows up we must flush any pending
+                            // spill files. AggregatePayload shows that partial stage is over, no more spilling
+                            // will happen.
+                            let spilled = self.finish()?;
+                            if !spilled.is_empty() {
+                                spilled_blocks = Some(spilled);
+                            }
+
                             let (bucket, max_partition_count) = (p.bucket, p.max_partition_count);
 
                             if index == self.local_pos {
@@ -273,9 +314,16 @@ impl AccumulatingTransform for TransformExchangeAggregateSerializer {
                         _ => unreachable!(),
                     };
                 }
-                return Ok(vec![DataBlock::empty_with_meta(
-                    FlightSerializedMeta::create(serialized_blocks),
-                )]);
+                return if let Some(spilled) = spilled_blocks {
+                    Ok(vec![
+                        DataBlock::empty_with_meta(FlightSerializedMeta::create(spilled)),
+                        DataBlock::empty_with_meta(FlightSerializedMeta::create(serialized_blocks)),
+                    ])
+                } else {
+                    Ok(vec![DataBlock::empty_with_meta(
+                        FlightSerializedMeta::create(serialized_blocks),
+                    )])
+                };
             }
 
             data = data.add_meta(Some(block_meta))?;
@@ -284,26 +332,18 @@ impl AccumulatingTransform for TransformExchangeAggregateSerializer {
     }
 
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
-        match &mut self.spiller {
-            SpillerVer::Old(_) => Ok(vec![]),
-            SpillerVer::New(spillers) => {
-                let mut serialized_blocks = vec![];
-                let write_options = exchange_defines::spilled_write_options();
-
-                for (index, spiller) in spillers.iter_mut().enumerate() {
-                    if index == self.local_pos {
-                        serialized_blocks.push(Self::finish_local_new_spiller(spiller)?);
-                    } else {
-                        serialized_blocks
-                            .push(Self::finish_exchange_new_spiller(spiller, &write_options)?);
-                    }
-                }
-
-                Ok(vec![DataBlock::empty_with_meta(
+        // if partial stage spilled all data, no one AggregatePayload shows up,
+        // we need to finish spiller here.
+        if let SpillerVer::New(_) = &self.spiller {
+            let serialized_blocks = self.finish()?;
+            if !serialized_blocks.is_empty() {
+                return Ok(vec![DataBlock::empty_with_meta(
                     FlightSerializedMeta::create(serialized_blocks),
-                )])
+                )]);
             }
         }
+
+        Ok(vec![])
     }
 }
 

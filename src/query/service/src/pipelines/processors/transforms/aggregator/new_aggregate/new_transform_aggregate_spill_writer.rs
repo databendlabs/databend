@@ -30,6 +30,7 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::sessions::QueryContext;
 
 pub struct NewTransformAggregateSpillWriter {
+    finished: bool,
     pub spiller: NewAggregateSpiller,
 }
 
@@ -47,8 +48,28 @@ impl NewTransformAggregateSpillWriter {
         Ok(AccumulatingTransformer::create(
             input,
             output,
-            NewTransformAggregateSpillWriter { spiller },
+            NewTransformAggregateSpillWriter {
+                finished: false,
+                spiller,
+            },
         ))
+    }
+
+    fn finish(&mut self) -> Result<Vec<DataBlock>> {
+        if self.finished {
+            return Ok(vec![]);
+        }
+        self.finished = true;
+        let spilled_payloads = self.spiller.spill_finish()?;
+
+        let mut spilled_blocks = Vec::with_capacity(spilled_payloads.len());
+        for payload in spilled_payloads {
+            spilled_blocks.push(DataBlock::empty_with_meta(
+                AggregateMeta::create_new_bucket_spilled(payload),
+            ));
+        }
+
+        Ok(spilled_blocks)
     }
 }
 
@@ -57,6 +78,15 @@ impl AccumulatingTransform for NewTransformAggregateSpillWriter {
 
     fn transform(&mut self, mut data: DataBlock) -> Result<Vec<DataBlock>> {
         if let Some(block_meta) = data.get_meta().and_then(AggregateMeta::downcast_ref_from) {
+            if matches!(block_meta, AggregateMeta::AggregatePayload(_)) {
+                // As soon as a non-spilled AggregatePayload shows up we must flush any pending
+                // spill files. AggregatePayload shows that partial stage is over, no more spilling
+                // will happen.
+                let mut blocks = self.finish()?;
+                blocks.push(data);
+                return Ok(blocks);
+            }
+
             if matches!(block_meta, AggregateMeta::AggregateSpilling(_)) {
                 let meta = data.take_meta().unwrap();
                 let aggregate_meta = AggregateMeta::downcast_from(meta).unwrap();
@@ -85,15 +115,8 @@ impl AccumulatingTransform for NewTransformAggregateSpillWriter {
     }
 
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
-        let spilled_payloads = self.spiller.spill_finish()?;
-
-        let mut spilled_blocks = Vec::with_capacity(spilled_payloads.len());
-        for payload in spilled_payloads {
-            spilled_blocks.push(DataBlock::empty_with_meta(
-                AggregateMeta::create_new_bucket_spilled(payload),
-            ));
-        }
-
-        Ok(spilled_blocks)
+        // if partial stage spilled all data, no one AggregatePayload shows up,
+        // we need to finish spiller here.
+        self.finish()
     }
 }
