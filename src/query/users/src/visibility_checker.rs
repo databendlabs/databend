@@ -132,6 +132,7 @@ pub struct GrantObjectVisibilityChecker {
 
     // Name-based storage (backward compatibility)
     granted_databases: FxHashSet<(Arc<str>, Arc<str>)>,
+    extra_databases: FxHashSet<(Arc<str>, Arc<str>)>,
     granted_tables: FxHashSet<(Arc<str>, Arc<str>, Arc<str>)>,
     sys_databases: FxHashSet<(Arc<str>, Arc<str>)>,
 
@@ -181,6 +182,8 @@ impl GrantObjectVisibilityChecker {
             FastHashSet::with_capacity(total_objects / 10);
 
         let mut granted_databases: FxHashSet<(Arc<str>, Arc<str>)> =
+            FxHashSet::with_capacity_and_hasher(total_objects / 10, Default::default());
+        let mut extra_databases: FxHashSet<(Arc<str>, Arc<str>)> =
             FxHashSet::with_capacity_and_hasher(total_objects / 10, Default::default());
         let mut granted_tables: FxHashSet<(Arc<str>, Arc<str>, Arc<str>)> =
             FxHashSet::with_capacity_and_hasher(total_objects, Default::default());
@@ -332,7 +335,7 @@ impl GrantObjectVisibilityChecker {
                         granted_tables.insert((catalog.clone(), db.clone(), table));
 
                         // if table is visible, the table's database is also treated as visible
-                        granted_databases.insert((catalog, db));
+                        extra_databases.insert((catalog, db));
                     }
                     GrantObject::UDF(udf) => {
                         granted_udfs.insert(Arc::from(udf.as_str()));
@@ -374,6 +377,11 @@ impl GrantObjectVisibilityChecker {
                     db_id,
                 } => {
                     let catalog_id = catalog_pool.get_or_insert(catalog_name);
+                    let db_set =
+                        fast_map_get_or_insert(&mut granted_databases_id, catalog_id, || {
+                            FastHashSet::with_capacity(estimated_dbs_per_catalog)
+                        });
+                    let _ = db_set.set_insert(*db_id);
                     let extra_set =
                         fast_map_get_or_insert(&mut extra_databases_id, catalog_id, || {
                             FastHashSet::with_capacity(estimated_dbs_per_catalog)
@@ -447,6 +455,7 @@ impl GrantObjectVisibilityChecker {
             granted_tables_id,
             extra_databases_id,
             granted_databases,
+            extra_databases,
             granted_tables,
             sys_databases,
             granted_udfs,
@@ -488,7 +497,16 @@ impl GrantObjectVisibilityChecker {
 
     #[inline(always)]
     pub fn check_table_visibility_by_id(&self, catalog_id: u32, db_id: u64, table_id: u64) -> bool {
-        if self.check_database_visibility_by_id(catalog_id, db_id) {
+        if self.granted_global_db_table {
+            return true;
+        }
+
+        if self
+            .granted_databases_id
+            .get(&catalog_id)
+            .map(|set| set.contains(&db_id))
+            .unwrap_or(false)
+        {
             return true;
         }
 
@@ -521,13 +539,23 @@ impl GrantObjectVisibilityChecker {
             }
         }
 
-        if self.granted_databases.is_empty() && self.sys_databases.is_empty() {
+        if self.granted_databases.is_empty()
+            && self.extra_databases.is_empty()
+            && self.sys_databases.is_empty()
+        {
             return false;
         }
 
         let catalog: Arc<str> = Arc::from(catalog);
         let db: Arc<str> = Arc::from(db);
         if self.sys_databases.contains(&(catalog.clone(), db.clone())) {
+            return true;
+        }
+
+        if self
+            .extra_databases
+            .contains(&(catalog.clone(), db.clone()))
+        {
             return true;
         }
 
@@ -669,6 +697,7 @@ impl GrantObjectVisibilityChecker {
         }
 
         let capacity = self.granted_databases.len()
+            + self.extra_databases.len()
             + self.granted_databases_id.len()
             + self.extra_databases_id.len()
             + self.sys_databases.len();
@@ -677,6 +706,11 @@ impl GrantObjectVisibilityChecker {
             .granted_databases
             .iter()
             .map(|(catalog, db)| (catalog.as_ref(), (Some(db.as_ref()), None)))
+            .chain(
+                self.extra_databases
+                    .iter()
+                    .map(|(catalog, db)| (catalog.as_ref(), (Some(db.as_ref()), None))),
+            )
             .chain(
                 self.granted_databases_id
                     .iter()

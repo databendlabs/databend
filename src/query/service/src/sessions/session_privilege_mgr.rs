@@ -386,7 +386,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
         let roles = self.get_all_effective_roles().await?;
         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
 
-        let ownership_objects =
+        let ownership_infos =
             if roles_name.contains(&"account_admin".to_string()) || ignore_ownership {
                 vec![]
             } else {
@@ -431,19 +431,19 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
                             .await?
                     }
                 };
-                let mut ownership_objects = vec![];
+                let mut ownership_infos = vec![];
                 for ownership in ownerships {
                     if roles_name.contains(&ownership.role) {
-                        ownership_objects.push(ownership.object);
+                        ownership_infos.push(ownership);
                     }
                 }
-                ownership_objects
+                ownership_infos
             };
 
         Ok(GrantObjectVisibilityChecker::new(
             &self.get_current_user()?,
             &roles,
-            &ownership_objects,
+            &ownership_infos,
         ))
     }
 }
