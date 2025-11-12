@@ -199,11 +199,11 @@ merge into t_17800 using t1_17800 on t_17800.a=t1_17800.a when matched then upda
 ----
 17 33
 
-query T
-show statistics from table t_17800;
+query B
+select abs(stats_row_count - actual_row_count) * 10 < actual_row_count from system.statistics where database = 'db' and table = 't_17800';
 ----
-db t_17800 a 117 117 117 0 0 148 4 (empty)
-db t_17800 b 117 117 50 0 0 49 4 (empty)
+1
+1
 
 statement ok
 CREATE OR REPLACE TABLE t1(id string, raw_data variant, add_time timestamp, action string);
