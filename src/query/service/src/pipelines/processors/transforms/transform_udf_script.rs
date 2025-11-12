@@ -14,6 +14,7 @@
 
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::str;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -34,6 +35,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::plans::UDFLanguage;
@@ -55,6 +57,105 @@ pub enum ScriptRuntime {
 
 static PY_VERSION: LazyLock<String> =
     LazyLock::new(|| venv::detect_python_version().unwrap_or("3.12".to_string()));
+
+#[cfg(feature = "python-udf")]
+const PYTHON_SCRIPT_BOOTSTRAP: &str = r#"
+import sys
+import sysconfig
+
+_databend_std_keys = ("stdlib", "platstdlib", "purelib", "platlib")
+for _databend_key in _databend_std_keys:
+    _databend_path = sysconfig.get_path(_databend_key)
+    if _databend_path and _databend_path not in sys.path:
+        sys.path.append(_databend_path)
+del _databend_std_keys
+
+try:
+    import _contextvars  # noqa: F401
+except ModuleNotFoundError:
+    import threading
+    import types
+    import weakref
+
+    _databend_missing = object()
+    _databend_registered = weakref.WeakSet()
+
+    class Token:
+        __slots__ = ("var", "old")
+
+        def __init__(self, var, old):
+            self.var = var
+            self.old = old
+
+    class ContextVar:
+        __slots__ = ("name", "default", "_local")
+
+        def __init__(self, name, *, default=_databend_missing):
+            self.name = name
+            self.default = default
+            self._local = threading.local()
+            _databend_registered.add(self)
+
+        def get(self, default=_databend_missing):
+            value = getattr(self._local, "value", _databend_missing)
+            if value is _databend_missing:
+                if default is not _databend_missing:
+                    return default
+                if self.default is _databend_missing:
+                    raise LookupError(f"ContextVar {self.name} has no value")
+                return self.default
+            return value
+
+        def set(self, value):
+            old = getattr(self._local, "value", _databend_missing)
+            self._local.value = value
+            return Token(self, old)
+
+        def reset(self, token):
+            if token.var is not self:
+                raise ValueError("Token does not belong to this ContextVar")
+            if token.old is _databend_missing:
+                if hasattr(self._local, "value"):
+                    del self._local.value
+            else:
+                self._local.value = token.old
+
+    class Context:
+        def __init__(self, values=None):
+            self._values = values or {}
+
+        def __setitem__(self, key, value):
+            self._values[key] = value
+
+        def items(self):
+            return self._values.items()
+
+        def run(self, callable, *args, **kwargs):
+            tokens = []
+            try:
+                for var, value in self._values.items():
+                    tokens.append(var.set(value))
+                return callable(*args, **kwargs)
+            finally:
+                for token in reversed(tokens):
+                    token.var.reset(token)
+
+    def copy_context():
+        ctx = Context()
+        for var in list(_databend_registered):
+            try:
+                ctx[var] = var.get()
+            except LookupError:
+                continue
+        return ctx
+
+    module = types.ModuleType("_contextvars")
+    module.ContextVar = ContextVar
+    module.Context = Context
+    module.Token = Token
+    module.copy_context = copy_context
+    sys.modules["_contextvars"] = module
+"#;
 
 impl ScriptRuntime {
     pub fn try_create(func: &UdfFunctionDesc, _temp_dir: Option<Arc<TempDir>>) -> Result<Self> {
@@ -88,27 +189,35 @@ impl ScriptRuntime {
             }
             #[cfg(feature = "python-udf")]
             UDFLanguage::Python => {
-                let code = String::from_utf8(code.to_vec())?;
-                let code = if let Some(temp_dir) = _temp_dir {
+                let user_code = String::from_utf8(code.to_vec())?;
+                let mut script =
+                    String::with_capacity(PYTHON_SCRIPT_BOOTSTRAP.len() + user_code.len() + 256);
+                script.push_str(PYTHON_SCRIPT_BOOTSTRAP);
+                if let Some(temp_dir) = &_temp_dir {
                     let import_dir = temp_dir.path().display();
-                    format!(
-                        r#"import sys, sysconfig
-_databend_std_keys = ("stdlib", "platstdlib", "purelib", "platlib")
-for _databend_key in _databend_std_keys:
-    _databend_path = sysconfig.get_path(_databend_key)
-    if _databend_path and _databend_path not in sys.path:
-        sys.path.append(_databend_path)
-del _databend_std_keys
+                    script.push_str(&format!(
+                        r#"
 sys._xoptions['databend_import_directory'] = '{dir}'
 if '{dir}' not in sys.path:
     sys.path.append('{dir}')
-{code}"#,
+"#,
                         dir = import_dir,
-                        code = code
-                    )
-                } else {
-                    code
-                };
+                    ));
+
+                    let stage_paths = Self::collect_stage_sys_paths(func, temp_dir.as_ref());
+                    if !stage_paths.is_empty() {
+                        script.push_str("for _databend_zip in (");
+                        for (idx, path) in stage_paths.iter().enumerate() {
+                            if idx > 0 {
+                                script.push_str(", ");
+                            }
+                            script.push_str(&format!("{path:?}"));
+                        }
+                        script.push_str("):\n    if _databend_zip not in sys.path:\n        sys.path.append(_databend_zip)\ndel _databend_zip\n");
+                    }
+                }
+                script.push_str(&user_code);
+                let code = script;
 
                 let builder = PyRuntimeBuilder {
                     name: func.name.clone(),
@@ -180,6 +289,36 @@ if '{dir}' not in sys.path:
             }
         };
         Ok(result_batch)
+    }
+
+    #[cfg(feature = "python-udf")]
+    fn collect_stage_sys_paths(func: &UdfFunctionDesc, temp_dir: &TempDir) -> Vec<String> {
+        match &func.udf_type {
+            UDFType::Script(box UDFScriptCode {
+                imports_stage_info, ..
+            }) => imports_stage_info
+                .iter()
+                .filter_map(|(_, stage_path)| {
+                    let name = stage_path
+                        .trim_end_matches('/')
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(stage_path);
+                    let local_path = temp_dir.path().join(name);
+                    let ext = local_path
+                        .extension()
+                        .and_then(|s| s.to_str())
+                        .map(|s| s.to_ascii_lowercase());
+                    match ext.as_deref() {
+                        Some("zip") | Some("whl") | Some("egg") => {
+                            Some(local_path.display().to_string())
+                        }
+                        _ => None,
+                    }
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
     }
 }
 
@@ -672,6 +811,20 @@ impl TransformUdfScript {
             ))
         })?;
 
+        if let Some(error_idx) = schema
+            .fields()
+            .iter()
+            .position(|field| field.name().eq_ignore_ascii_case("error"))
+        {
+            let error_entry = result_block.get_by_offset(error_idx);
+            if let Some(message) = Self::first_non_null_error(error_entry) {
+                return Err(ErrorCode::UDFRuntimeError(format!(
+                    "Python UDF {:?} execution failed: {}",
+                    func.name, message
+                )));
+            }
+        }
+
         let entry = if contains_variant(&func.data_type) {
             let value = transform_variant(&result_block.get_by_offset(0).value(), false).map_err(
                 |err| {
@@ -698,6 +851,34 @@ impl TransformUdfScript {
         }
         data_block.add_entry(entry);
         Ok(())
+    }
+
+    fn first_non_null_error(entry: &BlockEntry) -> Option<String> {
+        for row in 0..entry.len() {
+            if let Some(value) = entry.index(row) {
+                match value {
+                    ScalarRef::Null => continue,
+                    ScalarRef::String(message) => {
+                        if !message.is_empty() {
+                            return Some(message.to_string());
+                        }
+                    }
+                    ScalarRef::Binary(bytes) => {
+                        if let Ok(text) = str::from_utf8(bytes) {
+                            if !text.is_empty() {
+                                return Some(text.to_string());
+                            }
+                        } else {
+                            return Some("Python UDF returned non UTF-8 error payload".to_string());
+                        }
+                    }
+                    other => {
+                        return Some(format!("{other:?}"));
+                    }
+                }
+            }
+        }
+        None
     }
 }
 
