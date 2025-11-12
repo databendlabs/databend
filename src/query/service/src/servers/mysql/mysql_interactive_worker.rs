@@ -48,7 +48,6 @@ use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::thread_rng;
 use rand::Rng as _;
-use rand::RngCore;
 use uuid::Uuid;
 
 use crate::auth::CredentialType;
@@ -519,23 +518,12 @@ impl InteractiveWorker {
         session: Arc<Session>,
         version: BuildInfoRef,
         client_addr: String,
+        salt: [u8; 20],
     ) -> InteractiveWorker {
-        let mut bs = vec![0u8; 20];
-        let mut rng = rand::thread_rng();
-        rng.fill_bytes(bs.as_mut());
-
-        let mut scramble: [u8; 20] = [0; 20];
-        for i in 0..20 {
-            scramble[i] = bs[i] & 0x7fu8;
-            if scramble[i] == b'\0' || scramble[i] == b'$' {
-                scramble[i] += 1;
-            }
-        }
-
         InteractiveWorker {
             version: format!("{MYSQL_VERSION}-{}", version.commit_detail),
             base: InteractiveWorkerBase { session, version },
-            salt: scramble,
+            salt,
             client_addr,
             keep_alive_task_started: false,
         }

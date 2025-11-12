@@ -89,6 +89,19 @@ impl SessionManager {
 
     #[async_backtrace::framed]
     pub async fn create_session(&self, typ: SessionType) -> Result<Session> {
+        self.create_session_with_conn_id(typ, None).await
+    }
+
+    pub async fn create_mysql_session_with_conn_id(&self, conn_id: u32) -> Result<Session> {
+        self.create_session_with_conn_id(SessionType::MySQL, Some(conn_id))
+            .await
+    }
+
+    async fn create_session_with_conn_id(
+        &self,
+        typ: SessionType,
+        mysql_conn_id: Option<u32>,
+    ) -> Result<Session> {
         if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
             let sessions = self.active_sessions.read();
             self.validate_max_active_sessions(sessions.len(), "active sessions")?;
@@ -103,7 +116,7 @@ impl SessionManager {
         let settings = Settings::create(tenant);
         settings.load_changes().await?;
 
-        let session = self.create_with_settings(typ, settings, None)?;
+        let session = self.create_with_settings_with_conn_id(typ, settings, None, mysql_conn_id)?;
 
         Ok(session)
     }
@@ -134,9 +147,22 @@ impl SessionManager {
         settings: Arc<Settings>,
         user: Option<UserInfo>,
     ) -> Result<Session> {
+        self.create_with_settings_with_conn_id(typ, settings, user, None)
+    }
+
+    fn create_with_settings_with_conn_id(
+        &self,
+        typ: SessionType,
+        settings: Arc<Settings>,
+        user: Option<UserInfo>,
+        mysql_conn_id: Option<u32>,
+    ) -> Result<Session> {
         let id = uuid::Uuid::new_v4().to_string();
         let mysql_conn_id = match typ {
-            SessionType::MySQL => Some(self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed)),
+            SessionType::MySQL => Some(
+                mysql_conn_id
+                    .unwrap_or_else(|| self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed)),
+            ),
             _ => None,
         };
 
@@ -149,6 +175,10 @@ impl SessionManager {
         )?;
 
         Ok(session)
+    }
+
+    pub fn alloc_mysql_conn_id(&self) -> u32 {
+        self.mysql_basic_conn_id.fetch_add(1, Ordering::Relaxed)
     }
 
     /// Add session to the session manager.

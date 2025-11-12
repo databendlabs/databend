@@ -18,6 +18,7 @@ use databend_common_base::base::tokio::net::TcpStream;
 use databend_common_exception::Result;
 use opensrv_mysql::ErrorKind;
 
+#[allow(dead_code)]
 pub struct RejectConnection;
 
 impl RejectConnection {
