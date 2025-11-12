@@ -66,11 +66,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             name_ident.tenant().clone(),
             name_ident.data_mask_name().to_string(),
         );
-        if self.get_pb(&row_access_name_ident).await?.is_some() {
-            return Ok(Err(
-                name_ident.exist_error("name conflicts with an existing masking policy")
-            ));
-        }
 
         let masking_policy_id = fetch_id(self, IdGenerator::data_mask_id()).await?;
 
