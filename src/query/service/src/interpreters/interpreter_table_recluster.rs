@@ -159,7 +159,7 @@ impl Interpreter for ReclusterTableInterpreter {
                 }
             }
 
-            let elapsed_time = SystemTime::now().duration_since(start).unwrap();
+            let elapsed_time = SystemTime::now().duration_since(start).unwrap_or_default();
             times += 1;
             // Status.
             {
