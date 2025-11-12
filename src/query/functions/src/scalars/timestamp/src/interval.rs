@@ -147,7 +147,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     };
                     // EvalMonthsImpl::eval_timestamp will use tz to add offset to timestamp as local timestamp, so here we balance it by subtracting offset in advance
                     // - input.micros_offset().unwrap_or(0)
-                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp() - input.micros_offset().unwrap_or(0), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
+                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp(), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
                 },
             ),
         );
@@ -187,7 +187,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     };
                     // EvalMonthsImpl::eval_timestamp will use tz to add offset to timestamp as local timestamp, so here we balance it by subtracting offset in advance
                     // - input.micros_offset().unwrap_or(0)
-                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp() - input.micros_offset().unwrap_or(0), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
+                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp(), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
                 },
             ),
         );
@@ -241,7 +241,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     };
                     // EvalMonthsImpl::eval_timestamp will use tz to add offset to timestamp as local timestamp, so here we balance it by subtracting offset in advance
                     // - input.micros_offset().unwrap_or(0)
-                    eval_timestamp_minus(a, b, output, ctx, |input| input.timestamp() - input.micros_offset().unwrap_or(0), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
+                    eval_timestamp_minus(a, b, output, ctx, |input| input.timestamp(), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
                 },
             ),
         );
@@ -274,7 +274,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             vectorize_with_builder_2_arg::<TimestampTzType, TimestampTzType, IntervalType>(
                 |t1, t2, output, ctx| {
                     let fn_to_zoned = |ts_tz: timestamp_tz| {
-                        let ts = Timestamp::from_microsecond(ts_tz.timestamp())?;
+                        let ts = Timestamp::from_microsecond(ts_tz.total_micros())?;
                         let zone = TimeZone::fixed(Offset::from_seconds(ts_tz.seconds_offset())?);
 
                         Result::Ok(ts.to_zoned(zone))
@@ -337,7 +337,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
 
                 let zone = TimeZone::fixed(Offset::from_seconds(t2.seconds_offset())?);
                 let today_date = today_date(&ctx.func_ctx.now, &zone);
-                let mut t2 = Timestamp::from_microsecond(t2.timestamp())?.to_zoned(zone.clone());
+                let mut t2 = Timestamp::from_microsecond(t2.total_micros())?.to_zoned(zone.clone());
                 let mut t1 = calc_date_to_timestamp(today_date, zone.clone())?.to_timestamp(zone);
 
                 if t1 < t2 {
