@@ -65,11 +65,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             name_ident.tenant().clone(),
             name_ident.row_access_name().to_string(),
         );
-        if self.get_pb(&mask_name_ident).await?.is_some() {
-            return Ok(Err(
-                name_ident.exist_error("name conflicts with an existing masking policy")
-            ));
-        }
 
         let row_access_id = fetch_id(self, IdGenerator::row_access_id()).await?;
         let policy_id = RowAccessPolicyId::new(row_access_id);
