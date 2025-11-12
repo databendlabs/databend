@@ -38,6 +38,7 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_blocks::parquet_writer_properties_builder;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::Index;
@@ -49,9 +50,6 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
-use parquet::basic::Encoding;
-use parquet::file::properties::EnabledStatistics;
-use parquet::file::properties::WriterProperties;
 
 use crate::io::create_inverted_index_builders;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
@@ -172,15 +170,14 @@ impl StreamBlockBuilder {
         let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let block_writer = match properties.write_settings.storage_format {
             FuseStorageFormat::Parquet => {
-                let props = WriterProperties::builder()
-                    .set_compression(properties.write_settings.table_compression.into())
-                    // use `usize::MAX` to effectively limit the number of row groups to 1
-                    .set_max_row_group_size(usize::MAX)
-                    .set_encoding(Encoding::PLAIN)
-                    .set_dictionary_enabled(false)
-                    .set_statistics_enabled(EnabledStatistics::None)
-                    .set_bloom_filter_enabled(false)
-                    .build();
+                let write_settings = &properties.write_settings;
+                let props = parquet_writer_properties_builder(
+                    write_settings.table_compression,
+                    write_settings.enable_parquet_dictionary,
+                    None,
+                )
+                .build();
+
                 let arrow_schema = Arc::new(properties.source_schema.as_ref().into());
                 let writer = ArrowWriter::try_new(buffer, arrow_schema, Some(props))?;
                 BlockWriterImpl::Arrow(writer)

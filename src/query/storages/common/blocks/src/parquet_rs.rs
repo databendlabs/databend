@@ -23,6 +23,7 @@ use parquet::basic::Encoding;
 use parquet::file::metadata::KeyValue;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
+use parquet::file::properties::WriterPropertiesBuilder;
 use parquet::file::properties::WriterVersion;
 use parquet::format::FileMetaData;
 
@@ -36,22 +37,7 @@ pub fn blocks_to_parquet(
     metadata: Option<Vec<KeyValue>>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
-    let builder = WriterProperties::builder()
-        .set_compression(compression.into())
-        // use `usize::MAX` to effectively limit the number of row groups to 1
-        .set_max_row_group_size(usize::MAX)
-        .set_encoding(Encoding::PLAIN)
-        .set_statistics_enabled(EnabledStatistics::None)
-        .set_bloom_filter_enabled(false)
-        .set_key_value_metadata(metadata);
-
-    let builder = if enable_dictionary {
-        builder
-            .set_writer_version(WriterVersion::PARQUET_2_0)
-            .set_dictionary_enabled(true)
-    } else {
-        builder.set_dictionary_enabled(false)
-    };
+    let builder = parquet_writer_properties_builder(compression, enable_dictionary, metadata);
 
     let props = builder.build();
     let batches = blocks
@@ -65,4 +51,27 @@ pub fn blocks_to_parquet(
     }
     let file_meta = writer.close()?;
     Ok(file_meta)
+}
+
+pub fn parquet_writer_properties_builder(
+    compression: TableCompression,
+    enable_dictionary: bool,
+    metadata: Option<Vec<KeyValue>>,
+) -> WriterPropertiesBuilder {
+    let builder = WriterProperties::builder()
+        .set_compression(compression.into())
+        // use `usize::MAX` to effectively limit the number of row groups to 1
+        .set_max_row_group_size(usize::MAX)
+        .set_encoding(Encoding::PLAIN)
+        .set_statistics_enabled(EnabledStatistics::None)
+        .set_bloom_filter_enabled(false)
+        .set_key_value_metadata(metadata);
+
+    if enable_dictionary {
+        builder
+            .set_writer_version(WriterVersion::PARQUET_2_0)
+            .set_dictionary_enabled(true)
+    } else {
+        builder.set_dictionary_enabled(false)
+    }
 }
