@@ -16,6 +16,7 @@ use std::io;
 use std::net::Shutdown;
 use std::sync::Arc;
 
+use databend_common_base::base::tokio::io::AsyncWriteExt;
 use databend_common_base::base::tokio::io::BufWriter;
 use databend_common_base::base::tokio::net::tcp::OwnedReadHalf;
 use databend_common_base::base::tokio::net::tcp::OwnedWriteHalf;
@@ -35,6 +36,7 @@ use log::warn;
 use opensrv_mysql::plain_run_with_options;
 use opensrv_mysql::secure_run_with_options;
 use opensrv_mysql::AsyncMysqlIntermediary;
+use opensrv_mysql::ErrorKind;
 use opensrv_mysql::IntermediaryOptions;
 use opensrv_mysql::ServerHandshakeConfig;
 use rand::RngCore;
@@ -95,10 +97,7 @@ impl MySQLConnection {
             OwnedReadHalf,
             BufWriter<OwnedWriteHalf>,
         >::init_before_ssl_with_config(
-            &handshake_config,
-            reader,
-            &mut writer,
-            &tls,
+            &handshake_config, reader, &mut writer, &tls
         )
         .await;
 
@@ -112,6 +111,8 @@ impl MySQLConnection {
             }
         };
 
+        let response_seq = init_params.1;
+
         let session = match session_manager
             .create_mysql_session_with_conn_id(mysql_conn_id)
             .await
@@ -119,6 +120,7 @@ impl MySQLConnection {
             Ok(session) => session,
             Err(error) => {
                 warn!("create session failed, {:?}", error);
+                Self::send_session_error(&mut writer, response_seq, &error).await;
                 return Ok(());
             }
         };
@@ -127,6 +129,7 @@ impl MySQLConnection {
             Ok(session) => session,
             Err(error) => {
                 warn!("fail to register session, {:?}", error);
+                Self::send_session_error(&mut writer, response_seq, &error).await;
                 return Ok(());
             }
         };
@@ -201,6 +204,48 @@ impl MySQLConnection {
                 | io::ErrorKind::UnexpectedEof
                 | io::ErrorKind::BrokenPipe
         )
+    }
+
+    async fn send_session_error(
+        writer: &mut BufWriter<OwnedWriteHalf>,
+        seq: u8,
+        error: &ErrorCode,
+    ) {
+        if let Err(e) = Self::write_error_packet(writer, seq, error).await {
+            warn!("failed to send mysql error packet: {e}");
+        }
+    }
+
+    async fn write_error_packet(
+        writer: &mut BufWriter<OwnedWriteHalf>,
+        seq: u8,
+        error: &ErrorCode,
+    ) -> io::Result<()> {
+        let (kind, message) = Self::map_error_kind(error);
+        let mut payload = Vec::with_capacity(1 + 2 + 1 + 5 + message.len());
+        payload.push(0xFF);
+        payload.extend_from_slice(&(kind as u16).to_le_bytes());
+        payload.push(b'#');
+        payload.extend_from_slice(kind.sqlstate());
+        payload.extend_from_slice(message.as_bytes());
+
+        let payload_len = payload.len() as u32;
+        let mut header = [0u8; 4];
+        header[0] = (payload_len & 0xFF) as u8;
+        header[1] = ((payload_len >> 8) & 0xFF) as u8;
+        header[2] = ((payload_len >> 16) & 0xFF) as u8;
+        header[3] = seq.wrapping_add(1);
+
+        writer.write_all(&header).await?;
+        writer.write_all(&payload).await?;
+        writer.flush().await
+    }
+
+    fn map_error_kind(error: &ErrorCode) -> (ErrorKind, String) {
+        match error.code() {
+            41 => (ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, error.message()),
+            _ => (ErrorKind::ER_INTERNAL_ERROR, error.message()),
+        }
     }
 
     fn attach_session(session: &Arc<Session>, blocking_stream: &std::net::TcpStream) -> Result<()> {
