@@ -62,7 +62,7 @@ impl SetInterpreter {
     async fn execute_settings(&self, scalars: Vec<Scalar>, is_global: bool) -> Result<()> {
         let scalars: Vec<Scalar> = scalars
             .into_iter()
-            .map(|scalar| cast_scalar(None, scalar.clone(), DataType::String, &BUILTIN_FUNCTIONS))
+            .map(|scalar| cast_scalar(None, scalar.clone(), &DataType::String, &BUILTIN_FUNCTIONS))
             .collect::<Result<Vec<_>>>()?;
 
         let mut keys: Vec<String> = vec![];
