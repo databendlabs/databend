@@ -1862,7 +1862,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let describe_row_access = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ ROW ~ ACCESS ~ POLICY ~ ^#ident
+            ( DESC | DESCRIBE ) ~ ROW ~ ACCESS ~ POLICY ~ #ident
         },
         |(_, _, _, _, name)| {
             Statement::DescRowAccessPolicy(DescRowAccessPolicyStmt {
@@ -2195,7 +2195,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let describe_network_policy = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ NETWORK ~ POLICY ~ ^#ident
+            ( DESC | DESCRIBE ) ~ NETWORK ~ POLICY ~ #ident
         },
         |(_, _, _, name)| {
             Statement::DescNetworkPolicy(DescNetworkPolicyStmt {
@@ -2252,7 +2252,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let describe_password_policy = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ PASSWORD ~ POLICY ~ ^#ident
+            ( DESC | DESCRIBE ) ~ PASSWORD ~ POLICY ~ #ident
         },
         |(_, _, _, name)| {
             Statement::DescPasswordPolicy(DescPasswordPolicyStmt {
@@ -2750,7 +2750,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         COMMENT => rule!(#comment).parse(i),
         DESC | DESCRIBE => rule!(
             #desc_task : "`DESC | DESCRIBE TASK <name>`"
-            | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #describe_view : "`DESCRIBE VIEW [<database>.]<view>`"
             | #describe_user: "`DESCRIBE USER <user_name>`"
             | #describe_row_access : "`DESC[RIBE] ROW ACCESS POLICY <name>`"
@@ -2763,6 +2762,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
             | #describe_procedure : "`DESC PROCEDURE <procedure_name>()`"
             | #describe_stream : "`DESCRIBE STREAM [<database>.]<stream>`"
+            | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #sequence
         ).parse(i),
         CREATE => rule!(
