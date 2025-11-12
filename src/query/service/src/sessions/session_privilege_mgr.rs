@@ -387,7 +387,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
 
         let ownership_infos =
-            if roles_name.contains(&"account_admin".to_string()) || ignore_ownership {
+            if roles_name.contains(&BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()) || ignore_ownership {
                 vec![]
             } else {
                 let user_api = UserApiProvider::instance();
