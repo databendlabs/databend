@@ -50,8 +50,7 @@ pub fn blocks_to_parquet(
             .set_writer_version(WriterVersion::PARQUET_2_0)
             .set_dictionary_enabled(true)
     } else {
-        builder
-            .set_dictionary_enabled(false)
+        builder.set_dictionary_enabled(false)
     };
 
     let props = builder.build();
