@@ -3195,7 +3195,7 @@ impl SchemaApiTestSuite {
                     update_on: None,
                 },
             };
-            mt.create_data_mask(req).await.unwrap().unwrap();
+            mt.create_data_mask(req).await??;
 
             let mask1_name_ident = DataMaskNameIdent::new(tenant.clone(), mask_name_1.to_string());
             mask1_id = get_kv_u64_data(mt, &mask1_name_ident).await?;
@@ -3212,7 +3212,7 @@ impl SchemaApiTestSuite {
                     update_on: None,
                 },
             };
-            mt.create_data_mask(req).await.unwrap().unwrap();
+            mt.create_data_mask(req).await??;
 
             let mask2_name_ident = DataMaskNameIdent::new(tenant.clone(), mask_name_2.to_string());
             mask2_id = get_kv_u64_data(mt, &mask2_name_ident).await?;
@@ -3473,7 +3473,7 @@ impl SchemaApiTestSuite {
                     update_on: None,
                 },
             };
-            mt.create_data_mask(req).await.unwrap().unwrap();
+            mt.create_data_mask(req).await??;
             let old_id: u64 = get_kv_u64_data(mt, &name).await?;
 
             let id_key = DataMaskIdIdent::new(&tenant, old_id);
@@ -3493,7 +3493,7 @@ impl SchemaApiTestSuite {
                     update_on: None,
                 },
             };
-            mt.create_data_mask(req).await.unwrap().unwrap();
+            mt.create_data_mask(req).await??;
 
             // assert old id key has been deleted
             let meta: Result<DatamaskMeta, KVAppError> = get_kv_data(mt, &id_key).await;
@@ -3559,7 +3559,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         };
-        mt.create_row_access_policy(req).await.unwrap().unwrap();
+        mt.create_row_access_policy(req).await??;
 
         let name = RowAccessPolicyNameIdent::new(tenant.clone(), policy1.to_string());
         let res = mt.get_row_access_policy(&name).await.unwrap().unwrap();
@@ -3576,7 +3576,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         };
-        mt.create_row_access_policy(req).await.unwrap().unwrap();
+        mt.create_row_access_policy(req).await??;
 
         let table_id_1;
         info!("--- apply mask1 policy to table 1 and check");
@@ -3898,9 +3898,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         })
-        .await
-        .unwrap()
-        .unwrap();
+        .await??;
         let mask_cleanup_id = get_kv_u64_data(mt, &mask_cleanup_ident).await?;
 
         let set_req = SetTableColumnMaskPolicyReq {
@@ -3963,9 +3961,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         })
-        .await
-        .unwrap()
-        .unwrap();
+        .await??;
         let mask_guard_id = get_kv_u64_data(mt, &mask_guard_ident).await?;
 
         table_info = util.get_table().await?;
@@ -4057,8 +4053,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         })
-        .await?
-        .unwrap();
+        .await??;
         let cleanup_policy_id = {
             let res = mt
                 .get_row_access_policy(&policy_cleanup_ident)
@@ -4132,8 +4127,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         })
-        .await?
-        .unwrap();
+        .await??;
         let guard_policy_id = {
             let res = mt
                 .get_row_access_policy(&policy_guard_ident)
