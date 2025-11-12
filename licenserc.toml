@@ -10,7 +10,7 @@ excludes = [
     "benchmark",
     "src/common/compress/tests",
     "src/meta/compat.py",
-    "src/query/storages/common/index/cpp/"
+    "src/query/storages/common/index/cpp/",
     # licensed under Elastic License 2.0
     "src/binaries/query/ee_main.rs",
     "src/meta/binaries/meta/ee_main.rs",
