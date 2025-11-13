@@ -1,18 +1,12 @@
-statement ok
-drop table if exists t;
-
-statement ok
-drop table if exists u;
-
 # TINYINT limits
 statement ok
-CREATE TABLE t(t_k0 TINYINT);
+CREATE OR REPLACE TABLE t(t_k0 TINYINT);
 
 statement ok
 INSERT INTO t VALUES (-128), (127);
 
 statement ok
-CREATE TABLE u(u_k0 TINYINT);
+CREATE OR REPLACE TABLE u(u_k0 TINYINT);
 
 statement ok
 INSERT INTO u VALUES (-128), (127);
