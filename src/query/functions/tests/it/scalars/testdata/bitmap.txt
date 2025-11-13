@@ -20,7 +20,7 @@ error:
   --> SQL:1:1
   |
 1 | build_bitmap([7, -8])
-  | ^^^^^^^^^^^^^^^^^^^^^ build_bitmap just support positive integer while evaluating function `build_bitmap([7, -8])` in expr `build_bitmap(CAST(array(CAST(7 AS Int16), - 8) AS Array(Int16 NULL)))`
+  | ^^^^^^^^^^^^^^^^^^^^^ build_bitmap just support positive integer while evaluating function `build_bitmap([7, -8])` in expr `build_bitmap(CAST(array(CAST(7 AS Int16), CAST(-8 AS Int16)) AS Array(Int16 NULL)))`
 
 
 
