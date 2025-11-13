@@ -246,6 +246,11 @@ settings(timezone='Asia/Shanghai') select to_timestamp_tz('2024-04-16 12:34:56.7
 2024-04-16 12:34:56.789000 +0600
 
 query T
+settings(timezone='Asia/Shanghai') select to_timestamp_tz('2024-04-16 12:34:56.789 +0800')
+----
+2024-04-16 12:34:56.789000 +0800
+
+query T
 settings(timezone='Asia/Shanghai') select to_timestamp_tz('2024-04-16 12:34:56.789')
 ----
 2024-04-16 12:34:56.789000 +0800
