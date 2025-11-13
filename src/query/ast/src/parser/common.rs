@@ -326,33 +326,42 @@ pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> 
 }
 
 pub fn column_id(i: Input) -> IResult<ColumnID> {
-    alt((
-        map_res(rule! { ColumnPosition }, |token| {
-            let name = token.text().to_string();
-            let pos = name[1..]
-                .parse::<usize>()
-                .map_err(|e| nom::Err::Failure(e.into()))?;
-            if pos == 0 {
-                return Err(nom::Err::Failure(ErrorKind::Other(
-                    "column position must be greater than 0",
-                )));
-            }
-            Ok(ColumnID::Position(crate::ast::ColumnPosition {
-                pos,
-                name,
-                span: Some(token.span),
-            }))
-        }),
-        // ROW could be a column name for compatibility
-        map_res(rule! {ROW}, |token| {
-            Ok(ColumnID::Name(Identifier::from_name(
-                transform_span(&[token.clone()]),
-                "row",
-            )))
-        }),
-        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
-    ))
+    alt((column_position, column_row, column_ident)).parse(i)
+}
+
+pub fn column_position(i: Input) -> IResult<ColumnID> {
+    map_res(rule! { ColumnPosition }, |token| {
+        let name = token.text().to_string();
+        let pos = name[1..]
+            .parse::<usize>()
+            .map_err(|e| nom::Err::Failure(e.into()))?;
+        if pos == 0 {
+            return Err(nom::Err::Failure(ErrorKind::Other(
+                "column position must be greater than 0",
+            )));
+        }
+        Ok(ColumnID::Position(crate::ast::ColumnPosition {
+            pos,
+            name,
+            span: Some(token.span),
+        }))
+    })
     .parse(i)
+}
+
+pub fn column_row(i: Input) -> IResult<ColumnID> {
+    // ROW could be a column name for compatibility
+    map_res(rule! {ROW}, |token| {
+        Ok(ColumnID::Name(Identifier::from_name(
+            transform_span(&[token.clone()]),
+            "row",
+        )))
+    })
+    .parse(i)
+}
+
+pub fn column_ident(i: Input) -> IResult<ColumnID> {
+    map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))).parse(i)
 }
 
 pub fn variable_ident(i: Input) -> IResult<String> {

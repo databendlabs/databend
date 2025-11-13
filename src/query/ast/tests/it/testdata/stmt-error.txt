@@ -954,7 +954,6 @@ error:
   | |      |
   | |      column position must be greater than 0
   | |      while parsing expression
-  | |      while parsing <column>
   | while parsing `SELECT ...`
 
 

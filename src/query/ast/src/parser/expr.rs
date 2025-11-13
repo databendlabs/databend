@@ -15,6 +15,7 @@
 use ethnum::i256;
 use itertools::Itertools;
 use nom::combinator::consumed;
+use nom::combinator::verify;
 use nom::error::context;
 use nom::Parser;
 use nom_rule::rule;
@@ -32,6 +33,7 @@ use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
+use crate::span::merge_span;
 use crate::Span;
 
 macro_rules! with_span {
@@ -819,15 +821,42 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     }
 
     fn prefix(&mut self, elem: WithSpan<'a, ExprElement>, rhs: Expr) -> Result<Expr, &'static str> {
-        let expr = match elem.elem {
-            ExprElement::UnaryOp { op } => Expr::UnaryOp {
-                span: transform_span(elem.span.tokens),
-                op,
-                expr: Box::new(rhs),
-            },
+        match elem.elem {
+            ExprElement::UnaryOp { op } => {
+                let op_span = transform_span(elem.span.tokens);
+                match (op, rhs) {
+                    (
+                        UnaryOperator::Minus,
+                        Expr::Literal {
+                            span: rhs_span,
+                            value,
+                        },
+                    ) => {
+                        if let Some(value) = try_negate_literal(&value) {
+                            Ok(Expr::Literal {
+                                span: merge_span(op_span, rhs_span),
+                                value,
+                            })
+                        } else {
+                            Ok(Expr::UnaryOp {
+                                span: op_span,
+                                op: UnaryOperator::Minus,
+                                expr: Box::new(Expr::Literal {
+                                    span: rhs_span,
+                                    value,
+                                }),
+                            })
+                        }
+                    }
+                    (op, rhs_expr) => Ok(Expr::UnaryOp {
+                        span: op_span,
+                        op,
+                        expr: Box::new(rhs_expr),
+                    }),
+                }
+            }
             _ => unreachable!(),
-        };
-        Ok(expr)
+        }
     }
 
     fn postfix(
@@ -1230,7 +1259,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule! {
            "." ~ #column_id
         },
-        |(_, key)| ExprElement::DotAccess { key },
+        |(_, column)| ExprElement::DotAccess { key: column },
     );
 
     let chain_function_call = check_experimental_chain_function(
@@ -1550,6 +1579,74 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let stage_location = map(rule! { #at_string }, |location| {
         ExprElement::StageLocation { location }
     });
+    let string = map(literal_string, |literal| ExprElement::Literal {
+        value: Literal::String(literal),
+    });
+    let code_string = map(code_string, |literal| ExprElement::Literal {
+        value: Literal::String(literal),
+    });
+    let boolean = map(literal_bool, |literal| ExprElement::Literal {
+        value: Literal::Boolean(literal),
+    });
+    let null = value(
+        ExprElement::Literal {
+            value: Literal::Null,
+        },
+        rule! { NULL },
+    );
+    let decimal_uint = map_res(
+        rule! {
+            LiteralInteger
+        },
+        |token| {
+            Ok(ExprElement::Literal {
+                value: parse_uint(token.text(), 10).map_err(nom::Err::Failure)?,
+            })
+        },
+    );
+    let hex_uint = map_res(literal_hex_str, |str| {
+        Ok(ExprElement::Literal {
+            value: parse_uint(str, 16).map_err(nom::Err::Failure)?,
+        })
+    });
+    let decimal_float = map_res(
+        verify(
+            rule! {
+               LiteralFloat
+            },
+            |token: &Token| !token.text().starts_with('.'),
+        ),
+        |token| {
+            Ok(ExprElement::Literal {
+                value: parse_float(token.text()).map_err(nom::Err::Failure)?,
+            })
+        },
+    );
+    let column_position = map(column_position, |column| ExprElement::ColumnRef {
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column,
+        },
+    });
+    let column_row = map(column_row, |column| ExprElement::ColumnRef {
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column,
+        },
+    });
+    let column_ident = map(column_ident, |column| ExprElement::ColumnRef {
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column,
+        },
+    });
+
+    if i.tokens.first().map(|token| token.kind) == Some(ColumnPosition) {
+        return with_span!(column_position).parse(i);
+    }
 
     try_dispatch!(i, true,
         IS => with_span!(rule!(#is_null | #is_distinct_from)).parse(i),
@@ -1656,6 +1753,14 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | AtAt
             | HashMinus => with_span!(json_op).parse(i),
         Factorial | SquareRoot | BitWiseNot | CubeRoot | Abs => with_span!(unary_op).parse(i),
+        LiteralString => with_span!(string).parse(i),
+        LiteralCodeString => with_span!(code_string).parse(i),
+        LiteralInteger => with_span!(decimal_uint).parse(i),
+        LiteralFloat => with_span!(rule!{ #decimal_float | #dot_number_map_access }).parse(i),
+        MySQLLiteralHex | PGLiteralHex => with_span!(hex_uint).parse(i),
+        TRUE | FALSE => with_span!(boolean).parse(i),
+        NULL => with_span!(null).parse(i),
+        ROW => with_span!(column_row).parse(i),
     );
 
     // The try-parse operation in the function call is very expensive, easy to stack overflow
@@ -1669,8 +1774,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     }
 
     with_span!(alt((rule!(
-        #column_ref : "<column>"
-        | #dot_number_map_access : ".<key>"
+        #column_ident : "<column>"
         | #literal : "<literal>"
     ),)))
     .parse(i)
@@ -2719,6 +2823,27 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
             precision: 76,
             scale: 0,
         })
+    }
+}
+
+fn try_negate_literal(literal: &Literal) -> Option<Literal> {
+    match literal {
+        Literal::UInt64(value) => Some(Literal::Decimal256 {
+            value: -i256::from(*value),
+            precision: 76,
+            scale: 0,
+        }),
+        Literal::Decimal256 {
+            value,
+            precision,
+            scale,
+        } => Some(Literal::Decimal256 {
+            value: -*value,
+            precision: *precision,
+            scale: *scale,
+        }),
+        Literal::Float64(value) => Some(Literal::Float64(-value)),
+        _ => None,
     }
 }
 
