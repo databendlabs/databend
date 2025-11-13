@@ -36,6 +36,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
@@ -243,6 +244,8 @@ if '{dir}' not in sys.path:
 
     #[cfg(feature = "python-udf")]
     fn first_non_null_error(entry: &BlockEntry) -> Option<String> {
+        use databend_common_expression::ScalarRef;
+
         for row in 0..entry.len() {
             if let Some(value) = entry.index(row) {
                 match value {
@@ -608,10 +611,11 @@ impl TransformUdfScript {
                     let mut dependencies = Self::extract_deps(&code_str);
                     dependencies.extend_from_slice(packages.as_slice());
 
-                    let temp_dir = if !dependencies.is_empty() || !imports_stage_info.is_empty() {
-                        let key = venv::PyVenvKeyEntry {
-                            udf_desc: func.clone(),
-                        };
+                    let stage_fingerprints = Self::collect_stage_fingerprints(imports_stage_info)?;
+
+                    let temp_dir = if !dependencies.is_empty() || !stage_fingerprints.is_empty() {
+                        let key =
+                            venv::PyVenvKeyEntry::new(&dependencies, stage_fingerprints.clone());
                         let mut w = venv::PY_VENV_CACHE.write();
                         if let Some(entry) = w.get(&key) {
                             Some(entry.materialize().map_err(ErrorCode::from_string)?)
@@ -648,10 +652,9 @@ impl TransformUdfScript {
 
                             let archive_path = venv::archive_env(temp_dir.path())
                                 .map_err(ErrorCode::from_string)?;
-                            w.insert(
-                                key,
-                                venv::PyVenvCacheEntry::new(temp_dir.clone(), archive_path),
-                            );
+                            let cache_entry =
+                                venv::PyVenvCacheEntry::new(temp_dir.clone(), archive_path);
+                            w.insert(key, cache_entry);
 
                             Some(temp_dir)
                         }
@@ -742,6 +745,39 @@ impl TransformUdfScript {
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(block_entries)
+    }
+
+    #[cfg(feature = "python-udf")]
+    fn collect_stage_fingerprints(
+        imports_stage_info: &[(StageInfo, String)],
+    ) -> Result<Vec<venv::StageImportFingerprint>> {
+        if imports_stage_info.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut tasks = Vec::with_capacity(imports_stage_info.len());
+        for (stage, path) in imports_stage_info.iter() {
+            let op = init_stage_operator(stage)?;
+            let stage_name = stage.stage_name.clone();
+            let path = path.clone();
+            tasks.push(async move {
+                let meta = op.stat(&path).await.map_err(|e| {
+                    ErrorCode::StorageUnavailable(format!(
+                        "Failed to stat stage file '{path}': {e}"
+                    ))
+                })?;
+                Ok(venv::StageImportFingerprint {
+                    stage_name,
+                    path,
+                    content_length: meta.content_length(),
+                    etag: meta.etag().map(str::to_string),
+                })
+            });
+        }
+
+        databend_common_base::runtime::block_on(async {
+            futures::future::try_join_all(tasks).await
+        })
     }
 
     fn create_input_batch(
@@ -840,8 +876,6 @@ mod venv {
     use zip::write::FileOptions;
     use zip::ZipArchive;
     use zip::ZipWriter;
-
-    use crate::physical_plans::UdfFunctionDesc;
 
     static PY_VENV_ARCHIVE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
         let base = std::env::var("DATABEND_PY_UDF_CACHE_DIR")
@@ -979,14 +1013,54 @@ mod venv {
         archive_path: PathBuf,
     }
 
+    #[derive(Clone, Eq, Hash, PartialEq)]
+    pub(crate) struct StageImportFingerprint {
+        pub(crate) stage_name: String,
+        pub(crate) path: String,
+        pub(crate) content_length: u64,
+        pub(crate) etag: Option<String>,
+    }
+
     #[derive(Eq, Hash, PartialEq)]
     pub(crate) struct PyVenvKeyEntry {
-        pub(crate) udf_desc: UdfFunctionDesc,
+        pub(crate) dependencies: Vec<String>,
+        pub(crate) stage_fingerprints: Vec<StageImportFingerprint>,
+    }
+
+    impl PyVenvKeyEntry {
+        pub fn new(
+            dependencies: &[String],
+            stage_fingerprints: Vec<StageImportFingerprint>,
+        ) -> Self {
+            let mut deps = dependencies.to_vec();
+            deps.sort();
+            Self {
+                dependencies: deps,
+                stage_fingerprints,
+            }
+        }
     }
 
     impl MemSized for PyVenvKeyEntry {
         fn mem_bytes(&self) -> usize {
-            std::mem::size_of::<PyVenvKeyEntry>()
+            self.dependencies
+                .iter()
+                .map(MemSized::mem_bytes)
+                .sum::<usize>()
+                + self
+                    .stage_fingerprints
+                    .iter()
+                    .map(MemSized::mem_bytes)
+                    .sum::<usize>()
+        }
+    }
+
+    impl MemSized for StageImportFingerprint {
+        fn mem_bytes(&self) -> usize {
+            self.stage_name.mem_bytes()
+                + self.path.mem_bytes()
+                + std::mem::size_of::<u64>()
+                + self.etag.mem_bytes()
         }
     }
 
