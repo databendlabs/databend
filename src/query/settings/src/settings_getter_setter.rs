@@ -381,7 +381,7 @@ impl Settings {
     }
 
     pub fn get_nested_loop_join_threshold(&self) -> Result<u64> {
-        Ok(self.try_get_u64("nested_loop_join_threshold")?)
+        self.try_get_u64("nested_loop_join_threshold")
     }
 
     pub fn get_bloom_runtime_filter(&self) -> Result<bool> {
