@@ -175,6 +175,7 @@ select * from infer_schema(location => '@data/ndjson/numbers.ndjson', file_forma
 ----
 id BIGINT 1 ndjson/numbers.ndjson 0
 value BIGINT 1 ndjson/numbers.ndjson 1
+score DOUBLE 1 ndjson/numbers.ndjson 2
 
 query TTBTI
 select * from infer_schema(location => '@data/ndjson/ragged.ndjson', file_format => 'NDJSON');
