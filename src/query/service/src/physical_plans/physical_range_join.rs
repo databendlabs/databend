@@ -20,7 +20,6 @@ use databend_common_exception::Result;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -232,10 +231,7 @@ impl PhysicalPlanBuilder {
         let left_schema = self.prepare_probe_schema(join_type, &left_side)?;
         let right_schema = self.prepare_build_schema(join_type, &right_side)?;
 
-        let mut output_schema = Vec::clone(left_schema.fields());
-        output_schema.extend_from_slice(right_schema.fields());
-
-        let merged_schema = DataSchemaRefExt::create(
+        let output_schema = DataSchema::new_ref(
             left_schema
                 .fields()
                 .iter()
@@ -262,11 +258,11 @@ impl PhysicalPlanBuilder {
                 .collect::<Result<_>>()?,
             other_conditions: other_conditions
                 .iter()
-                .map(|scalar| resolve_scalar(scalar, &merged_schema))
+                .map(|scalar| resolve_scalar(scalar, &output_schema))
                 .collect::<Result<_>>()?,
             join_type,
             range_join_type,
-            output_schema: Arc::new(DataSchema::new(output_schema)),
+            output_schema,
             stat_info: Some(self.build_plan_stat_info(s_expr)?),
         }))
     }
@@ -343,9 +339,9 @@ fn resolve_range_condition(
     }
 }
 
-fn resolve_scalar(scalar: &ScalarExpr, schema: &DataSchemaRef) -> Result<RemoteExpr> {
+pub fn resolve_scalar(scalar: &ScalarExpr, schema: &DataSchema) -> Result<RemoteExpr> {
     let expr = scalar
-        .type_check(schema.as_ref())?
+        .type_check(schema)?
         .project_column_ref(|index| schema.index_of(&index.to_string()))?;
     Ok(expr.as_remote_expr())
 }

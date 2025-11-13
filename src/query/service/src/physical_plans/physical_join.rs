@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_settings::Settings;
 use databend_common_sql::binder::is_range_join_condition;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
@@ -30,16 +31,51 @@ use crate::physical_plans::PhysicalPlanBuilder;
 enum PhysicalJoinType {
     Hash,
     // The first arg is range conditions, the second arg is other conditions
-    RangeJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
+    RangeJoin {
+        range: Vec<ScalarExpr>,
+        other: Vec<ScalarExpr>,
+    },
+    LoopJoin {
+        conditions: Vec<ScalarExpr>,
+    },
 }
 
 // Choose physical join type by join conditions
-fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
+fn physical_join(join: &Join, s_expr: &SExpr, settings: &Settings) -> Result<PhysicalJoinType> {
     if join.equi_conditions.is_empty() && join.join_type.is_any_join() {
         return Err(ErrorCode::SemanticError(
             "ANY JOIN only supports equality-based hash joins",
         ));
     }
+
+    let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
+    let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
+    let right_stat_info = right_rel_expr.derive_cardinality()?;
+    let nested_loop_join_threshold = settings.get_nested_loop_join_threshold()?;
+    if matches!(join.join_type, JoinType::Inner | JoinType::Cross)
+        && (right_stat_info
+            .statistics
+            .precise_cardinality
+            .map(|n| n < nested_loop_join_threshold)
+            .unwrap_or(false)
+            || right_stat_info.cardinality < nested_loop_join_threshold as _)
+    {
+        let conditions = join
+            .non_equi_conditions
+            .iter()
+            .cloned()
+            .chain(join.equi_conditions.iter().cloned().map(|condition| {
+                FunctionCall {
+                    span: condition.left.span(),
+                    func_name: "eq".to_string(),
+                    params: vec![],
+                    arguments: vec![condition.left, condition.right],
+                }
+                .into()
+            }))
+            .collect();
+        return Ok(PhysicalJoinType::LoopJoin { conditions });
+    };
 
     if !join.equi_conditions.is_empty() {
         // Contain equi condition, use hash join
@@ -51,9 +87,6 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         return Ok(PhysicalJoinType::Hash);
     }
 
-    let left_rel_expr = RelExpr::with_s_expr(s_expr.child(0)?);
-    let right_rel_expr = RelExpr::with_s_expr(s_expr.child(1)?);
-    let right_stat_info = right_rel_expr.derive_cardinality()?;
     if matches!(right_stat_info.statistics.precise_cardinality, Some(1))
         || right_stat_info.cardinality == 1.0
     {
@@ -61,22 +94,22 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
         return Ok(PhysicalJoinType::Hash);
     }
 
-    let left_prop = left_rel_expr.derive_relational_prop()?;
-    let right_prop = right_rel_expr.derive_relational_prop()?;
-    let (range_conditions, other_conditions) = join
-        .non_equi_conditions
-        .iter()
-        .cloned()
-        .partition::<Vec<_>, _>(|condition| {
-            is_range_join_condition(condition, &left_prop, &right_prop).is_some()
-        });
+    if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+        let left_prop = left_rel_expr.derive_relational_prop()?;
+        let right_prop = right_rel_expr.derive_relational_prop()?;
+        let (range, other) = join
+            .non_equi_conditions
+            .iter()
+            .cloned()
+            .partition::<Vec<_>, _>(|condition| {
+                is_range_join_condition(condition, &left_prop, &right_prop).is_some()
+            });
 
-    if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
-        return Ok(PhysicalJoinType::RangeJoin(
-            range_conditions,
-            other_conditions,
-        ));
+        if !range.is_empty() {
+            return Ok(PhysicalJoinType::RangeJoin { range, other });
+        }
     }
+
     // Leverage hash join to execute nested loop join
     Ok(PhysicalJoinType::Hash)
 }
@@ -157,7 +190,8 @@ impl PhysicalPlanBuilder {
             )
             .await
         } else {
-            match physical_join(join, s_expr)? {
+            let settings = self.ctx.get_settings();
+            match physical_join(join, s_expr, &settings)? {
                 PhysicalJoinType::Hash => {
                     self.build_hash_join(
                         join,
@@ -170,7 +204,7 @@ impl PhysicalPlanBuilder {
                     )
                     .await
                 }
-                PhysicalJoinType::RangeJoin(range, other) => {
+                PhysicalJoinType::RangeJoin { range, other } => {
                     self.build_range_join(
                         join.join_type,
                         s_expr,
@@ -178,6 +212,16 @@ impl PhysicalPlanBuilder {
                         right_required,
                         range,
                         other,
+                    )
+                    .await
+                }
+                PhysicalJoinType::LoopJoin { conditions } => {
+                    self.build_loop_join(
+                        join.join_type,
+                        s_expr,
+                        left_required,
+                        right_required,
+                        conditions,
                     )
                     .await
                 }

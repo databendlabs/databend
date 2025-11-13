@@ -362,6 +362,10 @@ impl DataSchema {
         }
     }
 
+    pub fn new_ref(fields: Vec<DataField>) -> Arc<Self> {
+        Self::new(fields).into()
+    }
+
     pub fn new_from(fields: Vec<DataField>, metadata: BTreeMap<String, String>) -> Self {
         Self { fields, metadata }
     }

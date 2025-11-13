@@ -16,6 +16,7 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::PoisonError;
 
 use geozero::error::GeozeroError;
 
@@ -434,5 +435,11 @@ impl From<sqlx::Error> for ErrorCode {
 impl From<redis::RedisError> for ErrorCode {
     fn from(error: redis::RedisError) -> Self {
         ErrorCode::DictionarySourceError(format!("Dictionary Redis Error, cause: {}", error))
+    }
+}
+
+impl<T> From<PoisonError<T>> for ErrorCode {
+    fn from(error: PoisonError<T>) -> Self {
+        ErrorCode::Internal(format!("{error}"))
     }
 }
