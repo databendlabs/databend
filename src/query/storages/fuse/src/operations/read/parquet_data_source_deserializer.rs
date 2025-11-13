@@ -181,7 +181,7 @@ impl DeserializeDataTransform {
 
             // Apply bloom filter
             let start = Instant::now();
-            ExprBloomFilter::new(runtime_filter.filter).apply(probe_column, &mut bitmap)?;
+            ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column, &mut bitmap)?;
             let elapsed = start.elapsed();
             let unset_bits = bitmap.null_count();
             runtime_filter
