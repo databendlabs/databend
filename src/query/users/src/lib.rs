@@ -34,11 +34,11 @@ pub mod file_format;
 pub mod role_cache_mgr;
 pub mod role_util;
 
+pub use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
+pub use databend_common_meta_app::principal::BUILTIN_ROLE_PUBLIC;
 pub use jwt::*;
 pub use password_policy::*;
 pub use role_cache_mgr::RoleCacheManager;
-pub use role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
-pub use role_mgr::BUILTIN_ROLE_PUBLIC;
 pub use user::CertifiedInfo;
 pub use user_api::UserApiProvider;
 pub use visibility_checker::GrantObjectVisibilityChecker;

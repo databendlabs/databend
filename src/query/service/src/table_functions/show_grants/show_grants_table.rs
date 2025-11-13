@@ -57,6 +57,7 @@ use databend_common_sql::validate_function_arg;
 use databend_common_users::Object;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_enterprise_resources_management::ResourcesManagement;
 use itertools::Itertools;
 
@@ -456,7 +457,7 @@ async fn show_account_grants(
     let mut privileges = vec![];
     if !expand_roles {
         for role in &roles {
-            if !(grant_type == "role" && role == &name || name == "account_admin") {
+            if !(grant_type == "role" && role == &name || name == BUILTIN_ROLE_ACCOUNT_ADMIN) {
                 object_name.push("".to_string());
                 object_id.push(None);
                 privileges.push("".to_string());
@@ -576,7 +577,7 @@ async fn show_account_grants(
 
     // If roles contains account_admin, it means this role has all roles.
     // No need to display ownership.
-    if !roles.contains(&"account_admin".to_string()) {
+    if !roles.contains(&BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()) {
         let roles = if expand_roles {
             roles
         } else if grant_type == "role" {

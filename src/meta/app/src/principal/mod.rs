@@ -38,6 +38,13 @@ mod user_stage;
 mod ownership_object;
 
 mod auto_increment;
+
+/// Built-in role name with full administrative privileges.
+pub const BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
+
+/// Built-in role that every user inherits by default.
+pub const BUILTIN_ROLE_PUBLIC: &str = "public";
+
 pub mod client_session;
 pub mod client_session_ident;
 pub mod connection_ident;

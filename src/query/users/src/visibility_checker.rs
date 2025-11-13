@@ -14,17 +14,22 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::string::ToString;
+use std::sync::Arc;
 
+use databend_common_hashtable::HashMap as FastHashMap;
+use databend_common_hashtable::HashSet as FastHashSet;
+use databend_common_hashtable::HashtableKeyable;
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::BitFlags;
 use itertools::Itertools;
+use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 
 pub enum Object {
     Stage,
@@ -35,85 +40,181 @@ pub enum Object {
     All,
 }
 
-/// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a
-/// database or table.
-/// It is used in `SHOW DATABASES` and `SHOW TABLES` statements.
+struct CatalogIdPool {
+    name_to_id: FxHashMap<Arc<str>, u32>,
+    id_to_name: Vec<Arc<str>>,
+}
+
+impl CatalogIdPool {
+    /// Creates a new empty catalog ID pool.
+    fn new() -> Self {
+        Self {
+            name_to_id: FxHashMap::default(),
+            id_to_name: Vec::new(),
+        }
+    }
+
+    /// Gets or inserts a catalog name, returning its u32 ID.
+    /// If the name already exists, returns the existing ID.
+    /// If the name is new, assigns a new sequential ID.
+    fn get_or_insert(&mut self, name: impl AsRef<str>) -> u32 {
+        let name = name.as_ref();
+        if let Some(&id) = self.name_to_id.get(name) {
+            return id;
+        }
+
+        let id = self.id_to_name.len() as u32;
+        let name: Arc<str> = Arc::from(name);
+        self.name_to_id.insert(name.clone(), id);
+        self.id_to_name.push(name);
+        id
+    }
+
+    /// Gets the catalog ID for a given name, if it exists.
+    #[inline]
+    fn get_id(&self, name: &str) -> Option<u32> {
+        self.name_to_id.get(name).copied()
+    }
+
+    /// Gets the catalog name for a given ID.
+    #[inline]
+    fn get_name(&self, id: u32) -> Option<&Arc<str>> {
+        self.id_to_name.get(id as usize)
+    }
+}
+
+#[inline(always)]
+fn fast_map_get_or_insert<K, V, F>(map: &mut FastHashMap<K, V>, key: K, ctor: F) -> &mut V
+where
+    K: HashtableKeyable,
+    F: FnOnce() -> V,
+{
+    unsafe {
+        match map.insert(key) {
+            Ok(slot) => slot.write(ctor()),
+            Err(entry) => entry,
+        }
+    }
+}
+
+#[inline(always)]
+fn is_system_database(name: &str) -> bool {
+    name.eq_ignore_ascii_case("information_schema") || name.eq_ignore_ascii_case("system")
+}
+
+/// Checks visibility of grant objects (databases, tables, UDFs, stages, etc.) for a user and their roles.
+///
+/// This structure is optimized for large-scale ownership checking by:
+/// 1. Using a CatalogIdPool to map catalog names to u32 IDs, avoiding repeated string hashing
+/// 2. Using FastHashMap/FastHashSet for fast integer-based lookups
+/// 3. Pre-allocating capacity to avoid hash table expansion
+/// 4. Single-pass construction that traverses grant_sets and ownership_objects only once each
 pub struct GrantObjectVisibilityChecker {
+    // Global flags for unrestricted access
     granted_global_udf: bool,
     granted_global_ws: bool,
     granted_global_c: bool,
     granted_global_seq: bool,
     granted_global_procedure: bool,
-    granted_global_db_table: bool,
     granted_global_stage: bool,
     granted_global_read_stage: bool,
-    granted_databases: HashSet<(String, String)>,
-    granted_databases_id: HashSet<(String, u64)>,
-    granted_tables: HashSet<(String, String, String)>,
-    granted_tables_id: HashSet<(String, u64, u64)>,
-    extra_databases: HashSet<(String, String)>,
-    sys_databases: HashSet<(String, String)>,
-    extra_databases_id: HashSet<(String, u64)>,
-    granted_udfs: HashSet<String>,
-    granted_write_stages: HashSet<String>,
-    granted_read_stages: HashSet<String>,
-    granted_ws: HashSet<String>,
-    granted_c: HashSet<String>,
-    granted_seq: HashSet<String>,
-    granted_procedures_id: HashSet<u64>,
+    granted_global_db_table: bool,
+
+    // Catalog ID pool for efficient name → ID mapping
+    catalog_pool: CatalogIdPool,
+
+    // ID-based storage (u32 catalog_id → u64 snowflake_ids)
+    // These use integer keys for fast lookups
+    granted_databases_id: FastHashMap<u32, FastHashSet<u64>>,
+    granted_tables_id: FastHashMap<u32, FastHashMap<u64, FastHashSet<u64>>>,
+    extra_databases_id: FastHashMap<u32, FastHashSet<u64>>,
+    granted_procedures_id: FastHashSet<u64>,
+
+    // Name-based storage (backward compatibility)
+    granted_databases: FxHashSet<(Arc<str>, Arc<str>)>,
+    extra_databases: FxHashSet<(Arc<str>, Arc<str>)>,
+    granted_tables: FxHashSet<(Arc<str>, Arc<str>, Arc<str>)>,
+    sys_databases: FxHashSet<(Arc<str>, Arc<str>)>,
+
+    // Other name-based grants
+    granted_udfs: FxHashSet<Arc<str>>,
+    granted_write_stages: FxHashSet<Arc<str>>,
+    granted_read_stages: FxHashSet<Arc<str>>,
+    granted_ws: FxHashSet<Arc<str>>,
+    granted_c: FxHashSet<Arc<str>>,
+    granted_seq: FxHashSet<Arc<str>>,
 }
 
 impl GrantObjectVisibilityChecker {
-    pub fn new(
-        user: &UserInfo,
-        available_roles: &Vec<RoleInfo>,
-        ownership_objects: &[OwnershipObject],
-    ) -> Self {
+    pub fn new(user: &UserInfo, roles: &[RoleInfo], ownership_objects: &[OwnershipInfo]) -> Self {
         let mut granted_global_udf = false;
         let mut granted_global_ws = false;
         let mut granted_global_c = false;
         let mut granted_global_seq = false;
         let mut granted_global_procedure = false;
-        let mut granted_global_db_table = false;
         let mut granted_global_stage = false;
         let mut granted_global_read_stage = false;
-        let mut granted_databases = HashSet::new();
-        let mut granted_tables = HashSet::new();
-        let mut granted_udfs = HashSet::new();
-        let mut granted_ws = HashSet::new();
-        let mut granted_c = HashSet::new();
-        let mut granted_seq = HashSet::new();
-        let mut granted_procedures_id = HashSet::new();
-        let mut granted_write_stages = HashSet::new();
-        let mut granted_read_stages = HashSet::new();
-        let mut extra_databases = HashSet::new();
-        let mut granted_databases_id = HashSet::new();
-        let mut extra_databases_id = HashSet::new();
-        let mut granted_tables_id = HashSet::new();
+        let mut granted_global_db_table = false;
+        let mut catalog_pool = CatalogIdPool::new();
+        let total_objects = ownership_objects.len();
+        // Most deployments use only the default catalog
+        let estimated_catalogs = 1;
+        let estimated_dbs_per_catalog = (total_objects / estimated_catalogs / 10).max(16);
+        // Adaptive initial capacity based on total objects:
+        // - Small datasets (< 10K): 16 (minimal memory overhead)
+        // - Medium datasets (10K-1M): 64 (good balance)
+        // - Large datasets (> 1M): 128 (reduce rehashing for large single-DB cases)
+        let estimated_tables_per_db = if total_objects < 10_000 {
+            16
+        } else if total_objects < 1_000_000 {
+            64
+        } else {
+            128
+        };
 
-        let mut grant_sets: Vec<&UserGrantSet> = vec![&user.grants];
-        for role in available_roles {
-            grant_sets.push(&role.grants);
+        let mut granted_databases_id: FastHashMap<u32, FastHashSet<u64>> =
+            FastHashMap::with_capacity(estimated_catalogs);
+        let mut granted_tables_id: FastHashMap<u32, FastHashMap<u64, FastHashSet<u64>>> =
+            FastHashMap::with_capacity(estimated_catalogs);
+        let mut extra_databases_id: FastHashMap<u32, FastHashSet<u64>> =
+            FastHashMap::with_capacity(estimated_catalogs);
+        let mut granted_procedures_id: FastHashSet<u64> =
+            FastHashSet::with_capacity(total_objects / 10);
+
+        let mut granted_databases: FxHashSet<(Arc<str>, Arc<str>)> =
+            FxHashSet::with_capacity_and_hasher(total_objects / 10, Default::default());
+        let mut extra_databases: FxHashSet<(Arc<str>, Arc<str>)> =
+            FxHashSet::with_capacity_and_hasher(total_objects / 10, Default::default());
+        let mut granted_tables: FxHashSet<(Arc<str>, Arc<str>, Arc<str>)> =
+            FxHashSet::with_capacity_and_hasher(total_objects, Default::default());
+
+        let mut granted_udfs: FxHashSet<Arc<str>> = FxHashSet::default();
+        let mut granted_write_stages: FxHashSet<Arc<str>> = FxHashSet::default();
+        let mut granted_read_stages: FxHashSet<Arc<str>> = FxHashSet::default();
+        let mut granted_ws: FxHashSet<Arc<str>> = FxHashSet::default();
+        let mut granted_c: FxHashSet<Arc<str>> = FxHashSet::default();
+        let mut granted_seq: FxHashSet<Arc<str>> = FxHashSet::default();
+
+        let grant_sets = std::iter::once(&user.grants).chain(roles.iter().map(|r| &r.grants));
+
+        // Helper function to check if privileges match a certain type
+        fn check_privilege<T, F>(granted: &mut bool, mut iter: T, condition: F)
+        where
+            T: Iterator<Item = UserPrivilegeType>,
+            F: Fn(UserPrivilegeType) -> bool,
+        {
+            if !*granted {
+                *granted |= iter.any(condition);
+            }
         }
-        for grant_set in grant_sets {
-            for ent in grant_set.entries() {
-                match ent.object() {
-                    GrantObject::Global => {
-                        // this check validates every granted entry's privileges
-                        // contains any privilege on *.* of database/table/stage/udf
-                        fn check_privilege<T, F>(granted: &mut bool, mut iter: T, condition: F)
-                        where
-                            T: Iterator<Item = UserPrivilegeType>,
-                            F: Fn(UserPrivilegeType) -> bool,
-                        {
-                            if !*granted {
-                                *granted |= iter.any(condition);
-                            }
-                        }
 
+        for grant_set in grant_sets {
+            for grant_entry in grant_set.entries() {
+                match grant_entry.object() {
+                    GrantObject::Global => {
                         check_privilege(
                             &mut granted_global_udf,
-                            ent.privileges().iter(),
+                            grant_entry.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_udf(false)
                                     .has_privilege(privilege)
@@ -122,7 +223,7 @@ impl GrantObjectVisibilityChecker {
 
                         check_privilege(
                             &mut granted_global_ws,
-                            ent.privileges().iter(),
+                            grant_entry.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_warehouse(false)
                                     .has_privilege(privilege)
@@ -131,7 +232,7 @@ impl GrantObjectVisibilityChecker {
 
                         check_privilege(
                             &mut granted_global_c,
-                            ent.privileges().iter(),
+                            grant_entry.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_connection(false)
                                     .has_privilege(privilege)
@@ -140,7 +241,7 @@ impl GrantObjectVisibilityChecker {
 
                         check_privilege(
                             &mut granted_global_seq,
-                            ent.privileges().iter(),
+                            grant_entry.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_sequence(false)
                                     .has_privilege(privilege)
@@ -149,7 +250,7 @@ impl GrantObjectVisibilityChecker {
 
                         check_privilege(
                             &mut granted_global_procedure,
-                            ent.privileges().iter(),
+                            grant_entry.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_procedure(false)
                                     .has_privilege(privilege)
@@ -158,7 +259,7 @@ impl GrantObjectVisibilityChecker {
 
                         check_privilege(
                             &mut granted_global_stage,
-                            ent.privileges().iter(),
+                            grant_entry.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_stage(false)
                                     .has_privilege(privilege)
@@ -167,119 +268,178 @@ impl GrantObjectVisibilityChecker {
 
                         check_privilege(
                             &mut granted_global_read_stage,
-                            ent.privileges().iter(),
+                            grant_entry.privileges().iter(),
                             |privilege| privilege == UserPrivilegeType::Read,
                         );
 
                         check_privilege(
                             &mut granted_global_db_table,
-                            ent.privileges().iter(),
+                            grant_entry.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_database(false)
                                     .has_privilege(privilege)
                             },
                         );
                     }
-                    GrantObject::Database(catalog, db) => {
-                        if !(ent.privileges().len() == 1
-                            && ent.privileges().contains(UserPrivilegeType::Usage))
+                    GrantObject::DatabaseById(catalog, db_id) => {
+                        // If only has db level usage privilege means only support use db.
+                        if !(grant_entry.privileges().len() == 1
+                            && grant_entry
+                                .privileges()
+                                .contains(BitFlags::from(UserPrivilegeType::Usage)))
                         {
-                            granted_databases.insert((catalog.to_string(), db.to_string()));
+                            let catalog_id = catalog_pool.get_or_insert(catalog);
+                            let db_set = fast_map_get_or_insert(
+                                &mut granted_databases_id,
+                                catalog_id,
+                                || FastHashSet::with_capacity(estimated_dbs_per_catalog),
+                            );
+                            let _ = db_set.set_insert(*db_id);
                         }
                     }
-                    GrantObject::DatabaseById(catalog, db) => {
+                    GrantObject::Database(catalog, db) => {
                         // If only has db level usage privilege means only support use db.
-                        if !(ent.privileges().len() == 1
-                            && ent.privileges().contains(UserPrivilegeType::Usage))
+                        if !(grant_entry.privileges().len() == 1
+                            && grant_entry
+                                .privileges()
+                                .contains(BitFlags::from(UserPrivilegeType::Usage)))
                         {
-                            granted_databases_id.insert((catalog.to_string(), *db));
+                            let catalog: Arc<str> = Arc::from(catalog.as_str());
+                            let db: Arc<str> = Arc::from(db.as_str());
+                            granted_databases.insert((catalog, db));
                         }
+                    }
+                    GrantObject::TableById(catalog, db_id, table_id) => {
+                        let catalog_id = catalog_pool.get_or_insert(catalog);
+                        let db_map =
+                            fast_map_get_or_insert(&mut granted_tables_id, catalog_id, || {
+                                FastHashMap::with_capacity(estimated_dbs_per_catalog)
+                            });
+                        let table_set = fast_map_get_or_insert(db_map, *db_id, || {
+                            FastHashSet::with_capacity(estimated_tables_per_db)
+                        });
+                        let _ = table_set.set_insert(*table_id);
+
+                        // if table is visible, the table's database is also treated as visible
+                        let extra_set = fast_map_get_or_insert(
+                            &mut extra_databases_id,
+                            catalog_pool.get_or_insert(catalog),
+                            || FastHashSet::with_capacity(estimated_dbs_per_catalog),
+                        );
+                        let _ = extra_set.set_insert(*db_id);
                     }
                     GrantObject::Table(catalog, db, table) => {
-                        granted_tables.insert((
-                            catalog.to_string(),
-                            db.to_string(),
-                            table.to_string(),
-                        ));
+                        let catalog: Arc<str> = Arc::from(catalog.as_str());
+                        let db: Arc<str> = Arc::from(db.as_str());
+                        let table: Arc<str> = Arc::from(table.as_str());
+                        granted_tables.insert((catalog.clone(), db.clone(), table));
+
                         // if table is visible, the table's database is also treated as visible
-                        extra_databases.insert((catalog.to_string(), db.to_string()));
-                    }
-                    GrantObject::TableById(catalog, db, table) => {
-                        granted_tables_id.insert((catalog.to_string(), *db, *table));
-                        // if table is visible, the table's database is also treated as visible
-                        extra_databases_id.insert((catalog.to_string(), *db));
+                        extra_databases.insert((catalog, db));
                     }
                     GrantObject::UDF(udf) => {
-                        granted_udfs.insert(udf.to_string());
+                        granted_udfs.insert(Arc::from(udf.as_str()));
                     }
                     GrantObject::Stage(stage) => {
-                        if ent
+                        if grant_entry
                             .privileges()
                             .contains(BitFlags::from(UserPrivilegeType::Write))
                         {
-                            granted_write_stages.insert(stage.to_string());
+                            granted_write_stages.insert(Arc::from(stage.as_str()));
                         }
-                        if ent
+                        if grant_entry
                             .privileges()
                             .contains(BitFlags::from(UserPrivilegeType::Read))
                         {
-                            granted_read_stages.insert(stage.to_string());
+                            granted_read_stages.insert(Arc::from(stage.as_str()));
                         }
                     }
                     GrantObject::Warehouse(w) => {
-                        granted_ws.insert(w.to_string());
+                        granted_ws.insert(Arc::from(w.as_str()));
                     }
                     GrantObject::Connection(c) => {
-                        granted_c.insert(c.to_string());
+                        granted_c.insert(Arc::from(c.as_str()));
                     }
-                    GrantObject::Sequence(c) => {
-                        granted_seq.insert(c.to_string());
+                    GrantObject::Sequence(s) => {
+                        granted_seq.insert(Arc::from(s.as_str()));
                     }
                     GrantObject::Procedure(procedure_id) => {
-                        granted_procedures_id.insert(*procedure_id);
+                        let _ = granted_procedures_id.set_insert(*procedure_id);
                     }
                 }
             }
         }
 
-        for ownership_object in ownership_objects {
-            match ownership_object {
+        for ownership in ownership_objects {
+            match &ownership.object {
                 OwnershipObject::Database {
                     catalog_name,
                     db_id,
                 } => {
-                    granted_databases_id.insert((catalog_name.to_string(), *db_id));
+                    let catalog_id = catalog_pool.get_or_insert(catalog_name);
+                    let db_set =
+                        fast_map_get_or_insert(&mut granted_databases_id, catalog_id, || {
+                            FastHashSet::with_capacity(estimated_dbs_per_catalog)
+                        });
+                    let _ = db_set.set_insert(*db_id);
+                    let extra_set =
+                        fast_map_get_or_insert(&mut extra_databases_id, catalog_id, || {
+                            FastHashSet::with_capacity(estimated_dbs_per_catalog)
+                        });
+                    let _ = extra_set.set_insert(*db_id);
                 }
                 OwnershipObject::Table {
                     catalog_name,
                     db_id,
                     table_id,
                 } => {
-                    granted_tables_id.insert((catalog_name.to_string(), *db_id, *table_id));
+                    let catalog_id = catalog_pool.get_or_insert(catalog_name);
+                    let db_map = fast_map_get_or_insert(&mut granted_tables_id, catalog_id, || {
+                        FastHashMap::with_capacity(estimated_dbs_per_catalog)
+                    });
+                    let table_set = fast_map_get_or_insert(db_map, *db_id, || {
+                        FastHashSet::with_capacity(estimated_tables_per_db)
+                    });
+                    let _ = table_set.set_insert(*table_id);
+
                     // if table is visible, the table's database is also treated as visible
-                    extra_databases_id.insert((catalog_name.to_string(), *db_id));
+                    let extra_set =
+                        fast_map_get_or_insert(&mut extra_databases_id, catalog_id, || {
+                            FastHashSet::with_capacity(estimated_dbs_per_catalog)
+                        });
+                    let _ = extra_set.set_insert(*db_id);
                 }
                 OwnershipObject::Stage { name } => {
-                    granted_write_stages.insert(name.to_string());
-                    granted_read_stages.insert(name.to_string());
+                    let name: Arc<str> = Arc::from(name.as_str());
+                    granted_write_stages.insert(name.clone());
+                    granted_read_stages.insert(name);
                 }
                 OwnershipObject::UDF { name } => {
-                    granted_udfs.insert(name.to_string());
+                    granted_udfs.insert(Arc::from(name.as_str()));
                 }
                 OwnershipObject::Warehouse { id } => {
-                    granted_ws.insert(id.to_string());
+                    granted_ws.insert(Arc::from(id.as_str()));
                 }
                 OwnershipObject::Connection { name } => {
-                    granted_c.insert(name.to_string());
+                    granted_c.insert(Arc::from(name.as_str()));
                 }
                 OwnershipObject::Sequence { name } => {
-                    granted_seq.insert(name.to_string());
+                    granted_seq.insert(Arc::from(name.as_str()));
                 }
-                OwnershipObject::Procedure { procedure_id } => {
-                    granted_procedures_id.insert(*procedure_id);
+                OwnershipObject::Procedure { procedure_id, .. } => {
+                    let _ = granted_procedures_id.set_insert(*procedure_id);
                 }
             }
         }
+
+        // Phase 4: Add system databases
+        let mut sys_databases: FxHashSet<(Arc<str>, Arc<str>)> =
+            FxHashSet::with_capacity_and_hasher(2, Default::default());
+        let default_catalog: Arc<str> = Arc::from("default");
+        let info_schema: Arc<str> = Arc::from("information_schema");
+        let system: Arc<str> = Arc::from("system");
+        sys_databases.insert((default_catalog.clone(), info_schema));
+        sys_databases.insert((default_catalog, system));
 
         Self {
             granted_global_udf,
@@ -287,22 +447,20 @@ impl GrantObjectVisibilityChecker {
             granted_global_c,
             granted_global_seq,
             granted_global_procedure,
-            granted_global_db_table,
             granted_global_stage,
             granted_global_read_stage,
-            granted_databases,
+            granted_global_db_table,
+            catalog_pool,
             granted_databases_id,
-            granted_tables,
             granted_tables_id,
-            extra_databases,
             extra_databases_id,
+            granted_databases,
+            extra_databases,
+            granted_tables,
+            sys_databases,
             granted_udfs,
             granted_write_stages,
             granted_read_stages,
-            sys_databases: HashSet::from([
-                ("default".to_string(), "information_schema".to_string()),
-                ("default".to_string(), "system".to_string()),
-            ]),
             granted_ws,
             granted_c,
             granted_seq,
@@ -310,61 +468,194 @@ impl GrantObjectVisibilityChecker {
         }
     }
 
-    pub fn check_stage_visibility(&self, stage: &str) -> bool {
-        if self.granted_global_stage {
+    #[inline(always)]
+    pub fn check_database_visibility_by_id(&self, catalog_id: u32, db_id: u64) -> bool {
+        if self.granted_global_db_table {
             return true;
         }
 
-        if self.granted_read_stages.contains(stage) || self.granted_write_stages.contains(stage) {
+        if self
+            .granted_databases_id
+            .get(&catalog_id)
+            .map(|set| set.contains(&db_id))
+            .unwrap_or(false)
+        {
             return true;
         }
+
+        if self
+            .extra_databases_id
+            .get(&catalog_id)
+            .map(|set| set.contains(&db_id))
+            .unwrap_or(false)
+        {
+            return true;
+        }
+
         false
     }
 
-    pub fn check_stage_read_visibility(&self, stage: &str) -> bool {
-        if self.granted_global_read_stage {
+    #[inline(always)]
+    pub fn check_table_visibility_by_id(&self, catalog_id: u32, db_id: u64, table_id: u64) -> bool {
+        if self.granted_global_db_table {
             return true;
         }
 
-        if self.granted_read_stages.contains(stage) {
+        if self
+            .granted_databases_id
+            .get(&catalog_id)
+            .map(|set| set.contains(&db_id))
+            .unwrap_or(false)
+        {
             return true;
         }
+
+        if let Some(db_tables) = self.granted_tables_id.get(&catalog_id) {
+            if let Some(tables) = db_tables.get(&db_id) {
+                if tables.contains(&table_id) {
+                    return true;
+                }
+            }
+        }
+
         false
     }
 
+    #[inline]
+    pub fn check_database_visibility(&self, catalog: &str, db: &str, db_id: u64) -> bool {
+        // Fast path: global privileges
+        if self.granted_global_db_table {
+            return true;
+        }
+
+        // System databases in every catalog are always visible
+        if is_system_database(db) {
+            return true;
+        }
+
+        if let Some(catalog_id) = self.catalog_pool.get_id(catalog) {
+            if self.check_database_visibility_by_id(catalog_id, db_id) {
+                return true;
+            }
+        }
+
+        if self.granted_databases.is_empty()
+            && self.extra_databases.is_empty()
+            && self.sys_databases.is_empty()
+        {
+            return false;
+        }
+
+        let catalog: Arc<str> = Arc::from(catalog);
+        let db: Arc<str> = Arc::from(db);
+        if self.sys_databases.contains(&(catalog.clone(), db.clone())) {
+            return true;
+        }
+
+        if self
+            .extra_databases
+            .contains(&(catalog.clone(), db.clone()))
+        {
+            return true;
+        }
+
+        self.granted_databases.contains(&(catalog, db))
+    }
+
+    #[inline]
+    pub fn check_table_visibility(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        db_id: u64,
+        table_id: u64,
+    ) -> bool {
+        // Skip system databases
+        if is_system_database(database) {
+            return true;
+        }
+
+        if self.granted_global_db_table {
+            return true;
+        }
+
+        if let Some(catalog_id) = self.catalog_pool.get_id(catalog) {
+            if self.check_table_visibility_by_id(catalog_id, db_id, table_id) {
+                return true;
+            }
+        }
+
+        if self.granted_databases.is_empty() && self.granted_tables.is_empty() {
+            return false;
+        }
+
+        let catalog: Arc<str> = Arc::from(catalog);
+        let database: Arc<str> = Arc::from(database);
+
+        if self
+            .granted_databases
+            .contains(&(catalog.clone(), database.clone()))
+        {
+            return true;
+        }
+
+        let table: Arc<str> = Arc::from(table);
+        if self.granted_tables.contains(&(catalog, database, table)) {
+            return true;
+        }
+
+        false
+    }
+
+    #[inline]
     pub fn check_udf_visibility(&self, udf: &str) -> bool {
         if self.granted_global_udf {
             return true;
         }
-
         if self.granted_udfs.contains(udf) {
             return true;
         }
         false
     }
 
+    #[inline]
+    pub fn check_stage_visibility(&self, stage: &str) -> bool {
+        if self.granted_global_stage {
+            return true;
+        }
+        if self.granted_write_stages.contains(stage) {
+            return true;
+        }
+        if self.granted_read_stages.contains(stage) {
+            return true;
+        }
+        false
+    }
+
+    #[inline]
+    pub fn check_stage_read_visibility(&self, stage: &str) -> bool {
+        if self.granted_global_read_stage {
+            return true;
+        }
+        if self.granted_read_stages.contains(stage) {
+            return true;
+        }
+        false
+    }
+
+    #[inline]
     pub fn check_warehouse_visibility(&self, id: &str) -> bool {
         if self.granted_global_ws {
             return true;
         }
-
         if self.granted_ws.contains(id) {
             return true;
         }
         false
     }
 
-    pub fn check_procedure_visibility(&self, id: &u64) -> bool {
-        if self.granted_global_procedure {
-            return true;
-        }
-
-        if self.granted_procedures_id.contains(id) {
-            return true;
-        }
-        false
-    }
-
+    #[inline]
     pub fn check_connection_visibility(&self, name: &str) -> bool {
         if self.granted_global_c {
             return true;
@@ -375,6 +666,7 @@ impl GrantObjectVisibilityChecker {
         false
     }
 
+    #[inline]
     pub fn check_seq_visibility(&self, name: &str) -> bool {
         if self.granted_global_seq {
             return true;
@@ -385,135 +677,70 @@ impl GrantObjectVisibilityChecker {
         false
     }
 
-    pub fn check_database_visibility(&self, catalog: &str, db: &str, db_id: u64) -> bool {
-        // skip information_schema privilege check
-        if db.to_lowercase() == "information_schema" || db.to_lowercase() == "system" {
+    #[inline]
+    pub fn check_procedure_visibility(&self, id: &u64) -> bool {
+        if self.granted_global_procedure {
             return true;
         }
-
-        if self.granted_global_db_table {
+        if self.granted_procedures_id.contains(id) {
             return true;
         }
-
-        if self
-            .granted_databases
-            .contains(&(catalog.to_string(), db.to_string()))
-        {
-            return true;
-        }
-
-        if self
-            .granted_databases_id
-            .contains(&(catalog.to_string(), db_id))
-        {
-            return true;
-        }
-
-        // if one of the tables in the database is granted, the database is also visible
-        if self
-            .extra_databases
-            .contains(&(catalog.to_string(), db.to_string()))
-        {
-            return true;
-        }
-
-        if self
-            .extra_databases_id
-            .contains(&(catalog.to_string(), db_id))
-        {
-            return true;
-        }
-
-        false
-    }
-
-    pub fn check_table_visibility(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        db_id: u64,
-        table_id: u64,
-    ) -> bool {
-        // skip information_schema privilege check
-        if database.to_lowercase() == "information_schema" || database.to_lowercase() == "system" {
-            return true;
-        }
-
-        if self.granted_global_db_table {
-            return true;
-        }
-
-        // if database is granted, all the tables in it are visible
-        if self
-            .granted_databases
-            .contains(&(catalog.to_string(), database.to_string()))
-        {
-            return true;
-        }
-
-        if self
-            .granted_databases_id
-            .contains(&(catalog.to_string(), db_id))
-        {
-            return true;
-        }
-
-        if self.granted_tables.contains(&(
-            catalog.to_string(),
-            database.to_string(),
-            table.to_string(),
-        )) {
-            return true;
-        }
-
-        if self
-            .granted_tables_id
-            .contains(&(catalog.to_string(), db_id, table_id))
-        {
-            return true;
-        }
-
         false
     }
 
     #[allow(clippy::type_complexity)]
     pub fn get_visibility_database(
         &self,
-    ) -> Option<HashMap<&String, HashSet<(Option<&String>, Option<&u64>)>>> {
+    ) -> Option<HashMap<&str, HashSet<(Option<&str>, Option<&u64>)>>> {
         if self.granted_global_db_table {
             return None;
         }
 
         let capacity = self.granted_databases.len()
-            + self.granted_databases_id.len()
             + self.extra_databases.len()
+            + self.granted_databases_id.len()
             + self.extra_databases_id.len()
             + self.sys_databases.len();
 
         let dbs = self
             .granted_databases
             .iter()
-            .map(|(catalog, db)| (catalog, (Some(db), None)))
-            .chain(
-                self.granted_databases_id
-                    .iter()
-                    .map(|(catalog, db_id)| (catalog, (None, Some(db_id)))),
-            )
+            .map(|(catalog, db)| (catalog.as_ref(), (Some(db.as_ref()), None)))
             .chain(
                 self.extra_databases
                     .iter()
-                    .map(|(catalog, db)| (catalog, (Some(db), None))),
+                    .map(|(catalog, db)| (catalog.as_ref(), (Some(db.as_ref()), None))),
             )
             .chain(
-                self.sys_databases
+                self.granted_databases_id
                     .iter()
-                    .map(|(catalog, db)| (catalog, (Some(db), None))),
+                    .flat_map(|entry| {
+                        let catalog_id = *entry.key();
+                        self.catalog_pool.get_name(catalog_id).map(|catalog| {
+                            entry.get().iter().map(move |db_entry| {
+                                (catalog.as_ref(), (None, Some(db_entry.key())))
+                            })
+                        })
+                    })
+                    .flatten(),
             )
             .chain(
                 self.extra_databases_id
                     .iter()
-                    .map(|(catalog, db_id)| (catalog, (None, Some(db_id)))),
+                    .flat_map(|entry| {
+                        let catalog_id = *entry.key();
+                        self.catalog_pool.get_name(catalog_id).map(|catalog| {
+                            entry.get().iter().map(move |db_entry| {
+                                (catalog.as_ref(), (None, Some(db_entry.key())))
+                            })
+                        })
+                    })
+                    .flatten(),
+            )
+            .chain(
+                self.sys_databases
+                    .iter()
+                    .map(|(catalog, db)| (catalog.as_ref(), (Some(db.as_ref()), None))),
             )
             .into_grouping_map()
             .fold(

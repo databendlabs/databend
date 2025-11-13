@@ -18,8 +18,8 @@ use std::collections::VecDeque;
 
 use databend_common_meta_app::principal::RoleInfo;
 
-use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use crate::role_mgr::BUILTIN_ROLE_PUBLIC;
+use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use crate::BUILTIN_ROLE_PUBLIC;
 
 // An role can be granted with multiple roles, find all the related roles in a DFS manner
 pub fn find_all_related_roles(
