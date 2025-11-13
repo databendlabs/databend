@@ -36,6 +36,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
+#[cfg_attr(not(feature = "python-udf"), allow(unused_imports))]
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::plans::UDFLanguage;
@@ -747,37 +748,44 @@ impl TransformUdfScript {
         Ok(block_entries)
     }
 
-    #[cfg(feature = "python-udf")]
     fn collect_stage_fingerprints(
         imports_stage_info: &[(StageInfo, String)],
     ) -> Result<Vec<venv::StageImportFingerprint>> {
-        if imports_stage_info.is_empty() {
-            return Ok(Vec::new());
-        }
+        #[cfg(feature = "python-udf")]
+        {
+            if imports_stage_info.is_empty() {
+                return Ok(Vec::new());
+            }
 
-        let mut tasks = Vec::with_capacity(imports_stage_info.len());
-        for (stage, path) in imports_stage_info.iter() {
-            let op = init_stage_operator(stage)?;
-            let stage_name = stage.stage_name.clone();
-            let path = path.clone();
-            tasks.push(async move {
-                let meta = op.stat(&path).await.map_err(|e| {
-                    ErrorCode::StorageUnavailable(format!(
-                        "Failed to stat stage file '{path}': {e}"
-                    ))
-                })?;
-                Ok(venv::StageImportFingerprint {
-                    stage_name,
-                    path,
-                    content_length: meta.content_length(),
-                    etag: meta.etag().map(str::to_string),
-                })
-            });
-        }
+            let mut tasks = Vec::with_capacity(imports_stage_info.len());
+            for (stage, path) in imports_stage_info.iter() {
+                let op = init_stage_operator(stage)?;
+                let stage_name = stage.stage_name.clone();
+                let path = path.clone();
+                tasks.push(async move {
+                    let meta = op.stat(&path).await.map_err(|e| {
+                        ErrorCode::StorageUnavailable(format!(
+                            "Failed to stat stage file '{path}': {e}"
+                        ))
+                    })?;
+                    Ok(venv::StageImportFingerprint {
+                        stage_name,
+                        path,
+                        content_length: meta.content_length(),
+                        etag: meta.etag().map(str::to_string),
+                    })
+                });
+            }
 
-        databend_common_base::runtime::block_on(async {
-            futures::future::try_join_all(tasks).await
-        })
+            databend_common_base::runtime::block_on(async {
+                futures::future::try_join_all(tasks).await
+            })
+        }
+        #[cfg(not(feature = "python-udf"))]
+        {
+            let _ = imports_stage_info;
+            Ok(Vec::new())
+        }
     }
 
     fn create_input_batch(
