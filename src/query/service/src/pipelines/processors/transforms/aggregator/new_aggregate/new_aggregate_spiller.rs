@@ -30,7 +30,7 @@ use databend_common_pipeline_transforms::traits::Location;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
-use log::info;
+use log::debug;
 use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;
 
@@ -304,7 +304,7 @@ impl NewAggregateSpiller {
         self.payload_writers.write_ready_blocks(pending_blocks)?;
 
         let payloads = self.payload_writers.finalize()?;
-        info!(
+        debug!(
             "[NewAggregateSpiller] spill finish with {} payloads",
             payloads.len()
         );
