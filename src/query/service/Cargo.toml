@@ -175,8 +175,8 @@ typetag = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
-zip = { workspace = true }
 xorf = { workspace = true }
+zip = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
