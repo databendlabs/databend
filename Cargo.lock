@@ -4902,7 +4902,6 @@ dependencies = [
  "async-trait",
  "databend-common-base",
  "databend-common-exception",
- "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-store",
  "databend-common-meta-types",

@@ -92,7 +92,7 @@ select * from policy_references(POLICY_NAME => 'rap_multi_case1');
 rap_multi_case1 ROW ACCESS POLICY default employees1 TABLE NULL name, department ACTIVE
 
 query T
-select * from policy_references(POLICY_NAME => 'mask_ssn_conditional1');
+select * from policy_references(POLICY_NAME => 'mask_ssn_conditional1') order by ref_entity_name;
 ----
 mask_ssn_conditional1 MASKING POLICY default employees1 TABLE ssn role ACTIVE
 mask_ssn_conditional1 MASKING POLICY default employees2 TABLE ssn role ACTIVE
