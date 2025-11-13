@@ -28,6 +28,7 @@ AggregateFinal
         ├── set returning functions: unnest(fold_count.id (#0))
         └── TableScan
             ├── table: default.default.fold_count
+            ├── scan id: 0
             ├── output columns: [id (#0)]
             ├── read rows: 1
             ├── read size: < 1 KiB
@@ -58,6 +59,7 @@ ProjectSet
 ├── set returning functions: unnest([1, 2, 3])
 └── TableScan
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -75,6 +77,7 @@ ProjectSet
 ├── set returning functions: unnest(CAST(array(1, 2, 3, numbers.number (#0)) AS Array(UInt64 NULL)))
 └── TableScan
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -102,6 +105,7 @@ EvalScalar
     ├── set returning functions: flatten(1, 5)(t.b (#1))
     └── TableScan
         ├── table: default.project_set.t
+        ├── scan id: 0
         ├── output columns: [a (#0), b (#1)]
         ├── read rows: 0
         ├── read size: 0
@@ -127,6 +131,7 @@ EvalScalar
         ├── set returning functions: flatten(1, 2, 5)(t.b (#1))
         └── TableScan
             ├── table: default.project_set.t
+            ├── scan id: 0
             ├── output columns: [a (#0), b (#1)]
             ├── read rows: 0
             ├── read size: 0
@@ -148,6 +153,7 @@ EvalScalar
     ├── set returning functions: json_each(t.b (#1)), unnest(t.b (#1))
     └── TableScan
         ├── table: default.project_set.t
+        ├── scan id: 0
         ├── output columns: [b (#1)]
         ├── read rows: 0
         ├── read size: 0
@@ -169,6 +175,7 @@ HashJoin
 ├── estimated rows: 450.00
 ├── TableScan(Build)
 │   ├── table: default.system.numbers
+│   ├── scan id: 1
 │   ├── output columns: [number (#3)]
 │   ├── read rows: 15
 │   ├── read size: < 1 KiB
@@ -186,6 +193,7 @@ HashJoin
         ├── set returning functions: unnest([1, 2, 3])
         └── TableScan
             ├── table: default.system.numbers
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 10
             ├── read size: < 1 KiB

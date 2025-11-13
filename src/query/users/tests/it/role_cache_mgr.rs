@@ -28,6 +28,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::role_util::find_all_related_roles;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_version::BUILD_INFO;
 
 pub const CATALOG_DEFAULT: &str = "default";
@@ -62,7 +63,7 @@ async fn test_role_cache_mgr() -> Result<()> {
         .await?;
     roles.sort_by(|a, b| a.name.cmp(&b.name));
     assert_eq!(roles.len(), 2);
-    assert_eq!(&roles[0].name, "public");
+    assert_eq!(&roles[0].name, BUILTIN_ROLE_PUBLIC);
     assert_eq!(&roles[1].name, "role1");
 
     Ok(())

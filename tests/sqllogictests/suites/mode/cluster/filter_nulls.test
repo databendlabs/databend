@@ -46,7 +46,7 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:table2.value (#1), probe key:table1.value (#0), filter type:inlist,min_max
+    │   └── filter id:0, build key:table2.value (#1), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 250.00
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
@@ -57,6 +57,7 @@ Exchange
     │       ├── estimated rows: 1000.00
     │       └── TableScan
     │           ├── table: default.default.table2
+    │           ├── scan id: 1
     │           ├── output columns: [value (#1)]
     │           ├── read rows: 1000
     │           ├── read size: 2.30 KiB
@@ -71,6 +72,7 @@ Exchange
         ├── estimated rows: 2000.00
         └── TableScan
             ├── table: default.default.table1
+            ├── scan id: 0
             ├── output columns: [value (#0)]
             ├── read rows: 2000
             ├── read size: 3.94 KiB
@@ -95,7 +97,7 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:1, build key:table3.value (#2), probe key:table1.value (#0), filter type:inlist,min_max
+    │   └── filter id:1, build key:table3.value (#2), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 200.00
     ├── Exchange(Build)
     │   ├── output columns: [table3.value (#2), table2.value (#1)]
@@ -108,7 +110,7 @@ Exchange
     │       ├── keys is null equal: [false]
     │       ├── filters: []
     │       ├── build join filters:
-    │       │   └── filter id:0, build key:table2.value (#1), probe key:table3.value (#2), filter type:inlist,min_max
+    │       │   └── filter id:0, build key:table2.value (#1), probe targets:[table3.value (#2)@scan2], filter type:bloom,inlist,min_max
     │       ├── estimated rows: 250.00
     │       ├── Exchange(Build)
     │       │   ├── output columns: [table2.value (#1)]
@@ -119,6 +121,7 @@ Exchange
     │       │       ├── estimated rows: 1000.00
     │       │       └── TableScan
     │       │           ├── table: default.default.table2
+    │       │           ├── scan id: 1
     │       │           ├── output columns: [value (#1)]
     │       │           ├── read rows: 1000
     │       │           ├── read size: 2.30 KiB
@@ -133,6 +136,7 @@ Exchange
     │           ├── estimated rows: 2000.00
     │           └── TableScan
     │               ├── table: default.default.table3
+    │               ├── scan id: 2
     │               ├── output columns: [value (#2)]
     │               ├── read rows: 2000
     │               ├── read size: 3.94 KiB
@@ -148,6 +152,7 @@ Exchange
         ├── estimated rows: 2000.00
         └── TableScan
             ├── table: default.default.table1
+            ├── scan id: 0
             ├── output columns: [value (#0)]
             ├── read rows: 2000
             ├── read size: 3.94 KiB
@@ -182,6 +187,7 @@ Exchange
     │       ├── estimated rows: 1000.00
     │       └── TableScan
     │           ├── table: default.default.table2
+    │           ├── scan id: 1
     │           ├── output columns: [value (#1)]
     │           ├── read rows: 1000
     │           ├── read size: 2.30 KiB
@@ -196,6 +202,7 @@ Exchange
         ├── estimated rows: 2000.00
         └── TableScan
             ├── table: default.default.table1
+            ├── scan id: 0
             ├── output columns: [value (#0)]
             ├── read rows: 2000
             ├── read size: 3.94 KiB
@@ -219,7 +226,7 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters(distributed):
-    │   └── filter id:0, build key:table2.value (#1), probe key:table1.value (#0), filter type:inlist,min_max
+    │   └── filter id:0, build key:table2.value (#1), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 250.00
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
@@ -230,6 +237,7 @@ Exchange
     │       ├── estimated rows: 1000.00
     │       └── TableScan
     │           ├── table: default.default.table2
+    │           ├── scan id: 1
     │           ├── output columns: [value (#1)]
     │           ├── read rows: 1000
     │           ├── read size: 2.30 KiB
@@ -247,6 +255,7 @@ Exchange
             ├── estimated rows: 2000.00
             └── TableScan
                 ├── table: default.default.table1
+                ├── scan id: 0
                 ├── output columns: [value (#0)]
                 ├── read rows: 2000
                 ├── read size: 3.94 KiB

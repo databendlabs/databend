@@ -166,7 +166,7 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
                             || db_name.to_lowercase() == "information_schema"
                             || db_name.to_lowercase() == "system"
                         {
-                            catalog_names.push(ctl_name.clone());
+                            catalog_names.push(ctl_name.to_string());
                             db_names.push(db_name);
                             db_ids.push(id);
                             owners.push(
@@ -221,7 +221,7 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
                         if db_ids.contains(&db_id) {
                             continue;
                         }
-                        catalog_names.push(catalog.clone());
+                        catalog_names.push(catalog.to_string());
                         db_names.push(db.get_db_info().name_ident.database_name().to_string());
                         db_ids.push(db_id);
                         owners.push(

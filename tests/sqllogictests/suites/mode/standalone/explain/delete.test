@@ -47,6 +47,7 @@ CommitSink
             ├── estimated rows: 2.00
             ├── TableScan(Build)
             │   ├── table: default.default.t2
+            │   ├── scan id: 1
             │   ├── output columns: [a (#2)]
             │   ├── read rows: 2
             │   ├── read size: < 1 KiB
@@ -57,6 +58,7 @@ CommitSink
             │   └── estimated rows: 2.00
             └── TableScan(Probe)
                 ├── table: default.default.t1
+                ├── scan id: 0
                 ├── output columns: [a (#0), _row_id (#4)]
                 ├── read rows: 4
                 ├── read size: < 1 KiB
@@ -98,6 +100,7 @@ CommitSink
             ├── estimated rows: 2.00
             ├── TableScan(Build)
             │   ├── table: default.default.t2
+            │   ├── scan id: 1
             │   ├── output columns: [a (#2)]
             │   ├── read rows: 2
             │   ├── read size: < 1 KiB
@@ -112,6 +115,7 @@ CommitSink
                 ├── estimated rows: 3.00
                 └── TableScan
                     ├── table: default.default.t1
+                    ├── scan id: 0
                     ├── output columns: [a (#0), b (#1), _row_id (#4)]
                     ├── read rows: 4
                     ├── read size: < 1 KiB

@@ -38,6 +38,7 @@ Commit
                 ├── Duplicate data to 4 branch
                 └── TableScan
                     ├── table: default.default.orders_placed
+                    ├── scan id: 0
                     ├── output columns: [order_id (#0), order_amount (#2)]
                     ├── read rows: 5
                     ├── read size: < 1 KiB

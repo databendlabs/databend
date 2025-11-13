@@ -332,7 +332,7 @@ pub(crate) async fn dump_tables(
             // All databases + Visibility check
             if let Some(catalog_dbs) = checker.get_visibility_database() {
                 if let Some(dbs_in_default_catalog) =
-                    catalog_dbs.get(&ctx.get_default_catalog()?.name())
+                    catalog_dbs.get(ctx.get_default_catalog()?.name().as_str())
                 {
                     let mut id_list: Vec<u64> = Vec::new();
                     let mut name_set: HashSet<String> = HashSet::new();

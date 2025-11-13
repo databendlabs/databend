@@ -24,6 +24,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -41,6 +42,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -76,6 +78,7 @@ Filter
 ├── estimated rows: 40.00
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [d (#0), a (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -94,6 +97,7 @@ Filter
 ├── estimated rows: 40.00
 └── TableScan
     ├── table: default.default.t2
+    ├── scan id: 0
     ├── output columns: [d (#0), a (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -112,6 +116,7 @@ Filter
 ├── estimated rows: 5.25
 └── TableScan
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 6
     ├── read size: < 1 KiB
@@ -147,6 +152,7 @@ Filter
 ├── estimated rows: 40.00
 └── TableScan
     ├── table: default.default.t1_tz
+    ├── scan id: 0
     ├── output columns: [d (#0), a (#1)]
     ├── read rows: 200
     ├── read size: < 1 KiB
@@ -165,6 +171,7 @@ Filter
 ├── estimated rows: 40.00
 └── TableScan
     ├── table: default.default.t2_tz
+    ├── scan id: 0
     ├── output columns: [d (#0), a (#1)]
     ├── read rows: 200
     ├── read size: < 1 KiB

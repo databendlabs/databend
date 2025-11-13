@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -129,6 +130,7 @@ pub struct ExecuteRunning {
     // mainly used to get progress for now
     pub(crate) ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
+    driver_settings: Option<BTreeMap<String, String>>,
     has_result_set: bool,
     #[allow(dead_code)]
     queue_guard: AcquireQueueGuard,
@@ -136,6 +138,7 @@ pub struct ExecuteRunning {
 
 pub struct ExecuteStopped {
     pub schema: DataSchemaRef,
+    pub driver_settings: Option<BTreeMap<String, String>>,
     pub has_result_set: Option<bool>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
@@ -197,11 +200,18 @@ impl Executor {
             Stopped(f) => f.schema.clone(),
         };
 
+        let driver_settings = match &self.state {
+            Starting(_) => None,
+            Running(r) => r.driver_settings.clone(),
+            Stopped(f) => f.driver_settings.clone(),
+        };
+
         ResponseState {
             running_time_ms: self.get_query_duration_ms(),
             progresses: self.get_progress(),
             state: exe_state,
             error: err,
+            driver_settings,
             warnings: self.get_warnings(),
             affect: self.get_affect(),
             schema,
@@ -309,6 +319,7 @@ impl Executor {
                 ExecuteStopped {
                     stats: Default::default(),
                     schema: Default::default(),
+                    driver_settings: None,
                     has_result_set: None,
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
@@ -331,6 +342,7 @@ impl Executor {
                 ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     schema: r.schema.clone(),
+                    driver_settings: r.driver_settings.clone(),
                     has_result_set: Some(r.has_result_set),
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
@@ -389,12 +401,15 @@ impl ExecuteState {
         } else {
             Default::default()
         };
+        let tz = ctx.get_settings().get_timezone().with_context(make_error)?;
+        let driver_settings = Some(BTreeMap::from_iter([("timezone".to_string(), tz)]));
 
         let running_state = ExecuteRunning {
             session,
             ctx: ctx.clone(),
             queue_guard,
             schema,
+            driver_settings,
             has_result_set,
         };
         info!("[HTTP-QUERY] Query state changed to Running");

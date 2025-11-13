@@ -20,6 +20,7 @@ AggregateFinal
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t1
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 1000
             ├── read size: 1.40 KiB
@@ -48,6 +49,7 @@ AggregateFinal
         ├── estimated rows: 100.00
         └── TableScan
             ├── table: default.default.t1
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 1000
             ├── read size: 1.40 KiB

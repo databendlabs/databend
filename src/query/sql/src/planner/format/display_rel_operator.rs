@@ -409,14 +409,14 @@ fn limit_to_format_tree<I: IdHumanizer>(_: &I, op: &Limit) -> FormatTreeNode {
 
 fn exchange_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Exchange) -> FormatTreeNode {
     let payload = match op {
-        Exchange::Hash(_) => "Exchange(Hash)",
         Exchange::Broadcast => "Exchange(Broadcast)",
         Exchange::Merge => "Exchange(Merge)",
         Exchange::MergeSort => "Exchange(MergeSort)",
+        Exchange::NodeToNodeHash(_) => "Exchange(Hash)",
     };
 
     match op {
-        Exchange::Hash(keys) => {
+        Exchange::NodeToNodeHash(keys) => {
             FormatTreeNode::with_children(payload.to_string(), vec![FormatTreeNode::new(format!(
                 "Exchange(Hash): keys: [{}]",
                 keys.iter()

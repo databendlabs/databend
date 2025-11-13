@@ -19,6 +19,7 @@ databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
+databend-common-hashtable = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
@@ -35,14 +36,21 @@ p256 = { workspace = true }
 parking_lot = { workspace = true }
 passwords = { workspace = true }
 reqwest = { workspace = true }
+rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression = { workspace = true }
 databend-common-version = { workspace = true }
+divan = { workspace = true }
 pretty_assertions = { workspace = true }
+rand = { workspace = true }
 wiremock = { workspace = true }
+
+[[bench]]
+name = "visibility_checker"
+harness = false
 
 [lints]
 workspace = true

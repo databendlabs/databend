@@ -191,7 +191,6 @@ def test_query_lifecycle_finalized(rows):
 
     # not return session since nothing changed
     exp["session"] = None
-    del exp["settings"] # only in the first resp
     exp["state"] = "Succeeded"
     if rows == 8:
         exp["next_uri"] = f"/v1/query/{query_id}/page/2"

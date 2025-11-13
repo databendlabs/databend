@@ -42,6 +42,7 @@ use crate::operations::read::native_data_transform_reader::ReadNativeDataTransfo
 use crate::operations::read::parquet_data_transform_reader::ReadParquetDataTransform;
 use crate::operations::read::DeserializeDataTransform;
 use crate::operations::read::NativeDeserializeDataTransform;
+use crate::operations::read::TransformRuntimeFilterWait;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(
@@ -83,6 +84,14 @@ pub fn build_fuse_native_source_pipeline(
                 }
             }
             pipeline.add_transform(|input, output| {
+                Ok(TransformRuntimeFilterWait::create(
+                    ctx.clone(),
+                    plan.scan_id,
+                    input,
+                    output,
+                ))
+            })?;
+            pipeline.add_transform(|input, output| {
                 ReadNativeDataTransform::<true>::create(
                     plan.scan_id,
                     ctx.clone(),
@@ -117,6 +126,15 @@ pub fn build_fuse_native_source_pipeline(
                     pipeline.add_pipe(pipe);
                 }
             }
+
+            pipeline.add_transform(|input, output| {
+                Ok(TransformRuntimeFilterWait::create(
+                    ctx.clone(),
+                    plan.scan_id,
+                    input,
+                    output,
+                ))
+            })?;
 
             pipeline.add_transform(|input, output| {
                 ReadNativeDataTransform::<false>::create(
@@ -191,6 +209,15 @@ pub fn build_fuse_parquet_source_pipeline(
                 Arc::new(AtomicU64::new(pipeline.output_len() as u64));
 
             pipeline.add_transform(|input, output| {
+                Ok(TransformRuntimeFilterWait::create(
+                    ctx.clone(),
+                    plan.scan_id,
+                    input,
+                    output,
+                ))
+            })?;
+
+            pipeline.add_transform(|input, output| {
                 ReadParquetDataTransform::<true>::create(
                     plan.scan_id,
                     ctx.clone(),
@@ -232,6 +259,15 @@ pub fn build_fuse_parquet_source_pipeline(
             }
             let unfinished_processors_count =
                 Arc::new(AtomicU64::new(pipeline.output_len() as u64));
+
+            pipeline.add_transform(|input, output| {
+                Ok(TransformRuntimeFilterWait::create(
+                    ctx.clone(),
+                    plan.scan_id,
+                    input,
+                    output,
+                ))
+            })?;
 
             pipeline.add_transform(|input, output| {
                 ReadParquetDataTransform::<false>::create(

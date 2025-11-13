@@ -610,7 +610,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         let catalog_dbs = catalog_dbs.as_ref().unwrap();
                         let mut final_dbs = vec![];
                         for (catalog_name, dbs) in catalog_dbs {
-                            if ctl.name() == catalog_name.to_string() {
+                            if ctl.name() == *catalog_name {
                                 let mut catalog_db_ids = vec![];
                                 let mut catalog_db_names = vec![];
                                 catalog_db_names.extend(

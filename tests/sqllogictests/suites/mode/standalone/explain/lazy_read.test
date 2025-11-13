@@ -25,6 +25,7 @@ RowFetch
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t_lazy
+            ├── scan id: 0
             ├── output columns: [a (#0), _row_id (#7)]
             ├── read rows: 0
             ├── read size: 0
@@ -51,6 +52,7 @@ RowFetch
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t_lazy
+            ├── scan id: 0
             ├── output columns: [a (#0), _row_id (#7)]
             ├── read rows: 0
             ├── read size: 0
@@ -69,6 +71,7 @@ Limit
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_lazy
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
     ├── read rows: 0
     ├── read size: 0
@@ -104,6 +107,7 @@ RowFetch
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.t_11831
+                ├── scan id: 0
                 ├── output columns: [uid (#0), time (#3), _row_id (#4)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -132,6 +136,7 @@ Limit
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t_lazy
+        ├── scan id: 0
         ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
         ├── read rows: 0
         ├── read size: 0
@@ -154,6 +159,7 @@ Limit
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t_lazy
+        ├── scan id: 0
         ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
         ├── read rows: 0
         ├── read size: 0
@@ -172,6 +178,7 @@ Limit
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t_lazy
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
     ├── read rows: 0
     ├── read size: 0
@@ -204,6 +211,7 @@ Limit
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t_lazy
+            ├── scan id: 0
             ├── output columns: [a (#0), b (#1)]
             ├── read rows: 0
             ├── read size: 0
@@ -253,6 +261,7 @@ Limit
                             ├── estimated rows: 0.00
                             └── TableScan
                                 ├── table: default.default.t_lazy
+                                ├── scan id: 0
                                 ├── output columns: [a (#0), b (#1), _row_id (#9)]
                                 ├── read rows: 0
                                 ├── read size: 0

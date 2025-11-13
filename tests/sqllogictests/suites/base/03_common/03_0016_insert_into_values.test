@@ -71,7 +71,7 @@ insert into ts1 values (1676620596564, '2024-10-22 12:00:00+0900')
 query T
 select a, b from ts1
 ----
-2023-02-17 07:56:36.564000 2024-10-22 21:00:00.000000 +0900
+2023-02-17 07:56:36.564000 2024-10-22 12:00:00.000000 +0900
 
 statement ok
 create table my_table(column1 string, column2 string, column3 string);

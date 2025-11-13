@@ -44,6 +44,7 @@ Filter
 ├── estimated rows: 8.00
 └── TableScan
     ├── table: default.test_ngram_index_db.t1
+    ├── scan id: 0
     ├── output columns: [id (#0), content (#1)]
     ├── read rows: 16
     ├── read size: 1.03 KiB
@@ -62,6 +63,7 @@ Filter
 ├── estimated rows: 0.06
 └── TableScan
     ├── table: default.test_ngram_index_db.t1
+    ├── scan id: 0
     ├── output columns: [id (#0), content (#1)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -80,6 +82,7 @@ Filter
 ├── estimated rows: 0.03
 └── TableScan
     ├── table: default.test_ngram_index_db.t1
+    ├── scan id: 0
     ├── output columns: [id (#0), content (#1)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -98,6 +101,7 @@ Filter
 ├── estimated rows: 8.00
 └── TableScan
     ├── table: default.test_ngram_index_db.t1
+    ├── scan id: 0
     ├── output columns: [id (#0), content (#1)]
     ├── read rows: 16
     ├── read size: 1.03 KiB
@@ -116,6 +120,7 @@ Filter
 ├── estimated rows: 4.00
 └── TableScan
     ├── table: default.test_ngram_index_db.t1
+    ├── scan id: 0
     ├── output columns: [id (#0), content (#1)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -163,6 +168,7 @@ EXPLAIN SELECT id, content FROM t2 WHERE content LIKE '%your eggs%'
 ----
 TableScan
 ├── table: default.test_ngram_index_db.t2
+├── scan id: 0
 ├── output columns: [id (#0), content (#1)]
 ├── read rows: 2
 ├── read size: < 1 KiB
@@ -177,6 +183,7 @@ EXPLAIN SELECT id, content FROM t2 WHERE content LIKE '%your eggs'
 ----
 TableScan
 ├── table: default.test_ngram_index_db.t2
+├── scan id: 0
 ├── output columns: [id (#0), content (#1)]
 ├── read rows: 2
 ├── read size: < 1 KiB
@@ -196,6 +203,7 @@ EXPLAIN SELECT id, content FROM t2 WHERE content LIKE '%yo%'
 ----
 TableScan
 ├── table: default.test_ngram_index_db.t2
+├── scan id: 0
 ├── output columns: [id (#0), content (#1)]
 ├── read rows: 16
 ├── read size: 1.26 KiB
@@ -210,6 +218,7 @@ EXPLAIN SELECT id, content FROM t2 WHERE content LIKE '%风来%'
 ----
 TableScan
 ├── table: default.test_ngram_index_db.t2
+├── scan id: 0
 ├── output columns: [id (#0), content (#1)]
 ├── read rows: 16
 ├── read size: 1.26 KiB
@@ -224,6 +233,7 @@ EXPLAIN SELECT id, content FROM t2 WHERE content LIKE '%月无声%'
 ----
 TableScan
 ├── table: default.test_ngram_index_db.t2
+├── scan id: 0
 ├── output columns: [id (#0), content (#1)]
 ├── read rows: 2
 ├── read size: < 1 KiB
@@ -262,6 +272,7 @@ EXPLAIN SELECT id, content FROM t2 WHERE content LIKE '%your eggs%'
 ----
 TableScan
 ├── table: default.test_ngram_index_db.t2
+├── scan id: 0
 ├── output columns: [id (#0), content (#1)]
 ├── read rows: 10
 ├── read size: < 1 KiB
@@ -282,6 +293,7 @@ EXPLAIN SELECT id, content FROM t2 WHERE content LIKE '%your eggs%'
 ----
 TableScan
 ├── table: default.test_ngram_index_db.t2
+├── scan id: 0
 ├── output columns: [id (#0), content (#1)]
 ├── read rows: 10
 ├── read size: < 1 KiB
@@ -336,6 +348,7 @@ Filter
 ├── estimated rows: 0.25
 └── TableScan
     ├── table: default.test_ngram_index_db.t3
+    ├── scan id: 0
     ├── output columns: [id (#0), content1 (#1), content2 (#2)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -359,6 +372,7 @@ Filter
 ├── estimated rows: 0.25
 └── TableScan
     ├── table: default.test_ngram_index_db.t3
+    ├── scan id: 0
     ├── output columns: [id (#0), content1 (#1), content2 (#2)]
     ├── read rows: 2
     ├── read size: < 1 KiB

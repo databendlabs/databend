@@ -491,6 +491,7 @@ pub struct StageAttachmentConf {
 pub struct ResponseState {
     pub has_result_set: Option<bool>,
     pub schema: DataSchemaRef,
+    pub driver_settings: Option<BTreeMap<String, String>>,
     pub running_time_ms: i64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
@@ -847,6 +848,7 @@ impl HttpQuery {
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         schema: Default::default(),
+                        driver_settings: None,
                         has_result_set: None,
                         reason: Err(e.clone()),
                         session_state: ExecutorSessionState::new(

@@ -14,9 +14,11 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::CreateDatamaskPolicyPlan;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
@@ -53,9 +55,19 @@ impl Interpreter for CreateDataMaskInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
-        handler
+        if let Err(_e) = handler
             .create_data_mask(meta_api, self.plan.clone().into())
-            .await?;
+            .await?
+        {
+            return if let CreateOption::CreateIfNotExists = self.plan.create_option {
+                Ok(PipelineBuildResult::create())
+            } else {
+                Err(ErrorCode::DatamaskAlreadyExists(format!(
+                    "Security policy with name '{}' already exists",
+                    self.plan.name
+                )))
+            };
+        }
 
         Ok(PipelineBuildResult::create())
     }

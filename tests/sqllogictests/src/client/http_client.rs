@@ -164,22 +164,24 @@ impl HttpClient {
 
         let mut schema = std::mem::take(&mut response.schema);
         let mut parsed_rows = vec![];
-        self.handle_response(&response, &mut parsed_rows)?;
-        while let Some(next_uri) = &response.next_uri {
-            let url = format!("http://127.0.0.1:{port}{next_uri}");
-            let mut new_response = self.poll_query_result(&url).await?;
-            if schema.is_empty() && !new_response.schema.is_empty() {
-                schema = std::mem::take(&mut new_response.schema);
+
+        loop {
+            self.handle_response(&response, &mut parsed_rows)?;
+            if let Some(error) = &response.error {
+                return Err(format_error(error.clone()).into());
             }
-            if new_response.next_uri.is_some() {
-                self.handle_response(&new_response, &mut parsed_rows)?;
-                response = new_response;
-            } else {
-                break;
+
+            match &response.next_uri {
+                Some(next_uri) => {
+                    let url = format!("http://127.0.0.1:{port}{next_uri}");
+                    let mut new_response = self.poll_query_result(&url).await?;
+                    if schema.is_empty() && !new_response.schema.is_empty() {
+                        schema = std::mem::take(&mut new_response.schema);
+                    }
+                    response = new_response;
+                }
+                None => break,
             }
-        }
-        if let Some(error) = response.error {
-            return Err(format_error(error).into());
         }
 
         if self.debug {

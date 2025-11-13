@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use databend_common_exception::Result;
@@ -30,6 +31,12 @@ pub async fn build_and_push_down_runtime_filter(
 ) -> Result<()> {
     let overall_start = Instant::now();
 
+    let is_spill_happened = join.hash_join_state.need_next_round.load(Ordering::Acquire)
+        || join
+            .hash_join_state
+            .is_spill_happened
+            .load(Ordering::Acquire);
+
     let inlist_threshold = join
         .ctx
         .get_settings()
@@ -42,6 +49,10 @@ pub async fn build_and_push_down_runtime_filter(
         .ctx
         .get_settings()
         .get_min_max_runtime_filter_threshold()? as usize;
+    let selectivity_threshold = join
+        .ctx
+        .get_settings()
+        .get_join_runtime_filter_selectivity_threshold()?;
 
     let build_start = Instant::now();
     let mut packet = build_runtime_filter_packet(
@@ -52,6 +63,8 @@ pub async fn build_and_push_down_runtime_filter(
         inlist_threshold,
         bloom_threshold,
         min_max_threshold,
+        selectivity_threshold,
+        is_spill_happened,
     )?;
     let build_time = build_start.elapsed();
 
@@ -72,7 +85,8 @@ pub async fn build_and_push_down_runtime_filter(
         .iter()
         .map(|r| (r.id, r))
         .collect();
-    let runtime_filter_infos = build_runtime_filter_infos(packet, runtime_filter_descs)?;
+    let runtime_filter_infos =
+        build_runtime_filter_infos(packet, runtime_filter_descs, selectivity_threshold)?;
 
     let total_time = overall_start.elapsed();
     let filter_count = runtime_filter_infos.len();

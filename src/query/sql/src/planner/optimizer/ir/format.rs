@@ -56,7 +56,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::UnionAll(_) => "UnionAll".to_string(),
         RelOperator::Exchange(op) => {
             format!("Exchange: ({})", match op {
-                Exchange::Hash(scalars) => format!(
+                Exchange::NodeToNodeHash(scalars) => format!(
                     "Hash({})",
                     scalars
                         .iter()
