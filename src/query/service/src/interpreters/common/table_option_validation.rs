@@ -32,6 +32,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_
 use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
@@ -89,6 +90,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_SEGMENT_FORMAT);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
+    r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
     r
 });
 
@@ -256,6 +258,22 @@ where
             );
             ErrorCode::TableOptionInvalid(msg)
         })?;
+    }
+    Ok(())
+}
+
+pub fn is_valid_fuse_parquet_dictionary_opt(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    is_valid_bool_opt(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY, options)
+}
+
+fn is_valid_bool_opt(
+    key: &str,
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(key) {
+        value.parse::<bool>()?;
     }
     Ok(())
 }
