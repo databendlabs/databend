@@ -279,9 +279,11 @@ impl AccumulatingTransform for TransformExchangeAggregateSerializer {
                             // As soon as a non-spilled AggregatePayload shows up we must flush any pending
                             // spill files. AggregatePayload shows that partial stage is over, no more spilling
                             // will happen.
-                            let spilled = self.finish()?;
-                            if !spilled.is_empty() {
-                                spilled_blocks = Some(spilled);
+                            if matches!(&self.spiller, SpillerVer::New(_)) {
+                                let spilled = self.finish()?;
+                                if !spilled.is_empty() {
+                                    spilled_blocks = Some(spilled);
+                                }
                             }
 
                             let (bucket, max_partition_count) = (p.bucket, p.max_partition_count);
