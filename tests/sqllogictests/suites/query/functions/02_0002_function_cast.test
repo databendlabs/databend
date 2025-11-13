@@ -239,7 +239,16 @@ query T
 select to_timestamp_tz('2024-04-16 12:34:56.789 +0600')
 ----
 2024-04-16 12:34:56.789000 +0600
+query T
+settings(timezone='Asia/Shanghai') select to_timestamp_tz('2024-04-16 12:34:56.789 +0600')
+----
+2024-04-16 12:34:56.789000 +0600
 
+
+query T
+settings(timezone='Asia/Shanghai') select to_timestamp_tz('2024-04-16 12:34:56.789')
+----
+2024-04-16 12:34:56.789000 +0800
 query B
 SELECT to_variant(true)::boolean
 ----
