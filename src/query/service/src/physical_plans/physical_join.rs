@@ -14,12 +14,14 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_settings::Settings;
 use databend_common_sql::binder::is_range_join_condition;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
+use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
@@ -63,17 +65,9 @@ fn physical_join(join: &Join, s_expr: &SExpr, settings: &Settings) -> Result<Phy
         let conditions = join
             .non_equi_conditions
             .iter()
-            .cloned()
-            .chain(join.equi_conditions.iter().cloned().map(|condition| {
-                FunctionCall {
-                    span: condition.left.span(),
-                    func_name: "eq".to_string(),
-                    params: vec![],
-                    arguments: vec![condition.left, condition.right],
-                }
-                .into()
-            }))
-            .collect();
+            .map(|c| Ok(c.clone()))
+            .chain(join.equi_conditions.iter().map(condition_to_expr))
+            .collect::<Result<_>>()?;
         return Ok(PhysicalJoinType::LoopJoin { conditions });
     };
 
@@ -228,4 +222,29 @@ impl PhysicalPlanBuilder {
             }
         }
     }
+}
+
+fn condition_to_expr(condition: &JoinEquiCondition) -> Result<ScalarExpr> {
+    let left_type = condition.left.data_type()?;
+    let right_type = condition.right.data_type()?;
+
+    let arguments = match (&left_type, &right_type) {
+        (DataType::Nullable(left), right) if **left == *right => vec![
+            condition.left.clone(),
+            condition.right.clone().unify_to_data_type(&left_type),
+        ],
+        (left, DataType::Nullable(right)) if *left == **right => vec![
+            condition.left.clone().unify_to_data_type(&right_type),
+            condition.right.clone(),
+        ],
+        _ => vec![condition.left.clone(), condition.right.clone()],
+    };
+
+    Ok(FunctionCall {
+        span: condition.left.span(),
+        func_name: "eq".to_string(),
+        params: vec![],
+        arguments,
+    }
+    .into())
 }

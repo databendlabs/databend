@@ -60,17 +60,20 @@ impl BasicHashJoin {
         state: Arc<BasicHashJoinState>,
     ) -> Result<Self> {
         let settings = ctx.get_settings();
-        let block_size = settings.get_max_block_size()? as usize;
-        let block_bytes = settings.get_max_block_size()? as usize;
+        let squash_block = SquashBlocks::new(
+            settings.get_max_block_size()? as _,
+            settings.get_max_block_bytes()? as _,
+        );
 
         Ok(BasicHashJoin {
             desc,
             state,
             method,
             function_ctx,
-            squash_block: SquashBlocks::new(block_size, block_bytes),
+            squash_block,
         })
     }
+
     pub(crate) fn add_block(&mut self, mut data: Option<DataBlock>) -> Result<()> {
         let mut squashed_block = match data.take() {
             None => self.squash_block.finalize()?,
@@ -128,6 +131,7 @@ impl BasicHashJoin {
             std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 
+        log::info!("build_hash_table chunk_index{chunk_index}");
         self.build_hash_table(keys_block, chunk_index)?;
 
         Ok(Some(ProgressValues {

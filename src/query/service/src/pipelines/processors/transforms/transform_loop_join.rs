@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -28,6 +29,8 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::sinks::Sink;
 use databend_common_sql::plans::JoinType;
 
+use super::Join;
+use super::JoinStream;
 use crate::physical_plans::NestedLoopJoin;
 use crate::pipelines::executor::WatchNotify;
 use crate::sessions::QueryContext;
@@ -137,7 +140,6 @@ pub struct LoopJoinState {
 
     right_sinker_count: RwLock<usize>,
 
-    #[allow(dead_code)]
     join_type: JoinType,
 }
 
@@ -253,5 +255,51 @@ impl LoopJoinState {
             DataBlock::new(entries, right.num_rows())
         });
         Ok(iter)
+    }
+}
+
+impl Join for LoopJoinState {
+    fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
+        let Some(right_block) = data else {
+            return Ok(());
+        };
+
+        let right = if matches!(self.join_type, JoinType::Left | JoinType::Full) {
+            let rows = right_block.num_rows();
+            let entries = right_block
+                .take_columns()
+                .into_iter()
+                .map(|entry| entry.into_nullable())
+                .collect::<Vec<_>>();
+            DataBlock::new(entries, rows)
+        } else {
+            right_block
+        };
+        self.right_table.write()?.push(right);
+        Ok(())
+    }
+
+    fn final_build(&mut self) -> Result<Option<ProgressValues>> {
+        let progress = self.right_table.read()?.iter().fold(
+            ProgressValues::default(),
+            |mut progress, block| {
+                progress.rows += block.num_rows();
+                progress.bytes += block.memory_size();
+                progress
+            },
+        );
+        Ok(Some(progress))
+    }
+
+    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
+        todo!();
+    }
+}
+
+struct LoopJoinStream {}
+
+impl JoinStream for LoopJoinStream {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        todo!()
     }
 }
