@@ -1418,7 +1418,7 @@ impl<'a> Evaluator<'a> {
     ) -> Result<Value<AnyType>> {
         assert!(args.len() >= 2);
 
-        let mut result = validity.clone();
+        let mut result = None;
         for arg in args {
             let cond = self.partial_run(arg, validity.clone(), options)?;
             match &cond {
