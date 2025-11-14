@@ -281,14 +281,12 @@ unsafe extern "C" fn signal_handler(sig: i32, info: *mut libc::siginfo_t, uc: *m
     }
 
     #[allow(unreachable_code)]
-    if sig != libc::SIGTRAP {
-        match libc::SIG_ERR == libc::signal(sig, libc::SIG_DFL) {
-            true => std::process::exit(1),
-            false => match libc::raise(sig) {
-                0 => {}
-                _ => std::process::exit(1),
-            },
-        }
+    match libc::SIG_ERR == libc::signal(sig, libc::SIG_DFL) {
+        true => std::process::exit(1),
+        false => match libc::raise(sig) {
+            0 => {}
+            _ => std::process::exit(1),
+        },
     }
 }
 
