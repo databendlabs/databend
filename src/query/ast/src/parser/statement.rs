@@ -5508,7 +5508,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                 },
                 (ReturnBody::Scalar(_), FuncBody::Server { .. }) => {
                     return Err(nom::Err::Failure(ErrorKind::Other(
-                        "ScalarUDF unsupport external Server",
+                        "ScalarUDF unsupported external Server",
                     )))
                 }
                 (ReturnBody::Table(return_types), FuncBody::Sql(sql)) => UDFDefinition::UDTFSql {
