@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::hash::Hasher;
 use std::marker::Send;
@@ -51,19 +50,20 @@ pub(super) trait DistinctStateFunc: Sized + Send + StateSerde + 'static {
     fn new() -> Self;
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;
-    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()>;
+    fn add(&mut self, columns: ProjectedBlock, row: usize, skip_null: bool) -> Result<()>;
     fn batch_add(
         &mut self,
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
+        skip_null: bool,
     ) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn build_entries(&mut self, types: &[DataType]) -> Result<Vec<BlockEntry>>;
 }
 
 pub struct AggregateDistinctState {
-    set: HashSet<Vec<u8>, RandomState>,
+    set: HashSet<Vec<u8>>,
 }
 
 impl DistinctStateFunc for AggregateDistinctState {
@@ -81,16 +81,16 @@ impl DistinctStateFunc for AggregateDistinctState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize, skip_null: bool) -> Result<()> {
         let values = columns
             .iter()
-            .map(|entry| match entry {
-                BlockEntry::Const(scalar, _, _) => scalar.clone(),
-                BlockEntry::Column(column) => {
-                    unsafe { AnyType::index_column_unchecked(column, row) }.to_owned()
-                }
-            })
+            .map(|entry| unsafe { entry.index_unchecked(row) }.to_owned())
             .collect::<Vec<_>>();
+
+        if skip_null && values.iter().all(Scalar::is_null) {
+            return Ok(());
+        }
+
         let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
         values.serialize(&mut buffer)?;
         self.set.insert(buffer);
@@ -102,26 +102,26 @@ impl DistinctStateFunc for AggregateDistinctState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
+        skip_null: bool,
     ) -> Result<()> {
-        for row in 0..input_rows {
-            if validity.map(|v| v.get_bit(row)).unwrap_or(true) {
-                let values = columns
-                    .iter()
-                    .map(|entry| match entry {
-                        BlockEntry::Const(scalar, _, _) => scalar.clone(),
-                        BlockEntry::Column(column) => {
-                            unsafe { AnyType::index_column_unchecked(column, row) }.to_owned()
-                        }
-                    })
-                    .collect::<Vec<_>>();
-
-                let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
-                values.serialize(&mut buffer)?;
-                self.set.insert(buffer);
+        match validity {
+            Some(validity) => {
+                for (row, b) in (0..input_rows).zip(validity) {
+                    if !b {
+                        continue;
+                    }
+                    self.add(columns, row, skip_null)?;
+                }
+            }
+            None => {
+                for row in 0..input_rows {
+                    self.add(columns, row, skip_null)?;
+                }
             }
         }
         Ok(())
     }
+
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         self.set.extend(rhs.set.clone());
         Ok(())
@@ -204,7 +204,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         let data = unsafe { view.index_unchecked(row) };
         let _ = self.set.set_insert(data.as_bytes());
@@ -216,6 +216,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
+        _skip_null: bool,
     ) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         match validity {
@@ -311,7 +312,7 @@ where T: Number + HashtableKeyable
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
         let view = columns[0].downcast::<NumberType<T>>().unwrap();
         let v = unsafe { view.index_unchecked(row) };
         let _ = self.set.set_insert(v).is_ok();
@@ -323,6 +324,7 @@ where T: Number + HashtableKeyable
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
+        _skip_null: bool,
     ) -> Result<()> {
         let view = columns[0].downcast::<NumberType<T>>().unwrap();
         match validity {
@@ -421,7 +423,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         let data = unsafe { view.index_unchecked(row) }.as_bytes();
         let mut hasher = SipHasher24::new();
@@ -436,6 +438,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
+        _skip_null: bool,
     ) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         match validity {

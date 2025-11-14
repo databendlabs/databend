@@ -30,7 +30,6 @@ use databend_common_expression::StateSerdeItem;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
-use super::AggregateFunctionFeatures;
 use super::AggregateFunctionRef;
 use super::StateAddr;
 
@@ -44,13 +43,10 @@ pub struct AggregateFunctionOrNullAdaptor {
 }
 
 impl AggregateFunctionOrNullAdaptor {
-    pub fn create(
-        nested: AggregateFunctionRef,
-        features: AggregateFunctionFeatures,
-    ) -> Result<AggregateFunctionRef> {
+    pub fn create(nested: AggregateFunctionRef) -> Result<AggregateFunctionRef> {
         // count/count distinct should not be nullable for empty set, just return zero
         let inner_return_type = nested.return_type()?;
-        if features.returns_default_when_only_null || inner_return_type == DataType::Null {
+        if inner_return_type == DataType::Null {
             return Ok(nested);
         }
 

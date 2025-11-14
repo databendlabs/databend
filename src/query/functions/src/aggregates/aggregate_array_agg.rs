@@ -62,6 +62,7 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::SerializeInfo;
 use super::StateAddr;
@@ -809,5 +810,12 @@ fn try_create_aggregate_array_agg_function(
 }
 
 pub fn aggregate_array_agg_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_array_agg_function))
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_array_agg_function),
+        AggregateFunctionFeatures {
+            allow_sort: true,
+            keep_nullable: true,
+            ..Default::default()
+        },
+    )
 }
