@@ -5435,6 +5435,7 @@ dependencies = [
  "bytemuck",
  "bytes",
  "cbordata",
+ "cc",
  "crc32fast",
  "databend-common-ast",
  "databend-common-exception",
