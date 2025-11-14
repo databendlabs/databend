@@ -49,6 +49,7 @@ use log::warn;
 use opendal::layers::AsyncBacktraceLayer;
 use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::FastraceLayer;
+use opendal::layers::HttpClientLayer;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::RetryInterceptor;
@@ -201,7 +202,7 @@ fn build_operator<B: Builder>(builder: B, cfg: Option<&StorageNetworkParams>) ->
         .finish();
 
     // Make sure the http client has been updated.
-    ob.update_http_client(|_| HttpClient::with(get_http_client(cfg)));
+    let ob = ob.layer(HttpClientLayer::new(HttpClient::with(get_http_client(cfg))));
 
     let mut op = ob
         // Add retry

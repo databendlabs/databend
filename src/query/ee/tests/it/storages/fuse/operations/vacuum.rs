@@ -313,13 +313,9 @@ mod test_accessor {
 
     impl Access for AccessorFaultyDeletion {
         type Reader = ();
-        type BlockingReader = ();
         type Writer = ();
-        type BlockingWriter = ();
         type Lister = VecLister;
-        type BlockingLister = ();
         type Deleter = MockDeleter;
-        type BlockingDeleter = ();
 
         fn info(&self) -> Arc<AccessorInfo> {
             let info = AccessorInfo::default();
