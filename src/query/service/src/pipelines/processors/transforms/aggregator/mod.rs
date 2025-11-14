@@ -29,6 +29,8 @@ pub use aggregate_exchange_injector::AggregateInjector;
 pub use aggregate_meta::*;
 pub use aggregator_params::AggregatorParams;
 pub use build_partition_bucket::build_partition_bucket;
+pub use new_aggregate::NewTransformAggregateSpillWriter;
+pub use new_aggregate::SharedPartitionStream;
 pub use transform_aggregate_expand::TransformExpandGroupingSets;
 pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;
