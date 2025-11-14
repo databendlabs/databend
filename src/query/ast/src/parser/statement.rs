@@ -1821,26 +1821,22 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
 
     // row policy
-    // CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS
+    // CREATE ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS
     // ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body>
     // [ COMMENT = '<string_literal>' ]
-    let create_row_access = map_res(
+    let create_row_access = map(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ ROW ~ ACCESS ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ROW ~ ACCESS ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #row_access_definition
             ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
         },
-        |(_, opt_or_replace, _, _, _, opt_if_not_exists, name, definition, opt_comment)| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateRowAccessPolicy(
-                CreateRowAccessPolicyStmt {
-                    create_option,
-                    name,
-                    description: opt_comment.map(|(_, _, description)| description),
-                    definition,
-                },
-            ))
+        |(_, _, _, _, opt_if_not_exists, name, definition, opt_comment)| {
+            Statement::CreateRowAccessPolicy(CreateRowAccessPolicyStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name,
+                description: opt_comment.map(|(_, _, description)| description),
+                definition,
+            })
         },
     );
     let drop_row_access = map(
@@ -2061,19 +2057,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
 
     // data mark policy
-    let create_data_mask_policy = map_res(
+    let create_data_mask_policy = map(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
+            CREATE ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
         },
-        |(_, opt_or_replace, _, _, opt_if_not_exists, name, policy)| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+        |(_, _, _, opt_if_not_exists, name, policy)| {
             let stmt = CreateDatamaskPolicyStmt {
-                create_option,
+                if_not_exists: opt_if_not_exists.is_some(),
                 name: name.to_string(),
                 policy,
             };
-            Ok(Statement::CreateDatamaskPolicy(stmt))
+            Statement::CreateDatamaskPolicy(stmt)
         },
     );
     let drop_data_mask_policy = map(
@@ -2811,7 +2805,7 @@ AS
             | #drop_connection: "`DROP CONNECTION [IF EXISTS] <connection_name>`"
             | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
             | #show_connections: "`SHOW CONNECTIONS`"
-            | #create_row_access : "`CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
+            | #create_row_access : "`CREATE ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
             | #drop_row_access : "`DROP ROW ACCESS POLICY [ IF EXISTS ] <name>`"
             | #describe_row_access : "`DESC[RIBE] ROW ACCESS POLICY <name>`"
             | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"

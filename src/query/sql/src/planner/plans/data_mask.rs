@@ -24,12 +24,11 @@ use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateDatamaskPolicyPlan {
-    pub create_option: CreateOption,
+    pub if_not_exists: bool,
     pub tenant: Tenant,
     pub name: String,
     pub policy: DataMaskPolicy,
@@ -44,7 +43,6 @@ impl CreateDatamaskPolicyPlan {
 impl From<CreateDatamaskPolicyPlan> for CreateDatamaskReq {
     fn from(p: CreateDatamaskPolicyPlan) -> Self {
         CreateDatamaskReq {
-            create_option: p.create_option,
             name: DataMaskNameIdent::new(p.tenant.clone(), &p.name),
             data_mask_meta: DatamaskMeta {
                 // CRITICAL: Normalize parameter names to lowercase at creation time
