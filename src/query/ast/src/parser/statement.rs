@@ -5423,7 +5423,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         rule!(
             #sql: "AS <sql>"
             | #server: "LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
-        )(i)
+        )
+        .parse(i)
     }
 
     let lambda_udf = map(
