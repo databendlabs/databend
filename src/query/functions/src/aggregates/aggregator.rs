@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::adaptors::*;
 use super::aggregate_approx_count_distinct::aggregate_approx_count_distinct_function_desc;
 use super::aggregate_arg_min_max::aggregate_arg_max_function_desc;
 use super::aggregate_arg_min_max::aggregate_arg_min_function_desc;
@@ -27,8 +28,6 @@ use super::aggregate_bitmap::aggregate_bitmap_or_count_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_union_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_xor_count_function_desc;
 use super::aggregate_boolean::aggregate_boolean_function_desc;
-use super::aggregate_combinator_distinct_desc;
-use super::aggregate_combinator_uniq_desc;
 use super::aggregate_covariance::aggregate_covariance_population_desc;
 use super::aggregate_covariance::aggregate_covariance_sample_desc;
 use super::aggregate_histogram::aggregate_histogram_function_desc;
@@ -54,13 +53,13 @@ use super::aggregate_st_collect::aggregate_st_collect_function_desc;
 use super::aggregate_stddev::aggregate_stddev_pop_function_desc;
 use super::aggregate_stddev::aggregate_stddev_samp_function_desc;
 use super::aggregate_string_agg::aggregate_string_agg_function_desc;
-use super::aggregate_sum_function_desc;
+use super::aggregate_sum::aggregate_sum_function_desc;
+use super::aggregate_sum_zero::AggregateSumZeroFunction;
 use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
 use super::AggregateCountFunction;
 use super::AggregateFunctionFactory;
 use super::AggregateIfCombinator;
 use super::AggregateStateCombinator;
-use crate::aggregates::aggregate_sum_zero::AggregateSumZeroFunction;
 
 pub struct Aggregators;
 
@@ -72,7 +71,8 @@ impl Aggregators {
         factory.register("sum0", AggregateSumZeroFunction::desc());
         factory.register("sum_zero", AggregateSumZeroFunction::desc());
         factory.register("avg", aggregate_avg_function_desc());
-        factory.register("uniq", aggregate_combinator_uniq_desc());
+        factory.register("uniq", aggregate_uniq_desc());
+        factory.register("count_distinct", aggregate_count_distinct_desc());
 
         factory.register("min", aggregate_min_function_desc());
         factory.register("max", aggregate_max_function_desc());
