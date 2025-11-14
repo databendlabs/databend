@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::types::DataType;

@@ -50,7 +50,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
-use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::{FileFormatParams, UDTFServer};
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
@@ -164,6 +164,8 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use walkdir::WalkDir;
 use xorf::BinaryFuse16;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_function::TableFunction;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
@@ -1236,6 +1238,10 @@ impl Catalog for FakedCatalog {
         &self,
         _req: GetAutoIncrementNextValueReq,
     ) -> Result<GetAutoIncrementNextValueReply> {
+        todo!()
+    }
+
+    fn transform_udtf_as_table_function(&self, ctx: &dyn TableContext, table_args: &TableArgs, udtf: UDTFServer, func_name: &str) -> Result<Arc<dyn TableFunction>> {
         todo!()
     }
 }
