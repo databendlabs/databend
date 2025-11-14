@@ -527,13 +527,15 @@ impl PhysicalPlanBuilder {
         required: &mut ColumnSet,
         others_required: &mut ColumnSet,
     ) -> (Vec<IndexType>, Vec<IndexType>) {
-        let retained_columns = self.metadata.read().get_retained_column().clone();
-        *required = required.union(&retained_columns).cloned().collect();
-        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+        {
+            let metadata = self.metadata.read();
+            let retained_columns = metadata.get_retained_column();
+            required.extend(retained_columns);
+            others_required.extend(retained_columns);
+        }
 
-        *others_required = others_required.union(&retained_columns).cloned().collect();
-        let pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
-
+        let column_projections = required.iter().copied().collect();
+        let pre_column_projections = others_required.iter().copied().collect();
         (column_projections, pre_column_projections)
     }
 
