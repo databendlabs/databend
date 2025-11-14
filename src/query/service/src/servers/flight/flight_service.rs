@@ -79,8 +79,10 @@ impl FlightService {
             builder
         };
 
-        let incoming = TcpIncoming::new(addr, true, None)
-            .map_err(|e| ErrorCode::CannotListenerPort(format!("{},{}", e, addr)))?;
+        let incoming = TcpIncoming::bind(addr)
+            .map_err(|e| ErrorCode::CannotListenerPort(format!("{},{}", e, addr)))?
+            .with_nodelay(Some(true))
+            .with_keepalive(None);
         let server = builder
             .add_service(
                 FlightServiceServer::new(flight_api_service)
