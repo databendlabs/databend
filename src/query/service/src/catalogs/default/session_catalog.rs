@@ -20,9 +20,11 @@ use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
@@ -798,6 +800,17 @@ impl Catalog for SessionCatalog {
         req: GetAutoIncrementNextValueReq,
     ) -> Result<GetAutoIncrementNextValueReply> {
         self.inner.get_autoincrement_next_value(req).await
+    }
+
+    fn transform_udtf_as_table_function(
+        &self,
+        ctx: &dyn TableContext,
+        table_args: &TableArgs,
+        udtf: UDTFServer,
+        func_name: &str,
+    ) -> Result<Arc<dyn TableFunction>> {
+        self.inner
+            .transform_udtf_as_table_function(ctx, table_args, udtf, func_name)
     }
 }
 
