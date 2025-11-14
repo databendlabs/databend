@@ -31,8 +31,6 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::AsyncTransformer;
-use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::IndexType;
 use databend_storages_common_io::ReadSettings;
 use log::debug;
