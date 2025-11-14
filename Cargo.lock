@@ -8769,7 +8769,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=d5cca1c15f240f3cb04e57569bce648933b1c79b#d5cca1c15f240f3cb04e57569bce648933b1c79b"
+source = "git+https://github.com/dqhl76/iceberg-rust?rev=1dace26ea25a9b9e2066367cbd3b7badc75dd7f9#1dace26ea25a9b9e2066367cbd3b7badc75dd7f9"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -8794,7 +8794,7 @@ dependencies = [
  "murmur3",
  "num-bigint",
  "once_cell",
- "opendal 0.53.2",
+ "opendal 0.54.1",
  "ordered-float 4.6.0",
  "parquet",
  "rand 0.8.5",
@@ -8818,7 +8818,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-glue"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=d5cca1c15f240f3cb04e57569bce648933b1c79b#d5cca1c15f240f3cb04e57569bce648933b1c79b"
+source = "git+https://github.com/dqhl76/iceberg-rust?rev=1dace26ea25a9b9e2066367cbd3b7badc75dd7f9#1dace26ea25a9b9e2066367cbd3b7badc75dd7f9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8835,7 +8835,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=d5cca1c15f240f3cb04e57569bce648933b1c79b#d5cca1c15f240f3cb04e57569bce648933b1c79b"
+source = "git+https://github.com/dqhl76/iceberg-rust?rev=1dace26ea25a9b9e2066367cbd3b7badc75dd7f9#1dace26ea25a9b9e2066367cbd3b7badc75dd7f9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8859,7 +8859,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=d5cca1c15f240f3cb04e57569bce648933b1c79b#d5cca1c15f240f3cb04e57569bce648933b1c79b"
+source = "git+https://github.com/dqhl76/iceberg-rust?rev=1dace26ea25a9b9e2066367cbd3b7badc75dd7f9#1dace26ea25a9b9e2066367cbd3b7badc75dd7f9"
 dependencies = [
  "async-trait",
  "chrono",
@@ -8879,7 +8879,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-s3tables"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=d5cca1c15f240f3cb04e57569bce648933b1c79b#d5cca1c15f240f3cb04e57569bce648933b1c79b"
+source = "git+https://github.com/dqhl76/iceberg-rust?rev=1dace26ea25a9b9e2066367cbd3b7badc75dd7f9#1dace26ea25a9b9e2066367cbd3b7badc75dd7f9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -11003,7 +11003,6 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "chrono",
- "crc32c",
  "futures",
  "getrandom 0.2.16",
  "http 1.3.1",
@@ -11012,7 +11011,6 @@ dependencies = [
  "md-5",
  "percent-encoding",
  "quick-xml 0.37.5",
- "reqsign",
  "reqwest",
  "serde",
  "serde_json",
