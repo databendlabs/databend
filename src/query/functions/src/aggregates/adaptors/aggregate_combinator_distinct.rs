@@ -54,7 +54,7 @@ pub struct AggregateDistinctCombinator<State> {
 
     nested_name: String,
     arguments: Vec<DataType>,
-    check_null: bool,
+    skip_null: bool,
     nested: Arc<dyn AggregateFunction>,
     _s: PhantomData<fn(State)>,
 }
@@ -65,7 +65,7 @@ impl<State> Clone for AggregateDistinctCombinator<State> {
             name: self.name.clone(),
             nested_name: self.nested_name.clone(),
             arguments: self.arguments.clone(),
-            check_null: self.check_null,
+            skip_null: self.skip_null,
             nested: self.nested.clone(),
             _s: PhantomData,
         }
@@ -119,12 +119,12 @@ where State: DistinctStateFunc
         input_rows: usize,
     ) -> Result<()> {
         let state = Self::get_state(place);
-        state.batch_add(columns, validity, input_rows, self.check_null)
+        state.batch_add(columns, validity, input_rows, self.skip_null)
     }
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = Self::get_state(place);
-        state.add(columns, row, self.check_null)
+        state.add(columns, row, self.skip_null)
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
@@ -282,7 +282,7 @@ fn try_create(
                 > {
                     nested_name: nested_name.to_owned(),
                     arguments,
-                    check_null: false,
+                    skip_null: false,
                     nested,
                     name,
                     _s: PhantomData,
@@ -295,7 +295,7 @@ fn try_create(
             > {
                 name,
                 arguments,
-                check_null: false,
+                skip_null: false,
                 nested,
                 nested_name: nested_name.to_owned(),
                 _s: PhantomData,
@@ -306,7 +306,7 @@ fn try_create(
         > {
             nested_name: nested_name.to_owned(),
             arguments,
-            check_null: false,
+            skip_null: false,
             nested,
             name,
             _s: PhantomData,
@@ -315,7 +315,7 @@ fn try_create(
             AggregateDistinctState,
         > {
             nested_name: nested_name.to_owned(),
-            check_null: nested_name == "count"
+            skip_null: nested_name == "count"
                 && arguments.len() > 1
                 && arguments.iter().any(DataType::is_nullable_or_null),
             arguments,

@@ -1,0 +1,4 @@
+query TI
+select 'a', count(distinct a,b,c) from (values(1,null,1),(2,null,null),(4,null,4),(null,null,null)) t(a,b,c);
+----
+a 3

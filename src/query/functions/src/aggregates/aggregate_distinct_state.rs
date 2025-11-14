@@ -50,13 +50,13 @@ pub(super) trait DistinctStateFunc: Sized + Send + StateSerde + 'static {
     fn new() -> Self;
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;
-    fn add(&mut self, columns: ProjectedBlock, row: usize, check_null: bool) -> Result<()>;
+    fn add(&mut self, columns: ProjectedBlock, row: usize, skip_null: bool) -> Result<()>;
     fn batch_add(
         &mut self,
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        check_null: bool,
+        skip_null: bool,
     ) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn build_entries(&mut self, types: &[DataType]) -> Result<Vec<BlockEntry>>;
@@ -81,13 +81,13 @@ impl DistinctStateFunc for AggregateDistinctState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, check_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize, skip_null: bool) -> Result<()> {
         let values = columns
             .iter()
             .map(|entry| unsafe { entry.index_unchecked(row) }.to_owned())
             .collect::<Vec<_>>();
 
-        if check_null && values.iter().all(Scalar::is_null) {
+        if skip_null && values.iter().all(Scalar::is_null) {
             return Ok(());
         }
 
@@ -102,7 +102,7 @@ impl DistinctStateFunc for AggregateDistinctState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        check_null: bool,
+        skip_null: bool,
     ) -> Result<()> {
         match validity {
             Some(validity) => {
@@ -110,12 +110,12 @@ impl DistinctStateFunc for AggregateDistinctState {
                     if !b {
                         continue;
                     }
-                    self.add(columns, row, check_null)?;
+                    self.add(columns, row, skip_null)?;
                 }
             }
             None => {
                 for row in 0..input_rows {
-                    self.add(columns, row, check_null)?;
+                    self.add(columns, row, skip_null)?;
                 }
             }
         }
@@ -204,7 +204,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, _check_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         let data = unsafe { view.index_unchecked(row) };
         let _ = self.set.set_insert(data.as_bytes());
@@ -216,7 +216,7 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        _check_null: bool,
+        _skip_null: bool,
     ) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         match validity {
@@ -312,7 +312,7 @@ where T: Number + HashtableKeyable
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, _check_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
         let view = columns[0].downcast::<NumberType<T>>().unwrap();
         let v = unsafe { view.index_unchecked(row) };
         let _ = self.set.set_insert(v).is_ok();
@@ -324,7 +324,7 @@ where T: Number + HashtableKeyable
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        _check_null: bool,
+        _skip_null: bool,
     ) -> Result<()> {
         let view = columns[0].downcast::<NumberType<T>>().unwrap();
         match validity {
@@ -423,7 +423,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: ProjectedBlock, row: usize, _check_null: bool) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize, _skip_null: bool) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         let data = unsafe { view.index_unchecked(row) }.as_bytes();
         let mut hasher = SipHasher24::new();
@@ -438,7 +438,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
-        _check_null: bool,
+        _skip_null: bool,
     ) -> Result<()> {
         let view = columns[0].downcast::<StringType>().unwrap();
         match validity {
