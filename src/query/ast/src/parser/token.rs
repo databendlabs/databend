@@ -351,6 +351,8 @@ pub enum TokenKind {
     ANY,
     #[token("APPEND_ONLY", ignore(ascii_case))]
     APPEND_ONLY,
+    #[token("APPLY", ignore(ascii_case))]
+    APPLY,
     #[token("ARGS", ignore(ascii_case))]
     ARGS,
     #[token("AUTO", ignore(ascii_case))]

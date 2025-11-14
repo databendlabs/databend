@@ -47,17 +47,22 @@ impl DatamaskHandler for RealDatamaskHandler {
         meta_api.create_data_mask(req).await
     }
 
-    async fn drop_data_mask(&self, meta_api: Arc<MetaStore>, req: DropDatamaskReq) -> Result<()> {
+    async fn drop_data_mask(
+        &self,
+        meta_api: Arc<MetaStore>,
+        req: DropDatamaskReq,
+    ) -> Result<Option<u64>> {
         let dropped = meta_api.drop_data_mask(&req.name).await??;
-        if dropped.is_none() {
-            if req.if_exists {
-                // Ok
-            } else {
-                return Err(AppError::from(req.name.unknown_error("drop data mask")).into());
+        match dropped {
+            Some((seq_id, _)) => Ok(Some(*seq_id.data)),
+            None => {
+                if req.if_exists {
+                    Ok(None)
+                } else {
+                    Err(AppError::from(req.name.unknown_error("drop data mask")).into())
+                }
             }
         }
-
-        Ok(())
     }
 
     async fn get_data_mask(

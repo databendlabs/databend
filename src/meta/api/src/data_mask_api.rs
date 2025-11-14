@@ -48,6 +48,17 @@ pub trait DatamaskApi: Send + Sync {
         name_ident: &DataMaskNameIdent,
     ) -> Result<Option<SeqV<DatamaskMeta>>, MetaError>;
 
+    async fn get_data_mask_id(
+        &self,
+        name_ident: &DataMaskNameIdent,
+    ) -> Result<Option<u64>, MetaError>;
+
+    async fn get_data_mask_name_by_id(
+        &self,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<Option<String>, MetaError>;
+
     async fn get_data_mask_by_id(
         &self,
         tenant: &Tenant,

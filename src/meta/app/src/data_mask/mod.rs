@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod data_mask_id_ident;
+pub mod data_mask_id_to_name_ident;
 pub mod data_mask_name_ident;
 pub mod mask_policy_policy_table_id_ident;
 pub mod mask_policy_table_id_list_ident;
@@ -23,7 +24,10 @@ use chrono::DateTime;
 use chrono::Utc;
 pub use data_mask_id_ident::DataMaskId;
 pub use data_mask_id_ident::DataMaskIdIdent;
+pub use data_mask_id_to_name_ident::DataMaskIdToNameIdent;
+pub use data_mask_id_to_name_ident::DataMaskIdToNameIdentRaw;
 pub use data_mask_name_ident::DataMaskNameIdent;
+pub use data_mask_name_ident::DataMaskNameIdentRaw;
 pub use mask_policy_policy_table_id_ident::MaskPolicyIdTableId;
 pub use mask_policy_policy_table_id_ident::MaskPolicyTableIdIdent;
 pub use mask_policy_table_id_list_ident::MaskPolicyTableIdListIdent;

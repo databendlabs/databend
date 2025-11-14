@@ -25,6 +25,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_management::WarehouseInfo;
+use databend_common_meta_api::DatamaskApi;
+use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
@@ -41,6 +43,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
@@ -168,6 +171,9 @@ impl PrivilegeAccess {
             },
             GrantObject::Procedure(procedure_id) => OwnershipObject::Procedure {
                 procedure_id: *procedure_id,
+            },
+            GrantObject::MaskingPolicy(policy_id) => OwnershipObject::MaskingPolicy {
+                policy_id: *policy_id,
             },
             GrantObject::Global => return Ok(None),
         };
@@ -662,7 +668,8 @@ impl PrivilegeAccess {
             | GrantObject::Connection(_)
             | GrantObject::Sequence(_)
             | GrantObject::Procedure(_)
-            | GrantObject::TableById(_, _, _) => true,
+            | GrantObject::TableById(_, _, _)
+            | GrantObject::MaskingPolicy(_) => true,
             GrantObject::Global => false,
         };
 
@@ -724,7 +731,8 @@ impl PrivilegeAccess {
                     | GrantObject::Sequence(_)
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
-                    | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
+                    | GrantObject::Table(_, _, _)
+                    | GrantObject::MaskingPolicy(_) => Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]. \
                         Note: Please ensure that your current role have the appropriate permissions to create a new Object",
                         privilege,
@@ -774,6 +782,103 @@ impl PrivilegeAccess {
             false,
         )
         .await
+    }
+
+    async fn resolve_masking_policy_id_by_name(&self, policy_name: &str) -> Result<u64> {
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let ident = DataMaskNameIdent::new(self.ctx.get_tenant(), policy_name);
+        if let Some(policy_id) = meta_api.get_data_mask_id(&ident).await? {
+            Ok(policy_id)
+        } else {
+            Err(ErrorCode::UnknownDatamask(format!(
+                "Unknown masking policy {}",
+                policy_name
+            )))
+        }
+    }
+
+    async fn find_masking_policy_id_for_column(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        column: &str,
+    ) -> Result<Option<u64>> {
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(catalog).await?;
+        let table_obj = catalog.get_table(&tenant, database, table).await?;
+        let schema = table_obj.schema();
+        if let Some((_, field)) = schema.column_with_name(column) {
+            if let Some(policy) = table_obj
+                .get_table_info()
+                .meta
+                .column_mask_policy_columns_ids
+                .get(&field.column_id)
+            {
+                return Ok(Some(policy.policy_id));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn validate_masking_policy_access(
+        &self,
+        policy_id: u64,
+        policy_name: &str,
+    ) -> Result<()> {
+        match self
+            .validate_access(
+                &GrantObject::Global,
+                UserPrivilegeType::ApplyMaskingPolicy,
+                false,
+                false,
+            )
+            .await
+        {
+            Ok(_) => return Ok(()),
+            Err(err) => {
+                if err.code() != ErrorCode::PERMISSION_DENIED {
+                    return Err(err);
+                }
+            }
+        }
+
+        match self
+            .validate_access(
+                &GrantObject::MaskingPolicy(policy_id),
+                UserPrivilegeType::ApplyMaskingPolicy,
+                false,
+                false,
+            )
+            .await
+        {
+            Ok(_) => return Ok(()),
+            Err(err) => {
+                if err.code() != ErrorCode::PERMISSION_DENIED {
+                    return Err(err);
+                }
+            }
+        }
+
+        let session = self.ctx.get_current_session();
+        if self
+            .has_ownership(
+                &session,
+                &GrantObject::MaskingPolicy(policy_id),
+                false,
+                false,
+            )
+            .await?
+        {
+            return Ok(());
+        }
+
+        let current_user = self.ctx.get_current_user()?;
+        Err(ErrorCode::PermissionDenied(format!(
+            "Permission denied: APPLY MASKING POLICY or OWNERSHIP is required on MASKING POLICY {} for user {}",
+            policy_name,
+            current_user.identity().display()
+        )))
     }
 
     async fn validate_udf_access(&self, udf_names: HashSet<&String>) -> Result<()> {
@@ -1221,7 +1326,41 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::ModifyTableColumn(plan) => {
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+                self.validate_table_access(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    UserPrivilegeType::Alter,
+                    false,
+                    false,
+                )
+                .await?;
+
+                match &plan.action {
+                    ModifyColumnAction::SetMaskingPolicy(policy_name, _) => {
+                        let policy_id = self
+                            .resolve_masking_policy_id_by_name(policy_name)
+                            .await?;
+                        self.validate_masking_policy_access(policy_id, policy_name)
+                            .await?;
+                    }
+                    ModifyColumnAction::UnsetMaskingPolicy(column) => {
+                        if let Some(policy_id) = self
+                            .find_masking_policy_id_for_column(
+                                &plan.catalog,
+                                &plan.database,
+                                &plan.table,
+                                column,
+                            )
+                            .await?
+                        {
+                            let policy_display = policy_id.to_string();
+                            self.validate_masking_policy_access(policy_id, &policy_display)
+                                .await?;
+                        }
+                    }
+                    _ => {}
+                }
             }
             Plan::ModifyTableComment(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
@@ -1581,13 +1720,35 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
-            Plan::CreateDatamaskPolicy(_) | Plan::DropDatamaskPolicy(_) => {
-                self.validate_access(
-                    &GrantObject::Global,
-                    UserPrivilegeType::CreateDataMask,
-                    false, false,
-                )
+            Plan::CreateDatamaskPolicy(_) => {
+                self
+                    .validate_access(
+                        &GrantObject::Global,
+                        UserPrivilegeType::CreateMaskingPolicy,
+                        false,
+                        false,
+                    )
                     .await?;
+            }
+            Plan::DropDatamaskPolicy(plan) => {
+                if self
+                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await
+                    .is_err()
+                {
+                    match self
+                        .resolve_masking_policy_id_by_name(&plan.name)
+                        .await
+                    {
+                        Ok(policy_id) => {
+                            self.validate_masking_policy_access(policy_id, &plan.name)
+                                .await?;
+                        }
+                        Err(err)
+                            if err.code() == ErrorCode::UNKNOWN_DATAMASK && plan.if_exists => {}
+                        Err(err) => return Err(err),
+                    }
+                }
             }
             // Note: No need to check privileges
             // SET ROLE & SHOW ROLES is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges
@@ -1604,7 +1765,13 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ExplainSyntax { .. } => {}
             // just used in clickhouse-sqlalchemy, no need to check
             Plan::ExistsTable(_) => {}
-            Plan::DescDatamaskPolicy(_) => {}
+            Plan::DescDatamaskPolicy(plan) => {
+                let policy_id = self
+                    .resolve_masking_policy_id_by_name(&plan.name)
+                    .await?;
+                self.validate_masking_policy_access(policy_id, &plan.name)
+                    .await?;
+            }
             Plan::Begin => {}
             Plan::CreateProcedure(_) => {
                 if self
@@ -1748,7 +1915,8 @@ fn check_db_tb_ownership_access(
                 | OwnershipObject::Warehouse { .. }
                 | OwnershipObject::Connection { .. }
                 | OwnershipObject::Procedure { .. }
-                | OwnershipObject::Sequence { .. } => {}
+                | OwnershipObject::Sequence { .. }
+                | OwnershipObject::MaskingPolicy { .. } => {}
             }
         }
     }
