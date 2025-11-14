@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -45,6 +44,7 @@ use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
+use crate::servers::http::v1::http_query_handlers::ResultFormatSettings;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
@@ -130,7 +130,7 @@ pub struct ExecuteRunning {
     // mainly used to get progress for now
     pub(crate) ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
-    driver_settings: Option<BTreeMap<String, String>>,
+    result_format_settings: Option<ResultFormatSettings>,
     has_result_set: bool,
     #[allow(dead_code)]
     queue_guard: AcquireQueueGuard,
@@ -138,7 +138,7 @@ pub struct ExecuteRunning {
 
 pub struct ExecuteStopped {
     pub schema: DataSchemaRef,
-    pub driver_settings: Option<BTreeMap<String, String>>,
+    pub result_format_settings: Option<ResultFormatSettings>,
     pub has_result_set: Option<bool>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
@@ -200,10 +200,10 @@ impl Executor {
             Stopped(f) => f.schema.clone(),
         };
 
-        let driver_settings = match &self.state {
+        let result_format_settings = match &self.state {
             Starting(_) => None,
-            Running(r) => r.driver_settings.clone(),
-            Stopped(f) => f.driver_settings.clone(),
+            Running(r) => r.result_format_settings.clone(),
+            Stopped(f) => f.result_format_settings.clone(),
         };
 
         ResponseState {
@@ -211,7 +211,7 @@ impl Executor {
             progresses: self.get_progress(),
             state: exe_state,
             error: err,
-            driver_settings,
+            result_format_settings,
             warnings: self.get_warnings(),
             affect: self.get_affect(),
             schema,
@@ -319,7 +319,7 @@ impl Executor {
                 ExecuteStopped {
                     stats: Default::default(),
                     schema: Default::default(),
-                    driver_settings: None,
+                    result_format_settings: None,
                     has_result_set: None,
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
@@ -342,7 +342,7 @@ impl Executor {
                 ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     schema: r.schema.clone(),
-                    driver_settings: r.driver_settings.clone(),
+                    result_format_settings: r.result_format_settings.clone(),
                     has_result_set: Some(r.has_result_set),
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
@@ -401,15 +401,23 @@ impl ExecuteState {
         } else {
             Default::default()
         };
-        let tz = ctx.get_settings().get_timezone().with_context(make_error)?;
-        let driver_settings = Some(BTreeMap::from_iter([("timezone".to_string(), tz)]));
+        let settings = ctx.get_settings();
+        let timezone = settings.get_timezone().with_context(make_error)?;
+        let geometry_output_format = settings
+            .get_geometry_output_format()
+            .with_context(make_error)?
+            .to_string();
+        let result_format_settings = Some(ResultFormatSettings {
+            timezone,
+            geometry_output_format,
+        });
 
         let running_state = ExecuteRunning {
             session,
             ctx: ctx.clone(),
             queue_guard,
             schema,
-            driver_settings,
+            result_format_settings,
             has_result_set,
         };
         info!("[HTTP-QUERY] Query state changed to Running");
