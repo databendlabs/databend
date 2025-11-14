@@ -169,7 +169,8 @@ impl Processor for ExchangeShuffleTransform {
             }
         }
 
-        if !self.initialized && !self.waiting_outputs.is_empty() {
+        // Lazy execution: To avoid memory issues from concurrent execution of all query fragments, we will defer execution until all downstream operations are ready.
+        if !self.initialized && self.waiting_outputs.len() == self.outputs.len() {
             self.initialized = true;
             for input in &self.inputs {
                 input.port.set_need_data();
