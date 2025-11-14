@@ -207,6 +207,13 @@ use crate::UDFArgVisitor;
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct StageLocationParam {
+    pub param_name: String,
+    pub relative_path: String,
+    pub stage_info: StageInfo,
+}
+
 /// A helper for type checking.
 ///
 /// `TypeChecker::resolve` will resolve types of `Expr` and transform `Expr` into
@@ -5143,6 +5150,7 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_udaf_script(span, name, arguments, udf_def)?,
             )),
             UDFDefinition::UDTF(_) => unreachable!(),
+            UDFDefinition::UDTFServer(_) => unreachable!(),
             UDFDefinition::ScalarUDF(udf_def) => Ok(Some(
                 self.resolve_scalar_udf(span, name, arguments, udf_def)?,
             )),
@@ -5156,13 +5164,6 @@ impl<'a> TypeChecker<'a> {
         arguments: &[Expr],
         mut udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        #[derive(serde::Serialize, serde::Deserialize)]
-        struct StageLocationParam {
-            param_name: String,
-            relative_path: String,
-            stage_info: StageInfo,
-        }
-
         UDFValidator::is_udf_server_allowed(&udf_definition.address)?;
         if arguments.len() != udf_definition.arg_types.len() {
             return Err(ErrorCode::InvalidArgument(format!(
@@ -5343,7 +5344,7 @@ impl<'a> TypeChecker<'a> {
             )
             .await?;
 
-        let value = unsafe { result.index_unchecked(0) };
+        let value = unsafe { result.get_by_offset(0).index_unchecked(0) };
         Ok(value.to_owned())
     }
 

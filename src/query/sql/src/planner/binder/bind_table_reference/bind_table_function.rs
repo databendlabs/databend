@@ -140,111 +140,128 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
         let udtf_result = databend_common_base::runtime::block_on(async {
-            if let Some(UDFDefinition::UDTF(udtf)) = UserApiProvider::instance()
+            match UserApiProvider::instance()
                 .get_udf(&tenant, &func_name.name)
                 .await?
                 .map(|udf| udf.definition)
             {
-                let mut stmt = Planner::new(self.ctx.clone())
-                    .parse_sql(&udtf.sql)?
-                    .statement;
+                Some(UDFDefinition::UDTF(udtf)) => {
+                    let mut stmt = Planner::new(self.ctx.clone())
+                        .parse_sql(&udtf.sql)?
+                        .statement;
 
-                if udtf.arg_types.len() != table_args.positioned.len() {
-                    return Err(ErrorCode::SyntaxException(format!(
-                        "UDTF '{}' argument types length {} does not match input arguments length {}",
-                        func_name,
-                        udtf.arg_types.len(),
-                        table_args.positioned.len()
-                    )));
-                }
+                    if udtf.arg_types.len() != table_args.positioned.len() {
+                        return Err(ErrorCode::SyntaxException(format!(
+                            "UDTF '{}' argument types length {} does not match input arguments length {}",
+                            func_name,
+                            udtf.arg_types.len(),
+                            table_args.positioned.len()
+                        )));
+                    }
 
-                let args_expr = table_args
-                    .positioned
-                    .iter()
-                    .map(|scalar| Expr::Literal {
-                        span: None,
-                        value: Literal::String(scalar_ref_to_string(&scalar.as_ref())),
-                    })
-                    .collect::<Vec<_>>();
-                let mut visitor = UDFArgVisitor::new(&udtf.arg_types, &args_expr);
-                stmt.drive_mut(&mut visitor);
+                    let args_expr = table_args
+                        .positioned
+                        .iter()
+                        .map(|scalar| Expr::Literal {
+                            span: None,
+                            value: Literal::String(scalar_ref_to_string(&scalar.as_ref())),
+                        })
+                        .collect::<Vec<_>>();
+                    let mut visitor = UDFArgVisitor::new(&udtf.arg_types, &args_expr);
+                    stmt.drive_mut(&mut visitor);
 
-                let binder = Binder::new(
-                    self.ctx.clone(),
-                    CatalogManager::instance(),
-                    self.name_resolution_ctx.clone(),
-                    self.metadata.clone(),
-                )
-                .with_subquery_executor(self.subquery_executor.clone());
-                let plan = binder.bind(&stmt).await?;
-
-                let Plan::Query {
-                    s_expr,
-                    mut bind_context,
-                    ..
-                } = plan
-                else {
-                    return Err(ErrorCode::UDFRuntimeError(
-                        "Query in UDTF returned no result set",
-                    ));
-                };
-                let mut output_bindings = Vec::with_capacity(bind_context.columns.len());
-                let mut output_items = Vec::with_capacity(bind_context.columns.len());
-
-                if udtf.return_types.len() != bind_context.columns.len() {
-                    return Err(ErrorCode::UDFSchemaMismatch(format!(
-                        "UDTF '{}' return types length {} does not match output columns length {}",
-                        func_name,
-                        udtf.return_types.len(),
-                        bind_context.columns.len()
-                    )));
-                }
-
-                for ((return_name, return_type), output_binding) in udtf
-                    .return_types
-                    .into_iter()
-                    .zip(bind_context.columns.iter())
-                {
-                    let input_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: output_binding.clone(),
-                    });
-                    let cast_expr = ScalarExpr::CastExpr(CastExpr {
-                        span: None,
-                        is_try: false,
-                        argument: Box::new(input_expr),
-                        target_type: Box::new(return_type.clone()),
-                    });
-                    let index = self
-                        .metadata
-                        .write()
-                        .add_derived_column(return_name.clone(), return_type.clone());
-                    let output_binding = ColumnBindingBuilder::new(
-                        return_name,
-                        index,
-                        Box::new(return_type),
-                        Visibility::Visible,
+                    let binder = Binder::new(
+                        self.ctx.clone(),
+                        CatalogManager::instance(),
+                        self.name_resolution_ctx.clone(),
+                        self.metadata.clone(),
                     )
-                    .build();
+                    .with_subquery_executor(self.subquery_executor.clone());
+                    let plan = binder.bind(&stmt).await?;
 
-                    output_items.push(ScalarItem {
-                        scalar: cast_expr,
-                        index: output_binding.index,
-                    });
-                    output_bindings.push(output_binding);
+                    let Plan::Query {
+                        s_expr,
+                        mut bind_context,
+                        ..
+                    } = plan
+                    else {
+                        return Err(ErrorCode::UDFRuntimeError(
+                            "Query in UDTF returned no result set",
+                        ));
+                    };
+                    let mut output_bindings = Vec::with_capacity(bind_context.columns.len());
+                    let mut output_items = Vec::with_capacity(bind_context.columns.len());
+
+                    if udtf.return_types.len() != bind_context.columns.len() {
+                        return Err(ErrorCode::UDFSchemaMismatch(format!(
+                            "UDTF '{}' return types length {} does not match output columns length {}",
+                            func_name,
+                            udtf.return_types.len(),
+                            bind_context.columns.len()
+                        )));
+                    }
+
+                    for ((return_name, return_type), output_binding) in udtf
+                        .return_types
+                        .into_iter()
+                        .zip(bind_context.columns.iter())
+                    {
+                        let input_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: output_binding.clone(),
+                        });
+                        let cast_expr = ScalarExpr::CastExpr(CastExpr {
+                            span: None,
+                            is_try: false,
+                            argument: Box::new(input_expr),
+                            target_type: Box::new(return_type.clone()),
+                        });
+                        let index = self
+                            .metadata
+                            .write()
+                            .add_derived_column(return_name.clone(), return_type.clone());
+                        let output_binding = ColumnBindingBuilder::new(
+                            return_name,
+                            index,
+                            Box::new(return_type),
+                            Visibility::Visible,
+                        )
+                        .build();
+
+                        output_items.push(ScalarItem {
+                            scalar: cast_expr,
+                            index: output_binding.index,
+                        });
+                        output_bindings.push(output_binding);
+                    }
+                    bind_context.columns = output_bindings;
+                    let s_expr = SExpr::create_unary(
+                        Arc::new(
+                            EvalScalar {
+                                items: output_items,
+                            }
+                            .into(),
+                        ),
+                        s_expr,
+                    );
+
+                    return Ok(Some((s_expr, *bind_context)));
                 }
-                bind_context.columns = output_bindings;
-                let s_expr = SExpr::create_unary(
-                    Arc::new(
-                        EvalScalar {
-                            items: output_items,
-                        }
-                        .into(),
-                    ),
-                    s_expr,
-                );
-
-                return Ok(Some((s_expr, *bind_context)));
+                Some(UDFDefinition::UDTFServer(udtf)) => {
+                    let table = self
+                        .catalogs
+                        .get_default_catalog(self.ctx.session_state()?)?
+                        .transform_udtf_as_table_function(
+                            self.ctx.as_ref(),
+                            &table_args,
+                            udtf,
+                            &func_name.name,
+                        )?;
+                    let (s_expr, bind_context) =
+                        self.bind_base_table_inner(bind_context, alias, sample, table)?;
+                    return Ok(Some((s_expr, bind_context)));
+                }
+                _ => (),
             }
             Ok(None)
         });
@@ -260,31 +277,39 @@ impl Binder {
                 .catalogs
                 .get_default_catalog(self.ctx.session_state()?)?
                 .get_table_function(&func_name.name, table_args)?;
-            let table = table_meta.as_table();
-            let table_alias_name = if let Some(table_alias) = alias {
-                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
-            } else {
-                None
-            };
-            let table_index = self.metadata.write().add_table(
-                CATALOG_DEFAULT.to_string(),
-                "system".to_string(),
-                table.clone(),
-                table_alias_name,
-                false,
-                false,
-                false,
-                None,
-                false,
-            );
-
-            let (s_expr, mut bind_context) =
-                self.bind_base_table(bind_context, "system", table_index, None, sample)?;
-            if let Some(alias) = alias {
-                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-            }
-            Ok((s_expr, bind_context))
+            self.bind_base_table_inner(bind_context, alias, sample, table_meta)
         }
+    }
+
+    fn bind_base_table_inner(
+        &mut self,
+        bind_context: &mut BindContext,
+        alias: &Option<TableAlias>,
+        sample: &Option<SampleConfig>,
+        table: Arc<dyn TableFunction>,
+    ) -> Result<(SExpr, BindContext)> {
+        let table_alias_name = if let Some(table_alias) = alias {
+            Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+        } else {
+            None
+        };
+        let table_index = self.metadata.write().add_table(
+            CATALOG_DEFAULT.to_string(),
+            "system".to_string(),
+            table.as_table(),
+            table_alias_name,
+            false,
+            false,
+            false,
+            None,
+            false,
+        );
+        let (s_expr, mut bind_context) =
+            self.bind_base_table(bind_context, "system", table_index, None, sample)?;
+        if let Some(alias) = alias {
+            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+        }
+        Ok((s_expr, bind_context))
     }
 
     fn bind_result_scan(
