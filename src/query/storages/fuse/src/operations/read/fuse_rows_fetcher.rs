@@ -71,37 +71,20 @@ pub fn row_fetch_processor(
                 cur_bytes: 0,
             };
 
-            Ok(match block_reader.support_blocking_api() {
-                true => Box::new(move |input, output| {
-                    Ok(TransformRowsFetcher::create(
-                        input,
-                        output,
-                        row_id_col_offset,
-                        ParquetRowsFetcher::<true>::create(
-                            fuse_table.clone(),
-                            projection.clone(),
-                            block_reader.clone(),
-                            read_settings,
-                        ),
-                        need_wrap_nullable,
-                        block_threshold,
-                    ))
-                }),
-                false => Box::new(move |input, output| {
-                    Ok(TransformRowsFetcher::create(
-                        input,
-                        output,
-                        row_id_col_offset,
-                        ParquetRowsFetcher::<false>::create(
-                            fuse_table.clone(),
-                            projection.clone(),
-                            block_reader.clone(),
-                            read_settings,
-                        ),
-                        need_wrap_nullable,
-                        block_threshold,
-                    ))
-                }),
+            Box::new(move |input, output| {
+                Ok(TransformRowsFetcher::create(
+                    input,
+                    output,
+                    row_id_col_offset,
+                    ParquetRowsFetcher::create(
+                        fuse_table.clone(),
+                        projection.clone(),
+                        block_reader.clone(),
+                        read_settings,
+                    ),
+                    need_wrap_nullable,
+                    block_threshold,
+                ))
             })
         }
     }
