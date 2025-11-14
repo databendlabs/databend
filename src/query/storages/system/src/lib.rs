@@ -118,6 +118,7 @@ pub use roles_table::RolesTable;
 pub use settings_table::SettingsTable;
 pub use stages_table::StagesTable;
 pub use statistics_table::StatisticsTable;
+pub use statistics_table::TableColumnStatistics;
 pub use streams_table::FullStreamsTable;
 pub use streams_table::TerseStreamsTable;
 pub use table::SyncOneBlockSystemTable;
