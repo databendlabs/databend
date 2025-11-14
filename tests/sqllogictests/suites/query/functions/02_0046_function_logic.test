@@ -371,3 +371,14 @@ select number from numbers(6) where number = 1 or number = 5 or number = 3 order
 
 statement ok
 DROP TABLE t_logic
+
+#ISSUE 18964
+statement ok
+set enable_selector_executor = 0;
+
+query I
+select number from numbers(6) where number < 6 and number in (1, 3, 5);
+----
+1
+3
+5
