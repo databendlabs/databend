@@ -71,7 +71,7 @@ pub fn row_fetch_processor(
                 cur_bytes: 0,
             };
 
-            Box::new(move |input, output| {
+            Ok(Box::new(move |input, output| {
                 Ok(TransformRowsFetcher::create(
                     input,
                     output,
@@ -85,7 +85,7 @@ pub fn row_fetch_processor(
                     need_wrap_nullable,
                     block_threshold,
                 ))
-            })
+            }))
         }
     }
 }

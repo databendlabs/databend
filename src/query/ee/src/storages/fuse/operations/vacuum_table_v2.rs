@@ -535,12 +535,11 @@ async fn fs_list_until_prefix(
     gc_root_meta_ts: Option<DateTime<Utc>>,
 ) -> Result<Vec<Entry>> {
     // Fetch ALL entries from the path and sort them by path in lexicographical order.
-    let lister = dal.blocking().lister(path)?;
+    let mut lister = dal.lister(path).await?;
     let mut entries = Vec::new();
-    for item in lister {
-        let entry = item?;
-        if entry.metadata().is_file() {
-            entries.push(entry);
+    while let Some(item) = lister.try_next().await? {
+        if item.metadata().is_file() {
+            entries.push(item);
         }
     }
     entries.sort_by(|l, r| l.path().cmp(r.path()));
