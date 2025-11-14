@@ -54,7 +54,7 @@ pub struct ReadStats {
     pub blocks_pruned: AtomicU64,
 }
 
-pub struct ReadParquetDataTransform<const BLOCKING_IO: bool> {
+pub struct ReadParquetDataTransform {
     func_ctx: FunctionContext,
     block_reader: Arc<BlockReader>,
 
@@ -68,39 +68,7 @@ pub struct ReadParquetDataTransform<const BLOCKING_IO: bool> {
     unfinished_processors_count: Arc<AtomicU64>,
 }
 
-impl ReadParquetDataTransform<true> {
-    pub fn create(
-        scan_id: IndexType,
-        ctx: Arc<dyn TableContext>,
-        table_schema: Arc<TableSchema>,
-        block_reader: Arc<BlockReader>,
-        index_reader: Arc<Option<AggIndexReader>>,
-        virtual_reader: Arc<Option<VirtualColumnReader>>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        stats: Arc<ReadStats>,
-        unfinished_processors_count: Arc<AtomicU64>,
-    ) -> Result<ProcessorPtr> {
-        let func_ctx = ctx.get_function_context()?;
-        Ok(ProcessorPtr::create(Transformer::create(
-            input,
-            output,
-            ReadParquetDataTransform::<true> {
-                func_ctx,
-                block_reader,
-                index_reader,
-                virtual_reader,
-                table_schema,
-                scan_id,
-                context: ctx,
-                stats,
-                unfinished_processors_count,
-            },
-        )))
-    }
-}
-
-impl ReadParquetDataTransform<false> {
+impl ReadParquetDataTransform {
     pub fn create(
         table_index: IndexType,
         ctx: Arc<dyn TableContext>,
@@ -117,7 +85,7 @@ impl ReadParquetDataTransform<false> {
         Ok(ProcessorPtr::create(AsyncTransformer::create(
             input,
             output,
-            ReadParquetDataTransform::<false> {
+            ReadParquetDataTransform {
                 func_ctx,
                 block_reader,
                 index_reader,
@@ -132,131 +100,8 @@ impl ReadParquetDataTransform<false> {
     }
 }
 
-impl Transform for ReadParquetDataTransform<true> {
-    const NAME: &'static str = "SyncReadParquetDataTransform";
-
-    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        if let Some(meta) = data.get_meta() {
-            if let Some(block_part_meta) = BlockPartitionMeta::downcast_ref_from(meta) {
-                let mut partitions = block_part_meta.part_ptr.clone();
-                debug_assert!(partitions.len() == 1);
-                let part = partitions.pop().unwrap();
-                let prune_start = Instant::now();
-                let filters = self
-                    .context
-                    .get_runtime_filters(self.scan_id)
-                    .into_iter()
-                    .flat_map(|entry| {
-                        let mut exprs = Vec::new();
-                        if let Some(expr) = entry.inlist.clone() {
-                            exprs.push(RuntimeFilterExpr {
-                                filter_id: entry.id,
-                                expr,
-                                stats: entry.stats.clone(),
-                            });
-                        }
-                        if let Some(expr) = entry.min_max.clone() {
-                            exprs.push(RuntimeFilterExpr {
-                                filter_id: entry.id,
-                                expr,
-                                stats: entry.stats.clone(),
-                            });
-                        }
-                        exprs
-                    })
-                    .collect::<Vec<_>>();
-
-                let exists_runtime_filter = !filters.is_empty();
-
-                let runtime_filter = ExprRuntimePruner::new(filters);
-
-                self.stats.blocks_total.fetch_add(1, Ordering::Relaxed);
-                let prune_result =
-                    runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)?;
-                let prune_duration = prune_start.elapsed();
-                if exists_runtime_filter {
-                    Profile::record_usize_profile(
-                        ProfileStatisticsName::RuntimeFilterInlistMinMaxTime,
-                        prune_duration.as_nanos() as usize,
-                    );
-                }
-                if prune_result {
-                    self.stats.blocks_pruned.fetch_add(1, Ordering::Relaxed);
-                    return Ok(DataBlock::empty());
-                }
-
-                if let Some(index_reader) = self.index_reader.as_ref() {
-                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
-                    let loc =
-                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                            &fuse_part.location,
-                            index_reader.index_id(),
-                        );
-                    if let Some(data) = index_reader.sync_read_parquet_data_by_merge_io(
-                        &ReadSettings::from_ctx(&self.context)?,
-                        &loc,
-                    ) {
-                        // Read from aggregating index.
-                        return Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
-                            vec![part.clone()],
-                            vec![ParquetDataSource::AggIndex(data)],
-                        )));
-                    }
-                }
-
-                // If virtual column file exists, read the data from the virtual columns directly.
-                let virtual_source = if let Some(virtual_reader) = self.virtual_reader.as_ref() {
-                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
-                    let virtual_block_meta = fuse_part
-                        .block_meta_index
-                        .as_ref()
-                        .and_then(|b| b.virtual_block_meta.as_ref());
-                    virtual_reader.sync_read_parquet_data_by_merge_io(
-                        &ReadSettings::from_ctx(&self.context)?,
-                        &virtual_block_meta,
-                        fuse_part.nums_rows,
-                    )
-                } else {
-                    None
-                };
-                let ignore_column_ids = if let Some(virtual_source) = &virtual_source {
-                    &virtual_source.ignore_column_ids
-                } else {
-                    &None
-                };
-
-                let source = self.block_reader.sync_read_columns_data_by_merge_io(
-                    &ReadSettings::from_ctx(&self.context)?,
-                    &part,
-                    ignore_column_ids,
-                )?;
-
-                return Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
-                    vec![part],
-                    vec![ParquetDataSource::Normal((source, virtual_source))],
-                )));
-            }
-        }
-        Err(ErrorCode::Internal(
-            "ReadParquetDataTransform get wrong meta data",
-        ))
-    }
-
-    fn on_finish(&mut self) -> Result<()> {
-        let unfinished_processors_count = self
-            .unfinished_processors_count
-            .fetch_sub(1, Ordering::Relaxed);
-        if unfinished_processors_count == 1 {
-            let blocks_total = self.stats.blocks_total.load(Ordering::Relaxed);
-            let blocks_pruned = self.stats.blocks_pruned.load(Ordering::Relaxed);
-            info!("RUNTIME-FILTER: ReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
-        }
-        Ok(())
-    }
-}
-
 #[async_trait::async_trait]
-impl AsyncTransform for ReadParquetDataTransform<false> {
+impl AsyncTransform for ReadParquetDataTransform {
     const NAME: &'static str = "AsyncReadParquetDataTransform";
 
     async fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {

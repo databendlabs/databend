@@ -41,7 +41,7 @@ use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
 use crate::FuseBlockPartInfo;
 
-pub struct ReadNativeDataTransform<const BLOCKING_IO: bool> {
+pub struct ReadNativeDataTransform {
     func_ctx: FunctionContext,
     block_reader: Arc<BlockReader>,
 
@@ -52,33 +52,7 @@ pub struct ReadNativeDataTransform<const BLOCKING_IO: bool> {
     context: Arc<dyn TableContext>,
 }
 
-impl ReadNativeDataTransform<true> {
-    pub fn create(
-        scan_id: IndexType,
-        ctx: Arc<dyn TableContext>,
-        table_schema: Arc<TableSchema>,
-        block_reader: Arc<BlockReader>,
-        index_reader: Arc<Option<AggIndexReader>>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-    ) -> Result<ProcessorPtr> {
-        let func_ctx = ctx.get_function_context()?;
-        Ok(ProcessorPtr::create(Transformer::create(
-            input,
-            output,
-            ReadNativeDataTransform::<true> {
-                func_ctx,
-                block_reader,
-                index_reader,
-                table_schema,
-                scan_id,
-                context: ctx,
-            },
-        )))
-    }
-}
-
-impl ReadNativeDataTransform<false> {
+impl ReadNativeDataTransform {
     pub fn create(
         scan_id: IndexType,
         ctx: Arc<dyn TableContext>,
@@ -92,7 +66,7 @@ impl ReadNativeDataTransform<false> {
         Ok(ProcessorPtr::create(AsyncTransformer::create(
             input,
             output,
-            ReadNativeDataTransform::<false> {
+            ReadNativeDataTransform {
                 func_ctx,
                 block_reader,
                 index_reader,
@@ -104,76 +78,8 @@ impl ReadNativeDataTransform<false> {
     }
 }
 
-impl Transform for ReadNativeDataTransform<true> {
-    const NAME: &'static str = "SyncReadNativeDataTransform";
-
-    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        if let Some(meta) = data.get_meta() {
-            if let Some(block_part_meta) = BlockPartitionMeta::downcast_ref_from(meta) {
-                let mut partitions = block_part_meta.part_ptr.clone();
-                debug_assert!(partitions.len() == 1);
-                let part = partitions.pop().unwrap();
-                let runtime_filter = ExprRuntimePruner::new(
-                    self.context
-                        .get_runtime_filters(self.scan_id)
-                        .into_iter()
-                        .flat_map(|entry| {
-                            let mut exprs = Vec::new();
-                            if let Some(expr) = entry.inlist.clone() {
-                                exprs.push(RuntimeFilterExpr {
-                                    filter_id: entry.id,
-                                    expr,
-                                    stats: entry.stats.clone(),
-                                });
-                            }
-                            if let Some(expr) = entry.min_max.clone() {
-                                exprs.push(RuntimeFilterExpr {
-                                    filter_id: entry.id,
-                                    expr,
-                                    stats: entry.stats.clone(),
-                                });
-                            }
-                            exprs
-                        })
-                        .collect(),
-                );
-                if runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)? {
-                    return Ok(DataBlock::empty());
-                }
-
-                if let Some(index_reader) = self.index_reader.as_ref() {
-                    let fuse_part = FuseBlockPartInfo::from_part(&part)?;
-                    let loc =
-                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                            &fuse_part.location,
-                            index_reader.index_id(),
-                        );
-                    if let Some(data) = index_reader.sync_read_native_data(&loc) {
-                        // Read from aggregating index.
-                        return Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
-                            vec![part.clone()],
-                            vec![NativeDataSource::AggIndex(data)],
-                        )));
-                    }
-                }
-
-                return Ok(DataBlock::empty_with_meta(DataSourceWithMeta::create(
-                    vec![part.clone()],
-                    vec![NativeDataSource::Normal(
-                        self.block_reader
-                            .sync_read_native_columns_data(&part, &None)?,
-                    )],
-                )));
-            }
-        }
-        Err(ErrorCode::Internal(
-            "ReadNativeDataTransform get wrong meta data",
-        ))
-    }
-}
-
 #[async_trait::async_trait]
-impl AsyncTransform for ReadNativeDataTransform<false> {
+impl AsyncTransform for ReadNativeDataTransform {
     const NAME: &'static str = "AsyncReadNativeDataTransform";
 
     #[async_backtrace::framed]

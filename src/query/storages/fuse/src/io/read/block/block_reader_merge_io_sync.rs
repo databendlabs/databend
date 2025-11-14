@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_storages_common_cache::CacheAccessor;
@@ -25,29 +24,10 @@ use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
-use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::BlockReadResult;
 
 impl BlockReader {
-    pub fn sync_read_columns_data_by_merge_io(
-        &self,
-        settings: &ReadSettings,
-        part: &PartInfoPtr,
-        ignore_column_ids: &Option<HashSet<ColumnId>>,
-    ) -> Result<BlockReadResult> {
-        let part = FuseBlockPartInfo::from_part(part)?;
-        let location = &part.location;
-        let columns_meta = &part.columns_meta;
-
-        self.sync_read_columns_data_by_merge_io_2(
-            settings,
-            location,
-            columns_meta,
-            ignore_column_ids,
-        )
-    }
-
     pub fn sync_read_columns_data_by_merge_io_2(
         &self,
         settings: &ReadSettings,

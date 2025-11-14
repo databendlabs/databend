@@ -207,39 +207,6 @@ impl StageFilesInfo {
         Ok(files.pop())
     }
 
-    pub fn blocking_list(
-        &self,
-        operator: &Operator,
-        max_files: Option<usize>,
-    ) -> Result<Vec<StageFileInfo>> {
-        let max_files = max_files.unwrap_or(usize::MAX);
-        if let Some(files) = &self.files {
-            let mut res = Vec::new();
-            for file in files {
-                let full_path = Path::new(&self.path)
-                    .join(file)
-                    .to_string_lossy()
-                    .trim_start_matches('/')
-                    .to_string();
-                let meta = operator.blocking().stat(&full_path)?;
-                if meta.mode().is_file() {
-                    res.push(StageFileInfo::new(full_path, &meta))
-                } else {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "{full_path} is not a file"
-                    )));
-                }
-                if res.len() == max_files {
-                    return Ok(res);
-                }
-            }
-            Ok(res)
-        } else {
-            let pattern = self.get_pattern()?;
-            blocking_list_files_with_pattern(operator, &self.path, pattern, max_files)
-        }
-    }
-
     #[async_backtrace::framed]
     pub async fn list_files_with_pattern(
         operator: &Operator,
@@ -372,52 +339,6 @@ fn check_file(path: &str, mode: EntryMode, pattern: &Option<Regex>) -> bool {
     } else {
         false
     }
-}
-
-fn blocking_list_files_with_pattern(
-    operator: &Operator,
-    path: &str,
-    pattern: Option<Regex>,
-    max_files: usize,
-) -> Result<Vec<StageFileInfo>> {
-    if path == STDIN_FD {
-        return Ok(vec![stdin_stage_info()]);
-    }
-    let operator = operator.blocking();
-    let mut files = Vec::new();
-    let prefix_meta = operator.stat(path);
-    match prefix_meta {
-        Ok(meta) if meta.is_file() => {
-            files.push(StageFileInfo::new(path.to_string(), &meta));
-        }
-        Err(e) if e.kind() != opendal::ErrorKind::NotFound => {
-            return Err(e.into());
-        }
-        _ => {}
-    };
-    let prefix_len = if path == "/" { 0 } else { path.len() };
-    let list = operator.lister_with(path).recursive(true).call()?;
-    if files.len() == max_files {
-        return Ok(files);
-    }
-    for obj in list {
-        let obj = obj?;
-        let (path, mut meta) = obj.into_parts();
-        if check_file(&path[prefix_len..], meta.mode(), &pattern) {
-            if meta.etag().is_none() {
-                meta = match operator.stat(&path) {
-                    Ok(meta) => meta,
-                    Err(err) => return Err(ErrorCode::from(err)),
-                }
-            }
-
-            files.push(StageFileInfo::new(path, &meta));
-            if files.len() == max_files {
-                return Ok(files);
-            }
-        }
-    }
-    Ok(files)
 }
 
 pub const STDIN_FD: &str = "/dev/fd/0";
