@@ -66,8 +66,6 @@ pub enum UserPrivilegeType {
     DropRole = 1 << 14,
     // Privilege to Drop user.
     DropUser = 1 << 15,
-    // Privilege to Create/Drop DataMask.
-    CreateDataMask = 1 << 16,
     // Privilege to Own a databend object such as database/table.
     Ownership = 1 << 17,
     // Privilege to Read stage
@@ -90,8 +88,13 @@ pub enum UserPrivilegeType {
     CreateProcedure = 1 << 26,
     // Privilege to Access Procedure
     AccessProcedure = 1 << 27,
+    // Privilege to Apply Masking Policy.
+    ApplyMaskingPolicy = 1 << 28,
+    // Privilege to Create Masking Policy.
+    CreateMaskingPolicy = 1 << 29,
     // Discard Privilege Type
     Set = 1 << 4,
+    CreateDataMask = 1 << 16,
 }
 
 const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
@@ -112,6 +115,8 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | CreateStage
         | Set
         | CreateDataMask
+        | CreateMaskingPolicy
+        | ApplyMaskingPolicy
         | Ownership
         | Read
         | Write
@@ -142,6 +147,8 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::Grant => "GRANT",
             UserPrivilegeType::Set => "SET",
             UserPrivilegeType::CreateDataMask => "CREATE DATAMASK",
+            UserPrivilegeType::CreateMaskingPolicy => "CREATE MASKING POLICY",
+            UserPrivilegeType::ApplyMaskingPolicy => "APPLY MASKING POLICY",
             UserPrivilegeType::Ownership => "OWNERSHIP",
             UserPrivilegeType::Read => "Read",
             UserPrivilegeType::Write => "Write",
@@ -181,8 +188,11 @@ impl From<databend_common_ast::ast::UserPrivilegeType> for UserPrivilegeType {
             }
             databend_common_ast::ast::UserPrivilegeType::DropRole => UserPrivilegeType::DropRole,
             databend_common_ast::ast::UserPrivilegeType::DropUser => UserPrivilegeType::DropUser,
-            databend_common_ast::ast::UserPrivilegeType::CreateDataMask => {
-                UserPrivilegeType::CreateDataMask
+            databend_common_ast::ast::UserPrivilegeType::CreateMaskingPolicy => {
+                UserPrivilegeType::CreateMaskingPolicy
+            }
+            databend_common_ast::ast::UserPrivilegeType::ApplyMaskingPolicy => {
+                UserPrivilegeType::ApplyMaskingPolicy
             }
             databend_common_ast::ast::UserPrivilegeType::Ownership => UserPrivilegeType::Ownership,
             databend_common_ast::ast::UserPrivilegeType::Read => UserPrivilegeType::Read,
@@ -247,14 +257,16 @@ impl UserPrivilegeSet {
         let wh_privs_without_ownership = Self::available_privileges_on_warehouse(false);
         let connection_privs_without_ownership = Self::available_privileges_on_connection(false);
         let seq_privs_without_ownership = Self::available_privileges_on_sequence(false);
-        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateWarehouse | CreateConnection | CreateSequence | CreateProcedure });
+        let mask_privs = Self::available_privileges_on_masking_policy(false);
+        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateMaskingPolicy | CreateWarehouse | CreateConnection | CreateSequence | CreateProcedure });
         (database_privs.privileges
             | privs
             | stage_privs_without_ownership.privileges
             | wh_privs_without_ownership.privileges
             | connection_privs_without_ownership.privileges
             | seq_privs_without_ownership.privileges
-            | udf_privs_without_ownership.privileges)
+            | udf_privs_without_ownership.privileges
+            | mask_privs.privileges)
             .into()
     }
 
@@ -322,6 +334,14 @@ impl UserPrivilegeSet {
             make_bitflags!(UserPrivilegeType::{ Usage | Ownership }).into()
         } else {
             make_bitflags!(UserPrivilegeType::{ Usage }).into()
+        }
+    }
+
+    pub fn available_privileges_on_masking_policy(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{ ApplyMaskingPolicy | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{ ApplyMaskingPolicy }).into()
         }
     }
 

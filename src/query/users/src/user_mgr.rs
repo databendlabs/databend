@@ -217,9 +217,10 @@ impl UserApiProvider {
                 | GrantObject::Connection(_)
                 | GrantObject::Sequence(_)
                 | GrantObject::Procedure(_)
+                | GrantObject::MaskingPolicy(_)
         ) {
             return Err(ErrorCode::IllegalUser(format!(
-                "Cannot grant warehouse|connection|Sequence|Procedure privileges to user `{}`",
+                "Cannot grant Warehouse|Connection|Sequence|Procedure|MaskingPolicy privileges to user `{}`",
                 user.username
             )));
         }

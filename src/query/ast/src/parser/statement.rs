@@ -3697,6 +3697,26 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let masking_policy_privs = map(
+        rule! {
+            APPLY ~ ON ~ MASKING ~ POLICY ~ #ident
+        },
+        |(_, _, _, _, name)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::ApplyMaskingPolicy],
+            level: AccountMgrLevel::MaskingPolicy(name.to_string()),
+        },
+    );
+
+    let masking_policy_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ MASKING ~ POLICY ~ #ident
+        },
+        |(_, _, _, _, _, name)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::ApplyMaskingPolicy],
+            level: AccountMgrLevel::MaskingPolicy(name.to_string()),
+        },
+    );
+
     rule!(
         #role : "ROLE <role_name>"
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
@@ -3706,6 +3726,8 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
         | #connection_privs: "ACCESS CONNECTION ON CONNECTION <connection_name>"
         | #seq_privs: "ACCESS SEQUENCE ON CONNECTION <seq_name>"
+        | #masking_policy_privs: "APPLY ON MASKING POLICY <policy_name>"
+        | #masking_policy_all_privs: "ALL [ PRIVILEGES ] ON MASKING POLICY <policy_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -3765,6 +3787,14 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
     let set = value(UserPrivilegeType::Set, rule! { SET });
     let drop = value(UserPrivilegeType::Drop, rule! { DROP });
     let create = value(UserPrivilegeType::Create, rule! { CREATE });
+    let create_masking_policy = value(
+        UserPrivilegeType::CreateMaskingPolicy,
+        rule! { CREATE ~ MASKING ~ POLICY },
+    );
+    let apply_masking_policy = value(
+        UserPrivilegeType::ApplyMaskingPolicy,
+        rule! { APPLY ~ MASKING ~ POLICY },
+    );
 
     alt((
         rule!(
@@ -3793,6 +3823,8 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             | #create_stage
             | #set
             | #drop
+            | #create_masking_policy
+            | #apply_masking_policy
             | #create
         ),
     ))
@@ -3871,6 +3903,10 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         },
     );
 
+    let masking_policy = map(rule! { MASKING ~ POLICY ~ #ident }, |(_, _, name)| {
+        GrantObjectName::MaskingPolicy(name.to_string())
+    });
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
@@ -3880,6 +3916,7 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         | #connection : "CONNECTION <connection_name>"
         | #seq : "SEQUENCE <seq_name>"
         | #procedure : "PROCEDURE <procedure_identity>"
+        | #masking_policy : "MASKING POLICY <policy_name>"
     )
     .parse(i)
 }
@@ -3906,10 +3943,15 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
         },
     );
 
+    let masking_policy = map(rule! { MASKING ~ POLICY ~ #ident }, |(_, _, name)| {
+        AccountMgrLevel::MaskingPolicy(name.to_string())
+    });
+
     rule!(
         #global : "*.*"
         | #db : "<database>.*"
         | #table : "<database>.<table>"
+        | #masking_policy : "MASKING POLICY <policy_name>"
     )
     .parse(i)
 }
@@ -3980,6 +4022,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         Warehouse,
         Connection,
         Sequence,
+        MaskingPolicy,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
@@ -3987,6 +4030,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         value(Object::Warehouse, rule! { WAREHOUSE }),
         value(Object::Connection, rule! { CONNECTION }),
         value(Object::Sequence, rule! { SEQUENCE }),
+        value(Object::MaskingPolicy, rule! { MASKING ~ POLICY }),
     ));
 
     // Object object_name
@@ -3998,6 +4042,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
             Object::Warehouse => AccountMgrLevel::Warehouse(object_name.to_string()),
             Object::Connection => AccountMgrLevel::Connection(object_name.to_string()),
             Object::Sequence => AccountMgrLevel::Sequence(object_name.to_string()),
+            Object::MaskingPolicy => AccountMgrLevel::MaskingPolicy(object_name.to_string()),
         },
     );
 
@@ -4046,7 +4091,7 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
 
     rule!(
         #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
-        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> | CONNECTION <connection_name> | SEQUENCE <seq_name> }"
+        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> | CONNECTION <connection_name> | SEQUENCE <seq_name> | MASKING POLICY <policy_name> }"
         | #role_granted: "OF ROLE <role_name>"
     ).parse(i)
 }

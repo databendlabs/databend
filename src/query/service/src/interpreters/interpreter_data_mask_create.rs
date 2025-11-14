@@ -18,7 +18,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::CreateDatamaskPolicyPlan;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 
@@ -54,20 +57,37 @@ impl Interpreter for CreateDataMaskInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
-        if let Err(_e) = handler
+        let tenant = self.plan.tenant.clone();
+
+        match handler
             .create_data_mask(meta_api, self.plan.clone().into())
             .await?
         {
-            return if self.plan.if_not_exists {
+            Ok(reply) => {
+                if let Some(current_role) = self.ctx.get_current_role() {
+                    let role_api = UserApiProvider::instance().role_api(&tenant);
+                    role_api
+                        .grant_ownership(
+                            &OwnershipObject::MaskingPolicy {
+                                policy_id: reply.id,
+                            },
+                            &current_role.name,
+                        )
+                        .await?;
+                    RoleCacheManager::instance().invalidate_cache(&tenant);
+                }
                 Ok(PipelineBuildResult::create())
-            } else {
-                Err(ErrorCode::DatamaskAlreadyExists(format!(
-                    "Security policy with name '{}' already exists",
-                    self.plan.name
-                )))
-            };
+            }
+            Err(_e) => {
+                if self.plan.if_not_exists {
+                    Ok(PipelineBuildResult::create())
+                } else {
+                    Err(ErrorCode::DatamaskAlreadyExists(format!(
+                        "Security policy with name '{}' already exists",
+                        self.plan.name
+                    )))
+                }
+            }
         }
-
-        Ok(PipelineBuildResult::create())
     }
 }

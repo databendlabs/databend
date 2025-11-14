@@ -17,7 +17,9 @@ use databend_common_meta_app::data_mask::CreateDatamaskReply;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskId;
 use databend_common_meta_app::data_mask::DataMaskIdIdent;
+use databend_common_meta_app::data_mask::DataMaskIdToNameIdent;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
+use databend_common_meta_app::data_mask::DataMaskNameIdentRaw;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
@@ -41,11 +43,14 @@ use crate::errors::MaskingPolicyError;
 use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_core_util::txn_delete_exact;
+use crate::txn_op_builder_util::txn_op_del;
+use crate::txn_op_builder_util::txn_op_put;
 use crate::txn_op_builder_util::txn_op_put_pb;
 
 /// DatamaskApi is implemented upon kvapi::KVApi.
@@ -77,6 +82,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
         let id = DataMaskId::new(masking_policy_id);
         let id_ident = DataMaskIdIdent::new_generic(name_ident.tenant(), id);
+        let id_to_name_ident = DataMaskIdToNameIdent::new_generic(name_ident.tenant(), id);
+        let name_raw = DataMaskNameIdentRaw::from(name_ident.clone());
         let id_list_key = MaskPolicyTableIdListIdent::new_from(name_ident.clone());
 
         debug!(
@@ -91,9 +98,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             txn.condition.push(txn_cond_eq_seq(name_ident, 0));
             txn.condition
                 .push(txn_cond_eq_seq(&row_access_name_ident, 0));
+            let name_bytes = serialize_struct(&name_raw)?;
+
             txn.if_then.extend(vec![
-                txn_op_put_pb(name_ident, &id, None)?,  // name -> db_id
+                txn_op_put_pb(name_ident, &id, None)?, // name -> masking_policy_id
                 txn_op_put_pb(&id_ident, &meta, None)?, // id -> meta
+                txn_op_put(&id_to_name_ident, name_bytes), // id -> name
                 // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
                 txn_op_put_pb(&id_list_key, &id_list, None)?, // data mask name -> id_list
             ]);
@@ -159,7 +169,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             }
 
             // No references - drop the policy
-            let id_ident = seq_id.data.into_t_ident(tenant);
+            let id_ident = seq_id.data.into_t_ident(tenant.clone());
+            let id_to_name_ident =
+                DataMaskIdToNameIdent::new_generic(tenant, DataMaskId::new(policy_id));
             let mut txn = TxnRequest::default();
 
             // Ensure no new references were created
@@ -168,6 +180,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
             txn_delete_exact(&mut txn, name_ident, seq_id.seq);
             txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
+            txn.if_then.push(txn_op_del(&id_to_name_ident));
 
             // TODO: Tentative retention for compatibility. Can be deleted later.
             clear_table_column_mask_policy(self, name_ident, &mut txn).await?;
@@ -189,6 +202,27 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
         let res = self.get_id_and_value(name_ident).await?;
 
         Ok(res.map(|(_, seq_meta)| seq_meta))
+    }
+
+    async fn get_data_mask_id(
+        &self,
+        name_ident: &DataMaskNameIdent,
+    ) -> Result<Option<u64>, MetaError> {
+        let res = self.get_pb(name_ident).await?;
+        Ok(res.map(|seq_id| *seq_id.data))
+    }
+
+    async fn get_data_mask_name_by_id(
+        &self,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<Option<String>, MetaError> {
+        let ident = DataMaskIdToNameIdent::new_generic(tenant.clone(), DataMaskId::new(policy_id));
+        let seq_meta = self.get_pb(&ident).await?;
+
+        debug!(ident :% =(&ident); "get_data_mask_name_by_id");
+
+        Ok(seq_meta.map(|s| s.data.data_mask_name().to_string()))
     }
 
     async fn get_data_mask_by_id(
