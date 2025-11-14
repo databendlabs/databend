@@ -77,6 +77,7 @@ impl ResultCacheWriter {
             self.blocks.clone(),
             &mut buf,
             TableCompression::None,
+            false,
             None,
         )?;
 
