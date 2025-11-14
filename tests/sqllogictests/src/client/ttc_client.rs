@@ -16,12 +16,12 @@ use std::time::Instant;
 
 use regex::Regex;
 use sqllogictest::DBOutput;
-use sqllogictest::DefaultColumnType;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 use crate::error::Result;
+use crate::util::ColumnType;
 
 #[derive(Debug)]
 pub struct TTCClient {
@@ -47,7 +47,7 @@ impl TTCClient {
         self.bench = true;
     }
 
-    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
+    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<ColumnType>> {
         let start = Instant::now();
         let res = self.query_response(sql).await;
 
@@ -106,7 +106,7 @@ impl TTCClient {
         }
         let mut types = vec![];
         if !parsed_rows.is_empty() {
-            types = vec![DefaultColumnType::Any; parsed_rows[0].len()];
+            types = vec![ColumnType::Any; parsed_rows[0].len()];
         }
         // Todo: add types to compare
         Ok(DBOutput::Rows {

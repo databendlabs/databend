@@ -26,7 +26,6 @@ use sqllogictest::default_column_validator;
 use sqllogictest::default_validator;
 use sqllogictest::parse_file;
 use sqllogictest::DBOutput;
-use sqllogictest::DefaultColumnType;
 use sqllogictest::Location;
 use sqllogictest::QueryExpect;
 use sqllogictest::Record;
@@ -48,6 +47,7 @@ use crate::util::get_files;
 use crate::util::lazy_prepare_data;
 use crate::util::lazy_run_dictionary_containers;
 use crate::util::run_ttc_container;
+use crate::util::ColumnType;
 
 mod arg;
 mod client;
@@ -97,7 +97,7 @@ impl Databend {
 #[async_trait::async_trait]
 impl sqllogictest::AsyncDB for Databend {
     type Error = DSqlLogicTestError;
-    type ColumnType = DefaultColumnType;
+    type ColumnType = ColumnType;
 
     async fn run(&mut self, sql: &str) -> Result<DBOutput<Self::ColumnType>> {
         self.client.query(sql).await
@@ -291,7 +291,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                     continue;
                 }
             }
-            num_of_tests += parse_file::<DefaultColumnType>(suit_file.as_ref().unwrap().path())
+            num_of_tests += parse_file::<ColumnType>(suit_file.as_ref().unwrap().path())
                 .unwrap()
                 .len();
 
@@ -355,23 +355,19 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
     Ok(())
 }
 
-fn column_validator(
-    loc: Location,
-    actual: Vec<DefaultColumnType>,
-    expected: Vec<DefaultColumnType>,
-) {
+fn column_validator(loc: Location, actual: Vec<ColumnType>, expected: Vec<ColumnType>) {
     let equals = if actual.len() != expected.len() {
         false
     } else {
         actual.iter().zip(expected.iter()).all(|x| {
-            use DefaultColumnType::*;
+            use ColumnType::*;
             matches!(
                 x,
-                (Text, Text)
+                (Bool, Bool)
+                    | (Text, Text)
                     | (Integer, Integer)
                     | (FloatingPoint, FloatingPoint)
                     | (Any, _)
-                    | (_, Any)
             )
         })
     };
