@@ -24,12 +24,11 @@ use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::DropRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateRowAccessPolicyPlan {
-    pub create_option: CreateOption,
+    pub if_not_exists: bool,
     pub tenant: Tenant,
     pub name: String,
     pub row_access: RowAccessPolicyDefinition,
@@ -45,11 +44,6 @@ impl CreateRowAccessPolicyPlan {
 impl From<CreateRowAccessPolicyPlan> for CreateRowAccessPolicyReq {
     fn from(p: CreateRowAccessPolicyPlan) -> Self {
         CreateRowAccessPolicyReq {
-            can_replace: match p.create_option {
-                CreateOption::Create => false,
-                CreateOption::CreateIfNotExists => false,
-                CreateOption::CreateOrReplace => true,
-            },
             name: RowAccessPolicyNameIdent::new(p.tenant.clone(), &p.name),
             row_access_policy_meta: RowAccessPolicyMeta {
                 // CRITICAL: Normalize parameter names to lowercase at creation time

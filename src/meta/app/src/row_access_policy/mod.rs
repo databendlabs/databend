@@ -35,7 +35,6 @@ pub struct RowAccessPolicyMeta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateRowAccessPolicyReq {
-    pub can_replace: bool,
     pub name: RowAccessPolicyNameIdent,
     pub row_access_policy_meta: RowAccessPolicyMeta,
 }
