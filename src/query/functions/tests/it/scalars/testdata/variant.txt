@@ -5148,8 +5148,8 @@ output         : '[1,2]'
 
 
 ast            : parse_json('[1,2,3]') - -1
-raw expr       : minus(parse_json('[1,2,3]'), minus(1))
-checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int16>(minus<UInt8>(1_u8) AS Int32))
+raw expr       : minus(parse_json('[1,2,3]'), -1)
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int8>(-1_i8 AS Int32))
 optimized expr : 0x80000002200000022000000250015002
 output type    : Variant
 output domain  : Undefined
@@ -5157,8 +5157,8 @@ output         : '[1,2]'
 
 
 ast            : parse_json('[1,2,3]') - -2
-raw expr       : minus(parse_json('[1,2,3]'), minus(2))
-checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int16>(minus<UInt8>(2_u8) AS Int32))
+raw expr       : minus(parse_json('[1,2,3]'), -2)
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int8>(-2_i8 AS Int32))
 optimized expr : 0x80000002200000022000000250015003
 output type    : Variant
 output domain  : Undefined
@@ -5166,8 +5166,8 @@ output         : '[1,3]'
 
 
 ast            : parse_json('[1,2,3]') - -3
-raw expr       : minus(parse_json('[1,2,3]'), minus(3))
-checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int16>(minus<UInt8>(3_u8) AS Int32))
+raw expr       : minus(parse_json('[1,2,3]'), -3)
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int8>(-3_i8 AS Int32))
 optimized expr : 0x80000002200000022000000250025003
 output type    : Variant
 output domain  : Undefined
@@ -5175,8 +5175,8 @@ output         : '[2,3]'
 
 
 ast            : parse_json('[1,2,3]') - -4
-raw expr       : minus(parse_json('[1,2,3]'), minus(4))
-checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int16>(minus<UInt8>(4_u8) AS Int32))
+raw expr       : minus(parse_json('[1,2,3]'), -4)
+checked expr   : minus<Variant, Int32>(CAST<String>("[1,2,3]" AS Variant), CAST<Int8>(-4_i8 AS Int32))
 optimized expr : 0x80000003200000022000000220000002500150025003
 output type    : Variant
 output domain  : Undefined
@@ -5375,8 +5375,8 @@ output         : '[true,0,1,2,3]'
 
 
 ast            : array_insert('[0,1,2,3]'::variant, -1, '{"k":"v"}'::variant)
-raw expr       : array_insert(CAST('[0,1,2,3]' AS Variant), minus(1), CAST('{"k":"v"}' AS Variant))
-checked expr   : array_insert<Variant, Int32, Variant>(CAST<String>("[0,1,2,3]" AS Variant), CAST<Int16>(minus<UInt8>(1_u8) AS Int32), CAST<String>("{\"k\":\"v\"}" AS Variant))
+raw expr       : array_insert(CAST('[0,1,2,3]' AS Variant), -1, CAST('{"k":"v"}' AS Variant))
+checked expr   : array_insert<Variant, Int32, Variant>(CAST<String>("[0,1,2,3]" AS Variant), CAST<Int8>(-1_i8 AS Int32), CAST<String>("{\"k\":\"v\"}" AS Variant))
 optimized expr : 0x800000052000000120000002200000025000000e2000000200500150024000000110000001100000016b765003
 output type    : Variant
 output domain  : Undefined
@@ -7053,8 +7053,8 @@ output         : '[null,1]'
 
 
 ast            : slice(parse_json('["a", "b", "c", "d"]'), -3, -1)
-raw expr       : slice(parse_json('["a", "b", "c", "d"]'), minus(3), minus(1))
-checked expr   : slice<Variant, Int64, Int64>(CAST<String>("[\"a\", \"b\", \"c\", \"d\"]" AS Variant), CAST<Int16>(minus<UInt8>(3_u8) AS Int64), CAST<Int16>(minus<UInt8>(1_u8) AS Int64))
+raw expr       : slice(parse_json('["a", "b", "c", "d"]'), -3, -1)
+checked expr   : slice<Variant, Int64, Int64>(CAST<String>("[\"a\", \"b\", \"c\", \"d\"]" AS Variant), CAST<Int8>(-3_i8 AS Int64), CAST<Int8>(-1_i8 AS Int64))
 optimized expr : 0x8000000210000001100000016263
 output type    : Variant
 output domain  : Undefined

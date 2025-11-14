@@ -14,12 +14,10 @@
 
 use ethnum::i256;
 use itertools::Itertools;
-use nom::branch::alt;
 use nom::combinator::consumed;
-use nom::combinator::map;
-use nom::combinator::value;
+use nom::combinator::verify;
 use nom::error::context;
-use nom::Slice;
+use nom::Parser;
 use nom_rule::rule;
 use pratt::Affix;
 use pratt::Associativity;
@@ -35,15 +33,22 @@ use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
+use crate::span::merge_span;
 use crate::Span;
 
+macro_rules! with_span {
+    ($parser:expr) => {
+        map(consumed($parser), |(span, elem)| WithSpan { span, elem })
+    };
+}
+
 pub fn expr(i: Input) -> IResult<Expr> {
-    context("expression", subexpr(0))(i)
+    context("expression", subexpr(0)).parse(i)
 }
 
 pub fn values(i: Input) -> IResult<Vec<Expr>> {
     let values = comma_separated_list0(expr);
-    map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v)(i)
+    map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v).parse(i)
 }
 
 pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
@@ -62,7 +67,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             })
         };
 
-        let (rest, mut expr_elements) = rule! { #higher_prec_expr_element+ }(i)?;
+        let (rest, mut expr_elements) = rule! { #higher_prec_expr_element+ }.parse(i)?;
 
         for (prev, curr) in (-1..(expr_elements.len() as isize)).tuple_windows() {
             // If it's following a prefix or infix element or it's the first element, ...
@@ -816,15 +821,42 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     }
 
     fn prefix(&mut self, elem: WithSpan<'a, ExprElement>, rhs: Expr) -> Result<Expr, &'static str> {
-        let expr = match elem.elem {
-            ExprElement::UnaryOp { op } => Expr::UnaryOp {
-                span: transform_span(elem.span.tokens),
-                op,
-                expr: Box::new(rhs),
-            },
+        match elem.elem {
+            ExprElement::UnaryOp { op } => {
+                let op_span = transform_span(elem.span.tokens);
+                match (op, rhs) {
+                    (
+                        UnaryOperator::Minus,
+                        Expr::Literal {
+                            span: rhs_span,
+                            value,
+                        },
+                    ) => {
+                        if let Some(value) = try_negate_literal(&value) {
+                            Ok(Expr::Literal {
+                                span: merge_span(op_span, rhs_span),
+                                value,
+                            })
+                        } else {
+                            Ok(Expr::UnaryOp {
+                                span: op_span,
+                                op: UnaryOperator::Minus,
+                                expr: Box::new(Expr::Literal {
+                                    span: rhs_span,
+                                    value,
+                                }),
+                            })
+                        }
+                    }
+                    (op, rhs_expr) => Ok(Expr::UnaryOp {
+                        span: op_span,
+                        op,
+                        expr: Box::new(rhs_expr),
+                    }),
+                }
+            }
             _ => unreachable!(),
-        };
-        Ok(expr)
+        }
     }
 
     fn postfix(
@@ -962,7 +994,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
         Ok(expr)
     }
 }
-
+#[allow(unreachable_code)]
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(column_id, |column| ExprElement::ColumnRef {
         column: ColumnRef {
@@ -1003,9 +1035,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, m, _, subquery, _, option_escape)| {
             let modifier = match m.kind {
-                TokenKind::ALL => SubqueryModifier::All,
-                TokenKind::ANY => SubqueryModifier::Any,
-                TokenKind::SOME => SubqueryModifier::Some,
+                ALL => SubqueryModifier::All,
+                ANY => SubqueryModifier::Any,
+                SOME => SubqueryModifier::Some,
                 _ => unreachable!(),
             };
             ExprElement::LikeSubquery {
@@ -1174,9 +1206,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(modifier, _, subquery, _)| {
             let modifier = modifier.map(|m| match m.kind {
-                TokenKind::ALL => SubqueryModifier::All,
-                TokenKind::ANY => SubqueryModifier::Any,
-                TokenKind::SOME => SubqueryModifier::Some,
+                ALL => SubqueryModifier::All,
+                ANY => SubqueryModifier::Any,
+                SOME => SubqueryModifier::Some,
                 _ => unreachable!(),
             });
             ExprElement::Subquery { modifier, subquery }
@@ -1217,12 +1249,17 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let variable_access = map(variable_ident, ExprElement::VariableAccess);
 
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
-    let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
+    let dot_number_map_access = map(map_access_dot_number, |accessor| ExprElement::MapAccess {
+        accessor,
+    });
+    let colon_map_access = map(map_access_colon, |accessor| ExprElement::MapAccess {
+        accessor,
+    });
     let dot_access = map(
         rule! {
            "." ~ #column_id
         },
-        |(_, key)| ExprElement::DotAccess { key },
+        |(_, column)| ExprElement::DotAccess { key: column },
     );
 
     let chain_function_call = check_experimental_chain_function(
@@ -1289,7 +1326,16 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             "[" ~ #comma_separated_list0_ignore_trailing(subexpr(0))? ~ ","? ~ ^"]"
         },
         |(_, opt_args, _, _)| {
-            let exprs = opt_args.unwrap_or_default();
+            let mut exprs = opt_args.unwrap_or_default();
+
+            if exprs.len() == 1 {
+                let expr = exprs.pop().unwrap();
+                return ExprElement::MapAccess {
+                    accessor: MapAccessor::Bracket {
+                        key: Box::new(expr),
+                    },
+                };
+            }
             ExprElement::Array { exprs }
         },
     );
@@ -1345,13 +1391,17 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let interval = map(
         rule! {
-            INTERVAL ~ #subexpr(0) ~ #interval_kind
+            INTERVAL ~ ^#subexpr(0) ~ #interval_kind?
         },
-        |(_, operand, unit)| ExprElement::Interval {
-            expr: operand,
-            unit,
+        |(_, expr, unit)| match unit {
+            None => ExprElement::Cast {
+                expr: Box::new(expr),
+                target_type: TypeName::Interval,
+            },
+            Some(unit) => ExprElement::Interval { expr, unit },
         },
     );
+
     let date_trunc = map(
         rule! {
             DATE_TRUNC ~ "(" ~ #interval_kind ~ "," ~ #subexpr(0) ~ ")"
@@ -1375,38 +1425,36 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule! {
             TRUNC ~ "(" ~  (#subexpr(0) ~ "," ~  #interval_kind)? ~ (#subexpr(0) ~ ("," ~  #subexpr(0))?)? ~ ")"
         },
-        |(s, _, opt_date, opt_numeric, _)| {
-            return match (opt_date, opt_numeric) {
-                (Some((date, _, unit)), None) => ExprElement::DateTrunc { unit, date },
-                (None, Some((expr, opt_expr2))) => {
-                    if let Some((_, expr2)) = opt_expr2 {
-                        ExprElement::FunctionCall {
-                            func: FunctionCall {
-                                distinct: false,
-                                name: Identifier::from_name(Some(s.span), "TRUNCATE"),
-                                args: vec![expr, expr2],
-                                ..Default::default()
-                            },
-                        }
-                    } else {
-                        ExprElement::FunctionCall {
-                            func: FunctionCall {
-                                distinct: false,
-                                name: Identifier::from_name(Some(s.span), "TRUNCATE"),
-                                args: vec![expr],
-                                ..Default::default()
-                            },
-                        }
+        |(s, _, opt_date, opt_numeric, _)| match (opt_date, opt_numeric) {
+            (Some((date, _, unit)), None) => ExprElement::DateTrunc { unit, date },
+            (None, Some((expr, opt_expr2))) => {
+                if let Some((_, expr2)) = opt_expr2 {
+                    ExprElement::FunctionCall {
+                        func: FunctionCall {
+                            distinct: false,
+                            name: Identifier::from_name(Some(s.span), "TRUNCATE"),
+                            args: vec![expr, expr2],
+                            ..Default::default()
+                        },
+                    }
+                } else {
+                    ExprElement::FunctionCall {
+                        func: FunctionCall {
+                            distinct: false,
+                            name: Identifier::from_name(Some(s.span), "TRUNCATE"),
+                            args: vec![expr],
+                            ..Default::default()
+                        },
                     }
                 }
-                _ => ExprElement::DateTrunc {
-                    unit: IntervalKind::UnknownIntervalKind,
-                    date: Expr::Literal {
-                        span: None,
-                        value: Literal::Null,
-                    },
+            }
+            _ => ExprElement::DateTrunc {
+                unit: IntervalKind::UnknownIntervalKind,
+                date: Expr::Literal {
+                    span: None,
+                    value: Literal::Null,
                 },
-            };
+            },
         },
     );
 
@@ -1479,19 +1527,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
-    let interval_expr = map(
-        rule! {
-            INTERVAL ~ #consumed(literal_string)
-        },
-        |(_, (span, date))| ExprElement::Cast {
-            expr: Box::new(Expr::Literal {
-                span: transform_span(span.tokens),
-                value: Literal::String(date),
-            }),
-            target_type: TypeName::Interval,
-        },
-    );
-
     let is_distinct_from = map(
         rule! {
             IS ~ NOT? ~ DISTINCT ~ FROM
@@ -1544,72 +1579,205 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let stage_location = map(rule! { #at_string }, |location| {
         ExprElement::StageLocation { location }
     });
+    let string = map(literal_string, |literal| ExprElement::Literal {
+        value: Literal::String(literal),
+    });
+    let code_string = map(code_string, |literal| ExprElement::Literal {
+        value: Literal::String(literal),
+    });
+    let boolean = map(literal_bool, |literal| ExprElement::Literal {
+        value: Literal::Boolean(literal),
+    });
+    let null = value(
+        ExprElement::Literal {
+            value: Literal::Null,
+        },
+        rule! { NULL },
+    );
+    let decimal_uint = map_res(
+        rule! {
+            LiteralInteger
+        },
+        |token| {
+            Ok(ExprElement::Literal {
+                value: parse_uint(token.text(), 10).map_err(nom::Err::Failure)?,
+            })
+        },
+    );
+    let hex_uint = map_res(literal_hex_str, |str| {
+        Ok(ExprElement::Literal {
+            value: parse_uint(str, 16).map_err(nom::Err::Failure)?,
+        })
+    });
+    let decimal_float = map_res(
+        verify(
+            rule! {
+               LiteralFloat
+            },
+            |token: &Token| !token.text().starts_with('.'),
+        ),
+        |token| {
+            Ok(ExprElement::Literal {
+                value: parse_float(token.text()).map_err(nom::Err::Failure)?,
+            })
+        },
+    );
+    let column_position = map(column_position, |column| ExprElement::ColumnRef {
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column,
+        },
+    });
+    let column_row = map(column_row, |column| ExprElement::ColumnRef {
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column,
+        },
+    });
+    let column_ident = map(column_ident, |column| ExprElement::ColumnRef {
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column,
+        },
+    });
 
-    map(
-        consumed(alt((
-            // Note: each `alt` call supports maximum of 21 parsers
-            rule!(
-                #is_null : "`... IS [NOT] NULL`"
-                | #in_list : "`[NOT] IN (<expr>, ...)`"
-                | #in_subquery : "`[NOT] IN (SELECT ...)`"
-                | #like_subquery: "`LIKE ANY | ALL | SOME (SELECT ...)`"
-                | #exists : "`[NOT] EXISTS (SELECT ...)`"
-                | #between : "`[NOT] BETWEEN ... AND ...`"
-                | #binary_op : "<operator>"
-                | #json_op : "<operator>"
-                | #unary_op : "<operator>"
-                | #cast : "`CAST(... AS ...)`"
-                | #pg_cast : "`::<type_name>`"
-                | #position : "`POSITION(... IN ...)`"
-                | #variable_access: "`$<ident>`"
-            ),
-            rule! (
-                #date_add : "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_diff : "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_sub : "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_between : "`DATE_BETWEEN((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW), ..., ...,)`"
-                | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
-                | #time_slice : "`TIME_SLICE(<date_or_time_expr>, <slice_length>, (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) [ , <start_or_end> ] )`"
-                | #trunc : "`TRUNC(..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK))`"
-                | #last_day : "`LAST_DAY(..., (YEAR | QUARTER | MONTH | WEEK)))`"
-                | #previous_day : "`PREVIOUS_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
-                | #next_day : "`NEXT_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
-                | #date_expr : "`DATE <str_literal>`"
-                | #timestamp_expr : "`TIMESTAMP <str_literal>`"
-                | #timestamp_tz_expr : "`TIMESTAMP_TZ <str_literal>`"
-                | #interval : "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
-                | #interval_expr : "`INTERVAL <str_literal>`"
-                | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
-                | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
-            ),
-            rule!(
-                #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
-                | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
-                | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
-                | #chain_function_call : "x.function(...)"
-                | #list_comprehensions: "[expr for x in ... [if ...]]"
-                | #count_all_with_window : "`COUNT(*) OVER ...`"
-                | #function_call
-                | #escape: "`ESCAPE '<escape>'`"
-            ),
-            rule!(
-                #case : "`CASE ... END`"
-                | #tuple : "`(<expr> [, ...])`"
-                | #subquery : "`(SELECT ...)`"
-                | #stage_location: "@<location>"
-                | #column_ref : "<column>"
-                | #dot_access : "<dot_access>"
-                | #map_access : "[<key>] | .<key> | :<key>"
-                | #literal : "<literal>"
-                | #current_date: "CURRENT_DATE"
-                | #current_time: "CURRENT_TIME"
-                | #current_timestamp: "CURRENT_TIMESTAMP"
-                | #array : "`[<expr>, ...]`"
-                | #map_expr : "`{ <literal> : <expr>, ... }`"
-            ),
-        ))),
-        |(span, elem)| WithSpan { span, elem },
-    )(i)
+    if i.tokens.first().map(|token| token.kind) == Some(ColumnPosition) {
+        return with_span!(column_position).parse(i);
+    }
+
+    try_dispatch!(i, true,
+        IS => with_span!(rule!(#is_null | #is_distinct_from)).parse(i),
+        NOT => with_span!(rule!(
+            #in_list
+                | #in_subquery
+                | #exists
+                | #between
+                | #binary_op
+                | #unary_op
+        ))
+        .parse(i),
+        IN => with_span!(rule!(#in_list | #in_subquery)).parse(i),
+        LIKE => with_span!(rule!(#like_subquery | #binary_op)).parse(i),
+        EXISTS => with_span!(exists).parse(i),
+        BETWEEN => with_span!(between).parse(i),
+        CAST | TRY_CAST => with_span!(cast).parse(i),
+        DoubleColon => with_span!(pg_cast).parse(i),
+        POSITION => with_span!(position).parse(i),
+        IDENTIFIER => {
+            return with_span!(column_ref).parse(i);
+        },
+        IdentVariable => with_span!(variable_access).parse(i),
+        ESCAPE => with_span!(escape).parse(i),
+        COUNT => with_span!(rule!{ #count_all_with_window | #function_call}).parse(i),
+        SUBSTRING | SUBSTR => with_span!(substring).parse(i),
+        TRIM => with_span!(trim_from).parse(i),
+        CASE => with_span!(case).parse(i),
+        LParen => with_span!(rule!(#tuple | #subquery)).parse(i),
+        ANY | SOME | ALL => with_span!(subquery).parse(i),
+        Dot => {
+            return with_span!(rule!(#chain_function_call | #dot_access | #dot_number_map_access))
+                .parse(i);
+        },
+        Colon => {
+            return with_span!(colon_map_access).parse(i);
+        },
+        LBracket => {
+            return with_span!(rule!(
+                #list_comprehensions | #array
+            ))
+            .parse(i);
+        },
+        LBrace => with_span!(map_expr).parse(i),
+        LiteralAtString => with_span!(stage_location).parse(i),
+        DATEADD | DATE_ADD => with_span!(date_add).parse(i),
+        DATE_DIFF | DATEDIFF => with_span!(date_diff).parse(i),
+        DATESUB | DATE_SUB => with_span!(date_sub).parse(i),
+        DATEBETWEEN | DATE_BETWEEN => with_span!(date_between).parse(i),
+        DATE_TRUNC => with_span!(date_trunc).parse(i),
+        TIME_SLICE => with_span!(time_slice).parse(i),
+        TRUNC => with_span!(trunc).parse(i),
+        LAST_DAY => with_span!(last_day).parse(i),
+        PREVIOUS_DAY => with_span!(previous_day).parse(i),
+        NEXT_DAY => with_span!(next_day).parse(i),
+        DATE => with_span!(date_expr).parse(i),
+        TIMESTAMP => with_span!(timestamp_expr).parse(i),
+        TIMESTAMP_TZ => with_span!(timestamp_tz_expr).parse(i),
+        INTERVAL => with_span!(interval).parse(i),
+        DATE_PART | DATEPART => with_span!(date_part).parse(i),
+        EXTRACT => with_span!(extract).parse(i),
+        CURRENT_DATE => with_span!(rule!{ #function_call | #current_date }).parse(i),
+        CURRENT_TIME => with_span!(rule!{ #function_call | #current_time }).parse(i),
+        CURRENT_TIMESTAMP => with_span!(rule!{ #function_call | #current_timestamp }).parse(i),
+        Plus
+            | Minus
+            | Multiply
+            | Divide
+            | IntDiv
+            | DIV
+            | Modulo
+            | StringConcat
+            | Spaceship
+            | L1DISTANCE
+            | L2DISTANCE
+            | Gt
+            | Lt
+            | Gte
+            | Lte
+            | Eq
+            | NotEq
+            | Caret
+            | AND
+            | OR
+            | XOR
+            | REGEXP
+            | RLIKE
+            | BitWiseOr
+            | BitWiseAnd
+            | BitWiseXor
+            | ShiftLeft
+            | ShiftRight
+            | SOUNDS => with_span!(rule!{ #binary_op | #unary_op }).parse(i),
+        RArrow
+            | LongRArrow
+            | HashRArrow
+            | HashLongRArrow
+            | Placeholder
+            | QuestionOr
+            | QuestionAnd
+            | AtArrow
+            | ArrowAt
+            | AtQuestion
+            | AtAt
+            | HashMinus => with_span!(json_op).parse(i),
+        Factorial | SquareRoot | BitWiseNot | CubeRoot | Abs => with_span!(unary_op).parse(i),
+        LiteralString => with_span!(string).parse(i),
+        LiteralCodeString => with_span!(code_string).parse(i),
+        LiteralInteger => with_span!(decimal_uint).parse(i),
+        LiteralFloat => with_span!(rule!{ #decimal_float | #dot_number_map_access }).parse(i),
+        MySQLLiteralHex | PGLiteralHex => with_span!(hex_uint).parse(i),
+        TRUE | FALSE => with_span!(boolean).parse(i),
+        NULL => with_span!(null).parse(i),
+        ROW => with_span!(column_row).parse(i),
+    );
+
+    // The try-parse operation in the function call is very expensive, easy to stack overflow
+    // so we manually check here whether the second token exists in LParen to avoid entering the loop
+    if i.tokens
+        .get(1)
+        .map(|token| token.kind == LParen)
+        .unwrap_or(false)
+    {
+        return with_span!(function_call).parse(i);
+    }
+
+    with_span!(alt((rule!(
+        #column_ident : "<column>"
+        | #literal : "<literal>"
+    ),)))
+    .parse(i)
 }
 
 #[inline]
@@ -1681,30 +1849,27 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             ShiftRight => BinaryOperator::BitwiseShiftRight,
         );
         match token_0.kind {
-            TokenKind::LIKE => {
-                return if matches!(
-                    i.tokens.get(1).map(|first| first.kind == TokenKind::ANY),
-                    Some(true)
-                ) {
+            LIKE => {
+                return if matches!(i.tokens.get(1).map(|first| first.kind == ANY), Some(true)) {
                     return_op(i, 2, BinaryOperator::LikeAny(None))
                 } else {
                     return_op(i, 1, BinaryOperator::Like(None))
                 }
             }
-            TokenKind::NOT => match i.tokens.get(1).map(|first| first.kind) {
-                Some(TokenKind::LIKE) => {
+            NOT => match i.tokens.get(1).map(|first| first.kind) {
+                Some(LIKE) => {
                     return return_op(i, 2, BinaryOperator::NotLike(None));
                 }
-                Some(TokenKind::REGEXP) => {
+                Some(REGEXP) => {
                     return return_op(i, 2, BinaryOperator::NotRegexp);
                 }
-                Some(TokenKind::RLIKE) => {
+                Some(RLIKE) => {
                     return return_op(i, 2, BinaryOperator::NotRLike);
                 }
                 _ => (),
             },
-            TokenKind::SOUNDS => {
-                if let Some(TokenKind::LIKE) = i.tokens.get(1).map(|first| first.kind) {
+            SOUNDS => {
+                if let Some(LIKE) = i.tokens.get(1).map(|first| first.kind) {
                     return return_op(i, 2, BinaryOperator::SoundsLike);
                 }
             }
@@ -1714,7 +1879,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
     Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ..."))))
 }
 
-pub(crate) fn json_op(i: Input) -> IResult<JsonOperator> {
+pub fn json_op(i: Input) -> IResult<JsonOperator> {
     if let Some(token_0) = i.tokens.first() {
         op_branch!(
             i, token_0,
@@ -1736,18 +1901,37 @@ pub(crate) fn json_op(i: Input) -> IResult<JsonOperator> {
 }
 
 pub fn literal(i: Input) -> IResult<Literal> {
-    let string = map(literal_string, Literal::String);
-    let code_string = map(code_string, Literal::String);
-    let boolean = map(literal_bool, Literal::Boolean);
-    let null = value(Literal::Null, rule! { NULL });
+    let mut string = map(literal_string, Literal::String);
+    let mut code_string = map(code_string, Literal::String);
+    let mut boolean = map(literal_bool, Literal::Boolean);
+    let mut null = value(Literal::Null, rule! { NULL });
+    let mut decimal_uint = map_res(
+        rule! {
+            LiteralInteger
+        },
+        |token| parse_uint(token.text(), 10).map_err(nom::Err::Failure),
+    );
+    let mut hex_uint = map_res(literal_hex_str, |str| {
+        parse_uint(str, 16).map_err(nom::Err::Failure)
+    });
+    let mut decimal_float = map_res(
+        rule! {
+           LiteralFloat
+        },
+        |token| parse_float(token.text()).map_err(nom::Err::Failure),
+    );
 
-    rule!(
-        #string
-        | #code_string
-        | #boolean
-        | #literal_number
-        | #null
-    )(i)
+    try_dispatch!(i, true,
+        LiteralString => string.parse(i),
+        LiteralCodeString => code_string.parse(i),
+        LiteralInteger => decimal_uint.parse(i),
+        LiteralFloat => decimal_float.parse(i),
+        MySQLLiteralHex | PGLiteralHex => hex_uint(i),
+        TRUE | FALSE => boolean.parse(i),
+        NULL => null.parse(i),
+    );
+
+    Err(nom::Err::Error(Error::from_error_kind(i, ErrorKind::Other("expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ..."))))
 }
 
 pub fn literal_hex_str(i: Input) -> IResult<&str> {
@@ -1769,7 +1953,8 @@ pub fn literal_hex_str(i: Input) -> IResult<&str> {
     rule!(
         #mysql_hex
         | #pg_hex
-    )(i)
+    )
+    .parse(i)
 }
 
 #[allow(clippy::from_str_radix_10)]
@@ -1787,7 +1972,8 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
     rule!(
         #decimal
         | #hex
-    )(i)
+    )
+    .parse(i)
 }
 
 #[allow(clippy::from_str_radix_10)]
@@ -1805,37 +1991,12 @@ pub fn literal_i64(i: Input) -> IResult<i64> {
     rule!(
         #decimal
         | #hex
-    )(i)
-}
-
-pub fn literal_number(i: Input) -> IResult<Literal> {
-    let decimal_uint = map_res(
-        rule! {
-            LiteralInteger
-        },
-        |token| parse_uint(token.text(), 10).map_err(nom::Err::Failure),
-    );
-
-    let hex_uint = map_res(literal_hex_str, |str| {
-        parse_uint(str, 16).map_err(nom::Err::Failure)
-    });
-
-    let decimal_float = map_res(
-        rule! {
-           LiteralFloat
-        },
-        |token| parse_float(token.text()).map_err(nom::Err::Failure),
-    );
-
-    rule!(
-        #decimal_uint
-        | #decimal_float
-        | #hex_uint
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn literal_bool(i: Input) -> IResult<bool> {
-    alt((value(true, rule! { TRUE }), value(false, rule! { FALSE })))(i)
+    alt((value(true, rule! { TRUE }), value(false, rule! { FALSE }))).parse(i)
 }
 
 pub fn literal_string(i: Input) -> IResult<String> {
@@ -1892,7 +2053,8 @@ pub fn nullable(i: Input) -> IResult<bool> {
     alt((
         value(true, rule! { NULL }),
         value(false, rule! { NOT ~ NULL }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn type_name(i: Input) -> IResult<TypeName> {
@@ -2119,7 +2281,8 @@ pub fn weekday(i: Input) -> IResult<Weekday> {
             Weekday::Saturday,
             rule! { #literal_string_eq_ignore_case("SATURDAY") },
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
@@ -2335,41 +2498,30 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #yearweek_str
             | #millennium_str
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
-pub fn map_access(i: Input) -> IResult<MapAccessor> {
-    let bracket = map(
-        rule! {
-           "[" ~ #subexpr(0) ~ "]"
-        },
-        |(_, key, _)| MapAccessor::Bracket { key: Box::new(key) },
-    );
-    let dot_number = map_res(
-        rule! {
-           LiteralFloat
-        },
-        |key| {
-            if key.text().starts_with('.') {
-                if let Ok(key) = (key.text()[1..]).parse::<u64>() {
-                    return Ok(MapAccessor::DotNumber { key });
-                }
+fn map_access_dot_number(i: Input) -> IResult<MapAccessor> {
+    map_res(rule! { LiteralFloat }, |key| {
+        if key.text().starts_with('.') {
+            if let Ok(key) = (key.text()[1..]).parse::<u64>() {
+                return Ok(MapAccessor::DotNumber { key });
             }
-            Err(nom::Err::Error(ErrorKind::ExpectText(".")))
-        },
-    );
-    let colon = map(
+        }
+        Err(nom::Err::Error(ErrorKind::ExpectText(".")))
+    })
+    .parse(i)
+}
+
+fn map_access_colon(i: Input) -> IResult<MapAccessor> {
+    map(
         rule! {
-         ":" ~ #ident
+            ":" ~ #ident
         },
         |(_, key)| MapAccessor::Colon { key },
-    );
-
-    rule!(
-        #bracket
-        | #dot_number
-        | #colon
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn map_element(i: Input) -> IResult<(Literal, Expr)> {
@@ -2378,7 +2530,8 @@ pub fn map_element(i: Input) -> IResult<(Literal, Expr)> {
             #literal ~ ":" ~ #subexpr(0)
         },
         |(key, _, value)| (key, value),
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn function_call(i: Input) -> IResult<ExprElement> {
@@ -2593,7 +2746,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                 },
             },
         },
-    )(i)
+    ).parse(i)
 }
 
 pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
@@ -2670,6 +2823,27 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
             precision: 76,
             scale: 0,
         })
+    }
+}
+
+fn try_negate_literal(literal: &Literal) -> Option<Literal> {
+    match literal {
+        Literal::UInt64(value) => Some(Literal::Decimal256 {
+            value: -i256::from(*value),
+            precision: 76,
+            scale: 0,
+        }),
+        Literal::Decimal256 {
+            value,
+            precision,
+            scale,
+        } => Some(Literal::Decimal256 {
+            value: -*value,
+            precision: *precision,
+            scale: *scale,
+        }),
+        Literal::Float64(value) => Some(Literal::Float64(-value)),
+        _ => None,
     }
 }
 
