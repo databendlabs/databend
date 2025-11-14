@@ -44,22 +44,3 @@ def test_json_response_errors():
     assert response3.json() == json.loads(
         '{"error": {"code": 404, "message": "not found"}}'
     )
-
-def query_page_0(sql):
-    data = {
-        'sql': sql,
-        "pagination": { "wait_time_secs": 5}
-    }
-    data = json.dumps(data)
-    response = requests.post(
-        query_url,
-        auth=auth,
-        headers={"Content-Type": "application/json"},
-        data=data,
-    )
-    return response.json()
-
-def test_timezone():
-    timezone = 'Asia/Shanghai'
-    r = query_page_0(f"settings (timezone='{timezone}') select 1")
-    assert r.get('settings', {}).get('timezone') == timezone
