@@ -87,7 +87,6 @@ impl PartialEq for Box<dyn PartInfo> {
     }
 }
 
-#[allow(dead_code)]
 pub type PartInfoPtr = Arc<Box<dyn PartInfo>>;
 
 /// For cache affinity, we consider some strategies when reshuffle partitions.
