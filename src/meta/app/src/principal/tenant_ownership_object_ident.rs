@@ -271,6 +271,23 @@ mod tests {
             let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
             assert_eq!(role_grantee, parsed);
         }
+
+        // masking policy
+        {
+            let role_grantee = TenantOwnershipObjectIdent::new_unchecked(
+                Tenant::new_literal("tenant_mask"),
+                OwnershipObject::MaskingPolicy { policy_id: 99 },
+            );
+
+            let key = role_grantee.to_string_key();
+            assert_eq!(
+                "__fd_object_owners/tenant_mask/masking-policy-by-id/99",
+                key
+            );
+
+            let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
+            assert_eq!(role_grantee, parsed);
+        }
     }
 
     #[test]

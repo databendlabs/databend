@@ -135,6 +135,9 @@ impl GrantPrivilegeInterpreter {
             GrantObject::Procedure(p) => Ok(OwnershipObject::Procedure {
                 procedure_id: *p,
             }),
+            GrantObject::MaskingPolicy(policy_id) => Ok(OwnershipObject::MaskingPolicy {
+                policy_id: *policy_id,
+            }),
             GrantObject::Global => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
             )),
@@ -248,7 +251,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                         self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)
                             .await?;
                     } else {
-                        return Err(databend_common_exception::ErrorCode::UnknownRole(
+                        return Err(ErrorCode::UnknownRole(
                             "No current role, cannot grant ownership",
                         ));
                     }
