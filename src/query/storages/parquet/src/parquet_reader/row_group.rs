@@ -456,75 +456,33 @@ pub async fn cached_range_read(
     merged_ranges: Vec<Range<u64>>,
     enable_cache: bool,
 ) -> Result<HashMap<Range<u64>, Bytes>> {
-    match op.info().full_capability().blocking {
-        true => {
-            let blocking_op = op.blocking();
-            // Read merged range data.
+    let mut handles = Vec::with_capacity(merged_ranges.len());
+    for range in merged_ranges {
+        let fut_read = op.read_with(location);
+        let key = format!("{}_{location}_{range:?}", op.info().root());
+        handles.push(async move {
             let column_data_cache = if enable_cache {
                 CacheManager::instance().get_column_data_cache()
             } else {
                 None
             };
-            let root = op.info().root();
-            let location = location.to_owned();
-            let f = move || -> Result<HashMap<Range<u64>, Bytes>> {
-                merged_ranges
-                    .into_iter()
-                    .map(|range| {
-                        let key = format!("{root}_{location}_{range:?}");
-
-                        if let Some(buffer) = column_data_cache
-                            .as_ref()
-                            .and_then(|cache| cache.get_sized(&key, range.end - range.start))
-                        {
-                            Ok::<_, ErrorCode>((range, buffer.bytes()))
-                        } else {
-                            let data = blocking_op
-                                .read_with(&location)
-                                .range(range.clone())
-                                .call()?;
-                            let data = data.to_bytes();
-                            if let Some(cache) = &column_data_cache {
-                                cache.insert(key, ColumnData::from_bytes(data.clone()));
-                            }
-                            Ok::<_, ErrorCode>((range, data))
-                        }
-                    })
-                    .collect::<Result<_>>()
-            };
-
-            maybe_spawn_blocking(f).await
-        }
-        false => {
-            let mut handles = Vec::with_capacity(merged_ranges.len());
-            for range in merged_ranges {
-                let fut_read = op.read_with(location);
-                let key = format!("{}_{location}_{range:?}", op.info().root());
-                handles.push(async move {
-                    let column_data_cache = if enable_cache {
-                        CacheManager::instance().get_column_data_cache()
-                    } else {
-                        None
-                    };
-                    if let Some(buffer) = column_data_cache
-                        .as_ref()
-                        .and_then(|cache| cache.get_sized(&key, range.end - range.start))
-                    {
-                        Ok::<_, ErrorCode>((range, buffer.bytes()))
-                    } else {
-                        let data = fut_read.range(range.start..range.end).await?;
-                        let data = data.to_bytes();
-                        if let Some(cache) = &column_data_cache {
-                            cache.insert(key, ColumnData::from_bytes(data.clone()));
-                        }
-                        Ok::<_, ErrorCode>((range, data))
-                    }
-                });
+            if let Some(buffer) = column_data_cache
+                .as_ref()
+                .and_then(|cache| cache.get_sized(&key, range.end - range.start))
+            {
+                Ok::<_, ErrorCode>((range, buffer.bytes()))
+            } else {
+                let data = fut_read.range(range.start..range.end).await?;
+                let data = data.to_bytes();
+                if let Some(cache) = &column_data_cache {
+                    cache.insert(key, ColumnData::from_bytes(data.clone()));
+                }
+                Ok::<_, ErrorCode>((range, data))
             }
-            let chunk_data = futures::future::try_join_all(handles).await?;
-            Ok(chunk_data.into_iter().collect())
-        }
+        });
     }
+    let chunk_data = futures::future::try_join_all(handles).await?;
+    Ok(chunk_data.into_iter().collect())
 }
 
 #[cfg(test)]
