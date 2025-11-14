@@ -63,7 +63,7 @@ impl Interpreter for CreateRowAccessPolicyInterpreter {
                 Ok(PipelineBuildResult::create())
             } else {
                 Err(ErrorCode::RowAccessPolicyAlreadyExists(format!(
-                    "Row Access Policy '{}' already exists",
+                    "Security policy with name '{}' already exists",
                     self.plan.name
                 )))
             };

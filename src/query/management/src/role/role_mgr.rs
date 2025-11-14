@@ -33,6 +33,7 @@ use databend_common_meta_app::principal::RoleIdent;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
@@ -67,8 +68,6 @@ use crate::serde::Quota;
 use crate::serialize_struct;
 
 static TXN_MAX_RETRY_TIMES: u32 = 60;
-
-static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 
 #[derive(Clone)]
 pub struct RoleMgr {

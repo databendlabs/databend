@@ -31,6 +31,7 @@ use tokio::sync::Semaphore;
 use crate::pipelines::processors::transforms::aggregator::new_aggregate::FinalAggregateSharedState;
 use crate::pipelines::processors::transforms::aggregator::new_aggregate::NewAggregateSpiller;
 use crate::pipelines::processors::transforms::aggregator::new_aggregate::NewFinalAggregateTransform;
+use crate::pipelines::processors::transforms::aggregator::new_aggregate::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::new_aggregate::TransformPartitionBucketScatter;
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
@@ -71,12 +72,19 @@ fn build_partition_bucket_experimental(
     let shared_state = Arc::new(Mutex::new(FinalAggregateSharedState::new(output_num)));
 
     let settings = ctx.get_settings();
-    let rows = settings.get_max_block_size()? as usize;
-    let bytes = settings.get_max_block_bytes()? as usize;
+    let max_rows = settings.get_max_block_size()? as usize;
+    let max_bytes = settings.get_max_block_bytes()? as usize;
     let max_aggregate_spill_level = settings.get_max_aggregate_spill_level()? as usize;
 
+    let shared_partition_stream =
+        SharedPartitionStream::new(output_num, max_rows, max_bytes, output_num);
+
     for id in 0..output_num {
-        let spiller = NewAggregateSpiller::try_create(ctx.clone(), output_num, rows, bytes)?;
+        let spiller = NewAggregateSpiller::try_create(
+            ctx.clone(),
+            output_num,
+            shared_partition_stream.clone(),
+        )?;
         let input_port = InputPort::create();
         let output_port = OutputPort::create();
         let processor = NewFinalAggregateTransform::try_create(

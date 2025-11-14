@@ -27,6 +27,8 @@ use databend_common_meta_app::schema::CreateOption::CreateIfNotExists;
 use databend_common_meta_app::schema::CreateOption::CreateOrReplace;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_version::BUILD_INFO;
 use pretty_assertions::assert_eq;
 
@@ -86,7 +88,11 @@ async fn test_role_manager() -> Result<()> {
             .map(|r| r.name)
             .collect::<Vec<_>>();
         role_names.sort();
-        assert_eq!(role_names, vec!["account_admin", "public", "test-role1"]);
+        assert_eq!(role_names, vec![
+            BUILTIN_ROLE_ACCOUNT_ADMIN,
+            BUILTIN_ROLE_PUBLIC,
+            "test-role1"
+        ]);
     }
 
     // grant and verify privilege to role

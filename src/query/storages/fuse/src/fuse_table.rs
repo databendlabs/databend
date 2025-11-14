@@ -133,6 +133,7 @@ use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
+use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
@@ -321,11 +322,15 @@ impl FuseTable {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
+        let enable_parquet_dictionary_encoding =
+            self.get_option(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY, false);
+
         WriteSettings {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
             max_page_size,
             block_per_seg,
+            enable_parquet_dictionary: enable_parquet_dictionary_encoding,
         }
     }
 

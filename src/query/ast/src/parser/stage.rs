@@ -14,8 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use nom::branch::alt;
-use nom::combinator::map;
+use nom::Parser;
 use nom_rule::rule;
 
 use crate::ast::FileFormatOptions;
@@ -32,28 +31,30 @@ use crate::parser::ErrorKind;
 
 pub fn parameter_to_grant_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(grant_ident, |ident| Ok(ident.name))(i);
-    let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
-    let boolean_to_string = |i| map(literal_bool, |v| v.to_string())(i);
+    let u64_to_string = |i| map(literal_u64, |v| v.to_string()).parse(i);
+    let boolean_to_string = |i| map(literal_bool, |v| v.to_string()).parse(i);
 
     rule!(
         #literal_string
         | #ident_to_string
         | #u64_to_string
         | #boolean_to_string
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn parameter_to_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);
-    let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
-    let boolean_to_string = |i| map(literal_bool, |v| v.to_string())(i);
+    let u64_to_string = |i| map(literal_u64, |v| v.to_string()).parse(i);
+    let boolean_to_string = |i| map(literal_bool, |v| v.to_string()).parse(i);
 
     rule!(
         #literal_string
         | #ident_to_string
         | #u64_to_string
         | #boolean_to_string
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
@@ -74,7 +75,8 @@ pub fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String
         rule!(
             #string_options
             | #bool_options
-        )(i)
+        )
+        .parse(i)
     }
 }
 
@@ -85,7 +87,8 @@ pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
         |(_, opts, _)| {
             BTreeMap::from_iter(opts.iter().map(|((k, v), _)| (k.to_lowercase(), v.clone())))
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
@@ -194,21 +197,24 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
                 .map(|((k, v), _)| (k.to_lowercase(), v.clone()))
                 .collect(),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn file_format_clause(i: Input) -> IResult<FileFormatOptions> {
     map(
         rule! { FILE_FORMAT ~ ^"=" ~ ^"(" ~ ^#format_options ~ ^")" },
         |(_, _, _, opts, _)| opts,
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn file_location(i: Input) -> IResult<FileLocation> {
     alt((
         string_location,
         map_res(at_string, |location| Ok(FileLocation::Stage(location))),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn stage_location(i: Input) -> IResult<String> {
@@ -279,5 +285,6 @@ pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
             rule! { CASE_SENSITIVE ~ ^"=>" ~ ^#literal_bool },
             |(_, _, case_sensitive)| SelectStageOption::CaseSensitive(case_sensitive),
         ),
-    ))(i)
+    ))
+    .parse(i)
 }

@@ -73,11 +73,11 @@ LET x := 'min';
 LET y := IDENTIFIER(:x)([1,2]);
 ---------- Output ----------
 error: 
-  --> SQL:2:10
+  --> SQL:2:1
   |
 1 | LET x := 'min';
 2 | LET y := IDENTIFIER(:x)([1,2]);
-  |          ^^^^^^^^^^^^^^ variable is not allowed in this context
+  | ^^^ unable to parse rest of the sql, rest tokens:  [LET(16..19), Ident(20..21), ColonEqual(22..24), IDENTIFIER(25..35), LParen(35..36), Colon(36..37), Ident(37..38), RParen(38..39), LParen(39..40), LBracket(40..41), LiteralInteger(41..42), Comma(42..43), LiteralInteger(43..44), RBracket(44..45), RParen(45..46), SemiColon(46..47), EOI(47..47)]
 
 
 ---------- Input ----------

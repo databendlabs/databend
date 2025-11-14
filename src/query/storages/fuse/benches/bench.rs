@@ -141,11 +141,13 @@ mod dummy {
         let max_page_size = 8192;
         let block_per_seg = 1000;
 
+        let enable_parquet_dictionary = false;
         let write_settings = WriteSettings {
             storage_format,
             table_compression: compression,
             max_page_size,
             block_per_seg,
+            enable_parquet_dictionary,
         };
         let schema = Arc::new(schema);
         let mut buffer = Vec::new();

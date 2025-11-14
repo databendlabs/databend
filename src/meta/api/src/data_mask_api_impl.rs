@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::data_mask::data_mask_name_ident;
 use databend_common_meta_app::data_mask::CreateDatamaskReply;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskId;
@@ -24,8 +24,10 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -38,7 +40,6 @@ use log::debug;
 use crate::data_mask_api::DatamaskApi;
 use crate::errors::MaskingPolicyError;
 use crate::fetch_id;
-use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
 use crate::txn_backoff::txn_backoff;
@@ -55,87 +56,93 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
     async fn create_data_mask(
         &self,
         req: CreateDatamaskReq,
-    ) -> Result<CreateDatamaskReply, KVAppError> {
+    ) -> Result<Result<CreateDatamaskReply, ExistError<data_mask_name_ident::Resource>>, MetaError>
+    {
         debug!(req :? =(&req); "DatamaskApi: {}", func_name!());
 
         let name_ident = &req.name;
 
-        let mut trials = txn_backoff(None, func_name!());
-        let id = loop {
-            trials.next().unwrap()?.await;
+        let row_access_name_ident = RowAccessPolicyNameIdent::new(
+            name_ident.tenant().clone(),
+            name_ident.data_mask_name().to_string(),
+        );
 
-            let mut txn = TxnRequest::default();
+        let masking_policy_id = fetch_id(self, IdGenerator::data_mask_id()).await?;
 
-            let res = self.get_id_and_value(name_ident).await?;
-            debug!(res :? = res, name_key :? =(name_ident); "create_data_mask");
+        let mut txn = TxnRequest::default();
 
-            let mut curr_seq = 0;
+        let res = self.get_id_and_value(name_ident).await?;
+        debug!(res :? = res, name_key :? =(name_ident); "create_data_mask");
 
-            if let Some((seq_id, seq_meta)) = res {
-                match req.create_option {
-                    CreateOption::Create => {
-                        return Err(AppError::DatamaskAlreadyExists(
-                            name_ident.exist_error(func_name!()),
-                        )
-                        .into());
-                    }
-                    CreateOption::CreateIfNotExists => {
-                        return Ok(CreateDatamaskReply { id: *seq_id.data });
-                    }
-                    CreateOption::CreateOrReplace => {
-                        let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
+        let mut curr_seq = 0;
 
-                        txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-
-                        curr_seq = seq_id.seq;
-                    }
-                };
-            }
-
-            // Create data mask by inserting these record:
-            // name -> id
-            // id -> policy
-            // data mask name -> data mask table id list
-
-            let id = fetch_id(self, IdGenerator::data_mask_id()).await?;
-
-            let id = DataMaskId::new(id);
-            let id_ident = DataMaskIdIdent::new_generic(name_ident.tenant(), id);
-            let id_list_key = MaskPolicyTableIdListIdent::new_from(name_ident.clone());
-
-            debug!(
-                id :? =(&id_ident),
-                name_key :? =(name_ident);
-                "new datamask id"
-            );
-
-            {
-                let meta: DatamaskMeta = req.data_mask_meta.clone();
-                let id_list = MaskpolicyTableIdList::default();
-                txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
-                txn.if_then.extend(vec![
-                    txn_op_put_pb(name_ident, &id, None)?,  // name -> db_id
-                    txn_op_put_pb(&id_ident, &meta, None)?, // id -> meta
-                    // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
-                    txn_op_put_pb(&id_list_key, &id_list, None)?, // data mask name -> id_list
-                ]);
-
-                let (succ, _responses) = send_txn(self, txn).await?;
-
-                debug!(
-                    name :? =(name_ident),
-                    id :? =(&id_ident),
-                    succ = succ;
-                    "create_data_mask"
-                );
-
-                if succ {
-                    break id;
+        if let Some((seq_id, seq_meta)) = res {
+            match req.create_option {
+                CreateOption::Create => {
+                    return Ok(Err(
+                        name_ident.exist_error(format!("{} already exists", req.name))
+                    ));
                 }
-            }
-        };
+                CreateOption::CreateIfNotExists => {
+                    return Ok(Ok(CreateDatamaskReply { id: *seq_id.data }));
+                }
+                CreateOption::CreateOrReplace => {
+                    let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
 
-        Ok(CreateDatamaskReply { id: *id })
+                    txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
+
+                    curr_seq = seq_id.seq;
+                }
+            };
+        }
+
+        // Create data mask by inserting these record:
+        // name -> id
+        // id -> policy
+        // data mask name -> data mask table id list
+
+        let id = DataMaskId::new(masking_policy_id);
+        let id_ident = DataMaskIdIdent::new_generic(name_ident.tenant(), id);
+        let id_list_key = MaskPolicyTableIdListIdent::new_from(name_ident.clone());
+
+        debug!(
+            id :? =(&id_ident),
+            name_key :? =(name_ident);
+            "new datamask id"
+        );
+
+        {
+            let meta: DatamaskMeta = req.data_mask_meta.clone();
+            let id_list = MaskpolicyTableIdList::default();
+            txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
+            txn.condition
+                .push(txn_cond_eq_seq(&row_access_name_ident, 0));
+            txn.if_then.extend(vec![
+                txn_op_put_pb(name_ident, &id, None)?,  // name -> db_id
+                txn_op_put_pb(&id_ident, &meta, None)?, // id -> meta
+                // TODO: Tentative retention for compatibility MaskPolicyTableIdListIdent related logic. It can be directly deleted later
+                txn_op_put_pb(&id_list_key, &id_list, None)?, // data mask name -> id_list
+            ]);
+        }
+
+        let (succ, _responses) = send_txn(self, txn).await?;
+
+        debug!(
+            name :? =(name_ident),
+            id :? =(&id_ident),
+            succ = succ;
+            "create_data_mask"
+        );
+
+        if succ {
+            Ok(Ok(CreateDatamaskReply {
+                id: masking_policy_id,
+            }))
+        } else {
+            Ok(Err(
+                name_ident.exist_error(format!("{} already exists", req.name))
+            ))
+        }
     }
 
     async fn drop_data_mask(
@@ -173,7 +180,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             // Policy is in use - cannot drop
             if !table_policy_refs.is_empty() {
                 return Ok(Err(MaskingPolicyError::policy_in_use(
-                    tenant.tenant_name().to_string(),
                     name_ident.data_mask_name().to_string(),
                 )));
             }

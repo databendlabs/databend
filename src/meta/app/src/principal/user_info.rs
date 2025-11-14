@@ -29,6 +29,7 @@ use crate::principal::AuthInfo;
 use crate::principal::UserGrantSet;
 use crate::principal::UserIdentity;
 use crate::principal::UserQuota;
+use crate::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
@@ -103,7 +104,9 @@ impl UserInfo {
     }
 
     pub fn is_account_admin(&self) -> bool {
-        self.grants.roles().contains(&"account_admin".to_string())
+        self.grants
+            .roles()
+            .contains(&BUILTIN_ROLE_ACCOUNT_ADMIN.to_string())
     }
 
     pub fn has_option_flag(&self, flag: UserOptionFlag) -> bool {

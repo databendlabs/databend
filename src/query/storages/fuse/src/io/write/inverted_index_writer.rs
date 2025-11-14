@@ -336,6 +336,8 @@ impl InvertedIndexWriter {
             &mut data,
             // Zstd has the best compression ratio
             TableCompression::Zstd,
+            // No dictionary page for inverted index
+            false,
             None,
         )?;
 

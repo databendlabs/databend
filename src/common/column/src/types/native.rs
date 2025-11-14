@@ -532,7 +532,7 @@ impl timestamp_tz {
 
 impl Display for timestamp_tz {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let timestamp = Timestamp::from_microsecond(self.timestamp()).unwrap();
+        let timestamp = Timestamp::from_microsecond(self.total_micros()).unwrap();
 
         let offset = tz::Offset::from_seconds(self.seconds_offset()).unwrap();
         let string = strtime::format(

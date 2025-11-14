@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
@@ -54,75 +55,78 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
         req: CreateRowAccessPolicyReq,
     ) -> Result<
         Result<CreateRowAccessPolicyReply, ExistError<row_access_policy_name_ident::Resource>>,
-        MetaTxnError,
+        MetaError,
     > {
         debug!(req :? =(&req); "RowAccessPolicyApi: {}", func_name!());
 
         let name_ident = &req.name;
 
-        let id = fetch_id(self, IdGenerator::row_access_id()).await?;
-        let mut trials = txn_backoff(None, func_name!());
-        let id = loop {
-            trials.next().unwrap()?.await;
+        let mask_name_ident = DataMaskNameIdent::new(
+            name_ident.tenant().clone(),
+            name_ident.row_access_name().to_string(),
+        );
 
-            let mut txn = TxnRequest::default();
+        let row_access_id = fetch_id(self, IdGenerator::row_access_id()).await?;
+        let policy_id = RowAccessPolicyId::new(row_access_id);
+        let mut txn = TxnRequest::default();
 
-            let res = self.get_id_and_value(name_ident).await?;
-            debug!(res :? = res, name_key :? =(name_ident); "create_row_access");
+        let res = self.get_id_and_value(name_ident).await?;
+        debug!(res :? = res, name_key :? =(name_ident); "create_row_access");
 
-            let mut curr_seq = 0;
+        let mut curr_seq = 0;
 
-            if let Some((seq_id, seq_meta)) = res {
-                if req.can_replace {
-                    let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
+        if let Some((seq_id, seq_meta)) = res {
+            if req.can_replace {
+                let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
 
-                    txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
+                txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
 
-                    // TODO(eason): need to remove row policy from table meta
+                // TODO(eason): need to remove row policy from table meta
 
-                    curr_seq = seq_id.seq;
-                } else {
-                    return Ok(Err(name_ident.exist_error(func_name!())));
-                }
+                curr_seq = seq_id.seq;
+            } else {
+                return Ok(Err(name_ident.exist_error(func_name!())));
             }
+        }
 
-            // Create row policy by inserting these record:
-            // name -> id
-            // id -> policy
+        // Create row policy by inserting these record:
+        // name -> id
+        // id -> policy
 
-            let id = RowAccessPolicyId::new(id);
-            let id_ident = RowAccessPolicyIdIdent::new_generic(name_ident.tenant(), id);
+        let id_ident = RowAccessPolicyIdIdent::new_generic(name_ident.tenant(), policy_id);
 
-            debug!(
-                id :? =(&id_ident),
-                name_key :? =(name_ident);
-                "new RowAccessPolicy id"
-            );
+        debug!(
+            id :? =(&id_ident),
+            name_key :? =(name_ident);
+            "new RowAccessPolicy id"
+        );
 
-            {
-                let meta: RowAccessPolicyMeta = req.row_access_policy_meta.clone();
-                txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
-                txn.if_then.extend(vec![
-                    txn_op_put_pb(name_ident, &id, None)?,  // name -> policy_id
-                    txn_op_put_pb(&id_ident, &meta, None)?, // id -> meta
-                ]);
+        {
+            let meta: RowAccessPolicyMeta = req.row_access_policy_meta.clone();
+            txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
+            txn.condition.push(txn_cond_eq_seq(&mask_name_ident, 0));
+            txn.if_then.extend(vec![
+                txn_op_put_pb(name_ident, &policy_id, None)?, // name -> policy_id
+                txn_op_put_pb(&id_ident, &meta, None)?,       // id -> meta
+            ]);
+        }
 
-                let (succ, _responses) = send_txn(self, txn).await?;
+        let (succ, _responses) = send_txn(self, txn).await?;
 
-                debug!(
-                    name :? =(name_ident),
-                    id :? =(&id_ident),
-                    succ = succ;
-                    "create_row_access"
-                );
+        debug!(
+            name :? =(name_ident),
+            id :? =(&id_ident),
+            succ = succ;
+            "create_row_access"
+        );
 
-                if succ {
-                    break id;
-                }
-            }
-        };
-
-        Ok(Ok(CreateRowAccessPolicyReply { id: *id }))
+        if succ {
+            Ok(Ok(CreateRowAccessPolicyReply { id: row_access_id }))
+        } else {
+            Ok(Err(
+                name_ident.exist_error(format!("{} already exists", req.name))
+            ))
+        }
     }
 
     async fn drop_row_access_policy(
@@ -160,7 +164,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
             // Policy is in use - cannot drop
             if !table_policy_refs.is_empty() {
                 return Ok(Err(RowAccessPolicyError::policy_in_use(
-                    tenant.tenant_name().to_string(),
                     name_ident.row_access_name().to_string(),
                 )));
             }

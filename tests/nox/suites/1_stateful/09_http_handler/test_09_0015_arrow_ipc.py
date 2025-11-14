@@ -69,3 +69,28 @@ def test_arrow_ipc():
 
     rows.sort()
     assert rows == [x for x in range(97)]
+
+def query_page_0(sql):
+    query_url = "http://localhost:8000/v1/query"
+
+    data = {
+        'sql': sql,
+        "pagination": { "wait_time_secs": 5}
+    }
+    data = json.dumps(data)
+    response = requests.post(
+        query_url,
+        auth=auth,
+        headers={"Content-Type": "application/json"},
+        data=data,
+    )
+    return response.json()
+
+def test_result_format_settings():
+    timezone = 'Asia/Shanghai'
+    r = query_page_0(f"settings (timezone='{timezone}') select 1")
+    assert r.get('settings', {}).get('timezone') == timezone
+
+    geometry_output_format = 'EWKB'
+    r = query_page_0(f"settings (geometry_output_format='{geometry_output_format}') select 1")
+    assert r.get('settings', {}).get('geometry_output_format') == geometry_output_format

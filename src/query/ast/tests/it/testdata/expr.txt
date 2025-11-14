@@ -341,20 +341,16 @@ Literal {
 ---------- Input ----------
 -1
 ---------- Output ---------
-- 1
+-1
 ---------- AST ------------
-UnaryOp {
+Literal {
     span: Some(
-        0..1,
+        0..2,
     ),
-    op: Minus,
-    expr: Literal {
-        span: Some(
-            1..2,
-        ),
-        value: UInt64(
-            1,
-        ),
+    value: Decimal256 {
+        value: -1,
+        precision: 76,
+        scale: 0,
     },
 }
 
@@ -836,7 +832,7 @@ FunctionCall {
 ---------- Input ----------
 - - + + - 1 + + - 2
 ---------- Output ---------
-- - + + - 1 + + - 2
+- - + + -1 + + -2
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -863,18 +859,14 @@ BinaryOp {
                         6..7,
                     ),
                     op: Plus,
-                    expr: UnaryOp {
+                    expr: Literal {
                         span: Some(
-                            8..9,
+                            8..11,
                         ),
-                        op: Minus,
-                        expr: Literal {
-                            span: Some(
-                                10..11,
-                            ),
-                            value: UInt64(
-                                1,
-                            ),
+                        value: Decimal256 {
+                            value: -1,
+                            precision: 76,
+                            scale: 0,
                         },
                     },
                 },
@@ -886,18 +878,14 @@ BinaryOp {
             14..15,
         ),
         op: Plus,
-        expr: UnaryOp {
+        expr: Literal {
             span: Some(
-                16..17,
+                16..19,
             ),
-            op: Minus,
-            expr: Literal {
-                span: Some(
-                    18..19,
-                ),
-                value: UInt64(
-                    2,
-                ),
+            value: Decimal256 {
+                value: -2,
+                precision: 76,
+                scale: 0,
             },
         },
     },
@@ -964,7 +952,7 @@ BinaryOp {
 ---------- Input ----------
 1 - -(- - -1)
 ---------- Output ---------
-1 - - - - - 1
+1 - 1
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -979,36 +967,14 @@ BinaryOp {
             1,
         ),
     },
-    right: UnaryOp {
+    right: Literal {
         span: Some(
-            4..5,
+            4..12,
         ),
-        op: Minus,
-        expr: UnaryOp {
-            span: Some(
-                6..7,
-            ),
-            op: Minus,
-            expr: UnaryOp {
-                span: Some(
-                    8..9,
-                ),
-                op: Minus,
-                expr: UnaryOp {
-                    span: Some(
-                        10..11,
-                    ),
-                    op: Minus,
-                    expr: Literal {
-                        span: Some(
-                            11..12,
-                        ),
-                        value: UInt64(
-                            1,
-                        ),
-                    },
-                },
-            },
+        value: Decimal256 {
+            value: 1,
+            precision: 76,
+            scale: 0,
         },
     },
 }

@@ -1089,6 +1089,3 @@ DROP MASKING POLICY mask_ssn_conditional;
 
 statement ok
 unset global enable_planner_cache;
-
-statement ok
-unset global enable_experimental_row_access_policy;

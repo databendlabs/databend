@@ -110,6 +110,10 @@ impl AdminService {
                 .at(
                     "/v1/tenants/:tenant/user_functions",
                     get(super::v1::user_functions::user_functions),
+                )
+                .at(
+                    "/v1/tenants/:tenant/databases/:database/tables/:table/stats",
+                    get(super::v1::table_statistics::get_table_stats_handler),
                 );
         }
 

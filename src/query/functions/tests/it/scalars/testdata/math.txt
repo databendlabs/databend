@@ -8,8 +8,8 @@ output         : 1
 
 
 ast            : abs(-2.3434)
-raw expr       : abs(minus(2.3434))
-checked expr   : abs<Decimal(5, 4)>(minus<Decimal(5, 4)>(2.3434_d64(5,4)))
+raw expr       : abs(-2.3434)
+checked expr   : abs<Decimal(5, 4)>(-2.3434_d64(5,4))
 optimized expr : 2.3434_d64(5,4)
 output type    : Decimal(5, 4)
 output domain  : {2.3434..=2.3434}
@@ -17,8 +17,8 @@ output         : 2.3434
 
 
 ast            : abs(-1)
-raw expr       : abs(minus(1))
-checked expr   : abs<Int64>(CAST<Int16>(minus<UInt8>(1_u8) AS Int64))
+raw expr       : abs(-1)
+checked expr   : abs<Int64>(CAST<Int8>(-1_i8 AS Int64))
 optimized expr : 1_u64
 output type    : UInt64
 output domain  : {1..=1}
@@ -66,8 +66,8 @@ output         : 1
 
 
 ast            : sign(-1)
-raw expr       : sign(minus(1))
-checked expr   : sign<Float64>(CAST<Int16>(minus<UInt8>(1_u8) AS Float64))
+raw expr       : sign(-1)
+checked expr   : sign<Float64>(CAST<Int8>(-1_i8 AS Float64))
 optimized expr : -1_i8
 output type    : Int8
 output domain  : {-1..=-1}
@@ -142,8 +142,8 @@ output         : 0.463647609
 
 
 ast            : cot(-1.0)
-raw expr       : cot(minus(1.0))
-checked expr   : cot<Float64>(CAST<Decimal(2, 1)>(minus<Decimal(2, 1)>(1.0_d64(2,1)) AS Float64))
+raw expr       : cot(-1.0)
+checked expr   : cot<Float64>(CAST<Decimal(2, 1)>(-1.0_d64(2,1) AS Float64))
 optimized expr : -0.6420926159_f64
 output type    : Float64
 output domain  : {-0.6420926159..=-0.6420926159}
@@ -249,8 +249,8 @@ output         : 7.3890560989
 
 
 ast            : exp(-2)
-raw expr       : exp(minus(2))
-checked expr   : exp<Int16>(minus<UInt8>(2_u8))
+raw expr       : exp(-2)
+checked expr   : exp<Int8>(-2_i8)
 optimized expr : 0.1353352832_f64
 output type    : Float64
 output domain  : {0.1353352832..=0.1353352832}
@@ -289,8 +289,8 @@ evaluation (internal):
 
 
 ast            : round(0)(-1.23)
-raw expr       : round(0)(minus(1.23))
-checked expr   : round<Decimal(3, 2)>(0)(minus<Decimal(3, 2)>(1.23_d64(3,2)))
+raw expr       : round(0)(-1.23)
+checked expr   : round<Decimal(3, 2)>(0)(-1.23_d64(3,2))
 optimized expr : -1_d64(3,0)
 output type    : Decimal(3, 0)
 output domain  : {-1..=-1}
@@ -454,8 +454,8 @@ output         : 100
 
 
 ast            : truncate(122, -1)
-raw expr       : truncate(122, minus(1))
-checked expr   : truncate<UInt8, Int64>(122_u8, CAST<Int16>(minus<UInt8>(1_u8) AS Int64))
+raw expr       : truncate(122, -1)
+checked expr   : truncate<UInt8, Int64>(122_u8, CAST<Int8>(-1_i8 AS Int64))
 optimized expr : 120_f64
 output type    : Float64
 output domain  : {120..=120}

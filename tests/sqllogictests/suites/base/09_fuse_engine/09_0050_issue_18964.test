@@ -1,0 +1,24 @@
+statement ok
+create or replace table t_18964(a int, b int, c bool);
+
+query I
+insert into t_18964 values(1,1,false),(2,2,false),(3,3,false),(4,4,false),(5,5,false);
+----
+5
+
+query I
+update t_18964 set c = true where a < 6 and b in (1, 3, 5);
+----
+3
+
+query IIB
+select * from t_18964 order by a;
+----
+1 1 1
+2 2 0
+3 3 1
+4 4 0
+5 5 1
+
+statement ok
+drop table t_18964 all;

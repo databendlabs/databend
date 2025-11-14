@@ -71,6 +71,7 @@ use crate::interpreters::common::table_option_validation::is_valid_bloom_index_c
 use crate::interpreters::common::table_option_validation::is_valid_change_tracking;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
@@ -455,6 +456,8 @@ impl CreateTableInterpreter {
         is_valid_random_seed(&table_meta.options)?;
         // check table level data_retention_period_in_hours
         is_valid_data_retention_period(&table_meta.options)?;
+        // check enable_parquet_encoding
+        is_valid_fuse_parquet_dictionary_opt(&table_meta.options)?;
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
