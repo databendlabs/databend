@@ -690,6 +690,12 @@ statement ok
 CREATE OR REPLACE FUNCTION immutable_multi_stage_process(input_stage STAGE_LOCATION, output_stage STAGE_LOCATION, value VARCHAR) RETURNS INT LANGUAGE python IMMUTABLE HANDLER = 'immutable_multi_stage_process' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
+CREATE OR REPLACE FUNCTION stage_summary_udtf(data_stage STAGE_LOCATION, arg int) RETURNS TABLE (stage_name varchar, stage_type varchar, bucket varchar,relative_path varchar, value int, summary varchar) LANGUAGE python HANDLER = 'stage_summary_udtf' HEADERS = ('X-Authorization' = '123') ADDRESS = 'http://0.0.0.0:8815';
+
+statement ok
+CREATE OR REPLACE FUNCTION multi_stage_process_udtf(input_stage STAGE_LOCATION, output_stage STAGE_LOCATION, arg int) RETURNS TABLE (input_stage varchar, output_stage varchar, input_bucket varchar, output_bucket varchar, input_relative_path varchar, output_relative_path varchar, result int) LANGUAGE python HANDLER = 'multi_stage_process_udtf' HEADERS = ('X-Authorization' = '123') ADDRESS = 'http://0.0.0.0:8815';
+
+statement ok
 CREATE OR REPLACE STAGE s3_stage URL = 's3://test/' CONNECTION = ( AWS_KEY_ID = 'minioadmin' AWS_SECRET_KEY = 'minioadmin' ENDPOINT_URL = 'http://127.0.0.1:9000') FILE_FORMAT = (TYPE = CSV);
 
 query T
@@ -706,3 +712,13 @@ query I
 SELECT immutable_multi_stage_process(@s3_stage/input/2024/, @s3_stage/output/2024, 'hello')
 ----
 13
+
+query I
+SELECT * from stage_summary_udtf(@s3_stage/output/2024, 21)
+----
+s3_stage External test output/2024 21 s3_stage:test:output/2024:21
+
+query I
+SELECT * from multi_stage_process_udtf(@s3_stage/input/2024/, @s3_stage/output/2024, 21)
+----
+s3_stage s3_stage test test input/2024/ output/2024 29

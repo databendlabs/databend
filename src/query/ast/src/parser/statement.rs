@@ -5383,6 +5383,49 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         .parse(i)
     }
 
+    enum FuncBody {
+        Sql(String),
+        Server {
+            address: String,
+            handler: String,
+            headers: BTreeMap<String, String>,
+            language: String,
+            immutable: Option<bool>,
+        },
+    }
+
+    fn func_body(i: Input) -> IResult<FuncBody> {
+        let sql = map(
+            rule! {
+                AS ~ ^#code_string
+            },
+            |(_, sql)| FuncBody::Sql(sql),
+        );
+        let server = map(
+            rule! {
+                LANGUAGE ~ #ident
+                ~ (#udf_immutable)?
+                ~ HANDLER ~ ^"=" ~ ^#literal_string
+                ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
+                ~ ADDRESS ~ ^"=" ~ ^#literal_string
+            },
+            |(_, language, immutable, _, _, handler, headers, _, _, address)| FuncBody::Server {
+                address,
+                handler,
+                headers: headers
+                    .map(|(_, _, _, headers, _)| BTreeMap::from_iter(headers))
+                    .unwrap_or_default(),
+                language: language.to_string(),
+                immutable,
+            },
+        );
+
+        rule!(
+            #sql: "AS <sql>"
+            | #server: "LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
+        )(i)
+    }
+
     let lambda_udf = map(
         rule! {
             AS ~ #lambda_udf_params
@@ -5455,23 +5498,49 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
-    let scalar_udf_or_udtf = map(
+    let scalar_udf_or_udtf = map_res(
         rule! {
             "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
             ~ RETURNS ~ ^#return_body
-            ~ AS ~ ^#code_string
+            ~ #func_body
         },
-        |(_, arg_types, _, _, return_body, _, sql)| match return_body {
-            ReturnBody::Scalar(return_type) => UDFDefinition::ScalarUDF {
-                arg_types,
-                definition: sql,
-                return_type,
-            },
-            ReturnBody::Table(return_types) => UDFDefinition::UDTFSql {
-                arg_types,
-                return_types,
-                sql,
-            },
+        |(_, arg_types, _, _, return_body, func_body)| {
+            let definition = match (return_body, func_body) {
+                (ReturnBody::Scalar(return_type), FuncBody::Sql(sql)) => UDFDefinition::ScalarUDF {
+                    arg_types,
+                    definition: sql,
+                    return_type,
+                },
+                (ReturnBody::Scalar(_), FuncBody::Server { .. }) => {
+                    return Err(nom::Err::Failure(ErrorKind::Other(
+                        "ScalarUDF unsupport external Server",
+                    )))
+                }
+                (ReturnBody::Table(return_types), FuncBody::Sql(sql)) => UDFDefinition::UDTFSql {
+                    arg_types,
+                    return_types,
+                    sql,
+                },
+                (
+                    ReturnBody::Table(return_types),
+                    FuncBody::Server {
+                        address,
+                        handler,
+                        headers,
+                        language,
+                        immutable,
+                    },
+                ) => UDFDefinition::UDTFServer {
+                    arg_types,
+                    return_types,
+                    address,
+                    handler,
+                    headers,
+                    language,
+                    immutable,
+                },
+            };
+            Ok(definition)
         },
     );
 
@@ -5537,7 +5606,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         #lambda_udf: "AS (<parameter [parameter type]>, ...) -> <definition expr>"
         | #udaf: "(<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
         | #udf: "(<[arg_name] arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
-        | #scalar_udf_or_udtf: "(<arg_name arg_type>, ...) RETURNS <return body> AS <sql> }"
+        | #scalar_udf_or_udtf: "(<arg_name arg_type>, ...) RETURNS <return body> { AS <sql> | LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address> } }"
     ).parse(i)
 }
 

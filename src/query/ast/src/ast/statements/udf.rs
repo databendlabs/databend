@@ -88,6 +88,15 @@ pub enum UDFDefinition {
         return_types: Vec<(Identifier, TypeName)>,
         sql: String,
     },
+    UDTFServer {
+        arg_types: Vec<(Identifier, TypeName)>,
+        return_types: Vec<(Identifier, TypeName)>,
+        address: String,
+        handler: String,
+        headers: BTreeMap<String, String>,
+        language: String,
+        immutable: Option<bool>,
+    },
     ScalarUDF {
         arg_types: Vec<(Identifier, TypeName)>,
         definition: String,
@@ -281,6 +290,46 @@ impl Display for UDFDefinition {
                     return_types.iter().map(|(name, ty)| format!("{name} {ty}")),
                 )?;
                 write!(f, ") AS $$\n{sql}\n$$")?;
+            }
+            UDFDefinition::UDTFServer {
+                arg_types,
+                return_types,
+                address,
+                handler,
+                headers,
+                language,
+                immutable,
+            } => {
+                write!(f, "(")?;
+                write_comma_separated_list(
+                    f,
+                    arg_types.iter().map(|(name, ty)| format!("{name} {ty}")),
+                )?;
+                write!(f, ") RETURNS TABLE (")?;
+                write_comma_separated_list(
+                    f,
+                    return_types.iter().map(|(name, ty)| format!("{name} {ty}")),
+                )?;
+                write!(f, ") LANGUAGE {language}")?;
+                if let Some(immutable) = immutable {
+                    if *immutable {
+                        write!(f, " IMMUTABLE")?;
+                    } else {
+                        write!(f, " VOLATILE")?;
+                    }
+                }
+                write!(f, " HANDLER = '{handler}'")?;
+                if !headers.is_empty() {
+                    write!(f, " HEADERS = (")?;
+                    for (i, (key, value)) in headers.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "'{key}' = '{value}'")?;
+                    }
+                    write!(f, ")")?;
+                }
+                write!(f, " ADDRESS = '{address}'")?;
             }
             UDFDefinition::ScalarUDF {
                 arg_types,

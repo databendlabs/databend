@@ -32,6 +32,7 @@ mod system;
 mod table_function;
 mod table_function_factory;
 mod temporary_tables_table;
+mod udf_table;
 
 pub use copy_history::CopyHistoryTable;
 pub use numbers::generate_numbers_parts;
@@ -46,3 +47,4 @@ pub use system::TableStatisticsFunc;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableFunctionFactory;
 pub use temporary_tables_table::TemporaryTablesTable;
+pub use udf_table::UDTFTable;

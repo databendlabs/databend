@@ -146,7 +146,7 @@ impl TransformUdfServer {
             )
             .await?;
 
-        data_block.add_entry(result);
+        data_block.add_entry(result.take_columns().pop().unwrap());
 
         drop(permit);
         Ok(data_block)

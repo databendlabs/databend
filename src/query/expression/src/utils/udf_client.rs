@@ -44,6 +44,7 @@ use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use hyper_util::client::legacy::connect::HttpConnector;
+use itertools::Itertools;
 use tonic::metadata::KeyAndValueRef;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataMap;
@@ -304,7 +305,7 @@ impl UDFFlightClient {
         num_rows: usize,
         args: Vec<BlockEntry>,
         return_type: &DataType,
-    ) -> Result<BlockEntry> {
+    ) -> Result<DataBlock> {
         let instant = Instant::now();
 
         Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRequestCount, 1);
@@ -344,11 +345,12 @@ impl UDFFlightClient {
 
         let result_batch = result_batch?;
         let schema = DataSchema::try_from(&(*result_batch.schema()))?;
-        let result_block = DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
-            ErrorCode::UDFDataError(format!(
-                "Cannot convert arrow record batch to data block: {err}"
-            ))
-        })?;
+        let mut result_block =
+            DataBlock::from_record_batch(&schema, &result_batch).map_err(|err| {
+                ErrorCode::UDFDataError(format!(
+                    "Cannot convert arrow record batch to data block: {err}"
+                ))
+            })?;
 
         let result_fields = schema.fields();
         if result_fields.is_empty() || result_block.is_empty() {
@@ -357,12 +359,6 @@ impl UDFFlightClient {
             ));
         }
 
-        if result_fields[0].data_type() != return_type {
-            return Err(ErrorCode::UDFSchemaMismatch(format!(
-                "The user-defined function \"{func_name}\" returned an unexpected schema. Expected result type {return_type}, but got {}.",
-                result_fields[0].data_type()
-            )));
-        }
         if result_block.num_rows() != num_rows {
             return Err(ErrorCode::UDFDataError(format!(
                 "UDF server should return {} rows, but it returned {} rows",
@@ -370,13 +366,42 @@ impl UDFFlightClient {
                 result_block.num_rows()
             )));
         }
-
-        if contains_variant(return_type) {
-            let value = transform_variant(&result_block.get_by_offset(0).value(), false)?;
-            Ok(BlockEntry::Column(value.as_column().unwrap().clone()))
-        } else {
-            Ok(result_block.get_by_offset(0).clone())
+        if return_type.remove_nullable().is_tuple() && result_fields.len() > 1 {
+            if let DataType::Tuple(tys) = return_type.remove_nullable() {
+                if tys
+                    .iter()
+                    .zip(result_fields.iter().map(|f| f.data_type()))
+                    .any(|(ty_a, ty_b)| ty_a != ty_b)
+                {
+                    return Err(ErrorCode::UDFSchemaMismatch(format!(
+                        "UDF server return incorrect type, expected: {}, but got: {}",
+                        tys.iter().map(|ty| ty.to_string()).join(","),
+                        result_fields
+                            .iter()
+                            .map(|f| f.data_type())
+                            .map(|ty| ty.to_string())
+                            .join(", ")
+                    )));
+                }
+            }
+        } else if result_fields[0].data_type() != return_type {
+            return Err(ErrorCode::UDFSchemaMismatch(format!(
+                "UDF server return incorrect type, expected: {}, but got: {}",
+                return_type,
+                result_fields[0].data_type()
+            )));
         }
+        for (entry, field) in result_block
+            .columns_mut()
+            .iter_mut()
+            .zip(result_fields.iter())
+        {
+            if contains_variant(field.data_type()) {
+                let value = transform_variant(&entry.value(), false)?;
+                *entry = BlockEntry::Column(value.as_column().unwrap().clone());
+            }
+        }
+        Ok(result_block)
     }
 
     #[async_backtrace::framed]
