@@ -51,8 +51,8 @@ pub struct StatisticsTable {
     table_info: TableInfo,
 }
 
-#[derive(Default)]
-struct TableColumnStatistics {
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+pub struct TableColumnStatistics {
     database_name: String,
     table_name: String,
     column_name: String,
@@ -119,7 +119,7 @@ impl StatisticsTable {
     }
 
     #[async_backtrace::framed]
-    async fn dump_table_columns(
+    async fn dump_tables_columns(
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
@@ -129,139 +129,146 @@ impl StatisticsTable {
         let mut rows: Vec<TableColumnStatistics> = vec![];
         for (database, tables) in database_and_tables {
             for table in tables {
-                match table.engine() {
-                    VIEW_ENGINE => {
-                        let fields = if let Some(query) = table.options().get(QUERY) {
-                            let mut planner = Planner::new(ctx.clone());
-                            match planner.plan_sql(query).await {
-                                Ok((plan, _)) => {
-                                    infer_table_schema(&plan.schema())?.fields().clone()
-                                }
-                                Err(e) => {
-                                    // If VIEW SELECT QUERY plan err, should return empty. not destroy the query.
-                                    warn!(
-                                        "failed to get columns for {}: {}",
-                                        table.get_table_info().desc,
-                                        e
-                                    );
-                                    vec![]
-                                }
-                            }
-                        } else {
+                rows.extend(Self::dump_table_columns(&ctx, catalog, &database, &table).await?);
+            }
+        }
+        Ok(rows)
+    }
+
+    pub async fn dump_table_columns(
+        ctx: &Arc<dyn TableContext>,
+        catalog: &Arc<dyn Catalog>,
+        database: &str,
+        table: &Arc<dyn Table>,
+    ) -> Result<Vec<TableColumnStatistics>> {
+        let mut columns = vec![];
+        match table.engine() {
+            VIEW_ENGINE => {
+                let fields = if let Some(query) = table.options().get(QUERY) {
+                    let mut planner = Planner::new(ctx.clone());
+                    match planner.plan_sql(query).await {
+                        Ok((plan, _)) => infer_table_schema(&plan.schema())?.fields().clone(),
+                        Err(e) => {
+                            // If VIEW SELECT QUERY plan err, should return empty. not destroy the query.
+                            warn!(
+                                "failed to get columns for {}: {}",
+                                table.get_table_info().desc,
+                                e
+                            );
                             vec![]
-                        };
-                        for field in fields {
-                            rows.push(TableColumnStatistics {
-                                database_name: database.clone(),
-                                table_name: table.name().into(),
-                                column_name: field.name,
-                                ..Default::default()
-                            })
                         }
                     }
-                    _ => {
-                        let schema = table.schema();
-                        // attach table should not collect statistics, source table column already collect them.
-                        let columns_statistics = if !FuseTable::is_table_attached(
-                            &table.get_table_info().meta.options,
+                } else {
+                    vec![]
+                };
+                for field in fields {
+                    columns.push(TableColumnStatistics {
+                        database_name: database.to_string(),
+                        table_name: table.name().into(),
+                        column_name: field.name,
+                        ..Default::default()
+                    })
+                }
+            }
+            _ => {
+                let schema = table.schema();
+                // attach table should not collect statistics, source table column already collect them.
+                let columns_statistics =
+                    if !FuseTable::is_table_attached(&table.get_table_info().meta.options) {
+                        table
+                            .column_statistics_provider(ctx.clone())
+                            .await
+                            .unwrap_or_else(|e| {
+                                let msg = format!(
+                                    "Collect {}.{}.{} column statistics with error: {}",
+                                    catalog.name(),
+                                    database,
+                                    table.name(),
+                                    e
+                                );
+                                warn!("{}", msg);
+                                ctx.push_warning(msg);
+                                Box::new(DummyColumnStatisticsProvider)
+                            })
+                    } else {
+                        Box::new(DummyColumnStatisticsProvider)
+                    };
+                let stats_row_count = columns_statistics.stats_num_rows();
+                let actual_row_count = columns_statistics.num_rows();
+                for field in schema.fields() {
+                    let column_id = field.column_id;
+                    let column_statistics = columns_statistics.column_statistics(column_id);
+                    let his_info = columns_statistics.histogram(column_id);
+                    let histogram = if let Some(his_info) = his_info {
+                        let mut his_infos = vec![];
+                        for (i, bucket) in his_info.buckets.iter().enumerate() {
+                            let min = bucket.lower_bound().to_string()?;
+                            let max = bucket.upper_bound().to_string()?;
+                            let ndv = bucket.num_distinct();
+                            let count = bucket.num_values();
+                            let his_info = format!(
+                                "[bucket id: {:?}, min: {:?}, max: {:?}, ndv: {:?}, count: {:?}]",
+                                i, min, max, ndv, count
+                            );
+                            his_infos.push(his_info);
+                        }
+                        his_infos.join(", ")
+                    } else {
+                        "".to_string()
+                    };
+                    columns.push(TableColumnStatistics {
+                        database_name: database.to_string(),
+                        table_name: table.name().into(),
+                        column_name: field.name().clone(),
+                        stats_row_count,
+                        actual_row_count,
+                        distinct_count: column_statistics.and_then(|v| v.ndv),
+                        null_count: column_statistics.map(|v| v.null_count),
+                        min: column_statistics
+                            .and_then(|s| s.min.clone())
+                            .map(|v| v.to_string().unwrap()),
+                        max: column_statistics
+                            .and_then(|s| s.max.clone())
+                            .map(|v| v.to_string().unwrap()),
+                        avg_size: columns_statistics.average_size(column_id),
+                        histogram,
+                    })
+                }
+                // add virtual column statistics
+                let table_info = table.get_table_info();
+                if let Some(virtual_schema) = &table_info.meta.virtual_schema {
+                    for virtual_field in virtual_schema.fields() {
+                        if let (Ok(source_field), Some(column_statistics)) = (
+                            schema.field_of_column_id(virtual_field.source_column_id),
+                            columns_statistics.column_statistics(virtual_field.column_id),
                         ) {
-                            table
-                                .column_statistics_provider(ctx.clone())
-                                .await
-                                .unwrap_or_else(|e| {
-                                    let msg = format!(
-                                        "Collect {}.{}.{} column statistics with error: {}",
-                                        catalog.name(),
-                                        database,
-                                        table.name(),
-                                        e
-                                    );
-                                    warn!("{}", msg);
-                                    ctx.push_warning(msg);
-                                    Box::new(DummyColumnStatisticsProvider)
-                                })
-                        } else {
-                            Box::new(DummyColumnStatisticsProvider)
-                        };
-                        let stats_row_count = columns_statistics.stats_num_rows();
-                        let actual_row_count = columns_statistics.num_rows();
-                        for field in schema.fields() {
-                            let column_id = field.column_id;
-                            let column_statistics = columns_statistics.column_statistics(column_id);
-                            let his_info = columns_statistics.histogram(column_id);
-                            let histogram = if let Some(his_info) = his_info {
-                                let mut his_infos = vec![];
-                                for (i, bucket) in his_info.buckets.iter().enumerate() {
-                                    let min = bucket.lower_bound().to_string()?;
-                                    let max = bucket.upper_bound().to_string()?;
-                                    let ndv = bucket.num_distinct();
-                                    let count = bucket.num_values();
-                                    let his_info = format!(
-                                        "[bucket id: {:?}, min: {:?}, max: {:?}, ndv: {:?}, count: {:?}]",
-                                        i, min, max, ndv, count
-                                    );
-                                    his_infos.push(his_info);
-                                }
-                                his_infos.join(", ")
-                            } else {
-                                "".to_string()
-                            };
-                            rows.push(TableColumnStatistics {
-                                database_name: database.clone(),
+                            let column_name =
+                                format!("{}{}", source_field.name, virtual_field.name);
+                            columns.push(TableColumnStatistics {
+                                database_name: database.to_string(),
                                 table_name: table.name().into(),
-                                column_name: field.name().clone(),
+                                column_name,
                                 stats_row_count,
                                 actual_row_count,
-                                distinct_count: column_statistics.and_then(|v| v.ndv),
-                                null_count: column_statistics.map(|v| v.null_count),
+                                distinct_count: column_statistics.ndv,
+                                null_count: Some(column_statistics.null_count),
                                 min: column_statistics
-                                    .and_then(|s| s.min.clone())
+                                    .min
+                                    .clone()
                                     .map(|v| v.to_string().unwrap()),
                                 max: column_statistics
-                                    .and_then(|s| s.max.clone())
+                                    .max
+                                    .clone()
                                     .map(|v| v.to_string().unwrap()),
-                                avg_size: columns_statistics.average_size(column_id),
-                                histogram,
+                                avg_size: columns_statistics.average_size(virtual_field.column_id),
+                                histogram: "".to_string(),
                             })
-                        }
-                        // add virtual column statistics
-                        let table_info = table.get_table_info();
-                        if let Some(virtual_schema) = &table_info.meta.virtual_schema {
-                            for virtual_field in virtual_schema.fields() {
-                                if let (Ok(source_field), Some(column_statistics)) = (
-                                    schema.field_of_column_id(virtual_field.source_column_id),
-                                    columns_statistics.column_statistics(virtual_field.column_id),
-                                ) {
-                                    let column_name =
-                                        format!("{}{}", source_field.name, virtual_field.name);
-                                    rows.push(TableColumnStatistics {
-                                        database_name: database.clone(),
-                                        table_name: table.name().into(),
-                                        column_name,
-                                        stats_row_count,
-                                        actual_row_count,
-                                        distinct_count: column_statistics.ndv,
-                                        null_count: Some(column_statistics.null_count),
-                                        min: column_statistics
-                                            .min
-                                            .clone()
-                                            .map(|v| v.to_string().unwrap()),
-                                        max: column_statistics
-                                            .max
-                                            .clone()
-                                            .map(|v| v.to_string().unwrap()),
-                                        avg_size: columns_statistics
-                                            .average_size(virtual_field.column_id),
-                                        histogram: "".to_string(),
-                                    })
-                                }
-                            }
                         }
                     }
                 }
             }
         }
-        Ok(rows)
+        Ok(columns)
     }
 }
 
@@ -287,7 +294,7 @@ impl AsyncSystemTable for StatisticsTable {
                 ctx.session_state()?,
             )
             .await?;
-        let rows = self.dump_table_columns(ctx, push_downs, &catalog).await?;
+        let rows = self.dump_tables_columns(ctx, push_downs, &catalog).await?;
 
         let mut names = Vec::with_capacity(rows.len());
         let mut databases = Vec::with_capacity(rows.len());
