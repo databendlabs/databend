@@ -440,7 +440,6 @@ impl Neg for months_days_micros {
     }
 }
 
-/// The in-memory representation of the MonthDayNano variant of the "Interval" logical type.
 #[derive(
     Debug,
     Copy,
@@ -486,7 +485,8 @@ impl timestamp_tz {
     pub const MICROS_PER_SECOND: i64 = 1_000_000;
 
     pub fn new(timestamp: i64, offset: i32) -> Self {
-        let ts = timestamp as u64 as i128; // <- 中间加一次 u64 屏蔽符号位
+        let ts = Self::encode_utc(timestamp, offset);
+        let ts = ts as u64 as i128;
         let off = (offset as i128) << 64;
         Self(off | ts)
     }
@@ -507,15 +507,25 @@ impl timestamp_tz {
     }
 
     #[inline]
+    pub fn micros_offset_inner(seconds: i64) -> Option<i64> {
+        seconds.checked_mul(Self::MICROS_PER_SECOND)
+    }
+
+    #[inline]
     pub fn hours_offset(&self) -> i8 {
         (self.seconds_offset() / 3600) as i8
     }
 
     #[inline]
     pub fn total_micros(&self) -> i64 {
-        self.try_total_micros().unwrap_or_else(|| {
+        self.timestamp()
+    }
+
+    #[inline]
+    pub fn timestamp_with_offset(&self) -> i64 {
+        self.try_timestamp_with_offset().unwrap_or_else(|| {
             error!(
-                "interval is out of range: timestamp={}, offset={}",
+                "timestamp_with_offset is out of range: timestamp={}, offset={}",
                 self.timestamp(),
                 self.seconds_offset()
             );
@@ -524,9 +534,27 @@ impl timestamp_tz {
     }
 
     #[inline]
-    pub fn try_total_micros(&self) -> Option<i64> {
+    pub fn try_timestamp_with_offset(&self) -> Option<i64> {
         let offset_micros = self.micros_offset()?;
-        self.timestamp().checked_sub(offset_micros)
+        self.timestamp().checked_add(offset_micros)
+    }
+
+    #[inline]
+    fn encode_utc(timestamp: i64, offset: i32) -> i64 {
+        let Some(offset_micros) = Self::micros_offset_inner(offset as i64) else {
+            error!(
+                "timestamp offset is out of range: timestamp={}, offset={}",
+                timestamp, offset
+            );
+            return 0;
+        };
+        timestamp.checked_sub(offset_micros).unwrap_or_else(|| {
+            error!(
+                "timestamp is out of range: timestamp={}, offset={}",
+                timestamp, offset
+            );
+            0
+        })
     }
 }
 
