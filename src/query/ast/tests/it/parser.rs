@@ -676,7 +676,6 @@ SELECT * from s;"#,
         r#"SELECT * FROM t GROUP BY a, ROLLUP (b, c)"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b)), a, ROLLUP (b, c)"#,
         r#"CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
-        r#"CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
         r#"DESC MASKING POLICY email_mask"#,
         r#"DROP MASKING POLICY IF EXISTS email_mask"#,
         r#"REFRESH VIRTUAL COLUMN FOR t"#,
@@ -974,12 +973,12 @@ SELECT * from s;"#,
         r#"ALTER TABLE p1 CONNECTION=(CONNECTION_NAME='test')"#,
         r#"ALTER table t connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
         // row policy
-        r#"create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
+        r#"create row access policy rap_it as (empl_id varchar) returns boolean ->
           case
               when 'it_admin' = current_role() then true
               else false
           end"#,
-        r#"create or replace row access policy rap_sales_manager_regions_1 as (sales_region varchar) returns boolean ->
+        r#"create row access policy if not exists rap_sales_manager_regions_1 as (sales_region varchar) returns boolean ->
             'sales_executive_role' = current_role()
               or exists (
                     select 1 from salesmanagerregions
