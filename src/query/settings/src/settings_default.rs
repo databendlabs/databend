@@ -349,7 +349,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("bloom_runtime_filter_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(u64::MAX),
+                    value: UserSettingValue::UInt64(3000000),
                     desc: "Sets the maximum number of rows for bloom runtime filter generation.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
