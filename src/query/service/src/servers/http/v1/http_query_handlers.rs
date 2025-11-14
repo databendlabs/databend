@@ -376,7 +376,7 @@ async fn query_final_handler(
     let _t = SlowRequestLogTracker::new(ctx);
     async {
         info!(
-            "[HTTP-QUERY] Query {} received final request at {}, completing query execution",
+            "Query {} received final request at {}, completing query execution",
             query_id,
             make_final_uri(&query_id)
         );
@@ -422,7 +422,7 @@ async fn query_cancel_handler(
     let _t = SlowRequestLogTracker::new(ctx);
     async {
         info!(
-            "[HTTP-QUERY] Query {} received cancel request at {}, terminating execution",
+            "Query {} received cancel request at {}, terminating execution",
             query_id,
             make_kill_uri(&query_id)
         );
@@ -496,7 +496,7 @@ async fn query_page_handler(
             if query.user_name != ctx.user_name {
                 return Err(poem::error::Error::from_string(
                     format!(
-                        "[HTTP-QUERY] Authentication error: query {} expected user {}, but got {}",
+                        "Authentication error: query {} expected user {}, but got {}",
                         query_id, query.user_name, ctx.user_name
                     ),
                     StatusCode::UNAUTHORIZED,
@@ -506,7 +506,7 @@ async fn query_page_handler(
             query.check_client_session_id(&ctx.client_session_id)?;
             if let Some(st) = query.check_closed() {
                 info!(
-                    "[HTTP-QUERY] /query/{}/page/{} - query is close (reason: {:?})",
+                    "/query/{}/page/{} - query is close (reason: {:?})",
                     query_id, page_no, st
                 );
                 Err(query_id_closed(&query_id, st.reason))
@@ -514,15 +514,12 @@ async fn query_page_handler(
                 query.update_expire_time(true, false).await;
                 let resp = query.get_response_page(page_no).await.map_err(|err| {
                     info!(
-                        "[HTTP-QUERY] /query/{}/page/{} - get response page error (reason: {})",
+                        "/query/{}/page/{} - get response page error (reason: {})",
                         query_id,
                         page_no,
                         err.message()
                     );
-                    poem::Error::from_string(
-                        format!("[HTTP-QUERY] {}", err.message()),
-                        StatusCode::NOT_FOUND,
-                    )
+                    poem::Error::from_string(format!("{}", err.message()), StatusCode::NOT_FOUND)
                 })?;
                 query
                     .update_expire_time(false, resp.is_data_drained())
@@ -575,7 +572,7 @@ pub(crate) async fn query_handler(
             .map(|s| format!("(client_session_id={s})"))
             .unwrap_or("".to_string());
         info!(
-            "[HTTP-QUERY] New query request{}{}: {}",
+            "New query request{}{}: {}",
             agent_info,
             client_session_id_info,
             mask_connection_info(&format!("{:?}", req))
@@ -585,14 +582,14 @@ pub(crate) async fn query_handler(
         match HttpQuery::try_create(ctx, req.clone()).await {
             Err(err) => {
                 let err = err.display_with_sql(&sql);
-                error!("[HTTP-QUERY] Failed to start SQL query, error: {:?}", err);
+                error!("Failed to start SQL query, error: {:?}", err);
                 ctx.set_fail();
                 Ok(req.fail_to_start_sql(err).into_response())
             }
             Ok(mut query) => {
                 if let Err(err) = query.start_query(sql.clone()).await {
                     let err = err.display_with_sql(&sql);
-                    error!("[HTTP-QUERY] Failed to start SQL query, error: {:?}", err);
+                    error!("Failed to start SQL query, error: {:?}", err);
                     ctx.set_fail();
                     return Ok(req.fail_to_start_sql(err).into_response());
                 }
@@ -606,7 +603,7 @@ pub(crate) async fn query_handler(
                     .map_err(|err| err.display_with_sql(&sql))
                     .map_err(|err| {
                         poem::Error::from_string(
-                            format!("[HTTP-QUERY] {}", err.message()),
+                            format!("{}", err.message()),
                             StatusCode::NOT_FOUND,
                         )
                     })?;
@@ -619,7 +616,7 @@ pub(crate) async fn query_handler(
                     None => (0, None),
                     Some(p) => (p.page.data.num_rows(), p.next_page_no),
                 };
-                info!("[HTTP-QUERY] Initial response for query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
+                info!("Initial response for query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
                         &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
                     );
                 query
@@ -767,12 +764,12 @@ pub async fn heartbeat_handler(
                                     .unwrap(),
                             )
                         } else {
-                            warn!("[HTTP-QUERY] Heartbeat forward failed: {:?}", resp);
+                            warn!("Heartbeat forward failed: {:?}", resp);
                             None
                         }
                     }
                     Err(e) => {
-                        warn!("[HTTP-QUERY] Heartbeat forward error: {:?}", e);
+                        warn!("Heartbeat forward error: {:?}", e);
                         None
                     }
                 }
@@ -920,17 +917,14 @@ pub fn query_route() -> Route {
 
 fn query_id_closed(query_id: &str, closed_reason: CloseReason) -> PoemError {
     PoemError::from_string(
-        format!(
-            "[HTTP-QUERY] Query {query_id} is closed for {}",
-            closed_reason
-        ),
+        format!("Query {query_id} is closed for {}", closed_reason),
         StatusCode::BAD_REQUEST,
     )
 }
 
 fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
     PoemError::from_string(
-        format!("[HTTP-QUERY] Query ID {query_id} not found on node {node_id}"),
+        format!("Query ID {query_id} not found on node {node_id}"),
         StatusCode::NOT_FOUND,
     )
 }
@@ -965,7 +959,7 @@ impl Drop for SlowRequestLogTracker {
             let elapsed = self.started_at.elapsed();
             if elapsed.as_secs_f64() > 60.0 {
                 warn!(
-                    "[HTTP-QUERY] Slow request detected on {} {}, elapsed time: {:.2}s",
+                    "Slow request detected on {} {}, elapsed time: {:.2}s",
                     self.method,
                     self.uri,
                     elapsed.as_secs_f64()
@@ -990,7 +984,7 @@ pub(crate) fn get_http_tracing_span(
                     .with_properties(|| ctx.to_fastrace_properties());
             }
             None => {
-                warn!("[HTTP-QUERY] Failed to decode trace parent: {}", trace);
+                warn!("Failed to decode trace parent: {}", trace);
             }
         }
     }

@@ -16,7 +16,7 @@ ok	1	2021-01-01
 q2.parquet	426	1
 >>>> streaming load: q2.parquet error :
 + curl -sS -H x-databend-query-id:load-q2 -H 'X-Databend-SQL:insert into streaming_load_parquet(c2,c3) from @_databend_load file_format = (type='\''parquet'\'', missing_field_as=error, null_if=())' -F upload=@/tmp/streaming_load_parquet/q2.parquet -u root: -XPUT http://localhost:8000/v1/streaming_load
-{"error":{"code":400,"message":"[HTTP-STREAMING-LOAD] Query execution failed: file q2.parquet missing column `c2`"}}
+{"error":{"code":400,"message":"Query execution failed: file q2.parquet missing column `c2`"}}
 <<<<
 >>>> select * from streaming_load_parquet;
 <<<<

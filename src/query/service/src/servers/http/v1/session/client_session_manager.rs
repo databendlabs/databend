@@ -177,7 +177,7 @@ impl ClientSessionManager {
         if self.refresh_in_memory_states(sid, user_name) {
             self.refresh_session_handle(tenant, user_name.to_string(), sid)
                 .await?;
-            info!("[HTTP-SESSION] refreshing session {}", sid);
+            info!("refreshing session {}", sid);
         }
         Ok(())
     }
@@ -298,10 +298,10 @@ impl ClientSessionManager {
         if SystemTime::now() > claim.expire_at() + TTL_GRACE_PERIOD_QUERY {
             return match token_type {
                 TokenType::Refresh => Err(ErrorCode::RefreshTokenExpired(
-                    "[HTTP-SESSION] Authentication failed: refresh token has expired",
+                    "Authentication failed: refresh token has expired",
                 )),
                 TokenType::Session => Err(ErrorCode::SessionTokenExpired(
-                    "[HTTP-SESSION] Authentication failed: session token has expired",
+                    "Authentication failed: session token has expired",
                 )),
             };
         }
@@ -324,12 +324,12 @@ impl ClientSessionManager {
                 }
                 _ => {
                     return match token_type {
-                        TokenType::Refresh => {
-                            Err(ErrorCode::RefreshTokenNotFound("[HTTP-SESSION] Authentication failed: refresh token not found in database"))
-                        }
-                        TokenType::Session => {
-                            Err(ErrorCode::SessionTokenNotFound("[HTTP-SESSION] Authentication failed: session token not found in database"))
-                        }
+                        TokenType::Refresh => Err(ErrorCode::RefreshTokenNotFound(
+                            "Authentication failed: refresh token not found in database",
+                        )),
+                        TokenType::Session => Err(ErrorCode::SessionTokenNotFound(
+                            "Authentication failed: session token not found in database",
+                        )),
                     };
                 }
             };
