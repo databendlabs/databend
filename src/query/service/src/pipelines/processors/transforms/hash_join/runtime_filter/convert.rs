@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::runtime_filter_info::RuntimeFilterBloom;
@@ -33,7 +32,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use xorf::BinaryFuse16;
+use fastbloom::BloomFilter;
 
 use super::builder::should_enable_runtime_filter;
 use super::packet::JoinRuntimeFilterPacket;
@@ -244,10 +243,9 @@ fn build_min_max_filter(
     Ok(min_max_filter)
 }
 
-fn build_bloom_filter(bloom: HashSet<u64>, probe_key: &Expr<String>) -> Result<RuntimeFilterBloom> {
+fn build_bloom_filter(bloom: Vec<u64>, probe_key: &Expr<String>) -> Result<RuntimeFilterBloom> {
     let probe_key = probe_key.as_column_ref().unwrap();
-    let hashes_vec = bloom.into_iter().collect::<Vec<_>>();
-    let filter = BinaryFuse16::try_from(&hashes_vec)?;
+    let filter = BloomFilter::with_false_pos(0.01).items(bloom);
     Ok(RuntimeFilterBloom {
         column_name: probe_key.id.to_string(),
         filter,

@@ -37,11 +37,11 @@ databend-storages-common-pruner = { workspace = true }
 databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
-ahash = { workspace = true }
 arrow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
+ahash = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = { workspace = true }
 async-trait = { workspace = true }
@@ -75,7 +75,7 @@ tantivy-jieba = { workspace = true }
 thrift = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
-xorf = { workspace = true }
+fastbloom = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }

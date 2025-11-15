@@ -3180,6 +3180,7 @@ dependencies = [
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
  "dyn-clone",
+ "fastbloom",
  "goldenfile",
  "log",
  "maplit",
@@ -3192,7 +3193,6 @@ dependencies = [
  "sha2",
  "thrift",
  "typetag",
- "xorf",
 ]
 
 [[package]]
@@ -4383,6 +4383,7 @@ dependencies = [
  "divan",
  "enum-as-inner",
  "enum_dispatch",
+ "fastbloom",
  "fastrace",
  "futures",
  "futures-util",
@@ -4409,7 +4410,6 @@ dependencies = [
  "thrift",
  "typetag",
  "uuid",
- "xorf",
 ]
 
 [[package]]
@@ -5253,6 +5253,7 @@ dependencies = [
  "dyn-clone",
  "either",
  "ethnum",
+ "fastbloom",
  "fastrace",
  "flatbuffers",
  "futures",
@@ -5322,7 +5323,6 @@ dependencies = [
  "uuid",
  "walkdir",
  "wiremock",
- "xorf",
 ]
 
 [[package]]
@@ -6420,6 +6420,18 @@ checksum = "62bf7fa928ce0c4a43bd6e7d1235318fc32ac3a3dea06a2208c44e729449471a"
 dependencies = [
  "small_ctor",
  "web-time",
+]
+
+[[package]]
+name = "fastbloom"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18c1ddb9231d8554c2d6bdf4cfaabf0c59251658c68b6c95cd52dd0c513a912a"
+dependencies = [
+ "getrandom 0.3.3",
+ "libm",
+ "rand 0.9.2",
+ "siphasher 1.0.1",
 ]
 
 [[package]]
@@ -17695,15 +17707,6 @@ name = "xmlparser"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
-
-[[package]]
-name = "xorf"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf24c008fe464f5d8f58b8d16a1ab7e930bd73b2a6933ff8704c414b2bed7f92"
-dependencies = [
- "libm",
-]
 
 [[package]]
 name = "xorfilter-rs"

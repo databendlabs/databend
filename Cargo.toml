@@ -110,6 +110,7 @@ members = [
 
 # Workspace dependencies
 [workspace.dependencies]
+fastbloom = "0.14.0"
 databend-common-ast = { path = "src/query/ast" }
 databend-common-async-functions = { path = "src/query/async_functions" }
 databend-common-auth = { path = "src/common/auth" }
