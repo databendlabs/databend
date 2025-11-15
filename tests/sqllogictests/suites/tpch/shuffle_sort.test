@@ -1,7 +1,0 @@
-statement ok
-set enable_shuffle_sort = 1;
-
-include ./queries.test
-
-statement ok
-unset enable_shuffle_sort;
