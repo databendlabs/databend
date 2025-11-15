@@ -618,16 +618,15 @@ fn append_profile_info(
             + prof.statistics[ProfileStatisticsName::ScanBytesFromLocal as usize]
             + prof.statistics[ProfileStatisticsName::ScanBytesFromMemory as usize];
 
-        let has_scan_bytes = prof.statistics[ProfileStatisticsName::ScanBytes as usize] > 0;
-
         for (stat_name, desc) in get_statistics_desc().iter() {
             let value = prof.statistics[desc.index];
             let always_show = matches!(
                 stat_name,
-                ProfileStatisticsName::ScanBytesFromRemote
+                ProfileStatisticsName::ScanBytes
+                    | ProfileStatisticsName::ScanBytesFromRemote
                     | ProfileStatisticsName::ScanBytesFromLocal
                     | ProfileStatisticsName::ScanBytesFromMemory
-            ) && has_scan_bytes;
+            );
 
             if value == 0 && !always_show {
                 continue;
