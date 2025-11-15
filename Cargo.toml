@@ -110,7 +110,6 @@ members = [
 
 # Workspace dependencies
 [workspace.dependencies]
-fastbloom = "0.14.0"
 databend-common-ast = { path = "src/query/ast" }
 databend-common-async-functions = { path = "src/query/async_functions" }
 databend-common-auth = { path = "src/common/auth" }
@@ -210,6 +209,7 @@ databend-storages-common-pruner = { path = "src/query/storages/common/pruner" }
 databend-storages-common-session = { path = "src/query/storages/common/session" }
 databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
+fastbloom = "0.14.0"
 
 # Crates.io dependencies
 ahash = { version = "0.8", features = ["no-rng"] }

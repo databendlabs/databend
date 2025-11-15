@@ -118,6 +118,7 @@ derive-visitor = { workspace = true }
 dyn-clone = { workspace = true }
 either = { workspace = true }
 ethnum = { workspace = true }
+fastbloom = { workspace = true }
 fastrace = { workspace = true }
 flatbuffers = { workspace = true }
 futures = { workspace = true }
@@ -175,7 +176,6 @@ typetag = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
-fastbloom = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
