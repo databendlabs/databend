@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
 
@@ -37,7 +36,7 @@ pub struct RuntimeFilterPacket {
     pub id: usize,
     pub inlist: Option<Column>,
     pub min_max: Option<SerializableDomain>,
-    pub bloom: Option<HashSet<u64>>,
+    pub bloom: Option<Vec<u64>>,
 }
 
 impl Debug for RuntimeFilterPacket {

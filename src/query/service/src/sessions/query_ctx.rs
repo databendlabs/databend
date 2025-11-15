@@ -58,6 +58,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
@@ -142,7 +143,6 @@ use log::debug;
 use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use xorf::BinaryFuse16;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
@@ -1745,7 +1745,7 @@ impl TableContext for QueryContext {
             .unwrap_or_default()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
+    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, RuntimeBloomFilter)> {
         self.get_runtime_filters(id)
             .into_iter()
             .filter_map(|entry| entry.bloom.map(|bloom| (bloom.column_name, bloom.filter)))

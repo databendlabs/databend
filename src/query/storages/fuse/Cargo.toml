@@ -50,6 +50,7 @@ bytes = { workspace = true }
 chrono = { workspace = true }
 enum-as-inner = { workspace = true }
 enum_dispatch = { workspace = true }
+fastbloom = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
@@ -75,7 +76,6 @@ tantivy-jieba = { workspace = true }
 thrift = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
-xorf = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }

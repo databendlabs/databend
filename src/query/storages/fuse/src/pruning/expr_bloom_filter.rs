@@ -23,17 +23,15 @@ use databend_common_expression::KeysState;
 use databend_common_expression::KeysState::U128;
 use databend_common_expression::KeysState::U256;
 use databend_common_hashtable::FastHash;
-use xorf::BinaryFuse16;
-use xorf::Filter;
+use fastbloom::BloomFilter;
 
 /// Bloom filter for runtime filtering of data rows.
 pub struct ExprBloomFilter<'a> {
-    filter: &'a BinaryFuse16,
+    filter: &'a BloomFilter,
 }
 
 impl<'a> ExprBloomFilter<'a> {
-    /// Create a new bloom filter.
-    pub fn new(filter: &'a BinaryFuse16) -> ExprBloomFilter<'a> {
+    pub fn new(filter: &'a BloomFilter) -> Self {
         Self { filter }
     }
 

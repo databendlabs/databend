@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -122,10 +121,7 @@ fn merge_min_max(
     Some(SerializableDomain { min, max })
 }
 
-fn merge_bloom(
-    packets: &[HashMap<usize, RuntimeFilterPacket>],
-    rf_id: usize,
-) -> Option<HashSet<u64>> {
+fn merge_bloom(packets: &[HashMap<usize, RuntimeFilterPacket>], rf_id: usize) -> Option<Vec<u64>> {
     if packets
         .iter()
         .any(|packet| packet.get(&rf_id).unwrap().bloom.is_none())
@@ -140,7 +136,8 @@ fn merge_bloom(
         .unwrap()
         .clone();
     for packet in packets.iter().skip(1) {
-        bloom.extend(packet.get(&rf_id).unwrap().bloom.as_ref().unwrap().clone());
+        let other = packet.get(&rf_id).unwrap().bloom.as_ref().unwrap();
+        bloom.extend_from_slice(other);
     }
     Some(bloom)
 }
