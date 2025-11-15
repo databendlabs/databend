@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::format_byte_size;
 use databend_common_base::runtime::profile::get_statistics_desc;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -612,14 +613,46 @@ fn append_profile_info(
     plan_id: u32,
 ) {
     if let Some(prof) = profs.get(&plan_id) {
-        for (_, desc) in get_statistics_desc().iter() {
-            if prof.statistics[desc.index] != 0 {
-                children.push(FormatTreeNode::new(format!(
+        // Calculate total scan IO bytes for percentage
+        let total_scan_io = prof.statistics[ProfileStatisticsName::ScanBytesFromRemote as usize]
+            + prof.statistics[ProfileStatisticsName::ScanBytesFromLocal as usize]
+            + prof.statistics[ProfileStatisticsName::ScanBytesFromMemory as usize];
+
+        for (stat_name, desc) in get_statistics_desc().iter() {
+            let value = prof.statistics[desc.index];
+            if value == 0 {
+                continue;
+            }
+
+            // Add percentage for cache-related statistics
+            let display_text = if total_scan_io > 0 {
+                match stat_name {
+                    ProfileStatisticsName::ScanBytesFromRemote
+                    | ProfileStatisticsName::ScanBytesFromLocal
+                    | ProfileStatisticsName::ScanBytesFromMemory => {
+                        let percentage = (value as f64 / total_scan_io as f64) * 100.0;
+                        format!(
+                            "{}: {} ({:.2}%)",
+                            desc.display_name.to_lowercase(),
+                            desc.human_format(value),
+                            percentage
+                        )
+                    }
+                    _ => format!(
+                        "{}: {}",
+                        desc.display_name.to_lowercase(),
+                        desc.human_format(value)
+                    ),
+                }
+            } else {
+                format!(
                     "{}: {}",
                     desc.display_name.to_lowercase(),
-                    desc.human_format(prof.statistics[desc.index])
-                )));
-            }
+                    desc.human_format(value)
+                )
+            };
+
+            children.push(FormatTreeNode::new(display_text));
         }
     }
 }
