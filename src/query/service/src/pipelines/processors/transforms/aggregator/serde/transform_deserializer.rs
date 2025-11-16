@@ -19,9 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArrayType;
-use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -34,16 +32,12 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::UnknownMode;
-use databend_common_storages_parquet::deserialize_row_group_meta_from_bytes;
 
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
-use crate::pipelines::processors::transforms::aggregator::NEW_SPILLED_TYPE;
-use crate::pipelines::processors::transforms::aggregator::SPILLED_TYPE;
 use crate::servers::flight::v1::exchange::serde::deserialize_block;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::packets::DataPacket;
@@ -114,7 +108,7 @@ impl TransformDeserializer {
                     AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
                 ))
             }
-            SPILLED_TYPE => {
+            _ => {
                 let data_schema = Arc::new(exchange_defines::spilled_schema());
                 let arrow_schema = Arc::new(exchange_defines::spilled_arrow_schema());
                 let data_block =
@@ -156,45 +150,6 @@ impl TransformDeserializer {
                     buckets_payload,
                 )))
             }
-            NEW_SPILLED_TYPE => {
-                let data_schema = Arc::new(exchange_defines::new_spilled_schema());
-                let arrow_schema = Arc::new(exchange_defines::new_spilled_arrow_schema());
-                let data_block =
-                    deserialize_block(dict, fragment_data, &data_schema, arrow_schema.clone())?;
-
-                let columns = data_block
-                    .columns()
-                    .iter()
-                    .map(|c| c.as_column().unwrap().clone())
-                    .collect::<Vec<_>>();
-
-                let buckets = NumberType::<i64>::try_downcast_column(&columns[0]).unwrap();
-                let locations = StringType::try_downcast_column(&columns[1]).unwrap();
-                let row_groups = BinaryType::try_downcast_column(&columns[2]).unwrap();
-
-                let mut spilled_payloads = Vec::with_capacity(data_block.num_rows());
-                for index in 0..data_block.num_rows() {
-                    unsafe {
-                        let bucket = *buckets.get_unchecked(index) as isize;
-                        let location = locations.value_unchecked(index).to_string();
-                        let row_group_bytes = row_groups.index_unchecked(index);
-                        let row_group = deserialize_row_group_meta_from_bytes(row_group_bytes)?;
-
-                        spilled_payloads.push(NewSpilledPayload {
-                            bucket,
-                            location,
-                            row_group,
-                        });
-                    }
-                }
-
-                Ok(DataBlock::empty_with_meta(
-                    AggregateMeta::create_new_spilled(spilled_payloads),
-                ))
-            }
-            other => Err(ErrorCode::Internal(format!(
-                "Unknown aggregate serde meta type {other}"
-            ))),
         }
     }
 }

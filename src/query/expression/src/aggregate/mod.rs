@@ -60,9 +60,6 @@ pub(crate) const L2_CACHE_SIZE: usize = 1048576 / 2;
 // Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
 pub(crate) const L3_CACHE_SIZE: usize = 1572864 / 2;
 
-pub(crate) const MAX_RADIX_BITS: u64 = 7;
-pub const MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM: u64 = 1 << MAX_RADIX_BITS;
-
 #[derive(Clone, Debug)]
 pub struct HashTableConfig {
     // Max radix bits across all threads, this is a hint to repartition
@@ -80,7 +77,7 @@ impl Default for HashTableConfig {
         Self {
             current_max_radix_bits: Arc::new(AtomicU64::new(3)),
             initial_radix_bits: 3,
-            max_radix_bits: MAX_RADIX_BITS,
+            max_radix_bits: 7,
             repartition_radix_bits_incr: 2,
             block_fill_factor: 1.8,
             partial_agg: false,

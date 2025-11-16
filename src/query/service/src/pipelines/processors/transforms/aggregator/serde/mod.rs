@@ -53,19 +53,6 @@ pub mod exchange_defines {
         Schema::from(&schema)
     }
 
-    pub fn new_spilled_schema() -> DataSchema {
-        DataSchema::new(vec![
-            DataField::new("bucket", DataType::Number(NumberDataType::Int64)),
-            DataField::new("location", DataType::String),
-            DataField::new("row_group", DataType::Binary),
-        ])
-    }
-
-    pub fn new_spilled_arrow_schema() -> Schema {
-        let schema = new_spilled_schema();
-        Schema::from(&schema)
-    }
-
     pub fn spilled_write_options() -> IpcWriteOptions {
         IpcWriteOptions::default()
     }

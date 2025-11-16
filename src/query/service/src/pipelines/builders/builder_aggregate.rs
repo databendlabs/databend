@@ -36,10 +36,9 @@ impl PipelineBuilder {
         agg_funcs: &[AggregateFunctionDesc],
         enable_experimental_aggregate_hashtable: bool,
         cluster_aggregator: bool,
+        max_block_size: usize,
         max_spill_io_requests: usize,
         enable_experiment_aggregate: bool,
-        max_block_rows: usize,
-        max_block_bytes: usize,
     ) -> Result<Arc<AggregatorParams>> {
         let mut agg_args = Vec::with_capacity(agg_funcs.len());
         let (group_by, group_data_types) = group_by
@@ -132,10 +131,9 @@ impl PipelineBuilder {
             &agg_args,
             enable_experimental_aggregate_hashtable,
             cluster_aggregator,
+            max_block_size,
             max_spill_io_requests,
             enable_experiment_aggregate,
-            max_block_rows,
-            max_block_bytes,
         )?;
 
         log::debug!("aggregate states layout: {:?}", params.states_layout);

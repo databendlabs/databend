@@ -22,7 +22,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
-use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_settings::FlightCompression;
@@ -32,8 +31,6 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::NewTransformAggregateSpillWriter;
-use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
@@ -62,6 +59,7 @@ impl ExchangeSorting for AggregateExchangeSorting {
                 ))),
                 Some(meta_info) => match meta_info {
                     AggregateMeta::Partitioned { .. } => unreachable!(),
+                    AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                     AggregateMeta::Serialized(v) => {
                         compute_block_number(v.bucket, v.max_partition_count)
                     }
@@ -70,9 +68,7 @@ impl ExchangeSorting for AggregateExchangeSorting {
                     }
                     AggregateMeta::AggregateSpilling(_)
                     | AggregateMeta::Spilled(_)
-                    | AggregateMeta::BucketSpilled(_)
-                    | AggregateMeta::NewBucketSpilled(_)
-                    | AggregateMeta::NewSpilled(_) => Ok(-1),
+                    | AggregateMeta::BucketSpilled(_) => Ok(-1),
                 },
             },
         }
@@ -187,7 +183,6 @@ impl FlightScatter for HashTableHashScatter {
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::NewBucketSpilled(_) => unreachable!(),
-                    AggregateMeta::NewSpilled(_) => unreachable!(),
                     AggregateMeta::AggregateSpilling(payload) => {
                         for p in scatter_partitioned_payload(payload, self.buckets)? {
                             blocks.push(DataBlock::empty_with_meta(
@@ -264,41 +259,21 @@ impl ExchangeInjector for AggregateInjector {
     ) -> Result<()> {
         let params = self.aggregator_params.clone();
 
-        if self.aggregator_params.enable_experiment_aggregate {
-            let shared_partition_stream = SharedPartitionStream::new(
-                pipeline.output_len(),
-                self.aggregator_params.max_block_rows,
-                self.aggregator_params.max_block_bytes,
-                MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
-            );
+        let operator = DataOperator::instance().spill_operator();
+        let location_prefix = self.ctx.query_id_spill_prefix();
 
-            pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    NewTransformAggregateSpillWriter::try_create(
-                        input,
-                        output,
-                        self.ctx.clone(),
-                        shared_partition_stream.clone(),
-                    )?,
-                ))
-            })?;
-        } else {
-            let operator = DataOperator::instance().spill_operator();
-            let location_prefix = self.ctx.query_id_spill_prefix();
-
-            pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    TransformAggregateSpillWriter::try_create(
-                        self.ctx.clone(),
-                        input,
-                        output,
-                        operator.clone(),
-                        params.clone(),
-                        location_prefix.clone(),
-                    )?,
-                ))
-            })?;
-        }
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(
+                TransformAggregateSpillWriter::try_create(
+                    self.ctx.clone(),
+                    input,
+                    output,
+                    operator.clone(),
+                    params.clone(),
+                    location_prefix.clone(),
+                )?,
+            ))
+        })?;
 
         pipeline.add_transform(|input, output| {
             TransformAggregateSerializer::try_create(input, output, params.clone())
@@ -315,24 +290,13 @@ impl ExchangeInjector for AggregateInjector {
         let operator = DataOperator::instance().spill_operator();
         let location_prefix = self.ctx.query_id_spill_prefix();
 
+        let schema = shuffle_params.schema.clone();
         let local_id = &shuffle_params.executor_id;
         let local_pos = shuffle_params
             .destination_ids
             .iter()
             .position(|x| x == local_id)
             .unwrap();
-
-        let mut partition_streams = vec![];
-        if self.aggregator_params.enable_experiment_aggregate {
-            for _i in 0..shuffle_params.destination_ids.len() {
-                partition_streams.push(SharedPartitionStream::new(
-                    pipeline.output_len(),
-                    self.aggregator_params.max_block_rows,
-                    self.aggregator_params.max_block_bytes,
-                    MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
-                ));
-            }
-        }
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
@@ -344,11 +308,12 @@ impl ExchangeInjector for AggregateInjector {
                     location_prefix.clone(),
                     params.clone(),
                     compression,
+                    schema.clone(),
                     local_pos,
-                    partition_streams.clone(),
                 )?,
             ))
         })?;
+
         pipeline.add_transform(TransformExchangeAsyncBarrier::try_create)
     }
 

@@ -142,8 +142,7 @@ impl IPhysicalPlan for AggregateFinal {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        let max_block_rows = builder.settings.get_max_block_size()? as usize;
-        let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
+        let max_block_size = builder.settings.get_max_block_size()?;
         let enable_experimental_aggregate_hashtable = builder
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
@@ -162,10 +161,9 @@ impl IPhysicalPlan for AggregateFinal {
             &self.agg_funcs,
             enable_experimental_aggregate_hashtable,
             is_cluster_aggregate,
+            max_block_size as usize,
             max_spill_io_requests as usize,
             enable_experiment_aggregate,
-            max_block_rows,
-            max_block_bytes,
         )?;
 
         if params.group_columns.is_empty() {

@@ -111,11 +111,6 @@ impl NewFinalAggregateTransform {
             }
             // Already a single payload for one upstream bucket.
             AggregateMeta::AggregatePayload(agg_payload) => agg_payload.payload,
-            AggregateMeta::NewSpilled(_) => {
-                return Err(ErrorCode::Internal(
-                    "New spilled payload must be restored before repartitioning",
-                ));
-            }
             _ => {
                 return Err(ErrorCode::Internal(
                     "Unexpected meta type for repartitioning",
@@ -269,7 +264,6 @@ impl NewFinalAggregateTransform {
                         agg_hashtable = Some(hashtable);
                     }
                 },
-                AggregateMeta::NewSpilled(_) => unreachable!(),
                 _ => unreachable!(),
             }
         }
@@ -315,11 +309,6 @@ impl NewFinalAggregateTransform {
                     AggregateMeta::AggregatePayload(AggregatePayload { payload, .. }) => {
                         let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
                         self.spiller.spill(id, data_block)?;
-                    }
-                    AggregateMeta::NewSpilled(_) => {
-                        return Err(ErrorCode::Internal(
-                            "New spilled payload should not exist in repartitioned queues",
-                        ));
                     }
                     _ => {
                         return Err(ErrorCode::Internal(
@@ -433,8 +422,7 @@ impl Processor for NewFinalAggregateTransform {
             RoundPhase::NewTask(meta) => {
                 let meta = match meta {
                     AggregateMeta::NewBucketSpilled(p) => self.spiller.restore(p)?,
-                    AggregateMeta::BucketSpilled(_) => unreachable!(),
-                    AggregateMeta::NewSpilled(_) => unreachable!(),
+                    AggregateMeta::BucketSpilled(p) => self.spiller.restore_legacy(p)?,
                     other => other,
                 };
                 self.repartition(meta)?;

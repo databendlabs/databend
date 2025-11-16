@@ -39,16 +39,13 @@ pub struct AggregatorParams {
 
     pub enable_experimental_aggregate_hashtable: bool,
     pub cluster_aggregator: bool,
+    pub max_block_size: usize,
     pub max_spill_io_requests: usize,
 
     pub enable_experiment_aggregate: bool,
-
-    pub max_block_rows: usize,
-    pub max_block_bytes: usize,
 }
 
 impl AggregatorParams {
-    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input_schema: DataSchemaRef,
         group_data_types: Vec<DataType>,
@@ -57,10 +54,9 @@ impl AggregatorParams {
         agg_args: &[Vec<usize>],
         enable_experimental_aggregate_hashtable: bool,
         cluster_aggregator: bool,
+        max_block_size: usize,
         max_spill_io_requests: usize,
         enable_experiment_aggregate: bool,
-        max_block_rows: usize,
-        max_block_bytes: usize,
     ) -> Result<Arc<AggregatorParams>> {
         let states_layout = if !agg_funcs.is_empty() {
             Some(get_states_layout(agg_funcs)?)
@@ -77,8 +73,7 @@ impl AggregatorParams {
             states_layout,
             enable_experimental_aggregate_hashtable,
             cluster_aggregator,
-            max_block_rows,
-            max_block_bytes,
+            max_block_size,
             max_spill_io_requests,
             enable_experiment_aggregate,
         }))

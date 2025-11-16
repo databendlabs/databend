@@ -101,7 +101,6 @@ impl TransformFinalAggregate {
                             agg_hashtable = Some(hashtable);
                         }
                     },
-                    AggregateMeta::NewSpilled(_) => unreachable!(),
                     _ => unreachable!(),
                 }
             }
