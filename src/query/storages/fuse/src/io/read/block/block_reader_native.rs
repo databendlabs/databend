@@ -85,16 +85,14 @@ impl BlockReader {
             let readers = column_node
                 .leaf_column_ids
                 .iter()
-                .map(|column_id| {
+                .filter_map(|column_id| {
                     let native_meta = part
                         .columns_meta
                         .get(column_id)
-                        .unwrap()
-                        .as_native()
-                        .unwrap();
-                    let data = column_buffers.get(column_id).unwrap();
+                        .and_then(ColumnMeta::as_native)?;
+                    let data = column_buffers.get(column_id)?;
                     let reader: Reader = Box::new(std::io::Cursor::new(data.clone()));
-                    NativeReader::new(reader, native_meta.pages.clone(), vec![])
+                    Some(NativeReader::new(reader, native_meta.pages.clone(), vec![]))
                 })
                 .collect();
 
