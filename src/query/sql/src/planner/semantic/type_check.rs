@@ -4939,6 +4939,7 @@ impl<'a> TypeChecker<'a> {
             Some(Vec::with_capacity(exprs.len()));
         let mut element_type: Option<DataType> = None;
 
+        let mut data_type_set = HashSet::with_capacity(2);
         for expr in exprs {
             let box (arg, data_type) = self.resolve(expr)?;
             if let Some(values) = constant_values.as_mut() {
@@ -4948,6 +4949,13 @@ impl<'a> TypeChecker<'a> {
                     _ => None,
                 };
                 if let Some(value) = maybe_constant {
+                    // If the data type has already been computed,
+                    // we don't need to compute the common type again.
+                    if data_type_set.contains(&data_type) {
+                        elems.push(arg);
+                        values.push((value, data_type));
+                        continue;
+                    }
                     element_type = if let Some(current_ty) = element_type.clone() {
                         common_super_type(
                             current_ty.clone(),
@@ -4959,6 +4967,7 @@ impl<'a> TypeChecker<'a> {
                     };
 
                     if element_type.is_some() {
+                        data_type_set.insert(data_type.clone());
                         values.push((value, data_type));
                     } else {
                         constant_values = None;

@@ -532,6 +532,12 @@ pub struct WindowAggregateRewriter<'a> {
 
 impl<'a> VisitorMut<'a> for WindowAggregateRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        if matches!(expr, ScalarExpr::WindowFunction(_)) {
+            return Err(ErrorCode::SemanticError(
+                "Window function cannot contain another window function".to_string(),
+            ));
+        }
+
         if let ScalarExpr::AggregateFunction(agg_func) = expr {
             let Some(agg) = self
                 .bind_context
