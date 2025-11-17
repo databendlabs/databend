@@ -70,25 +70,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
         let policy_id = RowAccessPolicyId::new(row_access_id);
         let mut txn = TxnRequest::default();
 
-        let res = self.get_id_and_value(name_ident).await?;
-        debug!(res :? = res, name_key :? =(name_ident); "create_row_access");
-
-        let mut curr_seq = 0;
-
-        if let Some((seq_id, seq_meta)) = res {
-            if req.can_replace {
-                let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
-
-                txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-
-                // TODO(eason): need to remove row policy from table meta
-
-                curr_seq = seq_id.seq;
-            } else {
-                return Ok(Err(name_ident.exist_error(func_name!())));
-            }
-        }
-
         // Create row policy by inserting these record:
         // name -> id
         // id -> policy
@@ -103,7 +84,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
 
         {
             let meta: RowAccessPolicyMeta = req.row_access_policy_meta.clone();
-            txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
+            txn.condition.push(txn_cond_eq_seq(name_ident, 0));
             txn.condition.push(txn_cond_eq_seq(&mask_name_ident, 0));
             txn.if_then.extend(vec![
                 txn_op_put_pb(name_ident, &policy_id, None)?, // name -> policy_id

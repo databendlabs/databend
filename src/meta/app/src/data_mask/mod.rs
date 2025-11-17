@@ -28,8 +28,6 @@ pub use mask_policy_policy_table_id_ident::MaskPolicyIdTableId;
 pub use mask_policy_policy_table_id_ident::MaskPolicyTableIdIdent;
 pub use mask_policy_table_id_list_ident::MaskPolicyTableIdListIdent;
 
-use crate::schema::CreateOption;
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DatamaskMeta {
     // Vec<(arg_name, arg_type)>
@@ -43,7 +41,6 @@ pub struct DatamaskMeta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDatamaskReq {
-    pub create_option: CreateOption,
     pub name: DataMaskNameIdent,
     pub data_mask_meta: DatamaskMeta,
 }
