@@ -459,12 +459,12 @@ pub struct timestamp_tz(pub i128);
 
 impl Hash for timestamp_tz {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.utc_timestamp().hash(state)
+        self.timestamp().hash(state)
     }
 }
 impl PartialEq for timestamp_tz {
     fn eq(&self, other: &Self) -> bool {
-        self.utc_timestamp() == other.utc_timestamp()
+        self.timestamp() == other.timestamp()
     }
 }
 impl PartialOrd for timestamp_tz {
@@ -475,8 +475,8 @@ impl PartialOrd for timestamp_tz {
 
 impl Ord for timestamp_tz {
     fn cmp(&self, other: &Self) -> Ordering {
-        let timestamp = self.utc_timestamp();
-        let other_micros = other.utc_timestamp();
+        let timestamp = self.timestamp();
+        let other_micros = other.timestamp();
         timestamp.cmp(&other_micros)
     }
 }
@@ -492,7 +492,7 @@ impl timestamp_tz {
     }
 
     #[inline]
-    pub fn utc_timestamp(&self) -> i64 {
+    pub fn timestamp(&self) -> i64 {
         self.0 as u64 as i64
     }
 
@@ -517,27 +517,15 @@ impl timestamp_tz {
     }
 
     #[inline]
-    pub fn local_timestamp(&self) -> i64 {
-        self.try_local_timestamp().unwrap_or_else(|| {
-            error!(
-                "timestamp_with_offset is out of range: timestamp={}, offset={}",
-                self.utc_timestamp(),
-                self.seconds_offset()
-            );
-            0
-        })
-    }
-
-    #[inline]
     pub fn try_local_timestamp(&self) -> Option<i64> {
         let offset_micros = self.micros_offset()?;
-        self.utc_timestamp().checked_add(offset_micros)
+        self.timestamp().checked_add(offset_micros)
     }
 }
 
 impl Display for timestamp_tz {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let timestamp = Timestamp::from_microsecond(self.utc_timestamp()).unwrap();
+        let timestamp = Timestamp::from_microsecond(self.timestamp()).unwrap();
 
         let offset = tz::Offset::from_seconds(self.seconds_offset()).unwrap();
         let string = strtime::format(

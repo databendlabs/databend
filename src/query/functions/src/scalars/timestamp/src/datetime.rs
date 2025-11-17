@@ -201,8 +201,8 @@ fn timestamp_tz_domain_to_timestamp_domain(
     domain: &SimpleDomain<timestamp_tz>,
 ) -> Option<SimpleDomain<i64>> {
     Some(SimpleDomain {
-        min: domain.min.utc_timestamp(),
-        max: domain.max.utc_timestamp(),
+        min: domain.min.timestamp(),
+        max: domain.max.timestamp(),
     })
 }
 
@@ -715,7 +715,7 @@ fn register_timestamp_tz_to_timestamp(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<TimestampTzType, TimestampType>(|val, output, _ctx| {
-            output.push(val.utc_timestamp())
+            output.push(val.timestamp())
         })(val, ctx)
     }
 }
@@ -959,7 +959,7 @@ fn register_timestamp_tz_to_date(registry: &mut FunctionRegistry) {
         let offset = Offset::from_seconds(val.seconds_offset()).map_err(|err| err.to_string())?;
 
         Ok(val
-            .utc_timestamp()
+            .timestamp()
             .to_timestamp(TimeZone::fixed(offset))
             .date()
             .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))

@@ -109,6 +109,6 @@ impl FixedLengthEncoding for timestamp_tz {
     type Encoded = [u8; 8];
 
     fn encode(self) -> [u8; 8] {
-        self.utc_timestamp().encode()
+        self.timestamp().encode()
     }
 }

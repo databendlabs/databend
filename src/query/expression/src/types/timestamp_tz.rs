@@ -180,9 +180,7 @@ mod tests {
         let value = string_to_timestamp_tz(b"2021-12-20 17:01:01 +0800", || &tz).expect("parse tz");
         assert_eq!(value.seconds_offset(), 28_800);
         // timestamp() keeps the UTC instant (09:01:01).
-        assert_eq!(value.utc_timestamp(), 1_639_990_861_000_000);
-        // local_timestamp() reconstructs the local wall clock (17:01:01).
-        assert_eq!(value.local_timestamp(), 1_640_019_661_000_000);
+        assert_eq!(value.timestamp(), 1_639_990_861_000_000);
         assert_eq!(value.to_string(), "2021-12-20 17:01:01.000000 +0800");
     }
 }
