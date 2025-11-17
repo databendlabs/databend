@@ -19,9 +19,9 @@ use mysql_async::Conn;
 use mysql_async::Pool;
 use mysql_async::Row;
 use sqllogictest::DBOutput;
-use sqllogictest::DefaultColumnType;
 
 use crate::error::Result;
+use crate::util::ColumnType;
 
 #[derive(Debug)]
 pub struct MySQLClient {
@@ -46,7 +46,7 @@ impl MySQLClient {
         self.bench = true;
     }
 
-    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
+    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<ColumnType>> {
         let start = Instant::now();
         let res = self.conn.query(sql).await;
 
@@ -75,8 +75,29 @@ impl MySQLClient {
             }
         };
 
+        let types = rows.first().map(|row| {
+            row.columns()
+                .iter()
+                .map(|c| {
+                    use mysql_async::consts::ColumnType::*;
+                    match c.column_type() {
+                        MYSQL_TYPE_TINY => ColumnType::Any,
+                        MYSQL_TYPE_SHORT | MYSQL_TYPE_LONG | MYSQL_TYPE_LONGLONG
+                        | MYSQL_TYPE_INT24 => ColumnType::Integer,
+                        MYSQL_TYPE_FLOAT | MYSQL_TYPE_DOUBLE | MYSQL_TYPE_DECIMAL => {
+                            ColumnType::FloatingPoint
+                        }
+                        MYSQL_TYPE_VAR_STRING | MYSQL_TYPE_STRING | MYSQL_TYPE_VARCHAR => {
+                            ColumnType::Text
+                        }
+                        _ => ColumnType::Any,
+                    }
+                })
+                .collect::<Vec<_>>()
+        });
+
         let mut parsed_rows = Vec::with_capacity(rows.len());
-        for row in rows.into_iter() {
+        for row in rows {
             let mut parsed_row = Vec::new();
             for i in 0..row.len() {
                 let value: Option<Option<String>> = row.get(i);
@@ -90,13 +111,9 @@ impl MySQLClient {
             }
             parsed_rows.push(parsed_row);
         }
-        let mut types = vec![];
-        if !parsed_rows.is_empty() {
-            types = vec![DefaultColumnType::Any; parsed_rows[0].len()];
-        }
-        // Todo: add types to compare
+
         Ok(DBOutput::Rows {
-            types,
+            types: types.unwrap_or_default(),
             rows: parsed_rows,
         })
     }

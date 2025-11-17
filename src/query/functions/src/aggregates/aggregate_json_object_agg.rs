@@ -51,6 +51,7 @@ use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
+use crate::aggregates::AggregateFunctionFeatures;
 
 pub(super) trait BinaryScalarStateFunc<V: ValueType>:
     BorshSerialize + BorshDeserialize + Send + 'static
@@ -444,5 +445,11 @@ pub fn try_create_aggregate_json_object_agg_function(
 }
 
 pub fn aggregate_json_object_agg_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_json_object_agg_function))
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_json_object_agg_function),
+        AggregateFunctionFeatures {
+            keep_nullable: true,
+            ..Default::default()
+        },
+    )
 }

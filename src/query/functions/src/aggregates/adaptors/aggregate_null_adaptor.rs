@@ -32,7 +32,6 @@ use super::AggrStateLoc;
 use super::AggrStateRegistry;
 use super::AggrStateType;
 use super::AggregateFunction;
-use super::AggregateFunctionFeatures;
 use super::AggregateFunctionRef;
 use super::AggregateNullResultFunction;
 use super::StateAddr;
@@ -57,20 +56,15 @@ impl AggregateFunctionCombinatorNull {
         Ok(results)
     }
 
-    pub fn transform_params(params: &[Scalar]) -> Result<Vec<Scalar>> {
-        Ok(params.to_owned())
-    }
-
     pub fn try_create(
-        _name: &str,
         params: Vec<Scalar>,
         arguments: Vec<DataType>,
         nested: AggregateFunctionRef,
-        properties: AggregateFunctionFeatures,
+        returns_default_when_only_null: bool,
     ) -> Result<AggregateFunctionRef> {
         // has_null_types
         if arguments.iter().any(|f| f == &DataType::Null) {
-            if properties.returns_default_when_only_null {
+            if returns_default_when_only_null {
                 return AggregateNullResultFunction::try_create(DataType::Number(
                     NumberDataType::UInt64,
                 ));
@@ -78,7 +72,6 @@ impl AggregateFunctionCombinatorNull {
                 return AggregateNullResultFunction::try_create(DataType::Null);
             }
         }
-        let params = Self::transform_params(&params)?;
         let arguments = Self::transform_arguments(&arguments)?;
         let size = arguments.len();
 
@@ -90,8 +83,7 @@ impl AggregateFunctionCombinatorNull {
         }
 
         let return_type = nested.return_type()?;
-        let result_is_null =
-            !properties.returns_default_when_only_null && return_type.can_inside_nullable();
+        let result_is_null = !returns_default_when_only_null && return_type.can_inside_nullable();
 
         match size {
             1 => match result_is_null {
