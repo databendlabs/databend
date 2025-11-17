@@ -70,15 +70,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
         let mut txn = TxnRequest::default();
 
-        let res = self.get_id_and_value(name_ident).await?;
-        debug!(res :? = res, name_key :? =(name_ident); "create_data_mask");
-
-        if res.is_some() {
-            return Ok(Err(
-                name_ident.exist_error(format!("{} already exists", req.name))
-            ));
-        }
-
         // Create data mask by inserting these record:
         // name -> id
         // id -> policy

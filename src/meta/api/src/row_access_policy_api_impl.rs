@@ -70,13 +70,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> RowAccessPolicyApi for KV {
         let policy_id = RowAccessPolicyId::new(row_access_id);
         let mut txn = TxnRequest::default();
 
-        let res = self.get_id_and_value(name_ident).await?;
-        debug!(res :? = res, name_key :? =(name_ident); "create_row_access");
-
-        if res.is_some() {
-            return Ok(Err(name_ident.exist_error(func_name!())));
-        }
-
         // Create row policy by inserting these record:
         // name -> id
         // id -> policy
