@@ -492,12 +492,6 @@ impl timestamp_tz {
     }
 
     #[inline]
-    pub fn new_local(timestamp: i64, offset: i32) -> Self {
-        let ts = Self::encode_utc(timestamp, offset);
-        Self::new(ts, offset)
-    }
-
-    #[inline]
     pub fn utc_timestamp(&self) -> i64 {
         self.0 as u64 as i64
     }
@@ -538,24 +532,6 @@ impl timestamp_tz {
     pub fn try_local_timestamp(&self) -> Option<i64> {
         let offset_micros = self.micros_offset()?;
         self.utc_timestamp().checked_add(offset_micros)
-    }
-
-    #[inline]
-    fn encode_utc(timestamp: i64, offset: i32) -> i64 {
-        let Some(offset_micros) = Self::micros_offset_inner(offset as i64) else {
-            error!(
-                "timestamp offset is out of range: timestamp={}, offset={}",
-                timestamp, offset
-            );
-            return 0;
-        };
-        timestamp.checked_sub(offset_micros).unwrap_or_else(|| {
-            error!(
-                "timestamp is out of range: timestamp={}, offset={}",
-                timestamp, offset
-            );
-            0
-        })
     }
 }
 

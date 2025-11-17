@@ -689,7 +689,10 @@ fn register_timestamp_to_timestamp_tz(registry: &mut FunctionRegistry) {
                 }
             };
             let offset = ctx.func_ctx.tz.to_offset(ts);
-            let ts_tz = timestamp_tz::new_local(val, offset.seconds());
+            let ts_tz = timestamp_tz::new(
+                val - (offset.seconds() as i64 * 1_000_000),
+                offset.seconds(),
+            );
 
             output.push(ts_tz)
         })(val, ctx)

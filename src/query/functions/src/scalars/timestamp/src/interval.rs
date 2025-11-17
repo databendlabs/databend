@@ -145,7 +145,9 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                             return;
                         }
                     };
-                    eval_timestamp_plus(a, b, output, ctx, |input| input.local_timestamp(), |result| timestamp_tz::new_local(result, a.seconds_offset()), TimeZone::fixed(offset));
+                    eval_timestamp_plus(a, b, output, ctx, |input| input.local_timestamp(), |result| {
+                        timestamp_tz::new(result - a.micros_offset().unwrap_or_default(), a.seconds_offset())
+                    }, TimeZone::fixed(offset));
                 },
             ),
         );
@@ -183,7 +185,9 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                             return;
                         }
                     };
-                    eval_timestamp_plus(a, b, output, ctx, |input| input.local_timestamp(), |result| timestamp_tz::new_local(result, a.seconds_offset()), TimeZone::fixed(offset));
+                    eval_timestamp_plus(a, b, output, ctx, |input| input.local_timestamp(), |result| {
+                        timestamp_tz::new(result - a.micros_offset().unwrap_or_default(), a.seconds_offset())
+                    }, TimeZone::fixed(offset));
                 },
             ),
         );
@@ -235,7 +239,9 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                             return;
                         }
                     };
-                    eval_timestamp_minus(a, b, output, ctx, |input| input.local_timestamp(), |result| timestamp_tz::new_local(result, a.seconds_offset()), TimeZone::fixed(offset));
+                    eval_timestamp_minus(a, b, output, ctx, |input| input.local_timestamp(), |result| {
+                        timestamp_tz::new(result - a.micros_offset().unwrap_or_default(), a.seconds_offset())
+                    }, TimeZone::fixed(offset));
                 },
             ),
         );

@@ -154,8 +154,8 @@ pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a TimeZone>(
             let timestamp = tz::offset(0).to_timestamp(datetime)?;
             let offset = fn_tz().to_offset(timestamp);
 
-            Ok(timestamp_tz::new_local(
-                timestamp.as_microsecond(),
+            Ok(timestamp_tz::new(
+                timestamp.as_microsecond() - (offset.seconds() as i64 * 1_000_000),
                 offset.seconds(),
             ))
         }
