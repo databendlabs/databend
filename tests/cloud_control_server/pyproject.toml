@@ -9,3 +9,8 @@ dependencies = [
     "grpcio-reflection",
     "protobuf",
 ]
+
+[dependency-groups]
+dev = [
+    "grpcio-tools",
+]
