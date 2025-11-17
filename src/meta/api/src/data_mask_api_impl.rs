@@ -25,7 +25,6 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::KeyWithTenant;
@@ -71,31 +70,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
         let mut txn = TxnRequest::default();
 
-        let res = self.get_id_and_value(name_ident).await?;
-        debug!(res :? = res, name_key :? =(name_ident); "create_data_mask");
-
-        let mut curr_seq = 0;
-
-        if let Some((seq_id, seq_meta)) = res {
-            match req.create_option {
-                CreateOption::Create => {
-                    return Ok(Err(
-                        name_ident.exist_error(format!("{} already exists", req.name))
-                    ));
-                }
-                CreateOption::CreateIfNotExists => {
-                    return Ok(Ok(CreateDatamaskReply { id: *seq_id.data }));
-                }
-                CreateOption::CreateOrReplace => {
-                    let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
-
-                    txn_delete_exact(&mut txn, &id_ident, seq_meta.seq);
-
-                    curr_seq = seq_id.seq;
-                }
-            };
-        }
-
         // Create data mask by inserting these record:
         // name -> id
         // id -> policy
@@ -114,7 +88,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
         {
             let meta: DatamaskMeta = req.data_mask_meta.clone();
             let id_list = MaskpolicyTableIdList::default();
-            txn.condition.push(txn_cond_eq_seq(name_ident, curr_seq));
+            txn.condition.push(txn_cond_eq_seq(name_ident, 0));
             txn.condition
                 .push(txn_cond_eq_seq(&row_access_name_ident, 0));
             txn.if_then.extend(vec![
