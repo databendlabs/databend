@@ -179,7 +179,7 @@ impl AggregatePayloadWriters {
             if written_size != 0 {
                 info!(
                     "Write aggregate spill finished({}): (bucket: {}, location: {}, bytes: {}, rows: {}, batch_count: {})",
-                    self.is_local.then(|| "local").unwrap_or("exchange"),
+                    if self.is_local { "local" } else { "exchange" },
                     partition_id,
                     path,
                     written_size,
