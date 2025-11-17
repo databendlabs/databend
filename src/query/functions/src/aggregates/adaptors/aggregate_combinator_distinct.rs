@@ -36,6 +36,7 @@ use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
 use super::aggregate_distinct_state::DistinctStateFunc;
+use super::aggregate_null_result::AggregateNullResultFunction;
 use super::assert_variadic_arguments;
 use super::AggrState;
 use super::AggrStateLoc;
@@ -235,19 +236,27 @@ pub fn aggregate_count_distinct_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator_with_features(
         Box::new(|_, params, arguments, _| {
             let count_creator = Box::new(AggregateCountFunction::try_create) as _;
-            if matches!(*arguments, [DataType::Nullable(_)]) {
-                let new_arguments =
-                    AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
-                let nested = try_create(
-                    "count",
-                    params.clone(),
-                    new_arguments,
-                    vec![],
-                    &count_creator,
-                )?;
-                AggregateFunctionCombinatorNull::try_create(params, arguments, nested, true)
-            } else {
-                try_create("count", params, arguments, vec![], &count_creator)
+            match *arguments {
+                [DataType::Nullable(_)] => {
+                    let new_arguments =
+                        AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
+                    let nested = try_create(
+                        "count",
+                        params.clone(),
+                        new_arguments,
+                        vec![],
+                        &count_creator,
+                    )?;
+                    AggregateFunctionCombinatorNull::try_create(params, arguments, nested, true)
+                }
+                ref arguments
+                    if !arguments.is_empty() && arguments.iter().all(DataType::is_null) =>
+                {
+                    AggregateNullResultFunction::try_create(DataType::Number(
+                        NumberDataType::UInt64,
+                    ))
+                }
+                _ => try_create("count", params, arguments, vec![], &count_creator),
             }
         }),
         AggregateFunctionFeatures {

@@ -392,6 +392,14 @@ fn test_count(file: &mut impl Write, simulator: impl AggregationSimulator) {
 
 fn test_count_distinct(file: &mut impl Write, simulator: impl AggregationSimulator) {
     let columns = &get_example();
+    run_agg_ast(file, "count_distinct(null)", columns, simulator, vec![]);
+    run_agg_ast(
+        file,
+        "count_distinct(null,null)",
+        columns,
+        simulator,
+        vec![],
+    );
     run_agg_ast(file, "count_distinct(1)", columns, simulator, vec![]);
     run_agg_ast(file, "count_distinct(a)", columns, simulator, vec![]);
     run_agg_ast(file, "count_distinct(x_null)", columns, simulator, vec![]);
