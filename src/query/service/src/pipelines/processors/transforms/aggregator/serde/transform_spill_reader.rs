@@ -14,6 +14,9 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -190,19 +193,40 @@ impl Processor for TransformSpillReader {
                         .await?
                         .to_vec();
 
+                    let elapsed = instant.elapsed();
+
                     info!(
-                        "Read aggregate spill {} successfully, elapsed: {:?}",
+                        "Read aggregate finished: (location: {}, bytes: {}, elapsed: {:?})",
                         &payload.location,
-                        instant.elapsed()
+                        data.len(),
+                        elapsed
                     );
+
+                    // perf
+                    {
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::RemoteSpillReadCount,
+                            1,
+                        );
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::RemoteSpillReadBytes,
+                            data.len(),
+                        );
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::RemoteSpillReadTime,
+                            elapsed.as_millis() as usize,
+                        );
+                    }
 
                     self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
                 }
                 AggregateMeta::Partitioned { data, .. } => {
                     // For log progress.
-                    let mut total_elapsed = Duration::default();
                     let log_interval = 100;
-                    let mut processed_count = 0;
+                    let total_buckets = data.len();
+                    let total_elapsed = Arc::new(AtomicU64::new(0));
+                    let processed_count = Arc::new(AtomicUsize::new(0));
+                    let processed_bytes = Arc::new(AtomicUsize::new(0));
 
                     let mut read_data = Vec::with_capacity(data.len());
                     for meta in data {
@@ -211,6 +235,9 @@ impl Processor for TransformSpillReader {
                             let operator = self.operator.clone();
                             let data_range = payload.data_range.clone();
                             let semaphore = self.semaphore.clone();
+                            let total_elapsed = total_elapsed.clone();
+                            let processed_count = processed_count.clone();
+                            let processed_bytes = processed_bytes.clone();
                             read_data.push(databend_common_base::runtime::spawn(async move {
                                 let _guard = semaphore.acquire().await;
                                 let instant = Instant::now();
@@ -236,16 +263,21 @@ impl Processor for TransformSpillReader {
                                     );
                                 }
 
-                                total_elapsed += instant.elapsed();
-                                processed_count += 1;
+                                let elapsed = instant.elapsed();
+                                total_elapsed
+                                    .fetch_add(elapsed.as_millis() as u64, Ordering::Relaxed);
+                                let finished = processed_count.fetch_add(1, Ordering::Relaxed) + 1;
+                                processed_bytes.fetch_add(data.len(), Ordering::Relaxed);
 
                                 // log the progress
-                                if processed_count % log_interval == 0 {
+                                if finished % log_interval == 0 {
                                     info!(
                                         "Read aggregate {}/{} spilled buckets, elapsed: {:?}",
-                                        processed_count,
-                                        data.len(),
-                                        total_elapsed
+                                        finished,
+                                        total_buckets,
+                                        Duration::from_millis(
+                                            total_elapsed.load(Ordering::Relaxed)
+                                        )
                                     );
                                 }
 
@@ -266,10 +298,13 @@ impl Processor for TransformSpillReader {
                         }
                     };
 
+                    let processed_count = processed_count.load(Ordering::Relaxed);
                     if processed_count != 0 {
                         info!(
-                            "Read {} aggregate spills successfully, total elapsed: {:?}",
-                            processed_count, total_elapsed
+                            "Read aggregate finished: (total count: {}, total bytes: {}, total elapsed: {:?})",
+                            processed_count,
+                            processed_bytes.load(Ordering::Relaxed),
+                            Duration::from_millis(total_elapsed.load(Ordering::Relaxed))
                         );
                     }
                 }

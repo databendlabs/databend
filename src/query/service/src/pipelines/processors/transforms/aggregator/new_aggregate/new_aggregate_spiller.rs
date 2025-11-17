@@ -31,6 +31,7 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
 use log::debug;
+use log::info;
 use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;
 
@@ -46,6 +47,8 @@ use crate::spillers::SpillsDataWriter;
 
 struct PayloadWriter {
     path: String,
+    // TODO: this may change to lazy init, for now it will create 128*thread_num files at most even
+    // if the writer not used to write.
     writer: SpillsDataWriter,
 }
 
@@ -110,16 +113,23 @@ struct AggregatePayloadWriters {
     writers: Vec<PayloadWriter>,
     write_stats: WriteStats,
     ctx: Arc<QueryContext>,
+    is_local: bool,
 }
 
 impl AggregatePayloadWriters {
-    pub fn create(prefix: &str, partition_count: usize, ctx: Arc<QueryContext>) -> Self {
+    pub fn create(
+        prefix: &str,
+        partition_count: usize,
+        ctx: Arc<QueryContext>,
+        is_local: bool,
+    ) -> Self {
         AggregatePayloadWriters {
             spill_prefix: prefix.to_string(),
             partition_count,
             writers: vec![],
             write_stats: WriteStats::default(),
             ctx,
+            is_local,
         }
     }
 
@@ -165,6 +175,18 @@ impl AggregatePayloadWriters {
         let mut spilled_payloads = Vec::new();
         for (partition_id, writer) in writers.into_iter().enumerate() {
             let (path, written_size, row_groups) = writer.close()?;
+
+            if written_size != 0 {
+                info!(
+                    "Write aggregate spill finished({}): (bucket: {}, location: {}, bytes: {}, rows: {}, batch_count: {})",
+                    self.is_local.then(|| "local").unwrap_or("exchange"),
+                    partition_id,
+                    path,
+                    written_size,
+                    row_groups.iter().map(|rg| rg.num_rows()).sum::<i64>(),
+                    row_groups.len()
+                );
+            }
 
             self.ctx.add_spill_file(
                 Location::Remote(path.clone()),
@@ -276,13 +298,15 @@ impl NewAggregateSpiller {
         ctx: Arc<QueryContext>,
         partition_count: usize,
         partition_stream: SharedPartitionStream,
+        is_local: bool,
     ) -> Result<Self> {
         let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
         let spill_prefix = ctx.query_id_spill_prefix();
 
-        let payload_writers = AggregatePayloadWriters::create(&spill_prefix, partition_count, ctx);
+        let payload_writers =
+            AggregatePayloadWriters::create(&spill_prefix, partition_count, ctx, is_local);
 
         Ok(Self {
             memory_settings,
@@ -320,12 +344,21 @@ impl NewAggregateSpiller {
 
         let operator = DataOperator::instance().spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
-        let mut reader = buffer_pool.reader(operator.clone(), location, vec![row_group.clone()])?;
 
-        let read_bytes = row_group.total_byte_size() as usize;
+        let mut reader =
+            buffer_pool.reader(operator.clone(), location.clone(), vec![row_group.clone()])?;
+
         let instant = Instant::now();
         let data_block = reader.read(self.read_setting)?;
-        flush_read_profile(&instant, read_bytes);
+        let elapsed = instant.elapsed();
+
+        let read_size = reader.read_bytes();
+        flush_read_profile(&elapsed, read_size);
+
+        info!(
+            "Read aggregate spill finished: (bucket: {}, location: {}, bytes: {}, rows: {}, elapsed: {:?})",
+            bucket, location, read_size, row_group.num_rows(), elapsed
+        );
 
         if let Some(block) = data_block {
             Ok(AggregateMeta::Serialized(SerializedPayload {
@@ -339,12 +372,12 @@ impl NewAggregateSpiller {
     }
 }
 
-fn flush_read_profile(instant: &Instant, read_bytes: usize) {
+fn flush_read_profile(elapsed: &Duration, read_bytes: usize) {
     Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
     Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
     Profile::record_usize_profile(
         ProfileStatisticsName::RemoteSpillReadTime,
-        instant.elapsed().as_millis() as usize,
+        elapsed.as_millis() as usize,
     );
 }
 
