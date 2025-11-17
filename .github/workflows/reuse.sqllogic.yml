@@ -118,10 +118,13 @@ jobs:
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
       - name: Start Cloud Control Server
+        working-directory: tests/cloud_control_server
         run: |
-          pip install grpcio grpcio-reflection protobuf grpcio-tools
-          python3 tests/cloud_control_server/simple_server.py &
+          uv sync
+          uv run python simple_server.py &
           sleep 2
       - uses: ./.github/actions/test_cloud_sqllogic_standalone_linux
         timeout-minutes: 15
