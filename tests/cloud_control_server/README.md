@@ -4,9 +4,10 @@
 ### How to run
 #### setup cloud control mock grpc server
 ```sh
-pip install grpcio grpcio-reflection protobuf
+# Install dependencies using uv
+uv sync
 # start UDF server
-python3 simple_server.py
+uv run python simple_server.py
 ```
 #### make sure databend config is correct
 you need to add the setting to your config.toml
@@ -19,4 +20,3 @@ cloud_control_grpc_server_address = "http://0.0.0.0:50051"
 ```sh
 ./target/debug/databend-sqllogictests --run_dir task
 ```
-
