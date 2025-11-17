@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
 
 use crate::types::i256;
 use crate::types::F32;
@@ -101,5 +102,13 @@ impl FixedLengthEncoding for months_days_micros {
 
     fn encode(self) -> [u8; 8] {
         self.total_micros().encode()
+    }
+}
+
+impl FixedLengthEncoding for timestamp_tz {
+    type Encoded = [u8; 8];
+
+    fn encode(self) -> [u8; 8] {
+        self.utc_timestamp().encode()
     }
 }

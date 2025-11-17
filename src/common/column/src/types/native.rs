@@ -440,7 +440,6 @@ impl Neg for months_days_micros {
     }
 }
 
-/// The in-memory representation of the MonthDayNano variant of the "Interval" logical type.
 #[derive(
     Debug,
     Copy,
@@ -460,12 +459,12 @@ pub struct timestamp_tz(pub i128);
 
 impl Hash for timestamp_tz {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.total_micros().hash(state)
+        self.utc_timestamp().hash(state)
     }
 }
 impl PartialEq for timestamp_tz {
     fn eq(&self, other: &Self) -> bool {
-        self.total_micros() == other.total_micros()
+        self.utc_timestamp() == other.utc_timestamp()
     }
 }
 impl PartialOrd for timestamp_tz {
@@ -476,23 +475,30 @@ impl PartialOrd for timestamp_tz {
 
 impl Ord for timestamp_tz {
     fn cmp(&self, other: &Self) -> Ordering {
-        let total_micros = self.total_micros();
-        let other_micros = other.total_micros();
-        total_micros.cmp(&other_micros)
+        let timestamp = self.utc_timestamp();
+        let other_micros = other.utc_timestamp();
+        timestamp.cmp(&other_micros)
     }
 }
 
 impl timestamp_tz {
     pub const MICROS_PER_SECOND: i64 = 1_000_000;
 
+    #[inline]
     pub fn new(timestamp: i64, offset: i32) -> Self {
-        let ts = timestamp as u64 as i128; // <- 中间加一次 u64 屏蔽符号位
+        let ts = timestamp as u64 as i128;
         let off = (offset as i128) << 64;
         Self(off | ts)
     }
 
     #[inline]
-    pub fn timestamp(&self) -> i64 {
+    pub fn new_local(timestamp: i64, offset: i32) -> Self {
+        let ts = Self::encode_utc(timestamp, offset);
+        Self::new(ts, offset)
+    }
+
+    #[inline]
+    pub fn utc_timestamp(&self) -> i64 {
         self.0 as u64 as i64
     }
 
@@ -507,16 +513,21 @@ impl timestamp_tz {
     }
 
     #[inline]
+    pub fn micros_offset_inner(seconds: i64) -> Option<i64> {
+        seconds.checked_mul(Self::MICROS_PER_SECOND)
+    }
+
+    #[inline]
     pub fn hours_offset(&self) -> i8 {
         (self.seconds_offset() / 3600) as i8
     }
 
     #[inline]
-    pub fn total_micros(&self) -> i64 {
-        self.try_total_micros().unwrap_or_else(|| {
+    pub fn local_timestamp(&self) -> i64 {
+        self.try_local_timestamp().unwrap_or_else(|| {
             error!(
-                "interval is out of range: timestamp={}, offset={}",
-                self.timestamp(),
+                "timestamp_with_offset is out of range: timestamp={}, offset={}",
+                self.utc_timestamp(),
                 self.seconds_offset()
             );
             0
@@ -524,15 +535,33 @@ impl timestamp_tz {
     }
 
     #[inline]
-    pub fn try_total_micros(&self) -> Option<i64> {
+    pub fn try_local_timestamp(&self) -> Option<i64> {
         let offset_micros = self.micros_offset()?;
-        self.timestamp().checked_sub(offset_micros)
+        self.utc_timestamp().checked_add(offset_micros)
+    }
+
+    #[inline]
+    fn encode_utc(timestamp: i64, offset: i32) -> i64 {
+        let Some(offset_micros) = Self::micros_offset_inner(offset as i64) else {
+            error!(
+                "timestamp offset is out of range: timestamp={}, offset={}",
+                timestamp, offset
+            );
+            return 0;
+        };
+        timestamp.checked_sub(offset_micros).unwrap_or_else(|| {
+            error!(
+                "timestamp is out of range: timestamp={}, offset={}",
+                timestamp, offset
+            );
+            0
+        })
     }
 }
 
 impl Display for timestamp_tz {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let timestamp = Timestamp::from_microsecond(self.total_micros()).unwrap();
+        let timestamp = Timestamp::from_microsecond(self.utc_timestamp()).unwrap();
 
         let offset = tz::Offset::from_seconds(self.seconds_offset()).unwrap();
         let string = strtime::format(
