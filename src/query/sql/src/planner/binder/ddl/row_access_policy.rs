@@ -39,7 +39,7 @@ impl Binder {
         stmt: &CreateRowAccessPolicyStmt,
     ) -> Result<Plan> {
         let CreateRowAccessPolicyStmt {
-            create_option,
+            if_not_exists,
             name,
             description,
             definition,
@@ -95,7 +95,7 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
         let plan = CreateRowAccessPolicyPlan {
-            create_option: create_option.clone().into(),
+            if_not_exists: *if_not_exists,
             tenant,
             name: normalize_identifier(name, &self.name_resolution_ctx).to_string(),
             row_access: definition.clone(),
