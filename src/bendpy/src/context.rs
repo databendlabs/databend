@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_version::BUILD_INFO;
 use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
@@ -63,11 +64,17 @@ impl PySessionContext {
                 databend_common_meta_app::principal::UserPrivilegeSet::available_privileges_on_global(),
             );
             // Grant account_admin role
-            user_info.grants.grant_role("account_admin".to_string());
-            user_info.option.set_default_role(Some("account_admin".to_string()));
+            user_info
+                .grants
+                .grant_role(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
+            user_info
+                .option
+                .set_default_role(Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()));
             // Set all flags to bypass various checks
             user_info.option.set_all_flag();
-            session.set_authed_user(user_info, Some("account_admin".to_string())).await?;
+            session
+                .set_authed_user(user_info, Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()))
+                .await?;
 
             Ok::<Arc<Session>, Box<dyn std::error::Error + Send + Sync>>(session)
         });

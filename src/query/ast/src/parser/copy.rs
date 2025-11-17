@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nom::branch::alt;
-use nom::combinator::map;
+use nom::Parser;
 use nom_rule::rule;
 
 use super::query::alias_name;
@@ -120,7 +119,8 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
             }
             CopyIntoLocation(copy_stmt)
         },
-    )(i)
+    )
+    .parse(i)
 }
 pub fn copy_into(i: Input) -> IResult<Statement> {
     rule!(
@@ -138,14 +138,15 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ copyOptions ]`"
-    )(i)
+    ).parse(i)
 }
 
 pub fn literal_string_or_variable(i: Input) -> IResult<LiteralStringOrVariable> {
     alt((
         map(literal_string, LiteralStringOrVariable::Literal),
         map(variable_ident, LiteralStringOrVariable::Variable),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
@@ -196,7 +197,8 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             rule! { RETURN_FAILED_ONLY ~ "=" ~ #literal_bool },
             |(_, _, return_failed_only)| CopyIntoTableOption::ReturnFailedOnly(return_failed_only),
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 fn copy_into_location_option(i: Input) -> IResult<CopyIntoLocationOption> {
@@ -227,5 +229,6 @@ fn copy_into_location_option(i: Input) -> IResult<CopyIntoLocationOption> {
         map(rule! { #file_format_clause }, |options| {
             CopyIntoLocationOption::FileFormat(options)
         }),
-    ))(i)
+    ))
+    .parse(i)
 }

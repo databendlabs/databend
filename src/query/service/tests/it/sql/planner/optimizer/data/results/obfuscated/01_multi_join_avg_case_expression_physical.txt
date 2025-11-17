@@ -33,14 +33,15 @@ Exchange
                             ├── keys is null equal: [false, false]
                             ├── filters: [b.a2c (#52) <= a.a0d (#0), b.a2k (#61) > a.a0d (#0)]
                             ├── build join filters:
-                            │   ├── filter id:2, build key:b.a0k (#48), probe key:a.a0k (#7), filter type:inlist,min_max
-                            │   └── filter id:3, build key:b.a0n (#50), probe key:a.a0n (#10), filter type:inlist,min_max
+                            │   ├── filter id:2, build key:b.a0k (#48), probe targets:[a.a0k (#7)@scan0], filter type:bloom,inlist,min_max
+                            │   └── filter id:3, build key:b.a0n (#50), probe targets:[a.a0n (#10)@scan0], filter type:bloom,inlist,min_max
                             ├── estimated rows: 8899220771657662846730240.00
                             ├── Exchange(Build)
                             │   ├── output columns: [b.a0k (#48), b.a0n (#50), b.a2c (#52), b.a2k (#61)]
                             │   ├── exchange type: Broadcast
                             │   └── TableScan
                             │       ├── table: default.default.a1z
+                            │       ├── scan id: 1
                             │       ├── output columns: [a0k (#48), a0n (#50), a2c (#52), a2k (#61)]
                             │       ├── read rows: 0
                             │       ├── read size: 0
@@ -56,7 +57,7 @@ Exchange
                                 ├── keys is null equal: [false]
                                 ├── filters: []
                                 ├── build join filters:
-                                │   └── filter id:1, build key:c.a0m (#149), probe key:a.a0m (#9), filter type:inlist,min_max
+                                │   └── filter id:1, build key:c.a0m (#149), probe targets:[a.a0m (#9)@scan0], filter type:bloom,inlist,min_max
                                 ├── estimated rows: 156490960961629056.00
                                 ├── Exchange(Build)
                                 │   ├── output columns: [c.a5m (#144), a0m (#149)]
@@ -67,6 +68,7 @@ Exchange
                                 │       ├── estimated rows: 63773.60
                                 │       └── TableScan
                                 │           ├── table: default.default.a2x
+                                │           ├── scan id: 2
                                 │           ├── output columns: [a0m (#74), a5m (#144)]
                                 │           ├── read rows: 0
                                 │           ├── read size: 0
@@ -82,13 +84,14 @@ Exchange
                                     ├── keys is null equal: [false]
                                     ├── filters: []
                                     ├── build join filters:
-                                    │   └── filter id:0, build key:d.a5t (#151), probe key:a.a0l (#8), filter type:inlist,min_max
+                                    │   └── filter id:0, build key:d.a5t (#151), probe targets:[a.a0l (#8)@scan0], filter type:bloom,inlist,min_max
                                     ├── estimated rows: 2453851765646.43
                                     ├── Exchange(Build)
                                     │   ├── output columns: [d.a5t (#151), d.a1v (#154)]
                                     │   ├── exchange type: Broadcast
                                     │   └── TableScan
                                     │       ├── table: default.default.a5r
+                                    │       ├── scan id: 3
                                     │       ├── output columns: [a5t (#151), a1v (#154)]
                                     │       ├── read rows: 0
                                     │       ├── read size: 0
@@ -98,6 +101,7 @@ Exchange
                                     │       └── estimated rows: 806.60
                                     └── TableScan(Probe)
                                         ├── table: default.default.a0c
+                                        ├── scan id: 0
                                         ├── output columns: [a0d (#0), a0k (#7), a0l (#8), a0m (#9), a0n (#10)]
                                         ├── read rows: 0
                                         ├── read size: 0

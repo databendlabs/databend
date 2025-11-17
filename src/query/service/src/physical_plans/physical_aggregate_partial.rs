@@ -27,6 +27,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
@@ -44,7 +45,9 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
+use crate::pipelines::processors::transforms::aggregator::NewTransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
+use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
 use crate::pipelines::PipelineBuilder;
@@ -167,10 +170,10 @@ impl IPhysicalPlan for AggregatePartial {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        builder.contain_sink_processor = true;
         self.input.build_pipeline(builder)?;
 
-        let max_block_size = builder.settings.get_max_block_size()?;
+        let max_block_rows = builder.settings.get_max_block_size()? as usize;
+        let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
         let max_threads = builder.settings.get_max_threads()?;
         let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
 
@@ -186,9 +189,10 @@ impl IPhysicalPlan for AggregatePartial {
             &self.agg_funcs,
             enable_experimental_aggregate_hashtable,
             builder.is_exchange_parent(),
-            max_block_size as usize,
             max_spill_io_requests as usize,
             enable_experiment_aggregate,
+            max_block_rows,
+            max_block_bytes,
         )?;
 
         if params.group_columns.is_empty() {
@@ -242,19 +246,37 @@ impl IPhysicalPlan for AggregatePartial {
         if !builder.is_exchange_parent() {
             let operator = DataOperator::instance().spill_operator();
             let location_prefix = builder.ctx.query_id_spill_prefix();
-
-            builder.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    TransformAggregateSpillWriter::try_create(
-                        builder.ctx.clone(),
-                        input,
-                        output,
-                        operator.clone(),
-                        params.clone(),
-                        location_prefix.clone(),
-                    )?,
-                ))
-            })?;
+            if params.enable_experiment_aggregate {
+                let shared_partition_stream = SharedPartitionStream::new(
+                    builder.main_pipeline.output_len(),
+                    max_block_rows,
+                    max_block_bytes,
+                    MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
+                );
+                builder.main_pipeline.add_transform(|input, output| {
+                    Ok(ProcessorPtr::create(
+                        NewTransformAggregateSpillWriter::try_create(
+                            input,
+                            output,
+                            builder.ctx.clone(),
+                            shared_partition_stream.clone(),
+                        )?,
+                    ))
+                })?;
+            } else {
+                builder.main_pipeline.add_transform(|input, output| {
+                    Ok(ProcessorPtr::create(
+                        TransformAggregateSpillWriter::try_create(
+                            builder.ctx.clone(),
+                            input,
+                            output,
+                            operator.clone(),
+                            params.clone(),
+                            location_prefix.clone(),
+                        )?,
+                    ))
+                })?;
+            }
         }
 
         builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());

@@ -14,6 +14,9 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::watch;
 use databend_common_base::base::tokio::sync::watch::Receiver;
@@ -23,42 +26,108 @@ use xorf::BinaryFuse16;
 
 #[derive(Clone, Default)]
 pub struct RuntimeFilterInfo {
-    pub inlist: Vec<Expr<String>>,
-    pub min_max: Vec<Expr<String>>,
-    pub bloom: Vec<(String, BinaryFuse16)>,
+    pub filters: Vec<RuntimeFilterEntry>,
 }
 
 impl Debug for RuntimeFilterInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "RuntimeFilterInfo {{ inlist: {}, min_max: {}, bloom: {:?} }}",
-            self.inlist
+            "RuntimeFilterInfo {{ filters: [{}] }}",
+            self.filters
                 .iter()
-                .map(|e| e.sql_display())
+                .map(|entry| format!("#{}(probe:{})", entry.id, entry.probe_expr.sql_display()))
                 .collect::<Vec<String>>()
-                .join(","),
-            self.min_max
-                .iter()
-                .map(|e| e.sql_display())
-                .collect::<Vec<String>>()
-                .join(","),
-            self.bloom
-                .iter()
-                .map(|(name, _)| name)
-                .collect::<Vec<&String>>()
+                .join(",")
         )
     }
 }
 
 impl RuntimeFilterInfo {
     pub fn is_empty(&self) -> bool {
-        self.inlist.is_empty() && self.bloom.is_empty() && self.min_max.is_empty()
+        self.filters.is_empty()
     }
 
     pub fn is_blooms_empty(&self) -> bool {
-        self.bloom.is_empty()
+        self.filters.iter().all(|entry| entry.bloom.is_none())
     }
+}
+
+#[derive(Clone)]
+pub struct RuntimeFilterEntry {
+    pub id: usize,
+    pub probe_expr: Expr<String>,
+    pub bloom: Option<RuntimeFilterBloom>,
+    pub inlist: Option<Expr<String>>,
+    pub min_max: Option<Expr<String>>,
+    pub stats: Arc<RuntimeFilterStats>,
+    pub build_rows: usize,
+    pub build_table_rows: Option<u64>,
+    pub enabled: bool,
+}
+
+#[derive(Clone)]
+pub struct RuntimeFilterBloom {
+    pub column_name: String,
+    pub filter: BinaryFuse16,
+}
+
+#[derive(Default)]
+pub struct RuntimeFilterStats {
+    bloom_time_ns: AtomicU64,
+    bloom_rows_filtered: AtomicU64,
+    inlist_min_max_time_ns: AtomicU64,
+    min_max_rows_filtered: AtomicU64,
+    min_max_partitions_pruned: AtomicU64,
+}
+
+impl RuntimeFilterStats {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn record_bloom(&self, time_ns: u64, rows_filtered: u64) {
+        self.bloom_time_ns.fetch_add(time_ns, Ordering::Relaxed);
+        self.bloom_rows_filtered
+            .fetch_add(rows_filtered, Ordering::Relaxed);
+    }
+
+    pub fn record_inlist_min_max(&self, time_ns: u64, rows_filtered: u64, partitions_pruned: u64) {
+        self.inlist_min_max_time_ns
+            .fetch_add(time_ns, Ordering::Relaxed);
+        self.min_max_rows_filtered
+            .fetch_add(rows_filtered, Ordering::Relaxed);
+        self.min_max_partitions_pruned
+            .fetch_add(partitions_pruned, Ordering::Relaxed);
+    }
+
+    pub fn snapshot(&self) -> RuntimeFilterStatsSnapshot {
+        RuntimeFilterStatsSnapshot {
+            bloom_time_ns: self.bloom_time_ns.load(Ordering::Relaxed),
+            bloom_rows_filtered: self.bloom_rows_filtered.load(Ordering::Relaxed),
+            inlist_min_max_time_ns: self.inlist_min_max_time_ns.load(Ordering::Relaxed),
+            min_max_rows_filtered: self.min_max_rows_filtered.load(Ordering::Relaxed),
+            min_max_partitions_pruned: self.min_max_partitions_pruned.load(Ordering::Relaxed),
+        }
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct RuntimeFilterStatsSnapshot {
+    pub bloom_time_ns: u64,
+    pub bloom_rows_filtered: u64,
+    pub inlist_min_max_time_ns: u64,
+    pub min_max_rows_filtered: u64,
+    pub min_max_partitions_pruned: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeFilterReport {
+    pub filter_id: usize,
+    pub has_bloom: bool,
+    pub has_inlist: bool,
+    pub has_min_max: bool,
+    pub stats: RuntimeFilterStatsSnapshot,
 }
 
 pub struct RuntimeFilterReady {

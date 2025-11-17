@@ -78,8 +78,10 @@ use crate::plan::PartInfoPtr;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
+use crate::runtime_filter_info::RuntimeFilterEntry;
 use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::runtime_filter_info::RuntimeFilterReady;
+use crate::runtime_filter_info::RuntimeFilterReport;
 use crate::session_type::SessionType;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
@@ -357,21 +359,24 @@ pub trait TableContext: Send + Sync {
 
     fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>>;
 
-    fn set_wait_runtime_filter(&self, table_index: usize, need_to_wait: bool);
-
-    fn get_wait_runtime_filter(&self, table_index: usize) -> bool;
-
     fn clear_runtime_filter(&self);
+    fn assert_no_runtime_filter_state(&self) -> Result<()> {
+        unimplemented!()
+    }
 
     fn set_merge_into_join(&self, join: MergeIntoJoin);
 
     fn get_merge_into_join(&self) -> MergeIntoJoin;
+
+    fn get_runtime_filters(&self, id: usize) -> Vec<RuntimeFilterEntry>;
 
     fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, BinaryFuse16)>;
 
     fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
 
     fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
+
+    fn runtime_filter_reports(&self) -> HashMap<usize, Vec<RuntimeFilterReport>>;
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
     fn txn_mgr(&self) -> TxnManagerRef;

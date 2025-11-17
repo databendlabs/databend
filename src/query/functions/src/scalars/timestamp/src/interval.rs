@@ -145,9 +145,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                             return;
                         }
                     };
-                    // EvalMonthsImpl::eval_timestamp will use tz to add offset to timestamp as local timestamp, so here we balance it by subtracting offset in advance
-                    // - input.micros_offset().unwrap_or(0)
-                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp() - input.micros_offset().unwrap_or(0), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
+                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp(), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
                 },
             ),
         );
@@ -185,9 +183,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                             return;
                         }
                     };
-                    // EvalMonthsImpl::eval_timestamp will use tz to add offset to timestamp as local timestamp, so here we balance it by subtracting offset in advance
-                    // - input.micros_offset().unwrap_or(0)
-                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp() - input.micros_offset().unwrap_or(0), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
+                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp(), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
                 },
             ),
         );
@@ -239,9 +235,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                             return;
                         }
                     };
-                    // EvalMonthsImpl::eval_timestamp will use tz to add offset to timestamp as local timestamp, so here we balance it by subtracting offset in advance
-                    // - input.micros_offset().unwrap_or(0)
-                    eval_timestamp_minus(a, b, output, ctx, |input| input.timestamp() - input.micros_offset().unwrap_or(0), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
+                    eval_timestamp_minus(a, b, output, ctx, |input| input.timestamp(), |result| timestamp_tz::new(result, a.seconds_offset()), TimeZone::fixed(offset));
                 },
             ),
         );

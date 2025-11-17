@@ -113,8 +113,12 @@ impl Aggregate {
         }
 
         match group_by_shuffle_mode.as_str() {
-            "before_partial" => Ok(Distribution::Hash(self.get_distribution_keys(true)?)),
-            "before_merge" => Ok(Distribution::Hash(self.get_distribution_keys(false)?)),
+            "before_partial" => Ok(Distribution::NodeToNodeHash(
+                self.get_distribution_keys(true)?,
+            )),
+            "before_merge" => Ok(Distribution::NodeToNodeHash(
+                self.get_distribution_keys(false)?,
+            )),
             value => Err(ErrorCode::Internal(format!(
                 "Bad settings value group_by_shuffle_mode = {:?}",
                 value

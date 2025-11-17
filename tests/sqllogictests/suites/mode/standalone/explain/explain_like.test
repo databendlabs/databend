@@ -23,6 +23,7 @@ Filter
 ├── estimated rows: 5.00
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [s (#0)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -45,6 +46,7 @@ Sort(Single)
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: [s (#0)]
         ├── read rows: 5
         ├── read size: < 1 KiB
@@ -72,6 +74,7 @@ Sort(Single)
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: [s (#0)]
         ├── read rows: 5
         ├── read size: < 1 KiB
@@ -99,6 +102,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [s (#0)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -125,6 +129,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [s (#0)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -148,6 +153,7 @@ Filter
 ├── estimated rows: 2.50
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [s (#0)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -171,6 +177,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [s (#0)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -192,6 +199,7 @@ explain select c from t1 where c like '%'
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [c (#0)]
 ├── read rows: 2
 ├── read size: < 1 KiB

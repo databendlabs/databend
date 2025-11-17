@@ -47,7 +47,7 @@ pub enum MaskingPolicyError {
 }
 
 impl MaskingPolicyError {
-    pub fn policy_in_use(_tenant: impl Into<String>, policy_name: impl Into<String>) -> Self {
+    pub fn policy_in_use(policy_name: impl Into<String>) -> Self {
         Self::PolicyInUse {
             policy_name: policy_name.into(),
         }
@@ -72,7 +72,7 @@ pub enum RowAccessPolicyError {
 }
 
 impl RowAccessPolicyError {
-    pub fn policy_in_use(_tenant: impl Into<String>, policy_name: impl Into<String>) -> Self {
+    pub fn policy_in_use(policy_name: impl Into<String>) -> Self {
         Self::PolicyInUse {
             policy_name: policy_name.into(),
         }

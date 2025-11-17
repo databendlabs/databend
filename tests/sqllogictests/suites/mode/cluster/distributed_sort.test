@@ -22,6 +22,7 @@ Sort(Final)
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t_distributed_sort
+            ├── scan id: 0
             ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
             ├── read rows: 0
             ├── read size: 0
@@ -56,6 +57,7 @@ Limit
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.t_distributed_sort
+                ├── scan id: 0
                 ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
                 ├── read rows: 0
                 ├── read size: 0
@@ -92,6 +94,7 @@ RowFetch
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.t_distributed_sort
+                    ├── scan id: 0
                     ├── output columns: [a (#0), _row_id (#7)]
                     ├── read rows: 0
                     ├── read size: 0
@@ -114,6 +117,7 @@ Limit
     ├── exchange type: Merge
     └── TableScan
         ├── table: default.system.numbers
+        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 1000
         ├── read size: 7.81 KiB
@@ -140,6 +144,7 @@ Limit
         ├── estimated rows: 110.00
         └── TableScan
             ├── table: default.system.numbers
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 110
             ├── read size: < 1 KiB
@@ -166,6 +171,7 @@ Limit
         ├── estimated rows: 110.00
         └── TableScan
             ├── table: default.system.numbers
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 110
             ├── read size: < 1 KiB

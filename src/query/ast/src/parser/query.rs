@@ -14,11 +14,8 @@
 
 use std::collections::BTreeMap;
 
-use nom::branch::alt;
-use nom::combinator::consumed;
-use nom::combinator::map;
-use nom::combinator::value;
 use nom::error::context;
+use nom::Parser;
 use nom_rule::rule;
 use pratt::Affix;
 use pratt::Associativity;
@@ -43,11 +40,12 @@ pub fn query(i: Input) -> IResult<Query> {
     context(
         "`SELECT ...`",
         map(set_operation, |set_expr| set_expr.into_query()),
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn set_operation(i: Input) -> IResult<SetExpr> {
-    let (rest, set_operation_elements) = rule! { #set_operation_element+ }(i)?;
+    let (rest, set_operation_elements) = rule! { #set_operation_element+ }.parse(i)?;
     run_pratt_parser(SetOperationParser, set_operation_elements, rest, i)
 }
 
@@ -232,7 +230,8 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             | #ignore_result
         }),
         |(span, elem)| WithSpan { span, elem },
-    )(i)
+    )
+    .parse(i)
 }
 
 struct SetOperationParser;
@@ -387,7 +386,8 @@ pub fn row_values(i: Input) -> IResult<Vec<Expr>> {
     map(
         rule! {"(" ~ #comma_separated_list1(expr) ~ ")"},
         |(_, row_values, _)| row_values,
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn with(i: Input) -> IResult<With> {
@@ -413,7 +413,8 @@ pub fn with(i: Input) -> IResult<With> {
             recursive: recursive.is_some(),
             ctes,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn exclude_col(i: Input) -> IResult<Vec<Identifier>> {
@@ -433,7 +434,8 @@ pub fn exclude_col(i: Input) -> IResult<Vec<Identifier>> {
     rule!(
         #var
         | #vars
-    )(i)
+    )
+    .parse(i)
 }
 
 #[allow(clippy::type_complexity)]
@@ -544,7 +546,8 @@ pub fn select_target(i: Input) -> IResult<SelectTarget> {
         | #columns_regexp
         | #columns_lambda
         | #projection
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
@@ -559,7 +562,8 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
 
     rule!(
         #at_stream | #at_snapshot_or_ts
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
@@ -578,7 +582,8 @@ pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
 
     rule!(
         #at_snapshot | #at_timestamp | #at_offset
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
@@ -606,7 +611,8 @@ pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
     rule!(
         #time_travel
         | #changes
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn alias_name(i: Input) -> IResult<Identifier> {
@@ -631,7 +637,8 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
     rule!(
         #short_alias
         | #as_alias
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn with_options(i: Input) -> IResult<WithOptions> {
@@ -645,7 +652,8 @@ pub fn with_options(i: Input) -> IResult<WithOptions> {
             },
             |(_, _, options, _)| WithOptions { options },
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
@@ -655,7 +663,8 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
             name,
             columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn table_alias_without_as(i: Input) -> IResult<TableAlias> {
@@ -665,7 +674,8 @@ pub fn table_alias_without_as(i: Input) -> IResult<TableAlias> {
             name,
             columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn join_operator(i: Input) -> IResult<JoinOperator> {
@@ -685,7 +695,8 @@ pub fn join_operator(i: Input) -> IResult<JoinOperator> {
         value(JoinOperator::LeftAsof, rule! { ASOF ~ LEFT }),
         value(JoinOperator::RightAsof, rule! { ASOF ~ RIGHT }),
         value(JoinOperator::Asof, rule! { ASOF }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
@@ -705,11 +716,12 @@ pub fn order_by_expr(i: Input) -> IResult<OrderByExpr> {
             asc: opt_asc.map(|asc| asc.kind == ASC),
             nulls_first: opt_nulls_first,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn table_reference(i: Input) -> IResult<TableReference> {
-    let (rest, table_reference_elements) = rule! { #table_reference_element+ }(i)?;
+    let (rest, table_reference_elements) = rule! { #table_reference_element+ }.parse(i)?;
     run_pratt_parser(TableReferenceParser, table_reference_elements, rest, i)
 }
 
@@ -729,7 +741,8 @@ pub fn table_function_param(i: Input) -> IResult<TableFunctionParam> {
 
     rule!(
         #named | #normal
-    )(i)
+    )
+    .parse(i)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -888,7 +901,8 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         | #join
         | #join_condition_on
         | #join_condition_using
-    })(i)?;
+    })
+    .parse(i)?;
     Ok((rest, WithSpan { span, elem }))
 }
 
@@ -903,7 +917,8 @@ fn pivot(i: Input) -> IResult<Pivot> {
             value_column,
             values,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 fn unpivot_name(i: Input) -> IResult<UnpivotName> {
@@ -927,7 +942,8 @@ fn unpivot_name(i: Input) -> IResult<UnpivotName> {
     map(
         rule! {#ident ~ (#short_alias | #as_alias)?},
         |(ident, alias)| UnpivotName { ident, alias },
-    )(i)
+    )
+    .parse(i)
 }
 
 // UNPIVOT(ident for ident IN (ident, ...))
@@ -941,7 +957,7 @@ fn unpivot(i: Input) -> IResult<Unpivot> {
             unpivot_column,
             column_names,
         },
-    )(i)
+    ).parse(i)
 }
 
 fn pivot_values(i: Input) -> IResult<PivotValues> {
@@ -960,7 +976,8 @@ fn pivot_values(i: Input) -> IResult<PivotValues> {
         map(query, |q| PivotValues::Subquery(Box::new(q))),
         // Parse expression list - must be last
         map(comma_separated_list1(expr), PivotValues::ColumnValues),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 fn get_table_sample(
@@ -1193,7 +1210,8 @@ pub fn group_by_items(i: Input) -> IResult<GroupBy> {
         } else {
             items.into_iter().next().unwrap()
         }
-    })(i)
+    })
+    .parse(i)
 }
 
 pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
@@ -1213,7 +1231,8 @@ pub fn window_frame_bound(i: Input) -> IResult<WindowFrameBound> {
         map(rule! { #subexpr(0) ~ FOLLOWING }, |(expr, _)| {
             WindowFrameBound::Following(Some(Box::new(expr)))
         }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameBound)> {
@@ -1225,7 +1244,8 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
         map(rule! { #window_frame_bound }, |s| {
             (s, WindowFrameBound::CurrentRow)
         }),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn window_spec(i: Input) -> IResult<WindowSpec> {
@@ -1254,7 +1274,8 @@ pub fn window_spec(i: Input) -> IResult<WindowSpec> {
                 }
             }),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn window_spec_ident(i: Input) -> IResult<Window> {
@@ -1271,7 +1292,8 @@ pub fn window_spec_ident(i: Input) -> IResult<Window> {
             },
             |window_name| Window::WindowReference(WindowRef { window_name }),
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn within_group(i: Input) -> IResult<Vec<OrderByExpr>> {
@@ -1280,7 +1302,8 @@ pub fn within_group(i: Input) -> IResult<Vec<OrderByExpr>> {
         WITHIN ~ GROUP ~ "(" ~ ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) ~ ")"
         },
         |(_, _, _, _, _, order_by, _)| order_by,
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn window_function(i: Input) -> IResult<WindowDesc> {
@@ -1292,7 +1315,8 @@ pub fn window_function(i: Input) -> IResult<WindowDesc> {
             ignore_nulls: opt_ignore_nulls.map(|key| key.0.kind == IGNORE),
             window: window.1,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
@@ -1304,5 +1328,6 @@ pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
             name: ident,
             spec: window,
         },
-    )(i)
+    )
+    .parse(i)
 }

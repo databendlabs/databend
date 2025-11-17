@@ -14,8 +14,12 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
+use databend_common_catalog::runtime_filter_info::RuntimeFilterBloom;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
@@ -31,6 +35,7 @@ use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use xorf::BinaryFuse16;
 
+use super::builder::should_enable_runtime_filter;
 use super::packet::JoinRuntimeFilterPacket;
 use super::packet::SerializableDomain;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
@@ -40,33 +45,71 @@ use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 ///
 /// The key in the resulting [`HashMap`] is the scan_id, which identifies the scan operator
 /// where the runtime filter will be applied. This is different from the runtime filter's own id,
+///
+/// Each runtime filter (identified by packet.id) is built once and then applied to multiple scans.
+/// The probe_targets in RuntimeFilterDesc specify all (probe_key, scan_id) pairs where this filter should be applied.
 pub fn build_runtime_filter_infos(
     packet: JoinRuntimeFilterPacket,
     runtime_filter_descs: HashMap<usize, &RuntimeFilterDesc>,
+    selectivity_threshold: u64,
 ) -> Result<HashMap<usize, RuntimeFilterInfo>> {
+    let total_build_rows = packet.build_rows;
     let Some(packets) = packet.packets else {
         return Ok(HashMap::new());
     };
     let mut filters: HashMap<usize, RuntimeFilterInfo> = HashMap::new();
+
+    // Iterate over all runtime filter packets
     for packet in packets.into_values() {
         let desc = runtime_filter_descs.get(&packet.id).unwrap();
-        let entry = filters.entry(desc.scan_id).or_default();
-        if let Some(inlist) = packet.inlist {
-            entry
-                .inlist
-                .push(build_inlist_filter(inlist, &desc.probe_key)?);
-        }
-        if let Some(min_max) = packet.min_max {
-            entry.min_max.push(build_min_max_filter(
-                min_max,
-                &desc.probe_key,
-                &desc.build_key,
-            )?);
-        }
-        if let Some(bloom) = packet.bloom {
-            entry
-                .bloom
-                .push(build_bloom_filter(bloom, &desc.probe_key)?);
+        let enabled = should_enable_runtime_filter(desc, total_build_rows, selectivity_threshold);
+
+        // Apply this single runtime filter to all probe targets (scan_id, probe_key pairs)
+        // This implements the design goal: "one runtime filter built once, pushed down to multiple scans"
+        for (probe_key, scan_id) in &desc.probe_targets {
+            let entry = filters.entry(*scan_id).or_default();
+
+            let runtime_entry = RuntimeFilterEntry {
+                id: desc.id,
+                probe_expr: probe_key.clone(),
+                bloom: if enabled {
+                    if let Some(ref bloom) = packet.bloom {
+                        Some(build_bloom_filter(bloom.clone(), probe_key)?)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                },
+                inlist: if enabled {
+                    if let Some(ref inlist) = packet.inlist {
+                        Some(build_inlist_filter(inlist.clone(), probe_key)?)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                },
+                min_max: if enabled {
+                    if let Some(ref min_max) = packet.min_max {
+                        Some(build_min_max_filter(
+                            min_max.clone(),
+                            probe_key,
+                            &desc.build_key,
+                        )?)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                },
+                stats: Arc::new(RuntimeFilterStats::new()),
+                build_rows: total_build_rows,
+                build_table_rows: desc.build_table_rows,
+                enabled,
+            };
+
+            entry.filters.push(runtime_entry);
         }
     }
     Ok(filters)
@@ -201,14 +244,14 @@ fn build_min_max_filter(
     Ok(min_max_filter)
 }
 
-fn build_bloom_filter(
-    bloom: HashSet<u64>,
-    probe_key: &Expr<String>,
-) -> Result<(String, BinaryFuse16)> {
+fn build_bloom_filter(bloom: HashSet<u64>, probe_key: &Expr<String>) -> Result<RuntimeFilterBloom> {
     let probe_key = probe_key.as_column_ref().unwrap();
     let hashes_vec = bloom.into_iter().collect::<Vec<_>>();
     let filter = BinaryFuse16::try_from(&hashes_vec)?;
-    Ok((probe_key.id.to_string(), filter))
+    Ok(RuntimeFilterBloom {
+        column_name: probe_key.id.to_string(),
+        filter,
+    })
 }
 
 #[cfg(test)]

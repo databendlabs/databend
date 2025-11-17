@@ -18,6 +18,7 @@ EvalScalar
     ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t1
+    │   ├── scan id: 0
     │   ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#4), f (#5)]
     │   ├── read rows: 0
     │   ├── read size: 0
@@ -36,6 +37,7 @@ EvalScalar
             ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.t1
+                ├── scan id: 1
                 ├── output columns: [a (#6), b (#7)]
                 ├── read rows: 0
                 ├── read size: 0

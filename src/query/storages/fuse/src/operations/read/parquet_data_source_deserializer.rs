@@ -23,9 +23,9 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -42,7 +42,6 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_sql::IndexType;
 use roaring::RoaringTreemap;
 use xorf::BinaryFuse16;
 
@@ -58,7 +57,6 @@ use crate::pruning::ExprBloomFilter;
 
 pub struct DeserializeDataTransform {
     ctx: Arc<dyn TableContext>,
-    table_index: IndexType,
     scan_id: usize,
     scan_progress: Arc<Progress>,
     block_reader: Arc<BlockReader>,
@@ -75,11 +73,16 @@ pub struct DeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
-    cached_runtime_filter: Option<Vec<(FieldIndex, BinaryFuse16)>>,
-    // for merge_into target build.
+    cached_runtime_filter: Option<Vec<BloomRuntimeFilterRef>>,
     need_reserve_block_info: bool,
-    need_wait_runtime_filter: bool,
-    runtime_filter_ready: Option<Arc<RuntimeFilterReady>>,
+}
+
+#[derive(Clone)]
+struct BloomRuntimeFilterRef {
+    column_index: FieldIndex,
+    filter_id: usize,
+    filter: BinaryFuse16,
+    stats: Arc<RuntimeFilterStats>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -95,8 +98,6 @@ impl DeserializeDataTransform {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let need_wait_runtime_filter =
-            !ctx.get_cluster().is_empty() && ctx.get_wait_runtime_filter(plan.scan_id);
 
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
         if let Some(virtual_reader) = virtual_reader.as_ref() {
@@ -116,8 +117,7 @@ impl DeserializeDataTransform {
         let output_schema: DataSchema = (&output_schema).into();
         let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
-            ctx,
-            table_index: plan.table_index,
+            ctx: ctx.clone(),
             scan_id: plan.scan_id,
             scan_progress,
             block_reader,
@@ -133,40 +133,60 @@ impl DeserializeDataTransform {
             base_block_ids: plan.base_block_ids.clone(),
             cached_runtime_filter: None,
             need_reserve_block_info,
-            need_wait_runtime_filter,
-            runtime_filter_ready: None,
         })))
     }
 
     fn runtime_filter(&mut self, data_block: DataBlock) -> Result<Option<Bitmap>> {
         // Check if already cached runtime filters
         if self.cached_runtime_filter.is_none() {
-            let bloom_filters = self.ctx.get_bloom_runtime_filter_with_id(self.table_index);
-            let bloom_filters = bloom_filters
+            let bloom_filters = self
+                .ctx
+                .get_runtime_filters(self.scan_id)
                 .into_iter()
-                .filter_map(|filter| {
-                    let name = filter.0.as_str();
-                    // Some probe keys are not in the schema, they are derived from expressions.
-                    self.src_schema
-                        .index_of(name)
-                        .ok()
-                        .map(|idx| (idx, filter.1.clone()))
+                .filter_map(|entry| {
+                    let filter_id = entry.id;
+                    let RuntimeFilterEntry { bloom, stats, .. } = entry;
+                    let bloom = bloom?;
+                    let column_index = self.src_schema.index_of(bloom.column_name.as_str()).ok()?;
+                    Some(BloomRuntimeFilterRef {
+                        column_index,
+                        filter_id,
+                        filter: bloom.filter.clone(),
+                        stats,
+                    })
                 })
-                .collect::<Vec<(FieldIndex, BinaryFuse16)>>();
+                .collect::<Vec<_>>();
             if bloom_filters.is_empty() {
                 return Ok(None);
             }
+            let mut filter_ids = bloom_filters
+                .iter()
+                .map(|f| f.filter_id)
+                .collect::<Vec<_>>();
+            filter_ids.sort_unstable();
+            log::info!(
+                "RUNTIME-FILTER: scan_id={} bloom_filters={} filter_ids={:?}",
+                self.scan_id,
+                bloom_filters.len(),
+                filter_ids
+            );
             self.cached_runtime_filter = Some(bloom_filters);
         }
 
         let mut bitmaps = vec![];
-        for (idx, filter) in self.cached_runtime_filter.as_ref().unwrap().iter() {
+        for runtime_filter in self.cached_runtime_filter.as_ref().unwrap().iter() {
             let mut bitmap = MutableBitmap::from_len_zeroed(data_block.num_rows());
-            let probe_block_entry = data_block.get_by_offset(*idx);
+            let probe_block_entry = data_block.get_by_offset(runtime_filter.column_index);
             let probe_column = probe_block_entry.to_column();
 
             // Apply bloom filter
-            ExprBloomFilter::new(filter.clone()).apply(probe_column, &mut bitmap)?;
+            let start = Instant::now();
+            ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column, &mut bitmap)?;
+            let elapsed = start.elapsed();
+            let unset_bits = bitmap.null_count();
+            runtime_filter
+                .stats
+                .record_bloom(elapsed.as_nanos() as u64, unset_bits as u64);
             bitmaps.push(bitmap);
         }
         if !bitmaps.is_empty() {
@@ -178,20 +198,6 @@ impl DeserializeDataTransform {
             Ok(rf_bitmap.into())
         } else {
             Ok(None)
-        }
-    }
-
-    fn need_wait_runtime_filter(&mut self) -> bool {
-        if !self.need_wait_runtime_filter {
-            return false;
-        }
-        self.need_wait_runtime_filter = false;
-        let runtime_filter_ready = self.ctx.get_runtime_filter_ready(self.scan_id);
-        if runtime_filter_ready.len() == 1 {
-            self.runtime_filter_ready = Some(runtime_filter_ready[0].clone());
-            true
-        } else {
-            false
         }
     }
 }
@@ -207,10 +213,6 @@ impl Processor for DeserializeDataTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.need_wait_runtime_filter() {
-            return Ok(Event::Async);
-        }
-
         if self.output.is_finished() {
             self.input.finish();
             return Ok(Event::Finished);
@@ -293,24 +295,23 @@ impl Processor for DeserializeDataTransform {
                     let origin_num_rows = data_block.num_rows();
 
                     let mut filter = None;
-                    if self.ctx.has_bloom_runtime_filters(self.table_index) {
-                        let start = Instant::now();
-                        let rows_before = data_block.num_rows();
-                        if let Some(bitmap) = self.runtime_filter(data_block.clone())? {
-                            data_block = data_block.filter_with_bitmap(&bitmap)?;
-                            filter = Some(bitmap);
-                            let rows_after = data_block.num_rows();
-                            let bloom_duration = start.elapsed();
+                    let bloom_start = Instant::now();
+
+                    let rows_before = data_block.num_rows();
+                    if let Some(bitmap) = self.runtime_filter(data_block.clone())? {
+                        data_block = data_block.filter_with_bitmap(&bitmap)?;
+                        filter = Some(bitmap);
+                        let rows_after = data_block.num_rows();
+                        let bloom_duration = bloom_start.elapsed();
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::RuntimeFilterBloomTime,
+                            bloom_duration.as_nanos() as usize,
+                        );
+                        if rows_before > rows_after {
                             Profile::record_usize_profile(
-                                ProfileStatisticsName::RuntimeFilterBloomTime,
-                                bloom_duration.as_nanos() as usize,
+                                ProfileStatisticsName::RuntimeFilterBloomRowsFiltered,
+                                rows_before - rows_after,
                             );
-                            if rows_before > rows_after {
-                                Profile::record_usize_profile(
-                                    ProfileStatisticsName::RuntimeFilterBloomRowsFiltered,
-                                    rows_before - rows_after,
-                                );
-                            }
                         }
                     }
 
@@ -370,19 +371,6 @@ impl Processor for DeserializeDataTransform {
             }
         }
 
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        let runtime_filter_ready = self.runtime_filter_ready.as_mut().unwrap();
-        let mut rx = runtime_filter_ready.runtime_filter_watcher.subscribe();
-        if (*rx.borrow()).is_some() {
-            return Ok(());
-        }
-        rx.changed()
-            .await
-            .map_err(|_| ErrorCode::TokioError("watcher's sender is dropped"))?;
         Ok(())
     }
 }

@@ -296,7 +296,7 @@ enquote = "1.1.0"
 enum-as-inner = "0.6"
 enum_dispatch = "0.3.13"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
-ethnum = { version = "1.5.1", features = ["serde", "macros"] }
+ethnum = { version = "1.5.2", features = ["serde", "macros"] }
 faststr = "0.2"
 feature-set = { version = "0.1.1" }
 feistel-permutation-rs = "0.1.1"
@@ -353,7 +353,7 @@ jaq-interpret = "1.5.0"
 jaq-parse = "1.0.3"
 jaq-std = "1.6.0"
 jiff = { version = "0.2.10", features = ["serde", "tzdb-bundle-always"] }
-jsonb = "0.5.4"
+jsonb = "0.5.5"
 jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
 levenshtein_automata = "0.2.1"
@@ -410,9 +410,9 @@ openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
 ] }
-opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", tag = "v0.9.0", features = ["tls"] }
+opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", tag = "v0.10.0", features = ["tls"] }
 orc-rust = "0.6.0"
-ordered-float = { version = "5.0.0", default-features = false }
+ordered-float = { version = "5.1.0", default-features = false }
 ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
@@ -457,6 +457,7 @@ rmp-serde = "1.1.1"
 roaring = { version = "^0.10", features = ["serde"] }
 rotbl = { version = "0.2.9", features = [] }
 rust_decimal = "1.26"
+rustc-hash = "2.1.0"
 rustix = { version = "0.38.37", features = ["fs"] }
 rustls = { version = "0.23.27", features = ["ring", "tls12"], default-features = false }
 rustls-pemfile = "2"
@@ -548,8 +549,8 @@ gix = "0.71.0"
 indent = "0.1.1"
 inventory = "0.3.15"
 logos = "0.12.1"
-nom = "7.1.1"
-nom-rule = "0.4"
+nom = "8.0.0"
+nom-rule = "0.5.1"
 pratt = "0.4.0"
 rspack-codespan-reporting = "0.11"
 rustc-demangle = "0.1"
@@ -651,7 +652,6 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
-jsonb = { git = "https://github.com/databendlabs/jsonb", rev = "425aae9" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.11" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "d82aa6d" }

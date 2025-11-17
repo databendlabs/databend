@@ -12,6 +12,7 @@ Sort(Single)
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.emp
+    ├── scan id: 0
     ├── output columns: [deptno (#0), job (#1), sal (#2)]
     ├── read rows: 0
     ├── read size: 0

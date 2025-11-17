@@ -39,6 +39,7 @@ AggregateFinal
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.t
+        ├── scan id: 0
         ├── output columns: []
         ├── read rows: 1000
         ├── read size: 3.92 KiB

@@ -18,6 +18,7 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::format_byte_size;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::IndexType;
@@ -32,6 +33,7 @@ pub struct FormatContext<'a> {
     pub metadata: &'a Metadata,
     pub profs: HashMap<u32, PlanProfile>,
     pub scan_id_to_runtime_filters: HashMap<IndexType, Vec<PhysicalRuntimeFilter>>,
+    pub runtime_filter_reports: HashMap<IndexType, Vec<RuntimeFilterReport>>,
 }
 
 pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata) -> String {

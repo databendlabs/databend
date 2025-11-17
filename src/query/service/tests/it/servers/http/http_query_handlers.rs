@@ -29,6 +29,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_version::DATABEND_SEMVER;
 use databend_query::servers::admin::v1::instance_status::instance_status_handler;
 use databend_query::servers::admin::v1::instance_status::InstanceStatus;
@@ -879,8 +881,8 @@ async fn test_role_apis() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     let body: ListRolesResponse = serde_json::from_str(&body).unwrap();
     assert_eq!(body.roles.len(), 2);
-    assert_eq!(body.roles[0].name, "account_admin");
-    assert_eq!(body.roles[1].name, "public");
+    assert_eq!(body.roles[0].name, BUILTIN_ROLE_ACCOUNT_ADMIN);
+    assert_eq!(body.roles[1].name, BUILTIN_ROLE_PUBLIC);
     Ok(())
 }
 
@@ -1214,7 +1216,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         nonce: None,
         custom: CustomClaims {
             tenant_id: None,
-            role: Some("account_admin".to_string()),
+            role: Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()),
             ensure_user: Some(EnsureUser::default()),
         },
     };
@@ -1222,9 +1224,10 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
     let token = key_pair.sign(claims)?;
     let bearer = headers::Authorization::bearer(&token).unwrap();
     assert_auth_current_user(&ep, user_name, bearer.clone(), "%").await?;
-    assert_auth_current_role(&ep, "account_admin", bearer.clone()).await?;
-    // assert_auth_current_role_with_restricted_role(&ep, "public", "public", bearer).await?;
-    assert_auth_current_role_with_role(&ep, "public", "public", bearer).await?;
+    assert_auth_current_role(&ep, BUILTIN_ROLE_ACCOUNT_ADMIN, bearer.clone()).await?;
+    // assert_auth_current_role_with_restricted_role(&ep, BUILTIN_ROLE_PUBLIC, BUILTIN_ROLE_PUBLIC, bearer).await?;
+    assert_auth_current_role_with_role(&ep, BUILTIN_ROLE_PUBLIC, BUILTIN_ROLE_PUBLIC, bearer)
+        .await?;
 
     Ok(())
 }
@@ -1459,7 +1462,7 @@ async fn test_affect() -> Result<()> {
             Some(HttpSessionConf {
                 catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
-                role: Some("account_admin".to_string()),
+                role: Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()),
                 secondary_roles: None,
                 settings: Some(BTreeMap::from([
                     ("max_threads".to_string(), "1".to_string()),
@@ -1482,7 +1485,7 @@ async fn test_affect() -> Result<()> {
             Some(HttpSessionConf {
                 catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
-                role: Some("account_admin".to_string()),
+                role: Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()),
                 secondary_roles: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1500,7 +1503,7 @@ async fn test_affect() -> Result<()> {
             Some(HttpSessionConf {
                 catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
-                role: Some("account_admin".to_string()),
+                role: Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()),
                 secondary_roles: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1520,7 +1523,7 @@ async fn test_affect() -> Result<()> {
             Some(HttpSessionConf {
                 catalog: Some("default".to_string()),
                 database: Some("db2".to_string()),
-                role: Some("account_admin".to_string()),
+                role: Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()),
                 secondary_roles: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
@@ -1542,7 +1545,7 @@ async fn test_affect() -> Result<()> {
             Some(HttpSessionConf {
                 catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
-                role: Some("account_admin".to_string()),
+                role: Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()),
                 secondary_roles: None,
                 settings: Some(BTreeMap::from([(
                     "timezone".to_string(),
@@ -1591,13 +1594,13 @@ async fn test_session_secondary_roles() -> Result<()> {
         Some(vec!["role1".to_string()])
     );
 
-    let json = serde_json::json!({"sql":  "select 1", "session": {"role": "public", "secondary_roles": Vec::<String>::new()}});
+    let json = serde_json::json!({"sql":  "select 1", "session": {"role": BUILTIN_ROLE_PUBLIC, "secondary_roles": Vec::<String>::new()}});
     let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
     assert!(result.error.is_none());
     assert_eq!(result.state, ExecuteStateKind::Succeeded);
     assert_eq!(result.session.unwrap().secondary_roles, Some(vec![]));
 
-    let json = serde_json::json!({"sql":  "select 1", "session": {"role": "public"}});
+    let json = serde_json::json!({"sql":  "select 1", "session": {"role": BUILTIN_ROLE_PUBLIC}});
     let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
     assert!(result.error.is_none());
     assert_eq!(result.state, ExecuteStateKind::Succeeded);

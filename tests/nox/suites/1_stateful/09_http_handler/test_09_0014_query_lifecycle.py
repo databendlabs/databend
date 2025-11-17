@@ -8,6 +8,7 @@ auth = ("root", "")
 STICKY_HEADER = "X-DATABEND-STICKY-NODE"
 
 timezone = 'Asia/Shanghai'
+geometry_output_format = 'EWKB'
 
 scan_progress = "scan_progress"
 
@@ -25,7 +26,8 @@ def do_query(query, timeout=10, pagination=None, port=8000, patch=True):
     session = {
         "settings": {
             "http_handler_result_timeout_secs": f"{timeout}",
-            "timezone": f"{timezone}"
+            "timezone": f"{timezone}",
+            "geometry_output_format": f"{geometry_output_format}"
         }
     }
 
@@ -154,7 +156,8 @@ def test_query_lifecycle_finalized(rows):
            "final_uri": f"/v1/query/{query_id}/final",
            "next_uri": f"/v1/query/{query_id}/page/1",
            "kill_uri": f"/v1/query/{query_id}/kill",
-           'settings': {'timezone': 'Asia/Shanghai'},
+           'settings': {'timezone': 'Asia/Shanghai',
+                        "geometry_output_format": f"{geometry_output_format}" },
            'session': {'catalog': 'default',
                        'database': 'default',
                        'internal': sessions_internal,
@@ -162,7 +165,8 @@ def test_query_lifecycle_finalized(rows):
                        'need_sticky': False,
                        'role': 'account_admin',
                        'settings': {'http_handler_result_timeout_secs': f'{timeout}',
-                                    'timezone': f"{timezone}"},
+                                    'timezone': f"{timezone}",
+                                    "geometry_output_format": f"{geometry_output_format}" },
                        'txn_state': 'AutoCommit'}
            }
 
@@ -191,7 +195,6 @@ def test_query_lifecycle_finalized(rows):
 
     # not return session since nothing changed
     exp["session"] = None
-    del exp["settings"] # only in the first resp
     exp["state"] = "Succeeded"
     if rows == 8:
         exp["next_uri"] = f"/v1/query/{query_id}/page/2"

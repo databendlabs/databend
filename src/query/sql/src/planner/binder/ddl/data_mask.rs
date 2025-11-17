@@ -29,19 +29,13 @@ impl Binder {
         stmt: &CreateDatamaskPolicyStmt,
     ) -> Result<Plan> {
         let CreateDatamaskPolicyStmt {
-            create_option,
+            if_not_exists,
             name,
             policy,
         } = stmt;
 
         // check if input type match to the return type
         let return_type = policy.return_type.to_string().to_lowercase();
-        // // TODO: support mult args in next pr
-        // if policy.args.len() > 1 {
-        // return Err(ErrorCode::InvalidArgument(
-        // "Mask policy only support one argument",
-        // ));
-        // }
         let policy_data_type = policy.args[0].arg_type.to_string().to_lowercase();
         if return_type != policy_data_type {
             return Err(ErrorCode::UnmatchMaskPolicyReturnType(format!(
@@ -52,7 +46,7 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
         let plan = CreateDatamaskPolicyPlan {
-            create_option: create_option.clone().into(),
+            if_not_exists: *if_not_exists,
             tenant,
             name: name.to_string(),
             policy: policy.clone(),

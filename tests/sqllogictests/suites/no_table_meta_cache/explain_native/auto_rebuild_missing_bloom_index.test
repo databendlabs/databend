@@ -26,6 +26,7 @@ explain select * from t where c = 6;
 ----
 TableScan
 ├── table: default.test_auto_rebuild_missing.t
+├── scan id: 0
 ├── output columns: [c (#0)]
 ├── read rows: 0
 ├── read size: 0
@@ -49,6 +50,7 @@ explain select * from t where c = 6;
 ----
 TableScan
 ├── table: default.test_auto_rebuild_missing.t
+├── scan id: 0
 ├── output columns: [c (#0)]
 ├── read rows: 5
 ├── read size: < 1 KiB
@@ -73,6 +75,7 @@ explain select * from t where c = 6;
 ----
 TableScan
 ├── table: default.test_auto_rebuild_missing.t
+├── scan id: 0
 ├── output columns: [c (#0)]
 ├── read rows: 0
 ├── read size: 0
@@ -109,6 +112,7 @@ explain select * from t where s = '12';
 ----
 TableScan
 ├── table: default.test_auto_rebuild_missing.t
+├── scan id: 0
 ├── output columns: [c (#0), s (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -137,6 +141,7 @@ explain select * from t where c = 6;
 ----
 TableScan
 ├── table: default.test_auto_rebuild_missing.t
+├── scan id: 0
 ├── output columns: [c (#0), s (#1)]
 ├── read rows: 0
 ├── read size: 0

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
-use databend_common_meta_api::meta_txn_error::MetaTxnError;
 use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::row_access_policy::row_access_policy_name_ident::Resource;
@@ -29,6 +28,7 @@ use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_enterprise_row_access_policy_feature::row_access_policy_handler::RowAccessPolicyHandler;
 use databend_enterprise_row_access_policy_feature::row_access_policy_handler::RowAccessPolicyHandlerWrapper;
@@ -43,7 +43,7 @@ impl RowAccessPolicyHandler for RealRowAccessPolicyHandler {
         req: CreateRowAccessPolicyReq,
     ) -> std::result::Result<
         std::result::Result<CreateRowAccessPolicyReply, ExistError<Resource>>,
-        MetaTxnError,
+        MetaError,
     > {
         meta_api.create_row_access_policy(req).await
     }

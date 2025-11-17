@@ -37,7 +37,6 @@ use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
-use databend_common_meta_app::data_mask::DataMaskIdIdent;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
@@ -3184,7 +3183,6 @@ impl SchemaApiTestSuite {
         let mask2_id;
         {
             let req = CreateDatamaskReq {
-                create_option: CreateOption::CreateIfNotExists,
                 name: DataMaskNameIdent::new(tenant.clone(), mask_name_1.to_string()),
                 data_mask_meta: DatamaskMeta {
                     args: vec![],
@@ -3195,13 +3193,12 @@ impl SchemaApiTestSuite {
                     update_on: None,
                 },
             };
-            mt.create_data_mask(req).await?;
+            mt.create_data_mask(req).await??;
 
             let mask1_name_ident = DataMaskNameIdent::new(tenant.clone(), mask_name_1.to_string());
             mask1_id = get_kv_u64_data(mt, &mask1_name_ident).await?;
 
             let req = CreateDatamaskReq {
-                create_option: CreateOption::CreateIfNotExists,
                 name: DataMaskNameIdent::new(tenant.clone(), mask_name_2.to_string()),
                 data_mask_meta: DatamaskMeta {
                     args: vec![],
@@ -3212,7 +3209,7 @@ impl SchemaApiTestSuite {
                     update_on: None,
                 },
             };
-            mt.create_data_mask(req).await?;
+            mt.create_data_mask(req).await??;
 
             let mask2_name_ident = DataMaskNameIdent::new(tenant.clone(), mask_name_2.to_string());
             mask2_id = get_kv_u64_data(mt, &mask2_name_ident).await?;
@@ -3457,57 +3454,6 @@ impl SchemaApiTestSuite {
             assert!(res.is_none());
         }
 
-        info!("--- create or replace mask policy");
-        {
-            let mask_name = "replace_mask";
-            let name = DataMaskNameIdent::new(tenant.clone(), mask_name);
-            let req = CreateDatamaskReq {
-                create_option: CreateOption::CreateIfNotExists,
-                name: name.clone(),
-                data_mask_meta: DatamaskMeta {
-                    args: vec![],
-                    return_type: "".to_string(),
-                    body: "".to_string(),
-                    comment: Some("before".to_string()),
-                    create_on: created_on,
-                    update_on: None,
-                },
-            };
-            mt.create_data_mask(req).await?;
-            let old_id: u64 = get_kv_u64_data(mt, &name).await?;
-
-            let id_key = DataMaskIdIdent::new(&tenant, old_id);
-
-            let meta: DatamaskMeta = get_kv_data(mt, &id_key).await?;
-            assert_eq!(meta.comment, Some("before".to_string()));
-
-            let req = CreateDatamaskReq {
-                create_option: CreateOption::CreateOrReplace,
-                name: name.clone(),
-                data_mask_meta: DatamaskMeta {
-                    args: vec![],
-                    return_type: "".to_string(),
-                    body: "".to_string(),
-                    comment: Some("after".to_string()),
-                    create_on: created_on,
-                    update_on: None,
-                },
-            };
-            mt.create_data_mask(req).await?;
-
-            // assert old id key has been deleted
-            let meta: Result<DatamaskMeta, KVAppError> = get_kv_data(mt, &id_key).await;
-            assert!(meta.is_err());
-
-            let id: u64 = get_kv_u64_data(mt, &name).await?;
-            assert_ne!(old_id, id);
-
-            let id_key = DataMaskIdIdent::new(&tenant, id);
-
-            let meta: DatamaskMeta = get_kv_data(mt, &id_key).await?;
-            assert_eq!(meta.comment, Some("after".to_string()));
-        }
-
         Ok(())
     }
 
@@ -3549,7 +3495,6 @@ impl SchemaApiTestSuite {
         info!("--- create row access policy");
 
         let req = CreateRowAccessPolicyReq {
-            can_replace: false,
             name: RowAccessPolicyNameIdent::new(tenant.clone(), policy1.to_string()),
             row_access_policy_meta: RowAccessPolicyMeta {
                 args: vec![("number".to_string(), "UInt64".to_string())],
@@ -3559,14 +3504,13 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         };
-        mt.create_row_access_policy(req).await.unwrap().unwrap();
+        mt.create_row_access_policy(req).await??;
 
         let name = RowAccessPolicyNameIdent::new(tenant.clone(), policy1.to_string());
         let res = mt.get_row_access_policy(&name).await.unwrap().unwrap();
         let policy1_id = res.0.data;
 
         let req = CreateRowAccessPolicyReq {
-            can_replace: false,
             name: RowAccessPolicyNameIdent::new(tenant.clone(), policy2.to_string()),
             row_access_policy_meta: RowAccessPolicyMeta {
                 args: vec![("number".to_string(), "UInt64".to_string())],
@@ -3576,7 +3520,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         };
-        mt.create_row_access_policy(req).await.unwrap().unwrap();
+        mt.create_row_access_policy(req).await??;
 
         let table_id_1;
         info!("--- apply mask1 policy to table 1 and check");
@@ -3887,7 +3831,6 @@ impl SchemaApiTestSuite {
         let mask_cleanup_ident =
             DataMaskNameIdent::new(tenant.clone(), mask_cleanup_name.to_string());
         mt.create_data_mask(CreateDatamaskReq {
-            create_option: CreateOption::Create,
             name: mask_cleanup_ident.clone(),
             data_mask_meta: DatamaskMeta {
                 args: vec![],
@@ -3898,7 +3841,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         })
-        .await?;
+        .await??;
         let mask_cleanup_id = get_kv_u64_data(mt, &mask_cleanup_ident).await?;
 
         let set_req = SetTableColumnMaskPolicyReq {
@@ -3950,7 +3893,6 @@ impl SchemaApiTestSuite {
         // Create another masking policy and bind it.
         let mask_guard_ident = DataMaskNameIdent::new(tenant.clone(), mask_guard_name.to_string());
         mt.create_data_mask(CreateDatamaskReq {
-            create_option: CreateOption::Create,
             name: mask_guard_ident.clone(),
             data_mask_meta: DatamaskMeta {
                 args: vec![],
@@ -3961,7 +3903,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         })
-        .await?;
+        .await??;
         let mask_guard_id = get_kv_u64_data(mt, &mask_guard_ident).await?;
 
         table_info = util.get_table().await?;
@@ -4043,7 +3985,6 @@ impl SchemaApiTestSuite {
         let policy_cleanup_ident =
             RowAccessPolicyNameIdent::new(tenant.clone(), policy_cleanup_name.to_string());
         mt.create_row_access_policy(CreateRowAccessPolicyReq {
-            can_replace: false,
             name: policy_cleanup_ident.clone(),
             row_access_policy_meta: RowAccessPolicyMeta {
                 args: vec![("number".to_string(), "UInt64".to_string())],
@@ -4053,8 +3994,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         })
-        .await?
-        .unwrap();
+        .await??;
         let cleanup_policy_id = {
             let res = mt
                 .get_row_access_policy(&policy_cleanup_ident)
@@ -4118,7 +4058,6 @@ impl SchemaApiTestSuite {
         let policy_guard_ident =
             RowAccessPolicyNameIdent::new(tenant.clone(), policy_guard_name.to_string());
         mt.create_row_access_policy(CreateRowAccessPolicyReq {
-            can_replace: false,
             name: policy_guard_ident.clone(),
             row_access_policy_meta: RowAccessPolicyMeta {
                 args: vec![("number".to_string(), "UInt64".to_string())],
@@ -4128,8 +4067,7 @@ impl SchemaApiTestSuite {
                 update_on: None,
             },
         })
-        .await?
-        .unwrap();
+        .await??;
         let guard_policy_id = {
             let res = mt
                 .get_row_access_policy(&policy_guard_ident)

@@ -12,6 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+macro_rules! try_dispatch {
+    ($input:expr, $return_if_ok:literal, $($pat:pat => $body:expr),+ $(,)?) => {{
+        if let Some(token_0) = $input.tokens.first() {
+            use TokenKind::*;
+
+            if let Some(result) = match token_0.kind {
+                $($pat => Some($body),)+
+                _ => None,
+            } {
+                if !$return_if_ok || result.is_ok() {
+                    return result;
+                }
+            }
+        }
+    }};
+}
+
 mod comment;
 mod common;
 mod copy;

@@ -86,25 +86,11 @@ drop row access policy if exists rap1;
 statement ok
 drop row access policy if exists p1;
 
-statement error 2004
+statement error 1005
 create or replace row access policy rap_it as (empl_id varchar) returns boolean -> empl_id in (select * from t);
 
 statement ok
-create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
-  case
-      when 'it_admin' = current_role() then true
-      else false
-  end;
-
-statement ok
-create row access policy IF NOT EXISTS rap_it as (empl_id varchar) returns boolean ->
-  case
-      when 'it_admin' = current_role() then true
-      else false
-  end;
-
-statement ok
-create or replace row access policy rap_it as (empl_id string null) returns boolean ->
+create row access policy rap_it as (empl_id string null) returns boolean ->
   case
       when 'account_admin' = current_role() then false
       else true
@@ -147,7 +133,10 @@ select id from t_1 order by id;
 2
 
 statement ok
-create or replace row access policy rap_it1 as (empl_id string null) returns boolean ->
+drop row access policy if exists rap_it1;
+
+statement ok
+create row access policy rap_it1 as (empl_id string null) returns boolean ->
   case
       when empl_id = current_role() then false
       else true
@@ -269,11 +258,7 @@ statement error 1005
 CREATE OR REPLACE MASKING POLICY IF NOT EXISTS mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a replace masking policy'
 
 statement ok
-CREATE OR REPLACE MASKING POLICY mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a replace masking policy'
-
-statement ok
 drop MASKING POLICY if exists mask
-
 
 statement ok
 drop role if exists non_exists_role;
@@ -291,9 +276,6 @@ CREATE MASKING POLICY mask AS (val STRING) RETURNS STRING -> CASE WHEN current_r
 
 statement error 1005
 CREATE OR REPLACE MASKING POLICY IF NOT EXISTS mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('non_exists_role') THEN VAL ELSE '*********'END comment = 'this is a replace masking policy'
-
-statement ok
-CREATE OR REPLACE MASKING POLICY mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('non_exists_role') THEN VAL ELSE '*********'END comment = 'this is a replace masking policy'
 
 statement ok
 drop MASKING POLICY if exists mask
@@ -1089,6 +1071,3 @@ DROP MASKING POLICY mask_ssn_conditional;
 
 statement ok
 unset global enable_planner_cache;
-
-statement ok
-unset global enable_experimental_row_access_policy;

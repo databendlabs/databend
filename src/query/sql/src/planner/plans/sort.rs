@@ -111,7 +111,7 @@ impl Operator for Sort {
             .map(|s| s.scalar.clone())
             .collect();
         Ok(PhysicalProperty {
-            distribution: Distribution::Hash(partition_by),
+            distribution: Distribution::NodeToNodeHash(partition_by),
         })
     }
 
@@ -140,7 +140,7 @@ impl Operator for Sort {
             .iter()
             .map(|s| s.scalar.clone())
             .collect();
-        required.distribution = Distribution::Hash(partition_by);
+        required.distribution = Distribution::NodeToNodeHash(partition_by);
 
         Ok(required)
     }
@@ -170,7 +170,7 @@ impl Operator for Sort {
             .map(|s| s.scalar.clone())
             .collect();
 
-        required.distribution = Distribution::Hash(partition_by);
+        required.distribution = Distribution::NodeToNodeHash(partition_by);
         Ok(vec![vec![required]])
     }
 

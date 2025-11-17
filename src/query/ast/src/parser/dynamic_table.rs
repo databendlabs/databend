@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nom::branch::alt;
-use nom::branch::permutation;
-use nom::combinator::map;
-use nom::combinator::value;
+use nom::Parser;
 use nom_rule::rule;
 
 use crate::ast::ClusterOption;
@@ -53,7 +50,7 @@ pub fn dynamic_table(i: Input) -> IResult<Statement> {
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
-    )(i)
+    ).parse(i)
 }
 
 fn create_dynamic_table(i: Input) -> IResult<Statement> {
@@ -148,7 +145,8 @@ fn dynamic_table_options(
         task_warehouse_option,
         refresh_mode_opt,
         initialize_opt,
-    ))(i)
+    ))
+    .parse(i)
 }
 
 fn target_lag(i: Input) -> IResult<TargetLag> {
@@ -188,5 +186,6 @@ fn target_lag(i: Input) -> IResult<TargetLag> {
         | #interval_hour
         | #interval_day
         | #downstream
-    )(i)
+    )
+    .parse(i)
 }

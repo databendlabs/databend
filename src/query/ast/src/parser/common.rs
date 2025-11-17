@@ -15,17 +15,25 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use nom::branch::alt;
-use nom::combinator::consumed;
-use nom::combinator::map;
-use nom::multi::many1;
+pub use nom::branch::alt;
+pub use nom::branch::permutation;
+pub use nom::combinator::consumed;
+pub use nom::combinator::map;
+pub use nom::combinator::not;
+pub use nom::combinator::value;
+pub use nom::multi::many1;
 use nom::sequence::terminated;
 use nom::Offset;
-use nom::Slice;
+use nom::Parser;
 use nom_rule::rule;
 use pratt::PrattError;
 use pratt::PrattParser;
 use pratt::Precedence;
+
+pub fn parser_fn<'a, O, P>(mut parser: P) -> impl FnMut(Input<'a>) -> IResult<'a, O>
+where P: nom::Parser<Input<'a>, Output = O, Error = Error<'a>> {
+    move |input| parser.parse(input)
+}
 
 use crate::ast::quote::QuotedIdent;
 use crate::ast::ColumnID;
@@ -85,7 +93,8 @@ pub fn lambda_params(i: Input) -> IResult<Vec<Identifier>> {
     rule!(
         #single_param
         | #multi_params
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn ident(i: Input) -> IResult<Identifier> {
@@ -116,7 +125,8 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
     rule!(
         #plain_ident
         | #anonymous_stage
-    )(i)
+    )
+    .parse(i)
 }
 
 fn plain_identifier(
@@ -134,7 +144,8 @@ fn plain_identifier(
                 quote: None,
                 ident_type: IdentifierType::None,
             },
-        )(i)
+        )
+        .parse(i)
     }
 }
 
@@ -193,7 +204,8 @@ fn identifier_variable(i: Input) -> IResult<Identifier> {
             quote: None,
             ident_type: IdentifierType::Variable,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 fn non_reserved_identifier(
@@ -205,7 +217,8 @@ fn non_reserved_identifier(
             | #quoted_identifier
             | #identifier_hole
             | #identifier_variable
-        )(i)
+        )
+        .parse(i)
     }
 }
 
@@ -228,7 +241,8 @@ fn non_reserved_keyword(
 pub fn database_ref(i: Input) -> IResult<DatabaseRef> {
     map(dot_separated_idents_1_to_2, |(catalog, database)| {
         DatabaseRef { catalog, database }
-    })(i)
+    })
+    .parse(i)
 }
 
 pub fn table_ref(i: Input) -> IResult<TableRef> {
@@ -242,7 +256,8 @@ pub fn table_ref(i: Input) -> IResult<TableRef> {
             table,
             with_options,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn set_type(i: Input) -> IResult<SetType> {
@@ -259,7 +274,8 @@ pub fn set_type(i: Input) -> IResult<SetType> {
             },
             None => SetType::SettingsSession,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {
@@ -279,7 +295,8 @@ pub fn table_reference_only(i: Input) -> IResult<TableReference> {
             unpivot: None,
             sample: None,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> {
@@ -304,40 +321,51 @@ pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> 
                 column,
             )
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn column_id(i: Input) -> IResult<ColumnID> {
-    alt((
-        map_res(rule! { ColumnPosition }, |token| {
-            let name = token.text().to_string();
-            let pos = name[1..]
-                .parse::<usize>()
-                .map_err(|e| nom::Err::Failure(e.into()))?;
-            if pos == 0 {
-                return Err(nom::Err::Failure(ErrorKind::Other(
-                    "column position must be greater than 0",
-                )));
-            }
-            Ok(ColumnID::Position(crate::ast::ColumnPosition {
-                pos,
-                name,
-                span: Some(token.span),
-            }))
-        }),
-        // ROW could be a column name for compatibility
-        map_res(rule! {ROW}, |token| {
-            Ok(ColumnID::Name(Identifier::from_name(
-                transform_span(&[token.clone()]),
-                "row",
-            )))
-        }),
-        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
-    ))(i)
+    alt((column_position, column_row, column_ident)).parse(i)
+}
+
+pub fn column_position(i: Input) -> IResult<ColumnID> {
+    map_res(rule! { ColumnPosition }, |token| {
+        let name = token.text().to_string();
+        let pos = name[1..]
+            .parse::<usize>()
+            .map_err(|e| nom::Err::Failure(e.into()))?;
+        if pos == 0 {
+            return Err(nom::Err::Failure(ErrorKind::Other(
+                "column position must be greater than 0",
+            )));
+        }
+        Ok(ColumnID::Position(crate::ast::ColumnPosition {
+            pos,
+            name,
+            span: Some(token.span),
+        }))
+    })
+    .parse(i)
+}
+
+pub fn column_row(i: Input) -> IResult<ColumnID> {
+    // ROW could be a column name for compatibility
+    map_res(rule! {ROW}, |token| {
+        Ok(ColumnID::Name(Identifier::from_name(
+            transform_span(&[token.clone()]),
+            "row",
+        )))
+    })
+    .parse(i)
+}
+
+pub fn column_ident(i: Input) -> IResult<ColumnID> {
+    map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))).parse(i)
 }
 
 pub fn variable_ident(i: Input) -> IResult<String> {
-    map(rule! { IdentVariable }, |t| t.text()[1..].to_string())(i)
+    map(rule! { IdentVariable }, |t| t.text()[1..].to_string()).parse(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.
@@ -352,7 +380,8 @@ pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Ide
             (ident1, None) => (None, ident1),
             (ident0, Some((_, ident1))) => (Some(ident0), ident1),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 /// Parse one to three idents separated by a dot, fulfilling from the right.
@@ -371,7 +400,8 @@ pub fn dot_separated_idents_1_to_3(
             (ident1, Some((_, ident2, None))) => (None, Some(ident1), ident2),
             (ident0, Some((_, ident1, Some((_, ident2))))) => (Some(ident0), Some(ident1), ident2),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 /// Parse two to four idents separated by a dot, fulfilling from the right.
@@ -396,36 +426,37 @@ pub fn dot_separated_idents_2_to_4(
                 (Some(ident0), Some(ident1), ident2, ident3)
             }
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn comma_separated_list0<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
     separated_list0(match_text(","), item)
 }
 
 pub fn comma_separated_list0_ignore_trailing<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
-) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
     nom::multi::separated_list0(match_text(","), item)
 }
 
 pub fn comma_separated_list1_ignore_trailing<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
-) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
     nom::multi::separated_list1(match_text(","), item)
 }
 
 pub fn semicolon_terminated_list1<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
-) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
     many1(terminated(item, match_text(";")))
 }
 
 pub fn comma_separated_list1<'a, T>(
-    item: impl FnMut(Input<'a>) -> IResult<'a, T>,
-) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {
+    item: impl nom::Parser<Input<'a>, Output = T, Error = Error<'a>>,
+) -> impl nom::Parser<Input<'a>, Output = Vec<T>, Error = Error<'a>> {
     separated_list1(match_text(","), item)
 }
 
@@ -437,9 +468,9 @@ pub fn separated_list0<I, O, O2, E, F, G>(
     mut f: F,
 ) -> impl FnMut(I) -> nom::IResult<I, Vec<O>, E>
 where
-    I: Clone + nom::InputLength,
-    F: nom::Parser<I, O, E>,
-    G: nom::Parser<I, O2, E>,
+    I: Clone + nom::Input,
+    F: nom::Parser<I, Output = O, Error = E>,
+    G: nom::Parser<I, Output = O2, Error = E>,
     E: nom::error::ParseError<I>,
 {
     move |mut i: I| {
@@ -487,9 +518,9 @@ pub fn separated_list1<I, O, O2, E, F, G>(
     mut f: F,
 ) -> impl FnMut(I) -> nom::IResult<I, Vec<O>, E>
 where
-    I: Clone + nom::InputLength,
-    F: nom::Parser<I, O, E>,
-    G: nom::Parser<I, O2, E>,
+    I: Clone + nom::Input,
+    F: nom::Parser<I, Output = O, Error = E>,
+    G: nom::Parser<I, Output = O2, Error = E>,
     E: nom::error::ParseError<I>,
 {
     move |mut i: I| {
@@ -537,7 +568,7 @@ pub fn map_res<'a, O1, O2, F, G>(
     mut f: G,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, O2>
 where
-    F: nom::Parser<Input<'a>, O1, Error<'a>>,
+    F: nom::Parser<Input<'a>, Output = O1, Error = Error<'a>>,
     G: FnMut(O1) -> Result<O2, nom::Err<ErrorKind>>,
 {
     move |input: Input| {
@@ -565,7 +596,7 @@ pub fn error_hint<'a, O, F>(
     message: &'static str,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, ()>
 where
-    F: nom::Parser<Input<'a>, O, Error<'a>>,
+    F: nom::Parser<Input<'a>, Output = O, Error = Error<'a>>,
 {
     move |input: Input| match match_error.parse(input) {
         Ok(_) => Err(nom::Err::Error(Error::from_error_kind(
@@ -682,7 +713,7 @@ where
 }
 
 pub fn check_template_mode<'a, O, F>(mut parser: F) -> impl FnMut(Input<'a>) -> IResult<'a, O>
-where F: nom::Parser<Input<'a>, O, Error<'a>> {
+where F: nom::Parser<Input<'a>, Output = O, Error = Error<'a>> {
     move |input: Input| {
         parser.parse(input).and_then(|(i, res)| {
             if input.mode.is_template() {
@@ -715,7 +746,7 @@ macro_rules! declare_experimental_feature {
             mut parser: F,
         ) -> impl FnMut(Input<'a>) -> IResult<'a, O>
         where
-            F: nom::Parser<Input<'a>, O, Error<'a>>,
+            F: nom::Parser<Input<'a>, Output = O, Error = Error<'a>>,
         {
             move |input: Input| {
                 parser.parse(input).and_then(|(i, res)| {
