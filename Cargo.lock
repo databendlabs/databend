@@ -5323,6 +5323,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "wiremock",
+ "zip",
 ]
 
 [[package]]
