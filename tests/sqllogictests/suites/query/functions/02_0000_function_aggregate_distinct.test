@@ -1,4 +1,33 @@
 query TI
-select 'a', count(distinct a,b,c) from (values(1,null,1),(2,null,null),(4,null,4),(null,null,null)) t(a,b,c);
+select 'a', count(distinct a,b,c) 
+from (values(1,null,1),(2,null,null),(4,null,4),(null,null,null)) t(a,b,c);
 ----
 a 3
+
+query TI
+select 'a', count(distinct b) 
+from (values(1,null,1),(2,null,null),(4,null,4),(null,null,null)) t(a,b,c);
+----
+a 0
+
+query TI
+select 'a', count(distinct c) 
+from (values(1,null,1),(2,null,null),(4,null,4),(null,null,null)) t(a,b,c);
+----
+a 2
+
+query TI
+select 'a', count(distinct b,c) 
+from (values(1,null,1),(2,null,null),(4,null,4),(null,null,null)) t(a,b,c);
+----
+a 2
+
+query TI
+select 'a',count(distinct null) from numbers(5);
+----
+a 0
+
+query TI
+select 'a',count(distinct null,null) from numbers(5);
+----
+a 0
