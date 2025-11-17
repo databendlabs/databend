@@ -47,10 +47,11 @@ use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 ///
 /// Each runtime filter (identified by packet.id) is built once and then applied to multiple scans.
 /// The probe_targets in RuntimeFilterDesc specify all (probe_key, scan_id) pairs where this filter should be applied.
-pub fn build_runtime_filter_infos(
+pub async fn build_runtime_filter_infos(
     packet: JoinRuntimeFilterPacket,
     runtime_filter_descs: HashMap<usize, &RuntimeFilterDesc>,
     selectivity_threshold: u64,
+    max_threads: usize,
 ) -> Result<HashMap<usize, RuntimeFilterInfo>> {
     let total_build_rows = packet.build_rows;
     let Some(packets) = packet.packets else {
@@ -73,7 +74,7 @@ pub fn build_runtime_filter_infos(
                 probe_expr: probe_key.clone(),
                 bloom: if enabled {
                     if let Some(ref bloom) = packet.bloom {
-                        Some(build_bloom_filter(bloom.clone(), probe_key)?)
+                        Some(build_bloom_filter(bloom.clone(), probe_key, max_threads).await?)
                     } else {
                         None
                     }
@@ -243,13 +244,80 @@ fn build_min_max_filter(
     Ok(min_max_filter)
 }
 
-fn build_bloom_filter(bloom: Vec<u64>, probe_key: &Expr<String>) -> Result<RuntimeFilterBloom> {
+async fn build_bloom_filter(
+    bloom: Vec<u64>,
+    probe_key: &Expr<String>,
+    max_threads: usize,
+) -> Result<RuntimeFilterBloom> {
     let probe_key = probe_key.as_column_ref().unwrap();
-    let filter = BloomFilter::with_false_pos(0.01).items(bloom);
+    let column_name = probe_key.id.to_string();
+    let total_items = bloom.len();
+
+    if total_items < 50000 {
+        let filter = BloomFilter::with_false_pos(0.01).items(bloom);
+        return Ok(RuntimeFilterBloom {
+            column_name,
+            filter,
+        });
+    }
+
+    let chunk_size = total_items.div_ceil(max_threads);
+
+    let chunks: Vec<Vec<u64>> = bloom
+        .chunks(chunk_size)
+        .map(|chunk| chunk.to_vec())
+        .collect();
+
+    let tasks: Vec<_> = chunks
+        .into_iter()
+        .map(|chunk| {
+            databend_common_base::runtime::spawn(async move {
+                let mut filter = BloomFilter::with_false_pos(0.01).expected_items(total_items);
+                for hash in chunk {
+                    filter.insert_hash(hash);
+                }
+                Ok::<BloomFilter, ErrorCode>(filter)
+            })
+        })
+        .collect();
+
+    let task_results = futures::future::join_all(tasks).await;
+
+    let filters: Vec<BloomFilter> = task_results
+        .into_iter()
+        .map(|r| r.expect("Task panicked"))
+        .collect::<Result<Vec<_>>>()?;
+
+    let merged_filter = merge_bloom_filters_tree(filters);
+
     Ok(RuntimeFilterBloom {
-        column_name: probe_key.id.to_string(),
-        filter,
+        column_name,
+        filter: merged_filter,
     })
+}
+
+fn merge_bloom_filters_tree(mut filters: Vec<BloomFilter>) -> BloomFilter {
+    if filters.is_empty() {
+        return BloomFilter::with_false_pos(0.01).expected_items(1);
+    }
+
+    while filters.len() > 1 {
+        let mut next_level = Vec::new();
+        let mut iter = filters.into_iter();
+
+        while let Some(mut left) = iter.next() {
+            if let Some(right) = iter.next() {
+                left.union(&right);
+                next_level.push(left);
+            } else {
+                next_level.push(left);
+            }
+        }
+
+        filters = next_level;
+    }
+
+    filters.pop().unwrap()
 }
 
 #[cfg(test)]
