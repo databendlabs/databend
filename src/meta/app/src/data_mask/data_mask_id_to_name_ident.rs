@@ -16,7 +16,10 @@ use crate::data_mask::DataMaskId;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
+/// Tenantless key mapping a masking policy id back to its name.
+/// This enables reverse lookup for SHOW GRANTS and ownership listings.
 pub type DataMaskIdToNameIdent = TIdent<Resource, DataMaskId>;
+/// Raw form of [`DataMaskIdToNameIdent`] used for serde/protobuf.
 pub type DataMaskIdToNameIdentRaw = TIdentRaw<Resource, DataMaskId>;
 
 pub use kvapi_impl::Resource;
