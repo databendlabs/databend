@@ -515,12 +515,6 @@ impl timestamp_tz {
     pub fn hours_offset(&self) -> i8 {
         (self.seconds_offset() / 3600) as i8
     }
-
-    #[inline]
-    pub fn try_local_timestamp(&self) -> Option<i64> {
-        let offset_micros = self.micros_offset()?;
-        self.timestamp().checked_add(offset_micros)
-    }
 }
 
 impl Display for timestamp_tz {
