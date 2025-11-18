@@ -16,7 +16,7 @@ if kubectl version --client; then
 	echo "kubectl client already installed"
 else
 	echo "install kubectl client"
-	curl -LO "https://dl.k8s.io/release/v1.29.5/bin/linux/amd64/kubectl"
+	curl -LO "https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl"
 	chmod +x kubectl
 	sudo mv kubectl /usr/local/bin/
 fi
