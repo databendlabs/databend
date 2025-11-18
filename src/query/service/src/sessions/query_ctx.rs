@@ -228,8 +228,26 @@ impl QueryContext {
                     .shared
                     .catalog_manager
                     .get_default_catalog(self.session_state()?)?;
-                let table_function =
-                    default_catalog.get_table_function(&table_info.name, table_args)?;
+                let udtf_result = databend_common_base::runtime::block_on(async {
+                    if let Some(udtf) = UserApiProvider::instance()
+                        .get_udf(&self.get_tenant(), &table_info.name)
+                        .await?
+                        .and_then(|func| func.as_udtf_server())
+                    {
+                        return default_catalog
+                            .transform_udtf_as_table_function(
+                                self,
+                                &table_args,
+                                udtf,
+                                &table_info.name,
+                            )
+                            .map(Some);
+                    }
+                    Ok(None)
+                });
+                let table_function = udtf_result.transpose().unwrap_or_else(|| {
+                    default_catalog.get_table_function(&table_info.name, table_args)
+                })?;
                 Ok(table_function.as_table())
             }
             (Some(_), false) => Err(ErrorCode::InvalidArgument(
