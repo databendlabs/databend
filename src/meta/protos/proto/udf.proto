@@ -86,6 +86,21 @@ message UDTF {
   string sql = 3;
 }
 
+message UDTFServer {
+  uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    string address = 1;
+    string handler = 2;
+    string language = 3;
+    repeated DataType arg_types = 4;
+    // return column name with data type
+    repeated UDTFArg return_types = 5;
+    map<string, string> headers = 6;
+    optional bool immutable = 7;
+    repeated string arg_names = 8;
+}
+
 message ScalarUDF {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -112,6 +127,7 @@ message UserDefinedFunction {
     UDAFScript udaf_script = 7;
     UDTF udtf = 8;
     ScalarUDF scalar_udf = 9;
+    UDTFServer udtf_server = 10;
   }
   // The time udf created.
   optional string created_on = 5;

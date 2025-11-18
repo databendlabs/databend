@@ -56,7 +56,7 @@ definition = "CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLE
 [log]
 
 [log.file]
-level = "INFO"
+level = "DEBUG"
 format = "text"
 dir = "./.databend/logs_2"
 limit = 12 # 12 files, 1 file per hour
