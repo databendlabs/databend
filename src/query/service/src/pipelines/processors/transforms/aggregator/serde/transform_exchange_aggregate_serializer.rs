@@ -107,11 +107,13 @@ impl TransformExchangeAggregateSerializer {
         let spiller = if params.enable_experiment_aggregate {
             let spillers = partition_streams
                 .into_iter()
-                .map(|stream| {
+                .enumerate()
+                .map(|(pos, stream)| {
                     NewAggregateSpiller::try_create(
                         ctx.clone(),
                         MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
                         stream.clone(),
+                        pos == local_pos,
                     )
                 })
                 .collect::<Result<Vec<NewAggregateSpiller>>>()?;
@@ -356,6 +358,7 @@ fn exchange_agg_spilling_aggregate_payload(
 ) -> Result<BoxFuture<'static, Result<DataBlock>>> {
     let partition_count = partitioned_payload.partition_count();
     let mut write_size = 0;
+    let mut buckets_count = 0;
     let mut write_data = Vec::with_capacity(partition_count);
     let mut buckets_column_data = Vec::with_capacity(partition_count);
     let mut data_range_start_column_data = Vec::with_capacity(partition_count);
@@ -371,6 +374,7 @@ fn exchange_agg_spilling_aggregate_payload(
 
         let data_block = payload.aggregate_flush_all()?;
         rows += data_block.num_rows();
+        buckets_count += 1;
 
         let old_write_size = write_size;
         let columns = data_block.columns().to_vec();
@@ -398,6 +402,7 @@ fn exchange_agg_spilling_aggregate_payload(
             let (location, write_bytes) = spiller
                 .spill_stream_aggregate_buffer(None, write_data)
                 .await?;
+            let elapsed = instant.elapsed();
             // perf
             {
                 Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
@@ -407,7 +412,7 @@ fn exchange_agg_spilling_aggregate_payload(
                 );
                 Profile::record_usize_profile(
                     ProfileStatisticsName::RemoteSpillWriteTime,
-                    instant.elapsed().as_millis() as usize,
+                    elapsed.as_millis() as usize,
                 );
             }
 
@@ -422,9 +427,8 @@ fn exchange_agg_spilling_aggregate_payload(
             }
 
             info!(
-                "Write aggregate spill {} successfully, elapsed: {:?}",
-                location,
-                instant.elapsed()
+                "Write aggregate spill finished(exchange): (location: {}, bytes: {}, rows: {}, buckets_count: {}, elapsed: {:?})",
+                location, write_bytes, rows, buckets_count, elapsed
             );
 
             let data_block = DataBlock::new_from_columns(vec![

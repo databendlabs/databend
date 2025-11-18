@@ -43,7 +43,7 @@ impl NewTransformAggregateSpillWriter {
     ) -> Result<Box<dyn Processor>> {
         let partition_count = MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize;
         let spiller =
-            NewAggregateSpiller::try_create(ctx, partition_count, shared_partition_stream)?;
+            NewAggregateSpiller::try_create(ctx, partition_count, shared_partition_stream, true)?;
 
         Ok(AccumulatingTransformer::create(
             input,
