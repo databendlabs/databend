@@ -107,9 +107,11 @@ pub async fn do_refresh_virtual_column(
     });
 
     if !fuse_table.support_virtual_columns() {
-        return Err(ErrorCode::VirtualColumnError(
-            "table don't support virtual column".to_string(),
-        ));
+        return Err(ErrorCode::VirtualColumnError(format!(
+            "Table don't support virtual column, storage_format: {} read_only: {}",
+            fuse_table.get_storage_format(),
+            fuse_table.is_read_only()
+        )));
     }
     let virtual_column_builder = VirtualColumnBuilder::try_create(ctx.clone(), source_schema)?;
 
