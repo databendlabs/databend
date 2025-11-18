@@ -717,8 +717,10 @@ query I
 SELECT * from stage_summary_udtf(@s3_stage/output/2024, 21)
 ----
 s3_stage External test output/2024 21 s3_stage:test:output/2024:21
+s3_stage External test output/2024 22 s3_stage:test:output/2024:22
 
 query I
 SELECT * from multi_stage_process_udtf(@s3_stage/input/2024/, @s3_stage/output/2024, 21)
 ----
 s3_stage s3_stage test test input/2024/ output/2024 29
+s3_stage s3_stage test test input/2024/ output/2024 30

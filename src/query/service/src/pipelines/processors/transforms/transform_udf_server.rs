@@ -140,7 +140,7 @@ impl TransformUdfServer {
             .do_exchange(
                 &func.name,
                 &func.func_name,
-                num_rows,
+                Some(num_rows),
                 block_entries,
                 &func.data_type,
             )

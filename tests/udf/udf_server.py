@@ -454,17 +454,23 @@ def stage_summary_udtf(data_stage: StageLocation, value: int):
     assert data_stage.stage_type.lower() == "external"
     assert data_stage.storage
     bucket = _stage_bucket(data_stage)
-    summary = f"{data_stage.stage_name}:{bucket}:{data_stage.relative_path}:{value}"
-    return [
-        {
-            "stage_name": data_stage.stage_name or "",
-            "stage_type": data_stage.stage_type or "",
-            "bucket": bucket,
-            "relative_path": data_stage.relative_path or "",
-            "value": value,
-            "summary": summary,
-        }
-    ]
+    rows = []
+    for offset in (0, 1):
+        current_value = value + offset
+        summary = (
+            f"{data_stage.stage_name}:{bucket}:{data_stage.relative_path}:{current_value}"
+        )
+        rows.append(
+            {
+                "stage_name": data_stage.stage_name or "",
+                "stage_type": data_stage.stage_type or "",
+                "bucket": bucket,
+                "relative_path": data_stage.relative_path or "",
+                "value": current_value,
+                "summary": summary,
+            }
+        )
+    return rows
 
 
 @udf(
@@ -507,18 +513,22 @@ def multi_stage_process_udtf(
     assert output_stage.stage_type.lower() == "external"
     input_bucket = _stage_bucket(input_stage)
     output_bucket = _stage_bucket(output_stage)
-    result = value + len(input_bucket) + len(output_bucket)
-    return [
-        {
-            "input_stage": input_stage.stage_name or "",
-            "output_stage": output_stage.stage_name or "",
-            "input_bucket": input_bucket,
-            "output_bucket": output_bucket,
-            "input_relative_path": input_stage.relative_path or "",
-            "output_relative_path": output_stage.relative_path or "",
-            "result": result,
-        }
-    ]
+    rows = []
+    for offset in (0, 1):
+        current_value = value + offset
+        result = current_value + len(input_bucket) + len(output_bucket)
+        rows.append(
+            {
+                "input_stage": input_stage.stage_name or "",
+                "output_stage": output_stage.stage_name or "",
+                "input_bucket": input_bucket,
+                "output_bucket": output_bucket,
+                "input_relative_path": input_stage.relative_path or "",
+                "output_relative_path": output_stage.relative_path or "",
+                "result": result,
+            }
+        )
+    return rows
 
 
 @udf(

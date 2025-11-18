@@ -123,7 +123,7 @@ impl UdtfServerSource {
 
         debug_assert!(func.return_ty.is_tuple());
         let result = client
-            .do_exchange(&func.name, &func.func_name, 1, args, &func.return_ty)
+            .do_exchange(&func.name, &func.func_name, None, args, &func.return_ty)
             .await?;
 
         drop(permit);

@@ -279,7 +279,13 @@ async fn run_mock_exchange(mode: MockMode) -> Result<String> {
     let return_type = DataType::Null;
     let result = timeout(
         std::time::Duration::from_secs(5),
-        client.do_exchange("mock_udf", "mock_handler", num_rows, args, &return_type),
+        client.do_exchange(
+            "mock_udf",
+            "mock_handler",
+            Some(num_rows),
+            args,
+            &return_type,
+        ),
     )
     .await
     .expect("do_exchange future timed out");

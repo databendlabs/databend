@@ -5347,7 +5347,7 @@ impl<'a> TypeChecker<'a> {
             .do_exchange(
                 name,
                 &udf_definition.handler,
-                num_rows,
+                Some(num_rows),
                 block_entries,
                 &udf_definition.return_type,
             )

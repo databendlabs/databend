@@ -163,7 +163,7 @@ impl Table for UdfEchoTable {
         let return_type = DataType::Nullable(Box::new(DataType::String));
 
         let result = client
-            .do_exchange(name, name, num_rows, block_entries, &return_type)
+            .do_exchange(name, name, Some(num_rows), block_entries, &return_type)
             .await?;
 
         let scalar = unsafe { result.get_by_offset(0).index_unchecked(0) };

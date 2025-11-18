@@ -302,7 +302,7 @@ impl UDFFlightClient {
         &mut self,
         name: &str,
         func_name: &str,
-        num_rows: usize,
+        num_rows: Option<usize>,
         args: Vec<BlockEntry>,
         return_type: &DataType,
     ) -> Result<DataBlock> {
@@ -310,7 +310,6 @@ impl UDFFlightClient {
 
         Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRequestCount, 1);
         record_running_requests_external_start(name, 1);
-        record_request_external_batch_rows(func_name, num_rows);
 
         let args = args
             .into_iter()
@@ -333,7 +332,9 @@ impl UDFFlightClient {
             .collect::<Vec<_>>();
         let data_schema = DataSchema::new(fields);
 
-        let input_batch = DataBlock::new(args, num_rows)
+        // at least 1 for `UDFFlightClient::batch_rows`
+        let input_num_rows = args.first().map(|entry| entry.len()).unwrap_or(1);
+        let input_batch = DataBlock::new(args, input_num_rows)
             .to_record_batch_with_dataschema(&data_schema)
             .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
@@ -359,13 +360,17 @@ impl UDFFlightClient {
             ));
         }
 
-        if result_block.num_rows() != num_rows {
-            return Err(ErrorCode::UDFDataError(format!(
-                "UDF server should return {} rows, but it returned {} rows",
-                num_rows,
-                result_block.num_rows()
-            )));
+        if let Some(expected_rows) = num_rows {
+            if result_block.num_rows() != expected_rows {
+                return Err(ErrorCode::UDFDataError(format!(
+                    "UDF server should return {} rows, but it returned {} rows",
+                    expected_rows,
+                    result_block.num_rows()
+                )));
+            }
         }
+        record_request_external_batch_rows(func_name, result_block.num_rows());
+
         if return_type.remove_nullable().is_tuple() && result_fields.len() > 1 {
             if let DataType::Tuple(tys) = return_type.remove_nullable() {
                 if tys
