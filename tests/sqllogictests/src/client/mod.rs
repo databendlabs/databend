@@ -31,12 +31,22 @@ pub use ttc_client::TTCClient;
 use crate::error::Result;
 use crate::util::ColumnType;
 
+#[derive(Debug, Clone, Copy)]
+pub enum BodyFormat {
+    Json,
+    Arrow,
+}
+
 #[derive(Debug, Clone)]
 pub enum ClientType {
     MySQL,
     Http,
     // Tcp Testing Container
-    Ttc(String, u16),
+    Ttc {
+        image: String,
+        port: u16,
+        body_format: BodyFormat,
+    },
     Hybird,
 }
 
