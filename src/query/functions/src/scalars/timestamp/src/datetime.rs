@@ -201,8 +201,8 @@ fn timestamp_tz_domain_to_timestamp_domain(
     domain: &SimpleDomain<timestamp_tz>,
 ) -> Option<SimpleDomain<i64>> {
     Some(SimpleDomain {
-        min: domain.min.total_micros(),
-        max: domain.max.total_micros(),
+        min: domain.min.timestamp(),
+        max: domain.max.timestamp(),
     })
 }
 
@@ -689,7 +689,10 @@ fn register_timestamp_to_timestamp_tz(registry: &mut FunctionRegistry) {
                 }
             };
             let offset = ctx.func_ctx.tz.to_offset(ts);
-            let ts_tz = timestamp_tz::new(val, offset.seconds());
+            let ts_tz = timestamp_tz::new(
+                val - (offset.seconds() as i64 * 1_000_000),
+                offset.seconds(),
+            );
 
             output.push(ts_tz)
         })(val, ctx)
@@ -712,7 +715,7 @@ fn register_timestamp_tz_to_timestamp(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<TimestampTzType, TimestampType>(|val, output, _ctx| {
-            output.push(val.total_micros())
+            output.push(val.timestamp())
         })(val, ctx)
     }
 }
