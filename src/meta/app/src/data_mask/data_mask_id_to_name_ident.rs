@@ -16,7 +16,10 @@ use crate::data_mask::DataMaskId;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
+/// Tenantless key mapping a masking policy id back to its name.
+/// This enables reverse lookup for SHOW GRANTS and ownership listings.
 pub type DataMaskIdToNameIdent = TIdent<Resource, DataMaskId>;
+/// Raw form of [`DataMaskIdToNameIdent`] used for serde/protobuf.
 pub type DataMaskIdToNameIdentRaw = TIdentRaw<Resource, DataMaskId>;
 
 pub use kvapi_impl::Resource;
@@ -45,7 +48,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_datamask_id_to_name";
         const TYPE: &'static str = "DataMaskIdToNameIdent";
-        const HAS_TENANT: bool = false;
+        const HAS_TENANT: bool = true;
         type ValueType = DataMaskNameIdentRaw;
     }
 

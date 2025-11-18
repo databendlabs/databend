@@ -16,7 +16,9 @@ use crate::row_access_policy::RowAccessPolicyId;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
+/// Tenantless key mapping a row access policy id back to its name for reverse lookups.
 pub type RowAccessPolicyIdToNameIdent = TIdent<Resource, RowAccessPolicyId>;
+/// Raw form of [`RowAccessPolicyIdToNameIdent`] used for serde/protobuf.
 pub type RowAccessPolicyIdToNameIdentRaw = TIdentRaw<Resource, RowAccessPolicyId>;
 
 pub use kvapi_impl::Resource;
@@ -45,7 +47,7 @@ mod kvapi_impl {
     impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_row_access_policy_id_to_name";
         const TYPE: &'static str = "RowAccessPolicyIdToNameIdent";
-        const HAS_TENANT: bool = false;
+        const HAS_TENANT: bool = true;
         type ValueType = RowAccessPolicyNameIdentRaw;
     }
 
