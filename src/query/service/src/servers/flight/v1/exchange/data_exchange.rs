@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
+use databend_common_base::base::GlobalUniqName;
 use databend_common_expression::RemoteExpr;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -29,12 +32,41 @@ impl DataExchange {
             DataExchange::NodeToNodeExchange(exchange) => exchange.destination_ids.clone(),
         }
     }
+
+    pub fn get_channels(&self, destination: &str) -> Vec<String> {
+        match self {
+            DataExchange::Merge(exchange) => vec![exchange.channel_id.clone()],
+            DataExchange::Broadcast(exchange) => {
+                for (to, channels) in &exchange.destination_channels {
+                    if to == destination {
+                        return channels.clone();
+                    }
+                }
+
+                vec![]
+            }
+            DataExchange::NodeToNodeExchange(exchange) => {
+                for (to, channels) in &exchange.destination_channels {
+                    if to == destination {
+                        return channels.clone();
+                    }
+                }
+
+                vec![]
+            }
+        }
+    }
+
+    pub fn get_parallel(&self) -> usize {
+        1
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NodeToNodeExchange {
     pub destination_ids: Vec<String>,
     pub shuffle_keys: Vec<RemoteExpr>,
+    pub destination_channels: Vec<(String, Vec<String>)>,
     pub allow_adjust_parallelism: bool,
 }
 
@@ -42,6 +74,7 @@ pub struct NodeToNodeExchange {
 pub struct MergeExchange {
     pub destination_id: String,
     pub ignore_exchange: bool,
+    pub channel_id: String,
     pub allow_adjust_parallelism: bool,
 }
 
@@ -55,6 +88,7 @@ impl MergeExchange {
             destination_id,
             ignore_exchange,
             allow_adjust_parallelism,
+            channel_id: GlobalUniqName::unique(),
         })
     }
 }
@@ -62,10 +96,20 @@ impl MergeExchange {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastExchange {
     pub destination_ids: Vec<String>,
+    pub destination_channels: Vec<(String, Vec<String>)>,
 }
 
 impl BroadcastExchange {
     pub fn create(destination_ids: Vec<String>) -> DataExchange {
-        DataExchange::Broadcast(BroadcastExchange { destination_ids })
+        let mut destination_channels = HashMap::with_capacity(destination_ids.len());
+
+        for destination in &destination_ids {
+            destination_channels.insert(destination.clone(), GlobalUniqName::unique());
+        }
+
+        DataExchange::Broadcast(BroadcastExchange {
+            destination_ids,
+            destination_channels: vec![],
+        })
     }
 }
