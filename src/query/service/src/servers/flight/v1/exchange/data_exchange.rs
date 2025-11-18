@@ -101,15 +101,15 @@ pub struct BroadcastExchange {
 
 impl BroadcastExchange {
     pub fn create(destination_ids: Vec<String>) -> DataExchange {
-        let mut destination_channels = HashMap::with_capacity(destination_ids.len());
+        let mut destination_channels = Vec::with_capacity(destination_ids.len());
 
         for destination in &destination_ids {
-            destination_channels.insert(destination.clone(), GlobalUniqName::unique());
+            destination_channels.push((destination.clone(), vec![GlobalUniqName::unique()]));
         }
 
         DataExchange::Broadcast(BroadcastExchange {
             destination_ids,
-            destination_channels: vec![],
+            destination_channels,
         })
     }
 }

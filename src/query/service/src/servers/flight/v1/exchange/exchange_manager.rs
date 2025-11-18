@@ -186,7 +186,7 @@ impl DataExchangeManager {
         let with_cur_rt = env.create_rpc_clint_with_current_rt;
 
         let mut request_exchanges = HashMap::new();
-        let mut targets_exchanges = HashMap::new();
+        let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
 
         for index in env.dataflow_diagram.node_indices() {
             if env.dataflow_diagram[index].id == config.query.node_id {
@@ -225,7 +225,12 @@ impl DataExchangeManager {
                 for flight_exchange in flight_exchanges {
                     match flight_exchange {
                         QueryExchange::Fragment { channel, exchange } => {
-                            targets_exchanges.insert(channel, exchange);
+                            match targets_exchanges.entry(channel) {
+                                Entry::Occupied(mut v) => v.get_mut().push(exchange),
+                                Entry::Vacant(v) => {
+                                    v.insert(vec![exchange]);
+                                }
+                            }
                         }
                         QueryExchange::Statistics { source, exchange } => {
                             request_exchanges.insert(source, exchange);
@@ -706,15 +711,18 @@ impl QueryCoordinator {
         Ok(rx)
     }
 
-    pub fn add_data_channel(&mut self, channels: HashMap<String, FlightExchange>) -> Result<()> {
-        for (id, exchange) in channels.into_iter() {
+    pub fn add_data_channel(
+        &mut self,
+        channels: HashMap<String, Vec<FlightExchange>>,
+    ) -> Result<()> {
+        for (id, exchanges) in channels.into_iter() {
             let receiver_id = (id, FLIGHT_RECEIVER);
             match self.fragment_exchanges.entry(receiver_id) {
                 Entry::Occupied(mut v) => {
-                    v.get_mut().push(exchange);
+                    v.get_mut().extend(exchanges);
                 }
                 Entry::Vacant(v) => {
-                    v.insert(vec![exchange]);
+                    v.insert(exchanges);
                 }
             }
         }

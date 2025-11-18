@@ -221,16 +221,17 @@ impl FragmentDeriveHandle {
             FragmentKind::Normal => {
                 let destination_ids = get_executors(cluster);
 
-                let mut destination_channels = HashMap::with_capacity(destination_ids.len());
+                let mut destination_channels = Vec::with_capacity(destination_ids.len());
 
                 for destination in &destination_ids {
-                    destination_channels.insert(destination.clone(), GlobalUniqName::unique());
+                    destination_channels
+                        .push((destination.clone(), vec![GlobalUniqName::unique()]));
                 }
 
                 Some(DataExchange::NodeToNodeExchange(NodeToNodeExchange {
                     destination_ids,
+                    destination_channels,
                     shuffle_keys: exchange_sink.keys.clone(),
-                    destination_channels: vec![],
                     allow_adjust_parallelism: exchange_sink.allow_adjust_parallelism,
                 }))
             }
