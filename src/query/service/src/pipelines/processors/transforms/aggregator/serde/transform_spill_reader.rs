@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -34,10 +33,11 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use itertools::Itertools;
+use futures::future::try_join_all;
 use log::info;
 use opendal::Operator;
 use tokio::sync::Semaphore;
+use tokio::task::JoinHandle;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
@@ -220,25 +220,24 @@ impl Processor for TransformSpillReader {
 
                     self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
                 }
-                AggregateMeta::Partitioned { data, .. } => {
-                    // For log progress.
-                    let log_interval = 100;
-                    let total_buckets = data.len();
-                    let total_elapsed = Arc::new(AtomicU64::new(0));
-                    let processed_count = Arc::new(AtomicUsize::new(0));
-                    let processed_bytes = Arc::new(AtomicUsize::new(0));
+                AggregateMeta::Partitioned { data, bucket } => {
+                    let bucket = *bucket;
+                    let total_task = data
+                        .iter()
+                        .filter(|meta| matches!(meta, AggregateMeta::BucketSpilled(_)))
+                        .count();
 
-                    let mut read_data = Vec::with_capacity(data.len());
-                    for meta in data {
+                    let processed_count = Arc::new(AtomicUsize::new(0));
+
+                    let mut read_tasks: Vec<JoinHandle<Result<(Vec<u8>, Duration)>>> = Vec::new();
+                    for meta in data.iter() {
                         if let AggregateMeta::BucketSpilled(payload) = meta {
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
                             let data_range = payload.data_range.clone();
                             let semaphore = self.semaphore.clone();
-                            let total_elapsed = total_elapsed.clone();
                             let processed_count = processed_count.clone();
-                            let processed_bytes = processed_bytes.clone();
-                            read_data.push(databend_common_base::runtime::spawn(async move {
+                            read_tasks.push(databend_common_base::runtime::spawn(async move {
                                 let _guard = semaphore.acquire().await;
                                 let instant = Instant::now();
                                 let data = operator
@@ -264,47 +263,49 @@ impl Processor for TransformSpillReader {
                                 }
 
                                 let elapsed = instant.elapsed();
-                                total_elapsed
-                                    .fetch_add(elapsed.as_millis() as u64, Ordering::Relaxed);
-                                let finished = processed_count.fetch_add(1, Ordering::Relaxed) + 1;
-                                processed_bytes.fetch_add(data.len(), Ordering::Relaxed);
 
                                 // log the progress
-                                if finished % log_interval == 0 {
+                                let finished = processed_count.fetch_add(1, Ordering::Relaxed) + 1;
+                                if finished % 100 == 0 {
                                     info!(
-                                        "Read aggregate {}/{} spilled buckets, elapsed: {:?}",
-                                        finished,
-                                        total_buckets,
-                                        Duration::from_millis(
-                                            total_elapsed.load(Ordering::Relaxed)
-                                        )
+                                        "Read aggregate {}/{} spilled task, elapsed: {:?}",
+                                        finished, total_task, elapsed
                                     );
                                 }
 
-                                Ok(data)
+                                Ok((data, elapsed))
                             }));
                         }
                     }
 
-                    match futures::future::try_join_all(read_data).await {
-                        Err(_) => {
-                            return Err(ErrorCode::TokioError("Cannot join tokio job"));
-                        }
-                        Ok(read_data) => {
-                            let read_data: std::result::Result<VecDeque<Vec<u8>>, opendal::Error> =
-                                read_data.into_iter().try_collect();
+                    let read_tasks = try_join_all(read_tasks)
+                        .await
+                        .map_err(|_| ErrorCode::TokioError("Cannot join tokio job"))?;
 
-                            self.deserializing_meta = Some((block_meta, read_data?));
-                        }
-                    };
+                    let mut processed_count = 0usize;
+                    let mut processed_bytes = 0usize;
+                    let mut total_elapsed = 0u64;
+                    let mut read_data = Vec::with_capacity(read_tasks.len());
+                    for result in read_tasks {
+                        let (data, elapsed) = result?;
 
-                    let processed_count = processed_count.load(Ordering::Relaxed);
+                        processed_count += 1;
+                        processed_bytes += data.len();
+                        total_elapsed += elapsed.as_millis() as u64;
+
+                        read_data.push(data);
+                    }
+
+                    let read_data: VecDeque<Vec<u8>> = VecDeque::from(read_data);
+                    self.deserializing_meta = Some((block_meta, read_data));
+
                     if processed_count != 0 {
                         info!(
-                            "Read aggregate finished: (total count: {}, total bytes: {}, total elapsed: {:?})",
+                            "Read aggregate finished: (bucket: {}, total read count: {}, total bytes: {}, total elapsed: {:?})",
+                            bucket,
                             processed_count,
-                            processed_bytes.load(Ordering::Relaxed),
-                            Duration::from_millis(total_elapsed.load(Ordering::Relaxed))
+                            processed_bytes,
+                            Duration::from_millis(total_elapsed)
                         );
                     }
                 }
