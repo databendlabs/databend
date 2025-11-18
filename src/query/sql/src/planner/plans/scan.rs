@@ -50,7 +50,7 @@ use crate::plans::SortItem;
 use crate::ColumnSet;
 use crate::IndexType;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Prewhere {
     // columns needed to be output after prewhere scan
     pub output_columns: ColumnSet,
