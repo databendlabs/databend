@@ -30,7 +30,6 @@ databend-common-users = { workspace = true }
 databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 dyn-clone = { workspace = true }
-fastbloom = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
@@ -40,6 +39,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thrift = { workspace = true }
+twox-hash = { workspace = true }
 typetag = { workspace = true }
 
 [dev-dependencies]

@@ -3180,7 +3180,6 @@ dependencies = [
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
  "dyn-clone",
- "fastbloom",
  "goldenfile",
  "log",
  "maplit",
@@ -3192,6 +3191,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "thrift",
+ "twox-hash 1.6.3",
  "typetag",
 ]
 
@@ -4383,7 +4383,6 @@ dependencies = [
  "divan",
  "enum-as-inner",
  "enum_dispatch",
- "fastbloom",
  "fastrace",
  "futures",
  "futures-util",
@@ -5253,7 +5252,6 @@ dependencies = [
  "dyn-clone",
  "either",
  "ethnum",
- "fastbloom",
  "fastrace",
  "flatbuffers",
  "futures",
@@ -6421,18 +6419,6 @@ checksum = "62bf7fa928ce0c4a43bd6e7d1235318fc32ac3a3dea06a2208c44e729449471a"
 dependencies = [
  "small_ctor",
  "web-time",
-]
-
-[[package]]
-name = "fastbloom"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18c1ddb9231d8554c2d6bdf4cfaabf0c59251658c68b6c95cd52dd0c513a912a"
-dependencies = [
- "getrandom 0.3.3",
- "libm",
- "rand 0.9.2",
- "siphasher 1.0.1",
 ]
 
 [[package]]

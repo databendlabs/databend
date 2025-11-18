@@ -19,6 +19,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterBloom;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
+use databend_common_catalog::sbbf::Sbbf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
@@ -32,8 +33,6 @@ use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use fastbloom::BloomFilter;
-use fastbloom::DefaultHasher;
 
 use super::builder::should_enable_runtime_filter;
 use super::packet::JoinRuntimeFilterPacket;
@@ -253,12 +252,13 @@ async fn build_bloom_filter(
     let probe_key = probe_key.as_column_ref().unwrap();
     let column_name = probe_key.id.to_string();
     let total_items = bloom.len();
-    let hasher = DefaultHasher::default();
 
     if total_items < 50000 {
-        let filter = BloomFilter::with_false_pos(0.01)
-            .hasher(hasher)
-            .items(bloom);
+        let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
+            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        for digest in bloom {
+            filter.insert_digest(digest);
+        }
         return Ok(RuntimeFilterBloom {
             column_name,
             filter,
@@ -275,20 +275,21 @@ async fn build_bloom_filter(
     let tasks: Vec<_> = chunks
         .into_iter()
         .map(|chunk| {
-            let hasher = hasher.clone();
             databend_common_base::runtime::spawn(async move {
-                let mut filter = BloomFilter::with_false_pos(0.01)
-                    .hasher(hasher)
-                    .expected_items(total_items);
-                filter.extend(chunk);
-                Ok::<BloomFilter, ErrorCode>(filter)
+                let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
+                    .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+
+                for digest in chunk {
+                    filter.insert_digest(digest);
+                }
+                Ok::<Sbbf, ErrorCode>(filter)
             })
         })
         .collect();
 
     let task_results = futures::future::join_all(tasks).await;
 
-    let filters: Vec<BloomFilter> = task_results
+    let filters: Vec<Sbbf> = task_results
         .into_iter()
         .map(|r| r.expect("Task panicked"))
         .collect::<Result<Vec<_>>>()?;
@@ -301,9 +302,9 @@ async fn build_bloom_filter(
     })
 }
 
-fn merge_bloom_filters_tree(mut filters: Vec<BloomFilter>) -> BloomFilter {
+fn merge_bloom_filters_tree(mut filters: Vec<Sbbf>) -> Sbbf {
     if filters.is_empty() {
-        return BloomFilter::with_false_pos(0.01).expected_items(1);
+        return Sbbf::new_with_ndv_fpp(1, 0.01).unwrap();
     }
 
     while filters.len() > 1 {

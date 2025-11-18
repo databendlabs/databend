@@ -118,7 +118,6 @@ derive-visitor = { workspace = true }
 dyn-clone = { workspace = true }
 either = { workspace = true }
 ethnum = { workspace = true }
-fastbloom = { workspace = true }
 fastrace = { workspace = true }
 flatbuffers = { workspace = true }
 futures = { workspace = true }
