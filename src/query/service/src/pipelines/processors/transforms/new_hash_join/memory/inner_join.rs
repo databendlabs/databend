@@ -28,6 +28,9 @@ use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 
+use super::basic::BasicHashJoin;
+use super::basic_state::BasicHashJoinState;
+use super::LoopJoinStream;
 use crate::pipelines::processors::transforms::build_runtime_filter_packet;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
@@ -35,8 +38,6 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeDat
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
-use crate::pipelines::processors::transforms::new_hash_join::memory::basic::BasicHashJoin;
-use crate::pipelines::processors::transforms::new_hash_join::memory::basic_state::BasicHashJoinState;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
@@ -51,6 +52,7 @@ pub struct InnerHashJoin {
     pub(crate) function_ctx: FunctionContext,
     pub(crate) basic_state: Arc<BasicHashJoinState>,
     pub(crate) performance_context: PerformanceContext,
+    nested_loop_filter: FilterExecutor,
 }
 
 impl InnerHashJoin {
@@ -67,19 +69,22 @@ impl InnerHashJoin {
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
         let basic_hash_join = BasicHashJoin::create(
-            ctx,
+            &settings,
             function_ctx.clone(),
             method,
             desc.clone(),
             state.clone(),
+            settings.get_nested_loop_join_threshold()? as _,
         )?;
 
+        let nested_loop_filter = desc.create_nested_loop_filter(&function_ctx, block_size)?;
         Ok(InnerHashJoin {
             desc,
             basic_hash_join,
             function_ctx,
             basic_state: state,
             performance_context: context,
+            nested_loop_filter,
         })
     }
 }
@@ -114,6 +119,22 @@ impl Join for InnerHashJoin {
 
         self.basic_hash_join.finalize_chunks();
 
+        match &*self.basic_state.hash_table {
+            HashJoinHashTable::Null => {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the hash table is uninitialized.",
+                ))
+            }
+            HashJoinHashTable::NestedLoop(build_blocks) => {
+                let nested = Box::new(LoopJoinStream::new(data, build_blocks));
+                return Ok(InnerHashJoinFilterStream::create(
+                    nested,
+                    &mut self.nested_loop_filter,
+                ));
+            }
+            _ => (),
+        }
+
         let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
 
         let mut keys = DataBlock::new(probe_keys, data.num_rows());
@@ -123,29 +144,26 @@ impl Join for InnerHashJoin {
         };
 
         self.desc.remove_keys_nullable(&mut keys);
-        let probe_block = data.project(&self.desc.probe_projections);
+        let probe_block = data.project(&self.desc.probe_projection);
 
-        let joined_stream =
-            with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
-                HashJoinHashTable::T(table) => {
-                    let probe_hash_statistics = &mut self.performance_context.probe_hash_statistics;
-                    probe_hash_statistics.clear(probe_block.num_rows());
+        let joined_stream = with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
+            HashJoinHashTable::T(table) => {
+                let probe_hash_statistics = &mut self.performance_context.probe_hash_statistics;
+                probe_hash_statistics.clear(probe_block.num_rows());
 
-                    let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
-                    let probe_keys_stream = table.probe_matched(probe_data)?;
+                let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
+                let probe_keys_stream = table.probe_matched(probe_data)?;
 
-                    Ok(InnerHashJoinStream::create(
-                        probe_block,
-                        self.basic_state.clone(),
-                        probe_keys_stream,
-                        self.desc.clone(),
-                        &mut self.performance_context.probe_result,
-                    ))
-                }
-                HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the hash table is uninitialized.",
-                )),
-            })?;
+                InnerHashJoinStream::create(
+                    probe_block,
+                    self.basic_state.clone(),
+                    probe_keys_stream,
+                    self.desc.clone(),
+                    &mut self.performance_context.probe_result,
+                )
+            }
+            HashJoinHashTable::Null | HashJoinHashTable::NestedLoop(_) => unreachable!(),
+        });
 
         match &mut self.performance_context.filter_executor {
             None => Ok(joined_stream),
@@ -232,31 +250,27 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
                 (None, None) => DataBlock::new(vec![], self.probed_rows.matched_build.len()),
             };
 
-            if !self.desc.probe_to_build.is_empty() {
-                for (index, (is_probe_nullable, is_build_nullable)) in
-                    self.desc.probe_to_build.iter()
-                {
-                    let entry = match (is_probe_nullable, is_build_nullable) {
-                        (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
-                        (true, false) => {
-                            result_block.get_by_offset(*index).clone().remove_nullable()
-                        }
-                        (false, true) => {
-                            let entry = result_block.get_by_offset(*index);
-                            let col = entry.to_column();
+            for (index, (is_probe_nullable, is_build_nullable)) in
+                self.desc.probe_to_build.iter().cloned()
+            {
+                let entry = match (is_probe_nullable, is_build_nullable) {
+                    (true, true) | (false, false) => result_block.get_by_offset(index).clone(),
+                    (true, false) => result_block.get_by_offset(index).clone().remove_nullable(),
+                    (false, true) => {
+                        let entry = result_block.get_by_offset(index);
+                        let col = entry.to_column();
 
-                            match col.is_null() || col.is_nullable() {
-                                true => entry.clone(),
-                                false => BlockEntry::from(NullableColumn::new_column(
-                                    col,
-                                    Bitmap::new_constant(true, result_block.num_rows()),
-                                )),
-                            }
+                        match col.is_null() || col.is_nullable() {
+                            true => entry.clone(),
+                            false => BlockEntry::from(NullableColumn::new_column(
+                                col,
+                                Bitmap::new_constant(true, result_block.num_rows()),
+                            )),
                         }
-                    };
+                    }
+                };
 
-                    result_block.add_entry(entry);
-                }
+                result_block.add_entry(entry);
             }
 
             return Ok(Some(result_block));

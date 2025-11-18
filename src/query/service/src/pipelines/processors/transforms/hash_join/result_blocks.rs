@@ -54,7 +54,9 @@ impl HashJoinProbeState {
             JoinType::InnerAny | JoinType::RightAny
         ) {
             let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
-            probe_state.used_once = Some(MutableBitmap::from_len_zeroed(hash_table.len()))
+            probe_state.used_once = Some(MutableBitmap::from_len_zeroed(
+                hash_table.size().unwrap_or_default(),
+            ))
         }
         let no_other_predicate = self
             .hash_join_state

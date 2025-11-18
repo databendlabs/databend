@@ -78,6 +78,7 @@ pub struct FixedKeyHashJoinHashTable<
 
 pub enum HashJoinHashTable {
     Null,
+    NestedLoop(Vec<DataBlock>),
     Serializer(SerializerHashJoinHashTable),
     SkipDuplicatesSerializer(SkipDuplicatesSerializerHashJoinHashTable),
     SingleBinary(SingleBinaryHashJoinHashTable),
@@ -348,9 +349,9 @@ impl HashJoinState {
 }
 
 impl HashJoinHashTable {
-    pub fn len(&self) -> usize {
-        match self {
-            HashJoinHashTable::Null => 0,
+    pub fn size(&self) -> Option<usize> {
+        let n = match self {
+            HashJoinHashTable::Null | HashJoinHashTable::NestedLoop(_) => return None,
             HashJoinHashTable::Serializer(table) => table.hash_table.len(),
             HashJoinHashTable::SingleBinary(table) => table.hash_table.len(),
             HashJoinHashTable::KeysU8(table) => table.hash_table.len(),
@@ -367,11 +368,7 @@ impl HashJoinHashTable {
             HashJoinHashTable::SkipDuplicatesKeysU64(table) => table.hash_table.len(),
             HashJoinHashTable::SkipDuplicatesKeysU128(table) => table.hash_table.len(),
             HashJoinHashTable::SkipDuplicatesKeysU256(table) => table.hash_table.len(),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        };
+        Some(n)
     }
 }

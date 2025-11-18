@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -27,6 +26,7 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
+use databend_common_settings::Settings;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
 
@@ -40,7 +40,6 @@ use crate::pipelines::processors::transforms::SkipDuplicatesFixedKeyHashJoinHash
 use crate::pipelines::processors::transforms::SkipDuplicatesSerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::SkipDuplicatesSingleBinaryHashJoinHashTable;
 use crate::pipelines::processors::HashJoinDesc;
-use crate::sessions::QueryContext;
 
 pub struct BasicHashJoin {
     pub(crate) desc: Arc<HashJoinDesc>,
@@ -49,17 +48,18 @@ pub struct BasicHashJoin {
     pub(crate) method: HashMethodKind,
     pub(crate) function_ctx: FunctionContext,
     pub(crate) state: Arc<BasicHashJoinState>,
+    nested_loop_join_threshold: usize,
 }
 
 impl BasicHashJoin {
     pub fn create(
-        ctx: &QueryContext,
+        settings: &Settings,
         function_ctx: FunctionContext,
         method: HashMethodKind,
         desc: Arc<HashJoinDesc>,
         state: Arc<BasicHashJoinState>,
+        nested_loop_join_threshold: usize,
     ) -> Result<Self> {
-        let settings = ctx.get_settings();
         let squash_block = SquashBlocks::new(
             settings.get_max_block_size()? as _,
             settings.get_max_block_bytes()? as _,
@@ -71,6 +71,7 @@ impl BasicHashJoin {
             method,
             function_ctx,
             squash_block,
+            nested_loop_join_threshold,
         })
     }
 
@@ -81,22 +82,18 @@ impl BasicHashJoin {
         };
 
         if let Some(squashed_block) = squashed_block.take() {
-            let locked = self.state.mutex.lock();
-            let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-            *self.state.build_rows.as_mut() += squashed_block.num_rows();
-            let chunk_index = self.state.chunks.len();
-            self.state.chunks.as_mut().push(squashed_block);
-            self.state.build_queue.as_mut().push_back(chunk_index);
+            self.state.push_chunk(squashed_block);
         }
 
         Ok(())
     }
 
     pub(crate) fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.init_memory_hash_table();
+        if let Some(true) = self.init_memory_hash_table() {
+            return Ok(Some(self.build_nested_loop()));
+        };
 
-        let Some(chunk_index) = self.steal_chunk_index() else {
+        let Some(chunk_index) = self.state.steal_chunk_index() else {
             return Ok(None);
         };
 
@@ -131,7 +128,6 @@ impl BasicHashJoin {
             std::mem::swap(&mut chunks[chunk_index], &mut chunk_block);
         }
 
-        log::info!("build_hash_table chunk_index{chunk_index}");
         self.build_hash_table(keys_block, chunk_index)?;
 
         Ok(Some(ProgressValues {
@@ -139,17 +135,16 @@ impl BasicHashJoin {
             bytes: num_bytes,
         }))
     }
-}
-
-impl BasicHashJoin {
-    fn steal_chunk_index(&self) -> Option<usize> {
-        let locked = self.state.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-        self.state.build_queue.as_mut().pop_front()
-    }
 
     pub(crate) fn finalize_chunks(&mut self) {
         if self.desc.build_projection.is_empty() || !self.state.columns.is_empty() {
+            return;
+        }
+
+        if matches!(
+            self.state.hash_table.deref(),
+            HashJoinHashTable::NestedLoop(_)
+        ) {
             return;
         }
 
@@ -179,135 +174,139 @@ impl BasicHashJoin {
             columns.push(Column::take_downcast_column_vec(&full_columns));
         }
 
-        std::mem::swap(&mut columns, self.state.columns.as_mut());
+        *self.state.columns.as_mut() = columns;
     }
 
-    fn init_memory_hash_table(&mut self) {
+    fn init_memory_hash_table(&mut self) -> Option<bool> {
         if !matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
-            return;
+            return None;
         }
         let skip_duplicates = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny);
 
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-        if matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
-            let build_num_rows = *self.state.build_rows.deref();
-            *self.state.hash_table.as_mut() = match (self.method.clone(), skip_duplicates) {
-                (HashMethodKind::Serializer(_), false) => {
-                    HashJoinHashTable::Serializer(SerializerHashJoinHashTable::new(
-                        BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
-                        HashMethodSerializer::default(),
-                    ))
-                }
-                (HashMethodKind::Serializer(_), true) => {
-                    HashJoinHashTable::SkipDuplicatesSerializer(
-                        SkipDuplicatesSerializerHashJoinHashTable::new(
-                            BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
-                            HashMethodSerializer::default(),
-                        ),
-                    )
-                }
-                (HashMethodKind::SingleBinary(_), false) => {
-                    HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable::new(
+        if !matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
+            return None;
+        }
+
+        let build_num_rows = *self.state.build_rows.deref();
+        if build_num_rows < self.nested_loop_join_threshold {
+            *self.state.hash_table.as_mut() = HashJoinHashTable::NestedLoop(vec![]);
+            return Some(true);
+        }
+
+        *self.state.hash_table.as_mut() = match (self.method.clone(), skip_duplicates) {
+            (HashMethodKind::Serializer(_), false) => {
+                HashJoinHashTable::Serializer(SerializerHashJoinHashTable::new(
+                    BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                    HashMethodSerializer::default(),
+                ))
+            }
+            (HashMethodKind::Serializer(_), true) => HashJoinHashTable::SkipDuplicatesSerializer(
+                SkipDuplicatesSerializerHashJoinHashTable::new(
+                    BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                    HashMethodSerializer::default(),
+                ),
+            ),
+            (HashMethodKind::SingleBinary(_), false) => {
+                HashJoinHashTable::SingleBinary(SingleBinaryHashJoinHashTable::new(
+                    BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
+                    HashMethodSingleBinary::default(),
+                ))
+            }
+            (HashMethodKind::SingleBinary(_), true) => {
+                HashJoinHashTable::SkipDuplicatesSingleBinary(
+                    SkipDuplicatesSingleBinaryHashJoinHashTable::new(
                         BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
                         HashMethodSingleBinary::default(),
-                    ))
-                }
-                (HashMethodKind::SingleBinary(_), true) => {
-                    HashJoinHashTable::SkipDuplicatesSingleBinary(
-                        SkipDuplicatesSingleBinaryHashJoinHashTable::new(
-                            BinaryHashJoinHashMap::with_build_row_num(build_num_rows),
-                            HashMethodSingleBinary::default(),
-                        ),
-                    )
-                }
-                (HashMethodKind::KeysU8(hash_method), false) => {
-                    HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable::new(
-                        HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
+                    ),
+                )
+            }
+            (HashMethodKind::KeysU8(hash_method), false) => {
+                HashJoinHashTable::KeysU8(FixedKeyHashJoinHashTable::new(
+                    HashJoinHashMap::<u8>::with_build_row_num(build_num_rows),
+                    hash_method,
+                ))
+            }
+            (HashMethodKind::KeysU8(hash_method), true) => HashJoinHashTable::SkipDuplicatesKeysU8(
+                SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                    HashJoinHashMap::<u8, true>::with_build_row_num(build_num_rows),
+                    hash_method,
+                ),
+            ),
+            (HashMethodKind::KeysU16(hash_method), false) => {
+                HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable::new(
+                    HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
+                    hash_method,
+                ))
+            }
+            (HashMethodKind::KeysU16(hash_method), true) => {
+                HashJoinHashTable::SkipDuplicatesKeysU16(
+                    SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u16, true>::with_build_row_num(build_num_rows),
                         hash_method,
-                    ))
-                }
-                (HashMethodKind::KeysU8(hash_method), true) => {
-                    HashJoinHashTable::SkipDuplicatesKeysU8(
-                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<u8, true>::with_build_row_num(build_num_rows),
-                            hash_method,
-                        ),
-                    )
-                }
-                (HashMethodKind::KeysU16(hash_method), false) => {
-                    HashJoinHashTable::KeysU16(FixedKeyHashJoinHashTable::new(
-                        HashJoinHashMap::<u16>::with_build_row_num(build_num_rows),
+                    ),
+                )
+            }
+            (HashMethodKind::KeysU32(hash_method), false) => {
+                HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable::new(
+                    HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
+                    hash_method,
+                ))
+            }
+            (HashMethodKind::KeysU32(hash_method), true) => {
+                HashJoinHashTable::SkipDuplicatesKeysU32(
+                    SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u32, true>::with_build_row_num(build_num_rows),
                         hash_method,
-                    ))
-                }
-                (HashMethodKind::KeysU16(hash_method), true) => {
-                    HashJoinHashTable::SkipDuplicatesKeysU16(
-                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<u16, true>::with_build_row_num(build_num_rows),
-                            hash_method,
-                        ),
-                    )
-                }
-                (HashMethodKind::KeysU32(hash_method), false) => {
-                    HashJoinHashTable::KeysU32(FixedKeyHashJoinHashTable::new(
-                        HashJoinHashMap::<u32>::with_build_row_num(build_num_rows),
+                    ),
+                )
+            }
+            (HashMethodKind::KeysU64(hash_method), false) => {
+                HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable::new(
+                    HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
+                    hash_method,
+                ))
+            }
+            (HashMethodKind::KeysU64(hash_method), true) => {
+                HashJoinHashTable::SkipDuplicatesKeysU64(
+                    SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u64, true>::with_build_row_num(build_num_rows),
                         hash_method,
-                    ))
-                }
-                (HashMethodKind::KeysU32(hash_method), true) => {
-                    HashJoinHashTable::SkipDuplicatesKeysU32(
-                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<u32, true>::with_build_row_num(build_num_rows),
-                            hash_method,
-                        ),
-                    )
-                }
-                (HashMethodKind::KeysU64(hash_method), false) => {
-                    HashJoinHashTable::KeysU64(FixedKeyHashJoinHashTable::new(
-                        HashJoinHashMap::<u64>::with_build_row_num(build_num_rows),
+                    ),
+                )
+            }
+            (HashMethodKind::KeysU128(hash_method), false) => {
+                HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable::new(
+                    HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
+                    hash_method,
+                ))
+            }
+            (HashMethodKind::KeysU128(hash_method), true) => {
+                HashJoinHashTable::SkipDuplicatesKeysU128(
+                    SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<u128, true>::with_build_row_num(build_num_rows),
                         hash_method,
-                    ))
-                }
-                (HashMethodKind::KeysU64(hash_method), true) => {
-                    HashJoinHashTable::SkipDuplicatesKeysU64(
-                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<u64, true>::with_build_row_num(build_num_rows),
-                            hash_method,
-                        ),
-                    )
-                }
-                (HashMethodKind::KeysU128(hash_method), false) => {
-                    HashJoinHashTable::KeysU128(FixedKeyHashJoinHashTable::new(
-                        HashJoinHashMap::<u128>::with_build_row_num(build_num_rows),
+                    ),
+                )
+            }
+            (HashMethodKind::KeysU256(hash_method), false) => {
+                HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable::new(
+                    HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
+                    hash_method,
+                ))
+            }
+            (HashMethodKind::KeysU256(hash_method), true) => {
+                HashJoinHashTable::SkipDuplicatesKeysU256(
+                    SkipDuplicatesFixedKeyHashJoinHashTable::new(
+                        HashJoinHashMap::<U256, true>::with_build_row_num(build_num_rows),
                         hash_method,
-                    ))
-                }
-                (HashMethodKind::KeysU128(hash_method), true) => {
-                    HashJoinHashTable::SkipDuplicatesKeysU128(
-                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<u128, true>::with_build_row_num(build_num_rows),
-                            hash_method,
-                        ),
-                    )
-                }
-                (HashMethodKind::KeysU256(hash_method), false) => {
-                    HashJoinHashTable::KeysU256(FixedKeyHashJoinHashTable::new(
-                        HashJoinHashMap::<U256>::with_build_row_num(build_num_rows),
-                        hash_method,
-                    ))
-                }
-                (HashMethodKind::KeysU256(hash_method), true) => {
-                    HashJoinHashTable::SkipDuplicatesKeysU256(
-                        SkipDuplicatesFixedKeyHashJoinHashTable::new(
-                            HashJoinHashMap::<U256, true>::with_build_row_num(build_num_rows),
-                            hash_method,
-                        ),
-                    )
-                }
-            };
-        }
+                    ),
+                )
+            }
+        };
+        Some(false)
     }
 
     fn build_hash_table(&self, keys: DataBlock, chunk_idx: usize) -> Result<()> {
@@ -315,6 +314,7 @@ impl BasicHashJoin {
 
         match self.state.hash_table.deref() {
             HashJoinHashTable::Null => (),
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Serializer(v) => v.insert(keys, chunk_idx, &mut arena)?,
             HashJoinHashTable::SingleBinary(v) => v.insert(keys, chunk_idx, &mut arena)?,
             HashJoinHashTable::KeysU8(v) => v.insert(keys, chunk_idx, &mut arena)?,
@@ -348,5 +348,29 @@ impl BasicHashJoin {
         }
 
         Ok(())
+    }
+
+    fn build_nested_loop(&self) -> ProgressValues {
+        let mut progress = ProgressValues::default();
+        let mut plain = vec![];
+        while let Some(chunk_index) = self.state.steal_chunk_index() {
+            let chunk_mut = &mut self.state.chunks.as_mut()[chunk_index];
+
+            let mut chunk_block = DataBlock::empty();
+            std::mem::swap(chunk_mut, &mut chunk_block);
+
+            progress.rows += chunk_block.num_rows();
+            progress.bytes += chunk_block.memory_size();
+
+            *chunk_mut = chunk_block.clone();
+
+            plain.push(chunk_block);
+        }
+        debug_assert!(matches!(
+            *self.state.hash_table,
+            HashJoinHashTable::NestedLoop(_)
+        ));
+        *self.state.hash_table.as_mut() = HashJoinHashTable::NestedLoop(plain);
+        progress
     }
 }

@@ -43,7 +43,7 @@ enum PhysicalJoinType {
 }
 
 // Choose physical join type by join conditions
-fn physical_join(join: &Join, s_expr: &SExpr, settings: &Settings) -> Result<PhysicalJoinType> {
+fn physical_join(join: &Join, s_expr: &SExpr, _settings: &Settings) -> Result<PhysicalJoinType> {
     if join.equi_conditions.is_empty() && join.join_type.is_any_join() {
         return Err(ErrorCode::SemanticError(
             "ANY JOIN only supports equality-based hash joins",
@@ -53,7 +53,7 @@ fn physical_join(join: &Join, s_expr: &SExpr, settings: &Settings) -> Result<Phy
     let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
     let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
     let right_stat_info = right_rel_expr.derive_cardinality()?;
-    let nested_loop_join_threshold = settings.get_nested_loop_join_threshold()?;
+    let nested_loop_join_threshold = 0;
     if matches!(join.join_type, JoinType::Inner | JoinType::Cross)
         && (right_stat_info
             .statistics

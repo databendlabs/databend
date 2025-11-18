@@ -13,15 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline::sinks::Sinker;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::JoinType;
@@ -38,8 +40,7 @@ use super::PhysicalPlan;
 use super::PhysicalPlanBuilder;
 use super::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::LoopJoinState;
-use crate::pipelines::processors::transforms::TransformLoopJoinLeft;
-use crate::pipelines::processors::transforms::TransformLoopJoinRight;
+use crate::pipelines::processors::transforms::TransformLoopJoin;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -110,25 +111,56 @@ impl IPhysicalPlan for NestedLoopJoin {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        let state = Arc::new(LoopJoinState::new(builder.ctx.clone(), self));
-        self.build_right(state.clone(), builder)?;
-        self.build_left(state, builder)
-    }
-}
+        // Build right side (build side)
+        let right_side_builder = builder.create_sub_pipeline_builder();
+        let mut right_res = right_side_builder.finalize(&self.right)?;
+        let mut build_sinks = right_res.main_pipeline.take_sinks();
+        builder
+            .pipelines
+            .push(right_res.main_pipeline.finalize(None));
+        builder.pipelines.extend(right_res.sources_pipelines);
 
-impl NestedLoopJoin {
-    fn build_left(&self, state: Arc<LoopJoinState>, builder: &mut PipelineBuilder) -> Result<()> {
+        // Build left side (probe side)
         self.left.build_pipeline(builder)?;
 
-        let max_threads = builder.settings.get_max_threads()? as usize;
-        builder.main_pipeline.try_resize(max_threads)?;
-        builder.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformLoopJoinLeft::create(
-                input,
-                output,
-                state.clone(),
-            )))
-        })?;
+        let output_len = std::cmp::max(build_sinks.len(), builder.main_pipeline.output_len());
+        builder.main_pipeline.resize(output_len, false)?;
+        let probe_sinks = builder.main_pipeline.take_sinks();
+
+        if output_len != build_sinks.len() {
+            builder.main_pipeline.extend_sinks(build_sinks);
+            builder.main_pipeline.resize(output_len, false)?;
+            build_sinks = builder.main_pipeline.take_sinks();
+        }
+
+        debug_assert_eq!(build_sinks.len(), probe_sinks.len());
+
+        let join_pipe_items = build_sinks
+            .into_iter()
+            .zip(probe_sinks)
+            .map(|(build_sink, probe_sink)| {
+                builder.main_pipeline.extend_sinks([build_sink, probe_sink]);
+
+                let build_input = InputPort::create();
+                let probe_input = InputPort::create();
+                let joined_output = OutputPort::create();
+
+                let join_state = LoopJoinState::new(builder.ctx.clone(), self);
+                let loop_join = ProcessorPtr::create(TransformLoopJoin::create(
+                    build_input.clone(),
+                    probe_input.clone(),
+                    joined_output.clone(),
+                    Box::new(join_state),
+                ));
+
+                PipeItem::create(loop_join, vec![build_input, probe_input], vec![
+                    joined_output,
+                ])
+            })
+            .collect();
+
+        let join_pipe = Pipe::create(output_len * 2, output_len, join_pipe_items);
+        builder.main_pipeline.add_pipe(join_pipe);
 
         match self.conditions.len() {
             0 => Ok(()),
@@ -147,24 +179,6 @@ impl NestedLoopJoin {
                     .add_transform(builder.filter_transform_builder(&self.conditions, projections)?)
             }
         }
-    }
-
-    fn build_right(&self, state: Arc<LoopJoinState>, builder: &mut PipelineBuilder) -> Result<()> {
-        let right_side_builder = builder.create_sub_pipeline_builder();
-
-        let mut right_res = right_side_builder.finalize(&self.right)?;
-        right_res.main_pipeline.add_sink(|input| {
-            Ok(ProcessorPtr::create(Sinker::create(
-                input,
-                TransformLoopJoinRight::create(state.clone())?,
-            )))
-        })?;
-
-        builder
-            .pipelines
-            .push(right_res.main_pipeline.finalize(None));
-        builder.pipelines.extend(right_res.sources_pipelines);
-        Ok(())
     }
 }
 

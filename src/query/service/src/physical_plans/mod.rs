@@ -82,7 +82,7 @@ pub use physical_exchange::Exchange;
 pub use physical_exchange_sink::ExchangeSink;
 pub use physical_exchange_source::ExchangeSource;
 pub use physical_filter::Filter;
-pub use physical_hash_join::HashJoin;
+pub use physical_hash_join::*;
 pub use physical_limit::Limit;
 pub use physical_materialized_cte::*;
 pub use physical_multi_table_insert::*;

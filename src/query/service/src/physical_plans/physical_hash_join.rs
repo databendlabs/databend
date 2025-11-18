@@ -35,7 +35,9 @@ use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
+use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
@@ -52,6 +54,7 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::resolve_scalar;
 use crate::physical_plans::runtime_filter::build_runtime_filter;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -100,6 +103,12 @@ type MergedFieldsResult = (
 );
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct NestedLoopFilterInfo {
+    pub predicates: Vec<RemoteExpr>,
+    pub projection: Vec<usize>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct HashJoin {
     pub meta: PhysicalPlanMeta,
     // After building the probe key and build key, we apply probe_projections to probe_datablock
@@ -140,6 +149,7 @@ pub struct HashJoin {
 
     pub runtime_filter: PhysicalRuntimeFilters,
     pub broadcast_id: Option<u32>,
+    pub nested_loop_filter: NestedLoopFilterInfo,
 }
 
 #[typetag::serde]
@@ -261,6 +271,7 @@ impl IPhysicalPlan for HashJoin {
             build_side_cache_info: self.build_side_cache_info.clone(),
             runtime_filter: self.runtime_filter.clone(),
             broadcast_id: self.broadcast_id,
+            nested_loop_filter: self.nested_loop_filter.clone(),
         })
     }
 
@@ -1184,80 +1195,23 @@ impl PhysicalPlanBuilder {
             .collect::<Result<_>>()
     }
 
-    /// Creates a HashJoin physical plan
-    ///
-    /// # Arguments
-    /// * `join` - Join operation
-    /// * `probe_side` - Probe side physical plan
-    /// * `build_side` - Build side physical plan
-    /// * `is_broadcast` - Whether this is a broadcast join
-    /// * `projections` - Column projections
-    /// * `probe_projections` - Probe side projections
-    /// * `build_projections` - Build side projections
-    /// * `left_join_conditions` - Left join conditions
-    /// * `right_join_conditions` - Right join conditions
-    /// * `is_null_equal` - Null equality flags
-    /// * `non_equi_conditions` - Non-equi conditions
-    /// * `probe_to_build` - Probe to build mapping
-    /// * `output_schema` - Output schema
-    /// * `build_side_cache_info` - Build side cache info
-    /// * `runtime_filter` - Runtime filter
-    /// * `stat_info` - Statistics info
-    ///
-    /// # Returns
-    /// * `Result<PhysicalPlan>` - The HashJoin physical plan
-    #[allow(clippy::too_many_arguments)]
-    fn create_hash_join(
+    fn build_nested_loop_filter_info(
         &self,
-        s_expr: &SExpr,
         join: &Join,
-        probe_side: PhysicalPlan,
-        build_side: PhysicalPlan,
-        projections: ColumnSet,
-        probe_projections: ColumnSet,
-        build_projections: ColumnSet,
-        left_join_conditions: Vec<RemoteExpr>,
-        right_join_conditions: Vec<RemoteExpr>,
-        is_null_equal: Vec<bool>,
-        non_equi_conditions: Vec<RemoteExpr>,
-        probe_to_build: Vec<(usize, (bool, bool))>,
-        output_schema: DataSchemaRef,
-        build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
-        runtime_filter: PhysicalRuntimeFilters,
-        stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
-        let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
-        let broadcast_id = if build_side_data_distribution
-            .as_ref()
-            .is_some_and(|e| matches!(e, databend_common_sql::plans::Exchange::NodeToNodeHash(_)))
-        {
-            Some(self.ctx.get_next_broadcast_id())
-        } else {
-            None
-        };
-        Ok(PhysicalPlan::new(HashJoin {
-            projections,
-            build_projections,
-            probe_projections,
-            build: build_side,
-            probe: probe_side,
-            join_type: join.join_type,
-            build_keys: right_join_conditions,
-            probe_keys: left_join_conditions,
-            is_null_equal,
-            non_equi_conditions,
-            marker_index: join.marker_index,
-            meta: PhysicalPlanMeta::new("HashJoin"),
-            from_correlated_subquery: join.from_correlated_subquery,
-            probe_to_build,
-            output_schema,
-            need_hold_hash_table: join.need_hold_hash_table,
-            stat_info: Some(stat_info),
-            single_to_inner: join.single_to_inner,
-            build_side_cache_info,
-            runtime_filter,
-            broadcast_id,
-        }))
+        merged_schema: &DataSchemaRef,
+    ) -> Result<NestedLoopFilterInfo> {
+        let predicates = join
+            .non_equi_conditions
+            .iter()
+            .map(|c| Ok(c.clone()))
+            .chain(join.equi_conditions.iter().map(condition_to_expr))
+            .map(|scalar| resolve_scalar(&scalar?, merged_schema))
+            .collect::<Result<_>>()?;
+
+        Ok(NestedLoopFilterInfo {
+            predicates,
+            projection: vec![],
+        })
     }
 
     pub async fn build_hash_join(
@@ -1332,6 +1286,8 @@ impl PhysicalPlanBuilder {
         // Step 10: Process non-equi conditions
         let non_equi_conditions = self.process_non_equi_conditions(join, &merged_schema)?;
 
+        let nested_loop_filter = self.build_nested_loop_filter_info(join, &merged_schema)?;
+
         // Step 11: Build runtime filter
         let runtime_filter = build_runtime_filter(
             self.ctx.clone(),
@@ -1345,23 +1301,63 @@ impl PhysicalPlanBuilder {
         .await?;
 
         // Step 12: Create and return the HashJoin
-        self.create_hash_join(
-            s_expr,
-            join,
-            probe_side,
-            build_side,
+        let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
+        let broadcast_id = if build_side_data_distribution
+            .as_ref()
+            .is_some_and(|e| matches!(e, databend_common_sql::plans::Exchange::NodeToNodeHash(_)))
+        {
+            Some(self.ctx.get_next_broadcast_id())
+        } else {
+            None
+        };
+        Ok(PhysicalPlan::new(HashJoin {
             projections,
-            probe_projections,
             build_projections,
-            left_join_conditions,
-            right_join_conditions,
+            probe_projections,
+            build: build_side,
+            probe: probe_side,
+            join_type: join.join_type,
+            build_keys: right_join_conditions,
+            probe_keys: left_join_conditions,
             is_null_equal,
             non_equi_conditions,
+            marker_index: join.marker_index,
+            meta: PhysicalPlanMeta::new("HashJoin"),
+            from_correlated_subquery: join.from_correlated_subquery,
             probe_to_build,
             output_schema,
+            need_hold_hash_table: join.need_hold_hash_table,
+            stat_info: Some(stat_info),
+            single_to_inner: join.single_to_inner,
             build_side_cache_info,
             runtime_filter,
-            stat_info,
-        )
+            broadcast_id,
+            nested_loop_filter,
+        }))
     }
+}
+
+fn condition_to_expr(condition: &JoinEquiCondition) -> Result<ScalarExpr> {
+    let left_type = condition.left.data_type()?;
+    let right_type = condition.right.data_type()?;
+
+    let arguments = match (&left_type, &right_type) {
+        (DataType::Nullable(left), right) if **left == *right => vec![
+            condition.left.clone(),
+            condition.right.clone().unify_to_data_type(&left_type),
+        ],
+        (left, DataType::Nullable(right)) if *left == **right => vec![
+            condition.left.clone().unify_to_data_type(&right_type),
+            condition.right.clone(),
+        ],
+        _ => vec![condition.left.clone(), condition.right.clone()],
+    };
+
+    Ok(FunctionCall {
+        span: condition.left.span(),
+        func_name: "eq".to_string(),
+        params: vec![],
+        arguments,
+    }
+    .into())
 }

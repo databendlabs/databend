@@ -22,6 +22,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -30,6 +31,7 @@ use databend_common_sql::ColumnSet;
 use parking_lot::RwLock;
 
 use crate::physical_plans::HashJoin;
+use crate::physical_plans::NestedLoopFilterInfo;
 use crate::physical_plans::PhysicalRuntimeFilter;
 use crate::physical_plans::PhysicalRuntimeFilters;
 use crate::pipelines::processors::transforms::wrap_true_validity;
@@ -60,9 +62,10 @@ pub struct HashJoinDesc {
     pub(crate) runtime_filter: RuntimeFiltersDesc,
 
     pub(crate) build_projection: ColumnSet,
-    pub(crate) probe_projections: ColumnSet,
+    pub(crate) probe_projection: ColumnSet,
     pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
     pub(crate) build_schema: DataSchemaRef,
+    pub(crate) nested_loop_filter: NestedLoopFilterInfo,
 }
 
 #[derive(Debug, Clone)]
@@ -136,8 +139,9 @@ impl HashJoinDesc {
             runtime_filter: (&join.runtime_filter).into(),
             probe_to_build: join.probe_to_build.clone(),
             build_projection: join.build_projections.clone(),
-            probe_projections: join.probe_projections.clone(),
+            probe_projection: join.probe_projections.clone(),
             build_schema: join.build.output_schema()?,
+            nested_loop_filter: join.nested_loop_filter.clone(),
         })
     }
 
@@ -258,5 +262,30 @@ impl HashJoinDesc {
                 *entry = entry.clone().remove_nullable();
             }
         }
+    }
+
+    pub fn create_nested_loop_filter(
+        &self,
+        function_ctx: &FunctionContext,
+        block_size: usize,
+    ) -> Result<FilterExecutor> {
+        let predicates = self
+            .nested_loop_filter
+            .predicates
+            .iter()
+            .map(|x| Ok(x.as_expr(&BUILTIN_FUNCTIONS)))
+            .reduce(|lhs, rhs| {
+                check_function(None, "and_filters", &[], &[lhs?, rhs?], &BUILTIN_FUNCTIONS)
+            })
+            .unwrap()?;
+
+        Ok(FilterExecutor::new(
+            predicates,
+            function_ctx.clone(),
+            block_size,
+            None, // Some(self.nested_loop_filter.projection.iter().copied().collect()),
+            &BUILTIN_FUNCTIONS,
+            false,
+        ))
     }
 }

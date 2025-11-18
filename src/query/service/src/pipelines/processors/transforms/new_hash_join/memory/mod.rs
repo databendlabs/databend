@@ -15,7 +15,9 @@
 mod basic;
 mod basic_state;
 mod inner_join;
+mod nested_loop;
 pub mod outer_left_join;
 
 pub use basic_state::BasicHashJoinState;
 pub use inner_join::InnerHashJoin;
+pub use nested_loop::*;
