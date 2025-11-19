@@ -44,9 +44,18 @@ pub struct MergeExchangeParams {
     pub exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
+#[derive(Clone)]
+pub struct BroadcastExchangeParams {
+    pub query_id: String,
+    pub executor_id: String,
+    pub schema: DataSchemaRef,
+    pub destination_channels: Vec<(String, Vec<String>)>,
+}
+
+#[allow(clippy::enum_variant_names)]
 pub enum ExchangeParams {
     MergeExchange(MergeExchangeParams),
-    // BroadcastExchange(ShuffleExchangeParams),
+    BroadcastExchange(BroadcastExchangeParams),
     NodeShuffleExchange(ShuffleExchangeParams),
 }
 
@@ -55,6 +64,7 @@ impl ExchangeParams {
         match self {
             ExchangeParams::NodeShuffleExchange(exchange) => exchange.schema.clone(),
             ExchangeParams::MergeExchange(exchange) => exchange.schema.clone(),
+            ExchangeParams::BroadcastExchange(exchange) => exchange.schema.clone(),
         }
     }
 
@@ -62,6 +72,7 @@ impl ExchangeParams {
         match self {
             ExchangeParams::NodeShuffleExchange(exchange) => exchange.query_id.clone(),
             ExchangeParams::MergeExchange(exchange) => exchange.query_id.clone(),
+            ExchangeParams::BroadcastExchange(exchange) => exchange.query_id.clone(),
         }
     }
 }

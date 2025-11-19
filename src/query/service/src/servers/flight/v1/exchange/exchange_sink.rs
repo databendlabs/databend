@@ -88,6 +88,7 @@ impl ExchangeSink {
                 pipeline.add_pipe(Pipe::create(output, 0, items));
                 Ok(())
             }
+            ExchangeParams::BroadcastExchange(_params) => Ok(()),
             ExchangeParams::NodeShuffleExchange(params) => {
                 exchange_shuffle(ctx, params, pipeline)?;
 

@@ -42,6 +42,7 @@ impl ExchangeTransform {
             ExchangeParams::MergeExchange(params) => {
                 via_exchange_source(ctx.clone(), params, injector, pipeline)
             }
+            ExchangeParams::BroadcastExchange(_params) => Ok(()),
             ExchangeParams::NodeShuffleExchange(params) => {
                 exchange_shuffle(ctx, params, pipeline)?;
 

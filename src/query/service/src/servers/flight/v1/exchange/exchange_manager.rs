@@ -751,6 +751,38 @@ impl QueryCoordinator {
                     .map(|x| (params.destination_id.clone(), x.convert_to_sender()))
                     .collect())
             }
+            ExchangeParams::BroadcastExchange(params) => {
+                let mut exchanges = Vec::with_capacity(params.destination_channels.len());
+
+                for (destination, channels) in &params.destination_channels {
+                    for channel in channels {
+                        if destination == &params.executor_id {
+                            exchanges.push((
+                                destination.clone(),
+                                FlightSender::create(async_channel::bounded(1).0),
+                            ));
+
+                            continue;
+                        }
+
+                        let key = (channel.clone(), FLIGHT_SENDER);
+                        let Some(senders) = self.fragment_exchanges.remove(&key) else {
+                            return Err(ErrorCode::UnknownFragmentExchange(format!(
+                                "Unknown fragment broadcast exchange channel, {}",
+                                destination
+                            )));
+                        };
+
+                        exchanges.extend(
+                            senders
+                                .into_iter()
+                                .map(|x| (destination.clone(), x.convert_to_sender())),
+                        );
+                    }
+                }
+
+                Ok(exchanges)
+            }
             ExchangeParams::NodeShuffleExchange(params) => {
                 let mut exchanges = Vec::with_capacity(params.destination_ids.len());
 
@@ -804,17 +836,48 @@ impl QueryCoordinator {
                     .map(|x| x.convert_to_receiver())
                     .collect::<Vec<_>>())
             }
-            ExchangeParams::NodeShuffleExchange(params) => {
-                let mut exchanges = Vec::with_capacity(params.destination_ids.len());
+            ExchangeParams::BroadcastExchange(params) => {
+                let mut exchanges = Vec::with_capacity(params.destination_channels.len());
 
-                let key = (params.executor_id.clone(), FLIGHT_RECEIVER);
-                let Some(receivers) = self.fragment_exchanges.remove(&key) else {
-                    return Err(ErrorCode::UnknownFragmentExchange(format!(
-                        "Unknown fragment flight receiver, {}, {}",
-                        params.executor_id, params.fragment_id
-                    )));
-                };
-                exchanges.extend(receivers.into_iter().map(|x| x.convert_to_receiver()));
+                for (destination, channels) in &params.destination_channels {
+                    if destination == &params.executor_id {
+                        for channel in channels {
+                            let key = (channel.clone(), FLIGHT_RECEIVER);
+
+                            let Some(receivers) = self.fragment_exchanges.remove(&key) else {
+                                return Err(ErrorCode::UnknownFragmentExchange(format!(
+                                    "Unknown fragment broadcast flight receiver, {}",
+                                    params.executor_id
+                                )));
+                            };
+                            exchanges
+                                .extend(receivers.into_iter().map(|x| x.convert_to_receiver()));
+                        }
+                    }
+                }
+
+                Ok(exchanges)
+            }
+            ExchangeParams::NodeShuffleExchange(params) => {
+                let mut exchanges = Vec::with_capacity(params.destination_channels.len());
+
+                for (destination, channels) in &params.destination_channels {
+                    if destination == &params.executor_id {
+                        for channel in channels {
+                            let key = (channel.clone(), FLIGHT_RECEIVER);
+
+                            let Some(receivers) = self.fragment_exchanges.remove(&key) else {
+                                return Err(ErrorCode::UnknownFragmentExchange(format!(
+                                    "Unknown fragment flight receiver, {}, {}",
+                                    params.executor_id, params.fragment_id
+                                )));
+                            };
+                            exchanges
+                                .extend(receivers.into_iter().map(|x| x.convert_to_receiver()));
+                        }
+                    }
+                }
+
                 Ok(exchanges)
             }
         }
