@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::io::BufReader;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -86,16 +85,14 @@ impl BlockReader {
             let readers = column_node
                 .leaf_column_ids
                 .iter()
-                .map(|column_id| {
+                .filter_map(|column_id| {
                     let native_meta = part
                         .columns_meta
                         .get(column_id)
-                        .unwrap()
-                        .as_native()
-                        .unwrap();
-                    let data = column_buffers.get(column_id).unwrap();
+                        .and_then(ColumnMeta::as_native)?;
+                    let data = column_buffers.get(column_id)?;
                     let reader: Reader = Box::new(std::io::Cursor::new(data.clone()));
-                    NativeReader::new(reader, native_meta.pages.clone(), vec![])
+                    Some(NativeReader::new(reader, native_meta.pages.clone(), vec![]))
                 })
                 .collect();
 
@@ -132,70 +129,6 @@ impl BlockReader {
         }
 
         Ok((index, native_readers))
-    }
-
-    pub fn sync_read_native_columns_data(
-        &self,
-        part: &PartInfoPtr,
-        ignore_column_ids: &Option<HashSet<ColumnId>>,
-    ) -> Result<NativeSourceData> {
-        let part = FuseBlockPartInfo::from_part(part)?;
-
-        let mut results: BTreeMap<usize, Vec<NativeReader<Reader>>> = BTreeMap::new();
-        for (index, column_node) in self.project_column_nodes.iter().enumerate() {
-            if let Some(ignore_column_ids) = ignore_column_ids {
-                if column_node.leaf_column_ids.len() == 1
-                    && ignore_column_ids.contains(&column_node.leaf_column_ids[0])
-                {
-                    continue;
-                }
-            }
-
-            let op = self.operator.clone();
-            let metas: Vec<ColumnMeta> = column_node
-                .leaf_column_ids
-                .iter()
-                .filter_map(|column_id| part.columns_meta.get(column_id))
-                .cloned()
-                .collect::<Vec<_>>();
-
-            let readers =
-                Self::sync_read_native_column(op.clone(), &part.location, metas, part.range())?;
-            results.insert(index, readers);
-        }
-
-        Ok(results)
-    }
-
-    pub fn sync_read_native_column(
-        op: Operator,
-        path: &str,
-        metas: Vec<ColumnMeta>,
-        range: Option<&Range<usize>>,
-    ) -> Result<Vec<NativeReader<Reader>>> {
-        let mut native_readers = Vec::with_capacity(metas.len());
-        for meta in metas {
-            let mut native_meta = meta.as_native().unwrap().clone();
-            if let Some(range) = &range {
-                native_meta = native_meta.slice(range.start, range.end);
-            }
-            let (offset, length) = (
-                native_meta.offset,
-                native_meta.pages.iter().map(|p| p.length).sum::<u64>(),
-            );
-            let reader = op
-                .blocking()
-                .reader_with(path)
-                .call()?
-                .into_std_read(offset..offset + length)?;
-
-            let reader: Reader = Box::new(BufReader::new(reader));
-
-            let native_reader = NativeReader::new(reader, native_meta.pages.clone(), vec![]);
-            native_readers.push(native_reader);
-        }
-
-        Ok(native_readers)
     }
 
     #[inline(always)]

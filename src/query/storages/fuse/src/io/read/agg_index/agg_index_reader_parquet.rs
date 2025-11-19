@@ -15,7 +15,6 @@
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_storage::parquet::read_metadata_sync;
 use databend_common_storage::read_metadata_async;
 use databend_storages_common_io::ReadSettings;
 use log::debug;
@@ -26,47 +25,6 @@ use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 
 impl AggIndexReader {
-    pub fn sync_read_parquet_data_by_merge_io(
-        &self,
-        read_settings: &ReadSettings,
-        loc: &str,
-    ) -> Option<(PartInfoPtr, BlockReadResult)> {
-        let op = self.reader.operator.blocking();
-        match op.stat(loc) {
-            Ok(_meta) => {
-                let metadata = read_metadata_sync(loc, &self.reader.operator, None).ok()?;
-                debug_assert_eq!(metadata.num_row_groups(), 1);
-                let row_group = &metadata.row_groups()[0];
-                let columns_meta = build_columns_meta(row_group);
-
-                let part = FuseBlockPartInfo::create(
-                    loc.to_string(),
-                    row_group.num_rows() as u64,
-                    columns_meta,
-                    None,
-                    self.compression.into(),
-                    None,
-                    None,
-                    None,
-                );
-                let res = self
-                    .reader
-                    .sync_read_columns_data_by_merge_io(read_settings, &part, &None)
-                    .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
-                    .ok()?;
-                Some((part, res))
-            }
-            Err(e) => {
-                if e.kind() == opendal::ErrorKind::NotFound {
-                    debug!("Aggregating index `{loc}` not found.")
-                } else {
-                    debug!("Read aggregating index `{loc}` failed: {e}");
-                }
-                None
-            }
-        }
-    }
-
     pub async fn read_parquet_data_by_merge_io(
         &self,
         read_settings: &ReadSettings,

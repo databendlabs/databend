@@ -128,6 +128,7 @@ Exchange
     ├── output rows: 6
     ├── output bytes: 120.00 B
     ├── bytes scanned: 120.00 B
+    ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
     ├── scan id: 0
     ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
@@ -158,6 +159,7 @@ Exchange
         ├── output rows: 4
         ├── output bytes: 80.00 B
         ├── bytes scanned: 80.00 B
+        ├── runtime filter inlist/min-max time: <slt:ignore>
         ├── table: default.default.article
         ├── scan id: 0
         ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
@@ -206,6 +208,7 @@ Exchange
     │           ├── output rows: 1
     │           ├── output bytes: 31.00 B
     │           ├── bytes scanned: 31.00 B
+    │           ├── runtime filter inlist/min-max time: <slt:ignore>
     │           ├── table: default.default.author
     │           ├── scan id: 1
     │           ├── output columns: [id (#4), name (#5)]
@@ -222,6 +225,7 @@ Exchange
         ├── output rows: 6
         ├── output bytes: 120.00 B
         ├── bytes scanned: 120.00 B
+        ├── runtime filter inlist/min-max time: <slt:ignore>
         ├── table: default.default.article
         ├── scan id: 0
         ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]

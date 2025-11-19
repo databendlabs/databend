@@ -71,7 +71,7 @@ impl RowsFetchMetadata for RowsFetchMetadataImpl {
     }
 }
 
-pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
+pub(super) struct ParquetRowsFetcher {
     snapshot: Option<Arc<TableSnapshot>>,
     table: Arc<FuseTable>,
     projection: Projection,
@@ -85,7 +85,7 @@ pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
 }
 
 #[async_trait::async_trait]
-impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
+impl RowsFetcher for ParquetRowsFetcher {
     type Metadata = Arc<RowsFetchMetadataImpl>;
 
     #[async_backtrace::framed]
@@ -221,7 +221,7 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
     }
 }
 
-impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
+impl ParquetRowsFetcher {
     pub fn create(
         table: Arc<FuseTable>,
         projection: Projection,
@@ -256,23 +256,14 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             let settings = self.settings;
             let reader = self.reader.clone();
             async move {
-                let chunk = if BLOCKING_IO {
-                    reader.sync_read_columns_data_by_merge_io_2(
+                let chunk = reader
+                    .read_columns_data_by_merge_io(
                         &settings,
                         &metadata.location,
                         &metadata.columns_meta,
                         &None,
-                    )?
-                } else {
-                    reader
-                        .read_columns_data_by_merge_io(
-                            &settings,
-                            &metadata.location,
-                            &metadata.columns_meta,
-                            &None,
-                        )
-                        .await?
-                };
+                    )
+                    .await?;
 
                 let block = Self::build_block(&reader, &metadata, chunk)?;
                 Ok((
