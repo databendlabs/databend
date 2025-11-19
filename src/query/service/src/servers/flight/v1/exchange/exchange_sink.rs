@@ -82,7 +82,7 @@ impl ExchangeSink {
 
                 let items = senders
                     .into_iter()
-                    .map(|(_, sender)| create_writer_item(sender, false))
+                    .map(|(_, sender)| create_writer_item(sender, params.ignore_exchange))
                     .collect::<Vec<_>>();
 
                 pipeline.add_pipe(Pipe::create(output, 0, items));

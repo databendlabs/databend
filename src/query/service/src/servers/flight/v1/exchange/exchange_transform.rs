@@ -61,8 +61,7 @@ impl ExchangeTransform {
                 let exchange_manager = ctx.get_exchange_manager();
                 let flight_senders = exchange_manager.get_flight_sender(&exchange_params)?;
 
-                let senders = flight_senders.into_iter();
-                for (destination_id, sender) in senders {
+                for (destination_id, sender) in flight_senders {
                     items.push(match destination_id == params.executor_id {
                         true => {
                             if local_pipe == 1 {
