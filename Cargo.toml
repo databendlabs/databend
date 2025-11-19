@@ -209,7 +209,6 @@ databend-storages-common-pruner = { path = "src/query/storages/common/pruner" }
 databend-storages-common-session = { path = "src/query/storages/common/session" }
 databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
-fastbloom = "0.14.0"
 
 # Crates.io dependencies
 ahash = { version = "0.8", features = ["no-rng"] }
@@ -537,7 +536,6 @@ walkdir = "2.3.2"
 watcher = { version = "0.4.2" }
 wiremock = "0.6"
 wkt = "0.11.1"
-xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 xorfilter-rs = { version = "0.5", features = ["cbordata"] }
 zerocopy = { version = "0.8.26", features = ["derive"] }
 zip = "3.0.0"
