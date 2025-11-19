@@ -1809,7 +1809,8 @@ impl DecimalColumn {
         #[cfg(debug_assertions)]
         {
             match (&arrow_type, self) {
-                (arrow_schema::DataType::Decimal128(p, s), DecimalColumn::Decimal64(_, size))
+                (arrow_schema::DataType::Decimal64(p, s), DecimalColumn::Decimal64(_, size))
+                | (arrow_schema::DataType::Decimal128(p, s), DecimalColumn::Decimal64(_, size))
                 | (arrow_schema::DataType::Decimal128(p, s), DecimalColumn::Decimal128(_, size))
                 | (arrow_schema::DataType::Decimal256(p, s), DecimalColumn::Decimal256(_, size)) => {
                     assert_eq!(size.precision, *p);
@@ -1844,6 +1845,13 @@ impl DecimalColumn {
     pub fn try_from_arrow_data(array: ArrayData) -> Result<Self> {
         let buffer = array.buffers()[0].clone();
         match array.data_type() {
+            arrow_schema::DataType::Decimal64(p, s) => {
+                let decimal_size = DecimalSize {
+                    precision: *p,
+                    scale: *s as u8,
+                };
+                Ok(Self::Decimal64(buffer.into(), decimal_size).strict_decimal())
+            }
             arrow_schema::DataType::Decimal128(p, s) => {
                 let decimal_size = DecimalSize {
                     precision: *p,

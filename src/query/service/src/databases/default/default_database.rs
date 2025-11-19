@@ -129,7 +129,7 @@ impl Database for DefaultDatabase {
                 table_name,
                 format!("get_table: '{}'.'{}'", self.get_db_name(), table_name),
             ))
-            .into());
+                .into());
         };
 
         let (_name, id, seq_meta) = table_niv.unpack();
