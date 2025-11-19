@@ -59,3 +59,23 @@ mod kvapi_impl {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_kvapi::kvapi::Key;
+
+    use crate::data_mask::DataMaskId;
+    use crate::data_mask::DataMaskIdToNameIdent;
+    use crate::tenant::Tenant;
+
+    #[test]
+    fn test_data_mask_id_ident() {
+        let tenant = Tenant::new_literal("dummy");
+        let ident = DataMaskIdToNameIdent::new_generic(tenant, DataMaskId::new(3));
+
+        let key = ident.to_string_key();
+        assert_eq!(key, "__fd_datamask_id_to_name/dummy/3");
+
+        assert_eq!(ident, DataMaskIdToNameIdent::from_str_key(&key).unwrap());
+    }
+}

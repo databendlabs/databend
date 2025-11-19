@@ -58,3 +58,26 @@ mod kvapi_impl {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_kvapi::kvapi::Key;
+
+    use crate::row_access_policy::RowAccessPolicyId;
+    use crate::row_access_policy::RowAccessPolicyIdToNameIdent;
+    use crate::tenant::Tenant;
+
+    #[test]
+    fn test_row_access_policy_id_ident() {
+        let tenant = Tenant::new_literal("dummy");
+        let ident = RowAccessPolicyIdToNameIdent::new_generic(tenant, RowAccessPolicyId::new(3));
+
+        let key = ident.to_string_key();
+        assert_eq!(key, "__fd_row_access_policy_id_to_name/dummy/3");
+
+        assert_eq!(
+            ident,
+            RowAccessPolicyIdToNameIdent::from_str_key(&key).unwrap()
+        );
+    }
+}
