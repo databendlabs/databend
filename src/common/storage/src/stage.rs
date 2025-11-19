@@ -130,7 +130,7 @@ impl StageFilesInfo {
         mut files: &[String],
     ) -> Result<Vec<StageFileInfo>> {
         if let Some(m) = max_files {
-            files = &files[..m]
+            files = &files[..m.min(files.len())]
         }
         let file_infos = self.stat_concurrent(operator, thread_num, files).await?;
         let mut res = Vec::with_capacity(file_infos.len());
