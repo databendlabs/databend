@@ -118,7 +118,8 @@ impl CacheAccessor for DiskCacheAccessor {
         metrics_inc_cache_access_count(1, &self.name);
         let k = k.as_ref();
         if let Some(item) = self.lru_disk_cache.get(k) {
-            Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, item.len());
+            let size = item.len();
+            Profile::record_usize_profile(ProfileStatisticsName::ScanBytesFromLocal, size);
             metrics_inc_cache_hit_count(1, &self.name);
             Some(item)
         } else {
