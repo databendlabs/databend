@@ -62,9 +62,6 @@ statement ok
 grant role a to a;
 
 statement ok
-grant create database on *.* to a;
-
-statement ok
 set enable_expand_roles=1;
 
 query T
@@ -87,7 +84,7 @@ select grants from show_grants('user', 'a') order by object_id;
 GRANT SELECT ON 'default'.'default'.'t' TO 'a'@'%'
 GRANT OWNERSHIP ON 'default'.'default'.'t' TO 'a'@'%'
 GRANT OWNERSHIP ON 'default'.'default'.'t1' TO 'a'@'%'
-GRANT SELECT,INSERT,CREATE DATABASE ON *.* TO 'a'@'%'
+GRANT SELECT,INSERT ON *.* TO 'a'@'%'
 
 statement ok
 set enable_expand_roles=0;
@@ -114,7 +111,6 @@ select grants from show_grants('user', 'a') order by object_id;
 GRANT ROLE a to 'a'@'%'
 GRANT ROLE b to 'a'@'%'
 GRANT ROLE public to 'a'@'%'
-GRANT CREATE DATABASE ON *.* TO 'a'@'%'
 
 statement ok
 unset enable_expand_roles;

@@ -29,7 +29,7 @@ export USER_MASK_APPLY="bendsql --user=mask_apply --password=123 --host=${QUERY_
 
 comment "create privilege requires CREATE MASKING POLICY"
 echo "CREATE MASKING POLICY mask_phone AS (val STRING) RETURNS STRING -> concat('***', right(val, 2));" | $USER_MASK_CREATE
-stmt "GRANT CREATE MASKING POLICY ON *.* TO USER mask_create"
+stmt "GRANT CREATE MASKING POLICY ON *.* TO role role_mask_create"
 echo "CREATE MASKING POLICY mask_phone AS (val STRING) RETURNS STRING -> concat('***', right(val, 2));" | $USER_MASK_CREATE
 stmt "CREATE MASKING POLICY mask_email AS (val STRING) RETURNS STRING -> 'EMAIL'"
 #expect failure for user without privileges

@@ -16,8 +16,8 @@
 >>>> GRANT ROLE role_mask_create TO mask_create
 >>>> CREATE USER mask_desc IDENTIFIED BY '123' with default_role='mask_desc'
 #### create privilege requires CREATE MASKING POLICY
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateMaskingPolicy] is required on *.* for user 'mask_create'@'%' with roles [public,role_mask_create]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
->>>> GRANT CREATE MASKING POLICY ON *.* TO USER mask_create
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateMaskingPolicy] is required on *.* for user 'mask_create'@'%' with roles [role_mask_create]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+>>>> GRANT CREATE MASKING POLICY ON *.* TO role role_mask_create
 >>>> CREATE MASKING POLICY mask_email AS (val STRING) RETURNS STRING -> 'EMAIL'
 Error: APIError: QueryFailed: [1063]Permission denied: APPLY MASKING POLICY or OWNERSHIP is required on MASKING POLICY mask_phone for user 'mask_apply'@'%'
 1

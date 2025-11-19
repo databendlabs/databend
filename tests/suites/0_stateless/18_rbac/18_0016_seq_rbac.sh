@@ -9,7 +9,7 @@ export USER_B_CONNECT="bendsql --user=b --password=123 --host=${QUERY_MYSQL_HAND
 export USER_C_CONNECT="bendsql --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 for seq in $(echo "select name from show_sequences();" | $BENDSQL_CLIENT_CONNECT); do
-  echo "drop sequence if exists $seq;" | $BENDSQL_CLIENT_CONNECT
+  echo "drop sequence if exists `$seq`;" | $BENDSQL_CLIENT_CONNECT
 done
 
 echo "=== OLD LOGIC: user has super privileges can operator all sequences with enable_experimental_sequence_privilege_check=0 ==="
@@ -23,12 +23,21 @@ echo "drop role if exists role2;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists c;" | $BENDSQL_CLIENT_CONNECT
-echo "create user a identified by '123';" | $BENDSQL_CLIENT_CONNECT
-echo "create user b identified by '123';" | $BENDSQL_CLIENT_CONNECT
-echo "create user c identified by '123';" | $BENDSQL_CLIENT_CONNECT
-echo "grant super on *.* to a;" | $BENDSQL_CLIENT_CONNECT
-echo "grant select, insert, create on *.* to b" | $BENDSQL_CLIENT_CONNECT
-echo "grant select, insert, create on *.* to c" | $BENDSQL_CLIENT_CONNECT
+echo "create user a identified by '123' with default_role='role_a';" | $BENDSQL_CLIENT_CONNECT
+echo "create user b identified by '123' with default_role='role_b';" | $BENDSQL_CLIENT_CONNECT
+echo "create user c identified by '123' with default_role='role_c';" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role_a;" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role_b;" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role_c;" | $BENDSQL_CLIENT_CONNECT
+echo "create role if not exists role_a;" | $BENDSQL_CLIENT_CONNECT
+echo "create role if not exists role_b;" | $BENDSQL_CLIENT_CONNECT
+echo "create role if not exists role_c;" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role_a to a;" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role_b to b;" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role_c to c;" | $BENDSQL_CLIENT_CONNECT
+echo "grant super on *.* to role role_a;" | $BENDSQL_CLIENT_CONNECT
+echo "grant select, insert, create on *.* to role role_b" | $BENDSQL_CLIENT_CONNECT
+echo "grant select, insert, create on *.* to role role_c" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists tmp_b;" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists tmp_b1;" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists tmp_b2;" | $BENDSQL_CLIENT_CONNECT
@@ -69,9 +78,10 @@ echo "drop role if exists role3;" | $BENDSQL_CLIENT_CONNECT
 echo "create role role1;" | $BENDSQL_CLIENT_CONNECT
 echo "create role role2;" | $BENDSQL_CLIENT_CONNECT
 echo "create role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant create sequence on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant create sequence, create on *.* to role role1;" | $BENDSQL_CLIENT_CONNECT
 echo "grant role role1 to b;" | $BENDSQL_CLIENT_CONNECT
 echo "--- USER b failed to create conn seq1 because current role is public, can not create ---"
+echo "alter user b with default_role='public';" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE sequence seq1" | $USER_B_CONNECT
 
 echo "alter user b with default_role='role1';" | $BENDSQL_CLIENT_CONNECT
@@ -116,7 +126,7 @@ echo "show grants on sequence seq2;" | $USER_B_CONNECT
 echo "--- revoke access sequence from role3 , thne user c can not drop/use sequence seq1,3 ---"
 echo "revoke access sequence on sequence seq1 from role role3;" | $BENDSQL_CLIENT_CONNECT
 echo "revoke access sequence on sequence seq3 from role role3;" | $BENDSQL_CLIENT_CONNECT
-echo "grant select, insert, create on *.* to c" | $BENDSQL_CLIENT_CONNECT
+echo "grant select, insert, create on *.* to role role_c" | $BENDSQL_CLIENT_CONNECT
 echo "INSERT INTO tmp_b values(nextval(seq1));" | $USER_C_CONNECT
 echo "INSERT INTO tmp_b values(nextval(seq3));" | $USER_C_CONNECT
 echo "INSERT INTO tmp_b select nextval(seq1) from numbers(2);" | $USER_C_CONNECT
