@@ -32,6 +32,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::WorkloadMgr;
 use databend_common_meta_api::data_mask_api::DatamaskApi;
+use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GetProcedureReq;
@@ -42,6 +43,7 @@ use databend_common_meta_app::principal::ProcedureNameIdent;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_users::UserApiProvider;
 
 use crate::binder::show::get_show_options;
@@ -226,6 +228,10 @@ impl Binder {
                 let policy_id = self.resolve_masking_policy_id(policy).await?;
                 Ok(GrantObject::MaskingPolicy(policy_id))
             }
+            AccountMgrLevel::RowAccessPolicy(policy) => {
+                let policy_id = self.resolve_row_access_policy_id(policy).await?;
+                Ok(GrantObject::RowAccessPolicy(policy_id))
+            }
         }
     }
 
@@ -314,6 +320,10 @@ impl Binder {
                 let policy_id = self.resolve_masking_policy_id(policy).await?;
                 Ok(vec![GrantObject::MaskingPolicy(policy_id)])
             }
+            AccountMgrLevel::RowAccessPolicy(policy) => {
+                let policy_id = self.resolve_row_access_policy_id(policy).await?;
+                Ok(vec![GrantObject::RowAccessPolicy(policy_id)])
+            }
         }
     }
 
@@ -325,6 +335,19 @@ impl Binder {
         } else {
             Err(ErrorCode::UnknownDatamask(format!(
                 "Unknown masking policy {}",
+                policy
+            )))
+        }
+    }
+
+    async fn resolve_row_access_policy_id(&self, policy: &str) -> Result<u64> {
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let ident = RowAccessPolicyNameIdent::new(self.ctx.get_tenant(), policy.to_string());
+        if let Some((policy_id, _)) = meta_api.get_row_access_policy(&ident).await? {
+            Ok(*policy_id.data)
+        } else {
+            Err(ErrorCode::UnknownRowAccessPolicy(format!(
+                "Unknown row access policy {}",
                 policy
             )))
         }
@@ -611,6 +634,13 @@ impl Binder {
                 let policy_id = self.resolve_masking_policy_id(policy).await?;
                 format!(
                     "SELECT * FROM show_grants('masking_policy', '{}')",
+                    policy_id
+                )
+            }
+            GrantObjectName::RowAccessPolicy(policy) => {
+                let policy_id = self.resolve_row_access_policy_id(policy).await?;
+                format!(
+                    "SELECT * FROM show_grants('row_access_policy', '{}')",
                     policy_id
                 )
             }
