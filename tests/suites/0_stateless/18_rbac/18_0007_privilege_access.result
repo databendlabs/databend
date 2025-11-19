@@ -113,19 +113,19 @@ Error: APIError: QueryFailed: [1063]Permission denied: No privilege on database 
 Error: APIError: QueryFailed: [1063]Permission denied: No privilege on table root_table for user b.
 Error: APIError: QueryFailed: [1063]Permission denied: No privilege on table root_table for user b.
 1	1
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public,role_test_b]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public,role_test_b]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public,role_test_b]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public,role_test_b]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public,role_test_b]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public,role_test_b]
 0
 1
 a b/data_UUID_0000_00000000.parquet	1	0	NULL	NULL
 === check db/table_id ===
 Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
-CREATE default  USER b GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
 SELECT system  USER b GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
+CREATE default  USER b GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
 SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
 SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 SELECT,INSERT default.c.t  USER b GRANT SELECT,INSERT ON 'default'.'c'.'t' TO 'b'@'%'
@@ -133,8 +133,8 @@ OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2'
 1
 1
 Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
-CREATE default  USER b GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
 SELECT system  USER b GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
+CREATE default  USER b GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
 SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
 SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 SELECT,INSERT default.c.t1  USER b GRANT SELECT,INSERT ON 'default'.'c'.'t1' TO 'b'@'%'
@@ -143,8 +143,8 @@ OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2'
 1
 2
 Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
-CREATE default  USER b GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
 SELECT system  USER b GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
+CREATE default  USER b GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
 SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
 SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 SELECT,INSERT default.d.t1  USER b GRANT SELECT,INSERT ON 'default'.'d'.'t1' TO 'b'@'%'

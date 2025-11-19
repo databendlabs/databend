@@ -97,36 +97,6 @@ pub enum UserPrivilegeType {
     CreateDataMask = 1 << 16,
 }
 
-const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
-    UserPrivilegeType::{
-        Create
-        | Select
-        | Insert
-        | Update
-        | Delete
-        | Drop
-        | Alter
-        | Super
-        | CreateUser
-        | DropUser
-        | CreateRole
-        | DropRole
-        | Grant
-        | CreateStage
-        | Set
-        | CreateDataMask
-        | CreateMaskingPolicy
-        | ApplyMaskingPolicy
-        | Ownership
-        | Read
-        | Write
-        | CreateDatabase
-        | CreateWarehouse
-        | CreateConnection
-        | AccessConnection
-    }
-);
-
 impl Display for UserPrivilegeType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
@@ -345,25 +315,12 @@ impl UserPrivilegeSet {
         }
     }
 
-    // TODO: remove this, as ALL has different meanings on different objects
-    pub fn all_privileges() -> Self {
-        ALL_PRIVILEGES.into()
-    }
-
     pub fn set_privilege(&mut self, privilege: UserPrivilegeType) {
         self.privileges |= privilege;
     }
 
     pub fn has_privilege(&self, privilege: UserPrivilegeType) -> bool {
         self.privileges.contains(privilege)
-    }
-
-    pub fn set_all_privileges(&mut self) {
-        self.privileges |= ALL_PRIVILEGES;
-    }
-
-    pub fn is_all_privileges(&self) -> bool {
-        self.privileges == ALL_PRIVILEGES
     }
 }
 
