@@ -508,3 +508,34 @@ async fn stop_container(docker: &Docker, container_name: &str) {
         }
     }
 }
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ColumnType {
+    Bool,
+    Text,
+    Integer,
+    FloatingPoint,
+    Any,
+}
+
+impl sqllogictest::ColumnType for ColumnType {
+    fn from_char(value: char) -> Option<Self> {
+        match value {
+            'B' => Some(Self::Bool),
+            'T' => Some(Self::Text),
+            'I' => Some(Self::Integer),
+            'R' => Some(Self::FloatingPoint),
+            _ => Some(Self::Any),
+        }
+    }
+
+    fn to_char(&self) -> char {
+        match self {
+            Self::Bool => 'B',
+            Self::Text => 'T',
+            Self::Integer => 'I',
+            Self::FloatingPoint => 'R',
+            Self::Any => '?',
+        }
+    }
+}

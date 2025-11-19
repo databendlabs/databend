@@ -36,25 +36,41 @@ use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
 use super::aggregate_distinct_state::DistinctStateFunc;
+use super::aggregate_null_result::AggregateNullResultFunction;
 use super::assert_variadic_arguments;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateCountFunction;
 use super::AggregateFunction;
+use super::AggregateFunctionCombinatorNull;
 use super::AggregateFunctionCreator;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::CombinatorDescription;
 use super::StateAddr;
 
-#[derive(Clone)]
 pub struct AggregateDistinctCombinator<State> {
     name: String,
 
     nested_name: String,
     arguments: Vec<DataType>,
+    skip_null: bool,
     nested: Arc<dyn AggregateFunction>,
     _s: PhantomData<fn(State)>,
+}
+
+impl<State> Clone for AggregateDistinctCombinator<State> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            nested_name: self.nested_name.clone(),
+            arguments: self.arguments.clone(),
+            skip_null: self.skip_null,
+            nested: self.nested.clone(),
+            _s: PhantomData,
+        }
+    }
 }
 
 impl<State> AggregateDistinctCombinator<State>
@@ -104,12 +120,12 @@ where State: DistinctStateFunc
         input_rows: usize,
     ) -> Result<()> {
         let state = Self::get_state(place);
-        state.batch_add(columns, validity, input_rows)
+        state.batch_add(columns, validity, input_rows, self.skip_null)
     }
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = Self::get_state(place);
-        state.add(columns, row)
+        state.add(columns, row, self.skip_null)
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
@@ -202,32 +218,63 @@ pub fn aggregate_combinator_distinct_desc() -> CombinatorDescription {
     CombinatorDescription::creator(Box::new(try_create))
 }
 
-pub fn aggregate_combinator_uniq_desc() -> AggregateFunctionDescription {
-    let features = super::AggregateFunctionFeatures {
+pub fn aggregate_uniq_desc() -> AggregateFunctionDescription {
+    let features = AggregateFunctionFeatures {
         returns_default_when_only_null: true,
         ..Default::default()
     };
-    AggregateFunctionDescription::creator_with_features(Box::new(try_create_uniq), features)
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(|nested_name, params, arguments, sort_descs| {
+            let creator = Box::new(AggregateCountFunction::try_create) as _;
+            try_create(nested_name, params, arguments, sort_descs, &creator)
+        }),
+        features,
+    )
 }
 
-pub fn try_create_uniq(
-    nested_name: &str,
-    params: Vec<Scalar>,
-    arguments: Vec<DataType>,
-    sort_descs: Vec<AggregateFunctionSortDesc>,
-) -> Result<Arc<dyn AggregateFunction>> {
-    let creator: AggregateFunctionCreator = Box::new(AggregateCountFunction::try_create);
-    try_create(nested_name, params, arguments, sort_descs, &creator)
+pub fn aggregate_count_distinct_desc() -> AggregateFunctionDescription {
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(|_, params, arguments, _| {
+            let count_creator = Box::new(AggregateCountFunction::try_create) as _;
+            match *arguments {
+                [DataType::Nullable(_)] => {
+                    let new_arguments =
+                        AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
+                    let nested = try_create(
+                        "count",
+                        params.clone(),
+                        new_arguments,
+                        vec![],
+                        &count_creator,
+                    )?;
+                    AggregateFunctionCombinatorNull::try_create(params, arguments, nested, true)
+                }
+                ref arguments
+                    if !arguments.is_empty() && arguments.iter().all(DataType::is_null) =>
+                {
+                    AggregateNullResultFunction::try_create(DataType::Number(
+                        NumberDataType::UInt64,
+                    ))
+                }
+                _ => try_create("count", params, arguments, vec![], &count_creator),
+            }
+        }),
+        AggregateFunctionFeatures {
+            returns_default_when_only_null: true,
+            keep_nullable: true,
+            ..Default::default()
+        },
+    )
 }
 
-pub fn try_create(
+fn try_create(
     nested_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
     sort_descs: Vec<AggregateFunctionSortDesc>,
     nested_creator: &AggregateFunctionCreator,
 ) -> Result<Arc<dyn AggregateFunction>> {
-    let name = format!("DistinctCombinator({})", nested_name);
+    let name = format!("DistinctCombinator({nested_name})");
     assert_variadic_arguments(&name, arguments.len(), (1, 32))?;
 
     let nested_arguments = match nested_name {
@@ -236,53 +283,54 @@ pub fn try_create(
     };
     let nested = nested_creator(nested_name, params, nested_arguments, sort_descs)?;
 
-    if arguments.len() == 1 {
-        match &arguments[0] {
-            DataType::Number(ty) => with_number_mapped_type!(|NUM_TYPE| match ty {
-                NumberDataType::NUM_TYPE => {
-                    return Ok(Arc::new(AggregateDistinctCombinator::<
-                        AggregateDistinctNumberState<NUM_TYPE>,
-                    > {
-                        nested_name: nested_name.to_owned(),
-                        arguments,
-                        nested,
-                        name,
-                        _s: PhantomData,
-                    }));
-                }
-            }),
-            DataType::String => {
-                return match nested_name {
-                    "count" | "uniq" => Ok(Arc::new(AggregateDistinctCombinator::<
-                        AggregateUniqStringState,
-                    > {
-                        name,
-                        arguments,
-                        nested,
-                        nested_name: nested_name.to_owned(),
-                        _s: PhantomData,
-                    })),
-                    _ => Ok(Arc::new(AggregateDistinctCombinator::<
-                        AggregateDistinctStringState,
-                    > {
-                        nested_name: nested_name.to_owned(),
-                        arguments,
-                        nested,
-                        name,
-                        _s: PhantomData,
-                    })),
-                };
+    match *arguments {
+        [DataType::Number(ty)] => with_number_mapped_type!(|NUM_TYPE| match ty {
+            NumberDataType::NUM_TYPE => {
+                Ok(Arc::new(AggregateDistinctCombinator::<
+                    AggregateDistinctNumberState<NUM_TYPE>,
+                > {
+                    nested_name: nested_name.to_owned(),
+                    arguments,
+                    skip_null: false,
+                    nested,
+                    name,
+                    _s: PhantomData,
+                }))
             }
-            _ => {}
+        }),
+        [DataType::String] if matches!(nested_name, "count" | "uniq") => {
+            Ok(Arc::new(AggregateDistinctCombinator::<
+                AggregateUniqStringState,
+            > {
+                name,
+                arguments,
+                skip_null: false,
+                nested,
+                nested_name: nested_name.to_owned(),
+                _s: PhantomData,
+            }))
         }
+        [DataType::String] => Ok(Arc::new(AggregateDistinctCombinator::<
+            AggregateDistinctStringState,
+        > {
+            nested_name: nested_name.to_owned(),
+            arguments,
+            skip_null: false,
+            nested,
+            name,
+            _s: PhantomData,
+        })),
+        _ => Ok(Arc::new(AggregateDistinctCombinator::<
+            AggregateDistinctState,
+        > {
+            nested_name: nested_name.to_owned(),
+            skip_null: nested_name == "count"
+                && arguments.len() > 1
+                && arguments.iter().any(DataType::is_nullable_or_null),
+            arguments,
+            nested,
+            name,
+            _s: PhantomData,
+        })),
     }
-    Ok(Arc::new(AggregateDistinctCombinator::<
-        AggregateDistinctState,
-    > {
-        nested_name: nested_name.to_owned(),
-        arguments,
-        nested,
-        name,
-        _s: PhantomData,
-    }))
 }

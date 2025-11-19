@@ -1273,9 +1273,7 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        if matches!(self.storage_format, FuseStorageFormat::Parquet)
-            && matches!(self.table_type, FuseTableType::Standard)
-        {
+        if matches!(self.storage_format, FuseStorageFormat::Parquet) && !self.is_read_only() {
             // ignore persistent system tables {
             if let Ok(database_name) = self.table_info.database_name() {
                 if database_name == "persistent_system" {

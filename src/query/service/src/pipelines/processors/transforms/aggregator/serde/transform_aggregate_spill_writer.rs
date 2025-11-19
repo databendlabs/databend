@@ -192,6 +192,7 @@ pub fn agg_spilling_aggregate_payload(
     let mut spilled_buckets_payloads = Vec::with_capacity(partition_count);
     // Record how many rows are spilled.
     let mut rows = 0;
+    let mut buckets_count = 0;
     let location = spiller.create_unique_location();
     for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
         if payload.len() == 0 {
@@ -200,6 +201,7 @@ pub fn agg_spilling_aggregate_payload(
 
         let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
         rows += data_block.num_rows();
+        buckets_count += 1;
 
         let begin = write_size;
         let mut columns_data = Vec::with_capacity(data_block.num_columns());
@@ -227,6 +229,7 @@ pub fn agg_spilling_aggregate_payload(
             let (location, write_bytes) = spiller
                 .spill_stream_aggregate_buffer(Some(location), write_data)
                 .await?;
+            let elapsed = instant.elapsed();
             // perf
             {
                 Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
@@ -236,7 +239,7 @@ pub fn agg_spilling_aggregate_payload(
                 );
                 Profile::record_usize_profile(
                     ProfileStatisticsName::RemoteSpillWriteTime,
-                    instant.elapsed().as_millis() as usize,
+                    elapsed.as_millis() as usize,
                 );
             }
 
@@ -249,9 +252,8 @@ pub fn agg_spilling_aggregate_payload(
             }
 
             info!(
-                "Write aggregate spill {} successfully, elapsed: {:?}",
-                location,
-                instant.elapsed()
+                "Write aggregate spill finished(local): (location: {}, bytes: {}, rows: {}, buckets_count: {}, elapsed: {:?})",
+                location, write_bytes, rows, buckets_count, elapsed
             );
         }
 

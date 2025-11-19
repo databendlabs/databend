@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -38,6 +39,10 @@ pub struct OptimizerContext {
     enable_dphyp: RwLock<bool>,
     max_push_down_limit: RwLock<usize>,
     planning_agg_index: RwLock<bool>,
+    skip_list: HashSet<String>,
+    skip_list_str: String,
+    grouping_sets_to_union: bool,
+
     #[educe(Debug(ignore))]
     sample_executor: RwLock<Option<Arc<dyn QueryExecutor>>>,
 
@@ -52,6 +57,20 @@ pub struct OptimizerContext {
 
 impl OptimizerContext {
     pub fn new(table_ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Arc<Self> {
+        let settings = table_ctx.get_settings();
+        let grouping_sets_to_union = settings.get_grouping_sets_to_union().unwrap_or_default();
+
+        let (skip_list_str, skip_list) = match settings.get_optimizer_skip_list() {
+            Ok(skip_list_str) if !skip_list_str.is_empty() => {
+                let skip_list = skip_list_str
+                    .split(',')
+                    .map(|item| item.trim().to_lowercase())
+                    .collect::<HashSet<_>>();
+                (skip_list_str.to_string(), skip_list)
+            }
+            _ => ("".to_string(), HashSet::new()),
+        };
+
         Arc::new(Self {
             table_ctx,
             metadata,
@@ -62,6 +81,9 @@ impl OptimizerContext {
             max_push_down_limit: RwLock::new(10000),
             sample_executor: RwLock::new(None),
             planning_agg_index: RwLock::new(false),
+            skip_list,
+            skip_list_str,
+            grouping_sets_to_union,
             flags: RwLock::new(HashMap::new()),
             enable_trace: RwLock::new(false),
         })
@@ -148,33 +170,22 @@ impl OptimizerContext {
 
     /// Check if an optimizer or rule is disabled based on optimizer_skip_list setting
     pub fn is_optimizer_disabled(&self, name: &str) -> bool {
-        let settings = self.get_table_ctx().get_settings();
-
-        if !settings.get_grouping_sets_to_union().unwrap_or_default()
+        if !self.grouping_sets_to_union
             && (name == RuleID::GroupingSetsToUnion.to_string()
                 || name == RuleID::HierarchicalGroupingSetsToUnion.to_string())
         {
             return true;
         }
 
-        match settings.get_optimizer_skip_list() {
-            Ok(skip_list) if !skip_list.is_empty() => {
-                let name_lower = name.to_lowercase();
-                let is_disabled = skip_list
-                    .split(',')
-                    .map(str::trim)
-                    .any(|item| item.to_lowercase() == name_lower);
-
-                if is_disabled {
-                    log::warn!(
-                        "Skipping optimizer component: {} (found in optimizer_skip_list: {})",
-                        name,
-                        skip_list
-                    );
-                }
-                is_disabled
-            }
-            _ => false,
+        let name_lower = name.to_lowercase();
+        let is_disabled = self.skip_list.contains(&name_lower);
+        if is_disabled {
+            log::warn!(
+                "Skipping optimizer component: {} (found in optimizer_skip_list: {})",
+                name,
+                self.skip_list_str
+            );
         }
+        is_disabled
     }
 }

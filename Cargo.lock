@@ -5323,6 +5323,7 @@ dependencies = [
  "walkdir",
  "wiremock",
  "xorf",
+ "zip",
 ]
 
 [[package]]

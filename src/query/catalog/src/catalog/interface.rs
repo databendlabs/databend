@@ -21,6 +21,7 @@ use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
@@ -123,6 +124,7 @@ use log::info;
 use crate::database::Database;
 use crate::table::Table;
 use crate::table_args::TableArgs;
+use crate::table_context::TableContext;
 use crate::table_function::TableFunction;
 
 #[derive(Default, Clone)]
@@ -618,4 +620,12 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     }
 
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()>;
+
+    fn transform_udtf_as_table_function(
+        &self,
+        ctx: &dyn TableContext,
+        table_args: &TableArgs,
+        udtf: UDTFServer,
+        func_name: &str,
+    ) -> Result<Arc<dyn TableFunction>>;
 }

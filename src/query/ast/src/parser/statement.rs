@@ -1826,26 +1826,22 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
 
     // row policy
-    // CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS
+    // CREATE ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS
     // ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body>
     // [ COMMENT = '<string_literal>' ]
-    let create_row_access = map_res(
+    let create_row_access = map(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ ROW ~ ACCESS ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ ROW ~ ACCESS ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #row_access_definition
             ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
         },
-        |(_, opt_or_replace, _, _, _, opt_if_not_exists, name, definition, opt_comment)| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateRowAccessPolicy(
-                CreateRowAccessPolicyStmt {
-                    create_option,
-                    name,
-                    description: opt_comment.map(|(_, _, description)| description),
-                    definition,
-                },
-            ))
+        |(_, _, _, _, opt_if_not_exists, name, definition, opt_comment)| {
+            Statement::CreateRowAccessPolicy(CreateRowAccessPolicyStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name,
+                description: opt_comment.map(|(_, _, description)| description),
+                definition,
+            })
         },
     );
     let drop_row_access = map(
@@ -2066,19 +2062,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
 
     // data mark policy
-    let create_data_mask_policy = map_res(
+    let create_data_mask_policy = map(
         rule! {
-            CREATE ~ ( OR ~ ^REPLACE )? ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
+            CREATE ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
         },
-        |(_, opt_or_replace, _, _, opt_if_not_exists, name, policy)| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+        |(_, _, _, opt_if_not_exists, name, policy)| {
             let stmt = CreateDatamaskPolicyStmt {
-                create_option,
+                if_not_exists: opt_if_not_exists.is_some(),
                 name: name.to_string(),
                 policy,
             };
-            Ok(Statement::CreateDatamaskPolicy(stmt))
+            Statement::CreateDatamaskPolicy(stmt)
         },
     );
     let drop_data_mask_policy = map(
@@ -2787,7 +2781,7 @@ AS
     [ WEBHOOK = ( url = <string_literal>, method = <string_literal>, authorization_header = <string_literal> ) ]
     [ COMMENT = '<string_literal>' ]`"
                 | #create_connection: "`CREATE [OR REPLACE] CONNECTION [IF NOT EXISTS] <connection_name> STORAGE_TYPE = <type> <storage_configs>`"
-                | #create_row_access : "`CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
+                | #create_row_access : "`CREATE ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body> [ COMMENT = '<string_literal>' ]`"
                 | #create_user : "`CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
                 | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name> [COMMENT ='<string_literal>']`"
                 | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`"
@@ -5383,6 +5377,50 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         .parse(i)
     }
 
+    enum FuncBody {
+        Sql(String),
+        Server {
+            address: String,
+            handler: String,
+            headers: BTreeMap<String, String>,
+            language: String,
+            immutable: Option<bool>,
+        },
+    }
+
+    fn func_body(i: Input) -> IResult<FuncBody> {
+        let sql = map(
+            rule! {
+                AS ~ ^#code_string
+            },
+            |(_, sql)| FuncBody::Sql(sql),
+        );
+        let server = map(
+            rule! {
+                LANGUAGE ~ #ident
+                ~ (#udf_immutable)?
+                ~ HANDLER ~ ^"=" ~ ^#literal_string
+                ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
+                ~ ADDRESS ~ ^"=" ~ ^#literal_string
+            },
+            |(_, language, immutable, _, _, handler, headers, _, _, address)| FuncBody::Server {
+                address,
+                handler,
+                headers: headers
+                    .map(|(_, _, _, headers, _)| BTreeMap::from_iter(headers))
+                    .unwrap_or_default(),
+                language: language.to_string(),
+                immutable,
+            },
+        );
+
+        rule!(
+            #sql: "AS <sql>"
+            | #server: "LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
+        )
+        .parse(i)
+    }
+
     let lambda_udf = map(
         rule! {
             AS ~ #lambda_udf_params
@@ -5455,23 +5493,49 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
-    let scalar_udf_or_udtf = map(
+    let scalar_udf_or_udtf = map_res(
         rule! {
             "(" ~ #comma_separated_list0(udtf_arg) ~ ")"
             ~ RETURNS ~ ^#return_body
-            ~ AS ~ ^#code_string
+            ~ #func_body
         },
-        |(_, arg_types, _, _, return_body, _, sql)| match return_body {
-            ReturnBody::Scalar(return_type) => UDFDefinition::ScalarUDF {
-                arg_types,
-                definition: sql,
-                return_type,
-            },
-            ReturnBody::Table(return_types) => UDFDefinition::UDTFSql {
-                arg_types,
-                return_types,
-                sql,
-            },
+        |(_, arg_types, _, _, return_body, func_body)| {
+            let definition = match (return_body, func_body) {
+                (ReturnBody::Scalar(return_type), FuncBody::Sql(sql)) => UDFDefinition::ScalarUDF {
+                    arg_types,
+                    definition: sql,
+                    return_type,
+                },
+                (ReturnBody::Scalar(_), FuncBody::Server { .. }) => {
+                    return Err(nom::Err::Failure(ErrorKind::Other(
+                        "ScalarUDF unsupported external Server",
+                    )))
+                }
+                (ReturnBody::Table(return_types), FuncBody::Sql(sql)) => UDFDefinition::UDTFSql {
+                    arg_types,
+                    return_types,
+                    sql,
+                },
+                (
+                    ReturnBody::Table(return_types),
+                    FuncBody::Server {
+                        address,
+                        handler,
+                        headers,
+                        language,
+                        immutable,
+                    },
+                ) => UDFDefinition::UDTFServer {
+                    arg_types,
+                    return_types,
+                    address,
+                    handler,
+                    headers,
+                    language,
+                    immutable,
+                },
+            };
+            Ok(definition)
         },
     );
 
@@ -5537,7 +5601,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         #lambda_udf: "AS (<parameter [parameter type]>, ...) -> <definition expr>"
         | #udaf: "(<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
         | #udf: "(<[arg_name] arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
-        | #scalar_udf_or_udtf: "(<arg_name arg_type>, ...) RETURNS <return body> AS <sql> }"
+        | #scalar_udf_or_udtf: "(<arg_name arg_type>, ...) RETURNS <return body> { AS <sql> | LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address> } }"
     ).parse(i)
 }
 

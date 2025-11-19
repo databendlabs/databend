@@ -75,6 +75,10 @@ SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalar
 2
 3
 
+## window can't be inside window
+statement error
+select avg(number) over(partition by number % 3 order by number %3) as a, a + 3 as b, avg(b) over (partition by number % 3 order by number %3) as c from numbers(10);
+
 statement error
 select number %3 a, number %4 b, row_number() over(order by number % 11) from range(1, 10) t(number)  group by a,b;
 

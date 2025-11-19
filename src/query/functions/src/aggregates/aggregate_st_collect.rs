@@ -56,6 +56,7 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateSerde;
@@ -401,7 +402,7 @@ where
     }
 }
 
-pub fn try_create_aggregate_st_collect_function(
+fn try_create_aggregate_st_collect_function(
     display_name: &str,
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
@@ -423,5 +424,11 @@ pub fn try_create_aggregate_st_collect_function(
 }
 
 pub fn aggregate_st_collect_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_st_collect_function))
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_st_collect_function),
+        AggregateFunctionFeatures {
+            keep_nullable: true,
+            ..Default::default()
+        },
+    )
 }

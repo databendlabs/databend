@@ -19,7 +19,6 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::quote::QuotedString;
-use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::TypeName;
 
@@ -39,19 +38,15 @@ pub struct DataMaskPolicy {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateDatamaskPolicyStmt {
-    pub create_option: CreateOption,
+    pub if_not_exists: bool,
     pub name: String,
     pub policy: DataMaskPolicy,
 }
 
 impl Display for CreateDatamaskPolicyStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE ")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
-            write!(f, "OR REPLACE ")?;
-        }
-        write!(f, "MASKING POLICY ")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        write!(f, "CREATE MASKING POLICY ")?;
+        if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
         write!(f, "{} AS (", self.name)?;

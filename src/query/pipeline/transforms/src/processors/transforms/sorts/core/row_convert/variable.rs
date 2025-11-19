@@ -17,12 +17,14 @@ use std::ops::Range;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
@@ -128,6 +130,7 @@ impl RowConverter<VariableRows> for VariableRowConverter {
             | DataType::Number(_)
             | DataType::Decimal(_)
             | DataType::Timestamp
+            | DataType::TimestampTz
             | DataType::Interval
             | DataType::Date
             | DataType::Binary
@@ -335,6 +338,11 @@ impl LengthCalculatorVisitor<'_> {
             DataType::Timestamp => {
                 for length in self.lengths.iter_mut() {
                     *length += i64::ENCODED_LEN
+                }
+            }
+            DataType::TimestampTz => {
+                for length in self.lengths.iter_mut() {
+                    *length += timestamp_tz::ENCODED_LEN
                 }
             }
             DataType::Date => {
@@ -562,6 +570,21 @@ impl EncodeVisitor<'_> {
                     *scalar.as_timestamp().unwrap()
                 };
                 fixed_encode_const::<TimestampType>(
+                    &mut self.out.data,
+                    &mut self.out.offsets,
+                    is_null,
+                    scalar_value,
+                    self.field.asc,
+                    self.field.nulls_first,
+                );
+            }
+            DataType::TimestampTz => {
+                let scalar_value = if is_null {
+                    timestamp_tz::default()
+                } else {
+                    *scalar.as_timestamp_tz().unwrap()
+                };
+                fixed_encode_const::<TimestampTzType>(
                     &mut self.out.data,
                     &mut self.out.offsets,
                     is_null,
