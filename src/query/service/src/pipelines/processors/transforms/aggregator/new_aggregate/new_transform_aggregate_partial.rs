@@ -50,9 +50,7 @@ impl Default for HashTable {
         Self::MovedOut
     }
 }
-
-// SELECT column_name, agg(xxx) FROM table_name GROUP BY column_name
-pub struct TransformPartialAggregate {
+pub struct NewTransformPartialAggregate {
     hash_table: HashTable,
     probe_state: ProbeState,
     params: Arc<AggregatorParams>,
@@ -63,7 +61,7 @@ pub struct TransformPartialAggregate {
     settings: MemorySettings,
 }
 
-impl TransformPartialAggregate {
+impl NewTransformPartialAggregate {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
@@ -72,29 +70,17 @@ impl TransformPartialAggregate {
         config: HashTableConfig,
     ) -> Result<Box<dyn Processor>> {
         let arena = Arc::new(Bump::new());
-        // when enable_experiment_aggregate, we will repartition again in the final stage
-        // it will be too small if we use max radix bits here
-        let hash_table = if params.has_distinct_combinator() {
-            let max_radix_bits = config.max_radix_bits;
-            HashTable::AggregateHashTable(AggregateHashTable::new(
-                params.group_data_types.clone(),
-                params.aggregate_functions.clone(),
-                config.with_initial_radix_bits(max_radix_bits),
-                arena,
-            ))
-        } else {
-            HashTable::AggregateHashTable(AggregateHashTable::new(
-                params.group_data_types.clone(),
-                params.aggregate_functions.clone(),
-                config,
-                arena,
-            ))
-        };
+        let hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
+            params.group_data_types.clone(),
+            params.aggregate_functions.clone(),
+            config,
+            arena,
+        ));
 
         Ok(AccumulatingTransformer::create(
             input,
             output,
-            TransformPartialAggregate {
+            NewTransformPartialAggregate {
                 params,
                 hash_table,
                 probe_state: ProbeState::default(),
@@ -107,7 +93,6 @@ impl TransformPartialAggregate {
         ))
     }
 
-    // Block should be `convert_to_full`.
     #[inline(always)]
     fn aggregate_arguments<'a>(
         block: &'a DataBlock,
@@ -183,46 +168,49 @@ impl TransformPartialAggregate {
             }
         }
     }
+
+    fn spill_out(&mut self) -> Result<Vec<DataBlock>> {
+        if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
+            let group_types = v.payload.group_types.clone();
+            let aggrs = v.payload.aggrs.clone();
+            v.config.update_current_max_radix_bits();
+            let config = v
+                .config
+                .clone()
+                .with_initial_radix_bits(v.config.max_radix_bits);
+
+            let mut state = PayloadFlushState::default();
+
+            // repartition to max for normalization
+            let partitioned_payload = v
+                .payload
+                .repartition(1 << config.max_radix_bits, &mut state);
+
+            let blocks = vec![DataBlock::empty_with_meta(
+                AggregateMeta::create_agg_spilling(partitioned_payload),
+            )];
+
+            let arena = Arc::new(Bump::new());
+            self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
+                group_types,
+                aggrs,
+                config,
+                arena,
+            ));
+            return Ok(blocks);
+        }
+        unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state during spill check")
+    }
 }
 
-impl AccumulatingTransform for TransformPartialAggregate {
-    const NAME: &'static str = "TransformPartialAggregate";
+impl AccumulatingTransform for NewTransformPartialAggregate {
+    const NAME: &'static str = "NewTransformPartialAggregate";
 
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         self.execute_one_block(block)?;
 
         if self.settings.check_spill() {
-            if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
-                let group_types = v.payload.group_types.clone();
-                let aggrs = v.payload.aggrs.clone();
-                v.config.update_current_max_radix_bits();
-                let config = v
-                    .config
-                    .clone()
-                    .with_initial_radix_bits(v.config.max_radix_bits);
-
-                let mut state = PayloadFlushState::default();
-
-                // repartition to max for normalization
-                let partitioned_payload = v
-                    .payload
-                    .repartition(1 << config.max_radix_bits, &mut state);
-
-                let blocks = vec![DataBlock::empty_with_meta(
-                    AggregateMeta::create_agg_spilling(partitioned_payload),
-                )];
-
-                let arena = Arc::new(Bump::new());
-                self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
-                    group_types,
-                    aggrs,
-                    config,
-                    arena,
-                ));
-                return Ok(blocks);
-            }
-
-            unreachable!("[TRANSFORM-AGGREGATOR] Invalid hash table state during spill check")
+            self.spill_out()?;
         }
 
         Ok(vec![])

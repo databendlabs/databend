@@ -15,6 +15,7 @@
 mod datablock_splitter;
 mod new_aggregate_spiller;
 mod new_final_aggregate_state;
+mod new_transform_aggregate_partial;
 mod new_transform_aggregate_spill_writer;
 mod new_transform_final_aggregate;
 mod transform_partition_bucket_scatter;
