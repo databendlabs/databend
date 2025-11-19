@@ -234,7 +234,7 @@ impl From<&TableField> for Field {
             }
         };
 
-        Field::new(f.name(), ty, f.is_nullable()).with_metadata(metadata)
+        Field::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata)
     }
 }
 
@@ -426,5 +426,27 @@ impl From<&Column> for Arc<dyn arrow_array::Array> {
 impl Column {
     pub fn into_arrow_rs(self) -> Arc<dyn arrow_array::Array> {
         (&self).into()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_column::buffer::Buffer;
+
+    use super::*;
+    use crate::types::AnyType;
+    use crate::types::ArrayColumn;
+
+    #[test]
+    fn test_to_record_batch_with_null_array() {
+        let array =
+            ArrayColumn::<AnyType>::new(Column::Null { len: 3 }, Buffer::from(vec![0_u64, 3]));
+        let block = DataBlock::new_from_columns(vec![Column::Array(Box::new(array))]);
+        let schema = DataSchema::new(vec![DataField::new(
+            "arr",
+            DataType::Array(Box::new(DataType::Null)),
+        )]);
+
+        assert!(block.to_record_batch_with_dataschema(&schema).is_ok());
     }
 }
