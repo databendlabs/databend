@@ -14,14 +14,11 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_settings::Settings;
 use databend_common_sql::binder::is_range_join_condition;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
-use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
@@ -37,13 +34,10 @@ enum PhysicalJoinType {
         range: Vec<ScalarExpr>,
         other: Vec<ScalarExpr>,
     },
-    LoopJoin {
-        conditions: Vec<ScalarExpr>,
-    },
 }
 
 // Choose physical join type by join conditions
-fn physical_join(join: &Join, s_expr: &SExpr, _settings: &Settings) -> Result<PhysicalJoinType> {
+fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     if join.equi_conditions.is_empty() && join.join_type.is_any_join() {
         return Err(ErrorCode::SemanticError(
             "ANY JOIN only supports equality-based hash joins",
@@ -53,23 +47,6 @@ fn physical_join(join: &Join, s_expr: &SExpr, _settings: &Settings) -> Result<Ph
     let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
     let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
     let right_stat_info = right_rel_expr.derive_cardinality()?;
-    let nested_loop_join_threshold = 0;
-    if matches!(join.join_type, JoinType::Inner | JoinType::Cross)
-        && (right_stat_info
-            .statistics
-            .precise_cardinality
-            .map(|n| n < nested_loop_join_threshold)
-            .unwrap_or(false)
-            || right_stat_info.cardinality < nested_loop_join_threshold as _)
-    {
-        let conditions = join
-            .non_equi_conditions
-            .iter()
-            .map(|c| Ok(c.clone()))
-            .chain(join.equi_conditions.iter().map(condition_to_expr))
-            .collect::<Result<_>>()?;
-        return Ok(PhysicalJoinType::LoopJoin { conditions });
-    };
 
     if !join.equi_conditions.is_empty() {
         // Contain equi condition, use hash join
@@ -184,8 +161,7 @@ impl PhysicalPlanBuilder {
             )
             .await
         } else {
-            let settings = self.ctx.get_settings();
-            match physical_join(join, s_expr, &settings)? {
+            match physical_join(join, s_expr)? {
                 PhysicalJoinType::Hash => {
                     self.build_hash_join(
                         join,
@@ -209,42 +185,7 @@ impl PhysicalPlanBuilder {
                     )
                     .await
                 }
-                PhysicalJoinType::LoopJoin { conditions } => {
-                    self.build_loop_join(
-                        join.join_type,
-                        s_expr,
-                        left_required,
-                        right_required,
-                        conditions,
-                    )
-                    .await
-                }
             }
         }
     }
-}
-
-fn condition_to_expr(condition: &JoinEquiCondition) -> Result<ScalarExpr> {
-    let left_type = condition.left.data_type()?;
-    let right_type = condition.right.data_type()?;
-
-    let arguments = match (&left_type, &right_type) {
-        (DataType::Nullable(left), right) if **left == *right => vec![
-            condition.left.clone(),
-            condition.right.clone().unify_to_data_type(&left_type),
-        ],
-        (left, DataType::Nullable(right)) if *left == **right => vec![
-            condition.left.clone().unify_to_data_type(&right_type),
-            condition.right.clone(),
-        ],
-        _ => vec![condition.left.clone(), condition.right.clone()],
-    };
-
-    Ok(FunctionCall {
-        span: condition.left.span(),
-        func_name: "eq".to_string(),
-        params: vec![],
-        arguments,
-    }
-    .into())
 }

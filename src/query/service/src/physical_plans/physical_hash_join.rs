@@ -25,6 +25,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
@@ -1150,7 +1151,7 @@ impl PhysicalPlanBuilder {
 
         // Create projections and output schema
         let mut projections = ColumnSet::new();
-        let projected_schema = DataSchemaRefExt::create(merged_fields.clone());
+        let projected_schema = DataSchema::new(merged_fields.clone());
 
         for column in column_projections.iter() {
             if let Some((index, _)) = projected_schema.column_with_name(&column.to_string()) {
@@ -1198,7 +1199,7 @@ impl PhysicalPlanBuilder {
     fn build_nested_loop_filter_info(
         &self,
         join: &Join,
-        merged_schema: &DataSchemaRef,
+        merged_schema: &DataSchema,
     ) -> Result<NestedLoopFilterInfo> {
         let predicates = join
             .non_equi_conditions
@@ -1286,8 +1287,6 @@ impl PhysicalPlanBuilder {
         // Step 10: Process non-equi conditions
         let non_equi_conditions = self.process_non_equi_conditions(join, &merged_schema)?;
 
-        let nested_loop_filter = self.build_nested_loop_filter_info(join, &merged_schema)?;
-
         // Step 11: Build runtime filter
         let runtime_filter = build_runtime_filter(
             self.ctx.clone(),
@@ -1299,6 +1298,8 @@ impl PhysicalPlanBuilder {
             build_table_indexes,
         )
         .await?;
+
+        let nested_loop_filter = self.build_nested_loop_filter_info(join, &merged_schema)?;
 
         // Step 12: Create and return the HashJoin
         let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;

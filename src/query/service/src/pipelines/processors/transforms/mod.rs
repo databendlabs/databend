@@ -25,7 +25,6 @@ mod transform_branched_async_function;
 mod transform_cache_scan;
 mod transform_dictionary;
 mod transform_expression_scan;
-mod transform_loop_join;
 
 mod transform_recursive_cte_scan;
 mod transform_recursive_cte_source;
@@ -54,7 +53,6 @@ pub use transform_cache_scan::HashJoinCacheState;
 pub use transform_cache_scan::NewHashJoinCacheState;
 pub use transform_cache_scan::TransformCacheScan;
 pub use transform_expression_scan::TransformExpressionScan;
-pub use transform_loop_join::*;
 pub use transform_recursive_cte_scan::TransformRecursiveCteScan;
 pub use transform_recursive_cte_source::TransformRecursiveCteSource;
 pub use transform_resort_addon::TransformResortAddOn;
