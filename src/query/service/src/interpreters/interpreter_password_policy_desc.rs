@@ -127,6 +127,11 @@ impl Interpreter for DescPasswordPolicyInterpreter {
             Some(DEFAULT_PASSWORD_HISTORY),
         ];
 
+        let default = defaults
+            .iter()
+            .map(|opt| opt.map(|v| v.to_string()))
+            .collect::<Vec<_>>();
+
         let descriptions = vec![
             "Name of password policy.".to_string(),
             "Comment of password policy.".to_string(),
@@ -146,7 +151,7 @@ impl Interpreter for DescPasswordPolicyInterpreter {
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(properties),
             StringType::from_data(values),
-            UInt64Type::from_opt_data(defaults),
+            StringType::from_opt_data(defaults),
             StringType::from_data(descriptions),
         ])])
     }
