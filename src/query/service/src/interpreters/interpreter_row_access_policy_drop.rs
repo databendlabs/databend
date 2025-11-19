@@ -18,7 +18,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropRowAccessPolicyPlan;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 
@@ -54,6 +57,17 @@ impl Interpreter for DropRowAccessPolicyInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
+        let tenant = self.plan.tenant.clone();
+        let policy_id = match handler
+            .get_row_access_policy(meta_api.clone(), &tenant, self.plan.name.clone())
+            .await
+        {
+            Ok((policy_id, _)) => Some(*policy_id.data),
+            Err(e) if e.code() == ErrorCode::UNKNOWN_ROW_ACCESS_POLICY && self.plan.if_exists => {
+                None
+            }
+            Err(e) => return Err(e),
+        };
         if let Err(e) = handler
             .drop_row_access_policy(meta_api, self.plan.clone().into())
             .await
@@ -63,6 +77,14 @@ impl Interpreter for DropRowAccessPolicyInterpreter {
             } else {
                 return Err(e);
             }
+        }
+
+        if let Some(policy_id) = policy_id {
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            role_api
+                .revoke_ownership(&OwnershipObject::RowAccessPolicy { policy_id })
+                .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
         }
 
         Ok(PipelineBuildResult::create())
