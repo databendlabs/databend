@@ -22,7 +22,10 @@ use databend_common_base::base::tokio::sync::watch;
 use databend_common_base::base::tokio::sync::watch::Receiver;
 use databend_common_base::base::tokio::sync::watch::Sender;
 use databend_common_expression::Expr;
-use xorf::BinaryFuse16;
+
+use crate::sbbf::Sbbf;
+
+pub type RuntimeBloomFilter = Sbbf;
 
 #[derive(Clone, Default)]
 pub struct RuntimeFilterInfo {
@@ -69,7 +72,7 @@ pub struct RuntimeFilterEntry {
 #[derive(Clone)]
 pub struct RuntimeFilterBloom {
     pub column_name: String,
-    pub filter: BinaryFuse16,
+    pub filter: RuntimeBloomFilter,
 }
 
 #[derive(Default)]

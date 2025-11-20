@@ -32,6 +32,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
@@ -166,7 +167,6 @@ use futures::TryStreamExt;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use walkdir::WalkDir;
-use xorf::BinaryFuse16;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
@@ -832,7 +832,7 @@ impl TableContext for CtxDelegation {
         HashMap::new()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse16)> {
+    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
         todo!()
     }
 
