@@ -245,14 +245,14 @@ fn parse_date_or_timestamp(v: &Scalar) -> Option<String> {
     if v.as_timestamp().is_some() {
         Some(
             v.as_timestamp()
-                .map(|s| s.to_timestamp(TimeZone::UTC).to_string())
+                .map(|s| s.to_timestamp(&TimeZone::UTC).to_string())
                 .unwrap(),
         )
     } else if v.as_date().is_some() {
         Some(
             v.as_date()
                 .map(|s| {
-                    s.to_date(TimeZone::UTC)
+                    s.to_date(&TimeZone::UTC)
                         .at(0, 0, 0, 0)
                         .in_tz("UTC")
                         .unwrap()
