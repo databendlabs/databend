@@ -172,7 +172,11 @@ impl<K: Keyable, A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES
                 Err(x) => old_header = x,
             };
         }
-        self.count.fetch_add(1, Ordering::Relaxed);
+
+        if SKIP_DUPLICATES {
+            self.count.fetch_add(1, Ordering::Relaxed);
+        }
+
         unsafe { (*entry_ptr).next = remove_header_tag(old_header) };
     }
 }
