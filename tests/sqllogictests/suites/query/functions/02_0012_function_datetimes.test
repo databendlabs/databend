@@ -808,7 +808,6 @@ select add_days(to_date('9999-12-30'), 1)
 ----
 9999-12-31
 
-onlyif http
 query T
 select add_days(to_datetime('9999-12-30 21:59:59'), 1)
 ----
