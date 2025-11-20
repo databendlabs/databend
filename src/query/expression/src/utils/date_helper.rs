@@ -34,6 +34,13 @@ use crate::types::date::clamp_date;
 use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp::MICROS_PER_SEC;
 
+// jiff's `Timestamp` only accepts UTC seconds in
+// [-377705023201, 253402207200] so that any ±25:59:59 offset still
+// yields a valid civil datetime. Clamp after splitting into seconds
+// and sub-second nanoseconds to avoid constructing out-of-range values.
+const JIFF_TIMESTAMP_MIN_SEC: i64 = -377705023201;
+const JIFF_TIMESTAMP_MAX_SEC: i64 = 253402207200;
+
 pub trait DateConverter {
     fn to_date(&self, tz: TimeZone) -> Date;
     fn to_timestamp(&self, tz: TimeZone) -> Zoned;
@@ -55,12 +62,11 @@ where T: AsPrimitive<i64>
             secs -= 1;
             nanos += 1_000_000_000;
         }
-
-        if secs > 253402207200 {
-            secs = 253402207200;
+        if secs > JIFF_TIMESTAMP_MAX_SEC {
+            secs = JIFF_TIMESTAMP_MAX_SEC;
             nanos = 0;
-        } else if secs < -377705023201 {
-            secs = -377705023201;
+        } else if secs < JIFF_TIMESTAMP_MIN_SEC {
+            secs = JIFF_TIMESTAMP_MIN_SEC;
             nanos = 0;
         }
         let ts = Timestamp::new(secs, nanos as i32).unwrap();
