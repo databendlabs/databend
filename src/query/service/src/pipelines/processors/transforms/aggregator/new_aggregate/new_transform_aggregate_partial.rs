@@ -144,7 +144,7 @@ impl Spiller {
                             ctx.clone(),
                             MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
                             stream,
-                            if pos == local_pos { true } else { false },
+                            pos == local_pos,
                         )
                     })
                     .collect::<Result<Vec<_>>>()?;
