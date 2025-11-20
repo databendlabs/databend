@@ -260,8 +260,8 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         is_negative = true;
                     }
                     let tz = &ctx.func_ctx.tz;
-                    let t1 = t1.to_timestamp(tz.clone());
-                    let t2 = t2.to_timestamp(tz.clone());
+                    let t1 = t1.to_timestamp(tz);
+                    let t2 = t2.to_timestamp(tz);
                     output.push(calc_age(t1, t2, is_negative));
                 },
             ),
@@ -308,10 +308,10 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             let tz = &ctx.func_ctx.tz;
 
             let today_date = today_date(&ctx.func_ctx.now, &ctx.func_ctx.tz);
-            match calc_date_to_timestamp(today_date, tz.clone()) {
+            match calc_date_to_timestamp(today_date, tz) {
                 Ok(t) => {
-                    let mut t1 = t.to_timestamp(tz.clone());
-                    let mut t2 = t2.to_timestamp(tz.clone());
+                    let mut t1 = t.to_timestamp(tz);
+                    let mut t2 = t2.to_timestamp(tz);
 
                     if t1 < t2 {
                         std::mem::swap(&mut t1, &mut t2);
@@ -338,7 +338,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                 let zone = TimeZone::fixed(Offset::from_seconds(t2.seconds_offset())?);
                 let today_date = today_date(&ctx.func_ctx.now, &zone);
                 let mut t2 = Timestamp::from_microsecond(t2.timestamp())?.to_zoned(zone.clone());
-                let mut t1 = calc_date_to_timestamp(today_date, zone.clone())?.to_timestamp(zone);
+                let mut t1 = calc_date_to_timestamp(today_date, &zone)?.to_timestamp(&zone);
 
                 if t1 < t2 {
                     std::mem::swap(&mut t1, &mut t2);
@@ -401,7 +401,7 @@ fn eval_timestamp_plus<F1, F2, T>(
     let ts = fn_input(a)
         .wrapping_add(b.microseconds())
         .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
-    match EvalMonthsImpl::eval_timestamp(ts, timezone, b.months(), false) {
+    match EvalMonthsImpl::eval_timestamp(ts, &timezone, b.months(), false) {
         Ok(t) => output.push(fn_result(t)),
         Err(e) => {
             ctx.set_error(output.len(), e);
@@ -427,7 +427,7 @@ fn eval_timestamp_minus<F1, F2, T>(
     let ts = fn_input(a)
         .wrapping_sub(b.microseconds())
         .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
-    match EvalMonthsImpl::eval_timestamp(ts, timezone, -b.months(), false) {
+    match EvalMonthsImpl::eval_timestamp(ts, &timezone, -b.months(), false) {
         Ok(t) => output.push(fn_result(t)),
         Err(e) => {
             ctx.set_error(output.len(), e);
