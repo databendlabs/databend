@@ -117,7 +117,7 @@ fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
     Ok(buckets)
 }
 
-fn scatter_partitioned_payload(
+pub fn scatter_partitioned_payload(
     partitioned_payload: PartitionedPayload,
     buckets: usize,
 ) -> Result<Vec<PartitionedPayload>> {

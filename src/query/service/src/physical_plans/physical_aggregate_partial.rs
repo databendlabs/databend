@@ -38,6 +38,7 @@ use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
+use crate::clusters::ClusterHelper;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::AggregatePartialFormatter;
 use crate::physical_plans::format::PhysicalFormat;
@@ -46,6 +47,7 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::NewTransformAggregateSpillWriter;
+use crate::pipelines::processors::transforms::aggregator::NewTransformPartialAggregate;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
@@ -232,15 +234,49 @@ impl IPhysicalPlan for AggregatePartial {
             });
         }
 
-        builder.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
-                builder.ctx.clone(),
-                input,
-                output,
-                params.clone(),
-                partial_agg_config.clone(),
-            )?))
-        })?;
+        if params.enable_experiment_aggregate {
+            let cluster = &builder.ctx.get_cluster();
+            let streams_num = if !builder.is_exchange_parent() {
+                1
+            } else {
+                cluster.nodes.len()
+            };
+            let local_pos = cluster.ordered_index();
+            let shared_partition_streams = (0..streams_num)
+                .map(|_| {
+                    SharedPartitionStream::new(
+                        builder.main_pipeline.output_len(),
+                        max_block_rows,
+                        max_block_bytes,
+                        MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            builder.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(
+                    NewTransformPartialAggregate::try_create(
+                        builder.ctx.clone(),
+                        input,
+                        output,
+                        params.clone(),
+                        partial_agg_config.clone(),
+                        shared_partition_streams.clone(),
+                        local_pos,
+                    )?,
+                ))
+            })?;
+        } else {
+            builder.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
+                    builder.ctx.clone(),
+                    input,
+                    output,
+                    params.clone(),
+                    partial_agg_config.clone(),
+                )?))
+            })?;
+        }
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
         if !builder.is_exchange_parent() {
