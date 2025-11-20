@@ -22511,7 +22511,7 @@ DropDatamaskPolicy(
 ---------- Input ----------
 REFRESH VIRTUAL COLUMN FOR t
 ---------- Output ---------
-REFRESH VIRTUAL COLUMN FOR t
+REFRESH VIRTUAL COLUMN ON t
 ---------- AST ------------
 RefreshVirtualColumn(
     RefreshVirtualColumnStmt {
@@ -22525,6 +22525,9 @@ RefreshVirtualColumn(
             quote: None,
             ident_type: None,
         },
+        selection: None,
+        limit: None,
+        overwrite: false,
     },
 )
 
