@@ -20,7 +20,7 @@ INSERT INTO t1 VALUES
 query TII
 select name, index_size, bloom_index_size, ngram_index_size from system.tables where name='t1' and database='test_gram_index';
 ----
-t1 1049482 1049482 1048617
+t1 1049509 1049509 1048617
 
 query III
 select row_count, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't1')

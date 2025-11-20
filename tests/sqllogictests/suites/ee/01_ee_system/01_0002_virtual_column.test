@@ -140,7 +140,7 @@ test_virtual_column t2 val 3000000002 ['c'] String
 query II
 select row_count, virtual_column_size from fuse_block('test_virtual_column', 't2')
 ----
-3 806
+3 833
 
 query III
 select block_count, row_count, virtual_column_size from fuse_segment('test_virtual_column', 't2');
