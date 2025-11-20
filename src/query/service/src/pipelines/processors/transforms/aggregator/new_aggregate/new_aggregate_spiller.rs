@@ -30,7 +30,6 @@ use databend_common_pipeline_transforms::traits::Location;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
-use log::debug;
 use log::info;
 use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;

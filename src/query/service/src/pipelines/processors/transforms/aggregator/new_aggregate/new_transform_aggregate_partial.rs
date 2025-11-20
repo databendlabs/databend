@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Instant;
 use std::vec;
@@ -42,7 +41,6 @@ use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storages_parquet::serialize_row_group_meta_to_bytes;
-use log::info;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::scatter_partitioned_payload;
@@ -133,17 +131,20 @@ impl Spiller {
                     ctx.clone(),
                     MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
                     partition_streams[0].clone(),
+                    true,
                 )?;
                 Ok(Spiller::Standalone(spiller))
             }
             _ => {
                 let spillers = partition_streams
                     .into_iter()
-                    .map(|stream| {
+                    .enumerate()
+                    .map(|(pos, stream)| {
                         NewAggregateSpiller::try_create(
                             ctx.clone(),
                             MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
                             stream,
+                            if pos == local_pos { true } else { false },
                         )
                     })
                     .collect::<Result<Vec<_>>>()?;
