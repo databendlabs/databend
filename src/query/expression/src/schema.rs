@@ -420,8 +420,7 @@ impl DataSchema {
         let mut valid_fields: Vec<String> = self.fields.iter().map(|f| f.name().clone()).collect();
         valid_fields.truncate(16);
         Err(ErrorCode::BadArguments(format!(
-            "Unable to get field named \"{}\". Valid fields: {:?} ...",
-            name, valid_fields
+            "Unable to get field named {name:?}. Valid fields: {valid_fields:?} ...",
         )))
     }
 

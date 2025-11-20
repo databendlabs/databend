@@ -150,7 +150,7 @@ pub struct HashJoin {
 
     pub runtime_filter: PhysicalRuntimeFilters,
     pub broadcast_id: Option<u32>,
-    pub nested_loop_filter: NestedLoopFilterInfo,
+    pub nested_loop_filter: Option<NestedLoopFilterInfo>,
 }
 
 #[typetag::serde]
@@ -1043,7 +1043,7 @@ impl PhysicalPlanBuilder {
         }
 
         // Add tail fields
-        build_fields.extend(tail_fields.clone());
+        build_fields.extend_from_slice(&tail_fields);
         merged_fields.extend(tail_fields);
 
         Ok((merged_fields, probe_fields, build_fields, probe_to_build))
@@ -1199,20 +1199,73 @@ impl PhysicalPlanBuilder {
     fn build_nested_loop_filter_info(
         &self,
         join: &Join,
-        merged_schema: &DataSchema,
-    ) -> Result<NestedLoopFilterInfo> {
-        let predicates = join
-            .non_equi_conditions
-            .iter()
-            .map(|c| Ok(c.clone()))
-            .chain(join.equi_conditions.iter().map(condition_to_expr))
-            .map(|scalar| resolve_scalar(&scalar?, merged_schema))
-            .collect::<Result<_>>()?;
+        probe_schema: &DataSchema,
+        build_schema: &DataSchema,
+        target_schema: &DataSchema,
+    ) -> Result<Option<NestedLoopFilterInfo>> {
+        if matches!(join.join_type, JoinType::Inner) {
+            return Ok(None);
+        }
 
-        Ok(NestedLoopFilterInfo {
+        let merged = DataSchema::new(
+            probe_schema
+                .fields
+                .iter()
+                .cloned()
+                .chain(build_schema.fields.iter().cloned())
+                .collect(),
+        );
+
+        let mut predicates =
+            Vec::with_capacity(join.equi_conditions.len() + join.non_equi_conditions.len());
+
+        for condition in &join.equi_conditions {
+            let scalar = condition_to_expr(condition)?;
+            match resolve_scalar(&scalar, &merged) {
+                Ok(expr) => predicates.push(expr),
+                Err(_)
+                    if condition
+                        .left
+                        .data_type()
+                        .map(|data_type| data_type.remove_nullable().is_bitmap())
+                        .unwrap_or_default() =>
+                {
+                    // no function matches signature `eq(Bitmap NULL, Bitmap NULL)
+                    return Ok(None);
+                }
+                Err(err) => {
+                    return Err(err.add_message(format!(
+                    "Failed build nested loop filter schema: {merged:#?} equi_conditions: {:#?}",
+                    join.equi_conditions
+                )))
+                }
+            }
+        }
+
+        for scalar in &join.non_equi_conditions {
+            predicates.push(resolve_scalar(scalar, &merged).map_err(|err|{
+                err.add_message(format!(
+                    "Failed build nested loop filter schema: {merged:#?} non_equi_conditions: {:#?}",
+                    join.non_equi_conditions
+                ))
+            })?);
+        }
+
+        let projection = target_schema
+            .fields
+            .iter()
+            .map(|column| merged.index_of(column.name()))
+            .collect::<Result<Vec<_>>>()
+            .map_err(|err| {
+                err.add_message(format!(
+                    "Failed build nested loop filter schema: {merged:#?} target: {target_schema:#?}",
+                ))
+            })?;
+
+        Ok(Some(NestedLoopFilterInfo {
             predicates,
-            projection: vec![],
-        })
+            projection,
+        }))
     }
 
     pub async fn build_hash_join(
@@ -1299,7 +1352,8 @@ impl PhysicalPlanBuilder {
         )
         .await?;
 
-        let nested_loop_filter = self.build_nested_loop_filter_info(join, &merged_schema)?;
+        let nested_loop_filter =
+            self.build_nested_loop_filter_info(join, &probe_schema, &build_schema, &merged_schema)?;
 
         // Step 12: Create and return the HashJoin
         let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
@@ -1343,11 +1397,11 @@ fn condition_to_expr(condition: &JoinEquiCondition) -> Result<ScalarExpr> {
     let right_type = condition.right.data_type()?;
 
     let arguments = match (&left_type, &right_type) {
-        (DataType::Nullable(left), right) if **left == *right => vec![
+        (DataType::Nullable(box left), right) if left == right => vec![
             condition.left.clone(),
             condition.right.clone().unify_to_data_type(&left_type),
         ],
-        (left, DataType::Nullable(right)) if *left == **right => vec![
+        (left, DataType::Nullable(box right)) if left == right => vec![
             condition.left.clone().unify_to_data_type(&right_type),
             condition.right.clone(),
         ],

@@ -41,6 +41,7 @@ use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
+use crate::pipelines::processors::transforms::NestedLoopDesc;
 use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
@@ -52,7 +53,8 @@ pub struct InnerHashJoin {
     pub(crate) function_ctx: FunctionContext,
     pub(crate) basic_state: Arc<BasicHashJoinState>,
     pub(crate) performance_context: PerformanceContext,
-    nested_loop_filter: FilterExecutor,
+    nested_loop_filter: Option<FilterExecutor>,
+    nested_loop_field_reorder: Option<Vec<usize>>,
 }
 
 impl InnerHashJoin {
@@ -68,16 +70,25 @@ impl InnerHashJoin {
 
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
+        let (nested_loop_filter, nested_loop_field_reorder, nested_loop_join_threshold) =
+            match desc.create_nested_loop_desc(&settings, &function_ctx)? {
+                Some(NestedLoopDesc {
+                    filter,
+                    field_reorder,
+                    nested_loop_join_threshold,
+                }) => (Some(filter), field_reorder, nested_loop_join_threshold),
+                None => (None, None, 0),
+            };
+
         let basic_hash_join = BasicHashJoin::create(
             &settings,
             function_ctx.clone(),
             method,
             desc.clone(),
             state.clone(),
-            settings.get_nested_loop_join_threshold()? as _,
+            nested_loop_join_threshold,
         )?;
 
-        let nested_loop_filter = desc.create_nested_loop_filter(&function_ctx, block_size)?;
         Ok(InnerHashJoin {
             desc,
             basic_hash_join,
@@ -85,6 +96,7 @@ impl InnerHashJoin {
             basic_state: state,
             performance_context: context,
             nested_loop_filter,
+            nested_loop_field_reorder,
         })
     }
 }
@@ -129,7 +141,8 @@ impl Join for InnerHashJoin {
                 let nested = Box::new(LoopJoinStream::new(data, build_blocks));
                 return Ok(InnerHashJoinFilterStream::create(
                     nested,
-                    &mut self.nested_loop_filter,
+                    self.nested_loop_filter.as_mut().unwrap(),
+                    self.nested_loop_field_reorder.as_deref(),
                 ));
             }
             _ => (),
@@ -170,6 +183,7 @@ impl Join for InnerHashJoin {
             Some(filter_executor) => Ok(InnerHashJoinFilterStream::create(
                 joined_stream,
                 filter_executor,
+                None,
             )),
         }
     }
@@ -281,16 +295,19 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
 struct InnerHashJoinFilterStream<'a> {
     inner: Box<dyn JoinStream + 'a>,
     filter_executor: &'a mut FilterExecutor,
+    field_reorder: Option<&'a [usize]>,
 }
 
 impl<'a> InnerHashJoinFilterStream<'a> {
     pub fn create(
         inner: Box<dyn JoinStream + 'a>,
         filter_executor: &'a mut FilterExecutor,
+        field_reorder: Option<&'a [usize]>,
     ) -> Box<dyn JoinStream + 'a> {
         Box::new(InnerHashJoinFilterStream {
             inner,
             filter_executor,
+            field_reorder,
         })
     }
 }
@@ -312,6 +329,16 @@ impl<'a> JoinStream for InnerHashJoinFilterStream<'a> {
                 continue;
             }
 
+            let data_block = if let Some(field_reorder) = self.field_reorder {
+                DataBlock::from_iter(
+                    field_reorder
+                        .iter()
+                        .map(|offset| data_block.get_by_offset(*offset).clone()),
+                    data_block.num_rows(),
+                )
+            } else {
+                data_block
+            };
             return Ok(Some(data_block));
         }
     }

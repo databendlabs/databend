@@ -22,10 +22,12 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_settings::Settings;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::ColumnSet;
 use parking_lot::RwLock;
@@ -65,7 +67,7 @@ pub struct HashJoinDesc {
     pub(crate) probe_projection: ColumnSet,
     pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
     pub(crate) build_schema: DataSchemaRef,
-    pub(crate) nested_loop_filter: NestedLoopFilterInfo,
+    pub(crate) nested_loop_filter: Option<NestedLoopFilterInfo>,
 }
 
 #[derive(Debug, Clone)]
@@ -79,7 +81,7 @@ pub struct RuntimeFilterDesc {
     pub enable_min_max_runtime_filter: bool,
 }
 
-pub struct RuntimeFiltersDesc {
+pub(crate) struct RuntimeFiltersDesc {
     pub filters: Vec<RuntimeFilterDesc>,
 }
 
@@ -264,28 +266,62 @@ impl HashJoinDesc {
         }
     }
 
-    pub fn create_nested_loop_filter(
+    pub fn create_nested_loop_desc(
         &self,
+        settings: &Settings,
         function_ctx: &FunctionContext,
-        block_size: usize,
-    ) -> Result<FilterExecutor> {
-        let predicates = self
-            .nested_loop_filter
-            .predicates
+    ) -> Result<Option<NestedLoopDesc>> {
+        let nested_loop_join_threshold = settings.get_nested_loop_join_threshold()? as usize;
+        let block_size = settings.get_max_block_size()? as usize;
+        if nested_loop_join_threshold == 0 {
+            return Ok(None);
+        }
+
+        let Some(NestedLoopFilterInfo {
+            predicates,
+            projection,
+        }) = &self.nested_loop_filter
+        else {
+            return Ok(None);
+        };
+
+        let predicates = predicates
             .iter()
             .map(|x| Ok(x.as_expr(&BUILTIN_FUNCTIONS)))
             .reduce(|lhs, rhs| {
                 check_function(None, "and_filters", &[], &[lhs?, rhs?], &BUILTIN_FUNCTIONS)
             })
-            .unwrap()?;
+            .transpose()?;
+        let Some(predicates) = predicates else {
+            return Ok(None);
+        };
 
-        Ok(FilterExecutor::new(
-            predicates,
-            function_ctx.clone(),
-            block_size,
-            None, // Some(self.nested_loop_filter.projection.iter().copied().collect()),
-            &BUILTIN_FUNCTIONS,
-            false,
-        ))
+        let field_reorder = if !projection.is_sorted() {
+            let mut mapper = projection.iter().cloned().enumerate().collect::<Vec<_>>();
+            mapper.sort_by_key(|(_, field)| *field);
+            let reorder = mapper.iter().map(|(i, _)| *i).collect::<Vec<_>>();
+            Some(reorder)
+        } else {
+            None
+        };
+
+        Ok(Some(NestedLoopDesc {
+            filter: FilterExecutor::new(
+                predicates,
+                function_ctx.clone(),
+                block_size,
+                Some(projection.iter().copied().collect()),
+                &BUILTIN_FUNCTIONS,
+                false,
+            ),
+            field_reorder,
+            nested_loop_join_threshold,
+        }))
     }
+}
+
+pub struct NestedLoopDesc {
+    pub filter: FilterExecutor,
+    pub field_reorder: Option<Vec<FieldIndex>>,
+    pub nested_loop_join_threshold: usize,
 }
