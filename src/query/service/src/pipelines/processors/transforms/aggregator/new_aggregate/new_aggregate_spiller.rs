@@ -328,7 +328,7 @@ impl NewAggregateSpiller {
         self.payload_writers.write_ready_blocks(pending_blocks)?;
 
         let payloads = self.payload_writers.finalize()?;
-        debug!(
+        info!(
             "[NewAggregateSpiller] spill finish with {} payloads",
             payloads.len()
         );

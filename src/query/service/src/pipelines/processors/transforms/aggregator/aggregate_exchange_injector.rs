@@ -22,7 +22,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
-use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_settings::FlightCompression;
@@ -32,8 +31,6 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::NewTransformAggregateSpillWriter;
-use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
@@ -264,25 +261,7 @@ impl ExchangeInjector for AggregateInjector {
     ) -> Result<()> {
         let params = self.aggregator_params.clone();
 
-        if self.aggregator_params.enable_experiment_aggregate {
-            let shared_partition_stream = SharedPartitionStream::new(
-                pipeline.output_len(),
-                self.aggregator_params.max_block_rows,
-                self.aggregator_params.max_block_bytes,
-                MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
-            );
-
-            pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    NewTransformAggregateSpillWriter::try_create(
-                        input,
-                        output,
-                        self.ctx.clone(),
-                        shared_partition_stream.clone(),
-                    )?,
-                ))
-            })?;
-        } else {
+        if !self.aggregator_params.enable_experiment_aggregate {
             let operator = DataOperator::instance().spill_operator();
             let location_prefix = self.ctx.query_id_spill_prefix();
 
@@ -322,18 +301,6 @@ impl ExchangeInjector for AggregateInjector {
             .position(|x| x == local_id)
             .unwrap();
 
-        let mut partition_streams = vec![];
-        if self.aggregator_params.enable_experiment_aggregate {
-            for _i in 0..shuffle_params.destination_ids.len() {
-                partition_streams.push(SharedPartitionStream::new(
-                    pipeline.output_len(),
-                    self.aggregator_params.max_block_rows,
-                    self.aggregator_params.max_block_bytes,
-                    MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
-                ));
-            }
-        }
-
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
                 TransformExchangeAggregateSerializer::try_create(
@@ -345,7 +312,6 @@ impl ExchangeInjector for AggregateInjector {
                     params.clone(),
                     compression,
                     local_pos,
-                    partition_streams.clone(),
                 )?,
             ))
         })?;

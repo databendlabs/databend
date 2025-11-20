@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Instant;
 use std::vec;
@@ -41,6 +42,7 @@ use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storages_parquet::serialize_row_group_meta_to_bytes;
+use log::info;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_injector::scatter_partitioned_payload;
@@ -409,10 +411,6 @@ impl NewTransformPartialAggregate {
         }
         Ok(())
     }
-
-    fn spill_finish(&mut self) -> Result<Vec<DataBlock>> {
-        self.spillers.finish()
-    }
 }
 
 impl AccumulatingTransform for NewTransformPartialAggregate {
@@ -437,7 +435,7 @@ impl AccumulatingTransform for NewTransformPartialAggregate {
                 }
             },
             HashTable::AggregateHashTable(hashtable) => {
-                let mut blocks = self.spill_finish()?;
+                let mut blocks = self.spillers.finish()?;
 
                 let partition_count = hashtable.payload.partition_count();
                 let mut memory_blocks = Vec::with_capacity(partition_count);

@@ -46,7 +46,6 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
-use crate::pipelines::processors::transforms::aggregator::NewTransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::NewTransformPartialAggregate;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
@@ -279,40 +278,21 @@ impl IPhysicalPlan for AggregatePartial {
         }
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        if !builder.is_exchange_parent() {
+        if !builder.is_exchange_parent() && !params.enable_experiment_aggregate {
             let operator = DataOperator::instance().spill_operator();
             let location_prefix = builder.ctx.query_id_spill_prefix();
-            if params.enable_experiment_aggregate {
-                let shared_partition_stream = SharedPartitionStream::new(
-                    builder.main_pipeline.output_len(),
-                    max_block_rows,
-                    max_block_bytes,
-                    MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
-                );
-                builder.main_pipeline.add_transform(|input, output| {
-                    Ok(ProcessorPtr::create(
-                        NewTransformAggregateSpillWriter::try_create(
-                            input,
-                            output,
-                            builder.ctx.clone(),
-                            shared_partition_stream.clone(),
-                        )?,
-                    ))
-                })?;
-            } else {
-                builder.main_pipeline.add_transform(|input, output| {
-                    Ok(ProcessorPtr::create(
-                        TransformAggregateSpillWriter::try_create(
-                            builder.ctx.clone(),
-                            input,
-                            output,
-                            operator.clone(),
-                            params.clone(),
-                            location_prefix.clone(),
-                        )?,
-                    ))
-                })?;
-            }
+            builder.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(
+                    TransformAggregateSpillWriter::try_create(
+                        builder.ctx.clone(),
+                        input,
+                        output,
+                        operator.clone(),
+                        params.clone(),
+                        location_prefix.clone(),
+                    )?,
+                ))
+            })?;
         }
 
         builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());
