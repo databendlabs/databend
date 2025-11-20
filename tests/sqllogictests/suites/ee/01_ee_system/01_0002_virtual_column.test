@@ -150,19 +150,19 @@ select block_count, row_count, virtual_column_size from fuse_segment('test_virtu
 query III
 select block_count, row_count, virtual_column_size from fuse_snapshot('test_virtual_column', 't2');
 ----
-1 3 806
+1 3 833
 
 query IITTIII
 select virtual_block_size, row_count, column_name, column_type, column_id, block_offset, bytes_compressed from fuse_virtual_column('test_virtual_column', 't2')
 ----
-806 3 val['a'] UInt64 NULL 3000000000 4 48
-806 3 val['b'] UInt64 NULL 3000000001 52 48
-806 3 val['c'] String NULL 3000000002 100 48
+833 3 val['a'] UInt64 NULL 3000000000 4 48
+833 3 val['b'] UInt64 NULL 3000000001 52 48
+833 3 val['c'] String NULL 3000000002 100 48
 
 query IIIIII
 select block_count, row_count, bytes_uncompressed, bytes_compressed, index_size, virtual_block_count from fuse_segment('test_virtual_column', 't2')
 ----
-1 3 134 694 1235 1
+1 3 134 712 1271 1
 
 statement ok
 insert into t2 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
