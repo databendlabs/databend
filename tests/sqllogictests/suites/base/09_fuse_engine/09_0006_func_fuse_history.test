@@ -52,7 +52,7 @@ query I
 select bloom_filter_size from fuse_block('db_09_0006', 't') order by bloom_filter_size
 ----
 0
-425
+434
 
 statement ok
 create table t1(a int not null) row_per_block=3
