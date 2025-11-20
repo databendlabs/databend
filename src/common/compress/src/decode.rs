@@ -357,21 +357,38 @@ impl DecompressDecoder {
         Ok(main)
     }
 
-    pub fn decompress_all_zip(compressed: &[u8]) -> databend_common_exception::Result<Vec<u8>> {
+    pub fn decompress_all_zip(
+        compressed: &[u8],
+        path: &str,
+        memory_limit: usize,
+    ) -> databend_common_exception::Result<Vec<u8>> {
         let mut zip = ZipArchive::new(Cursor::new(compressed)).map_err(|e| {
             ErrorCode::InvalidCompressionData(format!("compression data invalid: {e}"))
         })?;
         if zip.len() > 1 {
+            // if we want to support loading of zip with multi files later, need to resolve
+            // 1. separate output bytes of files
+            // 2. a formal way to repr the path of each file, for metadata and error reporting
+            // 3. atomic file load
             return Err(ErrorCode::InvalidCompressionData(
                 "Zip only supports single file",
             ));
+        }
+        if memory_limit > 0 {
+            if let Some(size) = zip.decompressed_size() {
+                if size > memory_limit as u128 / 2 {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "zip file {path} is too large, decompressed_size = {size} ",
+                    )));
+                }
+            }
         }
         let mut file = zip.by_index(0).map_err(|e| {
             ErrorCode::InvalidCompressionData(format!("compression data invalid: {e}"))
         })?;
         let mut bytes = Vec::new();
+        // todo: split to 16MB batches
         file.read_to_end(&mut bytes)?;
-
         Ok(bytes)
     }
 
@@ -611,7 +628,7 @@ mod tests {
         rng.fill_bytes(&mut content);
 
         let compressed_content = CompressCodec::compress_all_zip(&content, "unload.csv")?;
-        let result = DecompressDecoder::decompress_all_zip(&compressed_content)?;
+        let result = DecompressDecoder::decompress_all_zip(&compressed_content, "", 0)?;
 
         assert_eq!(result, content);
 
