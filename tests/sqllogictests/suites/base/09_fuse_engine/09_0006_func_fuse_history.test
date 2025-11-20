@@ -34,7 +34,7 @@ insert into t values (2),(3)
 query III
 select block_count, row_count, index_size from fuse_snapshot('db_09_0006', 't') order by row_count desc limit 1
 ----
-2 3 425
+2 3 434
 
 query II
 select block_count, row_count from fuse_snapshot('db_09_0006', 't') order by row_count;
