@@ -211,24 +211,12 @@ impl IPhysicalPlan for AggregatePartial {
                 .cluster_with_partial(true, builder.ctx.get_cluster().nodes.len())
         };
 
-        // For rank limit, we can filter data using sort with rank before partial
-        if let Some(rank_limit) = &self.rank_limit {
-            let sort_desc = rank_limit
-                .0
-                .iter()
-                .map(|desc| {
-                    let offset = schema_before_group_by.index_of(&desc.order_by.to_string())?;
-                    Ok(SortColumnDescription {
-                        offset,
-                        asc: desc.asc,
-                        nulls_first: desc.nulls_first,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let sort_desc: Arc<[_]> = sort_desc.into();
-
+        // For rank limit, we can filter data using sort with rank before partial.
+        if let Some((sort_desc, limit)) =
+            self.resolve_rank_limit_descriptions(&schema_before_group_by)
+        {
             builder.main_pipeline.add_transformer(|| {
-                TransformSortPartial::new(LimitType::LimitRank(rank_limit.1), sort_desc.clone())
+                TransformSortPartial::new(LimitType::LimitRank(limit), sort_desc.clone())
             });
         }
 
@@ -281,5 +269,30 @@ impl IPhysicalPlan for AggregatePartial {
 
         builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());
         Ok(())
+    }
+}
+
+impl AggregatePartial {
+    fn resolve_rank_limit_descriptions(
+        &self,
+        schema_before_group_by: &DataSchemaRef,
+    ) -> Option<(Arc<[SortColumnDescription]>, usize)> {
+        let (sort_descs, limit) = self.rank_limit.as_ref()?;
+        let mut resolved = Vec::with_capacity(sort_descs.len());
+        for desc in sort_descs {
+            let field_name = desc.order_by.to_string();
+            let offset = match schema_before_group_by.index_of(&field_name) {
+                Ok(offset) => offset,
+                Err(_) => {
+                    return None;
+                }
+            };
+            resolved.push(SortColumnDescription {
+                offset,
+                asc: desc.asc,
+                nulls_first: desc.nulls_first,
+            });
+        }
+        Some((resolved.into(), *limit))
     }
 }
