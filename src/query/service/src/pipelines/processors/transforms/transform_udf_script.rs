@@ -950,7 +950,7 @@ mod venv {
             &self.inner.path
         }
 
-        pub fn downgrade(&self) -> WeakTempDir {
+        fn downgrade(&self) -> WeakTempDir {
             WeakTempDir {
                 inner: Arc::downgrade(&self.inner),
             }
@@ -958,13 +958,13 @@ mod venv {
     }
 
     impl WeakTempDir {
-        pub fn upgrade(&self) -> Option<TempDir> {
+        fn upgrade(&self) -> Option<TempDir> {
             self.inner
                 .upgrade()
                 .map(|inner| TempDir { inner })
         }
 
-        pub fn replace(&mut self, temp_dir: &TempDir) {
+        fn replace(&mut self, temp_dir: &TempDir) {
             self.inner = Arc::downgrade(&temp_dir.inner);
         }
     }
