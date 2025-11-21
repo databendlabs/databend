@@ -49,7 +49,7 @@ impl<'a> ExprBloomFilter<'a> {
                 match key_state {
                     KeysState::Column(Column::Binary(col)) => col.iter().for_each(|key| {
                         let hash = key.fast_hash();
-                        if self.filter.check_digest(hash) {
+                        if self.filter.check_hash(hash) {
                             bitmap.set(idx, true);
                         }
                         idx += 1;
@@ -64,14 +64,14 @@ impl<'a> ExprBloomFilter<'a> {
                     | KeysState::Column(Column::Variant(col))
                     | KeysState::Column(Column::Bitmap(col)) => col.iter().for_each(|key| {
                         let hash = key.fast_hash();
-                        if self.filter.check_digest(hash) {
+                        if self.filter.check_hash(hash) {
                             bitmap.set(idx, true);
                         }
                         idx += 1;
                     }),
                     KeysState::Column(Column::String(col)) => col.iter().for_each(|key| {
                         let hash = key.as_bytes().fast_hash();
-                        if self.filter.check_digest(hash) {
+                        if self.filter.check_hash(hash) {
                             bitmap.set(idx, true);
                         }
                         idx += 1;
@@ -85,7 +85,7 @@ impl<'a> ExprBloomFilter<'a> {
                     KeysState::Column(Column::Number(NumberColumn::UInt8(c))) => {
                         c.iter().for_each(|key| {
                             let hash = key.fast_hash();
-                            if self.filter.check_digest(hash) {
+                            if self.filter.check_hash(hash) {
                                 bitmap.set(idx, true);
                             }
                             idx += 1;
@@ -100,7 +100,7 @@ impl<'a> ExprBloomFilter<'a> {
                     KeysState::Column(Column::Number(NumberColumn::UInt16(c))) => {
                         c.iter().for_each(|key| {
                             let hash = key.fast_hash();
-                            if self.filter.check_digest(hash) {
+                            if self.filter.check_hash(hash) {
                                 bitmap.set(idx, true);
                             }
                             idx += 1;
@@ -115,7 +115,7 @@ impl<'a> ExprBloomFilter<'a> {
                     KeysState::Column(Column::Number(NumberColumn::UInt32(c))) => {
                         c.iter().for_each(|key| {
                             let hash = key.fast_hash();
-                            if self.filter.check_digest(hash) {
+                            if self.filter.check_hash(hash) {
                                 bitmap.set(idx, true);
                             }
                             idx += 1;
@@ -130,7 +130,7 @@ impl<'a> ExprBloomFilter<'a> {
                     KeysState::Column(Column::Number(NumberColumn::UInt64(c))) => {
                         c.iter().for_each(|key| {
                             let hash = key.fast_hash();
-                            if self.filter.check_digest(hash) {
+                            if self.filter.check_hash(hash) {
                                 bitmap.set(idx, true);
                             }
                             idx += 1;
@@ -144,7 +144,7 @@ impl<'a> ExprBloomFilter<'a> {
                 match key_state {
                     U128(c) => c.iter().for_each(|key| {
                         let hash = key.fast_hash();
-                        if self.filter.check_digest(hash) {
+                        if self.filter.check_hash(hash) {
                             bitmap.set(idx, true);
                         }
                         idx += 1;
@@ -157,7 +157,7 @@ impl<'a> ExprBloomFilter<'a> {
                 match key_state {
                     U256(c) => c.iter().for_each(|key| {
                         let hash = key.fast_hash();
-                        if self.filter.check_digest(hash) {
+                        if self.filter.check_hash(hash) {
                             bitmap.set(idx, true);
                         }
                         idx += 1;
