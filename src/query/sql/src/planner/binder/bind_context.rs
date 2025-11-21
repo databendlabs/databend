@@ -683,7 +683,9 @@ pub fn apply_alias_for_columns(
     name_resolution_ctx: &NameResolutionContext,
 ) -> Result<()> {
     for column in columns.iter_mut() {
-        column.database_name = None;
+        if !alias.keep_database_name {
+            column.database_name = None;
+        }
         column.table_name = Some(normalize_identifier(&alias.name, name_resolution_ctx).name);
     }
 
