@@ -16,7 +16,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -27,10 +26,10 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_settings::Settings;
 
 use super::basic::BasicHashJoin;
 use super::basic_state::BasicHashJoinState;
-use super::LoopJoinStream;
 use crate::pipelines::processors::transforms::build_runtime_filter_packet;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
@@ -41,10 +40,8 @@ use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
-use crate::pipelines::processors::transforms::NestedLoopDesc;
 use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::HashJoinDesc;
-use crate::sessions::QueryContext;
 
 pub struct InnerHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,
@@ -53,35 +50,23 @@ pub struct InnerHashJoin {
     pub(crate) function_ctx: FunctionContext,
     pub(crate) basic_state: Arc<BasicHashJoinState>,
     pub(crate) performance_context: PerformanceContext,
-    nested_loop_filter: Option<FilterExecutor>,
-    nested_loop_field_reorder: Option<Vec<usize>>,
 }
 
 impl InnerHashJoin {
     pub fn create(
-        ctx: &QueryContext,
+        settings: &Settings,
         function_ctx: FunctionContext,
         method: HashMethodKind,
         desc: Arc<HashJoinDesc>,
         state: Arc<BasicHashJoinState>,
+        nested_loop_join_threshold: usize,
     ) -> Result<Self> {
-        let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
 
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
-        let (nested_loop_filter, nested_loop_field_reorder, nested_loop_join_threshold) =
-            match desc.create_nested_loop_desc(&settings, &function_ctx)? {
-                Some(NestedLoopDesc {
-                    filter,
-                    field_reorder,
-                    nested_loop_join_threshold,
-                }) => (Some(filter), field_reorder, nested_loop_join_threshold),
-                None => (None, None, 0),
-            };
-
         let basic_hash_join = BasicHashJoin::create(
-            &settings,
+            settings,
             function_ctx.clone(),
             method,
             desc.clone(),
@@ -95,8 +80,6 @@ impl InnerHashJoin {
             function_ctx,
             basic_state: state,
             performance_context: context,
-            nested_loop_filter,
-            nested_loop_field_reorder,
         })
     }
 }
@@ -131,23 +114,6 @@ impl Join for InnerHashJoin {
 
         self.basic_hash_join.finalize_chunks();
 
-        match &*self.basic_state.hash_table {
-            HashJoinHashTable::Null => {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the hash table is uninitialized.",
-                ))
-            }
-            HashJoinHashTable::NestedLoop(build_blocks) => {
-                let nested = Box::new(LoopJoinStream::new(data, build_blocks));
-                return Ok(InnerHashJoinFilterStream::create(
-                    nested,
-                    self.nested_loop_filter.as_mut().unwrap(),
-                    self.nested_loop_field_reorder.as_deref(),
-                ));
-            }
-            _ => (),
-        }
-
         let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
 
         let mut keys = DataBlock::new(probe_keys, data.num_rows());
@@ -175,7 +141,12 @@ impl Join for InnerHashJoin {
                     &mut self.performance_context.probe_result,
                 )
             }
-            HashJoinHashTable::Null | HashJoinHashTable::NestedLoop(_) => unreachable!(),
+            HashJoinHashTable::Null => {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the hash table is uninitialized.",
+                ));
+            }
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
         });
 
         match &mut self.performance_context.filter_executor {
@@ -292,7 +263,7 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
     }
 }
 
-struct InnerHashJoinFilterStream<'a> {
+pub(super) struct InnerHashJoinFilterStream<'a> {
     inner: Box<dyn JoinStream + 'a>,
     filter_executor: &'a mut FilterExecutor,
     field_reorder: Option<&'a [usize]>,

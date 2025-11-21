@@ -13,16 +13,72 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 
+use super::inner_join::InnerHashJoinFilterStream;
+use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
+use crate::pipelines::processors::transforms::BasicHashJoinState;
+use crate::pipelines::processors::transforms::HashJoinHashTable;
+use crate::pipelines::processors::transforms::Join;
+use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::JoinStream;
+use crate::pipelines::processors::transforms::NestedLoopDesc;
+use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 
-pub struct LoopJoinStream<'a> {
+pub struct NestedLoopJoin<T> {
+    inner: T,
+    basic_state: Arc<BasicHashJoinState>,
+    desc: NestedLoopDesc,
+}
+
+impl<T> NestedLoopJoin<T> {
+    pub fn create(inner: T, basic_state: Arc<BasicHashJoinState>, desc: NestedLoopDesc) -> Self {
+        Self {
+            inner,
+            basic_state,
+            desc,
+        }
+    }
+}
+
+impl<T: Join> Join for NestedLoopJoin<T> {
+    fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
+        self.inner.add_block(data)
+    }
+
+    fn final_build(&mut self) -> Result<Option<ProgressValues>> {
+        self.inner.final_build()
+    }
+
+    fn build_runtime_filter(&self, desc: &RuntimeFiltersDesc) -> Result<JoinRuntimeFilterPacket> {
+        self.inner.build_runtime_filter(desc)
+    }
+
+    fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
+        if data.is_empty() || *self.basic_state.build_rows == 0 {
+            return Ok(Box::new(EmptyJoinStream));
+        }
+        let HashJoinHashTable::NestedLoop(build_blocks) = &*self.basic_state.hash_table else {
+            return self.inner.probe_block(data);
+        };
+
+        let nested = Box::new(LoopJoinStream::new(data, build_blocks));
+        Ok(InnerHashJoinFilterStream::create(
+            nested,
+            &mut self.desc.filter,
+            self.desc.field_reorder.as_deref(),
+        ))
+    }
+}
+
+struct LoopJoinStream<'a> {
     probe_rows: VecDeque<Vec<Scalar>>,
     probe_types: Vec<DataType>,
     build_blocks: &'a [DataBlock],

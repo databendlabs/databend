@@ -354,17 +354,10 @@ impl BasicHashJoin {
         let mut progress = ProgressValues::default();
         let mut plain = vec![];
         while let Some(chunk_index) = self.state.steal_chunk_index() {
-            let chunk_mut = &mut self.state.chunks.as_mut()[chunk_index];
-
-            let mut chunk_block = DataBlock::empty();
-            std::mem::swap(chunk_mut, &mut chunk_block);
-
+            let chunk_block = &self.state.chunks[chunk_index];
             progress.rows += chunk_block.num_rows();
             progress.bytes += chunk_block.memory_size();
-
-            *chunk_mut = chunk_block.clone();
-
-            plain.push(chunk_block);
+            plain.push(chunk_block.clone());
         }
         debug_assert!(matches!(
             *self.state.hash_table,
