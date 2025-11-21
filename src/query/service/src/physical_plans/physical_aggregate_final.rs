@@ -21,7 +21,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
 use databend_common_sql::executor::physical_plans::SortDesc;
@@ -142,14 +142,14 @@ impl IPhysicalPlan for AggregateFinal {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        let max_block_size = builder.settings.get_max_block_size()?;
+        let max_block_rows = builder.settings.get_max_block_size()? as usize;
+        let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
         let enable_experimental_aggregate_hashtable = builder
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
         let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
         let max_restore_worker = builder.settings.get_max_aggregate_restore_worker()?;
-        let experiment_aggregate_final =
-            builder.settings.get_enable_experiment_aggregate_final()?;
+        let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
 
         let mut is_cluster_aggregate = false;
         if ExchangeSource::check_physical_plan(&self.input) {
@@ -162,8 +162,10 @@ impl IPhysicalPlan for AggregateFinal {
             &self.agg_funcs,
             enable_experimental_aggregate_hashtable,
             is_cluster_aggregate,
-            max_block_size as usize,
             max_spill_io_requests as usize,
+            enable_experiment_aggregate,
+            max_block_rows,
+            max_block_bytes,
         )?;
 
         if params.group_columns.is_empty() {
@@ -201,7 +203,6 @@ impl IPhysicalPlan for AggregateFinal {
             params.clone(),
             max_restore_worker,
             after_group_parallel,
-            experiment_aggregate_final,
             builder.ctx.clone(),
         )
     }

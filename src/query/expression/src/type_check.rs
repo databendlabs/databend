@@ -112,7 +112,7 @@ pub fn check<Index: ColumnIndex>(
 
                         if dest_ty.is_integer() && src_ty.is_integer() {
                             if let Ok(casted_scalar) =
-                                cast_scalar(*span, scalar.clone(), dest_ty, fn_registry)
+                                cast_scalar(*span, scalar.clone(), &dest_ty, fn_registry)
                             {
                                 *scalar = casted_scalar;
                                 *data_type = scalar.as_ref().infer_data_type();

@@ -10,6 +10,7 @@ Sort(Single)
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [a (#0)]
     ├── read rows: 0
     ├── read size: 0
@@ -27,6 +28,7 @@ Sort(Single)
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [a (#0)]
     ├── read rows: 0
     ├── read size: 0
@@ -44,6 +46,7 @@ Sort(Single)
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [a (#0)]
     ├── read rows: 0
     ├── read size: 0

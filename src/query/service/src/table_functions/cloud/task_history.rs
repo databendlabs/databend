@@ -36,11 +36,11 @@ use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::plans::task_run_schema;
 use databend_common_storages_factory::Table;
 use databend_common_storages_system::parse_task_runs_to_datablock;
@@ -138,7 +138,7 @@ impl TaskHistorySource {
         output: Arc<OutputPort>,
         args_parsed: TableHistoryArgsParsed,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, TaskHistorySource {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, TaskHistorySource {
             ctx,
             args_parsed,
             is_finished: false,
@@ -245,14 +245,14 @@ fn parse_date_or_timestamp(v: &Scalar) -> Option<String> {
     if v.as_timestamp().is_some() {
         Some(
             v.as_timestamp()
-                .map(|s| s.to_timestamp(TimeZone::UTC).to_string())
+                .map(|s| s.to_timestamp(&TimeZone::UTC).to_string())
                 .unwrap(),
         )
     } else if v.as_date().is_some() {
         Some(
             v.as_date()
                 .map(|s| {
-                    s.to_date(TimeZone::UTC)
+                    s.to_date(&TimeZone::UTC)
                         .at(0, 0, 0, 0)
                         .in_tz("UTC")
                         .unwrap()

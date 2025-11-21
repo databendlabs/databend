@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::array::ArrayColumnBuilderMut;
@@ -39,7 +37,7 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
@@ -51,11 +49,6 @@ pub(crate) struct QuantileData {
     pub(crate) levels: Vec<f64>,
 }
 
-impl FunctionData for QuantileData {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
 #[derive(Default)]
 struct QuantileContState {
     pub value: Vec<F64>,
@@ -82,11 +75,9 @@ where
     T::Scalar: Number + AsPrimitive<f64>,
     R: ValueType,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    type FunctionInfo = QuantileData;
+
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         let other = T::to_owned_scalar(other).as_();
         self.value.push(other.into());
         Ok(())
@@ -100,15 +91,9 @@ where
     fn merge_result(
         &mut self,
         mut builder: R::ColumnBuilderMut<'_>,
-        function_data: Option<&dyn FunctionData>,
+        quantile_cont_data: &QuantileData,
     ) -> Result<()> {
         let value_len = self.value.len();
-        let quantile_cont_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<QuantileData>()
-        };
         if quantile_cont_data.levels.len() > 1 {
             let indices = quantile_cont_data
                 .levels
@@ -150,7 +135,7 @@ where
 }
 
 impl StateSerde for QuantileContState {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Array(Box::new(Float64Type::data_type())).into()]
     }
 
@@ -242,11 +227,9 @@ where
     T: ValueType,
     T::Scalar: Decimal,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    type FunctionInfo = QuantileData;
+
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         self.value.push(T::to_owned_scalar(other));
         Ok(())
     }
@@ -263,15 +246,9 @@ where
     fn merge_result(
         &mut self,
         mut builder: ArrayColumnBuilderMut<'_, T>,
-        function_data: Option<&dyn FunctionData>,
+        quantile_cont_data: &QuantileData,
     ) -> Result<()> {
         let value_len = self.value.len();
-        let quantile_cont_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<QuantileData>()
-        };
 
         if quantile_cont_data.levels.len() > 1 {
             let indices = quantile_cont_data
@@ -301,11 +278,9 @@ where
     T: ValueType,
     T::Scalar: Decimal,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    type FunctionInfo = QuantileData;
+
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         self.value.push(T::to_owned_scalar(other));
         Ok(())
     }
@@ -322,15 +297,9 @@ where
     fn merge_result(
         &mut self,
         mut builder: T::ColumnBuilderMut<'_>,
-        function_data: Option<&dyn FunctionData>,
+        quantile_cont_data: &QuantileData,
     ) -> Result<()> {
         let value_len = self.value.len();
-        let quantile_cont_data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<QuantileData>()
-        };
 
         let (frac, whole) = libm::modf((value_len - 1) as f64 * quantile_cont_data.levels[0]);
         let whole = whole as usize;
@@ -350,7 +319,7 @@ where
     T: ValueType,
     T::Scalar: Decimal,
 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Array(Box::new(DataType::Decimal(
             T::Scalar::default_decimal_size(),
         )))
@@ -418,8 +387,9 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                     QuantileContState,
                     NumberType<NUM_TYPE>,
                     ArrayType<Float64Type>,
-                >::create(display_name, return_type)
-                .with_function_data(Box::new(QuantileData { levels }))
+                >::with_function_info(display_name, return_type, QuantileData {
+                    levels,
+                })
                 .with_need_drop(true)
                 .finish()
             } else {
@@ -428,10 +398,9 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                     QuantileContState,
                     NumberType<NUM_TYPE>,
                     Float64Type,
-                >::create(
-                    display_name, return_type
+                >::with_function_info(
+                    display_name, return_type, QuantileData { levels }
                 )
-                .with_function_data(Box::new(QuantileData { levels }))
                 .with_need_drop(true)
                 .finish()
             }
@@ -446,10 +415,11 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                             DecimalQuantileContState<DecimalType<DECIMAL>>,
                             DecimalType<DECIMAL>,
                             ArrayType<DecimalType<DECIMAL>>,
-                        >::create(
-                            display_name, DataType::Array(Box::new(data_type))
+                        >::with_function_info(
+                            display_name,
+                            DataType::Array(Box::new(data_type)),
+                            QuantileData { levels },
                         )
-                        .with_function_data(Box::new(QuantileData { levels }))
                         .with_need_drop(true)
                         .finish()
                     } else {
@@ -457,15 +427,15 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                             DecimalQuantileContState<DecimalType<DECIMAL>>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::create(display_name, data_type)
-                        .with_function_data(Box::new(QuantileData { levels }))
+                        >::with_function_info(
+                            display_name, data_type, QuantileData { levels }
+                        )
                         .with_need_drop(true)
                         .finish()
                     }
                 }
             })
         }
-
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",
             display_name, arguments[0]

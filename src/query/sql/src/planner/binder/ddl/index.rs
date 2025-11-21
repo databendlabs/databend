@@ -38,8 +38,6 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
-use databend_common_license::license::Feature::AggregateIndex;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
@@ -169,32 +167,22 @@ impl Binder {
                 && table.support_index()
                 && !matches!(table.engine(), "VIEW" | "STREAM")
             {
-                #[allow(clippy::collapsible_if)]
-                if LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), AggregateIndex)
-                    .is_ok()
-                {
-                    let indexes = self
-                        .resolve_table_indexes(
-                            &self.ctx.get_tenant(),
-                            catalog.as_str(),
-                            table.get_id(),
-                        )
-                        .await?;
+                let indexes = self
+                    .resolve_table_indexes(&self.ctx.get_tenant(), catalog.as_str(), table.get_id())
+                    .await?;
 
-                    let mut s_exprs = Vec::with_capacity(indexes.len());
-                    for (index_id, _, index_meta) in indexes {
-                        let tokens = tokenize_sql(&index_meta.query)?;
-                        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-                        let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
-                        new_bind_context.planning_agg_index = true;
-                        if let Statement::Query(query) = &stmt {
-                            let (s_expr, _) = self.bind_query(&mut new_bind_context, query)?;
-                            s_exprs.push((index_id, index_meta.query.clone(), s_expr));
-                        }
+                let mut s_exprs = Vec::with_capacity(indexes.len());
+                for (index_id, _, index_meta) in indexes {
+                    let tokens = tokenize_sql(&index_meta.query)?;
+                    let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+                    let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
+                    new_bind_context.planning_agg_index = true;
+                    if let Statement::Query(query) = &stmt {
+                        let (s_expr, _) = self.bind_query(&mut new_bind_context, query)?;
+                        s_exprs.push((index_id, index_meta.query.clone(), s_expr));
                     }
-                    agg_indexes.extend(s_exprs);
                 }
+                agg_indexes.extend(s_exprs);
             }
 
             if !agg_indexes.is_empty() {

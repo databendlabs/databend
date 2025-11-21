@@ -65,5 +65,24 @@ fn test_mysql_federated() -> Result<()> {
         }
     }
 
+    // JDBC healthcheck
+    {
+        let query = "SELECT 1 FROM DUAL";
+        let result = federated.check(query);
+        assert!(result.is_some());
+
+        if let Some((_, block)) = result {
+            let expect = vec![
+                "+----------+",
+                "| Column 0 |",
+                "+----------+",
+                "| '1'      |",
+                "+----------+",
+            ];
+
+            assert_blocks_eq(expect, &[block]);
+        }
+    }
+
     Ok(())
 }

@@ -17,19 +17,13 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use databend_common_exception::Result;
 use num_traits::AsPrimitive;
 
 use super::AccessType;
-use super::AnyType;
-use super::ArgType;
+use super::Number;
 use super::NumberType;
-use super::StringColumn;
-use super::StringType;
-use crate::display::scalar_ref_to_string;
-use crate::types::string::StringDomain;
-use crate::types::string::StringIterator;
-use crate::types::Number;
-use crate::types::SimpleDomain;
+use super::SimpleDomain;
 use crate::Column;
 use crate::Domain;
 use crate::ScalarRef;
@@ -80,15 +74,15 @@ where
         T::to_scalar_ref(scalar)
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        F::try_downcast_scalar(scalar).map(|v| C::compute(v))
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        F::try_downcast_scalar(scalar).map(C::compute)
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
         F::try_downcast_column(col)
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         F::try_downcast_domain(domain).map(|domain| C::compute_domain(&domain))
     }
 
@@ -171,118 +165,5 @@ where
         let min = domain.min.as_();
         let max = domain.max.as_();
         SimpleDomain { min, max }
-    }
-}
-
-/// For number convert
-pub type StringConvertView = ComputeView<StringConvert, AnyType, OwnedStringType>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OwnedStringType;
-
-impl AccessType for OwnedStringType {
-    type Scalar = String;
-    type ScalarRef<'a> = String;
-    type Column = StringColumn;
-    type Domain = StringDomain;
-    type ColumnIterator<'a> = std::iter::Map<StringIterator<'a>, fn(&str) -> String>;
-
-    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        scalar.to_string()
-    }
-
-    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        scalar.clone()
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        scalar.as_string().map(|s| s.to_string())
-    }
-
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        col.as_string().cloned()
-    }
-
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_string().cloned()
-    }
-
-    fn column_len(col: &Self::Column) -> usize {
-        col.len()
-    }
-
-    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.index(index).map(str::to_string)
-    }
-
-    #[inline]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        col.value_unchecked(index).to_string()
-    }
-
-    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
-    }
-
-    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter().map(str::to_string)
-    }
-
-    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        scalar.len()
-    }
-
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
-    }
-
-    #[inline(always)]
-    fn compare(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> Ordering {
-        left.cmp(&right)
-    }
-
-    #[inline(always)]
-    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left == right
-    }
-
-    #[inline(always)]
-    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left != right
-    }
-
-    #[inline(always)]
-    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left > right
-    }
-
-    #[inline(always)]
-    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left >= right
-    }
-
-    #[inline(always)]
-    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left < right
-    }
-
-    #[inline(always)]
-    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left <= right
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StringConvert;
-
-impl Compute<AnyType, OwnedStringType> for StringConvert {
-    fn compute<'a>(
-        value: <AnyType as AccessType>::ScalarRef<'a>,
-    ) -> <OwnedStringType as AccessType>::ScalarRef<'a> {
-        scalar_ref_to_string(&value)
-    }
-
-    fn compute_domain(_: &<AnyType as AccessType>::Domain) -> StringDomain {
-        StringType::full_domain()
     }
 }

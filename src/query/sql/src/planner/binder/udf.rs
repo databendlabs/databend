@@ -33,6 +33,7 @@ use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
+use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::principal::UDTF;
 
@@ -253,6 +254,50 @@ impl Binder {
                         arg_types,
                         return_types,
                         sql: sql.to_string(),
+                    }),
+                    created_on: Utc::now(),
+                })
+            }
+            UDFDefinition::UDTFServer {
+                arg_types,
+                return_types,
+                address,
+                handler,
+                headers,
+                language,
+                immutable,
+            } => {
+                UDFValidator::is_udf_server_allowed(address.as_str())?;
+
+                let mut arg_datatypes = Vec::with_capacity(arg_types.len());
+                let mut arg_names = Vec::with_capacity(arg_types.len());
+
+                for (arg_name, arg_type) in arg_types {
+                    arg_names.push(normalize_identifier(arg_name, &self.name_resolution_ctx).name);
+                    arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                }
+
+                let return_types = return_types
+                    .iter()
+                    .map(|(name, arg_type)| {
+                        let column = normalize_identifier(name, &self.name_resolution_ctx).name;
+                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        Ok((column, ty))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                Ok(UserDefinedFunction {
+                    name,
+                    description,
+                    definition: PlanUDFDefinition::UDTFServer(UDTFServer {
+                        address: address.clone(),
+                        handler: handler.clone(),
+                        headers: headers.clone(),
+                        language: language.clone(),
+                        arg_names,
+                        arg_types: arg_datatypes,
+                        return_types,
+                        immutable: *immutable,
                     }),
                     created_on: Utc::now(),
                 })

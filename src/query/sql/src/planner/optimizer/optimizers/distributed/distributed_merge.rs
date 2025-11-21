@@ -59,11 +59,15 @@ impl BroadcastToShuffleOptimizer {
 
         let new_join_children = vec![
             Arc::new(SExpr::create_unary(
-                Arc::new(RelOperator::Exchange(Exchange::Hash(left_conditions))),
+                Arc::new(RelOperator::Exchange(Exchange::NodeToNodeHash(
+                    left_conditions,
+                ))),
                 Arc::new(left_exchange_input.clone()),
             )),
             Arc::new(SExpr::create_unary(
-                Arc::new(RelOperator::Exchange(Exchange::Hash(right_conditions))),
+                Arc::new(RelOperator::Exchange(Exchange::NodeToNodeHash(
+                    right_conditions,
+                ))),
                 Arc::new(right_exchange_input.clone()),
             )),
         ];

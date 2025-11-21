@@ -80,6 +80,7 @@ pub fn regexp_split_to_vec(
         pattern = &pattern[4..];
     }
     let mut literal_mode_from_flags = false;
+    #[allow(clippy::type_complexity)]
     let mut builder_config_fns: Vec<Box<dyn FnOnce(&mut RegexBuilder) -> &mut RegexBuilder>> =
         Vec::new();
 

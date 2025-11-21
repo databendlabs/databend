@@ -57,6 +57,7 @@ use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
+use crate::table_functions::policy_references::PolicyReferencesTable;
 use crate::table_functions::show_grants::ShowGrants;
 use crate::table_functions::show_roles::ShowRoles;
 use crate::table_functions::show_sequences::ShowSequences;
@@ -316,6 +317,11 @@ impl TableFunctionFactory {
         creators.insert(
             "show_variables".to_string(),
             (next_id(), Arc::new(ShowVariables::create)),
+        );
+
+        creators.insert(
+            "policy_references".to_string(),
+            (next_id(), Arc::new(PolicyReferencesTable::create)),
         );
 
         creators.insert(

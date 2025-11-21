@@ -18,7 +18,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::CreateRowAccessPolicyPlan;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
@@ -56,14 +55,14 @@ impl Interpreter for CreateRowAccessPolicyInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
         if let Err(_e) = handler
-            .create_row_access(meta_api, self.plan.clone().into())
+            .create_row_access_policy(meta_api, self.plan.clone().into())
             .await?
         {
-            return if let CreateOption::CreateIfNotExists = self.plan.create_option {
+            return if self.plan.if_not_exists {
                 Ok(PipelineBuildResult::create())
             } else {
                 Err(ErrorCode::RowAccessPolicyAlreadyExists(format!(
-                    "Row Access Policy '{}' already exists",
+                    "Security policy with name '{}' already exists",
                     self.plan.name
                 )))
             };

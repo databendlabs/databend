@@ -99,13 +99,14 @@ Exchange
                 ├── keys is null equal: [false]
                 ├── filters: []
                 ├── build join filters:
-                │   └── filter id:0, build key:d.department_id (#4), probe key:e.department_id (#2), filter type:inlist,min_max
+                │   └── filter id:0, build key:d.department_id (#4), probe targets:[e.department_id (#2)@scan0], filter type:bloom,inlist,min_max
                 ├── estimated rows: 8.00
                 ├── Exchange(Build)
                 │   ├── output columns: [d.department_id (#4), d.department_name (#5)]
                 │   ├── exchange type: Broadcast
                 │   └── TableScan
                 │       ├── table: default.default.departments
+                │       ├── scan id: 1
                 │       ├── output columns: [department_id (#4), department_name (#5)]
                 │       ├── read rows: 4
                 │       ├── read size: < 1 KiB
@@ -116,6 +117,7 @@ Exchange
                 │       └── estimated rows: 4.00
                 └── TableScan(Probe)
                     ├── table: default.default.employees
+                    ├── scan id: 0
                     ├── output columns: [name (#1), department_id (#2), salary (#3)]
                     ├── read rows: 10
                     ├── read size: < 1 KiB
@@ -167,6 +169,7 @@ Exchange
                             ├── estimated rows: 50.00
                             └── TableScan
                                 ├── table: default.system.numbers
+                                ├── scan id: 0
                                 ├── output columns: [number (#0)]
                                 ├── read rows: 50
                                 ├── read size: < 1 KiB
@@ -232,6 +235,7 @@ Limit
                             ├── exchange type: Hash(sales.customer_id (#2))
                             └── TableScan
                                 ├── table: default.default.sales
+                                ├── scan id: 0
                                 ├── output columns: [customer_id (#2), net_paid (#5)]
                                 ├── read rows: 0
                                 ├── read size: 0

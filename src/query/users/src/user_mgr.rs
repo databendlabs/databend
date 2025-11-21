@@ -30,8 +30,8 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
-use crate::role_mgr::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::UserApiProvider;
+use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
 
 impl UserApiProvider {
     // Get one user from by tenant.
@@ -217,9 +217,10 @@ impl UserApiProvider {
                 | GrantObject::Connection(_)
                 | GrantObject::Sequence(_)
                 | GrantObject::Procedure(_)
+                | GrantObject::MaskingPolicy(_)
         ) {
             return Err(ErrorCode::IllegalUser(format!(
-                "Cannot grant warehouse|connection|Sequence|Procedure privileges to user `{}`",
+                "Cannot grant Warehouse|Connection|Sequence|Procedure|MaskingPolicy privileges to user `{}`",
                 user.username
             )));
         }

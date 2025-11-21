@@ -14,7 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::Operator;
 

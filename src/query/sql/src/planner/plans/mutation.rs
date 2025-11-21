@@ -23,7 +23,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
-use databend_common_pipeline_core::LockGuard;
+use databend_common_pipeline::core::LockGuard;
 
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;

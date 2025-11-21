@@ -62,12 +62,14 @@ use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::cast_scalar;
 use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::expr;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_number;
+use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::type_check::convert_escape_pattern;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
@@ -81,6 +83,7 @@ use databend_common_expression::types::F32;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
@@ -134,6 +137,9 @@ use jsonb::keypath::KeyPaths;
 use serde_json::json;
 use serde_json::to_string;
 use simsearch::SimSearch;
+use tantivy_query_grammar::parse_query_lenient;
+use tantivy_query_grammar::UserInputAst;
+use tantivy_query_grammar::UserInputLeaf;
 use unicase::Ascii;
 
 use super::name_resolution::NameResolutionContext;
@@ -201,6 +207,13 @@ use crate::UDFArgVisitor;
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct StageLocationParam {
+    pub param_name: String,
+    pub relative_path: String,
+    pub stage_info: StageInfo,
+}
+
 /// A helper for type checking.
 ///
 /// `TypeChecker::resolve` will resolve types of `Expr` and transform `Expr` into
@@ -232,6 +245,9 @@ pub struct TypeChecker<'a> {
     // true if currently resolving a masking policy expression.
     // This prevents infinite recursion when a masking policy references the masked column itself.
     in_masking_policy: bool,
+
+    // Skip sequence existence checks when resolving `nextval`.
+    skip_sequence_check: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -257,7 +273,12 @@ impl<'a> TypeChecker<'a> {
             in_window_function: false,
             forbid_udf,
             in_masking_policy: false,
+            skip_sequence_check: false,
         })
+    }
+
+    pub fn set_skip_sequence_check(&mut self, skip: bool) {
+        self.skip_sequence_check = skip;
     }
 
     #[recursive::recursive]
@@ -2657,28 +2678,75 @@ impl<'a> TypeChecker<'a> {
             .set_span(query_scalar.span()));
         };
 
-        let field_strs: Vec<&str> = query_text.split(' ').collect();
-        let mut column_refs = Vec::with_capacity(field_strs.len());
-        for field_str in field_strs {
-            if !field_str.contains(':') {
-                continue;
+        // Extract the first subfield from the query field as the field name,
+        // as queries may contain dot separators when the field is JSON type.
+        // For example: The value of the `info` field is: `{“tags”:{“id”:10,“env”:“prod”,‘name’:“test”}}`
+        // The query statement can be written as `info.tags.env:prod`, the field `info` can be extracted.
+        fn extract_first_subfield(field: &str) -> String {
+            field.split('.').next().unwrap_or(field).to_string()
+        }
+
+        fn collect_fields(ast: &UserInputAst, fields: &mut HashSet<String>) {
+            match ast {
+                UserInputAst::Clause(clauses) => {
+                    for (_, sub_ast) in clauses {
+                        collect_fields(sub_ast, fields);
+                    }
+                }
+                UserInputAst::Boost(inner_ast, _) => {
+                    collect_fields(inner_ast, fields);
+                }
+                UserInputAst::Leaf(leaf) => match &**leaf {
+                    UserInputLeaf::Literal(literal) => {
+                        if let Some(field) = &literal.field_name {
+                            fields.insert(extract_first_subfield(field));
+                        }
+                    }
+                    UserInputLeaf::Range { field, .. } => {
+                        if let Some(field) = field {
+                            fields.insert(extract_first_subfield(field));
+                        }
+                    }
+                    UserInputLeaf::Set { field, .. } => {
+                        if let Some(field) = field {
+                            fields.insert(extract_first_subfield(field));
+                        }
+                    }
+                    UserInputLeaf::Exists { field } => {
+                        fields.insert(extract_first_subfield(field));
+                    }
+                    UserInputLeaf::Regex { field, .. } => {
+                        if let Some(field) = field {
+                            fields.insert(extract_first_subfield(field));
+                        }
+                    }
+                    UserInputLeaf::All => {}
+                },
             }
-            let field_names: Vec<&str> = field_str.split(':').collect();
-            // if the field is JSON type, must specify the key path in the object
-            // for example:
-            // the field `info` has the value: `{"tags":{"id":10,"env":"prod","name":"test"}}`
-            // a query can be written like this `info.tags.env:prod`
-            let field_name = field_names[0].trim();
-            let sub_field_names: Vec<&str> = field_name.split('.').collect();
+        }
+
+        let (query_ast, errs) = parse_query_lenient(query_text);
+        if !errs.is_empty() {
+            let err_msg = errs
+                .into_iter()
+                .map(|err| format!("{} pos {}", err.message, err.pos))
+                .join(", ");
+            return Err(
+                ErrorCode::SemanticError(format!("invalid query: {err_msg}",))
+                    .set_span(query_scalar.span()),
+            );
+        }
+        let mut fields = HashSet::new();
+        collect_fields(&query_ast, &mut fields);
+
+        let mut column_refs = Vec::with_capacity(fields.len());
+        for field in fields.into_iter() {
             let column_expr = Expr::ColumnRef {
                 span: query_scalar.span(),
                 column: ColumnRef {
                     database: None,
                     table: None,
-                    column: ColumnID::Name(Identifier::from_name(
-                        query_scalar.span(),
-                        sub_field_names[0].trim(),
-                    )),
+                    column: ColumnID::Name(Identifier::from_name(query_scalar.span(), field)),
                 },
             };
             let box (field_scalar, _) = self.resolve(&column_expr)?;
@@ -3409,6 +3477,15 @@ impl<'a> TypeChecker<'a> {
                 // Omit unary + operator
                 self.resolve(child)
             }
+            UnaryOperator::Minus => {
+                if let Expr::Literal { value, .. } = child {
+                    let box (value, data_type) = self.resolve_minus_literal_scalar(span, value)?;
+                    let scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr { span, value });
+                    return Ok(Box::new((scalar_expr, data_type)));
+                }
+                let name = op.to_func_name();
+                self.resolve_function(span, name.as_str(), vec![], &[child])
+            }
             other => {
                 let name = other.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[child])
@@ -3800,6 +3877,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("nvl"),
             Ascii::new("nvl2"),
             Ascii::new("is_null"),
+            Ascii::new("isnull"),
             Ascii::new("is_error"),
             Ascii::new("error_or"),
             Ascii::new("coalesce"),
@@ -4025,7 +4103,7 @@ impl<'a> TypeChecker<'a> {
                     arg_z,
                 ]))
             }
-            ("is_null", &[arg_x]) => {
+            ("is_null", &[arg_x]) | ("isnull", &[arg_x]) => {
                 // Rewrite is_null(x) to not(is_not_null(x))
                 Some(
                     self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::FunctionCall {
@@ -4643,12 +4721,6 @@ impl<'a> TypeChecker<'a> {
                         && matches!(col_data_type, DataType::Vector(_))
                         && matches!(&**argument, ScalarExpr::ConstantExpr(_))
                         && matches!(&target_type, DataType::Vector(_))
-                        && LicenseManagerSwitch::instance()
-                            .check_enterprise_enabled(
-                                self.ctx.get_license_key(),
-                                Feature::VectorIndex,
-                            )
-                            .is_ok()
                     {
                         let table_index = table_index.unwrap();
                         let table_entry = self.metadata.read().table(table_index).clone();
@@ -4826,16 +4898,128 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((value, data_type)))
     }
 
-    // TODO(leiysky): use an array builder function instead, since we should allow declaring
-    // an array with variable as element.
+    pub fn resolve_minus_literal_scalar(
+        &self,
+        span: Span,
+        literal: &databend_common_ast::ast::Literal,
+    ) -> Result<Box<(Scalar, DataType)>> {
+        let value = match literal {
+            Literal::UInt64(v) => {
+                if *v <= i64::MAX as u64 {
+                    Scalar::Number(NumberScalar::Int64(-(*v as i64)))
+                } else {
+                    Scalar::Decimal(DecimalScalar::Decimal128(
+                        -(*v as i128),
+                        DecimalSize::new_unchecked(i128::MAX_PRECISION, 0),
+                    ))
+                }
+            }
+            Literal::Decimal256 {
+                value,
+                precision,
+                scale,
+            } => Scalar::Decimal(DecimalScalar::Decimal256(
+                i256(*value).checked_mul(i256::minus_one()).unwrap(),
+                DecimalSize::new_unchecked(*precision, *scale),
+            )),
+            Literal::Float64(v) => Scalar::Number(NumberScalar::Float64((-*v).into())),
+            Literal::Null => Scalar::Null,
+            Literal::String(_) | Literal::Boolean(_) => {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Invalid minus operator for {}",
+                    literal
+                ))
+                .set_span(span));
+            }
+        };
+        let value = shrink_scalar(value);
+        let data_type = value.as_ref().infer_data_type();
+        Ok(Box::new((value, data_type)))
+    }
+
+    // Fast path for constant arrays so we don't need to go through the scalar `array()` function
+    // (which performs full type-checking and constant-folding). Non-constant elements still use
+    // the generic resolver to preserve the previous behaviour.
     fn resolve_array(&mut self, span: Span, exprs: &[Expr]) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut elems = Vec::with_capacity(exprs.len());
+        let mut constant_values: Option<Vec<(Scalar, DataType)>> =
+            Some(Vec::with_capacity(exprs.len()));
+        let mut element_type: Option<DataType> = None;
+
+        let mut data_type_set = HashSet::with_capacity(2);
         for expr in exprs {
-            let box (arg, _data_type) = self.resolve(expr)?;
+            let box (arg, data_type) = self.resolve(expr)?;
+            if let Some(values) = constant_values.as_mut() {
+                let maybe_constant = match &arg {
+                    ScalarExpr::ConstantExpr(constant) => Some(constant.value.clone()),
+                    ScalarExpr::TypedConstantExpr(constant, _) => Some(constant.value.clone()),
+                    _ => None,
+                };
+                if let Some(value) = maybe_constant {
+                    // If the data type has already been computed,
+                    // we don't need to compute the common type again.
+                    if data_type_set.contains(&data_type) {
+                        elems.push(arg);
+                        values.push((value, data_type));
+                        continue;
+                    }
+                    element_type = if let Some(current_ty) = element_type.clone() {
+                        common_super_type(
+                            current_ty.clone(),
+                            data_type.clone(),
+                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                        )
+                    } else {
+                        Some(data_type.clone())
+                    };
+
+                    if element_type.is_some() {
+                        data_type_set.insert(data_type.clone());
+                        values.push((value, data_type));
+                    } else {
+                        constant_values = None;
+                        element_type = None;
+                    }
+                } else {
+                    constant_values = None;
+                    element_type = None;
+                }
+            }
             elems.push(arg);
         }
 
+        if let (Some(values), Some(element_ty)) = (constant_values, element_type) {
+            let mut casted = Vec::with_capacity(values.len());
+            for (value, ty) in values {
+                if ty == element_ty {
+                    casted.push(value);
+                } else {
+                    casted.push(cast_scalar(span, value, &element_ty, &BUILTIN_FUNCTIONS)?);
+                }
+            }
+            return Ok(Self::build_constant_array(span, element_ty, casted));
+        }
+
         self.resolve_scalar_function_call(span, "array", vec![], elems)
+    }
+
+    fn build_constant_array(
+        span: Span,
+        element_ty: DataType,
+        values: Vec<Scalar>,
+    ) -> Box<(ScalarExpr, DataType)> {
+        let mut builder = ColumnBuilder::with_capacity(&element_ty, values.len());
+        for value in &values {
+            builder.push(value.as_ref());
+        }
+        let scalar = Scalar::Array(builder.build());
+        Box::new((
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                span,
+                value: scalar,
+            }),
+            DataType::Array(Box::new(element_ty)),
+        ))
     }
 
     fn resolve_map(
@@ -4975,6 +5159,7 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_udaf_script(span, name, arguments, udf_def)?,
             )),
             UDFDefinition::UDTF(_) => unreachable!(),
+            UDFDefinition::UDTFServer(_) => unreachable!(),
             UDFDefinition::ScalarUDF(udf_def) => Ok(Some(
                 self.resolve_scalar_udf(span, name, arguments, udf_def)?,
             )),
@@ -4988,13 +5173,6 @@ impl<'a> TypeChecker<'a> {
         arguments: &[Expr],
         mut udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        #[derive(serde::Serialize, serde::Deserialize)]
-        struct StageLocationParam {
-            param_name: String,
-            relative_path: String,
-            stage_info: StageInfo,
-        }
-
         UDFValidator::is_udf_server_allowed(&udf_definition.address)?;
         if arguments.len() != udf_definition.arg_types.len() {
             return Err(ErrorCode::InvalidArgument(format!(
@@ -5169,13 +5347,13 @@ impl<'a> TypeChecker<'a> {
             .do_exchange(
                 name,
                 &udf_definition.handler,
-                num_rows,
+                Some(num_rows),
                 block_entries,
                 &udf_definition.return_type,
             )
             .await?;
 
-        let value = unsafe { result.index_unchecked(0) };
+        let value = unsafe { result.get_by_offset(0).index_unchecked(0) };
         Ok(value.to_owned())
     }
 
@@ -5568,25 +5746,29 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         };
 
-        let catalog = self.ctx.get_default_catalog()?;
-        let req = GetSequenceReq {
-            ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
-        };
+        if !self.skip_sequence_check {
+            let catalog = self.ctx.get_default_catalog()?;
+            let req = GetSequenceReq {
+                ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
+            };
 
-        let visibility_checker = if self
-            .ctx
-            .get_settings()
-            .get_enable_experimental_sequence_privilege_check()?
-        {
-            Some(databend_common_base::runtime::block_on(async move {
-                self.ctx
-                    .get_visibility_checker(false, Object::Sequence)
-                    .await
-            })?)
-        } else {
-            None
-        };
-        databend_common_base::runtime::block_on(catalog.get_sequence(req, &visibility_checker))?;
+            let visibility_checker = if self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_sequence_privilege_check()?
+            {
+                Some(databend_common_base::runtime::block_on(async move {
+                    self.ctx
+                        .get_visibility_checker(false, Object::Sequence)
+                        .await
+                })?)
+            } else {
+                None
+            };
+            databend_common_base::runtime::block_on(
+                catalog.get_sequence(req, &visibility_checker),
+            )?;
+        }
 
         let return_type = DataType::Number(NumberDataType::UInt64);
         let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);

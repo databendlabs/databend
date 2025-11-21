@@ -19,9 +19,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
-use databend_common_pipeline_core::always_callback;
-use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::always_callback;
+use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_settings::Settings;
 
 use super::PipelineBuilderData;
@@ -59,8 +59,6 @@ pub struct PipelineBuilder {
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
     pub(crate) is_exchange_stack: Vec<bool>,
-
-    pub contain_sink_processor: bool,
 }
 
 impl PipelineBuilder {
@@ -80,7 +78,6 @@ impl PipelineBuilder {
             join_state: None,
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
-            contain_sink_processor: false,
             is_exchange_stack: vec![],
         }
     }
@@ -129,4 +126,11 @@ impl PipelineBuilder {
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         plan.build_pipeline(self)
     }
+}
+
+pub fn attach_runtime_filter_logger(ctx: Arc<QueryContext>, pipeline: &mut Pipeline) {
+    pipeline.set_on_finished(always_callback(move |_info: &ExecutionInfo| {
+        ctx.log_runtime_filter_stats();
+        Ok(())
+    }));
 }

@@ -18,6 +18,7 @@ explain select * from t_nullable_prune
 ----
 TableScan
 ├── table: default.default.t_nullable_prune
+├── scan id: 0
 ├── output columns: [a (#0)]
 ├── read rows: 6
 ├── read size: < 1 KiB
@@ -32,6 +33,7 @@ explain select * from t_nullable_prune where a is not null
 ----
 TableScan
 ├── table: default.default.t_nullable_prune
+├── scan id: 0
 ├── output columns: [a (#0)]
 ├── read rows: 3
 ├── read size: < 1 KiB
@@ -46,6 +48,7 @@ explain select * from t_nullable_prune where a is null
 ----
 TableScan
 ├── table: default.default.t_nullable_prune
+├── scan id: 0
 ├── output columns: [a (#0)]
 ├── read rows: 3
 ├── read size: < 1 KiB

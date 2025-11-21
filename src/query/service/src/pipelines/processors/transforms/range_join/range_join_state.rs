@@ -99,7 +99,7 @@ impl RangeJoinState {
             finished_tasks: AtomicU64::new(0),
             completed_pair: AtomicU64::new(0),
             ie_join_state,
-            join_type: range_join.join_type.clone(),
+            join_type: range_join.join_type,
             left_match: RwLock::new(MutableBitmap::new()),
             right_match: RwLock::new(MutableBitmap::new()),
             partition_count: AtomicU64::new(0),

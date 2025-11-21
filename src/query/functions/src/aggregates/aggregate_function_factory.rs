@@ -27,18 +27,6 @@ use super::AggregateFunctionRef;
 use super::AggregateFunctionSortAdaptor;
 use super::Aggregators;
 
-// The NULL value in the those function needs to be handled separately.
-const NEED_NULL_AGGREGATE_FUNCTIONS: [&str; 8] = [
-    "array_agg",
-    "list",
-    "json_agg",
-    "json_array_agg",
-    "json_object_agg",
-    "group_array_moving_avg",
-    "group_array_moving_sum",
-    "st_collect",
-];
-
 const STATE_SUFFIX: &str = "_state";
 
 pub type AggregateFunctionCreator = Box<
@@ -72,7 +60,7 @@ static FACTORY: LazyLock<Arc<AggregateFunctionFactory>> = LazyLock::new(|| {
 });
 
 pub struct AggregateFunctionDescription {
-    pub(crate) aggregate_function_creator: AggregateFunctionCreator,
+    pub(crate) creator: AggregateFunctionCreator,
     pub(crate) features: AggregateFunctionFeatures,
 }
 
@@ -95,6 +83,11 @@ pub struct AggregateFunctionFeatures {
     ///   AVG(C) = SUM(C) / COUNT(C)
     pub(crate) is_decomposable: bool,
 
+    pub(crate) allow_sort: bool,
+
+    // The NULL value in the those function needs to be handled separately.
+    pub(crate) keep_nullable: bool,
+
     // Function Category
     pub category: &'static str,
     // Introduce the function in brief.
@@ -108,7 +101,7 @@ pub struct AggregateFunctionFeatures {
 impl AggregateFunctionDescription {
     pub fn creator(creator: AggregateFunctionCreator) -> AggregateFunctionDescription {
         AggregateFunctionDescription {
-            aggregate_function_creator: creator,
+            creator,
             features: AggregateFunctionFeatures {
                 returns_default_when_only_null: false,
                 is_decomposable: false,
@@ -121,10 +114,7 @@ impl AggregateFunctionDescription {
         creator: AggregateFunctionCreator,
         features: AggregateFunctionFeatures,
     ) -> AggregateFunctionDescription {
-        AggregateFunctionDescription {
-            aggregate_function_creator: creator,
-            features,
-        }
+        AggregateFunctionDescription { creator, features }
     }
 }
 
@@ -214,111 +204,106 @@ impl AggregateFunctionFactory {
         sort_descs: Vec<AggregateFunctionSortDesc>,
         or_null: bool,
     ) -> Result<AggregateFunctionRef> {
-        let name = name.as_ref();
-        let mut features = AggregateFunctionFeatures::default();
+        let name = name.as_ref().to_lowercase();
 
-        if NEED_NULL_AGGREGATE_FUNCTIONS.contains(&name) {
-            let mut agg =
-                self.get_impl(name, params, arguments, sort_descs.clone(), &mut features)?;
-            if !sort_descs.is_empty() {
-                agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
+        if let Some(desc) = self.case_insensitive_desc.get(&name) {
+            if desc.features.keep_nullable {
+                let agg = (desc.creator)(&name, params, arguments, sort_descs.clone())?;
+                return if desc.features.allow_sort {
+                    AggregateFunctionSortAdaptor::create(agg, sort_descs)
+                } else {
+                    Ok(agg)
+                };
             }
-            return Ok(agg);
-        }
 
-        if arguments.iter().all(|f| !f.is_nullable_or_null()) {
-            let mut agg =
-                self.get_impl(name, params, arguments, sort_descs.clone(), &mut features)?;
-            if !sort_descs.is_empty() {
-                agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
+            if arguments.iter().all(|f| !f.is_nullable_or_null()) {
+                let mut agg = (desc.creator)(&name, params, arguments, sort_descs.clone())?;
+                if desc.features.allow_sort {
+                    agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
+                }
+                return if or_null && !desc.features.returns_default_when_only_null {
+                    AggregateFunctionOrNullAdaptor::create(agg)
+                } else {
+                    Ok(agg)
+                };
             }
-            if or_null {
-                agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
-            }
-            return Ok(agg);
-        }
 
-        let nested = if name.to_lowercase().strip_suffix(STATE_SUFFIX).is_some() {
-            self.get_impl(
-                name,
-                params.clone(),
-                arguments.clone(),
-                sort_descs.clone(),
-                &mut features,
-            )?
-        } else {
-            let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
             let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
-            self.get_impl(
-                name,
-                new_params,
-                new_arguments,
-                sort_descs.clone(),
-                &mut features,
-            )?
-        };
 
-        let mut agg = AggregateFunctionCombinatorNull::try_create(
-            name,
-            params,
-            arguments,
-            nested,
-            features.clone(),
-        )?;
-        if !sort_descs.is_empty() {
-            agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
-        }
-        if or_null {
-            agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
-        }
-        Ok(agg)
-    }
-
-    fn get_impl(
-        &self,
-        name: &str,
-        params: Vec<Scalar>,
-        arguments: Vec<DataType>,
-        sort_descs: Vec<AggregateFunctionSortDesc>,
-        features: &mut AggregateFunctionFeatures,
-    ) -> Result<AggregateFunctionRef> {
-        let lowercase_name = name.to_lowercase();
-        let aggregate_functions_map = &self.case_insensitive_desc;
-        if let Some(desc) = aggregate_functions_map.get(&lowercase_name) {
-            *features = desc.features.clone();
-            return (desc.aggregate_function_creator)(name, params, arguments, sort_descs);
+            let nested = (desc.creator)(&name, params.clone(), new_arguments, sort_descs.clone())?;
+            let mut agg = AggregateFunctionCombinatorNull::try_create(
+                params,
+                arguments,
+                nested,
+                desc.features.returns_default_when_only_null,
+            )?;
+            if desc.features.allow_sort {
+                agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
+            }
+            return if or_null && !desc.features.returns_default_when_only_null {
+                AggregateFunctionOrNullAdaptor::create(agg)
+            } else {
+                Ok(agg)
+            };
         }
 
         // find suffix
-        for (suffix, desc) in &self.case_insensitive_combinator_desc {
-            if let Some(nested_name) = lowercase_name.strip_suffix(suffix) {
-                let aggregate_functions_map = &self.case_insensitive_desc;
+        let Some((nested_name, suffix, nested_desc, desc)) = self
+            .case_insensitive_combinator_desc
+            .iter()
+            .find_map(|(suffix, desc)| {
+                name.strip_suffix(suffix)
+                    .map(|nested_name| (nested_name, suffix, desc))
+            })
+            .and_then(|(nested_name, suffix, desc)| {
+                self.case_insensitive_desc
+                    .get(nested_name)
+                    .map(|nested_desc| (nested_name, suffix, nested_desc, desc))
+            })
+        else {
+            return Err(ErrorCode::UnknownAggregateFunction(format!(
+                "Unsupported AggregateFunction: {name}",
+            )));
+        };
 
-                match aggregate_functions_map.get(nested_name) {
-                    None => {
-                        break;
-                    }
-                    Some(nested_desc) => {
-                        *features = nested_desc.features.clone();
-                        if suffix.eq_ignore_ascii_case(STATE_SUFFIX) {
-                            features.returns_default_when_only_null = true;
-                        }
-                        return (desc.creator)(
-                            nested_name,
-                            params,
-                            arguments,
-                            sort_descs,
-                            &nested_desc.aggregate_function_creator,
-                        );
-                    }
-                }
-            }
+        let (nested, features) = if suffix == STATE_SUFFIX {
+            let nested = (*desc.creator)(
+                nested_name,
+                params.clone(),
+                arguments.clone(),
+                sort_descs.clone(),
+                &nested_desc.creator,
+            )?;
+            let mut features = nested_desc.features.clone();
+            features.returns_default_when_only_null = true;
+            (nested, features)
+        } else {
+            let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
+
+            let nested = (*desc.creator)(
+                nested_name,
+                params.clone(),
+                new_arguments,
+                sort_descs.clone(),
+                &nested_desc.creator,
+            )?;
+            (nested, nested_desc.features.clone())
+        };
+
+        let mut agg = AggregateFunctionCombinatorNull::try_create(
+            params,
+            arguments,
+            nested,
+            features.returns_default_when_only_null,
+        )?;
+        if features.allow_sort {
+            agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
         }
-
-        Err(ErrorCode::UnknownAggregateFunction(format!(
-            "Unsupported AggregateFunction: {}",
-            name
-        )))
+        if or_null && !features.returns_default_when_only_null {
+            AggregateFunctionOrNullAdaptor::create(agg)
+        } else {
+            Ok(agg)
+        }
     }
 
     pub fn contains(&self, func_name: impl AsRef<str>) -> bool {

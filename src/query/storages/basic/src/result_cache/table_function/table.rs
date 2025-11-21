@@ -34,7 +34,7 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_common_storage::read_metadata_async;
 use databend_common_storage::DataOperator;

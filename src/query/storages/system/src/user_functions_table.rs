@@ -228,6 +228,24 @@ impl UserFunctionsTable {
                         states: BTreeMap::new(),
                         immutable: None,
                     },
+                    UDFDefinition::UDTFServer(x) => UserFunctionArguments {
+                        arg_types: x
+                            .arg_names
+                            .iter()
+                            .zip(x.arg_types.iter())
+                            .map(|(name, ty)| format!("{name} {ty}"))
+                            .collect(),
+                        return_type: Some(
+                            x.return_types
+                                .iter()
+                                .map(|(name, ty)| format!("{name} {ty}"))
+                                .collect(),
+                        ),
+                        server: Some(x.address.to_string()),
+                        parameters: vec![],
+                        states: BTreeMap::new(),
+                        immutable: x.immutable,
+                    },
                     UDFDefinition::ScalarUDF(x) => UserFunctionArguments {
                         arg_types: x
                             .arg_types

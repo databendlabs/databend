@@ -17,6 +17,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t
+    ├── scan id: 0
     ├── output columns: [x (#0)]
     ├── read rows: 2
     ├── read size: < 1 KiB

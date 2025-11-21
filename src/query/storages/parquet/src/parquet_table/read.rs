@@ -20,7 +20,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 
 use super::ParquetTable;
 use crate::parquet_reader::ParquetReaderBuilder;

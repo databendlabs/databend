@@ -40,7 +40,7 @@ use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::init_operator;
 use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;

@@ -34,7 +34,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::MutationType;

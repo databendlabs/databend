@@ -33,10 +33,6 @@ pub enum Feature {
     VirtualColumn,
     #[serde(alias = "data_mask", alias = "DATA_MASK")]
     DataMask,
-    #[serde(alias = "aggregate_index", alias = "AGGREGATE_INDEX")]
-    AggregateIndex,
-    #[serde(alias = "inverted_index", alias = "INVERTED_INDEX")]
-    InvertedIndex,
     #[serde(alias = "computed_column", alias = "COMPUTED_COLUMN")]
     ComputedColumn,
     #[serde(alias = "storage_encryption", alias = "STORAGE_ENCRYPTION")]
@@ -51,14 +47,10 @@ pub enum Feature {
     HilbertClustering,
     #[serde(alias = "system_management", alias = "SYSTEM_MANAGEMENT")]
     SystemManagement,
-    #[serde(alias = "ngram_index", alias = "NGRAM_INDEX")]
-    NgramIndex,
     #[serde(alias = "workload_group", alias = "WORKLOAD_GROUP")]
     WorkloadGroup,
     #[serde(alias = "system_history", alias = "SYSTEM_HISTORY")]
     SystemHistory,
-    #[serde(alias = "vector_index", alias = "VECTOR_INDEX")]
-    VectorIndex,
     #[serde(alias = "private_task", alias = "PRIVATE_TASK")]
     PrivateTask,
     #[serde(alias = "max_node_quota", alias = "MAX_NODE_QUOTA")]
@@ -85,8 +77,6 @@ impl fmt::Display for Feature {
             Feature::Test => write!(f, "test"),
             Feature::VirtualColumn => write!(f, "virtual_column"),
             Feature::DataMask => write!(f, "data_mask"),
-            Feature::AggregateIndex => write!(f, "aggregate_index"),
-            Feature::InvertedIndex => write!(f, "inverted_index"),
             Feature::ComputedColumn => write!(f, "computed_column"),
             Feature::StorageEncryption => write!(f, "storage_encryption"),
             Feature::Stream => write!(f, "stream"),
@@ -94,10 +84,8 @@ impl fmt::Display for Feature {
             Feature::AmendTable => write!(f, "amend_table"),
             Feature::SystemManagement => write!(f, "system_management"),
             Feature::HilbertClustering => write!(f, "hilbert_clustering"),
-            Feature::NgramIndex => write!(f, "ngram_index"),
             Feature::WorkloadGroup => write!(f, "workload_group"),
             Feature::SystemHistory => write!(f, "system_history"),
-            Feature::VectorIndex => write!(f, "vector_index"),
             Feature::PrivateTask => write!(f, "private_task"),
             Feature::RowAccessPolicy => write!(f, "row_access_policy"),
             Feature::Unknown => write!(f, "unknown"),
@@ -126,20 +114,16 @@ impl Feature {
                 false => Ok(VerifyResult::Failure),
             },
             (Feature::Test, Feature::Test)
-            | (Feature::AggregateIndex, Feature::AggregateIndex)
             | (Feature::ComputedColumn, Feature::ComputedColumn)
             | (Feature::Vacuum, Feature::Vacuum)
             | (Feature::LicenseInfo, Feature::LicenseInfo)
             | (Feature::Stream, Feature::Stream)
             | (Feature::DataMask, Feature::DataMask)
             | (Feature::RowAccessPolicy, Feature::RowAccessPolicy)
-            | (Feature::InvertedIndex, Feature::InvertedIndex)
             | (Feature::VirtualColumn, Feature::VirtualColumn)
             | (Feature::AttacheTable, Feature::AttacheTable)
             | (Feature::StorageEncryption, Feature::StorageEncryption)
-            | (Feature::HilbertClustering, Feature::HilbertClustering)
-            | (Feature::NgramIndex, Feature::NgramIndex)
-            | (Feature::VectorIndex, Feature::VectorIndex) => Ok(VerifyResult::Success),
+            | (Feature::HilbertClustering, Feature::HilbertClustering) => Ok(VerifyResult::Success),
             (_, _) => Ok(VerifyResult::MissMatch),
         }
     }
@@ -231,14 +215,6 @@ mod tests {
             serde_json::from_str::<Feature>("\"DataMask\"").unwrap()
         );
         assert_eq!(
-            Feature::AggregateIndex,
-            serde_json::from_str::<Feature>("\"AggregateIndex\"").unwrap()
-        );
-        assert_eq!(
-            Feature::InvertedIndex,
-            serde_json::from_str::<Feature>("\"InvertedIndex\"").unwrap()
-        );
-        assert_eq!(
             Feature::ComputedColumn,
             serde_json::from_str::<Feature>("\"ComputedColumn\"").unwrap()
         );
@@ -266,11 +242,6 @@ mod tests {
         );
 
         assert_eq!(
-            Feature::NgramIndex,
-            serde_json::from_str::<Feature>("\"NgramIndex\"").unwrap()
-        );
-
-        assert_eq!(
             Feature::WorkloadGroup,
             serde_json::from_str::<Feature>("\"workload_group\"").unwrap()
         );
@@ -278,11 +249,6 @@ mod tests {
         assert_eq!(
             Feature::SystemHistory,
             serde_json::from_str::<Feature>("\"system_history\"").unwrap()
-        );
-
-        assert_eq!(
-            Feature::VectorIndex,
-            serde_json::from_str::<Feature>("\"VectorIndex\"").unwrap()
         );
 
         assert_eq!(
@@ -318,15 +284,12 @@ mod tests {
                 Feature::Test,
                 Feature::VirtualColumn,
                 Feature::DataMask,
-                Feature::AggregateIndex,
-                Feature::InvertedIndex,
                 Feature::ComputedColumn,
                 Feature::StorageEncryption,
                 Feature::Stream,
                 Feature::AttacheTable,
                 Feature::AmendTable,
                 Feature::HilbertClustering,
-                Feature::NgramIndex,
                 Feature::WorkloadGroup,
                 Feature::SystemHistory,
                 Feature::PrivateTask,
@@ -335,7 +298,7 @@ mod tests {
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,private_task,row_access_policy,storage_encryption,stream,system_history,vacuum,virtual_column,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [amend_table,attach_table,computed_column,data_mask,hilbert_clustering,license_info,private_task,row_access_policy,storage_encryption,stream,system_history,vacuum,virtual_column,workload_group] }",
             license_info.to_string()
         );
     }

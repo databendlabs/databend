@@ -69,7 +69,7 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
@@ -133,6 +133,7 @@ use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
+use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
@@ -321,11 +322,15 @@ impl FuseTable {
         let block_per_seg =
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
+        let enable_parquet_dictionary_encoding =
+            self.get_option(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY, false);
+
         WriteSettings {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
             max_page_size,
             block_per_seg,
+            enable_parquet_dictionary: enable_parquet_dictionary_encoding,
         }
     }
 
@@ -1268,9 +1273,7 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        if matches!(self.storage_format, FuseStorageFormat::Parquet)
-            && matches!(self.table_type, FuseTableType::Standard)
-        {
+        if matches!(self.storage_format, FuseStorageFormat::Parquet) && !self.is_read_only() {
             // ignore persistent system tables {
             if let Ok(database_name) = self.table_info.database_name() {
                 if database_name == "persistent_system" {

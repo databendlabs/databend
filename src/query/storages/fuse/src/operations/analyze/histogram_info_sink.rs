@@ -19,10 +19,10 @@ use async_trait::async_trait;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_sinks::AsyncSink;
-use databend_common_pipeline_sinks::AsyncSinker;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::sinks::AsyncSink;
+use databend_common_pipeline::sinks::AsyncSinker;
 
 pub struct HistogramInfoSink {
     sender: Option<Sender<DataBlock>>,

@@ -1,0 +1,43 @@
+#### prepare masking policy rbac environment
+>>>> DROP TABLE IF EXISTS mp_rbac
+>>>> DROP MASKING POLICY IF EXISTS mask_phone
+>>>> DROP MASKING POLICY IF EXISTS mask_email
+>>>> DROP USER IF EXISTS mask_create
+>>>> DROP USER IF EXISTS mask_apply
+>>>> DROP USER IF EXISTS mask_desc
+>>>> DROP ROLE IF EXISTS role_mask_apply
+>>>> DROP ROLE IF EXISTS role_mask_create
+>>>> CREATE TABLE mp_rbac(id INT, phone STRING, email STRING)
+>>>> CREATE USER mask_create IDENTIFIED BY '123' with default_role='role_mask_create'
+>>>> CREATE USER mask_apply IDENTIFIED BY '123' with default_role='role_mask_apply'
+>>>> CREATE ROLE role_mask_apply
+>>>> GRANT ROLE role_mask_apply TO mask_apply
+>>>> CREATE ROLE role_mask_create
+>>>> GRANT ROLE role_mask_create TO mask_create
+>>>> CREATE USER mask_desc IDENTIFIED BY '123' with default_role='mask_desc'
+#### create privilege requires CREATE MASKING POLICY
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [CreateMaskingPolicy] is required on *.* for user 'mask_create'@'%' with roles [public,role_mask_create]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+>>>> GRANT CREATE MASKING POLICY ON *.* TO USER mask_create
+>>>> CREATE MASKING POLICY mask_email AS (val STRING) RETURNS STRING -> 'EMAIL'
+Error: APIError: QueryFailed: [1063]Permission denied: APPLY MASKING POLICY or OWNERSHIP is required on MASKING POLICY mask_phone for user 'mask_apply'@'%'
+1
+#### apply privilege requires APPLY on masking policy
+>>>> GRANT ALTER ON default.mp_rbac TO ROLE role_mask_apply
+>>>> ALTER TABLE mp_rbac MODIFY COLUMN phone SET MASKING POLICY mask_phone
+1
+>>>> GRANT APPLY ON MASKING POLICY mask_phone TO ROLE role_mask_apply
+1
+>>>> GRANT OWNERSHIP ON MASKING POLICY mask_phone TO ROLE role_mask_apply
+2
+Error: APIError: QueryFailed: [1063]Permission denied: APPLY MASKING POLICY or OWNERSHIP is required on MASKING POLICY mask_email for user 'mask_apply'@'%'
+>>>> GRANT APPLY MASKING POLICY ON *.* TO ROLE role_mask_apply
+2
+1
+#### cleanup masking policy rbac environment
+>>>> DROP TABLE IF EXISTS mp_rbac
+>>>> DROP MASKING POLICY IF EXISTS mask_phone
+>>>> DROP MASKING POLICY IF EXISTS mask_email
+>>>> DROP USER IF EXISTS mask_create
+>>>> DROP USER IF EXISTS mask_apply
+>>>> DROP USER IF EXISTS mask_desc
+>>>> DROP ROLE IF EXISTS role_mask_apply

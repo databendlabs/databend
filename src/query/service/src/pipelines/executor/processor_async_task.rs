@@ -28,7 +28,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::ProcessorPtr;
 use futures_util::future::BoxFuture;
 use futures_util::future::Either;
 use futures_util::FutureExt;

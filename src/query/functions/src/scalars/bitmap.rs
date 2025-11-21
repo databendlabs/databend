@@ -192,6 +192,31 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_1_arg::<BitmapType, ArrayType<NumberType<u64>>, _, _>(
+        "bitmap_to_array",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<BitmapType, ArrayType<NumberType<u64>>>(
+            |b, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+                match deserialize_bitmap(b) {
+                    Ok(rb) => {
+                        let ids = rb.into_iter().collect::<Vec<_>>();
+                        builder.push(ids.into());
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.commit_row();
+                    }
+                }
+            },
+        ),
+    );
+
     registry.register_passthrough_nullable_2_arg::<BitmapType, UInt64Type, BooleanType, _, _>(
         "bitmap_contains",
         |_, _, _| FunctionDomain::Full,

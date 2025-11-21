@@ -16,9 +16,8 @@ select '0099-05-16'::DATE
 ----
 0099-05-16
 
-# FIXME: After Parser update then remove ::STRING
 query T
-select '1022-05-16'::DATE, date '1022-05-16', timestamp '1022-05-16', (timestamp_tz '1022-05-16')::string
+select '1022-05-16'::DATE, date '1022-05-16', timestamp '1022-05-16', timestamp_tz '1022-05-16'
 ----
 1022-05-16 1022-05-16 1022-05-16 00:00:00.000000 1022-05-16 00:00:00.000000 +0000
 

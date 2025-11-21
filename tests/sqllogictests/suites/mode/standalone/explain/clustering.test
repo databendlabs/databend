@@ -27,6 +27,7 @@ Filter
 ├── estimated rows: 2.00
 └── TableScan
     ├── table: default.default.test_linear
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -45,6 +46,7 @@ Filter
 ├── estimated rows: 2.00
 └── TableScan
     ├── table: default.default.test_linear
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 4
     ├── read size: < 1 KiB

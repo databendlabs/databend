@@ -29,7 +29,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::FileStatus;
 use parquet::file::metadata::FileMetaData;

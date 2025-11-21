@@ -32,13 +32,13 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sinks::AsyncSink;
-use databend_common_pipeline_sinks::AsyncSinker;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::AsyncSink;
+use databend_common_pipeline::sinks::AsyncSinker;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_storages_common_cache::LoadParams;
@@ -160,7 +160,7 @@ impl FuseTable {
                     block_reader.clone(),
                     block_metas.clone(),
                 );
-                AsyncSourcer::create(ctx.clone(), output, inner)
+                AsyncSourcer::create(ctx.get_scan_progress(), output, inner)
             },
             1,
         )?;

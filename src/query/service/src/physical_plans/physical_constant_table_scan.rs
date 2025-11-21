@@ -18,7 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 

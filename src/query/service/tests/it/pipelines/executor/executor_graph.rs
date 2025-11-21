@@ -14,30 +14,31 @@
 
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc::channel;
 use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_base::base::tokio::sync::mpsc::Sender;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::PipeItem;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sinks::SyncSenderSink;
-use databend_common_pipeline_sources::BlocksSource;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::SyncSenderSink;
+use databend_common_pipeline::sources::BlocksSource;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::ExecutorWorkerContext;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::executor::WorkersCondvar;
-use databend_query::pipelines::processors::InputPort;
-use databend_query::pipelines::processors::OutputPort;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
-use parking_lot::Mutex;
 use petgraph::stable_graph::NodeIndex;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -500,7 +501,7 @@ fn create_source_pipe(
         txs.push(tx);
         items.push(PipeItem::create(
             BlocksSource::create(
-                ctx.clone(),
+                ctx.get_scan_progress(),
                 output.clone(),
                 Arc::new(Mutex::new(VecDeque::new())),
             )?,

@@ -919,13 +919,17 @@ fn register_like(registry: &mut FunctionRegistry) {
                             return Value::Scalar(Scalar::Boolean(Default::default()));
                         }
                     };
-                    let escape: Value<StringType> = args.get(2).cloned().and_then(|value| value.try_downcast()).unwrap_or(Value::Scalar("".to_string()));
+                    let escape: Value<StringType> = args
+                        .get(2)
+                        .cloned()
+                        .and_then(|value| value.try_downcast().ok())
+                        .unwrap_or(Value::Scalar("".to_string()));
 
-                    let result = if let Some(value) = arg.try_downcast::<StringType>() {
+                    let result = if let Ok(value) = arg.try_downcast::<StringType>() {
                         let like = vectorize_like(|str, pattern_type| pattern_type.compare(str));
                         patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), escape.clone(), ctx))
                             .collect::<Vec<_>>()
-                    } else if let Some(value) = arg.try_downcast::<VariantType>() {
+                    } else if let Ok(value) = arg.try_downcast::<VariantType>() {
                         let like = variant_vectorize_like_jsonb();
                         patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), escape.clone(), ctx))
                             .collect::<Vec<_>>()

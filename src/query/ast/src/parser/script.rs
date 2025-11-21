@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nom::branch::alt;
-use nom::combinator::consumed;
-use nom::combinator::map;
+use nom::Parser;
 use nom_rule::rule;
 
 use crate::ast::*;
 use crate::parser::common::*;
+use crate::parser::error::Error;
+use crate::parser::error::ErrorKind;
 use crate::parser::expr::*;
 use crate::parser::input::Input;
 use crate::parser::statement::*;
@@ -40,7 +40,8 @@ pub fn script_block_or_stmt(i: Input) -> IResult<ScriptBlockOrStmt> {
             }),
             |(_, stmt)| ScriptBlockOrStmt::Statement(stmt.stmt),
         ),
-    ))(i)
+    ))
+    .parse(i)
 }
 
 pub fn script_block(i: Input) -> IResult<ScriptBlock> {
@@ -60,7 +61,8 @@ pub fn script_block(i: Input) -> IResult<ScriptBlock> {
                 body,
             }
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn declare_item(i: Input) -> IResult<DeclareItem> {
@@ -70,7 +72,8 @@ pub fn declare_item(i: Input) -> IResult<DeclareItem> {
     rule!(
         #declare_var
         | #declare_set
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn declare_var(i: Input) -> IResult<DeclareVar> {
@@ -84,7 +87,8 @@ pub fn declare_var(i: Input) -> IResult<DeclareVar> {
             data_type,
             default: default.map(|(_, default)| default),
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn declare_set(i: Input) -> IResult<DeclareSet> {
@@ -97,7 +101,8 @@ pub fn declare_set(i: Input) -> IResult<DeclareSet> {
             name,
             stmt,
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 pub fn declare_cursor(i: Input) -> IResult<DeclareCursor> {
@@ -119,7 +124,8 @@ pub fn declare_cursor(i: Input) -> IResult<DeclareCursor> {
                 resultset: None,
             },
         },
-    )(i)
+    )
+    .parse(i)
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -137,21 +143,31 @@ pub(crate) fn cursor_target(i: Input) -> IResult<CursorTarget> {
     rule!(
         #resultset
         | #statement
-    )(i)
+    )
+    .parse(i)
 }
 
 pub(crate) fn iterable_item(i: Input) -> IResult<IterableItem> {
     // For now, we'll treat all identifiers as potential iterables
     // The compiler will determine if it's a cursor or resultset
     // based on what was actually declared
-    map(ident, IterableItem::Resultset)(i)
+    map(ident, IterableItem::Resultset).parse(i)
 }
 
 pub fn script_stmts(i: Input) -> IResult<Vec<ScriptStatement>> {
-    semicolon_terminated_list1(script_stmt)(i)
+    semicolon_terminated_list1(script_stmt).parse(i)
 }
 
 pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
+    if let Some(token) = i.tokens.first() {
+        let kind = token.kind;
+        if matches!(kind, END | ELSE | ELSEIF | WHEN | UNTIL) {
+            return Err(nom::Err::Error(Error::from_error_kind(
+                i,
+                ErrorKind::Other("block terminator"),
+            )));
+        }
+    }
     let let_var_stmt = map(
         rule! {
             LET ~ #declare_var
@@ -448,5 +464,6 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
         | #loop_stmts
         | #conditional_stmts
         | #run_stmt
-    )(i)
+    )
+    .parse(i)
 }

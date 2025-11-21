@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use nom::combinator::map;
+use nom::Parser;
 use nom_rule::rule;
 
 use crate::ast::DataMaskArg;
@@ -30,22 +30,24 @@ fn data_mask_arg(i: Input) -> IResult<DataMaskArg> {
             arg_name: arg_name.name,
             arg_type,
         }
-    })(i)
+    })
+    .parse(i)
 }
 
 fn data_mask_args(i: Input) -> IResult<Vec<DataMaskArg>> {
     map(
         rule! { AS ~ "(" ~ #comma_separated_list1(data_mask_arg) ~ ")" },
         |(_, _, args, _)| args,
-    )(i)
+    )
+    .parse(i)
 }
 
 fn data_mask_body(i: Input) -> IResult<Expr> {
-    map(rule! { #expr }, |expr| expr)(i)
+    map(rule! { #expr }, |expr| expr).parse(i)
 }
 
 fn data_mask_return_type(i: Input) -> IResult<TypeName> {
-    map(rule! { RETURNS ~ #type_name }, |(_, type_name)| type_name)(i)
+    map(rule! { RETURNS ~ #type_name }, |(_, type_name)| type_name).parse(i)
 }
 
 pub fn data_mask_policy(i: Input) -> IResult<DataMaskPolicy> {
@@ -60,5 +62,5 @@ pub fn data_mask_policy(i: Input) -> IResult<DataMaskPolicy> {
                 None => None,
             },
         },
-    )(i)
+    ).parse(i)
 }

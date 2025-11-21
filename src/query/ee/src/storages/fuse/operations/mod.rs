@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod handler;
-pub mod table_index;
 pub mod vacuum_drop_tables;
 pub mod vacuum_table;
 pub mod vacuum_table_v2;

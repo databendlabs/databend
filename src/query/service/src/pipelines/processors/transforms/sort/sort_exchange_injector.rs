@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::sorts::SortBound;
 use databend_common_settings::FlightCompression;
 
@@ -40,7 +40,7 @@ impl ExchangeInjector for SortInjector {
     ) -> Result<Arc<Box<dyn FlightScatter>>> {
         match exchange {
             DataExchange::Merge(_) | DataExchange::Broadcast(_) => unreachable!(),
-            DataExchange::ShuffleDataExchange(exchange) => {
+            DataExchange::NodeToNodeExchange(exchange) => {
                 Ok(Arc::new(Box::new(SortBoundScatter {
                     partitions: exchange.destination_ids.len(),
                 })))

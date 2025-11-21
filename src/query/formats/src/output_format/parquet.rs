@@ -53,7 +53,15 @@ impl OutputFormat for ParquetOutputFormat {
             return Ok(vec![]);
         }
         let mut buf = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
-        let _ = blocks_to_parquet(&self.schema, blocks, &mut buf, TableCompression::Zstd, None)?;
+        // While unloading data as parquet, enable dictionary unconditionally, usually this leads to smaller size.
+        let _ = blocks_to_parquet(
+            &self.schema,
+            blocks,
+            &mut buf,
+            TableCompression::Zstd,
+            true,
+            None,
+        )?;
         Ok(buf)
     }
 }

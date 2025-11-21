@@ -34,11 +34,12 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline_core::PlanProfile;
+use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::OutofMemoryBehavior;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
+use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
 use log::debug;
@@ -322,7 +323,7 @@ impl Session {
     #[async_backtrace::framed]
     pub async fn unset_current_role(&self) -> Result<()> {
         self.privilege_mgr()
-            .set_current_role(Some("public".to_string()))
+            .set_current_role(Some(BUILTIN_ROLE_PUBLIC.to_string()))
             .await
     }
 

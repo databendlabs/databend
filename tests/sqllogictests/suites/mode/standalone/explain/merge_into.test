@@ -42,6 +42,7 @@ CommitSink
             ├── EmptyResultScan(Build)
             └── TableScan(Probe)
                 ├── table: default.default.employees2
+                ├── scan id: 0
                 ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
                 ├── read rows: 4
                 ├── read size: < 1 KiB
@@ -79,6 +80,7 @@ CommitSink
                 ├── estimated rows: 4.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.salaries2
+                │   ├── scan id: 1
                 │   ├── output columns: [employee_id (#3), _row_id (#5)]
                 │   ├── read rows: 4
                 │   ├── read size: < 1 KiB
@@ -89,6 +91,7 @@ CommitSink
                 │   └── estimated rows: 4.00
                 └── TableScan(Probe)
                     ├── table: default.default.employees2
+                    ├── scan id: 0
                     ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
                     ├── read rows: 4
                     ├── read size: < 1 KiB
@@ -122,10 +125,11 @@ CommitSink
                 ├── keys is null equal: [false]
                 ├── filters: []
                 ├── build join filters:
-                │   └── filter id:0, build key:employees2.employee_id (#0), probe key:salaries2.employee_id (#3), filter type:inlist,min_max
+                │   └── filter id:0, build key:employees2.employee_id (#0), probe targets:[salaries2.employee_id (#3)@scan1], filter type:bloom,inlist,min_max
                 ├── estimated rows: 4.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.employees2
+                │   ├── scan id: 0
                 │   ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
                 │   ├── read rows: 4
                 │   ├── read size: < 1 KiB
@@ -136,6 +140,7 @@ CommitSink
                 │   └── estimated rows: 4.00
                 └── TableScan(Probe)
                     ├── table: default.default.salaries2
+                    ├── scan id: 1
                     ├── output columns: [employee_id (#3), _row_id (#5)]
                     ├── read rows: 6
                     ├── read size: < 1 KiB
@@ -167,10 +172,11 @@ CommitSink
                 ├── keys is null equal: [false]
                 ├── filters: []
                 ├── build join filters:
-                │   └── filter id:0, build key:employees2.employee_id (#0), probe key:salaries2.employee_id (#3), filter type:inlist,min_max
+                │   └── filter id:0, build key:employees2.employee_id (#0), probe targets:[salaries2.employee_id (#3)@scan1], filter type:bloom,inlist,min_max
                 ├── estimated rows: 4.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.employees2
+                │   ├── scan id: 0
                 │   ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
                 │   ├── read rows: 4
                 │   ├── read size: < 1 KiB
@@ -181,6 +187,7 @@ CommitSink
                 │   └── estimated rows: 4.00
                 └── TableScan(Probe)
                     ├── table: default.default.salaries2
+                    ├── scan id: 1
                     ├── output columns: [employee_id (#3), _row_id (#5)]
                     ├── read rows: 6
                     ├── read size: < 1 KiB
@@ -230,6 +237,7 @@ CommitSink
                 ├── estimated rows: 0.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.column_only_optimization_target
+                │   ├── scan id: 1
                 │   ├── output columns: [a (#2), _row_id (#4)]
                 │   ├── read rows: 0
                 │   ├── read size: 0
@@ -239,6 +247,7 @@ CommitSink
                 │   └── estimated rows: 0.00
                 └── TableScan(Probe)
                     ├── table: default.default.column_only_optimization_source
+                    ├── scan id: 0
                     ├── output columns: [a (#0), b (#1)]
                     ├── read rows: 0
                     ├── read size: 0
@@ -270,6 +279,7 @@ CommitSink
                 ├── estimated rows: 0.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.column_only_optimization_target
+                │   ├── scan id: 1
                 │   ├── output columns: [a (#2), _row_id (#4)]
                 │   ├── read rows: 0
                 │   ├── read size: 0
@@ -279,6 +289,7 @@ CommitSink
                 │   └── estimated rows: 0.00
                 └── TableScan(Probe)
                     ├── table: default.default.column_only_optimization_source
+                    ├── scan id: 0
                     ├── output columns: [a (#0), b (#1)]
                     ├── read rows: 0
                     ├── read size: 0
@@ -313,6 +324,7 @@ CommitSink
                 ├── estimated rows: 0.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.column_only_optimization_target
+                │   ├── scan id: 1
                 │   ├── output columns: [a (#2), _row_id (#4)]
                 │   ├── read rows: 0
                 │   ├── read size: 0
@@ -322,6 +334,7 @@ CommitSink
                 │   └── estimated rows: 0.00
                 └── TableScan(Probe)
                     ├── table: default.default.column_only_optimization_source
+                    ├── scan id: 0
                     ├── output columns: [a (#0), b (#1)]
                     ├── read rows: 0
                     ├── read size: 0
@@ -353,6 +366,7 @@ CommitSink
                 ├── estimated rows: 0.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.column_only_optimization_target
+                │   ├── scan id: 1
                 │   ├── output columns: [a (#2), _row_id (#4)]
                 │   ├── read rows: 0
                 │   ├── read size: 0
@@ -362,6 +376,7 @@ CommitSink
                 │   └── estimated rows: 0.00
                 └── TableScan(Probe)
                     ├── table: default.default.column_only_optimization_source
+                    ├── scan id: 0
                     ├── output columns: [a (#0), b (#1)]
                     ├── read rows: 0
                     ├── read size: 0

@@ -14,6 +14,7 @@
 
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
+use nom::Parser;
 use pretty_assertions::assert_eq;
 
 use crate::ast::ExplainKind;
@@ -73,7 +74,7 @@ pub fn parse_comma_separated_exprs(tokens: &[Token], dialect: Dialect) -> Result
 
 pub fn parse_comma_separated_idents(tokens: &[Token], dialect: Dialect) -> Result<Vec<Identifier>> {
     run_parser(tokens, dialect, ParseMode::Default, true, |i| {
-        comma_separated_list1(ident)(i)
+        comma_separated_list1(ident).parse(i)
     })
 }
 

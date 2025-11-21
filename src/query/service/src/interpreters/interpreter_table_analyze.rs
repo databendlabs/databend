@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::BindContext;

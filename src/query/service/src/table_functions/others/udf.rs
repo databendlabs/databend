@@ -47,8 +47,8 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_storages_factory::Table;
 use url::Url;
 
@@ -163,10 +163,10 @@ impl Table for UdfEchoTable {
         let return_type = DataType::Nullable(Box::new(DataType::String));
 
         let result = client
-            .do_exchange(name, name, num_rows, block_entries, &return_type)
+            .do_exchange(name, name, Some(num_rows), block_entries, &return_type)
             .await?;
 
-        let scalar = unsafe { result.index_unchecked(0) };
+        let scalar = unsafe { result.get_by_offset(0).index_unchecked(0) };
         let value = scalar.as_string().unwrap();
         let parts = vec![Arc::new(Box::new(StringPart {
             value: value.to_string(),

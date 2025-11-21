@@ -24,6 +24,7 @@ use futures_util::TryStreamExt;
 use crate::interpreters::InterpreterFactory;
 use crate::physical_plans::build_broadcast_plans;
 use crate::physical_plans::PhysicalPlan;
+use crate::pipelines::attach_runtime_filter_logger;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -63,7 +64,7 @@ pub async fn build_query_pipeline_without_render_result_set(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
-    let build_res = if !plan.is_distributed_plan() {
+    let mut build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan).await
     } else {
         if plan.is_warehouse_distributed_plan() {
@@ -72,6 +73,7 @@ pub async fn build_query_pipeline_without_render_result_set(
 
         build_distributed_pipeline(ctx, plan).await
     }?;
+    attach_runtime_filter_logger(ctx.clone(), &mut build_res.main_pipeline);
     Ok(build_res)
 }
 
@@ -126,7 +128,6 @@ pub async fn build_distributed_pipeline(
         }
     }
 }
-
 pub struct ServiceQueryExecutor {
     ctx: Arc<QueryContext>,
 }
@@ -142,25 +143,37 @@ impl ServiceQueryExecutor {
         &self,
         plan: &PhysicalPlan,
     ) -> Result<Vec<DataBlock>> {
-        let build_res = build_query_pipeline_without_render_result_set(&self.ctx, plan).await?;
-        let settings = ExecutorSettings::try_create(self.ctx.clone())?;
-        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
-        self.ctx.set_executor(pulling_executor.get_inner())?;
+        let result = async {
+            let build_res = build_query_pipeline_without_render_result_set(&self.ctx, plan).await?;
+            let settings = ExecutorSettings::try_create(self.ctx.clone())?;
+            let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+            self.ctx.set_executor(pulling_executor.get_inner())?;
 
-        PullingExecutorStream::create(pulling_executor)?
-            .try_collect::<Vec<DataBlock>>()
-            .await
+            PullingExecutorStream::create(pulling_executor)?
+                .try_collect::<Vec<DataBlock>>()
+                .await
+        }
+        .await;
+
+        self.ctx.clear_runtime_filter();
+        result
     }
 }
 
 #[async_trait]
 impl QueryExecutor for ServiceQueryExecutor {
     async fn execute_query_with_sql_string(&self, query_sql: &str) -> Result<Vec<DataBlock>> {
-        let mut planner = Planner::new(self.ctx.clone());
-        let (plan, _) = planner.plan_sql(query_sql).await?;
-        let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
-        let stream = interpreter.execute(self.ctx.clone()).await?;
-        let blocks = stream.try_collect::<Vec<_>>().await?;
-        Ok(blocks)
+        let result = async {
+            let mut planner = Planner::new(self.ctx.clone());
+            let (plan, _) = planner.plan_sql(query_sql).await?;
+            let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
+            let stream = interpreter.execute(self.ctx.clone()).await?;
+            let blocks = stream.try_collect::<Vec<_>>().await?;
+            Ok(blocks)
+        }
+        .await;
+
+        self.ctx.clear_runtime_filter();
+        result
     }
 }

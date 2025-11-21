@@ -67,6 +67,7 @@ use super::PageManager;
 use super::ResponseData;
 use super::Wait;
 use crate::servers::http::error::QueryError;
+use crate::servers::http::v1::http_query_handlers::ResultFormatSettings;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::QueryResponse;
@@ -128,6 +129,7 @@ impl HttpQueryRequest {
             error: Some(QueryError::from_error_code(err)),
             has_result_set: None,
             result_timeout_secs: None,
+            settings: None,
         })
     }
 
@@ -325,6 +327,7 @@ pub struct HttpSessionConf {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secondary_roles: Option<Vec<String>>,
+    // session level settings
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -489,6 +492,7 @@ pub struct StageAttachmentConf {
 pub struct ResponseState {
     pub has_result_set: Option<bool>,
     pub schema: DataSchemaRef,
+    pub result_format_settings: Option<ResultFormatSettings>,
     pub running_time_ms: i64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
@@ -569,7 +573,7 @@ pub struct HttpQuery {
     // cache only
     pub(crate) result_timeout_secs: u64,
 
-    execute_state: Arc<Mutex<Executor>>,
+    pub(crate) execute_state: Arc<Mutex<Executor>>,
 
     // client states
     client_state: Arc<Mutex<ClientState>>,
@@ -845,6 +849,7 @@ impl HttpQuery {
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         schema: Default::default(),
+                        result_format_settings: None,
                         has_result_set: None,
                         reason: Err(e.clone()),
                         session_state: ExecutorSessionState::new(

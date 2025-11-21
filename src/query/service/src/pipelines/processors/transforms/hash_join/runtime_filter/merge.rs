@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -29,6 +28,7 @@ pub fn merge_join_runtime_filter_packets(
         "RUNTIME-FILTER: merge_join_runtime_filter_packets input: {:?}",
         packets
     );
+    let total_build_rows: usize = packets.iter().map(|packet| packet.build_rows).sum();
     // Skip packets that `JoinRuntimeFilterPacket::packets` is `None`
     let packets = packets
         .into_iter()
@@ -36,7 +36,10 @@ pub fn merge_join_runtime_filter_packets(
         .collect::<Vec<_>>();
 
     if packets.is_empty() {
-        return Ok(JoinRuntimeFilterPacket::default());
+        return Ok(JoinRuntimeFilterPacket {
+            packets: None,
+            build_rows: total_build_rows,
+        });
     }
 
     let mut result = HashMap::new();
@@ -55,6 +58,7 @@ pub fn merge_join_runtime_filter_packets(
     );
     Ok(JoinRuntimeFilterPacket {
         packets: Some(result),
+        build_rows: total_build_rows,
     })
 }
 
@@ -117,10 +121,7 @@ fn merge_min_max(
     Some(SerializableDomain { min, max })
 }
 
-fn merge_bloom(
-    packets: &[HashMap<usize, RuntimeFilterPacket>],
-    rf_id: usize,
-) -> Option<HashSet<u64>> {
+fn merge_bloom(packets: &[HashMap<usize, RuntimeFilterPacket>], rf_id: usize) -> Option<Vec<u64>> {
     if packets
         .iter()
         .any(|packet| packet.get(&rf_id).unwrap().bloom.is_none())
@@ -135,7 +136,8 @@ fn merge_bloom(
         .unwrap()
         .clone();
     for packet in packets.iter().skip(1) {
-        bloom.extend(packet.get(&rf_id).unwrap().bloom.as_ref().unwrap().clone());
+        let other = packet.get(&rf_id).unwrap().bloom.as_ref().unwrap();
+        bloom.extend_from_slice(other);
     }
     Some(bloom)
 }

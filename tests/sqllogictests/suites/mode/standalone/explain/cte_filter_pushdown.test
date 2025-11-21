@@ -21,6 +21,7 @@ Filter
 ├── estimated rows: 1.67
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -45,6 +46,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
     ├── read rows: 3
     ├── read size: < 1 KiB
@@ -69,6 +71,7 @@ Filter
 ├── estimated rows: 3.00
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
     ├── read rows: 3
     ├── read size: < 1 KiB
@@ -93,6 +96,7 @@ Filter
 ├── estimated rows: 2.00
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
     ├── read rows: 3
     ├── read size: < 1 KiB
@@ -123,6 +127,7 @@ UnionAll
 │   ├── estimated rows: 1.00
 │   └── TableScan
 │       ├── table: default.default.cte1
+│       ├── scan id: 0
 │       ├── output columns: [a (#0), cnt (#1)]
 │       ├── read rows: 3
 │       ├── read size: < 1 KiB
@@ -137,6 +142,7 @@ UnionAll
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.cte1
+        ├── scan id: 1
         ├── output columns: [a (#2), cnt (#3)]
         ├── read rows: 3
         ├── read size: < 1 KiB
@@ -172,6 +178,7 @@ UnionAll
 │   │   ├── estimated rows: 1.00
 │   │   └── TableScan
 │   │       ├── table: default.default.cte1
+│   │       ├── scan id: 0
 │   │       ├── output columns: [a (#0), cnt (#1)]
 │   │       ├── read rows: 3
 │   │       ├── read size: < 1 KiB
@@ -186,6 +193,7 @@ UnionAll
 │       ├── estimated rows: 1.00
 │       └── TableScan
 │           ├── table: default.default.cte1
+│           ├── scan id: 1
 │           ├── output columns: [a (#2), cnt (#3)]
 │           ├── read rows: 3
 │           ├── read size: < 1 KiB
@@ -200,6 +208,7 @@ UnionAll
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.cte1
+        ├── scan id: 2
         ├── output columns: [a (#6), cnt (#7)]
         ├── read rows: 3
         ├── read size: < 1 KiB
@@ -222,6 +231,7 @@ Filter
 ├── estimated rows: 1.67
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -247,6 +257,7 @@ Filter
 ├── estimated rows: 2.00
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
     ├── read rows: 3
     ├── read size: < 1 KiB
@@ -271,6 +282,7 @@ Filter
 ├── estimated rows: 1.67
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1), cnt (#2)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -298,6 +310,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), cnt (#1), sum_b (#2)]
     ├── read rows: 3
     ├── read size: < 1 KiB
@@ -322,6 +335,7 @@ Filter
 ├── estimated rows: 1.67
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), cnt (#1)]
     ├── read rows: 3
     ├── read size: < 1 KiB
@@ -346,6 +360,7 @@ Filter
 ├── estimated rows: 2.78
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1), cnt (#2)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -370,6 +385,7 @@ Filter
 ├── estimated rows: 2.00
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), cnt (#1)]
     ├── read rows: 3
     ├── read size: < 1 KiB
@@ -393,6 +409,7 @@ Filter
 ├── estimated rows: 1.67
 └── TableScan
     ├── table: default.default.cte1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1), rn (#2)]
     ├── read rows: 5
     ├── read size: < 1 KiB

@@ -44,6 +44,7 @@ use itertools::Itertools;
 use super::batch_merge1;
 use super::batch_serialize1;
 use super::AggregateFunctionSortDesc;
+use super::SerializeInfo;
 use super::StateSerde;
 
 #[derive(Debug, Clone)]
@@ -52,7 +53,7 @@ pub struct SortAggState {
 }
 
 impl StateSerde for SortAggState {
-    fn serialize_type(_: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }
 

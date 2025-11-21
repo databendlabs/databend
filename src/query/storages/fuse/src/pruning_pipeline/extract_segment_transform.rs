@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaAccumulatingTransformer;
 use databend_storages_common_cache::CacheAccessor;

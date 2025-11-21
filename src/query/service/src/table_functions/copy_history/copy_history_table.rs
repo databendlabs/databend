@@ -39,11 +39,11 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_types::MetaId;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 
 use crate::sessions::QueryContext;
 use crate::table_functions::TableFunction;
@@ -196,7 +196,7 @@ impl CopyHistorySource {
         output: Arc<OutputPort>,
         table_name: String,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, CopyHistorySource {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, CopyHistorySource {
             state: State::NotStarted,
             ctx,
             table_name,

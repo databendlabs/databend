@@ -42,7 +42,7 @@ use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
     Cross,
     Inner,
@@ -89,7 +89,7 @@ impl JoinType {
             JoinType::RightMark => JoinType::LeftMark,
             JoinType::RightAsof => JoinType::LeftAsof,
             JoinType::LeftAsof => JoinType::RightAsof,
-            _ => self.clone(),
+            _ => *self,
         }
     }
 
@@ -116,6 +116,13 @@ impl JoinType {
         matches!(
             self,
             JoinType::InnerAny | JoinType::LeftAny | JoinType::RightAny
+        )
+    }
+
+    pub fn is_asof_join(&self) -> bool {
+        matches!(
+            self,
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
         )
     }
 }
@@ -633,9 +640,11 @@ impl Operator for Join {
             // Although the build side is also Hash, it is more efficient to
             // utilize the distribution on the probe side.
             // As soon as we support subset property, we can pass through both sides.
-            (Distribution::Hash(_), Distribution::Hash(_)) => Ok(PhysicalProperty {
-                distribution: probe_prop.distribution.clone(),
-            }),
+            (Distribution::NodeToNodeHash(_), Distribution::NodeToNodeHash(_)) => {
+                Ok(PhysicalProperty {
+                    distribution: probe_prop.distribution.clone(),
+                })
+            }
 
             // Otherwise use random distribution.
             _ => Ok(PhysicalProperty {
@@ -720,14 +729,14 @@ impl Operator for Join {
                 .iter()
                 .map(|condition| condition.left.clone())
                 .collect();
-            required.distribution = Distribution::Hash(left_conditions);
+            required.distribution = Distribution::NodeToNodeHash(left_conditions);
         } else {
             let right_conditions = self
                 .equi_conditions
                 .iter()
                 .map(|condition| condition.right.clone())
                 .collect();
-            required.distribution = Distribution::Hash(right_conditions);
+            required.distribution = Distribution::NodeToNodeHash(right_conditions);
         }
 
         Ok(required)
@@ -759,7 +768,7 @@ impl Operator for Join {
                         distribution: Distribution::Broadcast,
                     },
                     RequiredProperty {
-                        distribution: Distribution::Hash(conditions),
+                        distribution: Distribution::NodeToNodeHash(conditions),
                     },
                 ]);
             } else {
@@ -772,7 +781,7 @@ impl Operator for Join {
 
                 children_required.push(vec![
                     RequiredProperty {
-                        distribution: Distribution::Hash(conditions),
+                        distribution: Distribution::NodeToNodeHash(conditions),
                     },
                     RequiredProperty {
                         distribution: Distribution::Broadcast,
@@ -788,10 +797,10 @@ impl Operator for Join {
             children_required.extend(self.equi_conditions.iter().map(|condition| {
                 vec![
                     RequiredProperty {
-                        distribution: Distribution::Hash(vec![condition.left.clone()]),
+                        distribution: Distribution::NodeToNodeHash(vec![condition.left.clone()]),
                     },
                     RequiredProperty {
-                        distribution: Distribution::Hash(vec![condition.right.clone()]),
+                        distribution: Distribution::NodeToNodeHash(vec![condition.right.clone()]),
                     },
                 ]
             }));

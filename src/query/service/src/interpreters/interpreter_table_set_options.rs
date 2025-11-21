@@ -24,7 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
@@ -56,6 +56,7 @@ use crate::interpreters::common::table_option_validation::is_valid_block_per_seg
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::Interpreter;
@@ -95,6 +96,8 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_row_per_block(&self.plan.set_options)?;
         // check data_retention_period
         is_valid_data_retention_period(&self.plan.set_options)?;
+        // check enable_parquet_encoding
+        is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";

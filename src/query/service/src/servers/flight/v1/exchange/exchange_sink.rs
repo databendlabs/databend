@@ -18,10 +18,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::PipeItem;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
 
 use super::exchange_params::ExchangeParams;
 use super::exchange_sink_writer::create_writer_item;

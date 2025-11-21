@@ -34,7 +34,7 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline_core::LockGuard;
+use databend_common_pipeline::core::LockGuard;
 
 use crate::plans::Plan;
 

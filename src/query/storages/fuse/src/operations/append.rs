@@ -26,7 +26,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::create_dummy_item;

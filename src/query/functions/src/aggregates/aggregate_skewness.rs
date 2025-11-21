@@ -39,7 +39,7 @@ use super::batch_merge1;
 use super::AggrState;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 
 #[derive(Default, BorshSerialize, BorshDeserialize)]
@@ -55,11 +55,7 @@ where
     T: AccessType,
     T::Scalar: AsPrimitive<f64>,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         let other = T::to_owned_scalar(other).as_();
         self.n += 1;
         self.sum += other;
@@ -82,7 +78,7 @@ where
     fn merge_result(
         &mut self,
         mut builder: BuilderMut<'_, Float64Type>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         if self.n <= 2 {
             builder.push(F64::from(0_f64));
@@ -111,7 +107,7 @@ where
 }
 
 impl StateSerde for SkewnessStateV2 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(Some(32))]
     }
 
@@ -159,7 +155,6 @@ pub fn try_create_aggregate_skewness_function(
                 NumberConvertView<NUM_TYPE, F64>,
                 Float64Type,
             >::create(display_name, return_type)
-            .finish()
         }
 
         DataType::Decimal(s) => {
@@ -169,10 +164,7 @@ pub fn try_create_aggregate_skewness_function(
                         SkewnessStateV2,
                         DecimalF64View<DECIMAL>,
                         Float64Type,
-                    >::create(
-                        display_name, return_type
-                    )
-                    .finish()
+                    >::create(display_name, return_type)
                 }
             })
         }

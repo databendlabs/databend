@@ -380,13 +380,13 @@ impl Value<AnyType> {
         }
     }
 
-    pub fn try_downcast<T: AccessType>(&self) -> Option<Value<T>> {
-        Some(match self {
-            Value::Scalar(scalar) => Value::Scalar(T::to_owned_scalar(T::try_downcast_scalar(
+    pub fn try_downcast<T: AccessType>(&self) -> Result<Value<T>> {
+        match self {
+            Value::Scalar(scalar) => Ok(Value::Scalar(T::to_owned_scalar(T::try_downcast_scalar(
                 &scalar.as_ref(),
-            )?)),
-            Value::Column(col) => Value::Column(T::try_downcast_column(col)?),
-        })
+            )?))),
+            Value::Column(col) => Ok(Value::Column(T::try_downcast_column(col)?)),
+        }
     }
 
     pub fn wrap_nullable(self, validity: Option<Bitmap>) -> Self {

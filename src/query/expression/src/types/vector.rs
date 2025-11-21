@@ -19,18 +19,22 @@ use std::ops::Range;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_column::buffer::Buffer;
+use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
+use super::AccessType;
+use super::BuilderMut;
+use super::DataType;
+use super::NumberColumn;
+use super::NumberDataType;
+use super::ValueType;
+use super::F32;
 use crate::property::Domain;
-use crate::types::AccessType;
-use crate::types::BuilderMut;
-use crate::types::DataType;
-use crate::types::NumberColumn;
-use crate::types::NumberDataType;
-use crate::types::ValueType;
-use crate::types::F32;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -55,19 +59,24 @@ impl AccessType for VectorType {
         scalar.as_ref()
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        scalar.as_vector().cloned()
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        scalar
+            .as_vector()
+            .cloned()
+            .ok_or_else(|| scalar_type_error::<Self>(scalar))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        col.as_vector().cloned()
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        col.as_vector()
+            .cloned()
+            .ok_or_else(|| column_type_error::<Self>(col))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         if domain.is_undefined() {
-            Some(())
+            Ok(())
         } else {
-            None
+            Err(domain_type_error::<Self>(domain))
         }
     }
 
@@ -197,7 +206,7 @@ macro_rules! with_vector_number_mapped_type {
         match_template::match_template! {
             $t = [
                 Int8 => i8,
-                Float32 => $crate::types::number::F32,
+                Float32 => $super::number::F32,
             ],
             $($tail)*
         }

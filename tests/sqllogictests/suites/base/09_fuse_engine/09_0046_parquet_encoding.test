@@ -1,0 +1,124 @@
+statement ok
+create or replace database test_tbl_opt_parquet_encoding;
+
+statement ok
+use test_tbl_opt_parquet_encoding;
+
+#############################################
+# Create table with parquet encoding option #
+#############################################
+
+statement ok
+create or replace table t_encoded (c int, s string) enable_parquet_dictionary = 'true' storage_format = 'parquet';
+
+statement ok
+create or replace table t(c int, s string) storage_format = 'parquet';
+
+statement ok
+insert into t_encoded(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
+
+statement ok
+optimize table t_encoded compact;
+
+statement ok
+insert into t(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
+
+statement ok
+optimize table t compact;
+
+# In this case, lz4 with encoding produces smaller block files
+query T
+with
+  e as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 't_encoded')  limit 1),
+  p as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 't') limit 1)
+  select e.c < p.c from e,  p
+----
+1
+
+
+################################
+# Alter table parquet encoding #
+################################
+
+
+# 1. prepare plain encoded data and keep the file size
+statement ok
+create or replace table tbl (c int, s string) storage_format = 'parquet';
+
+statement ok
+insert into tbl(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
+
+# insertion might be executed in a distributed manner, in this case, data blocks might be fragmented
+statement ok
+optimize table tbl compact;
+
+statement ok
+create temp table tbl_size(s uint64);
+
+statement ok
+insert into tbl_size select bytes_compressed from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1;
+
+
+# 2. truncate table data and insert the same data with parquet encoding enabled
+statement ok
+truncate table tbl;
+
+statement ok
+ALTER TABLE tbl SET OPTIONS (enable_parquet_dictionary = 'true');
+
+statement ok
+insert into tbl(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
+
+# insertion might be executed in a distributed manner, in this case, data blocks might be fragmented, let's compact them
+statement ok
+optimize table tbl compact;
+
+
+# 3. check that file size of newly created blocks with encoding is smaller
+
+query T
+with
+ e as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1),
+ p as (select s as c from tbl_size)
+ select e.c < p.c from e,p
+----
+1
+
+# keep the size, will be used later
+statement ok
+create temp table e_tbl_size(s uint64);
+
+statement ok
+insert into e_tbl_size select bytes_compressed from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1;
+
+# 4. check that table option `enable_parquet_dictionary` could be turned off
+
+statement ok
+truncate table tbl;
+
+statement ok
+ALTER TABLE tbl SET OPTIONS (enable_parquet_dictionary = 'false');
+
+statement ok
+insert into tbl(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
+
+statement ok
+optimize table tbl compact;
+
+
+# 3. check that file size of newly created blocks with encoding is smaller
+query T
+with
+ p as (select bytes_compressed c from fuse_snapshot('test_tbl_opt_parquet_encoding', 'tbl') limit 1),
+ e as (select s as c from e_tbl_size)
+ select e.c < p.c from e,p
+----
+1
+
+
+# Test invalid option value
+
+statement error 1001
+ALTER TABLE tbl SET OPTIONS (enable_parquet_dictionary = 'invalid');
+
+

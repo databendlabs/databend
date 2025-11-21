@@ -1,6 +1,6 @@
 ast            : st_makepoint(40.7127, -74.0059)
-raw expr       : st_makepoint(40.7127, minus(74.0059))
-checked expr   : st_makepoint<Float64, Float64>(CAST<Decimal(6, 4)>(40.7127_d64(6,4) AS Float64), CAST<Decimal(6, 4)>(minus<Decimal(6, 4)>(74.0059_d64(6,4)) AS Float64))
+raw expr       : st_makepoint(40.7127, -74.0059)
+checked expr   : st_makepoint<Float64, Float64>(CAST<Decimal(6, 4)>(40.7127_d64(6,4) AS Float64), CAST<Decimal(6, 4)>(-74.0059_d64(6,4) AS Float64))
 optimized expr : "POINT(40.7127 -74.0059)"
 output type    : Geography
 output domain  : Undefined

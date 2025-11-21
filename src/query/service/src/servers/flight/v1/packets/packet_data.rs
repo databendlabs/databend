@@ -27,7 +27,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetricValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::PlanProfile;
+use databend_common_pipeline::core::PlanProfile;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::MutationStatus;
 use log::error;

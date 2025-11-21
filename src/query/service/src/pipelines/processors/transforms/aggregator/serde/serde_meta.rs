@@ -20,6 +20,7 @@ use databend_common_expression::BlockMetaInfoPtr;
 
 pub const BUCKET_TYPE: usize = 1;
 pub const SPILLED_TYPE: usize = 2;
+pub const NEW_SPILLED_TYPE: usize = 3;
 
 // Cannot change to enum, because bincode cannot deserialize custom enum
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -83,6 +84,18 @@ impl AggregateSerdeMeta {
             location: Some(location),
             data_range: Some(data_range),
             max_partition_count,
+            is_empty: false,
+        })
+    }
+
+    pub fn create_new_spilled() -> BlockMetaInfoPtr {
+        Box::new(AggregateSerdeMeta {
+            typ: NEW_SPILLED_TYPE,
+            bucket: 0,
+            columns_layout: vec![],
+            location: None,
+            data_range: None,
+            max_partition_count: 0,
             is_empty: false,
         })
     }

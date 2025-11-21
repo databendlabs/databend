@@ -28,8 +28,8 @@ use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_metrics::lock::metrics_inc_shutdown_lock_holder_nums;
 use databend_common_metrics::lock::metrics_inc_start_lock_holder_nums;
-use databend_common_pipeline_core::LockGuard;
-use databend_common_pipeline_core::UnlockApi;
+use databend_common_pipeline::core::LockGuard;
+use databend_common_pipeline::core::UnlockApi;
 use parking_lot::RwLock;
 
 use crate::locks::lock_holder::LockHolder;

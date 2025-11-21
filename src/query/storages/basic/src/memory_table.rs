@@ -38,15 +38,15 @@ use databend_common_expression::DataBlock;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sinks::Sink;
-use databend_common_pipeline_sinks::Sinker;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::Sink;
+use databend_common_pipeline::sinks::Sinker;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 use databend_common_storage::StorageMetrics;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
@@ -311,7 +311,7 @@ impl MemoryTableSource {
         data_blocks: Arc<Mutex<VecDeque<DataBlock>>>,
         extras: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output, MemoryTableSource {
+        SyncSourcer::create(ctx.get_scan_progress(), output, MemoryTableSource {
             extras,
             data_blocks,
         })

@@ -33,9 +33,9 @@ use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -107,9 +107,11 @@ pub async fn do_refresh_virtual_column(
     });
 
     if !fuse_table.support_virtual_columns() {
-        return Err(ErrorCode::VirtualColumnError(
-            "table don't support virtual column".to_string(),
-        ));
+        return Err(ErrorCode::VirtualColumnError(format!(
+            "Table don't support virtual column, storage_format: {} read_only: {}",
+            fuse_table.get_storage_format(),
+            fuse_table.is_read_only()
+        )));
     }
     let virtual_column_builder = VirtualColumnBuilder::try_create(ctx.clone(), source_schema)?;
 
@@ -173,7 +175,7 @@ pub async fn do_refresh_virtual_column(
                 block_reader.clone(),
                 virtual_column_metas.clone(),
             );
-            AsyncSourcer::create(ctx.clone(), output, inner)
+            AsyncSourcer::create(ctx.get_scan_progress(), output, inner)
         },
         1,
     )?;

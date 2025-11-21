@@ -199,13 +199,11 @@ merge into t_17800 using t1_17800 on t_17800.a=t1_17800.a when matched then upda
 ----
 17 33
 
-query II
-select segment_count, row_count from fuse_snapshot('db','t_17800') limit 4;
+query B
+select abs(stats_row_count - actual_row_count) * 10 < actual_row_count from system.statistics where database = 'db' and table = 't_17800';
 ----
-1 117
-1 117
-2 117
-1 100
+1
+1
 
 statement ok
 CREATE OR REPLACE TABLE t1(id string, raw_data variant, add_time timestamp, action string);

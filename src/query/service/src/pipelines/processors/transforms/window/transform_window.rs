@@ -44,10 +44,10 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
 use databend_common_sql::plans::WindowFuncFrameUnits;
 
 use super::frame_bound::FrameBound;
@@ -903,7 +903,7 @@ impl TransformWindow {
             .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
         Ok(EvalMonthsImpl::eval_timestamp(
             ts,
-            func_ctx.tz.clone(),
+            &func_ctx.tz,
             -b.months(),
             false,
         )?)
@@ -915,7 +915,7 @@ impl TransformWindow {
             .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
         Ok(EvalMonthsImpl::eval_timestamp(
             ts,
-            func_ctx.tz.clone(),
+            &func_ctx.tz,
             b.months(),
             false,
         )?)
@@ -972,8 +972,9 @@ impl TransformWindow {
                     }
                 } else if let Some(n) = offset.as_interval() {
                     let func_ctx = FunctionContext::default();
-                    let cmp_v_timestamp = calc_date_to_timestamp(cmp_v, func_ctx.tz.clone())?;
-                    let ref_v_timestamp = calc_date_to_timestamp(ref_v, func_ctx.tz.clone())?;
+                    let tz = &func_ctx.tz;
+                    let cmp_v_timestamp = calc_date_to_timestamp(cmp_v, tz)?;
+                    let ref_v_timestamp = calc_date_to_timestamp(ref_v, tz)?;
                     let ref_v_timestamp = if is_preceding {
                         Self::timestamp_sub(ref_v_timestamp, n, func_ctx)?
                     } else {
@@ -1495,11 +1496,11 @@ mod tests {
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
     use databend_common_functions::aggregates::AggregateFunctionFactory;
-    use databend_common_pipeline_core::processors::connect;
-    use databend_common_pipeline_core::processors::Event;
-    use databend_common_pipeline_core::processors::InputPort;
-    use databend_common_pipeline_core::processors::OutputPort;
-    use databend_common_pipeline_core::processors::Processor;
+    use databend_common_pipeline::core::port::connect;
+    use databend_common_pipeline::core::Event;
+    use databend_common_pipeline::core::InputPort;
+    use databend_common_pipeline::core::OutputPort;
+    use databend_common_pipeline::core::Processor;
     use databend_common_sql::plans::WindowFuncFrameUnits;
 
     use super::TransformWindow;

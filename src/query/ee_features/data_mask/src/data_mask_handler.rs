@@ -30,11 +30,15 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
+use databend_common_meta_app::data_mask::data_mask_name_ident::Resource;
+use databend_common_meta_app::data_mask::CreateDatamaskReply;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
@@ -43,9 +47,16 @@ pub trait DatamaskHandler: Sync + Send {
         &self,
         meta_api: Arc<MetaStore>,
         req: CreateDatamaskReq,
-    ) -> Result<()>;
+    ) -> std::result::Result<
+        std::result::Result<CreateDatamaskReply, ExistError<Resource>>,
+        MetaError,
+    >;
 
-    async fn drop_data_mask(&self, meta_api: Arc<MetaStore>, req: DropDatamaskReq) -> Result<()>;
+    async fn drop_data_mask(
+        &self,
+        meta_api: Arc<MetaStore>,
+        req: DropDatamaskReq,
+    ) -> Result<Option<u64>>;
 
     async fn get_data_mask(
         &self,
@@ -75,7 +86,10 @@ impl DatamaskHandlerWrapper {
         &self,
         meta_api: Arc<MetaStore>,
         req: CreateDatamaskReq,
-    ) -> Result<()> {
+    ) -> std::result::Result<
+        std::result::Result<CreateDatamaskReply, ExistError<Resource>>,
+        MetaError,
+    > {
         self.handler.create_data_mask(meta_api, req).await
     }
 
@@ -83,7 +97,7 @@ impl DatamaskHandlerWrapper {
         &self,
         meta_api: Arc<MetaStore>,
         req: DropDatamaskReq,
-    ) -> Result<()> {
+    ) -> Result<Option<u64>> {
         self.handler.drop_data_mask(meta_api, req).await
     }
 

@@ -17,19 +17,24 @@ use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use databend_common_exception::Result;
+
+use super::array::ArrayColumn;
+use super::array::ArrayColumnBuilderMut;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use super::AccessType;
+use super::ArgType;
 use super::ArrayType;
+use super::BuilderExt;
+use super::DataType;
+use super::GenericMap;
 use super::ReturnType;
+use super::Scalar;
+use super::ScalarRef;
+use super::ValueType;
 use crate::property::Domain;
-use crate::types::array::ArrayColumn;
-use crate::types::array::ArrayColumnBuilderMut;
-use crate::types::ArgType;
-use crate::types::BuilderExt;
-use crate::types::DataType;
-use crate::types::GenericMap;
-use crate::types::Scalar;
-use crate::types::ScalarRef;
-use crate::types::ValueType;
 use crate::values::Column;
 use crate::ColumnBuilder;
 
@@ -52,33 +57,33 @@ impl<K: AccessType, V: AccessType> AccessType for KvPair<K, V> {
         (K::to_scalar_ref(k), V::to_scalar_ref(v))
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Tuple(fields) if fields.len() == 2 => Some((
+            ScalarRef::Tuple(fields) if fields.len() == 2 => Ok((
                 K::try_downcast_scalar(&fields[0])?,
                 V::try_downcast_scalar(&fields[1])?,
             )),
-            _ => None,
+            _ => Err(scalar_type_error::<Self>(scalar)),
         }
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
         match col {
-            Column::Tuple(fields) if fields.len() == 2 => Some(KvColumn {
+            Column::Tuple(fields) if fields.len() == 2 => Ok(KvColumn {
                 keys: K::try_downcast_column(&fields[0])?,
                 values: V::try_downcast_column(&fields[1])?,
             }),
-            _ => None,
+            _ => Err(column_type_error::<Self>(col)),
         }
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         match domain {
-            Domain::Tuple(fields) if fields.len() == 2 => Some((
+            Domain::Tuple(fields) if fields.len() == 2 => Ok((
                 K::try_downcast_domain(&fields[0])?,
                 V::try_downcast_domain(&fields[1])?,
             )),
-            _ => None,
+            _ => Err(domain_type_error::<Self>(domain)),
         }
     }
 
@@ -451,22 +456,23 @@ impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
         MapInternal::<K, V>::to_scalar_ref(scalar)
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
         match scalar {
             ScalarRef::Map(array) => KvPair::<K, V>::try_downcast_column(array),
-            _ => None,
+            _ => Err(scalar_type_error::<Self>(scalar)),
         }
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        ArrayColumn::try_downcast(col.as_map()?)
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        let map = col.as_map().ok_or_else(|| column_type_error::<Self>(col))?;
+        ArrayColumn::try_downcast(map)
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         match domain {
-            Domain::Map(Some(domain)) => Some(Some(KvPair::<K, V>::try_downcast_domain(domain)?)),
-            Domain::Map(None) => Some(None),
-            _ => None,
+            Domain::Map(Some(domain)) => Ok(Some(KvPair::<K, V>::try_downcast_domain(domain)?)),
+            Domain::Map(None) => Ok(None),
+            _ => Err(domain_type_error::<Self>(domain)),
         }
     }
 

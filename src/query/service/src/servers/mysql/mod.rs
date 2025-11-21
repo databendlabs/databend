@@ -16,8 +16,6 @@ mod mysql_federated;
 mod mysql_handler;
 mod mysql_interactive_worker;
 mod mysql_session;
-#[allow(clippy::unused_io_amount)]
-mod reject_connection;
 mod tls;
 mod writers;
 

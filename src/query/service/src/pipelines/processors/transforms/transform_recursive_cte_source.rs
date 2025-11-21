@@ -35,10 +35,10 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::IndexType;
@@ -98,14 +98,18 @@ impl TransformRecursiveCteSource {
                 }
             })
             .collect::<Vec<_>>();
-        AsyncSourcer::create(ctx.clone(), output_port, TransformRecursiveCteSource {
-            ctx,
-            union_plan,
-            left_outputs,
-            right_outputs,
-            recursive_step: 0,
-            cte_scan_tables: vec![],
-        })
+        AsyncSourcer::create(
+            ctx.get_scan_progress(),
+            output_port,
+            TransformRecursiveCteSource {
+                ctx,
+                union_plan,
+                left_outputs,
+                right_outputs,
+                recursive_step: 0,
+                cte_scan_tables: vec![],
+            },
+        )
     }
 
     async fn execute_r_cte(

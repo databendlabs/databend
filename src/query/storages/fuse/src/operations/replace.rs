@@ -19,7 +19,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
-use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline::core::PipeItem;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_io::ReadSettings;

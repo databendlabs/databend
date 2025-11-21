@@ -24,9 +24,6 @@ use databend_common_expression::is_internal_column;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
-use databend_common_license::license::Feature::InvertedIndex;
-use databend_common_license::license::Feature::NgramIndex;
-use databend_common_license::license::Feature::VectorIndex;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -35,7 +32,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableIdent;
-use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -43,8 +39,8 @@ use databend_common_meta_app::schema::TablePartition;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_pipeline_core::always_callback;
-use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_pipeline::core::always_callback;
+use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::FuseSegmentFormat;
@@ -69,6 +65,7 @@ use crate::interpreters::common::table_option_validation::is_valid_bloom_index_c
 use crate::interpreters::common::table_option_validation::is_valid_change_tracking;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
@@ -121,29 +118,6 @@ impl Interpreter for CreateTableInterpreter {
         if has_computed_column {
             LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
-        }
-        if let Some(table_indexes) = &self.plan.table_indexes {
-            let has_inverted_index = table_indexes
-                .iter()
-                .any(|(_, i)| matches!(i.index_type, TableIndexType::Inverted));
-            let has_ngram_index = table_indexes
-                .iter()
-                .any(|(_, i)| matches!(i.index_type, TableIndexType::Ngram));
-            let has_vector_index = table_indexes
-                .iter()
-                .any(|(_, i)| matches!(i.index_type, TableIndexType::Vector));
-            if has_inverted_index {
-                LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), InvertedIndex)?;
-            }
-            if has_ngram_index {
-                LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), NgramIndex)?;
-            }
-            if has_vector_index {
-                LicenseManagerSwitch::instance()
-                    .check_enterprise_enabled(self.ctx.get_license_key(), VectorIndex)?;
-            }
         }
 
         let quota_api = UserApiProvider::instance().tenant_quota_api(tenant);
@@ -446,6 +420,8 @@ impl CreateTableInterpreter {
         is_valid_random_seed(&table_meta.options)?;
         // check table level data_retention_period_in_hours
         is_valid_data_retention_period(&table_meta.options)?;
+        // check enable_parquet_encoding
+        is_valid_fuse_parquet_dictionary_opt(&table_meta.options)?;
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;

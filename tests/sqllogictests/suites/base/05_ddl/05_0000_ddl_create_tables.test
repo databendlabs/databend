@@ -697,5 +697,5 @@ insert into test_timestamp_tz values(1, '2024-10-22 12:00:00');
 query T rowsort
 select c1, c2::STRING from test_timestamp_tz;
 ----
-0 2024-10-22 21:00:00.000000 +0900
+0 2024-10-22 12:00:00.000000 +0900
 1 2024-10-22 12:00:00.000000 +0000

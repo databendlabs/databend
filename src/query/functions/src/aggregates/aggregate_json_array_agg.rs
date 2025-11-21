@@ -49,6 +49,7 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateSerde;
@@ -141,7 +142,7 @@ where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
 {
-    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn super::SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }
 
@@ -349,7 +350,7 @@ where
     }
 }
 
-pub fn try_create_aggregate_json_array_agg_function(
+fn try_create_aggregate_json_array_agg_function(
     display_name: &str,
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
@@ -364,5 +365,11 @@ pub fn try_create_aggregate_json_array_agg_function(
 }
 
 pub fn aggregate_json_array_agg_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_json_array_agg_function))
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_json_array_agg_function),
+        AggregateFunctionFeatures {
+            keep_nullable: true,
+            ..Default::default()
+        },
+    )
 }

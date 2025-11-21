@@ -100,7 +100,7 @@ impl PhysicalPlanBuilder {
         mut required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        if let databend_common_sql::plans::Exchange::Hash(exprs) = exchange {
+        if let databend_common_sql::plans::Exchange::NodeToNodeHash(exprs) = exchange {
             for expr in exprs {
                 required.extend(expr.used_columns());
             }
@@ -112,7 +112,7 @@ impl PhysicalPlanBuilder {
         let mut keys = vec![];
         let mut allow_adjust_parallelism = true;
         let kind = match exchange {
-            databend_common_sql::plans::Exchange::Hash(scalars) => {
+            databend_common_sql::plans::Exchange::NodeToNodeHash(scalars) => {
                 for scalar in scalars {
                     let expr = scalar
                         .type_check(input_schema.as_ref())?

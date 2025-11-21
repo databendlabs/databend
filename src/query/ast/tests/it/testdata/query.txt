@@ -533,7 +533,7 @@ Query {
 ---------- Input ----------
 select * from customer at(offset => -10 * 30)
 ---------- Output ---------
-SELECT * FROM customer AT (OFFSET => - 10 * 30)
+SELECT * FROM customer AT (OFFSET => -10 * 30)
 ---------- AST ------------
 Query {
     span: Some(
@@ -584,18 +584,14 @@ Query {
                                         40..41,
                                     ),
                                     op: Multiply,
-                                    left: UnaryOp {
+                                    left: Literal {
                                         span: Some(
-                                            36..37,
+                                            36..39,
                                         ),
-                                        op: Minus,
-                                        expr: Literal {
-                                            span: Some(
-                                                37..39,
-                                            ),
-                                            value: UInt64(
-                                                10,
-                                            ),
+                                        value: Decimal256 {
+                                            value: -10,
+                                            precision: 76,
+                                            scale: 0,
                                         },
                                     },
                                     right: Literal {

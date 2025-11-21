@@ -18,7 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::group_hash_columns;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ProjectedBlock;
-use databend_common_pipeline_core::processors::Exchange;
+use databend_common_pipeline::basic::Exchange;
 
 use super::WindowPartitionMeta;
 

@@ -19,16 +19,16 @@ error:
   --> SQL:1:1
   |
 1 | [-1, true]
-  | ^^^^^^^^^^ no function matches signature `array(Int16, Boolean)`, you might need to add explicit type casts.
+  | ^^^^^^^^^^ no function matches signature `array(Int8, Boolean)`, you might need to add explicit type casts.
 
 candidate functions:
-  array(T0, T0) :: Array(T0)  : unable to find a common super type for `Int16` and `Boolean`
+  array(T0, T0) :: Array(T0)  : unable to find a common super type for `Int8` and `Boolean`
 
 
 
 ast            : [NULL, 8, -10]
-raw expr       : array(NULL, 8, minus(10))
-checked expr   : array<T0=Int16 NULL><T0, T0, T0>(CAST<NULL>(NULL AS Int16 NULL), CAST<UInt8>(8_u8 AS Int16 NULL), CAST<Int16>(minus<UInt8>(10_u8) AS Int16 NULL))
+raw expr       : array(NULL, 8, -10)
+checked expr   : array<T0=Int16 NULL><T0, T0, T0>(CAST<NULL>(NULL AS Int16 NULL), CAST<UInt8>(8_u8 AS Int16 NULL), CAST<Int8>(-10_i8 AS Int16 NULL))
 optimized expr : [NULL, 8, -10]
 output type    : Array(Int16 NULL)
 output domain  : [{-10..=8} ∪ {NULL}]
@@ -145,8 +145,8 @@ output         : [10, 13, 16, 19]
 
 
 ast            : range(-1, -10, -2)
-raw expr       : range(minus(1), minus(10), minus(2))
-checked expr   : range<Int64, Int64, Int64>(CAST<Int16>(minus<UInt8>(1_u8) AS Int64), CAST<Int16>(minus<UInt8>(10_u8) AS Int64), CAST<Int16>(minus<UInt8>(2_u8) AS Int64))
+raw expr       : range(-1, -10, -2)
+checked expr   : range<Int64, Int64, Int64>(CAST<Int8>(-1_i8 AS Int64), CAST<Int8>(-10_i8 AS Int64), CAST<Int8>(-2_i8 AS Int64))
 optimized expr : [-1, -3, -5, -7, -9]
 output type    : Array(Int64)
 output domain  : [{-9..=-1}]
@@ -391,8 +391,8 @@ output         : ['a', 'b', 'c', 'd']
 
 
 ast            : slice(['a', 'b', 'c', 'd'], -3, -1)
-raw expr       : slice(array('a', 'b', 'c', 'd'), minus(3), minus(1))
-checked expr   : slice<T0=String><Array(T0), Int64, Int64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), CAST<Int16>(minus<UInt8>(3_u8) AS Int64), CAST<Int16>(minus<UInt8>(1_u8) AS Int64))
+raw expr       : slice(array('a', 'b', 'c', 'd'), -3, -1)
+checked expr   : slice<T0=String><Array(T0), Int64, Int64>(array<T0=String><T0, T0, T0, T0>("a", "b", "c", "d"), CAST<Int8>(-3_i8 AS Int64), CAST<Int8>(-1_i8 AS Int64))
 optimized expr : ['b', 'c', 'd']
 output type    : Array(String)
 output domain  : [{"b"..="d"}]

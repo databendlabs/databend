@@ -17,15 +17,19 @@ use std::fmt::Debug;
 use std::ops::Range;
 
 pub use databend_common_column::bitmap::*;
+use databend_common_exception::Result;
 
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use super::AccessType;
+use super::ArgType;
+use super::BuilderMut;
+use super::DataType;
+use super::GenericMap;
+use super::ReturnType;
+use super::ValueType;
 use crate::property::Domain;
-use crate::types::ArgType;
-use crate::types::BuilderMut;
-use crate::types::DataType;
-use crate::types::GenericMap;
-use crate::types::ReturnType;
-use crate::types::ValueType;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -50,22 +54,25 @@ impl AccessType for BooleanType {
         *scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Boolean(scalar) => Some(*scalar),
-            _ => None,
+            ScalarRef::Boolean(scalar) => Ok(*scalar),
+            _ => Err(scalar_type_error::<Self>(scalar)),
         }
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
         match col {
-            Column::Boolean(column) => Some(column.clone()),
-            _ => None,
+            Column::Boolean(column) => Ok(column.clone()),
+            _ => Err(column_type_error::<Self>(col)),
         }
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        domain.as_boolean().cloned()
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        domain
+            .as_boolean()
+            .cloned()
+            .ok_or_else(|| domain_type_error::<Self>(domain))
     }
 
     fn column_len(col: &Self::Column) -> usize {

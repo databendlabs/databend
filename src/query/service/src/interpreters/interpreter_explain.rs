@@ -29,10 +29,10 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
-use databend_common_pipeline_core::always_callback;
-use databend_common_pipeline_core::processors::PlanProfile;
-use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::always_callback;
+use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::PlanProfile;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
@@ -180,6 +180,7 @@ impl Interpreter for ExplainInterpreter {
                         profs: HashMap::new(),
                         metadata: &metadata,
                         scan_id_to_runtime_filters: HashMap::new(),
+                        runtime_filter_reports: HashMap::new(),
                     };
 
                     let formatter = plan.formatter()?;
@@ -483,6 +484,8 @@ impl ExplainInterpreter {
             plan.set_pruning_stats(&mut pruned_partitions_stats);
         }
 
+        let runtime_filter_reports = self.ctx.runtime_filter_reports();
+
         let result = match self.partial {
             true => {
                 let metadata = metadata.read();
@@ -490,6 +493,7 @@ impl ExplainInterpreter {
                     profs: query_profiles.clone(),
                     metadata: &metadata,
                     scan_id_to_runtime_filters: HashMap::new(),
+                    runtime_filter_reports: runtime_filter_reports.clone(),
                 };
 
                 let formatter = plan.formatter()?;
@@ -498,8 +502,15 @@ impl ExplainInterpreter {
             }
             false => {
                 let metadata = metadata.read();
-                plan.format(&metadata, query_profiles.clone())?
-                    .format_pretty()?
+                let mut context = FormatContext {
+                    profs: query_profiles.clone(),
+                    metadata: &metadata,
+                    scan_id_to_runtime_filters: HashMap::new(),
+                    runtime_filter_reports: runtime_filter_reports.clone(),
+                };
+                let formatter = plan.formatter()?;
+                let format_node = formatter.format(&mut context)?;
+                format_node.format_pretty()?
             }
         };
 

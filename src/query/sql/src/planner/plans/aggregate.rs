@@ -34,6 +34,9 @@ use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
 
+const DEFAULT_AGGREGATE_RATIO: f64 = 1f64 / 3f64;
+const AGGREGATE_COLUMN_CORRELATION_COEFFICIENT: f64 = 0.75_f64;
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub enum AggregateMode {
     Partial,
@@ -110,8 +113,12 @@ impl Aggregate {
         }
 
         match group_by_shuffle_mode.as_str() {
-            "before_partial" => Ok(Distribution::Hash(self.get_distribution_keys(true)?)),
-            "before_merge" => Ok(Distribution::Hash(self.get_distribution_keys(false)?)),
+            "before_partial" => Ok(Distribution::NodeToNodeHash(
+                self.get_distribution_keys(true)?,
+            )),
+            "before_merge" => Ok(Distribution::NodeToNodeHash(
+                self.get_distribution_keys(false)?,
+            )),
             value => Err(ErrorCode::Internal(format!(
                 "Bad settings value group_by_shuffle_mode = {:?}",
                 value
@@ -151,13 +158,24 @@ impl Aggregate {
             .iter()
             .any(|item| !statistics.column_stats.contains_key(&item.index))
         {
-            cardinality
+            (cardinality * DEFAULT_AGGREGATE_RATIO).max(1_f64)
         } else {
             // A upper bound
-            let res = self.group_items.iter().fold(1.0, |acc, item| {
+            let mut res = self
+                .group_items
+                .first()
+                .map(|item| {
+                    let item_stat = statistics.column_stats.get(&item.index).unwrap();
+                    item_stat.ndv
+                })
+                .unwrap_or(1.0);
+
+            for (idx, item) in self.group_items.iter().skip(1).enumerate() {
                 let item_stat = statistics.column_stats.get(&item.index).unwrap();
-                acc * item_stat.ndv
-            });
+                let ndv = item_stat.ndv * AGGREGATE_COLUMN_CORRELATION_COEFFICIENT.powi(idx as i32);
+                res *= ndv.max(1_f64);
+            }
+
             for item in self.group_items.iter() {
                 let item_stat = statistics.column_stats.get_mut(&item.index).unwrap();
                 if let Some(histogram) = &mut item_stat.histogram {

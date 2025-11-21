@@ -91,13 +91,9 @@ impl<A> Debug for RuntimeAccessor<A> {
 impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
     type Inner = A;
     type Reader = RuntimeIO<A::Reader>;
-    type BlockingReader = A::BlockingReader;
     type Writer = RuntimeIO<A::Writer>;
-    type BlockingWriter = A::BlockingWriter;
     type Lister = RuntimeIO<A::Lister>;
-    type BlockingLister = A::BlockingLister;
     type Deleter = RuntimeIO<A::Deleter>;
-    type BlockingDeleter = A::BlockingDeleter;
 
     fn inner(&self) -> &Self::Inner {
         &self.inner
@@ -181,22 +177,6 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
             .spawn(async move { op.presign(&path, args).await })
             .await
             .expect("join must success")
-    }
-
-    fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
-        self.inner.blocking_read(path, args)
-    }
-
-    fn blocking_write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::BlockingWriter)> {
-        self.inner.blocking_write(path, args)
-    }
-
-    fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingLister)> {
-        self.inner.blocking_list(path, args)
-    }
-
-    fn blocking_delete(&self) -> Result<(RpDelete, Self::BlockingDeleter)> {
-        self.inner.blocking_delete()
     }
 }
 

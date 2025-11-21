@@ -22,7 +22,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline::core::Pipe;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::executor::physical_plans::MatchExpr;
 use databend_common_storages_fuse::operations::MatchedSplitProcessor;

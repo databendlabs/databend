@@ -22,7 +22,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;

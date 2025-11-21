@@ -30,6 +30,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
+    ├── scan id: 0
     ├── output columns: [c (#0)]
     ├── read rows: 0
     ├── read size: 0
@@ -57,6 +58,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
+    ├── scan id: 0
     ├── output columns: [c (#0)]
     ├── read rows: 5
     ├── read size: < 1 KiB
@@ -85,6 +87,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
+    ├── scan id: 0
     ├── output columns: [c (#0)]
     ├── read rows: 0
     ├── read size: 0
@@ -125,6 +128,7 @@ Filter
 ├── estimated rows: 2.67
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
+    ├── scan id: 0
     ├── output columns: [c (#0), s (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -157,6 +161,7 @@ Filter
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
+    ├── scan id: 0
     ├── output columns: [c (#0), s (#1)]
     ├── read rows: 0
     ├── read size: 0

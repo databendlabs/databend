@@ -23,15 +23,13 @@ use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 
 use crate::role_util::find_all_related_roles;
 use crate::UserApiProvider;
-
-pub const BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
-pub const BUILTIN_ROLE_PUBLIC: &str = "public";
 
 impl UserApiProvider {
     // Get one role from by tenant.

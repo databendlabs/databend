@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::time::Instant;
 
 use databend_common_base::runtime::profile::Profile;
@@ -42,6 +41,7 @@ struct JoinRuntimeFilterPacketBuilder<'a> {
     inlist_threshold: usize,
     bloom_threshold: usize,
     min_max_threshold: usize,
+    selectivity_threshold: u64,
 }
 
 impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
@@ -52,6 +52,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         inlist_threshold: usize,
         bloom_threshold: usize,
         min_max_threshold: usize,
+        selectivity_threshold: u64,
     ) -> Result<Self> {
         let build_key_column = Self::eval_build_key_column(data_blocks, func_ctx, build_key)?;
         Ok(Self {
@@ -60,9 +61,22 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
             inlist_threshold,
             bloom_threshold,
             min_max_threshold,
+            selectivity_threshold,
         })
     }
     fn build(&self, desc: &RuntimeFilterDesc) -> Result<RuntimeFilterPacket> {
+        if !should_enable_runtime_filter(
+            desc,
+            self.build_key_column.len(),
+            self.selectivity_threshold,
+        ) {
+            return Ok(RuntimeFilterPacket {
+                id: desc.id,
+                inlist: None,
+                min_max: None,
+                bloom: None,
+            });
+        }
         let start = Instant::now();
 
         let min_max_start = Instant::now();
@@ -115,7 +129,15 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
     }
 
     fn enable_bloom(&self, desc: &RuntimeFilterDesc) -> bool {
-        desc.enable_bloom_runtime_filter && self.build_key_column.len() < self.bloom_threshold
+        if !desc.enable_bloom_runtime_filter {
+            return false;
+        }
+
+        if self.build_key_column.len() >= self.bloom_threshold {
+            return false;
+        }
+
+        true
     }
 
     fn build_min_max(&self) -> Result<SerializableDomain> {
@@ -128,11 +150,11 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         self.dedup_column(&self.build_key_column)
     }
 
-    fn build_bloom(&self, desc: &RuntimeFilterDesc) -> Result<HashSet<u64>> {
+    fn build_bloom(&self, desc: &RuntimeFilterDesc) -> Result<Vec<u64>> {
         let data_type = desc.build_key.data_type();
         let num_rows = self.build_key_column.len();
         let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
-        let mut hashes = HashSet::with_capacity(num_rows);
+        let mut hashes = Vec::with_capacity(num_rows);
         let key_columns = &[self.build_key_column.clone().into()];
         hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;
         Ok(hashes)
@@ -175,6 +197,48 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
     }
 }
 
+pub(super) fn should_enable_runtime_filter(
+    desc: &RuntimeFilterDesc,
+    build_num_rows: usize,
+    selectivity_threshold: u64,
+) -> bool {
+    if build_num_rows == 0 {
+        return false;
+    }
+
+    let Some(build_table_rows) = desc.build_table_rows else {
+        log::info!(
+            "RUNTIME-FILTER: Disable runtime filter {} - no build table statistics available",
+            desc.id
+        );
+        return false;
+    };
+
+    let selectivity_pct = (build_num_rows as f64 / build_table_rows as f64) * 100.0;
+
+    if selectivity_pct < selectivity_threshold as f64 {
+        log::info!(
+            "RUNTIME-FILTER: Enable runtime filter {} - low selectivity: {:.2}% < {}% (build_rows={}, build_table_rows={})",
+            desc.id,
+            selectivity_pct,
+            selectivity_threshold,
+            build_num_rows,
+            build_table_rows
+        );
+        true
+    } else {
+        log::info!(
+            "RUNTIME-FILTER: Disable runtime filter {} - high selectivity: {:.2}% >= {}% (build_rows={}, build_table_rows={})",
+            desc.id,
+            selectivity_pct,
+            selectivity_threshold,
+            build_num_rows,
+            build_table_rows
+        );
+        false
+    }
+}
+
 pub fn build_runtime_filter_packet(
     build_chunks: &[DataBlock],
     build_num_rows: usize,
@@ -183,9 +247,20 @@ pub fn build_runtime_filter_packet(
     inlist_threshold: usize,
     bloom_threshold: usize,
     min_max_threshold: usize,
+    selectivity_threshold: u64,
+    is_spill_happened: bool,
 ) -> Result<JoinRuntimeFilterPacket> {
+    if is_spill_happened {
+        return Ok(JoinRuntimeFilterPacket::disable_all(
+            runtime_filter_desc,
+            build_num_rows,
+        ));
+    }
     if build_num_rows == 0 {
-        return Ok(JoinRuntimeFilterPacket::default());
+        return Ok(JoinRuntimeFilterPacket {
+            packets: None,
+            build_rows: build_num_rows,
+        });
     }
     let mut runtime_filters = HashMap::new();
     for rf in runtime_filter_desc {
@@ -198,11 +273,13 @@ pub fn build_runtime_filter_packet(
                 inlist_threshold,
                 bloom_threshold,
                 min_max_threshold,
+                selectivity_threshold,
             )?
             .build(rf)?,
         );
     }
     Ok(JoinRuntimeFilterPacket {
         packets: Some(runtime_filters),
+        build_rows: build_num_rows,
     })
 }

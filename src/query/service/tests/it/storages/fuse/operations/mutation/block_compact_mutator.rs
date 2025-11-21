@@ -115,7 +115,7 @@ async fn test_compact() -> Result<()> {
 
 async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<bool> {
     let settings = ctx.get_settings();
-    let mut pipeline = databend_common_pipeline_core::Pipeline::create();
+    let mut pipeline = databend_common_pipeline::core::Pipeline::create();
     let res = table
         .compact_blocks(ctx.clone(), CompactionLimits::default())
         .await?;

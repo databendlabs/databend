@@ -33,9 +33,9 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::ParquetFileFormatParams;
 use databend_common_meta_app::principal::StageFileCompression;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::SyncReceiverSource;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::SyncReceiverSource;
 use databend_common_pipeline_transforms::columns::TransformNullIf;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_storages_parquet::InmMemoryFile;
@@ -65,7 +65,7 @@ pub fn build_streaming_load_pipeline(
         |output| {
             let mut guard = rx.lock();
             let rx = mem::take(&mut *guard).expect("streaming load receiver already dropped");
-            SyncReceiverSource::create(ctx.clone(), rx, output.clone())
+            SyncReceiverSource::create(ctx.get_scan_progress(), rx, output.clone())
         },
         1,
     )?;

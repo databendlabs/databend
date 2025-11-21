@@ -145,7 +145,12 @@ fn op_decimal<Op: CmpOp>(
                                 T::e(size_calc.scale() - a_type.scale()),
                                 T::e(size_calc.scale() - b_type.scale()),
                             );
-                            compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
+
+                            if (f_a == f_b) {
+                                compare_decimal(a, b, |a, b, _| Op::is(a.cmp(&b)), ctx)
+                            } else {
+                                compare_decimal(a, b, |a, b, _| Op::compare(a, b, f_a, f_b), ctx)
+                            }
                         }
                     })
                 }

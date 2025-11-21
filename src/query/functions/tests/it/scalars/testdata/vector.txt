@@ -8,8 +8,8 @@ output         : 0
 
 
 ast            : cosine_distance([1,0,0], [-1,0,0])
-raw expr       : cosine_distance(array(1, 0, 0), array(minus(1), 0, 0))
-checked expr   : cosine_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(1_u8), CAST<UInt8>(0_u8 AS Int16), CAST<UInt8>(0_u8 AS Int16)) AS Array(Float32)))
+raw expr       : cosine_distance(array(1, 0, 0), array(-1, 0, 0))
+checked expr   : cosine_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<Int8>(-1_i8 AS Int16), CAST<UInt8>(0_u8 AS Int16), CAST<UInt8>(0_u8 AS Int16)) AS Array(Float32)))
 optimized expr : 2_f32
 output type    : Float32
 output domain  : {2..=2}
@@ -35,8 +35,8 @@ output         : NaN
 
 
 ast            : cosine_distance([1,-2,3]::vector(3), [-4,5,-6]::vector(3))
-raw expr       : cosine_distance(CAST(array(1, minus(2), 3) AS Vector(3)), CAST(array(minus(4), 5, minus(6)) AS Vector(3)))
-checked expr   : cosine_distance<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(4_u8), CAST<UInt8>(5_u8 AS Int16), minus<UInt8>(6_u8)) AS Vector(3)))
+raw expr       : cosine_distance(CAST(array(1, -2, 3) AS Vector(3)), CAST(array(-4, 5, -6) AS Vector(3)))
+checked expr   : cosine_distance<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), CAST<Int8>(-2_i8 AS Int16), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<Int8>(-4_i8 AS Int16), CAST<UInt8>(5_u8 AS Int16), CAST<Int8>(-6_i8 AS Int16)) AS Vector(3)))
 optimized expr : 1.974632_f32
 output type    : Float32
 output domain  : {1.974632..=1.974632}
@@ -214,8 +214,8 @@ output         : 6
 
 
 ast            : l1_distance([1,-2,3]::vector(3), [-4,5,-6]::vector(3))
-raw expr       : l1_distance(CAST(array(1, minus(2), 3) AS Vector(3)), CAST(array(minus(4), 5, minus(6)) AS Vector(3)))
-checked expr   : l1_distance<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(4_u8), CAST<UInt8>(5_u8 AS Int16), minus<UInt8>(6_u8)) AS Vector(3)))
+raw expr       : l1_distance(CAST(array(1, -2, 3) AS Vector(3)), CAST(array(-4, 5, -6) AS Vector(3)))
+checked expr   : l1_distance<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), CAST<Int8>(-2_i8 AS Int16), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<Int8>(-4_i8 AS Int16), CAST<UInt8>(5_u8 AS Int16), CAST<Int8>(-6_i8 AS Int16)) AS Vector(3)))
 optimized expr : 21_f32
 output type    : Float32
 output domain  : {21..=21}
@@ -393,8 +393,8 @@ output         : 3.741658
 
 
 ast            : l2_distance([1,-2,3]::vector(3), [-4,5,-6]::vector(3))
-raw expr       : l2_distance(CAST(array(1, minus(2), 3) AS Vector(3)), CAST(array(minus(4), 5, minus(6)) AS Vector(3)))
-checked expr   : l2_distance<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(4_u8), CAST<UInt8>(5_u8 AS Int16), minus<UInt8>(6_u8)) AS Vector(3)))
+raw expr       : l2_distance(CAST(array(1, -2, 3) AS Vector(3)), CAST(array(-4, 5, -6) AS Vector(3)))
+checked expr   : l2_distance<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), CAST<Int8>(-2_i8 AS Int16), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<Int8>(-4_i8 AS Int16), CAST<UInt8>(5_u8 AS Int16), CAST<Int8>(-6_i8 AS Int16)) AS Vector(3)))
 optimized expr : 12.4499_f32
 output type    : Float32
 output domain  : {12.4499..=12.4499}
@@ -554,8 +554,8 @@ output         : 1
 
 
 ast            : inner_product([1,0,0], [-1,0,0])
-raw expr       : inner_product(array(1, 0, 0), array(minus(1), 0, 0))
-checked expr   : inner_product<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(1_u8), CAST<UInt8>(0_u8 AS Int16), CAST<UInt8>(0_u8 AS Int16)) AS Array(Float32)))
+raw expr       : inner_product(array(1, 0, 0), array(-1, 0, 0))
+checked expr   : inner_product<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<Int8>(-1_i8 AS Int16), CAST<UInt8>(0_u8 AS Int16), CAST<UInt8>(0_u8 AS Int16)) AS Array(Float32)))
 optimized expr : -1_f32
 output type    : Float32
 output domain  : {-1..=-1}
@@ -581,8 +581,8 @@ output         : 0
 
 
 ast            : inner_product([1,-2,3]::vector(3), [-4,5,-6]::vector(3))
-raw expr       : inner_product(CAST(array(1, minus(2), 3) AS Vector(3)), CAST(array(minus(4), 5, minus(6)) AS Vector(3)))
-checked expr   : inner_product<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(4_u8), CAST<UInt8>(5_u8 AS Int16), minus<UInt8>(6_u8)) AS Vector(3)))
+raw expr       : inner_product(CAST(array(1, -2, 3) AS Vector(3)), CAST(array(-4, 5, -6) AS Vector(3)))
+checked expr   : inner_product<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), CAST<Int8>(-2_i8 AS Int16), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<Int8>(-4_i8 AS Int16), CAST<UInt8>(5_u8 AS Int16), CAST<Int8>(-6_i8 AS Int16)) AS Vector(3)))
 optimized expr : -32_f32
 output type    : Float32
 output domain  : {-32..=-32}
@@ -733,8 +733,8 @@ evaluation (internal):
 
 
 ast            : vector_dims([1,-2]::vector(2))
-raw expr       : vector_dims(CAST(array(1, minus(2)) AS Vector(2)))
-checked expr   : vector_dims<Vector(2)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8)) AS Vector(2)))
+raw expr       : vector_dims(CAST(array(1, -2) AS Vector(2)))
+checked expr   : vector_dims<Vector(2)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(CAST<UInt8>(1_u8 AS Int16), CAST<Int8>(-2_i8 AS Int16)) AS Vector(2)))
 optimized expr : 2_i32
 output type    : Int32
 output domain  : {2..=2}
@@ -775,8 +775,8 @@ evaluation (internal):
 
 
 ast            : vector_norm([1,-2]::vector(2))
-raw expr       : vector_norm(CAST(array(1, minus(2)) AS Vector(2)))
-checked expr   : vector_norm<Vector(2)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8)) AS Vector(2)))
+raw expr       : vector_norm(CAST(array(1, -2) AS Vector(2)))
+checked expr   : vector_norm<Vector(2)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(CAST<UInt8>(1_u8 AS Int16), CAST<Int8>(-2_i8 AS Int16)) AS Vector(2)))
 optimized expr : 2.236068_f32
 output type    : Float32
 output domain  : {2.236068..=2.236068}

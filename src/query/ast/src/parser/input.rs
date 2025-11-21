@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Range;
-use std::ops::RangeFrom;
-use std::ops::RangeFull;
-use std::ops::RangeTo;
+use std::iter::Enumerate;
+use std::ops::Bound;
+use std::ops::RangeBounds;
 
 use enum_as_inner::EnumAsInner;
+use nom::Needed;
 
 use crate::parser::token::Token;
 use crate::parser::Backtrace;
@@ -40,9 +40,25 @@ impl<'a> std::ops::Deref for Input<'a> {
     }
 }
 
-impl nom::InputLength for Input<'_> {
-    fn input_len(&self) -> usize {
-        self.tokens.input_len()
+impl<'a> Input<'a> {
+    pub fn slice<R>(&self, range: R) -> Self
+    where R: RangeBounds<usize> {
+        let len = self.tokens.len();
+        let start = match range.start_bound() {
+            Bound::Included(&idx) => idx,
+            Bound::Excluded(&idx) => idx + 1,
+            Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            Bound::Included(&idx) => idx + 1,
+            Bound::Excluded(&idx) => idx,
+            Bound::Unbounded => len,
+        };
+
+        Input {
+            tokens: &self.tokens[start.min(len)..end.min(len)],
+            ..*self
+        }
     }
 }
 
@@ -55,36 +71,57 @@ impl nom::Offset for Input<'_> {
     }
 }
 
-impl nom::Slice<Range<usize>> for Input<'_> {
-    fn slice(&self, range: Range<usize>) -> Self {
-        Input {
-            tokens: &self.tokens[range],
-            ..*self
-        }
-    }
-}
+impl<'a> nom::Input for Input<'a> {
+    type Item = &'a Token<'a>;
+    type Iter = std::slice::Iter<'a, Token<'a>>;
+    type IterIndices = Enumerate<Self::Iter>;
 
-impl nom::Slice<RangeTo<usize>> for Input<'_> {
-    fn slice(&self, range: RangeTo<usize>) -> Self {
-        Input {
-            tokens: &self.tokens[range],
-            ..*self
-        }
+    fn input_len(&self) -> usize {
+        self.tokens.len()
     }
-}
 
-impl nom::Slice<RangeFrom<usize>> for Input<'_> {
-    fn slice(&self, range: RangeFrom<usize>) -> Self {
-        Input {
-            tokens: &self.tokens[range],
-            ..*self
-        }
+    fn take(&self, index: usize) -> Self {
+        self.slice(0..index)
     }
-}
 
-impl nom::Slice<RangeFull> for Input<'_> {
-    fn slice(&self, _: RangeFull) -> Self {
-        *self
+    fn take_from(&self, index: usize) -> Self {
+        self.slice(index..)
+    }
+
+    fn take_split(&self, index: usize) -> (Self, Self) {
+        let (prefix, suffix) = self.tokens.split_at(index);
+
+        (
+            Input {
+                tokens: prefix,
+                ..*self
+            },
+            Input {
+                tokens: suffix,
+                ..*self
+            },
+        )
+    }
+
+    fn position<P>(&self, predicate: P) -> Option<usize>
+    where P: Fn(Self::Item) -> bool {
+        self.tokens.iter().position(predicate)
+    }
+
+    fn iter_elements(&self) -> Self::Iter {
+        self.tokens.iter()
+    }
+
+    fn iter_indices(&self) -> Self::IterIndices {
+        self.iter_elements().enumerate()
+    }
+
+    fn slice_index(&self, count: usize) -> Result<usize, Needed> {
+        if self.tokens.len() >= count {
+            Ok(count)
+        } else {
+            Err(Needed::new(count - self.tokens.len()))
+        }
     }
 }
 

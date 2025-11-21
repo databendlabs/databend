@@ -20,18 +20,19 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc::channel;
 use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_base::base::tokio::sync::mpsc::Sender;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::PipeItem;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sinks::SyncSenderSink;
-use databend_common_pipeline_sources::SyncReceiverSource;
+use databend_common_pipeline::core::ExecutionInfo;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sinks::SyncSenderSink;
+use databend_common_pipeline::sources::SyncReceiverSource;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
@@ -121,7 +122,7 @@ fn create_source_pipe(
         let (tx, rx) = channel(1);
         txs.push(tx);
         items.push(PipeItem::create(
-            SyncReceiverSource::create(ctx.clone(), rx, output.clone())?,
+            SyncReceiverSource::create(ctx.get_scan_progress(), rx, output.clone())?,
             vec![],
             vec![output],
         ));

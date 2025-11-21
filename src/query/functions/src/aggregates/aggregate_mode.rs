@@ -37,7 +37,7 @@ use super::batch_merge1;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
@@ -68,11 +68,7 @@ where
     T: ValueType,
     T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         let other = T::to_owned_scalar(other);
         match self.frequency_map.entry(other) {
             Entry::Occupied(o) => *o.into_mut() += 1,
@@ -100,7 +96,7 @@ where
     fn merge_result(
         &mut self,
         mut builder: T::ColumnBuilderMut<'_>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         if self.frequency_map.is_empty() {
             builder.push_default();
@@ -122,7 +118,7 @@ where
     T: ValueType,
     T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize,
 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }
 
@@ -169,9 +165,7 @@ pub fn try_create_aggregate_mode_function(
                 ModeState<NumberType<NUM>>,
                 NumberType<NUM>,
                 NumberType<NUM>,
-            >::create(
-                display_name, data_type.clone()
-            )
+            >::new(display_name, data_type.clone())
             .with_need_drop(true)
             .finish()
         }
@@ -182,14 +176,14 @@ pub fn try_create_aggregate_mode_function(
                         ModeState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         DecimalType<DECIMAL>,
-                    >::create(display_name, data_type.clone())
+                    >::new(display_name, data_type.clone())
                     .with_need_drop(true)
                     .finish()
                 }
             })
         }
         _ => {
-            AggregateUnaryFunction::<ModeState<AnyType>, AnyType, AnyType>::create(
+            AggregateUnaryFunction::<ModeState<AnyType>, AnyType, AnyType>::new(
                 display_name,
                 data_type.clone(),
             )

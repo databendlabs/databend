@@ -21,12 +21,13 @@ use databend_common_expression::types::*;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::StateAddr;
 
 use super::aggregate_scalar_state::ChangeIf;
 use super::batch_merge1;
 use super::batch_serialize1;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
@@ -61,11 +62,7 @@ where
     T::Scalar: Decimal,
     C: ChangeIf<T>,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         match self.value {
             Some(v) => {
                 let v = T::Scalar::from_u64_array(v);
@@ -82,16 +79,16 @@ where
 
     fn add_batch(
         &mut self,
-        other: T::Column,
+        other: ColumnView<T>,
         validity: Option<&Bitmap>,
-        function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
-        let column_len = T::column_len(&other);
+        let column_len = other.len();
         if column_len == 0 {
             return Ok(());
         }
 
-        let column_iter = T::iter_column(&other);
+        let column_iter = other.iter();
         match validity {
             Some(validity)
                 if validity.null_count() > 0 && validity.null_count() < validity.len() =>
@@ -102,14 +99,14 @@ where
                     .map(|(v, _)| v)
                     .reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
                 if let Some(v) = v {
-                    let _ = self.add(v, function_data);
+                    self.add(v, &())?;
                 }
             }
             Some(validity) if validity.null_count() == validity.len() => {}
             _ => {
                 let v = column_iter.reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
                 if let Some(v) = v {
-                    let _ = self.add(v, function_data);
+                    self.add(v, &())?;
                 }
             }
         }
@@ -120,7 +117,7 @@ where
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         if let Some(v) = rhs.value {
             let v = T::Scalar::from_u64_array(v);
-            self.add(T::to_scalar_ref(&v), None)?;
+            self.add(T::to_scalar_ref(&v), &())?;
         }
         Ok(())
     }
@@ -128,7 +125,7 @@ where
     fn merge_result(
         &mut self,
         mut builder: T::ColumnBuilderMut<'_>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         if let Some(v) = self.value {
             let v = T::Scalar::from_u64_array(v);
@@ -146,7 +143,7 @@ where
     T::Scalar: Decimal,
     C: ChangeIf<T>,
 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Decimal(T::Scalar::default_decimal_size())
             .wrap_nullable()
             .into()]

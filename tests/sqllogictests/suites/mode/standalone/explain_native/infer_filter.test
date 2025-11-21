@@ -28,6 +28,7 @@ explain select * from t1 where a = 1 and a = 1;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -54,6 +55,7 @@ explain select * from t1 where a = 1 and a != 2;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -68,6 +70,7 @@ explain select * from t1 where a = 1 and a < 2;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -88,6 +91,7 @@ explain select * from t1 where a = 1 and a <= 2;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -102,6 +106,7 @@ explain select * from t1 where a = 1 and a <= 1;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -116,6 +121,7 @@ explain select * from t1 where a = 1 and a > 0;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -136,6 +142,7 @@ explain select * from t1 where a = 1 and a >= 0;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -150,6 +157,7 @@ explain select * from t1 where a = 1 and a >= 1;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -171,6 +179,7 @@ explain select * from t1 where a != 1 and a = 2;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -185,6 +194,7 @@ explain select * from t1 where a != 1 and a != 1
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -199,6 +209,7 @@ explain select * from t1 where a != 1 and a != 2;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -213,6 +224,7 @@ explain select * from t1 where a != 1 and a < 1;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -227,6 +239,7 @@ explain select * from t1 where a != 1 and a < 2;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -241,6 +254,7 @@ explain select * from t1 where a != 1 and a <= 1;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -255,6 +269,7 @@ explain select * from t1 where a != 1 and a <= 2;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -269,6 +284,7 @@ explain select * from t1 where a != 1 and a > 1;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -283,6 +299,7 @@ explain select * from t1 where a != 1 and a > 0;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -297,6 +314,7 @@ explain select * from t1 where a != 1 and a >= 1;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -311,6 +329,7 @@ explain select * from t1 where a != 1 and a >= 0;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -331,6 +350,7 @@ explain select * from t1 where a < 5 and a = 2;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -345,6 +365,7 @@ explain select * from t1 where a < 5 and a != 10
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -359,6 +380,7 @@ explain select * from t1 where a < 5 and a != 2;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -373,6 +395,7 @@ explain select * from t1 where a < 5 and a <= 10;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -393,6 +416,7 @@ explain select * from t1 where a < 5 and a > 2;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -407,6 +431,7 @@ explain select * from t1 where 10000 > a and a > 10 and 100 >= a;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -427,10 +452,11 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
+│   ├── scan id: 1
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read size: 0
@@ -440,6 +466,7 @@ HashJoin
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -461,7 +488,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:t3.a (#4), probe key:t1.a (#0), filter type:bloom,inlist,min_max
+│   └── filter id:1, build key:t3.a (#4), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t3.b (#5), t3.a (#4)]
@@ -471,10 +498,11 @@ HashJoin
 │   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── build join filters:
-│   │   └── filter id:0, build key:t3.a (#4), probe key:t2.a (#2), filter type:bloom,inlist,min_max
+│   │   └── filter id:0, build key:t3.a (#4), probe targets:[t2.a (#2)@scan1], filter type:bloom,inlist,min_max
 │   ├── estimated rows: 0.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t3
+│   │   ├── scan id: 2
 │   │   ├── output columns: [a (#4), b (#5)]
 │   │   ├── read rows: 0
 │   │   ├── read size: 0
@@ -484,6 +512,7 @@ HashJoin
 │   │   └── estimated rows: 0.00
 │   └── TableScan(Probe)
 │       ├── table: default.default.t2
+│       ├── scan id: 1
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
 │       ├── read size: 0
@@ -494,6 +523,7 @@ HashJoin
 │       └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -515,6 +545,7 @@ MergeJoin
 ├── estimated rows: 0.00
 ├── TableScan(Left)
 │   ├── table: default.default.t2
+│   ├── scan id: 1
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read size: 0
@@ -524,6 +555,7 @@ MergeJoin
 │   └── estimated rows: 0.00
 └── TableScan(Right)
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -544,6 +576,7 @@ MergeJoin
 ├── estimated rows: 0.00
 ├── TableScan(Left)
 │   ├── table: default.default.t2
+│   ├── scan id: 1
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read size: 0
@@ -553,6 +586,7 @@ MergeJoin
 │   └── estimated rows: 0.00
 └── TableScan(Right)
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -585,7 +619,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:t3.a (#4), probe key:t1.a (#0), filter type:bloom,inlist,min_max
+│   └── filter id:1, build key:t3.a (#4), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t3.b (#5), t3.a (#4)]
@@ -595,10 +629,11 @@ HashJoin
 │   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── build join filters:
-│   │   └── filter id:0, build key:t3.a (#4), probe key:t2.a (#2), filter type:bloom,inlist,min_max
+│   │   └── filter id:0, build key:t3.a (#4), probe targets:[t2.a (#2)@scan1], filter type:bloom,inlist,min_max
 │   ├── estimated rows: 0.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t3
+│   │   ├── scan id: 2
 │   │   ├── output columns: [a (#4), b (#5)]
 │   │   ├── read rows: 0
 │   │   ├── read size: 0
@@ -608,6 +643,7 @@ HashJoin
 │   │   └── estimated rows: 0.00
 │   └── TableScan(Probe)
 │       ├── table: default.default.t2
+│       ├── scan id: 1
 │       ├── output columns: [a (#2), b (#3)]
 │       ├── read rows: 0
 │       ├── read size: 0
@@ -618,6 +654,7 @@ HashJoin
 │       └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -632,6 +669,7 @@ explain select * from t4 where a = b and strip_null_value(b) is not null;
 ----
 TableScan
 ├── table: default.default.t4
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -651,10 +689,11 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:CAST(t4.b (#3) AS Int32 NULL), probe key:t3.b (#1), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:CAST(t4.b (#3) AS Int32 NULL), probe targets:[t3.b (#1)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t4
+│   ├── scan id: 1
 │   ├── output columns: [a (#2), b (#3)]
 │   ├── read rows: 0
 │   ├── read size: 0
@@ -664,6 +703,7 @@ HashJoin
 │   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t3
+    ├── scan id: 0
     ├── output columns: [a (#0), b (#1)]
     ├── read rows: 0
     ├── read size: 0
@@ -711,6 +751,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
+│   ├── scan id: 1
 │   ├── output columns: [id (#1)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -721,6 +762,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
+    ├── scan id: 0
     ├── output columns: [id (#0)]
     ├── read rows: 1
     ├── read size: < 1 KiB

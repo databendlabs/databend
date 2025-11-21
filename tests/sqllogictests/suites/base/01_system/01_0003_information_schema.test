@@ -65,6 +65,8 @@ default
 default
 default
 default
+default
+default
 
 statement ok
 drop table if exists t

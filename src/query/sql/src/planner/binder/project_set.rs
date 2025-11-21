@@ -109,11 +109,10 @@ impl<'a> VisitorMut<'a> for SetReturningAnalyzer<'a> {
                     return Ok(());
                 }
 
-                let index = self.metadata.write().add_derived_column(
-                    srf_display_name.clone(),
-                    replaced_expr.data_type()?,
-                    Some(replaced_expr.clone()),
-                );
+                let index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(srf_display_name.clone(), replaced_expr.data_type()?);
 
                 // Add the srf to bind context, build ProjectSet plan later.
                 self.bind_context.srf_info.srfs.push(ScalarItem {

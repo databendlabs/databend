@@ -180,11 +180,10 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
                 column_ref.clone()
             } else {
                 let name = format!("{}_arg_{}", &udf.display_name, i);
-                let index = self.metadata.write().add_derived_column(
-                    name.clone(),
-                    arg.data_type()?,
-                    Some(arg.clone()),
-                );
+                let index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(name.clone(), arg.data_type()?);
 
                 // Generate a ColumnBinding for each argument of udf function
                 let column = ColumnBindingBuilder::new(
@@ -212,11 +211,10 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
 
         let index = match self.udf_functions_index_map.get(&udf.display_name) {
             Some(index) => *index,
-            None => self.metadata.write().add_derived_column(
-                udf.display_name.clone(),
-                (*udf.return_type).clone(),
-                Some(ScalarExpr::UDFCall(udf.clone())),
-            ),
+            None => self
+                .metadata
+                .write()
+                .add_derived_column(udf.display_name.clone(), (*udf.return_type).clone()),
         };
 
         // Generate a ColumnBinding for the udf function

@@ -45,6 +45,7 @@ use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
 use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
 use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
+use roaring::RoaringTreemap;
 
 // Segment and Block id Bits when generate internal column `_row_id`
 // Assumes that the max block count of a segment is 2 ^ NUM_BLOCK_ID_BITS
@@ -94,7 +95,7 @@ pub fn block_idx_in_segment(block_num: usize, block_id: usize) -> usize {
 }
 
 // meta data for generate internal columns
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct InternalColumnMeta {
     pub segment_idx: usize,
     pub block_id: usize,
@@ -102,7 +103,7 @@ pub struct InternalColumnMeta {
     pub segment_location: String,
     pub snapshot_location: Option<String>,
     /// The row offsets in the block.
-    pub offsets: Option<Vec<usize>>,
+    pub offsets: Option<RoaringTreemap>,
     pub base_block_ids: Option<Scalar>,
     pub inner: Option<BlockMetaInfoPtr>,
     // The search matched rows and optional scores in the block.
@@ -221,8 +222,8 @@ impl InternalColumn {
                 let high_32bit = compute_row_id_prefix(seg_id, block_id);
                 let mut row_ids = Vec::with_capacity(num_rows);
                 if let Some(offsets) = &meta.offsets {
-                    for i in offsets {
-                        let row_id = compute_row_id(high_32bit, *i as u64);
+                    for i in offsets.iter() {
+                        let row_id = compute_row_id(high_32bit, i);
                         row_ids.push(row_id);
                     }
                 } else {
@@ -256,8 +257,8 @@ impl InternalColumn {
                     });
                 let mut row_ids = Vec::with_capacity(num_rows);
                 if let Some(offsets) = &meta.offsets {
-                    for i in offsets {
-                        let row_id = format!("{}{:06x}", uuid, *i);
+                    for i in offsets.iter() {
+                        let row_id = format!("{}{:06x}", uuid, i);
                         row_ids.push(row_id);
                     }
                 } else {
@@ -282,6 +283,7 @@ impl InternalColumn {
 
                 let mut bitmap = MutableBitmap::from_len_zeroed(num_rows);
                 for (idx, _) in matched_rows.iter() {
+                    debug_assert!(*idx < bitmap.len());
                     bitmap.set(*idx, true);
                 }
                 Column::Boolean(bitmap.into()).into()
@@ -292,8 +294,9 @@ impl InternalColumn {
 
                 let mut scores = vec![F32::from(0_f32); num_rows];
                 for (idx, score) in matched_rows.iter() {
+                    debug_assert!(*idx < scores.len());
                     if let Some(val) = scores.get_mut(*idx) {
-                        assert!(score.is_some());
+                        debug_assert!(score.is_some());
                         *val = F32::from(*score.unwrap());
                     }
                 }
@@ -307,6 +310,7 @@ impl InternalColumn {
                 // Fill other rows with the maximum value and they will be filtered out.
                 let mut scores = vec![F32::from(f32::MAX); num_rows];
                 for (idx, score) in vector_scores.iter() {
+                    debug_assert!(*idx < scores.len());
                     if let Some(val) = scores.get_mut(*idx) {
                         *val = *score;
                     }

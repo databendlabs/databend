@@ -109,7 +109,7 @@ impl SortAndLimitPushDownOptimizer {
         match exchange_sexpr.plan() {
             RelOperator::Exchange(exchange) => match exchange {
                 // this is window shuffle sort
-                Exchange::Hash(_) => return Ok(s_expr.clone()),
+                Exchange::NodeToNodeHash(_) => return Ok(s_expr.clone()),
                 Exchange::Merge | Exchange::MergeSort => {}
                 Exchange::Broadcast => unreachable!(),
             },

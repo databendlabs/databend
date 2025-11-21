@@ -17,14 +17,11 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_sql::plans::CreateIndexPlan;
-use databend_enterprise_aggregating_index::get_agg_index_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -55,10 +52,6 @@ impl Interpreter for CreateIndexInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
-
         let index_name = self.plan.index_name.clone();
         let catalog = self.ctx.get_current_catalog();
         if catalog != "default" {
@@ -84,9 +77,7 @@ impl Interpreter for CreateIndexInterpreter {
             },
         };
 
-        let handler = get_agg_index_handler();
-        let _ = handler.do_create_index(catalog, create_index_req).await?;
-
+        let _ = catalog.create_index(create_index_req).await?;
         Ok(PipelineBuildResult::create())
     }
 }

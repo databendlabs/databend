@@ -39,11 +39,11 @@ use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
 use databend_common_users::Object;
 
@@ -138,7 +138,7 @@ struct ShowSequencesSource {
 
 impl ShowSequencesSource {
     pub fn create(ctx: Arc<dyn TableContext>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, ShowSequencesSource {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, ShowSequencesSource {
             ctx,
             finished: false,
         })

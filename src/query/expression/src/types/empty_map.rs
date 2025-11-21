@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::ArgType;
+use super::DataType;
 use super::ZeroSizeType;
 use super::ZeroSizeValueType;
 use crate::property::Domain;
-use crate::types::ArgType;
-use crate::types::DataType;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;

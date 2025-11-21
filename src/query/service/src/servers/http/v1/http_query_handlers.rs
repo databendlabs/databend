@@ -141,6 +141,14 @@ impl QueryResponseField {
     }
 }
 
+// settings also used by driver, may be set in query/session/global level
+// only available after binding
+#[derive(Serialize, Debug, Clone)]
+pub struct ResultFormatSettings {
+    pub timezone: String,
+    pub geometry_output_format: String,
+}
+
 #[derive(Serialize, Debug, Clone)]
 pub struct QueryResponse {
     pub id: String,
@@ -160,6 +168,9 @@ pub struct QueryResponse {
     pub data: Arc<BlocksSerializer>,
     pub affect: Option<QueryAffect>,
     pub result_timeout_secs: Option<u64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settings: Option<ResultFormatSettings>,
 
     pub stats: QueryStats,
 
@@ -189,6 +200,7 @@ impl QueryResponse {
                     affect,
                     error,
                     warnings,
+                    result_format_settings: driver_settings,
                 },
         }: HttpQueryResponseInternal,
         is_final: bool,
@@ -257,6 +269,7 @@ impl QueryResponse {
             error: error.map(QueryError::from_error_code),
             has_result_set,
             result_timeout_secs: Some(result_timeout_secs),
+            settings: driver_settings,
         };
 
         match body_format {

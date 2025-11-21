@@ -24,6 +24,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::udf_client::error_kind;
+use databend_common_expression::udf_client::is_transport_error_message;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
@@ -139,13 +140,13 @@ impl TransformUdfServer {
             .do_exchange(
                 &func.name,
                 &func.func_name,
-                num_rows,
+                Some(num_rows),
                 block_entries,
                 &func.data_type,
             )
             .await?;
 
-        data_block.add_entry(result);
+        data_block.add_entry(result.take_columns().pop().unwrap());
 
         drop(permit);
         Ok(data_block)
@@ -156,7 +157,7 @@ fn retry_on(err: &databend_common_exception::ErrorCode) -> bool {
     if err.code() == ErrorCode::U_D_F_DATA_ERROR {
         let message = err.message();
         // this means the server can't handle the request in 60s
-        if message.contains("h2 protocol error") {
+        if is_transport_error_message(&message) {
             return false;
         }
     }

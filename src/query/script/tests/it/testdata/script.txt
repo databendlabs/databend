@@ -172,7 +172,7 @@ RETURN sum;
 QUERY SELECT 0, __expr_result1(1)
 ITER __expr_result1(1), __expr_result_iter2(2)
 READ __expr_result_iter2(2), $0, sum(0)
-QUERY SELECT * FROM generate_series(1, - 1, -1), __for_index_set5(5)
+QUERY SELECT * FROM generate_series(1, -1, -1), __for_index_set5(5)
 ITER __for_index_set5(5), __for_index_iter6(6)
 __LOOP3(3):
 JUMP_IF_ENDED __for_index_iter6(6), __LOOP_END4(4)
@@ -190,7 +190,7 @@ RETURN __return_val10(10)
 ---------- QUERY ---------
 QUERY: SELECT 0
 BLOCK: ($0): (0)
-QUERY: SELECT * FROM generate_series(1, - 1, -1)
+QUERY: SELECT * FROM generate_series(1, -1, -1)
 BLOCK: ($0): (1), (0), (-1)
 QUERY: SELECT 0 + 1
 BLOCK: ($0): (1)

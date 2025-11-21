@@ -7,6 +7,7 @@ Sort(Single)
 ├── estimated rows: 10.00
 └── TableScan
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -24,6 +25,7 @@ Sort(Single)
 ├── estimated rows: 10.00
 └── TableScan
     ├── table: default.system.numbers
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -45,6 +47,7 @@ Sort(Single)
     ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.system.numbers
+        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 10
         ├── read size: < 1 KiB
@@ -66,6 +69,7 @@ Sort(Single)
     ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.system.numbers
+        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 10
         ├── read size: < 1 KiB
@@ -91,6 +95,7 @@ Sort(Single)
         ├── estimated rows: 10.00
         └── TableScan
             ├── table: default.system.numbers
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 10
             ├── read size: < 1 KiB

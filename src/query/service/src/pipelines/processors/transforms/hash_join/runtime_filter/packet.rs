@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Debug;
 
@@ -21,6 +20,8 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
+
+use crate::pipelines::processors::transforms::RuntimeFilterDesc;
 
 /// Represents a runtime filter that can be transmitted and merged.
 ///
@@ -35,7 +36,7 @@ pub struct RuntimeFilterPacket {
     pub id: usize,
     pub inlist: Option<Column>,
     pub min_max: Option<SerializableDomain>,
-    pub bloom: Option<HashSet<u64>>,
+    pub bloom: Option<Vec<u64>>,
 }
 
 impl Debug for RuntimeFilterPacket {
@@ -56,9 +57,31 @@ impl Debug for RuntimeFilterPacket {
 /// # Fields
 ///
 /// * `packets` - A map of runtime filter packets, keyed by their unique identifier `RuntimeFilterPacket::id`. When `packets` is `None`, it means that `build_num_rows` is zero.
+/// * `build_rows` - Total number of rows used when building the runtime filters.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct JoinRuntimeFilterPacket {
+    #[serde(default)]
     pub packets: Option<HashMap<usize, RuntimeFilterPacket>>,
+    #[serde(default)]
+    pub build_rows: usize,
+}
+
+impl JoinRuntimeFilterPacket {
+    pub fn disable_all(descs: &[RuntimeFilterDesc], build_rows: usize) -> Self {
+        let mut packets = HashMap::new();
+        for desc in descs {
+            packets.insert(desc.id, RuntimeFilterPacket {
+                id: desc.id,
+                inlist: None,
+                min_max: None,
+                bloom: None,
+            });
+        }
+        Self {
+            packets: Some(packets),
+            build_rows,
+        }
+    }
 }
 
 #[typetag::serde(name = "join_runtime_filter_packet")]

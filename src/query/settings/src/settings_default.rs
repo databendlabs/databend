@@ -349,7 +349,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("bloom_runtime_filter_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(u64::MAX),
+                    value: UserSettingValue::UInt64(3000000),
                     desc: "Sets the maximum number of rows for bloom runtime filter generation.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -508,6 +508,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("join_runtime_filter_selectivity_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Selectivity threshold (percentage) for join runtime filters. Filters are enabled when (build_rows / build_table_rows * 100) < threshold. Default 10 means 10%.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1490,7 +1497,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-
                 ("s3_storage_class", DefaultSettingValue {
                     value: {
                         let storage_class = Self::extract_s3_storage_class_config(&global_conf).unwrap_or_default();
@@ -1501,12 +1507,19 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![S3StorageClass::Standard.to_string(), S3StorageClass::IntelligentTiering.to_string()])),
                 }),
-                ("enable_experiment_aggregate_final", DefaultSettingValue {
+                ("enable_experiment_aggregate", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enable experiment aggregate final, default is 0, 1 for enable",
+                    desc: "Enable experiment aggregate, default is 0, 1 for enable",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("max_aggregate_spill_level", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Maximum recursion depth for the aggregate spill. Each recursion level repartition data into `num_cpu` smaller parts to ensure it fits in memory.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=16)),
                 }),
             ]);
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
@@ -21,8 +22,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::servers::http::v1::HttpQueryContext;
-
-const PUBLIC_ROLE: &str = "public";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ListRolesResponse {
@@ -46,11 +45,11 @@ async fn handle(ctx: &HttpQueryContext) -> Result<ListRolesResponse> {
     let current_role = ctx
         .session
         .get_current_role()
-        .map_or(PUBLIC_ROLE.to_string(), |role| role.name);
+        .map_or(BUILTIN_ROLE_PUBLIC.to_string(), |role| role.name);
     let default_role = current_user
         .option
         .default_role()
-        .map_or(PUBLIC_ROLE.to_string(), |role| role.to_string());
+        .map_or(BUILTIN_ROLE_PUBLIC.to_string(), |role| role.to_string());
     let mut roles = vec![];
     for role in all_roles {
         let is_current = role.name == current_role;
@@ -63,7 +62,7 @@ async fn handle(ctx: &HttpQueryContext) -> Result<ListRolesResponse> {
     }
     if roles.is_empty() {
         roles.push(RoleInfo {
-            name: PUBLIC_ROLE.to_string(),
+            name: BUILTIN_ROLE_PUBLIC.to_string(),
             is_current: true,
             is_default: true,
         });

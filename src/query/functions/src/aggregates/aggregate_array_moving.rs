@@ -44,8 +44,10 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
+use super::SerializeInfo;
 use super::StateAddr;
 use super::StateSerde;
 
@@ -221,7 +223,7 @@ where
     Self: SumState,
     T: Number,
 {
-    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![ArrayType::<NumberType<T>>::data_type().into()]
     }
 
@@ -421,7 +423,7 @@ where T: Decimal
             }
             let avg_val = match sum
                 .checked_mul(T::e(scale_add))
-                .and_then(|v| v.checked_div(T::from_i128(window_size as u64)))
+                .and_then(|v| v.checked_div(T::from_i64(window_size as i64)))
             {
                 Some(value) => value,
                 None => {
@@ -452,7 +454,7 @@ where
     Self: SumState,
     T: Decimal,
 {
-    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Array(Box::new(DataType::Decimal(T::default_decimal_size()))).into()]
     }
 
@@ -677,7 +679,13 @@ pub fn try_create_aggregate_array_moving_avg_function(
 }
 
 pub fn aggregate_array_moving_avg_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_array_moving_avg_function))
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_array_moving_avg_function),
+        AggregateFunctionFeatures {
+            keep_nullable: true,
+            ..Default::default()
+        },
+    )
 }
 
 #[derive(Clone)]
@@ -858,5 +866,11 @@ pub fn try_create_aggregate_array_moving_sum_function(
 }
 
 pub fn aggregate_array_moving_sum_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_array_moving_sum_function))
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_array_moving_sum_function),
+        AggregateFunctionFeatures {
+            keep_nullable: true,
+            ..Default::default()
+        },
+    )
 }

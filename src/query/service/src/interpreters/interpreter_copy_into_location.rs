@@ -18,7 +18,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_pipeline::core::ExecutionInfo;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use log::debug;
 use log::info;

@@ -48,7 +48,7 @@ use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
-use super::FunctionData;
+use super::SerializeInfo;
 use super::StateSerde;
 use super::UnaryState;
 
@@ -130,11 +130,7 @@ where
     T: AccessType,
     T::Scalar: Into<f64>,
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: T::ScalarRef<'_>, _: &Self::FunctionInfo) -> Result<()> {
         let value = T::to_owned_scalar(other).into();
         self.state_add(value)
     }
@@ -146,14 +142,14 @@ where
     fn merge_result(
         &mut self,
         builder: NullableColumnBuilderMut<'_, Float64Type>,
-        _function_data: Option<&dyn FunctionData>,
+        _: &Self::FunctionInfo,
     ) -> Result<()> {
         self.state_merge_result(builder)
     }
 }
 
 impl<const TYPE: u8> StateSerde for StddevState<TYPE> {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(Some(24))]
     }
 
@@ -201,7 +197,6 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                 NumberConvertView<NUM_TYPE, F64>,
                 NullableType<Float64Type>,
             >::create(display_name, return_type)
-            .finish()
         }
         DataType::Decimal(s) => {
             with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
@@ -211,7 +206,6 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                         DecimalF64View<DECIMAL>,
                         NullableType<Float64Type>,
                     >::create(display_name, return_type)
-                    .finish()
                 }
             })
         }

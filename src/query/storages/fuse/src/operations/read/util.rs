@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use roaring::RoaringTreemap;
 
 use crate::operations::BlockMetaIndex;
 use crate::FuseBlockPartInfo;
@@ -40,7 +41,7 @@ pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> 
 pub(crate) fn add_data_block_meta(
     block: DataBlock,
     fuse_part: &FuseBlockPartInfo,
-    offsets: Option<Vec<usize>>,
+    offsets: Option<RoaringTreemap>,
     base_block_ids: Option<Scalar>,
     update_stream_columns: bool,
     query_internal_columns: bool,
@@ -67,6 +68,33 @@ pub(crate) fn add_data_block_meta(
     if query_internal_columns {
         // Fill `BlockMetaInfoPtr` if query internal columns
         let block_meta = fuse_part.block_meta_index().unwrap();
+
+        // Transform matched_rows indices from block-level to page-level
+        let matched_rows = block_meta.matched_rows.clone().map(|matched_rows| {
+            if let Some(offsets) = &offsets {
+                matched_rows
+                    .into_iter()
+                    .filter(|(idx, _)| offsets.contains(*idx as u64))
+                    .map(|(idx, score)| ((offsets.rank(idx as u64) - 1) as usize, score))
+                    .collect::<Vec<_>>()
+            } else {
+                matched_rows
+            }
+        });
+
+        // Transform vector_scores indices from block-level to page-level
+        let vector_scores = block_meta.vector_scores.clone().map(|vector_scores| {
+            if let Some(offsets) = &offsets {
+                vector_scores
+                    .into_iter()
+                    .filter(|(idx, _)| offsets.contains(*idx as u64))
+                    .map(|(idx, score)| ((offsets.rank(idx as u64) - 1) as usize, score))
+                    .collect::<Vec<_>>()
+            } else {
+                vector_scores
+            }
+        });
+
         let internal_column_meta = InternalColumnMeta {
             segment_idx: block_meta.segment_idx,
             block_id: block_meta.block_id,
@@ -76,8 +104,8 @@ pub(crate) fn add_data_block_meta(
             offsets,
             base_block_ids,
             inner: meta,
-            matched_rows: block_meta.matched_rows.clone(),
-            vector_scores: block_meta.vector_scores.clone(),
+            matched_rows,
+            vector_scores,
         };
         meta = Some(Box::new(internal_column_meta));
     }

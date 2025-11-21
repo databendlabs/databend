@@ -29,7 +29,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::RangePruner;

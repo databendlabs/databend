@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use nom::Parser;
 use nom_rule::rule;
 
 use super::expr::literal_string;
@@ -33,7 +34,7 @@ pub fn comment(i: Input) -> IResult<Statement> {
          | #comment_column: "`COMMENT [IF EXISTS] ON COLUMN <table_name>.<column_name> IS '<string_literal>'`"
          | #comment_network_policy: "`COMMENT [IF EXISTS] ON NETWORK POLICY <policy_name> IS '<string_literal>'`"
          | #comment_password_policy: "`COMMENT [IF EXISTS] ON PASSWORD POLICY <policy_name> IS '<string_literal>'`"
-    )(i)
+    ).parse(i)
 }
 
 fn comment_table(i: Input) -> IResult<Statement> {

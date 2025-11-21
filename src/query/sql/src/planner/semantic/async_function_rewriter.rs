@@ -172,11 +172,10 @@ impl<'a> VisitorMut<'a> for AsyncFunctionRewriter {
                 column_ref.clone()
             } else {
                 let name = format!("{}_arg_{}", &async_func.display_name, i);
-                let index = self.metadata.write().add_derived_column(
-                    name.clone(),
-                    arg.data_type()?,
-                    Some(arg.clone()),
-                );
+                let index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(name.clone(), arg.data_type()?);
 
                 // Generate a ColumnBinding for each argument of async function
                 let column = ColumnBindingBuilder::new(
@@ -205,7 +204,6 @@ impl<'a> VisitorMut<'a> for AsyncFunctionRewriter {
             None => self.metadata.write().add_derived_column(
                 async_func.display_name.clone(),
                 (*async_func.return_type).clone(),
-                Some(async_func.clone().into()),
             ),
         };
 

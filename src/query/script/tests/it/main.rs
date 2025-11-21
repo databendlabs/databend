@@ -494,7 +494,7 @@ fn mock_client() -> MockClient {
             ]),
         )
         .response_when(
-            "SELECT * FROM generate_series(1, - 1, -1)",
+            "SELECT * FROM generate_series(1, -1, -1)",
             MockSet::unnamed(vec![
                 vec![Literal::UInt64(1)],
                 vec![Literal::UInt64(0)],

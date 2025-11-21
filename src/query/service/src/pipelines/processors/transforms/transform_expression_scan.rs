@@ -22,12 +22,11 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::processors::BlockingTransform;
 use databend_common_pipeline_transforms::processors::BlockingTransformer;
-
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::Processor;
 
 pub struct TransformExpressionScan {
     values: Vec<Vec<Expr>>,

@@ -17,9 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
 use databend_common_sql::evaluator::apply_cse;
 use databend_common_sql::evaluator::BlockOperator;
 

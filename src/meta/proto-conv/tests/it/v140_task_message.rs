@@ -31,7 +31,7 @@ fn test_decode_v140_task_message() -> anyhow::Result<()> {
         when_condition: Some("c1 > 1".to_string()),
         after: vec!["task_a".to_string(), "task_b".to_string()],
         comment: Some("comment".to_string()),
-        owner: "public".to_string(),
+        owner: mt::BUILTIN_ROLE_PUBLIC.to_string(),
         owner_user: "me".to_string(),
         schedule_options: Some(ScheduleOptions {
             interval: Some(11),

@@ -22,18 +22,21 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
+use super::AccessType;
 use super::AnyType;
+use super::ArgType;
+use super::BuilderExt;
+use super::Column;
+use super::DataType;
+use super::GenericMap;
 use super::ReturnType;
+use super::Scalar;
+use super::ScalarRef;
+use super::ValueType;
 use crate::property::Domain;
-use crate::types::AccessType;
-use crate::types::ArgType;
-use crate::types::BuilderExt;
-use crate::types::DataType;
-use crate::types::GenericMap;
-use crate::types::Scalar;
-use crate::types::ScalarRef;
-use crate::types::ValueType;
-use crate::values::Column;
 use crate::ColumnBuilder;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,22 +57,25 @@ impl<T: AccessType> AccessType for ArrayType<T> {
         scalar.clone()
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
         match scalar {
             ScalarRef::Array(array) => T::try_downcast_column(array),
-            _ => None,
+            _ => Err(scalar_type_error::<Self>(scalar)),
         }
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        ArrayColumn::try_downcast(col.as_array()?)
+    fn try_downcast_column(col: &Column) -> Result<Self::Column> {
+        let array = col
+            .as_array()
+            .ok_or_else(|| column_type_error::<Self>(col))?;
+        ArrayColumn::try_downcast(array)
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
         match domain {
-            Domain::Array(Some(domain)) => Some(Some(T::try_downcast_domain(domain)?)),
-            Domain::Array(None) => Some(None),
-            _ => None,
+            Domain::Array(Some(domain)) => Ok(Some(T::try_downcast_domain(domain)?)),
+            Domain::Array(None) => Ok(None),
+            _ => Err(domain_type_error::<Self>(domain)),
         }
     }
 
@@ -333,8 +339,8 @@ impl<T: ValueType> ArrayColumn<T> {
 }
 
 impl ArrayColumn<AnyType> {
-    pub fn try_downcast<T: AccessType>(&self) -> Option<ArrayColumn<T>> {
-        Some(ArrayColumn {
+    pub fn try_downcast<T: AccessType>(&self) -> Result<ArrayColumn<T>> {
+        Ok(ArrayColumn {
             values: T::try_downcast_column(&self.values)?,
             offsets: self.offsets.clone(),
         })

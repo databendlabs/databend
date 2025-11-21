@@ -32,7 +32,7 @@ pub fn get_hashes(
     block: &DataBlock,
     keys: &[Expr],
     method: &HashMethodKind,
-    join_type: &JoinType,
+    join_type: JoinType,
     from_build: bool,
     is_null_equal: &[bool],
     hashes: &mut Vec<u64>,

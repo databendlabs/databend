@@ -34,9 +34,9 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
 
 use crate::processors::Transform;
 use crate::processors::Transformer;

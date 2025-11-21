@@ -15,6 +15,7 @@ Sequence
 ├── MaterializedCTE: b
 │   └── TableScan
 │       ├── table: default.default.a
+│       ├── scan id: 0
 │       ├── output columns: [a (#0), b (#1)]
 │       ├── read rows: 20
 │       ├── read size: < 1 KiB
@@ -31,7 +32,7 @@ Sequence
     ├── keys is null equal: [false]
     ├── filters: [d.b (#3) < d.b (#5)]
     ├── build join filters:
-    │   └── filter id:0, build key:b2.a (#4), probe key:b1.a (#2), filter type:inlist,min_max
+    │   └── filter id:0, build key:b2.a (#4), probe targets:[b1.a (#2)@scan1], filter type:bloom,inlist,min_max
     ├── estimated rows: 40.00
     ├── MaterializeCTERef(Build)
     │   ├── cte_name: b

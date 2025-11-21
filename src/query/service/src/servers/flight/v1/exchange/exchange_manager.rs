@@ -36,9 +36,9 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
-use databend_common_pipeline_core::always_callback;
-use databend_common_pipeline_core::basic_callback;
-use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_pipeline::core::always_callback;
+use databend_common_pipeline::core::basic_callback;
+use databend_common_pipeline::core::ExecutionInfo;
 use fastrace::prelude::*;
 use log::warn;
 use parking_lot::Mutex;
@@ -57,6 +57,7 @@ use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
 use crate::physical_plans::PhysicalPlan;
+use crate::pipelines::attach_runtime_filter_logger;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -1050,7 +1051,7 @@ impl FragmentCoordinator {
                     allow_adjust_parallelism: true,
                 },
             ))),
-            DataExchange::ShuffleDataExchange(exchange) => Ok(Some(
+            DataExchange::NodeToNodeExchange(exchange) => Ok(Some(
                 ExchangeParams::ShuffleExchange(ShuffleExchangeParams {
                     exchange_injector: exchange_injector.clone(),
                     schema: self.physical_plan.output_schema()?,
@@ -1083,10 +1084,11 @@ impl FragmentCoordinator {
             let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
-                pipeline_ctx,
+                pipeline_ctx.clone(),
             );
 
-            let res = pipeline_builder.finalize(&self.physical_plan)?;
+            let mut res = pipeline_builder.finalize(&self.physical_plan)?;
+            attach_runtime_filter_logger(pipeline_ctx, &mut res.main_pipeline);
 
             self.pipeline_build_res = Some(res);
         }

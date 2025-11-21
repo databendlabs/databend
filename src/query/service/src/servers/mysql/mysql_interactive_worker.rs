@@ -48,7 +48,6 @@ use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
 use rand::thread_rng;
 use rand::Rng as _;
-use rand::RngCore;
 use uuid::Uuid;
 
 use crate::auth::CredentialType;
@@ -105,7 +104,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
     }
 
     #[async_backtrace::framed]
-    async fn auth_plugin_for_username(&self, _user: &[u8]) -> &str {
+    async fn auth_plugin_for_username(&self, _user: &[u8]) -> &'static str {
         "mysql_native_password"
     }
 
@@ -218,7 +217,6 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         let query_id = Uuid::now_v7();
         // Ensure the query id shares the same representation as trace_id.
         let query_id_str = query_id.simple().to_string();
-
         let sampled =
             thread_rng().gen_range(0..100) <= self.base.session.get_trace_sample_rate()?;
         let span_context =
@@ -402,7 +400,11 @@ impl InteractiveWorkerBase {
                 if data_block.num_rows() > 0 {
                     info!("Federated response: {:?}", data_block);
                 }
-                let has_result = data_block.num_rows() > 0;
+                // Fix for MySQL ODBC 9.5 + PowerBI compatibility:
+                // Empty result sets (0 rows but with schema) must set has_result=true,
+                // otherwise ODBC throws "invalid cursor state" error on commands like "SHOW KEYS FROM table".
+                // Check for column definitions instead of row count.
+                let has_result = !schema.fields().is_empty() || data_block.num_columns() > 0;
                 Ok((
                     QueryResult::create(
                         DataBlockStream::create(None, vec![data_block]).boxed(),
@@ -516,23 +518,12 @@ impl InteractiveWorker {
         session: Arc<Session>,
         version: BuildInfoRef,
         client_addr: String,
+        salt: [u8; 20],
     ) -> InteractiveWorker {
-        let mut bs = vec![0u8; 20];
-        let mut rng = rand::thread_rng();
-        rng.fill_bytes(bs.as_mut());
-
-        let mut scramble: [u8; 20] = [0; 20];
-        for i in 0..20 {
-            scramble[i] = bs[i] & 0x7fu8;
-            if scramble[i] == b'\0' || scramble[i] == b'$' {
-                scramble[i] += 1;
-            }
-        }
-
         InteractiveWorker {
             version: format!("{MYSQL_VERSION}-{}", version.commit_detail),
             base: InteractiveWorkerBase { session, version },
-            salt: scramble,
+            salt,
             client_addr,
             keep_alive_task_started: false,
         }

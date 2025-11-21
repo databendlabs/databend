@@ -26,3 +26,51 @@ select * from tmp order by seq;
 3 0 5
 4 1 6
 5 2 7
+
+statement ok
+create or replace sequence seq90;
+
+statement ok
+create or replace table sequence_demo (i integer default nextval(seq90), dummy smallint);
+
+statement ok
+drop table sequence_demo;
+
+statement ok
+drop sequence seq90;
+
+statement ok
+undrop table sequence_demo;
+
+query II
+select * from sequence_demo;
+----
+
+statement error 3101
+insert into sequence_demo(dummy) values(1);
+
+statement ok
+insert into sequence_demo values(100, 100);
+
+query II
+select * from sequence_demo order by dummy;
+----
+100 100
+
+statement ok
+alter table sequence_demo modify column i integer default 0;
+
+statement ok
+insert into sequence_demo(dummy) values(2);
+
+query II
+select * from sequence_demo order by dummy;
+----
+0 2
+100 100
+
+statement ok
+drop table if exists sequence_demo;
+
+statement ok
+drop sequence if exists seq90;

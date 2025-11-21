@@ -25,9 +25,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::EmptySource;
 use databend_common_storage::init_stage_operator;
 use databend_storages_common_stage::SingleFilePartition;
 

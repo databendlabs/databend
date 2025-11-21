@@ -17,7 +17,10 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropDatamaskPolicyPlan;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 
@@ -53,9 +56,17 @@ impl Interpreter for DropDataMaskInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
-        handler
-            .drop_data_mask(meta_api, self.plan.clone().into())
-            .await?;
+        let tenant = self.plan.tenant.clone();
+        if let Some(policy_id) = handler
+            .drop_data_mask(meta_api.clone(), self.plan.clone().into())
+            .await?
+        {
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            role_api
+                .revoke_ownership(&OwnershipObject::MaskingPolicy { policy_id })
+                .await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
 
         Ok(PipelineBuildResult::create())
     }

@@ -10,6 +10,7 @@ Filter
 ├── estimated rows: 6.00
 └── TableScan
     ├── table: default.default.t
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 738
     ├── read size: 1.10 KiB
@@ -28,6 +29,7 @@ Filter
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 0
     ├── read size: 0
@@ -46,6 +48,7 @@ Filter
 ├── estimated rows: 37.00
 └── TableScan
     ├── table: default.default.t
+    ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 738
     ├── read size: 1.10 KiB

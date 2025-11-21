@@ -1,0 +1,16 @@
+[project]
+name = "cloud-control-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "grpcio",
+    "grpcio-reflection",
+    "protobuf",
+]
+
+[dependency-groups]
+dev = [
+    "grpcio-tools",
+]

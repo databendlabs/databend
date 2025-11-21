@@ -55,10 +55,6 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_connect_with_tls() -> Result<()> {
-    // Set default crypto provider to use
-    // See: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#using-the-per-process-default-cryptoprovider
-    let _ = rustls::crypto::ring::default_provider().install_default();
-
     let _fixture = TestFixture::setup().await?;
 
     let tcp_keepalive_timeout_secs = 120;

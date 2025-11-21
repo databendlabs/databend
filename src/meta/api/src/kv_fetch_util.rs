@@ -160,6 +160,9 @@ pub async fn fetch_id<T: kvapi::Key>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     generator: T,
 ) -> Result<u64, MetaError> {
+    // Each `upsert` bumps the seq atomically inside metasrv, therefore every caller
+    // receives a unique, monotonically increasing id even when multiple sessions
+    // fetch from the same generator concurrently.
     let res = kv_api
         .upsert_kv(UpsertKV::update(generator.to_string_key(), b""))
         .await?;

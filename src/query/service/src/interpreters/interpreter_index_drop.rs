@@ -15,12 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_sql::plans::DropIndexPlan;
-use databend_enterprise_aggregating_index::get_agg_index_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -51,10 +48,6 @@ impl Interpreter for DropIndexInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
-
         let index_name = self.plan.index.clone();
         let catalog = self
             .ctx
@@ -65,9 +58,7 @@ impl Interpreter for DropIndexInterpreter {
             name_ident: IndexNameIdent::new(tenant, index_name),
         };
 
-        let handler = get_agg_index_handler();
-        let _ = handler.do_drop_index(catalog, drop_index_req).await?;
-
+        let _ = catalog.drop_index(drop_index_req).await?;
         Ok(PipelineBuildResult::create())
     }
 }

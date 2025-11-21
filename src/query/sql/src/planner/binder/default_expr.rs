@@ -168,7 +168,11 @@ impl DefaultExprBinder {
         Ok(ast)
     }
 
-    pub fn bind(&mut self, ast: &AExpr) -> Result<(ScalarExpr, DataType)> {
+    fn bind_impl(
+        &mut self,
+        ast: &AExpr,
+        skip_sequence_check: bool,
+    ) -> Result<(ScalarExpr, DataType)> {
         let mut type_checker = TypeChecker::try_create(
             &mut self.bind_context,
             self.ctx.clone(),
@@ -177,8 +181,15 @@ impl DefaultExprBinder {
             &[],
             true,
         )?;
+        if skip_sequence_check {
+            type_checker.set_skip_sequence_check(true);
+        }
         let (scalar_expr, data_type) = *type_checker.resolve(ast)?;
         Ok((scalar_expr, data_type))
+    }
+
+    pub fn bind(&mut self, ast: &AExpr) -> Result<(ScalarExpr, DataType)> {
+        self.bind_impl(ast, false)
     }
 
     pub fn parse_and_bind(&mut self, field: &DataField) -> Result<ScalarExpr> {
@@ -192,7 +203,7 @@ impl DefaultExprBinder {
                     e
                 )
             })?;
-            let (scalar_expr, data_type) = self.bind(&ast)?;
+            let (scalar_expr, data_type) = self.bind_impl(&ast, true)?;
             let dest_type = field.data_type();
             if data_type != *dest_type {
                 Ok(wrap_cast(&scalar_expr, dest_type))

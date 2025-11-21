@@ -36,7 +36,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:t.a (#0), probe key:t2.a (#2), filter type:inlist,min_max
+│   └── filter id:1, build key:t.a (#0), probe targets:[t2.a (#2)@scan2], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t1.a (#1), t.a (#0)]
@@ -46,10 +46,11 @@ HashJoin
 │   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── build join filters:
-│   │   └── filter id:0, build key:t.a (#0), probe key:t1.a (#1), filter type:inlist,min_max
+│   │   └── filter id:0, build key:t.a (#0), probe targets:[t1.a (#1)@scan1], filter type:bloom,inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── scan id: 0
 │   │   ├── output columns: [a (#0)]
 │   │   ├── read rows: 1
 │   │   ├── read size: < 1 KiB
@@ -60,6 +61,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
+│       ├── scan id: 1
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read size: < 1 KiB
@@ -71,6 +73,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
+    ├── scan id: 2
     ├── output columns: [a (#2)]
     ├── read rows: 100
     ├── read size: < 1 KiB
@@ -92,7 +95,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:t.a (#0), probe key:t1.a (#2), filter type:inlist,min_max
+│   └── filter id:1, build key:t.a (#0), probe targets:[t1.a (#2)@scan2], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#1), t.a (#0)]
@@ -102,10 +105,11 @@ HashJoin
 │   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── build join filters:
-│   │   └── filter id:0, build key:t.a (#0), probe key:t2.a (#1), filter type:inlist,min_max
+│   │   └── filter id:0, build key:t.a (#0), probe targets:[t2.a (#1)@scan1], filter type:bloom,inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── scan id: 0
 │   │   ├── output columns: [a (#0)]
 │   │   ├── read rows: 1
 │   │   ├── read size: < 1 KiB
@@ -116,6 +120,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t2
+│       ├── scan id: 1
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 100
 │       ├── read size: < 1 KiB
@@ -127,6 +132,7 @@ HashJoin
 │       └── estimated rows: 100.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── scan id: 2
     ├── output columns: [a (#2)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -148,7 +154,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
+│   └── filter id:1, build key:t2.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#2), t.a (#1)]
@@ -158,10 +164,11 @@ HashJoin
 │   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── build join filters:
-│   │   └── filter id:0, build key:t.a (#1), probe key:t2.a (#2), filter type:inlist,min_max
+│   │   └── filter id:0, build key:t.a (#1), probe targets:[t2.a (#2)@scan2], filter type:bloom,inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── scan id: 1
 │   │   ├── output columns: [a (#1)]
 │   │   ├── read rows: 1
 │   │   ├── read size: < 1 KiB
@@ -172,6 +179,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t2
+│       ├── scan id: 2
 │       ├── output columns: [a (#2)]
 │       ├── read rows: 100
 │       ├── read size: < 1 KiB
@@ -183,6 +191,7 @@ HashJoin
 │       └── estimated rows: 100.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── scan id: 0
     ├── output columns: [a (#0)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -204,7 +213,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:t.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
+│   └── filter id:1, build key:t.a (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t2.a (#1), t.a (#2)]
@@ -214,10 +223,11 @@ HashJoin
 │   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── build join filters:
-│   │   └── filter id:0, build key:t.a (#2), probe key:t2.a (#1), filter type:inlist,min_max
+│   │   └── filter id:0, build key:t.a (#2), probe targets:[t2.a (#1)@scan1], filter type:bloom,inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── scan id: 2
 │   │   ├── output columns: [a (#2)]
 │   │   ├── read rows: 1
 │   │   ├── read size: < 1 KiB
@@ -228,6 +238,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t2
+│       ├── scan id: 1
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 100
 │       ├── read size: < 1 KiB
@@ -239,6 +250,7 @@ HashJoin
 │       └── estimated rows: 100.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── scan id: 0
     ├── output columns: [a (#0)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -260,7 +272,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:t.a (#2), probe key:t2.a (#0), filter type:inlist,min_max
+│   └── filter id:1, build key:t.a (#2), probe targets:[t2.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t1.a (#1), t.a (#2)]
@@ -270,10 +282,11 @@ HashJoin
 │   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── build join filters:
-│   │   └── filter id:0, build key:t.a (#2), probe key:t1.a (#1), filter type:inlist,min_max
+│   │   └── filter id:0, build key:t.a (#2), probe targets:[t1.a (#1)@scan1], filter type:bloom,inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── scan id: 2
 │   │   ├── output columns: [a (#2)]
 │   │   ├── read rows: 1
 │   │   ├── read size: < 1 KiB
@@ -284,6 +297,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
+│       ├── scan id: 1
 │       ├── output columns: [a (#1)]
 │       ├── read rows: 10
 │       ├── read size: < 1 KiB
@@ -295,6 +309,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
+    ├── scan id: 0
     ├── output columns: [a (#0)]
     ├── read rows: 100
     ├── read size: < 1 KiB
@@ -316,7 +331,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:1, build key:t1.a (#2), probe key:t2.a (#0), filter type:inlist,min_max
+│   └── filter id:1, build key:t1.a (#2), probe targets:[t2.a (#0)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
 │   ├── output columns: [t1.a (#2), t.a (#1)]
@@ -326,10 +341,11 @@ HashJoin
 │   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── build join filters:
-│   │   └── filter id:0, build key:t.a (#1), probe key:t1.a (#2), filter type:inlist,min_max
+│   │   └── filter id:0, build key:t.a (#1), probe targets:[t1.a (#2)@scan2], filter type:bloom,inlist,min_max
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.join_reorder.t
+│   │   ├── scan id: 1
 │   │   ├── output columns: [a (#1)]
 │   │   ├── read rows: 1
 │   │   ├── read size: < 1 KiB
@@ -340,6 +356,7 @@ HashJoin
 │   │   └── estimated rows: 1.00
 │   └── TableScan(Probe)
 │       ├── table: default.join_reorder.t1
+│       ├── scan id: 2
 │       ├── output columns: [a (#2)]
 │       ├── read rows: 10
 │       ├── read size: < 1 KiB
@@ -351,6 +368,7 @@ HashJoin
 │       └── estimated rows: 10.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t2
+    ├── scan id: 0
     ├── output columns: [a (#0)]
     ├── read rows: 100
     ├── read size: < 1 KiB
@@ -374,6 +392,7 @@ HashJoin
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── scan id: 0
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -388,6 +407,7 @@ HashJoin
     ├── estimated rows: 10.00
     └── TableScan
         ├── table: default.join_reorder.t1
+        ├── scan id: 1
         ├── output columns: [a (#1)]
         ├── read rows: 10
         ├── read size: < 1 KiB
@@ -414,6 +434,7 @@ HashJoin
 │   ├── estimated rows: 1.00
 │   └── TableScan
 │       ├── table: default.join_reorder.t
+│       ├── scan id: 0
 │       ├── output columns: [a (#0)]
 │       ├── read rows: 1
 │       ├── read size: < 1 KiB
@@ -424,6 +445,7 @@ HashJoin
 │       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── scan id: 1
     ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -444,10 +466,11 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t.a (#0), probe key:t1.a (#1), filter type:inlist,min_max
+│   └── filter id:0, build key:t.a (#0), probe targets:[t1.a (#1)@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── scan id: 0
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -458,6 +481,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── scan id: 1
     ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -481,6 +505,7 @@ HashJoin
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── scan id: 0
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -491,6 +516,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── scan id: 1
     ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -511,10 +537,11 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t.a (#0), probe key:t1.a (#1), filter type:inlist,min_max
+│   └── filter id:0, build key:t.a (#0), probe targets:[t1.a (#1)@scan1], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── scan id: 0
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -525,6 +552,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── scan id: 1
     ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read size: < 1 KiB
@@ -548,6 +576,7 @@ HashJoin
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
+│   ├── scan id: 0
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 1
 │   ├── read size: < 1 KiB
@@ -558,6 +587,7 @@ HashJoin
 │   └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.join_reorder.t1
+    ├── scan id: 1
     ├── output columns: [a (#1)]
     ├── read rows: 10
     ├── read size: < 1 KiB

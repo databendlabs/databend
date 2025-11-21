@@ -42,17 +42,17 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_core::SourcePipeBuilder;
-use databend_common_pipeline_sources::EmptySource;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::SourcePipeBuilder;
+use databend_common_pipeline::sources::EmptySource;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 use databend_storages_common_table_meta::table::ChangeType;
 
 use super::numbers_part::generate_numbers_parts;
 use super::NumbersPartInfo;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::TableFunction;
@@ -244,7 +244,7 @@ impl NumbersSource {
         let settings = ctx.get_settings();
         let numbers_part = NumbersPartInfo::from_part(numbers_part)?;
 
-        SyncSourcer::create(ctx, output, NumbersSource {
+        SyncSourcer::create(ctx.get_scan_progress(), output, NumbersSource {
             begin: numbers_part.part_start,
             end: numbers_part.part_end,
             step: settings.get_max_block_size()?,

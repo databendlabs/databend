@@ -101,8 +101,11 @@ impl<const N: usize> Rows for FixedRows<N> {
         OpaqueType::upcast_column(self.0.clone())
     }
 
-    fn try_from_column(col: &Column) -> Option<Self> {
-        OpaqueType::<N>::try_downcast_column(col).map(FixedRows)
+    fn from_column(col: &Column) -> Result<Self> {
+        match OpaqueType::<N>::try_downcast_column(col) {
+            Ok(col) => Ok(FixedRows(col)),
+            Err(err) => Err(err.add_message("Order column type mismatched.")),
+        }
     }
 
     fn slice(&self, range: Range<usize>) -> Self {

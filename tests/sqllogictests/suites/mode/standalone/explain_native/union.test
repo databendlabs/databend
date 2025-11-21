@@ -30,6 +30,7 @@ UnionAll
 ├── estimated rows: 0.80
 ├── TableScan
 │   ├── table: default.default.t1
+│   ├── scan id: 0
 │   ├── output columns: [a (#0), b (#1)]
 │   ├── read rows: 0
 │   ├── read size: 0
@@ -40,6 +41,7 @@ UnionAll
 │   └── estimated rows: 0.40
 └── TableScan
     ├── table: default.default.t2
+    ├── scan id: 1
     ├── output columns: [a (#2), b (#3)]
     ├── read rows: 0
     ├── read size: 0
@@ -57,6 +59,7 @@ UnionAll
 ├── estimated rows: 2.00
 ├── TableScan
 │   ├── table: default.default.t1
+│   ├── scan id: 0
 │   ├── output columns: [a (#0), b (#1)]
 │   ├── read rows: 2
 │   ├── read size: < 1 KiB
@@ -67,6 +70,7 @@ UnionAll
 │   └── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t2
+    ├── scan id: 1
     ├── output columns: [a (#2), b (#3)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -94,6 +98,7 @@ Limit
     │   ├── estimated rows: 2.00
     │   └── TableScan
     │       ├── table: default.default.t1
+    │       ├── scan id: 0
     │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 2
     │       ├── read size: < 1 KiB
@@ -109,6 +114,7 @@ Limit
         ├── estimated rows: 2.00
         └── TableScan
             ├── table: default.default.t2
+            ├── scan id: 1
             ├── output columns: [a (#2), b (#3)]
             ├── read rows: 2
             ├── read size: < 1 KiB
@@ -136,6 +142,7 @@ Limit
     │   ├── estimated rows: 2.00
     │   └── TableScan
     │       ├── table: default.default.t1
+    │       ├── scan id: 0
     │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 2
     │       ├── read size: < 1 KiB
@@ -151,6 +158,7 @@ Limit
         ├── estimated rows: 2.00
         └── TableScan
             ├── table: default.default.t2
+            ├── scan id: 1
             ├── output columns: [a (#2), b (#3)]
             ├── read rows: 2
             ├── read size: < 1 KiB
@@ -178,6 +186,7 @@ Limit
     │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t1
+    │       ├── scan id: 0
     │       ├── output columns: [a (#0), b (#1)]
     │       ├── read rows: 2
     │       ├── read size: < 1 KiB
@@ -193,6 +202,7 @@ Limit
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.default.t2
+            ├── scan id: 1
             ├── output columns: [a (#2), b (#3)]
             ├── read rows: 2
             ├── read size: < 1 KiB

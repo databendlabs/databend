@@ -2500,7 +2500,7 @@ error:
   --> SQL:1:12
   |
 1 | lpad('hi', -1, '?')
-  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(- 1 AS UInt64)`, during run expr: `lpad('hi', CAST(- 1 AS UInt64), '?')`
+  |            ^^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(-1 AS UInt64)`, during run expr: `lpad('hi', CAST(-1 AS UInt64), '?')`
 
 
 
@@ -2610,7 +2610,7 @@ error:
   --> SQL:1:12
   |
 1 | rpad('hi', -1, '?')
-  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(- 1 AS UInt64)`, during run expr: `rpad('hi', CAST(- 1 AS UInt64), '?')`
+  |            ^^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(-1 AS UInt64)`, during run expr: `rpad('hi', CAST(-1 AS UInt64), '?')`
 
 
 
@@ -3266,8 +3266,8 @@ output         : 'QuWhattic'
 
 
 ast            : insert('Quadratic', -1, 4, 'What')
-raw expr       : insert('Quadratic', minus(1), 4, 'What')
-checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST<Int16>(minus<UInt8>(1_u8) AS Int64), CAST<UInt8>(4_u8 AS Int64), "What")
+raw expr       : insert('Quadratic', -1, 4, 'What')
+checked expr   : insert<String, Int64, Int64, String>("Quadratic", CAST<Int8>(-1_i8 AS Int64), CAST<UInt8>(4_u8 AS Int64), "What")
 optimized expr : "Quadratic"
 output type    : String
 output domain  : {"Quadratic"..="Quadratic"}
@@ -3532,8 +3532,8 @@ evaluation (internal):
 
 
 ast            : mid('1234567890', -3, 3)
-raw expr       : mid('1234567890', minus(3), 3)
-checked expr   : substr<String, Int64, UInt64>("1234567890", CAST<Int16>(minus<UInt8>(3_u8) AS Int64), CAST<UInt8>(3_u8 AS UInt64))
+raw expr       : mid('1234567890', -3, 3)
+checked expr   : substr<String, Int64, UInt64>("1234567890", CAST<Int8>(-3_i8 AS Int64), CAST<UInt8>(3_u8 AS UInt64))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
@@ -3541,8 +3541,8 @@ output         : '890'
 
 
 ast            : mid('1234567890', -3, 4 - 1)
-raw expr       : mid('1234567890', minus(3), minus(4, 1))
-checked expr   : substr<String, Int64, UInt64>("1234567890", CAST<Int16>(minus<UInt8>(3_u8) AS Int64), CAST<Int16>(minus<UInt8, UInt8>(4_u8, 1_u8) AS UInt64))
+raw expr       : mid('1234567890', -3, minus(4, 1))
+checked expr   : substr<String, Int64, UInt64>("1234567890", CAST<Int8>(-3_i8 AS Int64), CAST<Int16>(minus<UInt8, UInt8>(4_u8, 1_u8) AS UInt64))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
@@ -3550,8 +3550,8 @@ output         : '890'
 
 
 ast            : mid('1234567890', -3)
-raw expr       : mid('1234567890', minus(3))
-checked expr   : substr<String, Int64>("1234567890", CAST<Int16>(minus<UInt8>(3_u8) AS Int64))
+raw expr       : mid('1234567890', -3)
+checked expr   : substr<String, Int64>("1234567890", CAST<Int8>(-3_i8 AS Int64))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
@@ -3568,8 +3568,8 @@ output         : ''
 
 
 ast            : substr('Sakila' from -4 for 2)
-raw expr       : substr('Sakila', minus(4), 2)
-checked expr   : substr<String, Int64, UInt64>("Sakila", CAST<Int16>(minus<UInt8>(4_u8) AS Int64), CAST<UInt8>(2_u8 AS UInt64))
+raw expr       : substr('Sakila', -4, 2)
+checked expr   : substr<String, Int64, UInt64>("Sakila", CAST<Int8>(-4_i8 AS Int64), CAST<UInt8>(2_u8 AS UInt64))
 optimized expr : "ki"
 output type    : String
 output domain  : {"ki"..="ki"}
@@ -3577,8 +3577,8 @@ output         : 'ki'
 
 
 ast            : substr('sakila' FROM -4)
-raw expr       : substr('sakila', minus(4))
-checked expr   : substr<String, Int64>("sakila", CAST<Int16>(minus<UInt8>(4_u8) AS Int64))
+raw expr       : substr('sakila', -4)
+checked expr   : substr<String, Int64>("sakila", CAST<Int8>(-4_i8 AS Int64))
 optimized expr : "kila"
 output type    : String
 output domain  : {"kila"..="kila"}

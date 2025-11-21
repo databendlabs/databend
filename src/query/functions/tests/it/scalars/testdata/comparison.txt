@@ -183,8 +183,8 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)=to_timestamp(-100)
-raw expr       : eq(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : eq<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
+raw expr       : eq(to_timestamp(-315360000000000), to_timestamp(-100))
+checked expr   : eq<Timestamp, Timestamp>(CAST<Int64>(-315360000000000_i64 AS Timestamp), CAST<Int64>(CAST<Int8>(-100_i8 AS Int64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -461,8 +461,8 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)!=to_timestamp(-100)
-raw expr       : noteq(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : noteq<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
+raw expr       : noteq(to_timestamp(-315360000000000), to_timestamp(-100))
+checked expr   : noteq<Timestamp, Timestamp>(CAST<Int64>(-315360000000000_i64 AS Timestamp), CAST<Int64>(CAST<Int8>(-100_i8 AS Int64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -679,8 +679,8 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)<to_timestamp(-100)
-raw expr       : lt(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : lt<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
+raw expr       : lt(to_timestamp(-315360000000000), to_timestamp(-100))
+checked expr   : lt<Timestamp, Timestamp>(CAST<Int64>(-315360000000000_i64 AS Timestamp), CAST<Int64>(CAST<Int8>(-100_i8 AS Int64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -912,8 +912,8 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-100)
-raw expr       : lte(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : lte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
+raw expr       : lte(to_timestamp(-315360000000000), to_timestamp(-100))
+checked expr   : lte<Timestamp, Timestamp>(CAST<Int64>(-315360000000000_i64 AS Timestamp), CAST<Int64>(CAST<Int8>(-100_i8 AS Int64) AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -921,8 +921,8 @@ output         : true
 
 
 ast            : to_timestamp(-315360000000000)<=to_timestamp(-315360000000000)
-raw expr       : lte(to_timestamp(minus(315360000000000)), to_timestamp(minus(315360000000000)))
-checked expr   : lte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp))
+raw expr       : lte(to_timestamp(-315360000000000), to_timestamp(-315360000000000))
+checked expr   : lte<Timestamp, Timestamp>(CAST<Int64>(-315360000000000_i64 AS Timestamp), CAST<Int64>(-315360000000000_i64 AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1146,8 +1146,8 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>to_timestamp(-100)
-raw expr       : gt(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : gt<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
+raw expr       : gt(to_timestamp(-315360000000000), to_timestamp(-100))
+checked expr   : gt<Timestamp, Timestamp>(CAST<Int64>(-315360000000000_i64 AS Timestamp), CAST<Int64>(CAST<Int8>(-100_i8 AS Int64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1155,8 +1155,8 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>to_timestamp(-315360000000000)
-raw expr       : gt(to_timestamp(minus(315360000000000)), to_timestamp(minus(315360000000000)))
-checked expr   : gt<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp))
+raw expr       : gt(to_timestamp(-315360000000000), to_timestamp(-315360000000000))
+checked expr   : gt<Timestamp, Timestamp>(CAST<Int64>(-315360000000000_i64 AS Timestamp), CAST<Int64>(-315360000000000_i64 AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1397,8 +1397,8 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-100)
-raw expr       : gte(to_timestamp(minus(315360000000000)), to_timestamp(minus(100)))
-checked expr   : gte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(CAST<Int16>(minus<UInt8>(100_u8) AS Int64) AS Timestamp))
+raw expr       : gte(to_timestamp(-315360000000000), to_timestamp(-100))
+checked expr   : gte<Timestamp, Timestamp>(CAST<Int64>(-315360000000000_i64 AS Timestamp), CAST<Int64>(CAST<Int8>(-100_i8 AS Int64) AS Timestamp))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1406,8 +1406,8 @@ output         : false
 
 
 ast            : to_timestamp(-315360000000000)>=to_timestamp(-315360000000000)
-raw expr       : gte(to_timestamp(minus(315360000000000)), to_timestamp(minus(315360000000000)))
-checked expr   : gte<Timestamp, Timestamp>(CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp), CAST<Int64>(minus<UInt64>(315360000000000_u64) AS Timestamp))
+raw expr       : gte(to_timestamp(-315360000000000), to_timestamp(-315360000000000))
+checked expr   : gte<Timestamp, Timestamp>(CAST<Int64>(-315360000000000_i64 AS Timestamp), CAST<Int64>(-315360000000000_i64 AS Timestamp))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}

@@ -30,11 +30,11 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_storages_common_io::ReadSettings;
 
 use super::parquet_rows_fetcher::ParquetRowsFetcher;
@@ -71,38 +71,21 @@ pub fn row_fetch_processor(
                 cur_bytes: 0,
             };
 
-            Ok(match block_reader.support_blocking_api() {
-                true => Box::new(move |input, output| {
-                    Ok(TransformRowsFetcher::create(
-                        input,
-                        output,
-                        row_id_col_offset,
-                        ParquetRowsFetcher::<true>::create(
-                            fuse_table.clone(),
-                            projection.clone(),
-                            block_reader.clone(),
-                            read_settings,
-                        ),
-                        need_wrap_nullable,
-                        block_threshold,
-                    ))
-                }),
-                false => Box::new(move |input, output| {
-                    Ok(TransformRowsFetcher::create(
-                        input,
-                        output,
-                        row_id_col_offset,
-                        ParquetRowsFetcher::<false>::create(
-                            fuse_table.clone(),
-                            projection.clone(),
-                            block_reader.clone(),
-                            read_settings,
-                        ),
-                        need_wrap_nullable,
-                        block_threshold,
-                    ))
-                }),
-            })
+            Ok(Box::new(move |input, output| {
+                Ok(TransformRowsFetcher::create(
+                    input,
+                    output,
+                    row_id_col_offset,
+                    ParquetRowsFetcher::create(
+                        fuse_table.clone(),
+                        projection.clone(),
+                        block_reader.clone(),
+                        read_settings,
+                    ),
+                    need_wrap_nullable,
+                    block_threshold,
+                ))
+            }))
         }
     }
 }

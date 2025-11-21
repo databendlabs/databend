@@ -15,7 +15,7 @@
 use std::any::Any;
 
 use databend_common_exception::Result;
-use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline::core::Pipe;
 use databend_common_sql::IndexType;
 use databend_common_storages_fuse::operations::MutationSplitProcessor;
 

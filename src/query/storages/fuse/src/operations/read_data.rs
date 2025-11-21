@@ -26,7 +26,7 @@ use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -82,12 +82,7 @@ impl FuseTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
-        if !self.operator.info().native_capability().blocking {
-            Ok(std::cmp::max(max_threads, max_io_requests))
-        } else {
-            // For blocking fs, we don't want this to be too large
-            Ok(std::cmp::min(max_threads, max_io_requests).clamp(1, 48))
-        }
+        Ok(std::cmp::max(max_threads, max_io_requests))
     }
 
     #[inline]

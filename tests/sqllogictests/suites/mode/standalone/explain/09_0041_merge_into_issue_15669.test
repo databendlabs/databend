@@ -21,6 +21,7 @@ Filter
 ├── estimated rows: 1.04
 └── TableScan
     ├── table: default.test_15669.t
+    ├── scan id: 0
     ├── output columns: [c (#0)]
     ├── read rows: 0
     ├── read size: 0

@@ -35,6 +35,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
+│       ├── scan id: 1
 │       ├── output columns: [a (#2)]
 │       ├── read rows: 0
 │       ├── read size: 0
@@ -49,6 +50,7 @@ HashJoin
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: [a (#0)]
         ├── read rows: 0
         ├── read size: 0
@@ -76,6 +78,7 @@ HashJoin
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
+│       ├── scan id: 1
 │       ├── output columns: [a (#2)]
 │       ├── read rows: 0
 │       ├── read size: 0
@@ -90,6 +93,7 @@ HashJoin
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
+        ├── scan id: 0
         ├── output columns: [a (#0)]
         ├── read rows: 0
         ├── read size: 0

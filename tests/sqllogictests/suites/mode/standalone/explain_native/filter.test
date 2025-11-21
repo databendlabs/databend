@@ -15,6 +15,7 @@ explain select * from t1 where (a = 1 and b > 2) or (a = 1 and b < 100) or (a = 
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0
@@ -28,6 +29,7 @@ explain select * from t1 where b > 2 or b > 2 or b < 100;
 ----
 TableScan
 ├── table: default.default.t1
+├── scan id: 0
 ├── output columns: [a (#0), b (#1)]
 ├── read rows: 0
 ├── read size: 0

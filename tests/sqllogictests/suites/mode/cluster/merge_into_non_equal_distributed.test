@@ -82,6 +82,7 @@ CommitSink
                         ├── exchange type: Hash()
                         └── TableScan
                             ├── table: default.default.t2
+                            ├── scan id: 0
                             ├── output columns: [a (#0)]
                             ├── read rows: 1
                             ├── read size: < 1 KiB
@@ -116,6 +117,7 @@ CommitSink
             ├── estimated rows: 15.00
             ├── TableScan(Build)
             │   ├── table: default.default.t2
+            │   ├── scan id: 0
             │   ├── output columns: [a (#0)]
             │   ├── read rows: 1
             │   ├── read size: < 1 KiB
@@ -126,6 +128,7 @@ CommitSink
             │   └── estimated rows: 1.00
             └── TableScan(Probe)
                 ├── table: default.default.t1
+                ├── scan id: 1
                 ├── output columns: [a (#1), _row_id (#2)]
                 ├── read rows: 15
                 ├── read size: < 1 KiB
@@ -155,6 +158,7 @@ CommitSink
             ├── estimated rows: 15.00
             ├── TableScan(Build)
             │   ├── table: default.default.t2
+            │   ├── scan id: 0
             │   ├── output columns: [a (#0)]
             │   ├── read rows: 1
             │   ├── read size: < 1 KiB
@@ -165,6 +169,7 @@ CommitSink
             │   └── estimated rows: 1.00
             └── TableScan(Probe)
                 ├── table: default.default.t1
+                ├── scan id: 1
                 ├── output columns: [a (#1), _row_id (#2)]
                 ├── read rows: 15
                 ├── read size: < 1 KiB
@@ -257,6 +262,7 @@ CommitSink
                     │   ├── exchange type: Hash(CAST(t2.a (#0) AS Decimal(38, 5) NULL))
                     │   └── TableScan
                     │       ├── table: default.system.stage
+                    │       ├── scan id: 0
                     │       ├── output columns: [_$1 (#0)]
                     │       ├── read rows: 6
                     │       ├── read size: < 1 KiB
@@ -269,6 +275,7 @@ CommitSink
                         ├── exchange type: Hash(CAST(t1.a (#1) AS Decimal(38, 5) NULL))
                         └── TableScan
                             ├── table: default.default.t1
+                            ├── scan id: 1
                             ├── output columns: [a (#1), _row_id (#2)]
                             ├── read rows: 2
                             ├── read size: < 1 KiB

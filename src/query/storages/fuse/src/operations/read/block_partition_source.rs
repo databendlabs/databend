@@ -17,10 +17,10 @@ use std::sync::Arc;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 
@@ -38,7 +38,7 @@ impl BlockPartitionSource {
         ctx: Arc<dyn TableContext>,
         output_port: Arc<OutputPort>,
     ) -> databend_common_exception::Result<ProcessorPtr> {
-        SyncSourcer::create(ctx, output_port, BlockPartitionSource {
+        SyncSourcer::create(ctx.get_scan_progress(), output_port, BlockPartitionSource {
             id,
             partitions,
             max_batch_size,

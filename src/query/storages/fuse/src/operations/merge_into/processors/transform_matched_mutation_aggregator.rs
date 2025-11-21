@@ -14,10 +14,10 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::PipeItem;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
 

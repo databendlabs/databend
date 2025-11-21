@@ -27,14 +27,14 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
-use databend_common_pipeline_sources::EmptySource;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
+use databend_common_pipeline::sources::EmptySource;
+use databend_common_pipeline::sources::SyncSource;
+use databend_common_pipeline::sources::SyncSourcer;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct SystemTablePart;
@@ -186,7 +186,9 @@ where Self: SyncSource
         output: Arc<OutputPort>,
         inner: Arc<TTable>,
     ) -> Result<ProcessorPtr> {
-        SyncSourcer::create(ctx.clone(), output, SystemTableSyncSource::<TTable> {
+        SyncSourcer::create(ctx.get_scan_progress(), output, SystemTableSyncSource::<
+            TTable,
+        > {
             inner,
             context: ctx,
             finished: false,
@@ -354,12 +356,16 @@ where Self: AsyncSource
         context: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(context.clone(), output, SystemTableAsyncSource::<TTable> {
-            inner,
-            context,
-            finished: false,
-            push_downs,
-        })
+        AsyncSourcer::create(
+            context.get_scan_progress(),
+            output,
+            SystemTableAsyncSource::<TTable> {
+                inner,
+                context,
+                finished: false,
+                push_downs,
+            },
+        )
     }
 }
 

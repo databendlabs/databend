@@ -70,7 +70,10 @@ impl<A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES: bool>
             },
             atomic_pointers: std::ptr::null_mut(),
             hash_shift: (hash_bits() - capacity.trailing_zeros()) as usize,
-            count: Default::default(),
+            count: match SKIP_DUPLICATES {
+                true => Default::default(),
+                false => AtomicUsize::new(row_num),
+            },
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -105,7 +108,11 @@ impl<A: Allocator + Clone + Default + 'static, const SKIP_DUPLICATES: bool>
                 Err(x) => old_header = x,
             };
         }
-        self.count.fetch_add(1, Ordering::Relaxed);
+
+        if SKIP_DUPLICATES {
+            self.count.fetch_add(1, Ordering::Relaxed);
+        }
+
         unsafe { (*entry_ptr).next = remove_header_tag(old_header) };
     }
 }

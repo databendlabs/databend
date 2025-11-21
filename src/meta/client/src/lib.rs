@@ -161,7 +161,7 @@ use semver::Version;
 /// - 2025-09-27: since 1.2.823
 ///   👥 client: require 1.2.770, remove calling RPC kv_api
 ///
-/// - 2025-10-16: since TODO
+/// - 2025-10-16: since 1.2.828
 ///   🖥 server: rename `FetchAddU64` to `FetchIncreaseU64`, add `max_value`.
 ///
 /// Server feature set:

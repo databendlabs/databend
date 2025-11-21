@@ -18,7 +18,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::ColumnSet;

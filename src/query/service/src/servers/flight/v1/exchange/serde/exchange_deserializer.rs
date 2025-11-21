@@ -31,9 +31,9 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::BinaryRead;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::UnknownMode;
@@ -111,7 +111,7 @@ pub fn deserialize_block(
     }
 
     let batch = flight_data_to_arrow_batch(&fragment_data.data, arrow_schema, &dictionaries_by_id)?;
-    let (data_block, _) = DataBlock::from_record_batch(schema, &batch)?;
+    let data_block = DataBlock::from_record_batch(schema, &batch)?;
     Ok(data_block)
 }
 

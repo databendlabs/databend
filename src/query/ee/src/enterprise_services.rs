@@ -17,7 +17,6 @@ use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
 use databend_query::sessions::BuildInfoRef;
 
-use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::attach_table::RealAttachTableHandler;
 use crate::data_mask::RealDatamaskHandler;
 use crate::fail_safe::RealFailSafeHandler;
@@ -28,7 +27,6 @@ use crate::row_access_policy::row_access_policy_handler::RealRowAccessPolicyHand
 use crate::storage_encryption::RealStorageEncryptionHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::stream::RealStreamHandler;
-use crate::table_index::RealTableIndexHandler;
 use crate::virtual_column::RealVirtualColumnHandler;
 
 pub struct EnterpriseServices;
@@ -38,13 +36,11 @@ impl EnterpriseServices {
         RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
         RealStorageEncryptionHandler::init(&cfg, version)?;
         RealVacuumHandler::init()?;
-        RealAggregatingIndexHandler::init()?;
         RealDatamaskHandler::init()?;
         RealRowAccessPolicyHandler::init()?;
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
         RealAttachTableHandler::init()?;
-        RealTableIndexHandler::init()?;
         RealFailSafeHandler::init()?;
         init_resources_management(&cfg, version).await?;
         RealHilbertClusteringHandler::init()?;

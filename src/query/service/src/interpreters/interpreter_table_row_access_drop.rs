@@ -67,7 +67,7 @@ impl Interpreter for DropTableRowAccessPolicyInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
         let (policy_id, _) = handler
-            .get_row_access(
+            .get_row_access_policy(
                 meta_api,
                 &self.ctx.get_tenant(),
                 self.plan.policy.to_string(),

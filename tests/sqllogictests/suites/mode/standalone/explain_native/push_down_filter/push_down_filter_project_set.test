@@ -25,6 +25,7 @@ EvalScalar
         ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
         └── TableScan
             ├── table: default.default.products
+            ├── scan id: 0
             ├── output columns: [name (#0), details (#1)]
             ├── read rows: 3
             ├── read size: < 1 KiB
@@ -52,6 +53,7 @@ EvalScalar
     ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
     └── TableScan
         ├── table: default.default.products
+        ├── scan id: 0
         ├── output columns: [name (#0), details (#1)]
         ├── read rows: 3
         ├── read size: < 1 KiB

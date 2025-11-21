@@ -206,7 +206,6 @@ impl<'a> AggregateRewriter<'a> {
         let index = self.metadata.write().add_derived_column(
             aggregate.display_name.clone(),
             *aggregate.return_type.clone(),
-            Some(ScalarExpr::AggregateFunction(aggregate.clone())),
         );
 
         let replaced_agg = AggregateFunction {
@@ -243,11 +242,10 @@ impl<'a> AggregateRewriter<'a> {
 
         let replaced_args = self.replace_function_args(&udaf.arguments, &udaf.name)?;
 
-        let index = self.metadata.write().add_derived_column(
-            udaf.display_name.clone(),
-            *udaf.return_type.clone(),
-            Some(ScalarExpr::UDAFCall(udaf.clone())),
-        );
+        let index = self
+            .metadata
+            .write()
+            .add_derived_column(udaf.display_name.clone(), *udaf.return_type.clone());
 
         let replaced_udaf = UDAFCall {
             span: udaf.span,
@@ -321,11 +319,10 @@ impl<'a> AggregateRewriter<'a> {
                     })
                 } else {
                     let data_type = expr.data_type()?;
-                    let index = self.metadata.write().add_derived_column(
-                        name.clone(),
-                        data_type.clone(),
-                        Some(expr.clone()),
-                    );
+                    let index = self
+                        .metadata
+                        .write()
+                        .add_derived_column(name.clone(), data_type.clone());
 
                     // Generate a ColumnBinding for each sort describe of aggregates
                     let column_binding = ColumnBindingBuilder::new(
@@ -401,11 +398,10 @@ impl<'a> AggregateRewriter<'a> {
                     });
                 }
 
-                let index = self.metadata.write().add_derived_column(
-                    name.clone(),
-                    data_type.clone(),
-                    Some(arg.clone()),
-                );
+                let index = self
+                    .metadata
+                    .write()
+                    .add_derived_column(name.clone(), data_type.clone());
 
                 // Generate a ColumnBinding for each argument of aggregates
                 let column_binding = ColumnBindingBuilder::new(
@@ -767,7 +763,6 @@ impl Binder {
             let dummy = self.create_derived_column_binding(
                 format!("_dup_group_item_{i}"),
                 item.scalar.data_type()?,
-                Some(item.scalar.clone()),
             );
             dup_group_items.push((dummy.index, *dummy.data_type));
         }
@@ -776,7 +771,6 @@ impl Binder {
         let grouping_id_column = self.create_derived_column_binding(
             "_grouping_id".to_string(),
             DataType::Number(NumberDataType::UInt32),
-            None,
         );
 
         let bound_grouping_id_col = BoundColumnRef {
@@ -857,11 +851,7 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_derived_column_binding(
-                            alias,
-                            scalar.data_type()?,
-                            Some(scalar.clone()),
-                        )
+                        self.create_derived_column_binding(alias, scalar.data_type()?)
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar: scalar.clone(),
@@ -912,11 +902,9 @@ impl Binder {
             {
                 *index
             } else {
-                self.metadata.write().add_derived_column(
-                    group_item_name.clone(),
-                    scalar_expr.data_type()?,
-                    Some(scalar_expr.clone()),
-                )
+                self.metadata
+                    .write()
+                    .add_derived_column(group_item_name.clone(), scalar_expr.data_type()?)
             };
 
             bind_context.aggregate_info.group_items.push(ScalarItem {
@@ -1073,11 +1061,7 @@ impl Binder {
                 column.column_name = alias.clone();
                 column
             } else {
-                self.create_derived_column_binding(
-                    alias.clone(),
-                    scalar.data_type()?,
-                    Some(scalar.clone()),
-                )
+                self.create_derived_column_binding(alias.clone(), scalar.data_type()?)
             };
 
             if scalar_column_index.is_none() {

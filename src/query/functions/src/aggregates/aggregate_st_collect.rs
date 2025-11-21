@@ -56,6 +56,7 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateSerde;
@@ -189,7 +190,7 @@ where T: ArgType
 impl<T> StateSerde for StCollectState<T>
 where T: ArgType
 {
-    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+    fn serialize_type(_: Option<&dyn super::SerializeInfo>) -> Vec<StateSerdeItem> {
         vec![DataType::Array(Box::new(T::data_type())).into()]
     }
 
@@ -259,16 +260,14 @@ where
     ) -> Result<()> {
         let state = place.get::<State>();
         match &columns[0].to_column() {
+            Column::Null { .. } => Ok(()),
             Column::Nullable(box nullable_column) => {
                 let column = T::try_downcast_column(&nullable_column.column).unwrap();
                 state.add_batch(&column, Some(&nullable_column.validity))
             }
             _ => {
-                if let Some(column) = T::try_downcast_column(&columns[0].to_column()) {
-                    state.add_batch(&column, None)
-                } else {
-                    Ok(())
-                }
+                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
+                state.add_batch(&column, None)
             }
         }
     }
@@ -281,6 +280,7 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         match &columns[0].to_column() {
+            Column::Null { .. } => (),
             Column::Nullable(box nullable_column) => {
                 let column = T::try_downcast_column(&nullable_column.column).unwrap();
                 let column_iter = T::iter_column(&column);
@@ -296,13 +296,12 @@ where
                     });
             }
             _ => {
-                if let Some(column) = T::try_downcast_column(&columns[0].to_column()) {
-                    let column_iter = T::iter_column(&column);
-                    column_iter.zip(places.iter()).for_each(|(v, place)| {
-                        let state = AggrState::new(*place, loc).get::<State>();
-                        state.add(Some(v.clone()))
-                    });
-                }
+                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
+                let column_iter = T::iter_column(&column);
+                column_iter.zip(places.iter()).for_each(|(v, place)| {
+                    let state = AggrState::new(*place, loc).get::<State>();
+                    state.add(Some(v.clone()))
+                });
             }
         }
 
@@ -312,6 +311,7 @@ where
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<State>();
         match &columns[0].to_column() {
+            Column::Null { .. } => (),
             Column::Nullable(box nullable_column) => {
                 let valid = nullable_column.validity.get_bit(row);
                 if valid {
@@ -323,10 +323,9 @@ where
                 }
             }
             _ => {
-                if let Some(column) = T::try_downcast_column(&columns[0].to_column()) {
-                    let v = T::index_column(&column, row);
-                    state.add(v);
-                }
+                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
+                let v = T::index_column(&column, row);
+                state.add(v);
             }
         }
 
@@ -403,7 +402,7 @@ where
     }
 }
 
-pub fn try_create_aggregate_st_collect_function(
+fn try_create_aggregate_st_collect_function(
     display_name: &str,
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
@@ -425,5 +424,11 @@ pub fn try_create_aggregate_st_collect_function(
 }
 
 pub fn aggregate_st_collect_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_st_collect_function))
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_st_collect_function),
+        AggregateFunctionFeatures {
+            keep_nullable: true,
+            ..Default::default()
+        },
+    )
 }

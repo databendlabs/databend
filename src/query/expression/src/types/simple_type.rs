@@ -18,15 +18,19 @@ use std::marker::PhantomData;
 use std::ops::Range;
 
 use databend_common_column::buffer::Buffer;
+use databend_common_exception::Result;
 
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use super::AccessType;
+use super::BuilderMut;
+use super::DataType;
 use super::GenericMap;
 use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
 use crate::arrow::buffer_into_mut;
-use crate::types::BuilderMut;
-use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
@@ -96,16 +100,16 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
         *scalar
     }
 
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        T::downcast_scalar(scalar)
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Result<Self::ScalarRef<'a>> {
+        T::downcast_scalar(scalar).ok_or_else(|| scalar_type_error::<Self>(scalar))
     }
 
-    fn try_downcast_column(col: &Column) -> Option<Buffer<Self::Scalar>> {
-        T::downcast_column(col)
+    fn try_downcast_column(col: &Column) -> Result<Buffer<Self::Scalar>> {
+        T::downcast_column(col).ok_or_else(|| column_type_error::<Self>(col))
     }
 
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        T::downcast_domain(domain)
+    fn try_downcast_domain(domain: &Domain) -> Result<Self::Domain> {
+        T::downcast_domain(domain).ok_or_else(|| domain_type_error::<Self>(domain))
     }
 
     fn column_len(buffer: &Buffer<Self::Scalar>) -> usize {

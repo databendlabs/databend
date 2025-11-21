@@ -15,6 +15,7 @@
 //! Transaction condition utilities extracted from util.rs
 
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::TxnCondition;
@@ -30,5 +31,17 @@ pub fn txn_cond_seq(key: &impl kvapi::Key, op: ConditionResult, seq: u64) -> Txn
         key: key.to_string_key(),
         expected: op as i32,
         target: Some(Target::Seq(seq)),
+    }
+}
+
+/// Build a TxnCondition that checks the number of keys with the given prefix.
+pub fn txn_cond_eq_keys_with_prefix<K: kvapi::Key>(
+    prefix: &DirName<K>,
+    count: u64,
+) -> TxnCondition {
+    TxnCondition {
+        key: prefix.dir_name_with_slash(),
+        expected: ConditionResult::Eq as i32,
+        target: Some(Target::KeysWithPrefix(count)),
     }
 }

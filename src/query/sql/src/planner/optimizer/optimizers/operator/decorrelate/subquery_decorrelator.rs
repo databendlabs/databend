@@ -597,11 +597,10 @@ impl SubqueryDecorrelatorOptimizer {
                 // `(SELECT COUNT(*) = 1 FROM t WHERE a > 1 LIMIT 1)`.
                 let count_type = AggregateCountFunction::try_create("", vec![], vec![], vec![])?
                     .return_type()?;
-                let count_func_index = self.metadata.write().add_derived_column(
-                    "count(*)".to_string(),
-                    count_type.clone(),
-                    None,
-                );
+                let count_func_index = self
+                    .metadata
+                    .write()
+                    .add_derived_column("count(*)".to_string(), count_type.clone());
 
                 let agg = Aggregate {
                     aggregate_functions: vec![ScalarItem {
@@ -665,7 +664,6 @@ impl SubqueryDecorrelatorOptimizer {
                     let column_index = self.metadata.write().add_derived_column(
                         "_exists_scalar_subquery".to_string(),
                         DataType::Boolean,
-                        None,
                     );
                     output_index = Some(column_index);
                     let eval_scalar = EvalScalar {
@@ -734,7 +732,6 @@ impl SubqueryDecorrelatorOptimizer {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
-                        None,
                     )
                 };
 

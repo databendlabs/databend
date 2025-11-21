@@ -28,7 +28,7 @@ use databend_common_expression::Scalar;
 use databend_common_formats::FastFieldDecoderValues;
 use databend_common_formats::FastValuesDecodeFallback;
 use databend_common_formats::FastValuesDecoder;
-use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSource;
 use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;

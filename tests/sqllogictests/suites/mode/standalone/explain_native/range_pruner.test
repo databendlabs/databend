@@ -13,6 +13,7 @@ EvalScalar
 ├── estimated rows: 0.40
 └── TableScan
     ├── table: default.default.range_t
+    ├── scan id: 0
     ├── output columns: []
     ├── read rows: 0
     ├── read size: 0
@@ -31,6 +32,7 @@ EvalScalar
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.range_t
+    ├── scan id: 0
     ├── output columns: []
     ├── read rows: 0
     ├── read size: 0

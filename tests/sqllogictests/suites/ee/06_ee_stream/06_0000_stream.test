@@ -197,7 +197,7 @@ drop table t1 all
 query T
 show columns from s2
 ----
-a INT YES (empty) NULL NULL
+a int YES (empty) NULL NULL
 
 statement ok
 alter table t set options(change_tracking = false)

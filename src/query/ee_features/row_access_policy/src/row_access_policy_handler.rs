@@ -30,7 +30,6 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
-use databend_common_meta_api::meta_txn_error::MetaTxnError;
 use databend_common_meta_app::row_access_policy::row_access_policy_name_ident::Resource;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReply;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
@@ -40,33 +39,34 @@ use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait RowAccessPolicyHandler: Sync + Send {
-    async fn create_row_access(
+    async fn create_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         req: CreateRowAccessPolicyReq,
     ) -> std::result::Result<
         std::result::Result<CreateRowAccessPolicyReply, ExistError<Resource>>,
-        MetaTxnError,
+        MetaError,
     >;
 
-    async fn drop_row_access(
+    async fn drop_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         req: DropRowAccessPolicyReq,
     ) -> Result<()>;
 
-    async fn get_row_access(
+    async fn get_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
         name: String,
     ) -> Result<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>;
 
-    async fn get_row_access_by_id(
+    async fn get_row_access_policy_by_id(
         &self,
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
@@ -83,42 +83,44 @@ impl RowAccessPolicyHandlerWrapper {
         Self { handler }
     }
 
-    pub async fn create_row_access(
+    pub async fn create_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         req: CreateRowAccessPolicyReq,
     ) -> std::result::Result<
         std::result::Result<CreateRowAccessPolicyReply, ExistError<Resource>>,
-        MetaTxnError,
+        MetaError,
     > {
-        self.handler.create_row_access(meta_api, req).await
+        self.handler.create_row_access_policy(meta_api, req).await
     }
 
-    pub async fn drop_row_access(
+    pub async fn drop_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         req: DropRowAccessPolicyReq,
     ) -> Result<()> {
-        self.handler.drop_row_access(meta_api, req).await
+        self.handler.drop_row_access_policy(meta_api, req).await
     }
 
-    pub async fn get_row_access(
+    pub async fn get_row_access_policy(
         &self,
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
         name: String,
     ) -> Result<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)> {
-        self.handler.get_row_access(meta_api, tenant, name).await
+        self.handler
+            .get_row_access_policy(meta_api, tenant, name)
+            .await
     }
 
-    pub async fn get_row_access_by_id(
+    pub async fn get_row_access_policy_by_id(
         &self,
         meta_api: Arc<MetaStore>,
         tenant: &Tenant,
         policy_id: u64,
     ) -> Result<SeqV<RowAccessPolicyMeta>> {
         self.handler
-            .get_row_access_by_id(meta_api, tenant, policy_id)
+            .get_row_access_policy_by_id(meta_api, tenant, policy_id)
             .await
     }
 }

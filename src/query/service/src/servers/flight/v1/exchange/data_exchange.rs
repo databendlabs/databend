@@ -18,7 +18,7 @@ use databend_common_expression::RemoteExpr;
 pub enum DataExchange {
     Merge(MergeExchange),
     Broadcast(BroadcastExchange),
-    ShuffleDataExchange(ShuffleDataExchange),
+    NodeToNodeExchange(NodeToNodeExchange),
 }
 
 impl DataExchange {
@@ -26,13 +26,13 @@ impl DataExchange {
         match self {
             DataExchange::Merge(exchange) => vec![exchange.destination_id.clone()],
             DataExchange::Broadcast(exchange) => exchange.destination_ids.clone(),
-            DataExchange::ShuffleDataExchange(exchange) => exchange.destination_ids.clone(),
+            DataExchange::NodeToNodeExchange(exchange) => exchange.destination_ids.clone(),
         }
     }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ShuffleDataExchange {
+pub struct NodeToNodeExchange {
     pub destination_ids: Vec<String>,
     pub shuffle_keys: Vec<RemoteExpr>,
     pub allow_adjust_parallelism: bool,

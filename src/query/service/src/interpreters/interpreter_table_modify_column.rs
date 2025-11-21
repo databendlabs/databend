@@ -44,6 +44,7 @@ use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::resolve_type_name_by_str;
+use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
@@ -53,9 +54,11 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -246,6 +249,13 @@ impl ModifyTableColumnInterpreter {
             }
         }
 
+        let mut approx_distinct_cols = vec![];
+        if let Some(v) = table_info.options().get(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+            if let ApproxDistinctColumns::Specify(cols) = v.parse::<ApproxDistinctColumns>()? {
+                approx_distinct_cols = cols;
+            }
+        }
+
         let mut table_info = table.get_table_info().clone();
         table_info.meta.fill_field_comments();
         let mut modify_comment = false;
@@ -269,6 +279,16 @@ impl ModifyTableColumnInterpreter {
                     {
                         return Err(ErrorCode::TableOptionInvalid(format!(
                             "Unsupported data type '{}' for bloom index",
+                            field.data_type
+                        )));
+                    }
+                    if approx_distinct_cols
+                        .iter()
+                        .any(|v| v.as_str() == field.name)
+                        && !RangeIndex::supported_table_type(&field.data_type)
+                    {
+                        return Err(ErrorCode::TableOptionInvalid(format!(
+                            "Unsupported data type '{}' for approx distinct columns",
                             field.data_type
                         )));
                     }

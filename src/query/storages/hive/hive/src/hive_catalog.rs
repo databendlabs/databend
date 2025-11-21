@@ -24,9 +24,11 @@ use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -763,6 +765,16 @@ impl Catalog for HiveCatalog {
         &self,
         _req: GetAutoIncrementNextValueReq,
     ) -> Result<GetAutoIncrementNextValueReply> {
+        unimplemented!()
+    }
+
+    fn transform_udtf_as_table_function(
+        &self,
+        _ctx: &dyn TableContext,
+        _table_args: &TableArgs,
+        _udtf: UDTFServer,
+        _func_name: &str,
+    ) -> Result<Arc<dyn TableFunction>> {
         unimplemented!()
     }
 }

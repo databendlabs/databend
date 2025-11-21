@@ -33,10 +33,10 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TopKSorter;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
+use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use databend_common_storage::OperatorRegistry;
@@ -291,9 +291,11 @@ impl Processor for ParquetSource {
                             if let Some(reader) = self
                                 .row_group_reader
                                 .create_read_policy(
-                                    &ReadSettings::from_ctx(&self.ctx)?.with_enable_cache(
-                                        !matches!(self.source_type, ParquetSourceType::StageTable),
-                                    ),
+                                    &ReadSettings::from_settings(&self.ctx.get_settings())?
+                                        .with_enable_cache(!matches!(
+                                            self.source_type,
+                                            ParquetSourceType::StageTable
+                                        )),
                                     part,
                                     &mut self.topk_sorter,
                                     None,
@@ -448,7 +450,8 @@ impl ParquetSource {
 
             let reader = reader
                 .create_read_policy(
-                    &ReadSettings::from_ctx(&self.ctx)?.with_enable_cache(!from_stage_table),
+                    &ReadSettings::from_settings(&self.ctx.get_settings())?
+                        .with_enable_cache(!from_stage_table),
                     &part,
                     &mut self.topk_sorter,
                     delete_info,

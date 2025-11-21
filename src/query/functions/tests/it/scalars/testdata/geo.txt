@@ -39,8 +39,8 @@ evaluation (internal):
 
 
 ast            : great_circle_distance(55.755831, 37.617673, -55.755831, -37.617673)
-raw expr       : great_circle_distance(55.755831, 37.617673, minus(55.755831), minus(37.617673))
-checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(CAST<Decimal(8, 6)>(55.755831_d64(8,6) AS Float64), CAST<Decimal(8, 6)>(37.617673_d64(8,6) AS Float64), CAST<Decimal(8, 6)>(minus<Decimal(8, 6)>(55.755831_d64(8,6)) AS Float64), CAST<Decimal(8, 6)>(minus<Decimal(8, 6)>(37.617673_d64(8,6)) AS Float64))
+raw expr       : great_circle_distance(55.755831, 37.617673, -55.755831, -37.617673)
+checked expr   : great_circle_distance<Float64, Float64, Float64, Float64>(CAST<Decimal(8, 6)>(55.755831_d64(8,6) AS Float64), CAST<Decimal(8, 6)>(37.617673_d64(8,6) AS Float64), CAST<Decimal(8, 6)>(-55.755831_d64(8,6) AS Float64), CAST<Decimal(8, 6)>(-37.617673_d64(8,6) AS Float64))
 optimized expr : 14128353_f32
 output type    : Float32
 output domain  : {14128353..=14128353}
@@ -73,8 +73,8 @@ evaluation (internal):
 
 
 ast            : geo_distance(55.755831, 37.617673, -55.755831, -37.617673)
-raw expr       : geo_distance(55.755831, 37.617673, minus(55.755831), minus(37.617673))
-checked expr   : geo_distance<Float64, Float64, Float64, Float64>(CAST<Decimal(8, 6)>(55.755831_d64(8,6) AS Float64), CAST<Decimal(8, 6)>(37.617673_d64(8,6) AS Float64), CAST<Decimal(8, 6)>(minus<Decimal(8, 6)>(55.755831_d64(8,6)) AS Float64), CAST<Decimal(8, 6)>(minus<Decimal(8, 6)>(37.617673_d64(8,6)) AS Float64))
+raw expr       : geo_distance(55.755831, 37.617673, -55.755831, -37.617673)
+checked expr   : geo_distance<Float64, Float64, Float64, Float64>(CAST<Decimal(8, 6)>(55.755831_d64(8,6) AS Float64), CAST<Decimal(8, 6)>(37.617673_d64(8,6) AS Float64), CAST<Decimal(8, 6)>(-55.755831_d64(8,6) AS Float64), CAST<Decimal(8, 6)>(-37.617673_d64(8,6) AS Float64))
 optimized expr : 14128353_f32
 output type    : Float32
 output domain  : {14128353..=14128353}
@@ -278,8 +278,8 @@ evaluation (internal):
 
 
 ast            : geohash_encode(-5.60302734375, 42.593994140625)
-raw expr       : geohash_encode(minus(5.60302734375), 42.593994140625)
-checked expr   : geohash_encode<Float64, Float64>(CAST<Decimal(12, 11)>(minus<Decimal(12, 11)>(5.60302734375_d64(12,11)) AS Float64), CAST<Decimal(14, 12)>(42.593994140625_d64(14,12) AS Float64))
+raw expr       : geohash_encode(-5.60302734375, 42.593994140625)
+checked expr   : geohash_encode<Float64, Float64>(CAST<Decimal(12, 11)>(-5.60302734375_d64(12,11) AS Float64), CAST<Decimal(14, 12)>(42.593994140625_d64(14,12) AS Float64))
 optimized expr : "ezs42d000000"
 output type    : String
 output domain  : {"ezs42d000000"..="ezs42d000000"}
@@ -287,8 +287,8 @@ output         : 'ezs42d000000'
 
 
 ast            : geohash_encode(-5.60302734375, 42.593994140625, 11)
-raw expr       : geohash_encode(minus(5.60302734375), 42.593994140625, 11)
-checked expr   : geohash_encode<Float64, Float64, UInt8>(CAST<Decimal(12, 11)>(minus<Decimal(12, 11)>(5.60302734375_d64(12,11)) AS Float64), CAST<Decimal(14, 12)>(42.593994140625_d64(14,12) AS Float64), 11_u8)
+raw expr       : geohash_encode(-5.60302734375, 42.593994140625, 11)
+checked expr   : geohash_encode<Float64, Float64, UInt8>(CAST<Decimal(12, 11)>(-5.60302734375_d64(12,11) AS Float64), CAST<Decimal(14, 12)>(42.593994140625_d64(14,12) AS Float64), 11_u8)
 optimized expr : "ezs42d00000"
 output type    : String
 output domain  : {"ezs42d00000"..="ezs42d00000"}
@@ -296,8 +296,8 @@ output         : 'ezs42d00000'
 
 
 ast            : geohash_encode(-5.60302734375, 42.593994140625, 0)
-raw expr       : geohash_encode(minus(5.60302734375), 42.593994140625, 0)
-checked expr   : geohash_encode<Float64, Float64, UInt8>(CAST<Decimal(12, 11)>(minus<Decimal(12, 11)>(5.60302734375_d64(12,11)) AS Float64), CAST<Decimal(14, 12)>(42.593994140625_d64(14,12) AS Float64), 0_u8)
+raw expr       : geohash_encode(-5.60302734375, 42.593994140625, 0)
+checked expr   : geohash_encode<Float64, Float64, UInt8>(CAST<Decimal(12, 11)>(-5.60302734375_d64(12,11) AS Float64), CAST<Decimal(14, 12)>(42.593994140625_d64(14,12) AS Float64), 0_u8)
 optimized expr : "ezs42d000000"
 output type    : String
 output domain  : {"ezs42d000000"..="ezs42d000000"}

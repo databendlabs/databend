@@ -36,10 +36,10 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::Event;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline::core::Event;
+use databend_common_pipeline::core::InputPort;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::Processor;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use orc_rust::array_decoder::NaiveStripeDecoder;
@@ -245,7 +245,7 @@ impl Processor for StripeDecoderForCopy {
         if let Some(mut stripe) = stripe {
             if let Some(batch) = stripe.iter.next() {
                 let start = Instant::now();
-                let (block, _) =
+                let block =
                     DataBlock::from_record_batch(stripe.schema.data_schema.as_ref(), &batch?)?;
                 let block = self.project(block, &stripe.projection)?;
                 if let Some(copy_status) = &self.copy_status {

@@ -152,16 +152,16 @@ impl Binder {
 
         let join_type = join_type(&join.op);
         let s_expr = self.bind_join_with_type(
-            join_type.clone(),
+            join_type,
             join_conditions,
-            left_child,
-            right_child,
+            (left_child, &mut left_context),
+            (right_child, &mut right_context),
             vec![],
             build_side_cache_info,
         )?;
 
         let mut bind_context = join_bind_context(
-            &join_type,
+            join_type,
             bind_context,
             left_context.clone(),
             right_context.clone(),
@@ -178,8 +178,8 @@ impl Binder {
     pub(crate) async fn bind_merge_into_join(
         &mut self,
         bind_context: &mut BindContext,
-        left_context: BindContext,
-        right_context: BindContext,
+        mut left_context: BindContext,
+        mut right_context: BindContext,
         left_child: SExpr,
         right_child: SExpr,
         join_op: JoinOperator,
@@ -212,19 +212,15 @@ impl Binder {
 
         let join_type = join_type(&join_op);
         let s_expr = self.bind_join_with_type(
-            join_type.clone(),
+            join_type,
             join_conditions,
-            left_child,
-            right_child,
+            (left_child, &mut left_context),
+            (right_child, &mut right_context),
             vec![],
             None,
         )?;
-        let bind_context = join_bind_context(
-            &join_type,
-            bind_context,
-            left_context.clone(),
-            right_context,
-        );
+        let bind_context =
+            join_bind_context(join_type, bind_context, left_context.clone(), right_context);
         Ok((s_expr, bind_context))
     }
 
@@ -263,11 +259,10 @@ impl Binder {
             }
             // If the column is not nullable, generate a new column wrap nullable.
             let target_type = column.data_type.wrap_nullable();
-            let new_index = self.metadata.write().add_derived_column(
-                column.column_name.clone(),
-                target_type.clone(),
-                None,
-            );
+            let new_index = self
+                .metadata
+                .write()
+                .add_derived_column(column.column_name.clone(), target_type.clone());
             let old_scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span: None,
                 column: column.clone(),
@@ -354,31 +349,31 @@ impl Binder {
     pub(crate) fn bind_join_with_type(
         &mut self,
         mut join_type: JoinType,
-        join_conditions: JoinConditions,
-        mut left_child: SExpr,
-        mut right_child: SExpr,
+        JoinConditions {
+            mut left_conditions,
+            mut right_conditions,
+            mut non_equi_conditions,
+            other_conditions,
+        }: JoinConditions,
+        (mut left_child, _): (SExpr, &mut BindContext),
+        (mut right_child, right_context): (SExpr, &mut BindContext),
         mut is_null_equal: Vec<usize>,
         build_side_cache_info: Option<HashJoinBuildCacheInfo>,
     ) -> Result<SExpr> {
-        let mut left_conditions = join_conditions.left_conditions;
-        let mut right_conditions = join_conditions.right_conditions;
-        let mut non_equi_conditions = join_conditions.non_equi_conditions;
-        let other_conditions = join_conditions.other_conditions;
-
-        if join_type == JoinType::Cross
-            && (!left_conditions.is_empty() || !right_conditions.is_empty())
-        {
-            return Err(ErrorCode::SemanticError(
-                "Join conditions should be empty in cross join",
-            ));
-        }
-        if matches!(
-            join_type,
+        match join_type {
+            JoinType::Cross if !left_conditions.is_empty() || !right_conditions.is_empty() => {
+                return Err(ErrorCode::SemanticError(
+                    "Join conditions should be empty in cross join",
+                ));
+            }
             JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
-        ) && non_equi_conditions.is_empty()
-        {
-            return Err(ErrorCode::SemanticError("Missing inequality condition!"));
+                if non_equi_conditions.is_empty() =>
+            {
+                return Err(ErrorCode::SemanticError("Missing inequality condition!"));
+            }
+            _ => (),
         }
+
         self.push_down_other_conditions(
             &join_type,
             &mut left_child,
@@ -456,11 +451,16 @@ impl Binder {
             single_to_inner: None,
             build_side_cache_info,
         };
-        Ok(SExpr::create_binary(
-            Arc::new(logical_join.into()),
-            Arc::new(left_child),
-            Arc::new(right_child),
-        ))
+
+        if logical_join.join_type.is_asof_join() {
+            self.rewrite_asof(logical_join, left_child, (right_child, right_context))
+        } else {
+            Ok(SExpr::create_binary(
+                Arc::new(logical_join.into()),
+                Arc::new(left_child),
+                Arc::new(right_child),
+            ))
+        }
     }
 
     fn push_down_other_conditions(
@@ -1038,7 +1038,7 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
 }
 
 fn join_bind_context(
-    join_type: &JoinType,
+    join_type: JoinType,
     bind_context: BindContext,
     left_context: BindContext,
     right_context: BindContext,

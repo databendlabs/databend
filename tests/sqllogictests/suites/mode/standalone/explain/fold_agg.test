@@ -83,6 +83,7 @@ AggregateFinal
         ├── estimated rows: 2983.50
         └── TableScan
             ├── table: default.default.t
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 3000
             ├── read size: 5.89 KiB
@@ -106,6 +107,7 @@ AggregateFinal
     ├── estimated rows: 2000.00
     └── TableScan
         ├── table: default.default.t
+        ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 3000
         ├── read size: 5.89 KiB
@@ -158,6 +160,7 @@ EvalScalar
                 ├── estimated rows: 3000.00
                 └── TableScan
                     ├── table: default.default.t
+                    ├── scan id: 0
                     ├── output columns: [number (#0), money (#2)]
                     ├── read rows: 3000
                     ├── read size: 10.51 KiB
@@ -203,6 +206,7 @@ EvalScalar
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.default.t
+            ├── scan id: 0
             ├── output columns: [number (#0), money (#2)]
             ├── read rows: 3000
             ├── read size: 10.51 KiB

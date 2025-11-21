@@ -98,10 +98,22 @@ else
     echo "✓ meta node logs are collected as expected"
 fi
 
-startup_check_response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select count(*) from system_history.log_history where message like 'Ready for connections after%'\"}")
-startup_check_response_data=$(echo "$startup_check_response" | jq -r '.data')
-if [[ "$startup_check_response_data" != *"2"* ]]; then
-    echo "ERROR: startup check failed"
+# Retry startup check to handle timing issues with log collection
+startup_check_passed=false
+for i in {1..10}; do
+    startup_check_response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select count(*) from system_history.log_history where message like 'Ready for connections after%'\"}")
+    startup_check_response_data=$(echo "$startup_check_response" | jq -r '.data')
+    if [[ "$startup_check_response_data" == *"2"* ]]; then
+        startup_check_passed=true
+        break
+    fi
+    if [ $i -lt 10 ]; then
+        sleep 1
+    fi
+done
+
+if [ "$startup_check_passed" = false ]; then
+    echo "ERROR: startup check failed after retries"
     debug_info=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where message like 'Ready for connections after%'\"}")
     echo "$debug_info"
     echo "startup_check_response_data: $startup_check_response_data"

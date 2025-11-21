@@ -43,11 +43,14 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
 
     #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        // Register runtime filters for all probe targets
         for rf in self.inner.runtime_filter.filters.iter() {
-            ctx.scan_id_to_runtime_filters
-                .entry(rf.scan_id)
-                .or_default()
-                .push(rf.clone());
+            for (_probe_key, scan_id) in &rf.probe_targets {
+                ctx.scan_id_to_runtime_filters
+                    .entry(*scan_id)
+                    .or_default()
+                    .push(rf.clone());
+            }
         }
 
         let build_keys = self
@@ -83,11 +86,32 @@ impl<'a> PhysicalFormat for HashJoinFormatter<'a> {
 
         let mut build_runtime_filters = vec![];
         for rf in self.inner.runtime_filter.filters.iter() {
+            // Format all probe targets (sorted for stable explain output)
+            let mut probe_targets = rf
+                .probe_targets
+                .iter()
+                .map(|(probe_key, scan_id)| {
+                    (
+                        probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                        *scan_id,
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            // Sort by scan_id first, then by probe key string
+            probe_targets.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+
+            let probe_targets_str = probe_targets
+                .into_iter()
+                .map(|(probe_key_str, scan_id)| format!("{}@scan{}", probe_key_str, scan_id))
+                .collect::<Vec<_>>()
+                .join(", ");
+
             let mut s = format!(
-                "filter id:{}, build key:{}, probe key:{}, filter type:",
+                "filter id:{}, build key:{}, probe targets:[{}], filter type:",
                 rf.id,
                 rf.build_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
-                rf.probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                probe_targets_str,
             );
             if rf.enable_bloom_runtime_filter {
                 s += "bloom,";

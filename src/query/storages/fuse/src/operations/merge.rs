@@ -19,7 +19,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
-use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline::core::PipeItem;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::Location;
@@ -103,12 +103,8 @@ impl FuseTable {
             true,
         )?;
         let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
-        let vector_index_builder = VectorIndexBuilder::try_create(
-            ctx.clone(),
-            &self.table_info.meta.indexes,
-            new_schema.clone(),
-            true,
-        );
+        let vector_index_builder =
+            VectorIndexBuilder::try_create(&self.table_info.meta.indexes, new_schema.clone(), true);
 
         let block_builder = BlockBuilder {
             ctx: ctx.clone(),

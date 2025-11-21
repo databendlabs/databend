@@ -47,6 +47,10 @@ impl MySQLTlsConfig {
             return Ok(None);
         }
 
+        // Set default crypto provider to use
+        // See: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#using-the-per-process-default-cryptoprovider
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
         let cert = certs(&mut BufReader::new(File::open(&self.cert_path)?))
             .try_collect()
             .map_err(|err| ErrorCode::TLSConfigurationFailure(err.to_string()))?;

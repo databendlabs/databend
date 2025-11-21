@@ -48,7 +48,7 @@ use crate::schedulers::PlanFragment;
 use crate::servers::flight::v1::exchange::BroadcastExchange;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::MergeExchange;
-use crate::servers::flight::v1::exchange::ShuffleDataExchange;
+use crate::servers::flight::v1::exchange::NodeToNodeExchange;
 use crate::sessions::QueryContext;
 
 /// Visitor to split a `PhysicalPlan` into fragments.
@@ -217,7 +217,7 @@ impl FragmentDeriveHandle {
 
         Ok(match exchange_sink.kind {
             FragmentKind::Init => None,
-            FragmentKind::Normal => Some(DataExchange::ShuffleDataExchange(ShuffleDataExchange {
+            FragmentKind::Normal => Some(DataExchange::NodeToNodeExchange(NodeToNodeExchange {
                 destination_ids: get_executors(cluster),
                 shuffle_keys: exchange_sink.keys.clone(),
                 allow_adjust_parallelism: exchange_sink.allow_adjust_parallelism,

@@ -24,10 +24,10 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storage::StageFileInfo;
@@ -50,7 +50,7 @@ impl ParquetInferSchemaSource {
         stage_info: StageInfo,
         stage_file_infos: Vec<StageFileInfo>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx, output, ParquetInferSchemaSource {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, ParquetInferSchemaSource {
             is_finished: false,
             stage_info,
             stage_file_infos,

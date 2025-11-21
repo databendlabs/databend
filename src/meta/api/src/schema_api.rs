@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::time::Duration;
 
@@ -24,8 +25,18 @@ use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableRetentionGuard;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::data_mask::DataMaskId;
+use databend_common_meta_app::data_mask::DataMaskIdIdent;
+use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableId;
+use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyIdIdent;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
+use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::marked_deleted_table_index_id::MarkedDeletedTableIndexId;
@@ -51,6 +62,7 @@ use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use fastrace::func_name;
@@ -220,6 +232,44 @@ pub async fn construct_drop_table_txn_operations(
     }
 
     tb_meta.drop_on = Some(Utc::now());
+
+    // Delete table-policy references when dropping table
+    //
+    // Concurrency safety:
+    // - The `table_meta.seq` condition below protects against concurrent modifications
+    // - Using `txn_op_del` (instead of `txn_delete_exact`) is safe here because:
+    //   1. Any concurrent unset/modify of policies will change `table_meta.seq`, causing this txn to fail
+    //   2. Deleting a non-existent reference is idempotent and won't cause errors (returns success=false)
+    //   3. The transaction ensures atomicity - either all references are deleted or none
+    //
+    // This avoids the overhead of reading each reference's seq while maintaining correctness.
+    let policy_ids: HashSet<u64> = tb_meta
+        .column_mask_policy_columns_ids
+        .values()
+        .map(|policy_map| policy_map.policy_id)
+        .collect();
+
+    txn.if_then.extend(policy_ids.into_iter().map(|policy_id| {
+        txn_op_del(&MaskPolicyTableIdIdent::new_generic(
+            tenant.clone(),
+            MaskPolicyIdTableId {
+                policy_id,
+                table_id,
+            },
+        ))
+    }));
+
+    // Delete row access policy reference
+    if let Some(policy_map) = &tb_meta.row_access_policy_columns_ids {
+        txn.if_then
+            .push(txn_op_del(&RowAccessPolicyTableIdIdent::new_generic(
+                tenant.clone(),
+                RowAccessPolicyIdTableId {
+                    policy_id: policy_map.policy_id,
+                    table_id,
+                },
+            )));
+    }
 
     // There must NOT be concurrent txn(b) that list-then-delete tables:
     // Otherwise, (b) may not delete all of the tables, if this txn(a) is operating on some table.
@@ -487,6 +537,16 @@ pub async fn handle_undrop_table(
             }
         }
 
+        let tenant = tenant_dbname_tbname.tenant().clone();
+        let (policy_restore_ops, policy_restore_conditions) = restore_policy_references_on_undrop(
+            kv_api,
+            &tenant,
+            table_id,
+            &mut seq_table_meta.data,
+        )
+        .await
+        .map_err(KVAppError::from)?;
+
         {
             // reset drop on time
             seq_table_meta.drop_on = None;
@@ -495,26 +555,34 @@ pub async fn handle_undrop_table(
             let vacuum_seq = seq_vacuum_retention.as_ref().map(|sr| sr.seq).unwrap_or(0);
 
             let txn = TxnRequest::new(
-                vec![
-                    // db has not to change, i.e., no new table is created.
-                    // Renaming db is OK and does not affect the seq of db_meta.
-                    txn_cond_eq_seq(&DatabaseId { db_id }, seq_db_meta.seq),
-                    // still this table id
-                    txn_cond_eq_seq(&dbid_tbname, dbid_tbname_seq),
-                    // table is not changed
-                    txn_cond_eq_seq(&tbid, seq_table_meta.seq),
-                    // Concurrent safety: vacuum timestamp seq must not change during undrop
-                    // - If vacuum_retention exists: seq must remain the same (no update by vacuum)
-                    // - If vacuum_retention is None: seq must remain 0 (no creation by vacuum)
-                    txn_cond_eq_seq(&vacuum_ident, vacuum_seq),
-                ],
-                vec![
-                    // Changing a table in a db has to update the seq of db_meta,
-                    // to block the batch-delete-tables when deleting a db.
-                    txn_op_put_pb(&DatabaseId { db_id }, &seq_db_meta.data, None)?, /* (db_id) -> db_meta */
-                    txn_op_put(&dbid_tbname, serialize_u64(table_id)?), /* (tenant, db_id, tb_name) -> tb_id */
-                    txn_op_put_pb(&tbid, &seq_table_meta.data, None)?, /* (tenant, db_id, tb_id) -> tb_meta */
-                ],
+                [
+                    vec![
+                        // db has not to change, i.e., no new table is created.
+                        // Renaming db is OK and does not affect the seq of db_meta.
+                        txn_cond_eq_seq(&DatabaseId { db_id }, seq_db_meta.seq),
+                        // still this table id
+                        txn_cond_eq_seq(&dbid_tbname, dbid_tbname_seq),
+                        // table is not changed
+                        txn_cond_eq_seq(&tbid, seq_table_meta.seq),
+                        // Concurrent safety: vacuum timestamp seq must not change during undrop
+                        // - If vacuum_retention exists: seq must remain the same (no update by vacuum)
+                        // - If vacuum_retention is None: seq must remain 0 (no creation by vacuum)
+                        txn_cond_eq_seq(&vacuum_ident, vacuum_seq),
+                    ],
+                    policy_restore_conditions,
+                ]
+                .concat(),
+                [
+                    vec![
+                        // Changing a table in a db has to update the seq of db_meta,
+                        // to block the batch-delete-tables when deleting a db.
+                        txn_op_put_pb(&DatabaseId { db_id }, &seq_db_meta.data, None)?, // (db_id) -> db_meta
+                        txn_op_put(&dbid_tbname, serialize_u64(table_id)?), // (tenant, db_id, tb_name) -> tb_id
+                        txn_op_put_pb(&tbid, &seq_table_meta.data, None)?, // (tenant, db_id, tb_id) -> tb_meta
+                    ],
+                    policy_restore_ops,
+                ]
+                .concat(),
             );
 
             let (succ, _responses) = send_txn(kv_api, txn).await?;
@@ -531,6 +599,108 @@ pub async fn handle_undrop_table(
             }
         }
     }
+}
+
+/// Restore policy references when undropping a table.
+///
+/// This function handles two cases:
+/// 1. Policy exists: Restore the table-policy reference (deleted during drop_table)
+/// 2. Policy missing: Clean up the policy reference from table_meta
+async fn restore_policy_references_on_undrop(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    tenant: &Tenant,
+    table_id: u64,
+    table_meta: &mut TableMeta,
+) -> Result<(Vec<TxnOp>, Vec<TxnCondition>), MetaError> {
+    let mut ops = Vec::new();
+    let mut conditions = Vec::new();
+
+    // Process masking policies
+    if !table_meta.column_mask_policy_columns_ids.is_empty() {
+        // Collect unique policy IDs (one policy can be applied to multiple columns)
+        let policy_ids: HashSet<u64> = table_meta
+            .column_mask_policy_columns_ids
+            .values()
+            .map(|policy_map| policy_map.policy_id)
+            .collect();
+
+        let mut missing_policies = HashSet::new();
+
+        for policy_id in policy_ids {
+            let policy_ident = DataMaskIdIdent::new_generic(tenant, DataMaskId::new(policy_id));
+            let seq_policy = kv_api.get_pb(&policy_ident).await?;
+
+            match seq_policy {
+                None => {
+                    // Policy missing - mark for cleanup from table_meta
+                    // Note: table-policy reference was already deleted during drop_table
+                    missing_policies.insert(policy_id);
+                }
+                Some(seq_policy) => {
+                    // Policy exists - restore the table-policy reference
+                    // (it was deleted during drop_table)
+                    let ref_key =
+                        MaskPolicyTableIdIdent::new_generic(tenant.clone(), MaskPolicyIdTableId {
+                            policy_id,
+                            table_id,
+                        });
+                    // Concurrent safety: ensure policy still exists when txn executes.
+                    // Critical: if policy is dropped before txn execution, this prevents
+                    // creating a dangling reference to a non-existent policy.
+                    conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
+                    ops.push(txn_op_put_pb(&ref_key, &MaskPolicyTableId, None)?);
+                }
+            }
+        }
+
+        for missing_policy_id in &missing_policies {
+            debug!(
+                "Undrop table {}: removing missing masking policy {}",
+                table_id, missing_policy_id
+            );
+        }
+        table_meta
+            .column_mask_policy_columns_ids
+            .retain(|_, policy_map| !missing_policies.contains(&policy_map.policy_id));
+    }
+
+    // Process row access policy
+    if let Some(policy_map) = &table_meta.row_access_policy_columns_ids {
+        let policy_id = policy_map.policy_id;
+        let policy_ident =
+            RowAccessPolicyIdIdent::new_generic(tenant, RowAccessPolicyId::new(policy_id));
+        let seq_policy = kv_api.get_pb(&policy_ident).await?;
+
+        match seq_policy {
+            None => {
+                // Policy missing - clean up from table_meta
+                // Note: table-policy reference was already deleted during drop_table
+                debug!(
+                    "Undrop table {}: removing missing row access policy {}",
+                    table_id, policy_id
+                );
+                table_meta.row_access_policy_columns_ids = None;
+                table_meta.row_access_policy = None;
+            }
+            Some(seq_policy) => {
+                // Policy exists - restore the table-policy reference
+                // (it was deleted during drop_table)
+                let ref_key = RowAccessPolicyTableIdIdent::new_generic(
+                    tenant.clone(),
+                    RowAccessPolicyIdTableId {
+                        policy_id,
+                        table_id,
+                    },
+                );
+                // Concurrent safety: ensure policy still exists when txn executes.
+                // Critical: if policy is dropped before txn execution, this prevents
+                // creating a dangling reference to a non-existent policy.
+                conditions.push(txn_cond_eq_seq(&policy_ident, seq_policy.seq));
+                ops.push(txn_op_put_pb(&ref_key, &RowAccessPolicyTableId, None)?);
+            }
+        }
+    }
+    Ok((ops, conditions))
 }
 
 /// add __fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta

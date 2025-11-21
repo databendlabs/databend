@@ -27,6 +27,7 @@ EvalScalar
     ├── estimated rows: 1.50
     └── TableScan
         ├── table: default.default.bloom_test_t
+        ├── scan id: 0
         ├── output columns: [c1 (#0)]
         ├── read rows: 3
         ├── read size: < 1 KiB
@@ -113,6 +114,7 @@ EvalScalar
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.bloom_test_t
+        ├── scan id: 0
         ├── output columns: [c2 (#1)]
         ├── read rows: 0
         ├── read size: 0
@@ -135,6 +137,7 @@ EvalScalar
     ├── estimated rows: 4.00
     └── TableScan
         ├── table: default.default.bloom_test_t
+        ├── scan id: 0
         ├── output columns: [c2 (#1)]
         ├── read rows: 0
         ├── read size: 0
@@ -157,6 +160,7 @@ EvalScalar
     ├── estimated rows: 4.00
     └── TableScan
         ├── table: default.default.bloom_test_t
+        ├── scan id: 0
         ├── output columns: [c3 (#2)]
         ├── read rows: 0
         ├── read size: 0
@@ -199,6 +203,7 @@ EvalScalar
     ├── estimated rows: 1.50
     └── TableScan
         ├── table: default.default.bloom_test_alter_t1
+        ├── scan id: 0
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
         ├── read size: < 1 KiB
@@ -233,6 +238,7 @@ EvalScalar
     ├── estimated rows: 1.50
     └── TableScan
         ├── table: default.default.bloom_test_alter_t2
+        ├── scan id: 0
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
         ├── read size: < 1 KiB
@@ -264,6 +270,7 @@ EvalScalar
     ├── estimated rows: 1.80
     └── TableScan
         ├── table: default.default.bloom_test_alter_t2
+        ├── scan id: 0
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
         ├── read size: < 1 KiB
@@ -290,6 +297,7 @@ EvalScalar
     ├── estimated rows: 1.80
     └── TableScan
         ├── table: default.default.bloom_test_alter_t2
+        ├── scan id: 0
         ├── output columns: [c1 (#0)]
         ├── read rows: 9
         ├── read size: < 1 KiB
@@ -327,6 +335,7 @@ EvalScalar
     ├── estimated rows: 1.50
     └── TableScan
         ├── table: default.default.bloom_test_nullable_t
+        ├── scan id: 0
         ├── output columns: [c1 (#0), c2 (#1)]
         ├── read rows: 3
         ├── read size: < 1 KiB
@@ -349,6 +358,7 @@ EvalScalar
     ├── estimated rows: 1.20
     └── TableScan
         ├── table: default.default.bloom_test_nullable_t
+        ├── scan id: 0
         ├── output columns: [c2 (#1)]
         ├── read rows: 0
         ├── read size: 0
@@ -379,6 +389,7 @@ Filter
 ├── estimated rows: 1.60
 └── TableScan
     ├── table: default.default.bloom_test_nullable_t2
+    ├── scan id: 0
     ├── output columns: [c0 (#0), c1 (#1), c2 (#2)]
     ├── read rows: 2
     ├── read size: < 1 KiB
@@ -397,6 +408,7 @@ Filter
 ├── estimated rows: 2.00
 └── TableScan
     ├── table: default.default.bloom_test_nullable_t2
+    ├── scan id: 0
     ├── output columns: [c0 (#0), c1 (#1), c2 (#2)]
     ├── read rows: 2
     ├── read size: < 1 KiB

@@ -161,23 +161,15 @@ impl Binder {
             SetOperator::Intersect if !all => {
                 // Transfer Intersect to Semi join
                 self.bind_intersect(
-                    left.span(),
-                    right.span(),
-                    left_bind_context,
-                    right_bind_context,
-                    left_expr,
-                    right_expr,
+                    (left.span(),left_expr,left_bind_context),
+                    (right.span(),right_expr,right_bind_context),
                 )
             }
             SetOperator::Except if !all => {
                 // Transfer Except to Anti join
                 self.bind_except(
-                    left.span(),
-                    right.span(),
-                    left_bind_context,
-                    right_bind_context,
-                    left_expr,
-                    right_expr,
+                    (left.span(),left_expr,left_bind_context),
+                    (right.span(),right_expr,right_bind_context),
                 )
             }
             SetOperator::Union => self.bind_union(
@@ -302,53 +294,24 @@ impl Binder {
 
     pub fn bind_intersect(
         &mut self,
-        left_span: Span,
-        right_span: Span,
-        left_context: BindContext,
-        right_context: BindContext,
-        left_expr: SExpr,
-        right_expr: SExpr,
+        left: (Span, SExpr, BindContext),
+        right: (Span, SExpr, BindContext),
     ) -> Result<(SExpr, BindContext)> {
-        self.bind_intersect_or_except(
-            left_span,
-            right_span,
-            left_context,
-            right_context,
-            left_expr,
-            right_expr,
-            JoinType::LeftSemi,
-        )
+        self.bind_intersect_or_except(left, right, JoinType::LeftSemi)
     }
 
     pub fn bind_except(
         &mut self,
-        left_span: Span,
-        right_span: Span,
-        left_context: BindContext,
-        right_context: BindContext,
-        left_expr: SExpr,
-        right_expr: SExpr,
+        left: (Span, SExpr, BindContext),
+        right: (Span, SExpr, BindContext),
     ) -> Result<(SExpr, BindContext)> {
-        self.bind_intersect_or_except(
-            left_span,
-            right_span,
-            left_context,
-            right_context,
-            left_expr,
-            right_expr,
-            JoinType::LeftAnti,
-        )
+        self.bind_intersect_or_except(left, right, JoinType::LeftAnti)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn bind_intersect_or_except(
+    fn bind_intersect_or_except(
         &mut self,
-        left_span: Span,
-        right_span: Span,
-        mut left_context: BindContext,
-        right_context: BindContext,
-        left_expr: SExpr,
-        right_expr: SExpr,
+        (left_span, left_expr, mut left_context): (Span, SExpr, BindContext),
+        (right_span, right_expr, mut right_context): (Span, SExpr, BindContext),
         join_type: JoinType,
     ) -> Result<(SExpr, BindContext)> {
         let mut left_conditions = Vec::with_capacity(left_context.columns.len());
@@ -384,8 +347,8 @@ impl Binder {
         let s_expr = self.bind_join_with_type(
             join_type,
             join_conditions,
-            left_expr,
-            right_expr,
+            (left_expr, &mut left_context),
+            (right_expr, &mut right_context),
             is_null_equal,
             None,
         )?;
@@ -479,7 +442,6 @@ impl Binder {
             let column_binding = self.create_derived_column_binding(
                 left_col.column_name.clone(),
                 coercion_types[idx].clone(),
-                None,
             );
             new_bind_context.add_column_binding(column_binding);
         }

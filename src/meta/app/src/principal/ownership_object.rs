@@ -30,6 +30,8 @@ use databend_common_meta_kvapi::kvapi::KeyCodec;
 /// - `table-by-catalog-id/<catalog>/<table_id>`
 /// - `stage-by-name/<stage_name>`
 /// - `udf-by-name/<udf_name>`
+/// - `procedure-by-id/<procedure_id>`
+/// - `masking-policy-by-id/<policy_id>`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum OwnershipObject {
     /// used on the fuse databases
@@ -68,6 +70,10 @@ pub enum OwnershipObject {
     Procedure {
         procedure_id: u64,
     },
+
+    MaskingPolicy {
+        policy_id: u64,
+    },
 }
 
 impl OwnershipObject {
@@ -100,6 +106,9 @@ impl fmt::Display for OwnershipObject {
             OwnershipObject::Connection { name } => write!(f, "CONNECTION {name}"),
             OwnershipObject::Sequence { name } => write!(f, "SEQUENCE {name}"),
             OwnershipObject::Procedure { procedure_id } => write!(f, "PROCEDURE {procedure_id}"),
+            OwnershipObject::MaskingPolicy { policy_id } => {
+                write!(f, "MASKING POLICY {policy_id}")
+            }
         }
     }
 }
@@ -144,6 +153,9 @@ impl KeyCodec for OwnershipObject {
             OwnershipObject::Sequence { name } => b.push_raw("sequence-by-name").push_str(name),
             OwnershipObject::Procedure { procedure_id } => {
                 b.push_raw("procedure-by-id").push_u64(*procedure_id)
+            }
+            OwnershipObject::MaskingPolicy { policy_id } => {
+                b.push_raw("masking-policy-by-id").push_u64(*policy_id)
             }
         }
     }
@@ -207,9 +219,13 @@ impl KeyCodec for OwnershipObject {
                 let procedure_id = p.next_u64()?;
                 Ok(OwnershipObject::Procedure { procedure_id })
             }
+            "masking-policy-by-id" => {
+                let policy_id = p.next_u64()?;
+                Ok(OwnershipObject::MaskingPolicy { policy_id })
+            }
             _ => Err(kvapi::KeyError::InvalidSegment {
                 i: p.index(),
-                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|warehouse-by-id|connection-by-name"
+                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|warehouse-by-id|connection-by-name|masking-policy-by-id"
                     .to_string(),
                 got: q.to_string(),
             }),

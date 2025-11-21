@@ -1,6 +1,6 @@
 ast            : running_difference(-1)
-raw expr       : running_difference(minus(1))
-checked expr   : running_difference<Int64>(CAST<Int16>(minus<UInt8>(1_u8) AS Int64))
+raw expr       : running_difference(-1)
+checked expr   : running_difference<Int64>(CAST<Int8>(-1_i8 AS Int64))
 optimized expr : 0_i64
 output type    : Int64
 output domain  : {0..=0}

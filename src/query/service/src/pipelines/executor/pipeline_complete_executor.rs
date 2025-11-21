@@ -20,7 +20,7 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use fastrace::func_path;
 use fastrace::prelude::*;
 

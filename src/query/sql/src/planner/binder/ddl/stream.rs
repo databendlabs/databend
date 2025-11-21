@@ -142,7 +142,8 @@ impl Binder {
                 .with_column("owner")
                 .with_column("comment")
                 .with_column("mode")
-                .with_column("invalid_reason");
+                .with_column("invalid_reason")
+                .with_column("has_data");
         } else {
             select_builder
                 .with_column(format!("name AS `Streams_in_{database}`"))
@@ -210,7 +211,8 @@ impl Binder {
             .with_column("owner")
             .with_column("comment")
             .with_column("mode")
-            .with_column("invalid_reason");
+            .with_column("invalid_reason")
+            .with_column("has_data");
         select_builder.with_filter(format!("catalog = '{catalog}'"));
         select_builder.with_filter(format!("database = '{database}'"));
         select_builder.with_filter(format!("name = '{stream}'"));

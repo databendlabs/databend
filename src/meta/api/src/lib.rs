@@ -19,7 +19,7 @@
 
 extern crate databend_common_meta_types;
 pub mod catalog_api;
-mod data_mask_api;
+pub mod data_mask_api;
 mod data_mask_api_impl;
 pub mod data_retention_util;
 mod database_api;
@@ -78,6 +78,8 @@ pub use error_util::db_has_to_not_exist;
 pub use error_util::db_id_has_to_exist;
 pub use error_util::table_has_to_not_exist;
 pub use error_util::unknown_database_error;
+pub use errors::MaskingPolicyError;
+pub use errors::RowAccessPolicyError;
 pub use garbage_collection_api::GarbageCollectionApi;
 pub use index_api::IndexApi;
 // Re-export from new kv_fetch_util module for backward compatibility

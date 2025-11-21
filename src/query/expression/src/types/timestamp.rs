@@ -26,11 +26,11 @@ use jiff::tz::TimeZone;
 use jiff::Zoned;
 
 use super::number::SimpleDomain;
+use super::ArgType;
+use super::DataType;
+use super::SimpleType;
+use super::SimpleValueType;
 use crate::property::Domain;
-use crate::types::ArgType;
-use crate::types::DataType;
-use crate::types::SimpleType;
-use crate::types::SimpleValueType;
 use crate::utils::date_helper::DateConverter;
 use crate::values::Column;
 use crate::values::Scalar;
@@ -192,6 +192,6 @@ pub fn string_to_timestamp(
 
 #[inline]
 pub fn timestamp_to_string(ts: i64, tz: &TimeZone) -> impl Display {
-    let zdt = ts.to_timestamp(tz.clone());
+    let zdt = ts.to_timestamp(tz);
     strtime::format(TIMESTAMP_FORMAT, &zdt).unwrap()
 }

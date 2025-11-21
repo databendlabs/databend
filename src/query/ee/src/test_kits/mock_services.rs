@@ -19,13 +19,11 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 
-use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::data_mask::RealDatamaskHandler;
 use crate::license::RealLicenseManager;
 use crate::row_access_policy::row_access_policy_handler::RealRowAccessPolicyHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::stream::RealStreamHandler;
-use crate::table_index::RealTableIndexHandler;
 use crate::virtual_column::RealVirtualColumnHandler;
 
 pub struct MockServices;
@@ -35,12 +33,10 @@ impl MockServices {
         let rm = RealLicenseManager::new(cfg.query.tenant_id.tenant_name().to_string(), public_key);
         GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
         RealVacuumHandler::init()?;
-        RealAggregatingIndexHandler::init()?;
         RealDatamaskHandler::init()?;
         RealRowAccessPolicyHandler::init()?;
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
-        RealTableIndexHandler::init()?;
         Ok(())
     }
 }

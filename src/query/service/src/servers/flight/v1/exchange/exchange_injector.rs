@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_settings::FlightCompression;
 
 use super::exchange_params::MergeExchangeParams;
@@ -86,7 +86,7 @@ impl ExchangeInjector for DefaultExchangeInjector {
             DataExchange::Broadcast(exchange) => Box::new(BroadcastFlightScatter::try_create(
                 exchange.destination_ids.len(),
             )?),
-            DataExchange::ShuffleDataExchange(exchange) => {
+            DataExchange::NodeToNodeExchange(exchange) => {
                 let local_id = &ctx.get_cluster().local_id;
                 let local_pos = exchange
                     .destination_ids

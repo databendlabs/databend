@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use nom::Parser;
 use nom_rule::rule;
 
 use super::common::ident;
@@ -34,7 +35,7 @@ pub fn sequence(i: Input) -> IResult<Statement> {
          | #drop_sequence: "`DROP [IF EXISTS] <sequence_name>`"
          | #show_sequences: "`SHOW SEQUENCES [<show_limit>]`"
          | #desc_sequence: "`DESCRIBE SEQUENCE <sequence_name>`"
-    )(i)
+    ).parse(i)
 }
 
 fn create_sequence(i: Input) -> IResult<Statement> {

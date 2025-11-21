@@ -83,7 +83,7 @@ impl Binder {
                                         let scalar = cast_scalar(
                                             None,
                                             scalar.clone(),
-                                            DataType::String,
+                                            &DataType::String,
                                             &BUILTIN_FUNCTIONS,
                                         )?;
                                         results.push(scalar);

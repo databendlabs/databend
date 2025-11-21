@@ -21,7 +21,6 @@ use databend_common_base::base::tokio::net::TcpStream;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::future::AbortHandle;
@@ -29,16 +28,11 @@ use futures::future::AbortRegistration;
 use futures::future::Abortable;
 use futures::StreamExt;
 use log::error;
-use log::info;
-use log::warn;
-use opensrv_mysql::*;
 use rustls::ServerConfig;
-use socket2::SockRef;
 use socket2::TcpKeepalive;
 use tokio_stream::wrappers::TcpListenerStream;
 
 use crate::servers::mysql::mysql_session::MySQLConnection;
-use crate::servers::mysql::reject_connection::RejectConnection;
 use crate::servers::mysql::tls::MySQLTlsConfig;
 use crate::servers::server::ListeningStream;
 use crate::servers::server::Server;
@@ -110,49 +104,12 @@ impl MySQLHandler {
         tls: Option<Arc<ServerConfig>>,
     ) {
         executor.spawn(async move {
-            match session_manager.create_session(SessionType::MySQL).await {
-                Err(error) => {
-                    warn!("create session failed, {:?}", error);
-                    Self::reject_session(socket, error).await
-                }
-                Ok(session) => {
-                    info!("MySQL connection coming: {:?}", socket.peer_addr());
-
-                    match session_manager.register_session(session) {
-                        Ok(session) => {
-                            // TcpStream must implement AsFd for socket2 0.5, wait https://github.com/tokio-rs/tokio/pull/5514
-                            if let Err(e) = SockRef::from(&socket).set_tcp_keepalive(&keepalive) {
-                                warn!("failed to set socket option keepalive {}", e);
-                            }
-
-                            if let Err(error) = MySQLConnection::run_on_stream(session, socket, tls)
-                            {
-                                error!("Unexpected error occurred during query: {:?}", error);
-                            };
-                        }
-                        Err(error) => {
-                            warn!("fail to register session, {:?}", error);
-                            Self::reject_session(socket, error).await
-                        }
-                    }
-                }
+            if let Err(error) =
+                MySQLConnection::run_on_stream(session_manager, socket, keepalive, tls).await
+            {
+                error!("Unexpected error occurred during query: {:?}", error);
             }
         });
-    }
-
-    #[async_backtrace::framed]
-    async fn reject_session(stream: TcpStream, error: ErrorCode) {
-        let (kind, message) = match error.code() {
-            41 => (ErrorKind::ER_TOO_MANY_USER_CONNECTIONS, error.message()),
-            _ => (ErrorKind::ER_INTERNAL_ERROR, error.message()),
-        };
-
-        if let Err(error) = RejectConnection::reject_mysql_connection(stream, kind, message).await {
-            error!(
-                "Unexpected error occurred during reject connection: {:?}",
-                error
-            );
-        }
     }
 }
 

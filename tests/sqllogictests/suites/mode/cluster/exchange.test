@@ -15,13 +15,14 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:t.number (#0), probe key:t1.number (#1), filter type:inlist,min_max
+    │   └── filter id:0, build key:t.number (#0), probe targets:[t1.number (#1)@scan1], filter type:bloom,inlist,min_max
     ├── estimated rows: 2.00
     ├── Exchange(Build)
     │   ├── output columns: [t.number (#0)]
     │   ├── exchange type: Broadcast
     │   └── TableScan
     │       ├── table: default.system.numbers
+    │       ├── scan id: 0
     │       ├── output columns: [number (#0)]
     │       ├── read rows: 1
     │       ├── read size: < 1 KiB
@@ -31,6 +32,7 @@ Exchange
     │       └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
+        ├── scan id: 1
         ├── output columns: [number (#1)]
         ├── read rows: 2
         ├── read size: < 1 KiB
@@ -54,7 +56,7 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:1, build key:t.number (#0), probe key:t2.number (#2), filter type:inlist,min_max
+    │   └── filter id:1, build key:t.number (#0), probe targets:[t2.number (#2)@scan2], filter type:bloom,inlist,min_max
     ├── estimated rows: 6.00
     ├── Exchange(Build)
     │   ├── output columns: [t1.number (#1), t.number (#0)]
@@ -67,13 +69,14 @@ Exchange
     │       ├── keys is null equal: [false]
     │       ├── filters: []
     │       ├── build join filters:
-    │       │   └── filter id:0, build key:t.number (#0), probe key:t1.number (#1), filter type:inlist,min_max
+    │       │   └── filter id:0, build key:t.number (#0), probe targets:[t1.number (#1)@scan1], filter type:bloom,inlist,min_max
     │       ├── estimated rows: 2.00
     │       ├── Exchange(Build)
     │       │   ├── output columns: [t.number (#0)]
     │       │   ├── exchange type: Broadcast
     │       │   └── TableScan
     │       │       ├── table: default.system.numbers
+    │       │       ├── scan id: 0
     │       │       ├── output columns: [number (#0)]
     │       │       ├── read rows: 1
     │       │       ├── read size: < 1 KiB
@@ -83,6 +86,7 @@ Exchange
     │       │       └── estimated rows: 1.00
     │       └── TableScan(Probe)
     │           ├── table: default.system.numbers
+    │           ├── scan id: 1
     │           ├── output columns: [number (#1)]
     │           ├── read rows: 2
     │           ├── read size: < 1 KiB
@@ -93,6 +97,7 @@ Exchange
     │           └── estimated rows: 2.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
+        ├── scan id: 2
         ├── output columns: [number (#2)]
         ├── read rows: 3
         ├── read size: < 1 KiB
@@ -116,7 +121,7 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:1, build key:t.b (#1), probe key:t2.number (#3), filter type:inlist,min_max
+    │   └── filter id:1, build key:t.b (#1), probe targets:[t2.number (#3)@scan2], filter type:bloom,inlist,min_max
     ├── estimated rows: 6.00
     ├── Exchange(Build)
     │   ├── output columns: [t1.number (#2), b (#1), numbers.number (#0)]
@@ -129,7 +134,7 @@ Exchange
     │       ├── keys is null equal: [false]
     │       ├── filters: []
     │       ├── build join filters:
-    │       │   └── filter id:0, build key:t.a (#0), probe key:t1.number (#2), filter type:inlist,min_max
+    │       │   └── filter id:0, build key:t.a (#0), probe targets:[t1.number (#2)@scan1], filter type:bloom,inlist,min_max
     │       ├── estimated rows: 2.00
     │       ├── Exchange(Build)
     │       │   ├── output columns: [numbers.number (#0), b (#1)]
@@ -140,6 +145,7 @@ Exchange
     │       │       ├── estimated rows: 1.00
     │       │       └── TableScan
     │       │           ├── table: default.system.numbers
+    │       │           ├── scan id: 0
     │       │           ├── output columns: [number (#0)]
     │       │           ├── read rows: 1
     │       │           ├── read size: < 1 KiB
@@ -149,6 +155,7 @@ Exchange
     │       │           └── estimated rows: 1.00
     │       └── TableScan(Probe)
     │           ├── table: default.system.numbers
+    │           ├── scan id: 1
     │           ├── output columns: [number (#2)]
     │           ├── read rows: 2
     │           ├── read size: < 1 KiB
@@ -159,6 +166,7 @@ Exchange
     │           └── estimated rows: 2.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
+        ├── scan id: 2
         ├── output columns: [number (#3)]
         ├── read rows: 3
         ├── read size: < 1 KiB
@@ -199,6 +207,7 @@ Exchange
     │               ├── estimated rows: 1.00
     │               └── TableScan
     │                   ├── table: default.system.numbers
+    │                   ├── scan id: 0
     │                   ├── output columns: [number (#0)]
     │                   ├── read rows: 1
     │                   ├── read size: < 1 KiB
@@ -208,6 +217,7 @@ Exchange
     │                   └── estimated rows: 1.00
     └── TableScan(Probe)
         ├── table: default.system.numbers
+        ├── scan id: 1
         ├── output columns: [number (#2)]
         ├── read rows: 2
         ├── read size: < 1 KiB
@@ -230,6 +240,7 @@ Fragment 0:
         ├── estimated rows: 1.00
         └── TableScan
             ├── table: default.system.numbers
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 1
             ├── read size: < 1 KiB
@@ -272,6 +283,7 @@ Fragment 2:
         │   └── source fragment: [1]
         └── TableScan(Probe)
             ├── table: default.system.numbers
+            ├── scan id: 1
             ├── output columns: [number (#2)]
             ├── read rows: 2
             ├── read size: < 1 KiB
@@ -322,13 +334,14 @@ AggregateFinal
             │   ├── keys is null equal: [false]
             │   ├── filters: []
             │   ├── build join filters:
-            │   │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#1), filter type:inlist,min_max
+            │   │   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#1)@scan1], filter type:bloom,inlist,min_max
             │   ├── estimated rows: 10000.00
             │   ├── Exchange(Build)
             │   │   ├── output columns: [numbers.number (#0)]
             │   │   ├── exchange type: Broadcast
             │   │   └── TableScan
             │   │       ├── table: default.system.numbers
+            │   │       ├── scan id: 0
             │   │       ├── output columns: [number (#0)]
             │   │       ├── read rows: 10
             │   │       ├── read size: < 1 KiB
@@ -338,6 +351,7 @@ AggregateFinal
             │   │       └── estimated rows: 10.00
             │   └── TableScan(Probe)
             │       ├── table: default.system.numbers
+            │       ├── scan id: 1
             │       ├── output columns: [number (#1)]
             │       ├── read rows: 1000
             │       ├── read size: 7.81 KiB
@@ -354,13 +368,14 @@ AggregateFinal
                 ├── keys is null equal: [false]
                 ├── filters: []
                 ├── build join filters:
-                │   └── filter id:1, build key:t3.a (#3), probe key:t1.a (#2), filter type:inlist,min_max
+                │   └── filter id:1, build key:t3.a (#3), probe targets:[t1.a (#2)@scan2], filter type:bloom,inlist,min_max
                 ├── estimated rows: 100.00
                 ├── Exchange(Build)
                 │   ├── output columns: [numbers.number (#3)]
                 │   ├── exchange type: Broadcast
                 │   └── TableScan
                 │       ├── table: default.system.numbers
+                │       ├── scan id: 3
                 │       ├── output columns: [number (#3)]
                 │       ├── read rows: 10
                 │       ├── read size: < 1 KiB
@@ -370,6 +385,7 @@ AggregateFinal
                 │       └── estimated rows: 10.00
                 └── TableScan(Probe)
                     ├── table: default.system.numbers
+                    ├── scan id: 2
                     ├── output columns: [number (#2)]
                     ├── read rows: 10
                     ├── read size: < 1 KiB
@@ -415,13 +431,14 @@ AggregateFinal
         │       ├── keys is null equal: [false]
         │       ├── filters: []
         │       ├── build join filters:
-        │       │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#1), filter type:inlist,min_max
+        │       │   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#1)@scan1], filter type:bloom,inlist,min_max
         │       ├── estimated rows: 10000.00
         │       ├── Exchange(Build)
         │       │   ├── output columns: [numbers.number (#0)]
         │       │   ├── exchange type: Broadcast
         │       │   └── TableScan
         │       │       ├── table: default.system.numbers
+        │       │       ├── scan id: 0
         │       │       ├── output columns: [number (#0)]
         │       │       ├── read rows: 10
         │       │       ├── read size: < 1 KiB
@@ -431,6 +448,7 @@ AggregateFinal
         │       │       └── estimated rows: 10.00
         │       └── TableScan(Probe)
         │           ├── table: default.system.numbers
+        │           ├── scan id: 1
         │           ├── output columns: [number (#1)]
         │           ├── read rows: 1000
         │           ├── read size: 7.81 KiB
@@ -459,13 +477,14 @@ AggregateFinal
                         ├── keys is null equal: [false]
                         ├── filters: []
                         ├── build join filters:
-                        │   └── filter id:1, build key:t3.a (#3), probe key:t1.a (#2), filter type:inlist,min_max
+                        │   └── filter id:1, build key:t3.a (#3), probe targets:[t1.a (#2)@scan2], filter type:bloom,inlist,min_max
                         ├── estimated rows: 100.00
                         ├── Exchange(Build)
                         │   ├── output columns: [numbers.number (#3)]
                         │   ├── exchange type: Broadcast
                         │   └── TableScan
                         │       ├── table: default.system.numbers
+                        │       ├── scan id: 3
                         │       ├── output columns: [number (#3)]
                         │       ├── read rows: 10
                         │       ├── read size: < 1 KiB
@@ -475,6 +494,7 @@ AggregateFinal
                         │       └── estimated rows: 10.00
                         └── TableScan(Probe)
                             ├── table: default.system.numbers
+                            ├── scan id: 2
                             ├── output columns: [number (#2)]
                             ├── read rows: 10
                             ├── read size: < 1 KiB
@@ -519,13 +539,14 @@ AggregateFinal
             │   ├── keys is null equal: [false]
             │   ├── filters: []
             │   ├── build join filters:
-            │   │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#1), filter type:inlist,min_max
+            │   │   └── filter id:0, build key:t1.a (#0), probe targets:[t2.a (#1)@scan1], filter type:bloom,inlist,min_max
             │   ├── estimated rows: 10000.00
             │   ├── Exchange(Build)
             │   │   ├── output columns: [numbers.number (#0)]
             │   │   ├── exchange type: Broadcast
             │   │   └── TableScan
             │   │       ├── table: default.system.numbers
+            │   │       ├── scan id: 0
             │   │       ├── output columns: [number (#0)]
             │   │       ├── read rows: 10
             │   │       ├── read size: < 1 KiB
@@ -535,6 +556,7 @@ AggregateFinal
             │   │       └── estimated rows: 10.00
             │   └── TableScan(Probe)
             │       ├── table: default.system.numbers
+            │       ├── scan id: 1
             │       ├── output columns: [number (#1)]
             │       ├── read rows: 1000
             │       ├── read size: 7.81 KiB
@@ -545,6 +567,7 @@ AggregateFinal
             │       └── estimated rows: 1000.00
             └── TableScan
                 ├── table: default.system.numbers
+                ├── scan id: 2
                 ├── output columns: [number (#2)]
                 ├── read rows: 10
                 ├── read size: < 1 KiB
@@ -577,6 +600,7 @@ Exchange
     │   ├── exchange type: Broadcast
     │   └── TableScan
     │       ├── table: default.system.numbers
+    │       ├── scan id: 2
     │       ├── output columns: [number (#2)]
     │       ├── read rows: 10
     │       ├── read size: < 1 KiB
@@ -597,6 +621,7 @@ Exchange
         │   ├── exchange type: Broadcast
         │   └── TableScan
         │       ├── table: default.system.numbers
+        │       ├── scan id: 0
         │       ├── output columns: [number (#0)]
         │       ├── read rows: 10
         │       ├── read size: < 1 KiB
@@ -606,6 +631,7 @@ Exchange
         │       └── estimated rows: 10.00
         └── TableScan(Probe)
             ├── table: default.system.numbers
+            ├── scan id: 1
             ├── output columns: [number (#1)]
             ├── read rows: 1000
             ├── read size: 7.81 KiB
@@ -631,13 +657,14 @@ Exchange
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters(distributed):
-    │   └── filter id:0, build key:t2.number (#1), probe key:t1.number (#0), filter type:inlist,min_max
+    │   └── filter id:0, build key:t2.number (#1), probe targets:[t1.number (#0)@scan0], filter type:bloom,inlist,min_max
     ├── estimated rows: 200.00
     ├── Exchange(Build)
     │   ├── output columns: [t2.number (#1)]
     │   ├── exchange type: Hash(t2.number (#1))
     │   └── TableScan
     │       ├── table: default.system.numbers
+    │       ├── scan id: 1
     │       ├── output columns: [number (#1)]
     │       ├── read rows: 20
     │       ├── read size: < 1 KiB
@@ -650,6 +677,7 @@ Exchange
         ├── exchange type: Hash(t1.number (#0))
         └── TableScan
             ├── table: default.system.numbers
+            ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 10
             ├── read size: < 1 KiB

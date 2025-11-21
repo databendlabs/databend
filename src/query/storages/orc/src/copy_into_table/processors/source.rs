@@ -24,10 +24,10 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::sources::AsyncSource;
+use databend_common_pipeline::sources::AsyncSourcer;
 use databend_storages_common_stage::SingleFilePartition;
 use opendal::Operator;
 use orc_rust::ArrowReaderBuilder;
@@ -53,7 +53,7 @@ impl ORCSourceForCopy {
     ) -> Result<ProcessorPtr> {
         let scan_progress = table_ctx.get_scan_progress();
 
-        AsyncSourcer::create(table_ctx.clone(), output, ORCSourceForCopy {
+        AsyncSourcer::create(scan_progress.clone(), output, ORCSourceForCopy {
             table_ctx,
             op,
             scan_progress,

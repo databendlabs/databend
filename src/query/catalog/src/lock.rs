@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::LockType;
-use databend_common_pipeline_core::LockGuard;
+use databend_common_pipeline::core::LockGuard;
 
 use crate::table_context::TableContext;
 

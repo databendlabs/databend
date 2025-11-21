@@ -25,7 +25,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
