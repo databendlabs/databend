@@ -49,6 +49,7 @@ use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -57,8 +58,10 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
 use databend_common_expression::utils::date_helper::*;
 use databend_common_expression::vectorize_1_arg;
@@ -892,18 +895,136 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
     );
 
     fn eval_timestamp_to_date(val: Value<TimestampType>, ctx: &mut EvalContext) -> Value<DateType> {
-        vectorize_with_builder_1_arg::<TimestampType, DateType>(|val, output, ctx| {
-            let tz = &ctx.func_ctx.tz;
-            output.push(calc_timestamp_to_date(val, tz));
-        })(val, ctx)
+        match val {
+            Value::Scalar(v) => Value::Scalar(calc_timestamp_to_date(v, &ctx.func_ctx.tz)),
+            Value::Column(column) => {
+                let generics = ctx.generics.to_vec();
+                let len = TimestampType::column_len(&column);
+                let mut builder = DateType::create_builder(len, &generics);
+                let mut cache = TimeZoneOffsetCache::new(&ctx.func_ctx.tz);
+                for v in TimestampType::iter_column(&column) {
+                    let days = cache.days_for(v);
+                    DateType::push_item(&mut builder, days);
+                }
+                Value::Column(DateType::build_column(builder))
+            }
+        }
     }
     fn calc_timestamp_to_date(val: i64, tz: &TimeZone) -> i32 {
-        val.to_timestamp(tz)
-            .date()
-            .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
-            .unwrap()
-            .get_days()
+        let mut cache = TimeZoneOffsetCache::new(tz);
+        cache.days_for(val)
     }
+}
+
+struct OffsetInterval {
+    start: i64,
+    end: i64,
+    offset_micros: i64,
+}
+
+struct TimeZoneOffsetCache<'a> {
+    tz: &'a TimeZone,
+    interval: Option<OffsetInterval>,
+    fixed_offset_micros: Option<i64>,
+}
+
+impl<'a> TimeZoneOffsetCache<'a> {
+    fn new(tz: &'a TimeZone) -> Self {
+        let fixed_offset_micros = determine_fixed_offset(tz);
+        Self {
+            tz,
+            interval: None,
+            fixed_offset_micros,
+        }
+    }
+
+    fn days_for(&mut self, value: i64) -> i32 {
+        if self.tz == &TimeZone::UTC {
+            return utc_days_from_micros(value);
+        }
+        if let Some(offset) = self.fixed_offset_micros {
+            return apply_offset_micros(value, offset);
+        }
+
+        let needs_refresh = match &self.interval {
+            Some(interval) => value < interval.start || value >= interval.end,
+            None => true,
+        };
+        if needs_refresh {
+            self.interval = Some(self.build_interval(value));
+        }
+
+        let interval = self.interval.as_ref().unwrap();
+        apply_offset_micros(value, interval.offset_micros)
+    }
+
+    fn build_interval(&self, value: i64) -> OffsetInterval {
+        let ts = timestamp_from_microseconds_saturating(value);
+        let offset_micros = tz_offset_micros(self.tz, ts);
+
+        let start = self
+            .tz
+            .preceding(ts)
+            .next()
+            .map(|t| t.timestamp().as_microsecond())
+            .unwrap_or(i64::MIN);
+        let end = self
+            .tz
+            .following(ts)
+            .next()
+            .map(|t| t.timestamp().as_microsecond())
+            .unwrap_or(i64::MAX);
+
+        OffsetInterval {
+            start,
+            end,
+            offset_micros,
+        }
+    }
+}
+
+fn tz_offset_micros(tz: &TimeZone, ts: Timestamp) -> i64 {
+    let offset = tz.to_offset(ts);
+    (offset.seconds() as i64).saturating_mul(MICROS_PER_SEC)
+}
+
+fn determine_fixed_offset(tz: &TimeZone) -> Option<i64> {
+    if tz == &TimeZone::UTC {
+        return Some(0);
+    }
+
+    let epoch = Timestamp::UNIX_EPOCH;
+    let has_transitions =
+        tz.preceding(epoch).next().is_some() || tz.following(epoch).next().is_some();
+    if has_transitions {
+        None
+    } else {
+        Some(tz_offset_micros(tz, epoch))
+    }
+}
+
+fn timestamp_from_microseconds_saturating(value: i64) -> Timestamp {
+    Timestamp::from_microsecond(value).unwrap_or_else(|_| {
+        if value < 0 {
+            Timestamp::MIN
+        } else {
+            Timestamp::MAX
+        }
+    })
+}
+
+fn utc_days_from_micros(value: i64) -> i32 {
+    timestamp_from_microseconds_saturating(value)
+        .to_zoned(TimeZone::UTC)
+        .date()
+        .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+        .unwrap()
+        .get_days()
+}
+
+fn apply_offset_micros(value: i64, offset_micros: i64) -> i32 {
+    let adjusted = value.saturating_add(offset_micros);
+    utc_days_from_micros(adjusted)
 }
 
 fn register_timestamp_tz_to_date(registry: &mut FunctionRegistry) {

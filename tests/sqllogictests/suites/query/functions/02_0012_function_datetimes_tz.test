@@ -161,6 +161,38 @@ select next_day(to_date('2024-10-25'), saturday);
 ----
 2024-10-26
 
+statement ok
+set timezone='America/Toronto'
+
+statement ok
+drop table if exists tz_dst all
+
+statement ok
+create table tz_dst(ts timestamp)
+
+statement ok
+insert into tz_dst values
+    (to_timestamp('2024-03-10 01:30:00')),
+    (to_timestamp('2024-06-10 12:00:00')),
+    (to_timestamp('2024-11-03 01:30:00'))
+
+query T
+select to_date(to_timestamp('2024-03-10 01:30:00'));
+----
+2024-03-10
+
+query T
+select to_date(to_timestamp('2024-11-03 01:30:00'));
+----
+2024-11-03
+
+query RT
+select to_date(ts) from tz_dst order by ts;
+----
+2024-03-10
+2024-06-10
+2024-11-03
+
 query T
 select next_day(to_timestamp('2024-10-25 01:00:00'), monday);
 ----
