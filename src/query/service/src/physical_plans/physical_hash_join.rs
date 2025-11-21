@@ -1203,7 +1203,7 @@ impl PhysicalPlanBuilder {
         build_schema: &DataSchema,
         target_schema: &DataSchema,
     ) -> Result<Option<NestedLoopFilterInfo>> {
-        if matches!(join.join_type, JoinType::Inner) {
+        if !matches!(join.join_type, JoinType::Inner) {
             return Ok(None);
         }
 
