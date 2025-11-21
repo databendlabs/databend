@@ -43,8 +43,8 @@ use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
 use databend_common_sql::plans::UDFType;
 use databend_common_storage::init_stage_operator;
-use self::venv::TempDir;
 
+use self::venv::TempDir;
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
 use crate::physical_plans::UdfFunctionDesc;
@@ -899,9 +899,7 @@ mod venv {
     });
 
     static PY_VENV_WORK_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
-        let base = std::env::temp_dir()
-            .join("databend")
-            .join("python_udf_env");
+        let base = std::env::temp_dir().join("databend").join("python_udf_env");
         if let Err(e) = fs::create_dir_all(&base) {
             panic!("Failed to create python udf work dir {:?}: {}", base, e);
         }
@@ -929,9 +927,8 @@ mod venv {
                     format!("Failed to clean python udf temp dir {:?}: {}", path, e)
                 })?;
             }
-            fs::create_dir_all(&path).map_err(|e| {
-                format!("Failed to create python udf temp dir {:?}: {}", path, e)
-            })?;
+            fs::create_dir_all(&path)
+                .map_err(|e| format!("Failed to create python udf temp dir {:?}: {}", path, e))?;
             Ok(Self {
                 inner: Arc::new(TempDirInner { path }),
             })
@@ -959,9 +956,7 @@ mod venv {
 
     impl WeakTempDir {
         fn upgrade(&self) -> Option<TempDir> {
-            self.inner
-                .upgrade()
-                .map(|inner| TempDir { inner })
+            self.inner.upgrade().map(|inner| TempDir { inner })
         }
 
         fn replace(&mut self, temp_dir: &TempDir) {
@@ -1059,14 +1054,6 @@ mod venv {
     }
 
     pub fn create_venv(_python_version: &str) -> Result<TempDir, String> {
-        // let env_path = temp_dir.path().join(".venv");
-        // Command::new("python")
-        //     .args(["-m", "venv", env_path.to_str().unwrap()])
-        //     .stdout(std::process::Stdio::null())
-        //     .stderr(std::process::Stdio::null())
-        //     .status()
-        //     .map_err(|e| format!("Failed to create venv: {}", e))?;
-
         TempDir::new()
     }
 
