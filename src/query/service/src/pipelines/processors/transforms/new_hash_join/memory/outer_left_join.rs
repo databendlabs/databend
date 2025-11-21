@@ -138,9 +138,7 @@ impl Join for OuterLeftHashJoin {
                 let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
                 table.probe(probe_data)
             }
-            HashJoinHashTable::NestedLoop(_) => {
-                todo!()
-            }
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
