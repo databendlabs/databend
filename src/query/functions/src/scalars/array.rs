@@ -12,16 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::hash::Hash;
 use std::ops::Range;
 use std::sync::Arc;
 
+use bumpalo::Bump;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::aggregate::get_states_layout;
+use databend_common_expression::aggregate::AggrState;
+use databend_common_expression::aggregate::AggregateFunctionRef;
+use databend_common_expression::aggregate::StateAddr;
+use databend_common_expression::aggregate::StatesLayout;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
-use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::AccessType;
@@ -78,7 +85,6 @@ use jsonb::RawJsonb;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
-use crate::aggregates::eval_aggr;
 use crate::AggregateFunctionFactory;
 
 const ARRAY_AGGREGATE_FUNCTIONS: &[(&str, &str); 14] = &[
@@ -1154,136 +1160,220 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 }
 
-fn register_array_aggr(registry: &mut FunctionRegistry) {
-    fn scalar_to_array_column(scalar: ScalarRef) -> Result<Column> {
-        match scalar {
-            ScalarRef::Array(col) => Ok(col.clone()),
-            ScalarRef::Variant(val) => {
-                let array_val = RawJsonb::new(val);
-                match array_val.array_values() {
-                    Ok(vals_opt) => {
-                        let vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
-                        let variant_col = BinaryColumn::from_iter(vals.iter().map(|v| v.as_raw()));
-                        Ok(Column::Variant(variant_col))
-                    }
-                    Err(err) => Err(ErrorCode::Internal(err.to_string())),
+struct ArrayAggEvaluator {
+    func: AggregateFunctionRef,
+    state_layout: Arc<StatesLayout>,
+    addr: StateAddr,
+    need_manual_drop_state: bool,
+    _arena: Bump,
+}
+
+impl ArrayAggEvaluator {
+    fn new(func: AggregateFunctionRef, state_layout: Arc<StatesLayout>) -> Self {
+        let _arena = Bump::new();
+        let addr = _arena.alloc_layout(state_layout.layout).into();
+        let mut evaluator = Self {
+            func,
+            state_layout,
+            addr,
+            need_manual_drop_state: false,
+            _arena,
+        };
+        let state = evaluator.state();
+        evaluator.func.init_state(state);
+        evaluator.need_manual_drop_state = evaluator.func.need_manual_drop_state();
+        evaluator
+    }
+
+    fn state(&self) -> AggrState {
+        AggrState::new(self.addr, &self.state_layout.states_loc[0])
+    }
+
+    fn reset_state(&mut self) {
+        let state = self.state();
+        if self.need_manual_drop_state {
+            unsafe {
+                self.func.drop_state(state);
+            }
+        }
+        self.func.init_state(state);
+    }
+
+    fn eval_column(&mut self, column: Column, builder: &mut ColumnBuilder) -> Result<()> {
+        self.reset_state();
+        let rows = column.len();
+        let entries = [BlockEntry::Column(column)];
+        self.func
+            .accumulate(self.state(), (&entries).into(), None, rows)?;
+        self.func.merge_result(self.state(), false, builder)?;
+        Ok(())
+    }
+}
+
+impl Drop for ArrayAggEvaluator {
+    fn drop(&mut self) {
+        let need_drop = self.need_manual_drop_state;
+        drop_guard(move || {
+            if need_drop {
+                unsafe {
+                    self.func.drop_state(self.state());
                 }
             }
-            _ => unreachable!(),
+        })
+    }
+}
+
+struct ArrayAggDesc {
+    func: AggregateFunctionRef,
+    state_layout: Arc<StatesLayout>,
+    return_type: DataType,
+}
+
+impl ArrayAggDesc {
+    fn try_create(name: &str, array_type: &DataType) -> Result<Self> {
+        let factory = AggregateFunctionFactory::instance();
+        let func = factory.get(name, vec![], vec![array_type.clone()], vec![])?;
+        let return_type = func.return_type()?;
+        let funcs = [func.clone()];
+        let state_layout = Arc::new(get_states_layout(&funcs)?);
+        Ok(Self {
+            func,
+            state_layout,
+            return_type,
+        })
+    }
+
+    fn create_evaluator(&self) -> ArrayAggEvaluator {
+        ArrayAggEvaluator::new(self.func.clone(), self.state_layout.clone())
+    }
+}
+
+struct ArrayAggFunctionImpl {
+    desc: Option<ArrayAggDesc>,
+    is_count: bool,
+}
+
+impl ArrayAggFunctionImpl {
+    fn try_create(name: &'static str, arg_type: &DataType) -> Option<Self> {
+        let desc = match arg_type {
+            DataType::Nullable(box DataType::EmptyArray) | DataType::EmptyArray => None,
+            DataType::Nullable(box DataType::Array(inner)) | DataType::Array(inner) => {
+                ArrayAggDesc::try_create(name, inner).ok()
+            }
+            DataType::Nullable(box DataType::Variant) | DataType::Variant => {
+                ArrayAggDesc::try_create(name, &DataType::Variant).ok()
+            }
+            _ => return None,
+        };
+        Some(Self {
+            desc,
+            is_count: name == "count",
+        })
+    }
+
+    fn return_type(&self) -> Cow<DataType> {
+        match &self.desc {
+            Some(desc) => Cow::Borrowed(&desc.return_type),
+            None => {
+                let data_type = if self.is_count {
+                    DataType::Number(NumberDataType::UInt64)
+                } else {
+                    DataType::Null
+                };
+                Cow::Owned(data_type)
+            }
         }
     }
 
-    fn eval_array_aggr(
-        name: &str,
-        args: &[Value<AnyType>],
-        ctx: &mut EvalContext,
-    ) -> Value<AnyType> {
-        match &args[0] {
-            Value::Scalar(scalar) => match &scalar {
-                Scalar::EmptyArray | Scalar::Null => {
-                    if name == "count" {
-                        Value::Scalar(Scalar::Number(NumberScalar::UInt64(0)))
-                    } else {
-                        Value::Scalar(Scalar::Null)
+    fn eval(&self, args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+        match &self.desc {
+            None => match args {
+                [_] => Value::Scalar(Scalar::default_value(&self.return_type())),
+                _ => unreachable!(),
+            },
+            Some(desc) => match args {
+                [Value::Scalar(scalar)] => match scalar {
+                    Scalar::EmptyArray | Scalar::Null => {
+                        Value::Scalar(Scalar::default_value(&self.return_type()))
                     }
-                }
-                Scalar::Array(_) | Scalar::Variant(_) => {
-                    match scalar_to_array_column(scalar.as_ref()) {
-                        Ok(col) => {
-                            let len = col.len();
-                            match eval_aggr(name, vec![], &[col.clone().into()], len, vec![]) {
-                                Ok((res_col, _)) => {
-                                    let val = unsafe { res_col.index_unchecked(0) };
-                                    Value::Scalar(val.to_owned())
-                                }
-                                Err(err) => {
-                                    ctx.set_error(0, err.to_string());
-                                    Value::Scalar(Scalar::Null)
-                                }
+                    Scalar::Array(_) | Scalar::Variant(_) => {
+                        scalar_to_array_column(scalar.as_ref())
+                            .and_then(|col| {
+                                let mut evaluator = desc.create_evaluator();
+                                let mut result_builder =
+                                    ColumnBuilder::with_capacity(&desc.return_type, 1);
+
+                                evaluator.eval_column(col, &mut result_builder)?;
+                                Ok(Value::Scalar(result_builder.build_scalar()))
+                            })
+                            .unwrap_or_else(|err| {
+                                ctx.set_error(0, err.to_string());
+                                Value::Scalar(Scalar::default_value(&desc.return_type))
+                            })
+                    }
+                    _ => unreachable!(),
+                },
+                [Value::Column(column)] => {
+                    let mut builder =
+                        ColumnBuilder::with_capacity(&self.return_type(), column.len());
+                    let mut evaluator = desc.create_evaluator();
+                    for (row_index, scalar) in column.iter().enumerate() {
+                        if scalar == ScalarRef::Null {
+                            builder.push_default();
+                            continue;
+                        }
+                        if let Err(err) = scalar_to_array_column(scalar)
+                            .and_then(|col| evaluator.eval_column(col, &mut builder))
+                        {
+                            ctx.set_error(row_index, err.to_string());
+                            if builder.len() == row_index {
+                                builder.push_default();
                             }
                         }
-                        Err(err) => {
-                            ctx.set_error(0, err.to_string());
-                            Value::Scalar(Scalar::Null)
-                        }
                     }
+                    Value::Column(builder.build())
                 }
                 _ => unreachable!(),
             },
-            Value::Column(column) => {
-                let return_type = eval_aggr_return_type(name, &[column.data_type()]).unwrap();
-                let mut builder = ColumnBuilder::with_capacity(&return_type, column.len());
-                for scalar in column.iter() {
-                    if scalar == ScalarRef::Null {
-                        builder.push_default();
-                        continue;
-                    }
-                    match scalar_to_array_column(scalar) {
-                        Ok(col) => {
-                            let len = col.len();
-                            match eval_aggr(name, vec![], &[col.clone().into()], len, vec![]) {
-                                Ok((col, _)) => {
-                                    let val = unsafe { col.index_unchecked(0) };
-                                    builder.push(val)
-                                }
-                                Err(err) => {
-                                    ctx.set_error(builder.len(), err.to_string());
-                                    builder.push_default();
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            ctx.set_error(builder.len(), err.to_string());
-                            builder.push_default();
-                        }
-                    }
+        }
+    }
+}
+
+fn scalar_to_array_column(scalar: ScalarRef) -> Result<Column> {
+    match scalar {
+        ScalarRef::Array(col) => Ok(col.clone()),
+        ScalarRef::Variant(val) => {
+            let array_val = RawJsonb::new(val);
+            match array_val.array_values() {
+                Ok(vals_opt) => {
+                    let vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
+                    let variant_col = BinaryColumn::from_iter(vals.iter().map(|v| v.as_raw()));
+                    Ok(Column::Variant(variant_col))
                 }
-                Value::Column(builder.build())
+                Err(err) => Err(ErrorCode::Internal(err.to_string())),
             }
         }
+        _ => unreachable!(),
     }
+}
 
-    fn eval_aggr_return_type(name: &str, args_type: &[DataType]) -> Option<DataType> {
-        if args_type.len() != 1 {
-            return None;
-        }
-        let arg_type = args_type[0].remove_nullable();
-        if arg_type == DataType::EmptyArray {
-            if name == "count" {
-                return Some(DataType::Number(NumberDataType::UInt64));
-            }
-            return Some(DataType::Null);
-        }
-
-        let array_type = match arg_type {
-            DataType::Array(box array_type) => array_type.clone(),
-            DataType::Variant => DataType::Variant,
-            _ => {
-                return None;
-            }
-        };
-        let factory = AggregateFunctionFactory::instance();
-        let func = factory.get(name, vec![], vec![array_type], vec![]).ok()?;
-        let return_type = func.return_type().ok()?;
-        if args_type[0].is_nullable() {
-            Some(return_type.wrap_nullable())
-        } else {
-            Some(return_type)
-        }
-    }
-
+fn register_array_aggr(registry: &mut FunctionRegistry) {
     for (fn_name, name) in ARRAY_AGGREGATE_FUNCTIONS {
-        let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
-            let return_type = eval_aggr_return_type(name, args_type)?;
+        let factory = FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
+            let [arg] = args_type else {
+                return None;
+            };
+            let impl_info = ArrayAggFunctionImpl::try_create(name, arg)?;
+            let return_type = impl_info.return_type().into_owned();
             Some(Arc::new(Function {
                 signature: FunctionSignature {
                     name: fn_name.to_string(),
-                    args_type: vec![args_type[0].clone()],
+                    args_type: vec![arg.clone()],
                     return_type,
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(move |_, _| FunctionDomain::MayThrow),
-                    eval: Box::new(|args, ctx| eval_array_aggr(name, args, ctx)),
+                    eval: Box::new(move |args, ctx| impl_info.eval(args, ctx)),
                 },
             }))
         }));
