@@ -7,7 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [build-dependencies]
-pyo3-build-config = "0.24.2"
+pyo3-build-config = "0.25"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -32,7 +32,7 @@ databend-query = { workspace = true, features = [
     "simd",
     "disable_initial_exec_tls",
 ] }
-pyo3 = { version = "0.24", features = ["generate-import-lib", "abi3-py312"] }
+pyo3 = { version = "0.25", features = ["generate-import-lib", "abi3-py312"] }
 serde_json = { workspace = true }
 sysinfo = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }

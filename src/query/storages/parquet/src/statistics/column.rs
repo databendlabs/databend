@@ -27,11 +27,30 @@ use super::utils::decode_decimal256_from_bytes;
 
 /// according to https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
 pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<ColumnStatistics> {
-    let (max, min) = if s.has_min_max_set() {
+    if s.is_min_max_deprecated() {
+        return None;
+    }
+    let has_min_max_set = {
         match s {
-            Statistics::Boolean(s) => (Scalar::Boolean(*s.max()), Scalar::Boolean(*s.min())),
+            Statistics::Boolean(s) => s.max_opt().is_some() && s.min_opt().is_some(),
+            Statistics::Int32(s) => s.max_opt().is_some() && s.min_opt().is_some(),
+            Statistics::Int64(s) => s.max_opt().is_some() && s.min_opt().is_some(),
+            Statistics::Int96(s) => s.max_opt().is_some() && s.min_opt().is_some(),
+            Statistics::Float(s) => s.max_opt().is_some() && s.min_opt().is_some(),
+            Statistics::Double(s) => s.max_opt().is_some() && s.min_opt().is_some(),
+            Statistics::ByteArray(s) => s.max_opt().is_some() && s.min_opt().is_some(),
+            Statistics::FixedLenByteArray(s) => s.max_opt().is_some() && s.min_opt().is_some(),
+        }
+    };
+
+    let (max, min) = if has_min_max_set {
+        match s {
+            Statistics::Boolean(s) => (
+                Scalar::Boolean(*s.max_opt().unwrap()),
+                Scalar::Boolean(*s.min_opt().unwrap()),
+            ),
             Statistics::Int32(s) => {
-                let (max, min) = (*s.max(), *s.min());
+                let (max, min) = (*s.max_opt().unwrap(), *s.min_opt().unwrap());
                 match typ {
                     TableDataType::Number(NumberDataType::Int8) => {
                         (Scalar::from(max as i8), Scalar::from(min as i8))
@@ -67,7 +86,7 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
                 }
             }
             Statistics::Int64(s) => {
-                let (max, min) = (*s.max(), *s.min());
+                let (max, min) = (*s.max_opt().unwrap(), *s.min_opt().unwrap());
                 match typ {
                     TableDataType::Number(NumberDataType::UInt64) => {
                         (Scalar::from(max as u64), Scalar::from(min as u64))
@@ -98,25 +117,26 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
                 }
             }
             Statistics::Int96(s) => {
-                let (max, min) = (s.max().to_i64(), s.min().to_i64());
-                let multi = match max.checked_ilog10().unwrap_or_default() + 1 {
-                    0..=10 => 1_000_000,
-                    11..=13 => 1_000,
-                    _ => 1,
-                };
-                (
-                    Scalar::Timestamp(max * multi),
-                    Scalar::Timestamp(min * multi),
-                )
+                let (max, min) = (
+                    s.max_opt().unwrap().to_micros(),
+                    s.min_opt().unwrap().to_micros(),
+                );
+                (Scalar::Timestamp(max), Scalar::Timestamp(min))
             }
-            Statistics::Float(s) => (Scalar::from(*s.max()), Scalar::from(*s.min())),
-            Statistics::Double(s) => (Scalar::from(*s.max()), Scalar::from(*s.min())),
+            Statistics::Float(s) => (
+                Scalar::from(*s.max_opt().unwrap()),
+                Scalar::from(*s.min_opt().unwrap()),
+            ),
+            Statistics::Double(s) => (
+                Scalar::from(*s.max_opt().unwrap()),
+                Scalar::from(*s.min_opt().unwrap()),
+            ),
             Statistics::ByteArray(s) => (
-                Scalar::String(String::from_utf8(s.max().as_bytes().to_vec()).ok()?),
-                Scalar::String(String::from_utf8(s.min().as_bytes().to_vec()).ok()?),
+                Scalar::String(String::from_utf8(s.max_opt().unwrap().as_bytes().to_vec()).ok()?),
+                Scalar::String(String::from_utf8(s.min_opt().unwrap().as_bytes().to_vec()).ok()?),
             ),
             Statistics::FixedLenByteArray(s) => {
-                let (max, min) = (s.max(), s.min());
+                let (max, min) = (s.max_opt().unwrap(), s.min_opt().unwrap());
                 match typ {
                     TableDataType::Decimal(DecimalDataType::Decimal128(size)) => (
                         decode_decimal128_from_bytes(max, *size),
@@ -136,8 +156,9 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
     Some(ColumnStatistics::new(
         min,
         max,
-        s.null_count(),
+        // Doc this
+        s.null_count_opt().unwrap_or(0),
         0, // this field is not used.
-        s.distinct_count(),
+        s.distinct_count_opt(),
     ))
 }
