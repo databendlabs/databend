@@ -46,8 +46,6 @@ use crate::spillers::SpillsDataWriter;
 
 struct PayloadWriter {
     path: String,
-    // TODO: this may change to lazy init, for now it will create 128*thread_num files at most even
-    // if the writer not used to write.
     writer: SpillsDataWriter,
 }
 
@@ -109,7 +107,7 @@ impl WriteStats {
 struct AggregatePayloadWriters {
     spill_prefix: String,
     partition_count: usize,
-    writers: Vec<PayloadWriter>,
+    writers: Vec<Option<PayloadWriter>>,
     write_stats: WriteStats,
     ctx: Arc<QueryContext>,
     is_local: bool,
@@ -125,22 +123,25 @@ impl AggregatePayloadWriters {
         AggregatePayloadWriters {
             spill_prefix: prefix.to_string(),
             partition_count,
-            writers: vec![],
+            writers: Self::empty_writers(partition_count),
             write_stats: WriteStats::default(),
             ctx,
             is_local,
         }
     }
 
-    fn ensure_writers(&mut self) -> Result<()> {
-        if self.writers.is_empty() {
-            let mut writers = Vec::with_capacity(self.partition_count);
-            for _ in 0..self.partition_count {
-                writers.push(PayloadWriter::try_create(&self.spill_prefix)?);
-            }
-            self.writers = writers;
+    fn empty_writers(partition_count: usize) -> Vec<Option<PayloadWriter>> {
+        std::iter::repeat_with(|| None)
+            .take(partition_count)
+            .collect::<Vec<_>>()
+    }
+
+    fn ensure_writer(&mut self, bucket: usize) -> Result<&mut PayloadWriter> {
+        if self.writers[bucket].is_none() {
+            self.writers[bucket] = Some(PayloadWriter::try_create(&self.spill_prefix)?);
         }
-        Ok(())
+
+        Ok(self.writers[bucket].as_mut().unwrap())
     }
 
     pub fn write_ready_blocks(&mut self, ready_blocks: Vec<(usize, DataBlock)>) -> Result<()> {
@@ -148,15 +149,14 @@ impl AggregatePayloadWriters {
             return Ok(());
         }
 
-        self.ensure_writers()?;
-
         for (bucket, block) in ready_blocks {
             if block.is_empty() {
                 continue;
             }
 
             let start = Instant::now();
-            self.writers[bucket].write_block(block)?;
+            let writer = self.ensure_writer(bucket)?;
+            writer.write_block(block)?;
 
             let elapsed = start.elapsed();
             self.write_stats.accumulate(elapsed);
@@ -166,13 +166,18 @@ impl AggregatePayloadWriters {
     }
 
     pub fn finalize(&mut self) -> Result<Vec<NewSpilledPayload>> {
-        let writers = mem::take(&mut self.writers);
-        if writers.is_empty() {
+        let writers = mem::replace(&mut self.writers, Self::empty_writers(self.partition_count));
+
+        if writers.iter().all(|writer| writer.is_none()) {
             return Ok(Vec::new());
         }
 
         let mut spilled_payloads = Vec::new();
         for (partition_id, writer) in writers.into_iter().enumerate() {
+            let Some(writer) = writer else {
+                continue;
+            };
+
             let (path, written_size, row_groups) = writer.close()?;
 
             if written_size != 0 {
@@ -402,5 +407,49 @@ fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats) {
             bytes: stats.bytes,
         };
         ctx.get_aggregate_spill_progress().incr(&progress_val);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use databend_common_base::base::tokio;
+    use databend_common_exception::Result;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::FromData;
+
+    use crate::pipelines::processors::transforms::aggregator::new_aggregate::SharedPartitionStream;
+    use crate::pipelines::processors::transforms::aggregator::NewAggregateSpiller;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_aggregate_payload_writers_lazy_init() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+
+        let partition_count = 4;
+        let partition_stream = SharedPartitionStream::new(1, 1024, 1024 * 1024, partition_count);
+        let mut spiller =
+            NewAggregateSpiller::try_create(ctx.clone(), partition_count, partition_stream, true)?;
+
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2, 3])]);
+
+        spiller.spill(0, block.clone())?;
+        spiller.spill(2, block)?;
+
+        let payloads = spiller.spill_finish()?;
+
+        assert_eq!(payloads.len(), 2);
+
+        let spilled_files = ctx.get_spilled_files();
+        assert_eq!(spilled_files.len(), 2);
+
+        let buckets: HashSet<_> = payloads.iter().map(|p| p.bucket).collect();
+        assert!(buckets.contains(&0));
+        assert!(buckets.contains(&2));
+
+        Ok(())
     }
 }
