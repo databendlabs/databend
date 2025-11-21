@@ -4953,6 +4953,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-pipeline",
+ "databend-common-sql",
  "databend-common-storages-fuse",
 ]
 

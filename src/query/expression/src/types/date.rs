@@ -159,6 +159,6 @@ pub fn string_to_date(
 
 #[inline]
 pub fn date_to_string(date: impl AsPrimitive<i64>, tz: &TimeZone) -> impl Display {
-    let res = date.as_().to_date(tz.clone());
+    let res = date.as_().to_date(tz);
     strtime::format(DATE_FORMAT, res).unwrap()
 }

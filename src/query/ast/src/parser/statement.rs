@@ -1554,13 +1554,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let refresh_virtual_column = map(
         rule! {
-            REFRESH ~ VIRTUAL ~ COLUMN ~ FOR ~ #dot_separated_idents_1_to_3
+            REFRESH ~ VIRTUAL ~ ^COLUMN ~ ^( FOR | ON ) ~ ^#dot_separated_idents_1_to_3 ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ ^#literal_u64 )? ~ OVERWRITE?
         },
-        |(_, _, _, _, (catalog, database, table))| {
+        |(_, _, _, _, (catalog, database, table), opt_selection, opt_limit, opt_overwrite)| {
             Statement::RefreshVirtualColumn(RefreshVirtualColumnStmt {
                 catalog,
                 database,
                 table,
+                selection: opt_selection.map(|(_, selection)| Box::new(selection)),
+                limit: opt_limit.map(|(_, limit)| limit),
+                overwrite: opt_overwrite.is_some(),
             })
         },
     );
