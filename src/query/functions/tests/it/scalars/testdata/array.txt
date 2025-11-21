@@ -1517,6 +1517,29 @@ evaluation (internal):
 +--------+----------------------+
 
 
+ast            : array_count(a)
+raw expr       : array_count(a::Array(Int16) NULL)
+checked expr   : array_count<Array(Int16) NULL>(a)
+evaluation:
++--------+--------------------+-------------+
+|        | a                  | Output      |
++--------+--------------------+-------------+
+| Type   | Array(Int16) NULL  | UInt64 NULL |
+| Domain | [{1..=8}] ∪ {NULL} | Unknown     |
+| Row 0  | NULL               | NULL        |
+| Row 1  | [1, 5, 8, 3]       | 4           |
+| Row 2  | [1, 5]             | 2           |
+| Row 3  | NULL               | NULL        |
++--------+--------------------+-------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                           |
++--------+--------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: ArrayColumn { values: Int16([1, 5, 8, 3, 1, 5]), offsets: [0, 0, 4, 6, 6] }, validity: [0b____0110] } |
+| Output | NullableColumn { column: UInt64([0, 4, 2, 0]), validity: [0b____0110] }                                                        |
++--------+--------------------------------------------------------------------------------------------------------------------------------+
+
+
 ast            : array_count([a, b, c, d])
 raw expr       : array_count(array(a::UInt64 NULL, b::UInt64 NULL, c::UInt64 NULL, d::UInt64 NULL))
 checked expr   : array_count<Array(UInt64 NULL)>(array<T0=UInt64 NULL><T0, T0, T0, T0>(a, b, c, d))
@@ -1631,6 +1654,29 @@ optimized expr : "d"
 output type    : String NULL
 output domain  : {"d"..="d"}
 output         : 'd'
+
+
+ast            : array_max(a)
+raw expr       : array_max(a::Array(Int16) NULL)
+checked expr   : array_max<Array(Int16) NULL>(a)
+evaluation:
++--------+--------------------+------------+
+|        | a                  | Output     |
++--------+--------------------+------------+
+| Type   | Array(Int16) NULL  | Int16 NULL |
+| Domain | [{1..=8}] ∪ {NULL} | Unknown    |
+| Row 0  | NULL               | NULL       |
+| Row 1  | [1, 5, 8, 3]       | 8          |
+| Row 2  | [1, 5]             | 5          |
+| Row 3  | NULL               | NULL       |
++--------+--------------------+------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                           |
++--------+--------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: ArrayColumn { values: Int16([1, 5, 8, 3, 1, 5]), offsets: [0, 0, 4, 6, 6] }, validity: [0b____0110] } |
+| Output | NullableColumn { column: Int16([0, 8, 5, 0]), validity: [0b____0110] }                                                         |
++--------+--------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : array_max([a, b, c, d])

@@ -15,7 +15,9 @@
 use std::io::Write;
 
 use databend_common_expression::types::*;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -430,6 +432,20 @@ fn test_array_count(file: &mut impl Write) {
         ("d", Int16Type::from_data(vec![4i16, 8, 1, 9])),
     ]);
 
+    {
+        let data_type = DataType::Array(Box::new(Int16Type::data_type())).wrap_nullable();
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 4);
+
+        builder.push_default();
+        builder.push(Scalar::Array(Int16Type::from_data(vec![1, 5, 8, 3])).as_ref());
+        builder.push(Scalar::Array(Int16Type::from_data(vec![1, 5])).as_ref());
+        builder.push_default();
+
+        let column = builder.build();
+
+        run_ast(file, "array_count(a)", &[("a", column)]);
+    }
+
     run_ast(file, "array_count([a, b, c, d])", &[
         (
             "a",
@@ -463,6 +479,20 @@ fn test_array_max(file: &mut impl Write) {
     run_ast(file, "array_max([1.2, NULL, 3.4, 5.6, NULL])", &[]);
     run_ast(file, "array_max(['a', 'b', 'c', 'd', 'e'])", &[]);
     run_ast(file, "array_max(['a', 'b', NULL, 'c', 'd', NULL])", &[]);
+
+    {
+        let data_type = DataType::Array(Box::new(Int16Type::data_type())).wrap_nullable();
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 4);
+
+        builder.push_default();
+        builder.push(Scalar::Array(Int16Type::from_data(vec![1, 5, 8, 3])).as_ref());
+        builder.push(Scalar::Array(Int16Type::from_data(vec![1, 5])).as_ref());
+        builder.push_default();
+
+        let column = builder.build();
+
+        run_ast(file, "array_max(a)", &[("a", column)]);
+    }
 
     run_ast(file, "array_max([a, b, c, d])", &[
         ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
