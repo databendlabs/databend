@@ -1822,8 +1822,12 @@ impl DecimalColumn {
 
         let buffer = match self {
             DecimalColumn::Decimal64(col, _) => {
-                let builder = Decimal64As128Type::iter_column(col).collect::<Vec<_>>();
-                Decimal128Type::build_column(builder).into()
+                if matches!(arrow_type, arrow_schema::DataType::Decimal64(_, _)) {
+                    col.clone().into()
+                } else {
+                    let builder = Decimal64As128Type::iter_column(col).collect::<Vec<_>>();
+                    Decimal128Type::build_column(builder).into()
+                }
             }
             DecimalColumn::Decimal128(col, _) => col.clone().into(),
             DecimalColumn::Decimal256(col, _) => {
