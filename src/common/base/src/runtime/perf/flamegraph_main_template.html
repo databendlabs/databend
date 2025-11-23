@@ -48,8 +48,6 @@
 
 <script>
     function resizeIframe(iframe) {
-        // A small delay can help ensure the content has been fully rendered
-        // before calculating its height, especially for complex SVGs.
         setTimeout(() => {
             try {
                 const body = iframe.contentWindow.document.body;
