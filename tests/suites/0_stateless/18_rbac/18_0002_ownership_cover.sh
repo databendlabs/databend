@@ -135,7 +135,7 @@ echo "create role drop_role;" | $BENDSQL_CLIENT_CONNECT
 echo "create role drop_role1;" | $BENDSQL_CLIENT_CONNECT
 echo "create user u1 identified by '123' with DEFAULT_ROLE='drop_role'" | $BENDSQL_CLIENT_CONNECT
 echo "grant role drop_role to u1;" | $BENDSQL_CLIENT_CONNECT
-echo "grant create database on *.* to u1;" | $BENDSQL_CLIENT_CONNECT
+echo "grant create database on *.* to role drop_role;" | $BENDSQL_CLIENT_CONNECT
 export USER_U1_CONNECT="bendsql --user=u1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
 echo "create database a" | $USER_U1_CONNECT
