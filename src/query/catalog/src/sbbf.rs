@@ -73,10 +73,6 @@
 //! [sbbf-paper]: https://arxiv.org/pdf/2101.01719
 //! [bf-formulae]: http://tfk.mit.edu/pdf/bloom.pdf
 
-use std::hash::Hasher;
-
-use twox_hash::XxHash64;
-
 /// Salt values as defined in the [spec](https://github.com/apache/parquet-format/blob/master/BloomFilter.md#technical-approach).
 const SALT: [u32; 8] = [
     0x47b6137b_u32,
@@ -223,8 +219,8 @@ impl Sbbf {
         (((hash >> 32).saturating_mul(self.0.len() as u64)) >> 32) as usize
     }
 
-    /// Insert a hash into the filter
-    fn insert_hash(&mut self, hash: u64) {
+    /// Insert a hash into the filter. The caller must provide a well-distributed 64-bit hash.
+    pub fn insert_hash(&mut self, hash: u64) {
         let block_index = self.hash_to_block_index(hash);
         self.0[block_index].insert(hash as u32)
     }
@@ -232,21 +228,9 @@ impl Sbbf {
     /// Check if a hash is in the filter. May return
     /// true for values that was never inserted ("false positive")
     /// but will always return false if a hash has not been inserted.
-    fn check_hash(&self, hash: u64) -> bool {
+    pub fn check_hash(&self, hash: u64) -> bool {
         let block_index = self.hash_to_block_index(hash);
         self.0[block_index].check(hash as u32)
-    }
-
-    /// Insert a digest (u64 hash value) into the filter
-    pub fn insert_digest(&mut self, digest: u64) {
-        let hash = hash_u64(digest);
-        self.insert_hash(hash)
-    }
-
-    /// Check if a digest is probably present or definitely absent in the filter
-    pub fn check_digest(&self, digest: u64) -> bool {
-        let hash = hash_u64(digest);
-        self.check_hash(hash)
     }
 
     /// Merge another bloom filter into this one (bitwise OR operation)
@@ -271,29 +255,9 @@ impl Sbbf {
     }
 }
 
-/// Per spec we use xxHash with seed=0
-const SEED: u64 = 0;
-
-/// Hash a u64 value using XxHash64
-#[inline]
-fn hash_u64(value: u64) -> u64 {
-    let mut hasher = XxHash64::with_seed(SEED);
-    hasher.write_u64(value);
-    hasher.finish()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_hash_u64() {
-        let digest1 = 12345u64;
-        let digest2 = 67890u64;
-        assert_ne!(hash_u64(digest1), digest1);
-        assert_ne!(hash_u64(digest2), digest2);
-        assert_ne!(hash_u64(digest1), hash_u64(digest2));
-    }
 
     #[test]
     fn test_mask_set_quick_check() {
@@ -316,8 +280,8 @@ mod tests {
     fn test_sbbf_insert_and_check() {
         let mut sbbf = Sbbf(vec![Block::ZERO; 1_000]);
         for i in 0..1_000_000 {
-            sbbf.insert_digest(i);
-            assert!(sbbf.check_digest(i));
+            sbbf.insert_hash(i);
+            assert!(sbbf.check_hash(i));
         }
     }
 
@@ -325,18 +289,18 @@ mod tests {
     fn test_sbbf_union() {
         let mut filter1 = Sbbf::new_with_ndv_fpp(100, 0.01).unwrap();
         for i in 0..50 {
-            filter1.insert_digest(i);
+            filter1.insert_hash(i);
         }
 
         let mut filter2 = Sbbf::new_with_ndv_fpp(100, 0.01).unwrap();
         for i in 50..100 {
-            filter2.insert_digest(i);
+            filter2.insert_hash(i);
         }
 
         filter1.union(&filter2);
 
         for i in 0..100 {
-            assert!(filter1.check_digest(i));
+            assert!(filter1.check_hash(i));
         }
     }
 

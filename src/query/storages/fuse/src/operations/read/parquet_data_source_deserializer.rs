@@ -302,6 +302,7 @@ impl Processor for DeserializeDataTransform {
                         data_block = data_block.filter_with_bitmap(&bitmap)?;
                         filter = Some(bitmap);
                         let rows_after = data_block.num_rows();
+                        log::info!("Runtime filter: rows_before={} rows_after={}", rows_before, rows_after);
                         let bloom_duration = bloom_start.elapsed();
                         Profile::record_usize_profile(
                             ProfileStatisticsName::RuntimeFilterBloomTime,

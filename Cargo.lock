@@ -3473,7 +3473,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "thrift",
- "twox-hash 1.6.3",
  "typetag",
 ]
 
