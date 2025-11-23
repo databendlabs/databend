@@ -68,11 +68,12 @@ impl OuterLeftHashJoin {
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
         let basic_hash_join = BasicHashJoin::create(
-            ctx,
+            &settings,
             function_ctx.clone(),
             method,
             desc.clone(),
             state.clone(),
+            0,
         )?;
 
         Ok(OuterLeftHashJoin {
@@ -111,7 +112,7 @@ impl Join for OuterLeftHashJoin {
                 .collect::<Vec<_>>();
 
             let build_block = null_build_block(&types, data.num_rows());
-            let probe_block = Some(data.project(&self.desc.probe_projections));
+            let probe_block = Some(data.project(&self.desc.probe_projection));
             let result_block = final_result_block(&self.desc, probe_block, build_block, num_rows);
             return Ok(Box::new(OneBlockJoinStream(Some(result_block))));
         }
@@ -127,7 +128,7 @@ impl Join for OuterLeftHashJoin {
         };
 
         self.desc.remove_keys_nullable(&mut keys);
-        let probe_block = data.project(&self.desc.probe_projections);
+        let probe_block = data.project(&self.desc.probe_projection);
 
         let probe_stream = with_join_hash_method!(|T| match self.basic_state.hash_table.deref() {
             HashJoinHashTable::T(table) => {
@@ -136,6 +137,9 @@ impl Join for OuterLeftHashJoin {
 
                 let probe_data = ProbeData::new(keys, valids, probe_hash_statistics);
                 table.probe(probe_data)
+            }
+            HashJoinHashTable::NestedLoop(_) => {
+                todo!()
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",

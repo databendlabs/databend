@@ -15,6 +15,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::PoisonError;
 
 use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnVec;
@@ -53,6 +54,22 @@ impl BasicHashJoinState {
             arenas: CStyleCell::new(Vec::new()),
             hash_table: CStyleCell::new(HashJoinHashTable::Null),
         }
+    }
+
+    pub(super) fn push_chunk(&self, chunk: DataBlock) {
+        let locked = self.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        *self.build_rows.as_mut() += chunk.num_rows();
+        let chunk_index = self.chunks.len();
+        self.chunks.as_mut().push(chunk);
+        self.build_queue.as_mut().push_back(chunk_index);
+    }
+
+    pub(super) fn steal_chunk_index(&self) -> Option<usize> {
+        let locked = self.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        self.build_queue.as_mut().pop_front()
     }
 }
 

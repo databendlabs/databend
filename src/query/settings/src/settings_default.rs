@@ -495,6 +495,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("nested_loop_join_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024),
+                    desc: "Set the threshold for use nested loop join. Setting it to 0 disable nested loop join.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_bloom_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables bloom runtime filter optimization for JOIN.",

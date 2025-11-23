@@ -26,9 +26,10 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_sql::plans::JoinType;
 
-use crate::pipelines::processors::transforms::memory::outer_left_join::OuterLeftHashJoin;
-use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
-use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
+use super::common::CStyleCell;
+use super::grace::GraceHashJoinState;
+use super::memory::outer_left_join::OuterLeftHashJoin;
+use super::memory::NestedLoopJoin;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::GraceHashJoin;
 use crate::pipelines::processors::transforms::InnerHashJoin;
@@ -126,13 +127,29 @@ impl HashJoinFactory {
         }
 
         match typ {
-            JoinType::Inner => Ok(Box::new(InnerHashJoin::create(
-                &self.ctx,
-                self.function_ctx.clone(),
-                self.hash_method.clone(),
-                self.desc.clone(),
-                self.create_basic_state(id)?,
-            )?)),
+            JoinType::Inner => {
+                let state = self.create_basic_state(id)?;
+                let nested_loop_desc = self
+                    .desc
+                    .create_nested_loop_desc(&settings, &self.function_ctx)?;
+
+                let inner = InnerHashJoin::create(
+                    &settings,
+                    self.function_ctx.clone(),
+                    self.hash_method.clone(),
+                    self.desc.clone(),
+                    state.clone(),
+                    nested_loop_desc
+                        .as_ref()
+                        .map(|desc| desc.nested_loop_join_threshold)
+                        .unwrap_or_default(),
+                )?;
+
+                match nested_loop_desc {
+                    Some(desc) => Ok(Box::new(NestedLoopJoin::create(inner, state, desc))),
+                    None => Ok(Box::new(inner)),
+                }
+            }
             JoinType::Left => Ok(Box::new(OuterLeftHashJoin::create(
                 &self.ctx,
                 self.function_ctx.clone(),
@@ -148,11 +165,12 @@ impl HashJoinFactory {
         match typ {
             JoinType::Inner => {
                 let inner_hash_join = InnerHashJoin::create(
-                    &self.ctx,
+                    &self.ctx.get_settings(),
                     self.function_ctx.clone(),
                     self.hash_method.clone(),
                     self.desc.clone(),
                     self.create_basic_state(id)?,
+                    0,
                 )?;
 
                 Ok(Box::new(GraceHashJoin::create(

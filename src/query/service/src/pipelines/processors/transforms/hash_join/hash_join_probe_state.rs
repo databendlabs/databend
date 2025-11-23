@@ -165,6 +165,7 @@ impl HashJoinProbeState {
                 // Continue to probe hash table and process data blocks.
                 self.result_blocks(probe_state, keys, &table.hash_table)
             }
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
@@ -376,6 +377,7 @@ impl HashJoinProbeState {
                 // Continue to probe hash table and process data blocks.
                 self.result_blocks(probe_state, keys, &table.hash_table)
             }
+            HashJoinHashTable::NestedLoop(_) => unreachable!(),
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",
             )),
