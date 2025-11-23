@@ -34,25 +34,11 @@ use crate::servers::flight::FlightSender;
 
 pub struct ExchangeWriterSink {
     flight_sender: FlightSender,
-    source: String,
-    destination: String,
-    fragment: usize,
 }
 
 impl ExchangeWriterSink {
-    pub fn create(
-        input: Arc<InputPort>,
-        flight_sender: FlightSender,
-        source_id: &str,
-        destination_id: &str,
-        fragment_id: usize,
-    ) -> Box<dyn Processor> {
-        AsyncSinker::create(input, ExchangeWriterSink {
-            flight_sender,
-            source: source_id.to_string(),
-            destination: destination_id.to_string(),
-            fragment: fragment_id,
-        })
+    pub fn create(input: Arc<InputPort>, flight_sender: FlightSender) -> Box<dyn Processor> {
+        AsyncSinker::create(input, ExchangeWriterSink { flight_sender })
     }
 }
 
@@ -95,22 +81,6 @@ impl AsyncSink for ExchangeWriterSink {
 
         Ok(false)
     }
-
-    fn details_status(&self) -> Option<String> {
-        #[derive(Debug)]
-        #[allow(dead_code)]
-        struct Display {
-            source: String,
-            destination: String,
-            fragment: usize,
-        }
-
-        Some(format!("{:?}", Display {
-            source: self.source.clone(),
-            destination: self.destination.clone(),
-            fragment: self.fragment,
-        }))
-    }
 }
 
 pub struct IgnoreExchangeSink {
@@ -136,24 +106,12 @@ impl Sink for IgnoreExchangeSink {
     }
 }
 
-pub fn create_writer_item(
-    exchange: FlightSender,
-    ignore: bool,
-    destination_id: &str,
-    fragment_id: usize,
-    source_id: &str,
-) -> PipeItem {
+pub fn create_writer_item(exchange: FlightSender, ignore: bool) -> PipeItem {
     let input = InputPort::create();
     PipeItem::create(
         match ignore {
             true => ProcessorPtr::create(IgnoreExchangeSink::create(input.clone(), exchange)),
-            false => ProcessorPtr::create(ExchangeWriterSink::create(
-                input.clone(),
-                exchange,
-                source_id,
-                destination_id,
-                fragment_id,
-            )),
+            false => ProcessorPtr::create(ExchangeWriterSink::create(input.clone(), exchange)),
         },
         vec![input],
         vec![],

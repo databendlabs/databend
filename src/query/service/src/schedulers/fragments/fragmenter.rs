@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalUniqName;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -217,11 +218,23 @@ impl FragmentDeriveHandle {
 
         Ok(match exchange_sink.kind {
             FragmentKind::Init => None,
-            FragmentKind::Normal => Some(DataExchange::NodeToNodeExchange(NodeToNodeExchange {
-                destination_ids: get_executors(cluster),
-                shuffle_keys: exchange_sink.keys.clone(),
-                allow_adjust_parallelism: exchange_sink.allow_adjust_parallelism,
-            })),
+            FragmentKind::Normal => {
+                let destination_ids = get_executors(cluster);
+
+                let mut destination_channels = Vec::with_capacity(destination_ids.len());
+
+                for destination in &destination_ids {
+                    destination_channels
+                        .push((destination.clone(), vec![GlobalUniqName::unique()]));
+                }
+
+                Some(DataExchange::NodeToNodeExchange(NodeToNodeExchange {
+                    destination_ids,
+                    destination_channels,
+                    shuffle_keys: exchange_sink.keys.clone(),
+                    allow_adjust_parallelism: exchange_sink.allow_adjust_parallelism,
+                }))
+            }
             FragmentKind::Merge => Some(MergeExchange::create(
                 cluster.local_id(),
                 exchange_sink.ignore_exchange,

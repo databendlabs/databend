@@ -26,6 +26,7 @@ pub struct ShuffleExchangeParams {
     pub fragment_id: usize,
     pub schema: DataSchemaRef,
     pub destination_ids: Vec<String>,
+    pub destination_channels: Vec<(String, Vec<String>)>,
     pub shuffle_scatter: Arc<Box<dyn FlightScatter>>,
     pub exchange_injector: Arc<dyn ExchangeInjector>,
     pub allow_adjust_parallelism: bool,
@@ -36,29 +37,42 @@ pub struct MergeExchangeParams {
     pub query_id: String,
     pub fragment_id: usize,
     pub destination_id: String,
+    pub channel_id: String,
     pub schema: DataSchemaRef,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
     pub exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
+#[derive(Clone)]
+pub struct BroadcastExchangeParams {
+    pub query_id: String,
+    pub executor_id: String,
+    pub schema: DataSchemaRef,
+    pub destination_channels: Vec<(String, Vec<String>)>,
+}
+
+#[allow(clippy::enum_variant_names)]
 pub enum ExchangeParams {
     MergeExchange(MergeExchangeParams),
-    ShuffleExchange(ShuffleExchangeParams),
+    BroadcastExchange(BroadcastExchangeParams),
+    NodeShuffleExchange(ShuffleExchangeParams),
 }
 
 impl ExchangeParams {
     pub fn get_schema(&self) -> DataSchemaRef {
         match self {
-            ExchangeParams::ShuffleExchange(exchange) => exchange.schema.clone(),
+            ExchangeParams::NodeShuffleExchange(exchange) => exchange.schema.clone(),
             ExchangeParams::MergeExchange(exchange) => exchange.schema.clone(),
+            ExchangeParams::BroadcastExchange(exchange) => exchange.schema.clone(),
         }
     }
 
     pub fn get_query_id(&self) -> String {
         match self {
-            ExchangeParams::ShuffleExchange(exchange) => exchange.query_id.clone(),
+            ExchangeParams::NodeShuffleExchange(exchange) => exchange.query_id.clone(),
             ExchangeParams::MergeExchange(exchange) => exchange.query_id.clone(),
+            ExchangeParams::BroadcastExchange(exchange) => exchange.query_id.clone(),
         }
     }
 }

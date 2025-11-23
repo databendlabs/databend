@@ -36,27 +36,15 @@ pub struct ExchangeSourceReader {
     output: Arc<OutputPort>,
     output_data: Vec<DataPacket>,
     flight_receiver: FlightReceiver,
-    source: String,
-    destination: String,
-    fragment: usize,
 }
 
 impl ExchangeSourceReader {
-    pub fn create(
-        output: Arc<OutputPort>,
-        flight_receiver: FlightReceiver,
-        source: &str,
-        destination: &str,
-        fragment: usize,
-    ) -> ProcessorPtr {
+    pub fn create(output: Arc<OutputPort>, flight_receiver: FlightReceiver) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(ExchangeSourceReader {
             output,
             flight_receiver,
-            source: source.to_string(),
-            destination: destination.to_string(),
             finished: AtomicBool::new(false),
             output_data: vec![],
-            fragment,
         }))
     }
 }
@@ -135,41 +123,12 @@ impl Processor for ExchangeSourceReader {
 
         Ok(())
     }
-
-    fn details_status(&self) -> Option<String> {
-        #[derive(Debug)]
-        #[allow(dead_code)]
-        struct Display {
-            source: String,
-            destination: String,
-            fragment: usize,
-            can_push: bool,
-        }
-
-        Some(format!("{:?}", Display {
-            source: self.source.clone(),
-            destination: self.destination.clone(),
-            fragment: self.fragment,
-            can_push: self.output.can_push()
-        }))
-    }
 }
 
-pub fn create_reader_item(
-    flight_receiver: FlightReceiver,
-    source: &str,
-    destination: &str,
-    fragment: usize,
-) -> PipeItem {
+pub fn create_reader_item(flight_receiver: FlightReceiver) -> PipeItem {
     let output = OutputPort::create();
     PipeItem::create(
-        ExchangeSourceReader::create(
-            output.clone(),
-            flight_receiver,
-            source,
-            destination,
-            fragment,
-        ),
+        ExchangeSourceReader::create(output.clone(), flight_receiver),
         vec![],
         vec![output],
     )
