@@ -53,6 +53,7 @@ impl RepartitionedQueues {
 
 pub enum RoundPhase {
     Idle,
+    NoTask,
     NewTask(AggregateMeta),
     OutputReady(DataBlock),
     Aggregate,
@@ -63,6 +64,7 @@ impl Display for RoundPhase {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RoundPhase::Idle => write!(f, "Idle"),
+            RoundPhase::NoTask => write!(f, "NoTask"),
             RoundPhase::NewTask(_) => write!(f, "NewTask"),
             RoundPhase::OutputReady(_) => write!(f, "OutputReady"),
             RoundPhase::AsyncWait => write!(f, "AsyncWait"),
@@ -116,6 +118,11 @@ impl LocalRoundState {
         self.is_reported = true;
         self.phase = RoundPhase::AsyncWait;
         Event::Async
+    }
+
+    pub fn schedule_not_get_task(&mut self) -> Event {
+        self.phase = RoundPhase::NoTask;
+        Event::Sync
     }
 
     pub fn enqueue_partitioned_meta(&mut self, datablock: &mut DataBlock) -> Result<()> {
