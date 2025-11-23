@@ -12,6 +12,7 @@ async-trait = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
+databend-common-tracing = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }

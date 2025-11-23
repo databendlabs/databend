@@ -161,7 +161,7 @@ impl PipelineExecutor {
             }
 
             info!(query_id, elapsed:? = instant.elapsed();
-                "[PIPELINE-EXECUTOR] Pipeline initialized successfully",
+                "Pipeline initialized successfully",
             );
         }
         Ok(())
@@ -171,10 +171,7 @@ impl PipelineExecutor {
     pub fn execute(&self) -> Result<()> {
         let instants = Instant::now();
         let _guard = defer(move || {
-            info!(
-                "[PIPELINE-EXECUTOR] Execution completed, elapsed: {:?}",
-                instants.elapsed()
-            );
+            info!("Execution completed, elapsed: {:?}", instants.elapsed());
         });
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.execute(),
@@ -226,9 +223,11 @@ impl PipelineExecutor {
                 let max_execute_future = Box::pin(tokio::time::sleep(max_execute_time_in_seconds));
                 if let Either::Left(_) = select(max_execute_future, finished_future).await {
                     if let Some(graph) = this_graph.upgrade() {
-                        graph.should_finish(Err(ErrorCode::AbortedQuery(
-                            "[PIPELINE-EXECUTOR] Query aborted due to execution time exceeding maximum limit",
-                        ))).expect("[PIPELINE-EXECUTOR] Failed to send timeout error message");
+                        graph
+                            .should_finish(Err(ErrorCode::AbortedQuery(
+                                "Query aborted due to execution time exceeding maximum limit",
+                            )))
+                            .expect("Failed to send timeout error message");
                     }
                 }
             });
@@ -245,13 +244,13 @@ impl PipelineExecutor {
                     query_wrapper
                         .graph
                         .should_finish(Err(may_error))
-                        .expect("[PIPELINE-EXECUTOR] Failed to send error message");
+                        .expect("Failed to send error message");
                 }
                 None => {
                     query_wrapper
                         .graph
                         .should_finish::<()>(Ok(()))
-                        .expect("[PIPELINE-EXECUTOR] Failed to send completion message");
+                        .expect("Failed to send completion message");
                 }
             },
         }
@@ -290,7 +289,7 @@ impl PipelineExecutor {
     pub fn change_priority(&self, priority: u8) {
         match self {
             PipelineExecutor::QueryPipelineExecutor(_) => {
-                unreachable!("[PIPELINE-EXECUTOR] Logic error: cannot change priority for QueryPipelineExecutor")
+                unreachable!("Logic error: cannot change priority for QueryPipelineExecutor")
             }
             PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
                 query_wrapper.graph.change_priority(priority as u64);

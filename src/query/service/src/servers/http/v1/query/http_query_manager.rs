@@ -94,7 +94,7 @@ impl Queries {
             if let Some(st) = closed_state {
                 self.last_query_end_at = Some(now);
                 self.num_active_queries = self.num_active_queries.saturating_sub(1);
-                log::info!("[HTTP-QUERY] Query {query_id} closed: {st:?}");
+                log::info!("Query {query_id} closed: {st:?}");
             }
             return Ok((Some(q), closed_state));
         }
@@ -176,7 +176,7 @@ impl HttpQueryManager {
                     TimeoutResult::Remove => {
                         let mut queries = self_clone.queries.write();
                         queries.remove(&query_id_clone);
-                        log::info!("[HTTP-QUERY] Query {query_id_clone} removed");
+                        log::info!("Query {query_id_clone} removed");
                         break;
                     }
                 }
@@ -227,7 +227,7 @@ impl HttpQueryManager {
                 sleep(Duration::from_secs(timeout_secs)).await;
                 if self_clone.get_txn(&last_query_id_clone).is_some() {
                     log::info!(
-                        "[HTTP-QUERY] Transaction timed out after {} seconds, last_query_id = {}",
+                        "Transaction timed out after {} seconds, last_query_id = {}",
                         timeout_secs,
                         last_query_id_clone
                     );
@@ -252,13 +252,13 @@ impl HttpQueryManager {
         if let Some(id) = last_node_id {
             if self.server_info.id != *id {
                 return Err(ErrorCode::SessionLost(format!(
-                    "[HTTP-QUERY] Transaction aborted because server restart or route error: expecting server {}, current one is {} started at {} ",
+                    "Transaction aborted because server restart or route error: expecting server {}, current one is {} started at {} ",
                     id, self.server_info.id, self.server_info.start_time
                 )));
             }
         } else {
             return Err(ErrorCode::InvalidSessionState(
-                "[HTTP-QUERY] Transaction is active but missing server_info".to_string(),
+                "Transaction is active but missing server_info".to_string(),
             ));
         }
         Ok(())

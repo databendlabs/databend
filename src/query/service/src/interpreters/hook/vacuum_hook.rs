@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[VACUUM-HOOK] ...".
+databend_common_tracing::register_module_tag!("[VACUUM-HOOK]");
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -60,10 +63,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
             return Ok(());
         }
 
-        log::info!(
-            "[VACUUM-HOOK] Cleaning temporary files from nodes: {:?}",
-            node_files
-        );
+        log::info!("Cleaning temporary files from nodes: {:?}", node_files);
 
         let nodes = node_files.keys().cloned().collect::<Vec<usize>>();
         let _ = GlobalIORuntime::instance().block_on::<(), ErrorCode, _>(async move {
@@ -77,7 +77,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
                 .await;
 
             if let Err(cause) = &removed_files {
-                log::warn!("[VACUUM-HOOK] Failed to clean temporary files: {:?}", cause);
+                log::warn!("Failed to clean temporary files: {:?}", cause);
             }
 
             Ok(())
@@ -96,10 +96,7 @@ pub fn hook_disk_temp_dir(query_ctx: &Arc<QueryContext>) -> Result<()> {
             .get_spilling_to_disk_vacuum_unknown_temp_dirs_limit()?;
         let deleted = mgr.drop_disk_spill_dir_unknown(limit)?;
         if !deleted.is_empty() {
-            warn!(
-                "[VACUUM-HOOK] Removed residual temporary directories: {:?}",
-                deleted
-            )
+            warn!("Removed residual temporary directories: {:?}", deleted)
         }
     }
 

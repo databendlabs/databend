@@ -116,7 +116,7 @@ impl ProcessorAsyncTask {
             match futures::future::select(left, right).await {
                 Either::Left((res, _)) => res,
                 Either::Right((_, _)) => Err(ErrorCode::AbortedQuery(
-                    "[PROCESSOR-ASYNC-TASK] Query aborted due to server shutdown or query termination",
+                    "Query aborted due to server shutdown or query termination",
                 )),
             }
         };
@@ -136,7 +136,7 @@ impl ProcessorAsyncTask {
                         let elapsed = start.elapsed();
                         let active_workers = queue_clone.active_workers();
                         warn!(
-                            "[PROCESSOR-ASYNC-TASK] Slow async task detected - query: {:?}, processor: {:?} ({}), elapsed: {:?}, active workers: {:?}",
+                            "Slow async task detected - query: {:?}, processor: {:?} ({}), elapsed: {:?}, active workers: {:?}",
                             query_id, processor_id, processor_name, elapsed, active_workers
                         );
                     }
