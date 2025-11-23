@@ -424,6 +424,11 @@ fn test_array_count(file: &mut impl Write) {
     run_ast(file, "array_count([1.2, NULL, 3.4, 5.6, NULL])", &[]);
     run_ast(file, "array_count(['a', 'b', 'c', 'd', 'e'])", &[]);
     run_ast(file, "array_count(['a', 'b', NULL, 'c', 'd', NULL])", &[]);
+    run_ast(
+        file,
+        "array_count(CAST(NULL AS Nullable(Array(Int64))))",
+        &[],
+    );
 
     run_ast(file, "array_count([a, b, c, d])", &[
         ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
@@ -469,6 +474,25 @@ fn test_array_count(file: &mut impl Write) {
     run_ast(file, "array_count(parse_json('[1, 2, 3, 4, 5]'))", &[]);
     run_ast(file, "array_count(parse_json('[1, 2, null, 4, 5]'))", &[]);
     run_ast(file, "array_count(parse_json('[1.2, 3.4, 5.6, 7.8]'))", &[]);
+
+    {
+        let mut builder = ColumnBuilder::with_capacity(&DataType::EmptyArray, 3);
+        for _ in 0..3 {
+            builder.push_default();
+        }
+        let column = builder.build();
+        run_ast(file, "array_count(a)", &[("a", column)]);
+    }
+
+    {
+        let data_type = DataType::EmptyArray.wrap_nullable();
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 3);
+        builder.push_default();
+        builder.push(Scalar::EmptyArray.as_ref());
+        builder.push_default();
+        let column = builder.build();
+        run_ast(file, "array_count(a)", &[("a", column)]);
+    }
 }
 
 fn test_array_max(file: &mut impl Write) {
@@ -479,6 +503,7 @@ fn test_array_max(file: &mut impl Write) {
     run_ast(file, "array_max([1.2, NULL, 3.4, 5.6, NULL])", &[]);
     run_ast(file, "array_max(['a', 'b', 'c', 'd', 'e'])", &[]);
     run_ast(file, "array_max(['a', 'b', NULL, 'c', 'd', NULL])", &[]);
+    run_ast(file, "array_max(CAST(NULL AS Nullable(Array(Int64))))", &[]);
 
     {
         let data_type = DataType::Array(Box::new(Int16Type::data_type())).wrap_nullable();
@@ -528,6 +553,25 @@ fn test_array_max(file: &mut impl Write) {
         "array_max(parse_json('[\"a\", \"b\", \"c\", \"d\"]'))",
         &[],
     );
+
+    {
+        let mut builder = ColumnBuilder::with_capacity(&DataType::EmptyArray, 2);
+        for _ in 0..2 {
+            builder.push_default();
+        }
+        let column = builder.build();
+        run_ast(file, "array_max(a)", &[("a", column)]);
+    }
+
+    {
+        let data_type = DataType::EmptyArray.wrap_nullable();
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 3);
+        builder.push_default();
+        builder.push(Scalar::EmptyArray.as_ref());
+        builder.push_default();
+        let column = builder.build();
+        run_ast(file, "array_max(a)", &[("a", column)]);
+    }
 }
 
 fn test_array_min(file: &mut impl Write) {
