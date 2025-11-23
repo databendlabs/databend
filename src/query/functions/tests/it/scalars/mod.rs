@@ -64,7 +64,7 @@ pub use databend_common_functions::test_utils as parser;
 
 #[derive(Clone)]
 pub struct TestContext<'a> {
-    pub columns: &'a [(&'a str, Column)],
+    pub entries: &'a [(&'a str, BlockEntry)],
     pub input_domains: Option<&'a [(&'a str, Domain)]>,
     pub func_ctx: FunctionContext,
     pub strict_eval: bool,
@@ -73,7 +73,7 @@ pub struct TestContext<'a> {
 impl Default for TestContext<'_> {
     fn default() -> Self {
         Self {
-            columns: &[],
+            entries: &[],
             input_domains: None,
             func_ctx: FunctionContext::default(),
             strict_eval: true,
@@ -83,9 +83,9 @@ impl Default for TestContext<'_> {
 
 impl<'a> TestContext<'a> {
     pub fn input_domains(&mut self) -> HashMap<usize, Domain> {
-        self.columns
+        self.entries
             .iter()
-            .map(|(name, col)| {
+            .map(|(name, entry)| {
                 self.input_domains
                     .and_then(|domains| {
                         domains
@@ -93,7 +93,12 @@ impl<'a> TestContext<'a> {
                             .find(|(n, _)| n == name)
                             .map(|(_, domain)| domain.clone())
                     })
-                    .unwrap_or_else(|| col.domain())
+                    .unwrap_or_else(|| match entry {
+                        BlockEntry::Const(scalar, data_type, _) => {
+                            scalar.as_ref().domain(data_type)
+                        }
+                        BlockEntry::Column(column) => column.domain(),
+                    })
             })
             .enumerate()
             .collect()
@@ -101,8 +106,13 @@ impl<'a> TestContext<'a> {
 }
 
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
+    let entries = &columns
+        .iter()
+        .map(|(name, column)| (*name, column.clone().into()))
+        .collect::<Vec<_>>();
+
     run_ast_with_context(file, text, TestContext {
-        columns,
+        entries,
         func_ctx: FunctionContext::default(),
         input_domains: None,
         strict_eval: true,
@@ -115,9 +125,9 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
     let result: Result<_> = try {
         let raw_expr = parser::parse_raw_expr(
             text,
-            &ctx.columns
+            &ctx.entries
                 .iter()
-                .map(|(name, c)| (*name, c.data_type()))
+                .map(|(name, entry)| (*name, entry.data_type()))
                 .collect::<Vec<_>>(),
         );
 
@@ -136,17 +146,21 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         let remote_expr = optimized_expr.as_remote_expr();
         let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
 
-        let num_rows = ctx.columns.iter().map(|col| col.1.len()).max().unwrap_or(1);
+        let num_rows = ctx
+            .entries
+            .iter()
+            .map(|(_, entry)| entry.len())
+            .max()
+            .unwrap_or(1);
         let block = DataBlock::new(
-            ctx.columns
-                .iter()
-                .map(|(_, col)| col.clone().into())
-                .collect(),
+            ctx.entries.iter().map(|(_, entry)| entry.clone()).collect(),
             num_rows,
         );
 
-        ctx.columns.iter().for_each(|(_, col)| {
-            test_arrow_conversion(col, false);
+        ctx.entries.iter().for_each(|(_, entry)| {
+            if let BlockEntry::Column(col) = entry {
+                test_arrow_conversion(col, false);
+            }
         });
 
         let evaluator = Evaluator::new(&block, &ctx.func_ctx, &BUILTIN_FUNCTIONS);
@@ -216,7 +230,7 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
                         .collect::<Vec<_>>();
                     let columns = used_columns
                         .into_iter()
-                        .map(|i| ctx.columns[i].clone())
+                        .map(|i| ctx.entries[i].clone())
                         .collect::<Vec<_>>();
 
                     let mut table = Table::new();
