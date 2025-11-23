@@ -16,6 +16,7 @@ mod csv;
 mod ndjson;
 mod tsv;
 
+pub use csv::csv_read_partitions;
 pub use csv::CsvInputFormat;
 pub use ndjson::NdJsonInputFormat;
 pub use tsv::TsvInputFormat;
