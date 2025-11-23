@@ -5336,6 +5336,7 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
             alias: alias.map(|v| TableAlias {
                 name: v,
                 columns: vec![],
+                keep_database_name: false,
             }),
             temporal: None,
             with_options: None,

@@ -145,7 +145,7 @@ copy into @unload/a_raw_path.csv from (select 3,4) file_format=(type=csv) single
 query 
 copy into @unload/array_of_nulls from (select [NULL, NULL]);
 ----
-1 8 548
+1 8 555
 
 query 
 select * from @unload/array_of_nulls;
