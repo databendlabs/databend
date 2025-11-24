@@ -243,3 +243,48 @@ drop table t2;
 
 statement ok
 unset inlist_to_join_threshold
+
+statement ok
+create or replace database column_position
+
+statement ok
+use column_position
+
+query
+select $1, $2 from (select 1 as a, 2 as b, 3 as c) as t
+----
+1 2
+
+query
+select t.$1, t.$2 from (select number, number + 10 as n from numbers(3)) as t order by t.$1
+----
+0 10
+1 11
+2 12
+
+statement ok
+create or replace table monthly_totals(empid int, amount int)
+
+statement ok
+insert into monthly_totals values (1, 100), (1, 200), (2, 50), (2, 75)
+
+query
+with totals as ( select empid, sum(amount) as total from monthly_totals group by empid ) select totals.$1, totals.$2 from totals order by totals.$1
+----
+1 300
+2 125
+
+statement ok
+CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);
+
+statement ok
+INSERT INTO monthly_sales VALUES (1, 10000, 'JAN'), (1, 400, 'JAN'), (2, 4500, 'JAN'), (2, 35000, 'JAN'), (1, 5000, 'FEB'), (1, 3000, 'FEB'), (2, 200, 'FEB'), (2, 90500, 'FEB'), (1, 6000, 'MAR'), (1, 5000, 'MAR'), (2, 2500, 'MAR'), (2, 9500, 'MAR'), (1, 8000, 'APR'), (1, 10000, 'APR'), (2, 800, 'APR'), (2, 4500, 'APR');
+
+query
+SELECT $1, $2, $3 FROM  monthly_sales PIVOT(SUM(amount) FOR MONTH IN (SELECT DISTINCT month FROM  monthly_sales)) ORDER BY EMPID
+----
+1 18000 8000
+2 5300 90700
+
+statement ok
+drop database column_position
