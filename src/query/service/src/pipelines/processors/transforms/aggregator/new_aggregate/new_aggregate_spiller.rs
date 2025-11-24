@@ -227,15 +227,15 @@ impl AggregatePayloadWriters {
 struct SharedPartitionStreamInner {
     partition_stream: BlockPartitionStream,
     worker_count: usize,
-    working_count: usize,
+    finish_count: usize,
 }
 
 impl SharedPartitionStreamInner {
     pub fn finish(&mut self) -> Vec<(usize, DataBlock)> {
-        self.working_count -= 1;
+        self.finish_count += 1;
 
-        if self.working_count == 0 {
-            self.working_count = self.worker_count;
+        if self.finish_count == self.worker_count {
+            self.finish_count = 0;
 
             let ids = self.partition_stream.partition_ids();
 
@@ -254,6 +254,10 @@ impl SharedPartitionStreamInner {
     pub fn partition(&mut self, partition_id: u64, block: DataBlock) -> Vec<(usize, DataBlock)> {
         let indices = vec![partition_id; block.num_rows()];
         self.partition_stream.partition(indices, block, true)
+    }
+
+    pub fn update_worker_count(&mut self, worker_count: usize) {
+        self.worker_count = worker_count;
     }
 }
 
@@ -274,7 +278,7 @@ impl SharedPartitionStream {
             inner: Arc::new(Mutex::new(SharedPartitionStreamInner {
                 partition_stream,
                 worker_count,
-                working_count: worker_count,
+                finish_count: 0,
             })),
         }
     }
@@ -287,6 +291,11 @@ impl SharedPartitionStream {
     pub fn partition(&self, partition_id: usize, block: DataBlock) -> Vec<(usize, DataBlock)> {
         let mut inner = self.inner.lock();
         inner.partition(partition_id as u64, block)
+    }
+
+    pub fn update_worker_count(&self, worker_count: usize) {
+        let mut inner = self.inner.lock();
+        inner.update_worker_count(worker_count);
     }
 }
 
@@ -374,6 +383,20 @@ impl NewAggregateSpiller {
         } else {
             Err(ErrorCode::Internal("read empty block from final aggregate"))
         }
+    }
+
+    pub fn update_activate_worker(&self, activate_worker: usize) {
+        self.partition_stream.update_worker_count(activate_worker);
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn is_stream_partition_clean(&self) -> bool {
+        self.partition_stream
+            .inner
+            .lock()
+            .partition_stream
+            .partition_ids()
+            .is_empty()
     }
 }
 

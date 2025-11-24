@@ -383,13 +383,15 @@ impl Processor for NewFinalAggregateTransform {
             // begin a new round, reset spilled flag and reported flag
             round_state.reset_for_new_round(spill_round);
 
-            round_state.enqueue_partitioned_meta(&mut datablock)?;
+            if let Some(activate_worker) = round_state.enqueue_partitioned_meta(&mut datablock)? {
+                self.spiller.update_activate_worker(activate_worker);
+            }
 
             // schedule next task from working queue
             if let Some(event) = round_state.schedule_next_task() {
                 return Ok(event);
             } else {
-                return Ok(round_state.schedule_not_get_task());
+                return Ok(round_state.schedule_async_wait());
             }
         }
 
@@ -400,13 +402,14 @@ impl Processor for NewFinalAggregateTransform {
             round_state.first_data_ready = true;
 
             let mut data_block = self.input.pull_data().unwrap()?;
-            round_state.enqueue_partitioned_meta(&mut data_block)?;
-
+            if let Some(activate_worker) = round_state.enqueue_partitioned_meta(&mut data_block)? {
+                self.spiller.update_activate_worker(activate_worker);
+            }
             // schedule next task from working queue
             if let Some(event) = round_state.schedule_next_task() {
                 return Ok(event);
             } else {
-                return Ok(round_state.schedule_not_get_task());
+                return Ok(round_state.schedule_async_wait());
             }
         }
 
@@ -433,10 +436,6 @@ impl Processor for NewFinalAggregateTransform {
 
                 Ok(())
             }
-            RoundPhase::NoTask => {
-                self.try_finish_spill_round()?;
-                Ok(())
-            }
             RoundPhase::Aggregate => {
                 let queue = self
                     .shared_state
@@ -458,7 +457,11 @@ impl Processor for NewFinalAggregateTransform {
             RoundPhase::AsyncWait => {
                 // report local repartitioned queues to shared state
                 let queues = self.repartitioned_queues.take_queues();
-                self.shared_state.lock().add_repartitioned_queue(queues);
+                if self.shared_state.lock().add_repartitioned_queue(queues) {
+                    // if it is the last one called, we add a checkpoint to ensure
+                    // the spiller finished in every round
+                    debug_assert!(self.spiller.is_stream_partition_clean())
+                }
 
                 self.barrier.wait().await;
 

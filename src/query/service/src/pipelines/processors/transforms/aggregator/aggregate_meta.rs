@@ -137,7 +137,11 @@ pub enum AggregateMeta {
     BucketSpilled(BucketSpilledPayload),
     Spilled(Vec<BucketSpilledPayload>),
 
-    Partitioned { bucket: isize, data: Vec<Self> },
+    Partitioned {
+        bucket: isize,
+        data: Vec<Self>,
+        activate_worker: Option<usize>,
+    },
 
     NewBucketSpilled(NewSpilledPayload),
     NewSpilled(Vec<NewSpilledPayload>),
@@ -180,8 +184,16 @@ impl AggregateMeta {
         Box::new(AggregateMeta::BucketSpilled(payload))
     }
 
-    pub fn create_partitioned(bucket: isize, data: Vec<Self>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Partitioned { data, bucket })
+    pub fn create_partitioned(
+        bucket: isize,
+        data: Vec<Self>,
+        activate_worker: Option<usize>,
+    ) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::Partitioned {
+            data,
+            bucket,
+            activate_worker,
+        })
     }
 
     pub fn create_new_bucket_spilled(payload: NewSpilledPayload) -> BlockMetaInfoPtr {
