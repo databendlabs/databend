@@ -460,7 +460,8 @@ impl Processor for NewFinalAggregateTransform {
                 if self.shared_state.lock().add_repartitioned_queue(queues) {
                     // if it is the last one called, we add a checkpoint to ensure
                     // the spiller finished in every round
-                    debug_assert!(self.spiller.is_stream_partition_clean())
+                    #[cfg(debug_assertions)]
+                    debug_assert!(self.spiller.is_stream_partition_clean());
                 }
 
                 self.barrier.wait().await;
