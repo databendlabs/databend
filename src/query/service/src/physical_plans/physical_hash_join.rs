@@ -1219,7 +1219,21 @@ impl PhysicalPlanBuilder {
         let mut predicates =
             Vec::with_capacity(join.equi_conditions.len() + join.non_equi_conditions.len());
 
+        let is_simple_expr = |expr: &ScalarExpr| {
+            matches!(
+                expr,
+                ScalarExpr::BoundColumnRef(_)
+                    | ScalarExpr::ConstantExpr(_)
+                    | ScalarExpr::TypedConstantExpr(_, _)
+            )
+        };
+
         for condition in &join.equi_conditions {
+            if !is_simple_expr(&condition.left) || !is_simple_expr(&condition.right) {
+                // todo: Filtering after cross join cause expression to be evaluated multiple times
+                return Ok(None);
+            }
+
             let scalar = condition_to_expr(condition)?;
             match resolve_scalar(&scalar, &merged) {
                 Ok(expr) => predicates.push(expr),

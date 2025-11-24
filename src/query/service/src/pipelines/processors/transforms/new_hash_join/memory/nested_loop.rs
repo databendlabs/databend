@@ -69,7 +69,12 @@ impl<T: Join> Join for NestedLoopJoin<T> {
             return self.inner.probe_block(data);
         };
 
-        let nested = Box::new(LoopJoinStream::new(data, build_blocks));
+        let nested: Box<dyn JoinStream + '_> = if data.num_rows() <= *self.basic_state.build_rows {
+            Box::new(ConstProbeLoopJoinStream::new(data, build_blocks))
+        } else {
+            Box::new(ConstBuildLoopJoinStream::new(data, build_blocks))
+        };
+
         Ok(InnerHashJoinFilterStream::create(
             nested,
             &mut self.desc.filter,
@@ -78,15 +83,15 @@ impl<T: Join> Join for NestedLoopJoin<T> {
     }
 }
 
-struct LoopJoinStream<'a> {
+struct ConstProbeLoopJoinStream<'a> {
     probe_rows: VecDeque<Vec<Scalar>>,
     probe_types: Vec<DataType>,
     build_blocks: &'a [DataBlock],
     build_index: usize,
 }
 
-impl<'a> LoopJoinStream<'a> {
-    pub fn new(probe: DataBlock, build_blocks: &'a [DataBlock]) -> Self {
+impl<'a> ConstProbeLoopJoinStream<'a> {
+    fn new(probe: DataBlock, build_blocks: &'a [DataBlock]) -> Self {
         let mut probe_rows = vec![Vec::new(); probe.num_rows()];
         for entry in probe.columns().iter() {
             match entry {
@@ -103,22 +108,22 @@ impl<'a> LoopJoinStream<'a> {
             }
         }
 
-        let left_types = probe
+        let probe_types = probe
             .columns()
             .iter()
             .map(|entry| entry.data_type())
             .collect();
 
-        LoopJoinStream {
+        ConstProbeLoopJoinStream {
             probe_rows: probe_rows.into(),
-            probe_types: left_types,
+            probe_types,
             build_blocks,
             build_index: 0,
         }
     }
 }
 
-impl<'a> JoinStream for LoopJoinStream<'a> {
+impl<'a> JoinStream for ConstProbeLoopJoinStream<'a> {
     fn next(&mut self) -> Result<Option<DataBlock>> {
         let Some(probe_entries) = self.probe_rows.front() else {
             return Ok(None);
@@ -142,5 +147,54 @@ impl<'a> JoinStream for LoopJoinStream<'a> {
         }
 
         Ok(Some(DataBlock::new(entries, build_block.num_rows())))
+    }
+}
+
+struct ConstBuildLoopJoinStream<'a> {
+    probe: DataBlock,
+    build_blocks: &'a [DataBlock],
+    block_index: usize,
+    row_index: usize,
+}
+
+impl<'a> ConstBuildLoopJoinStream<'a> {
+    fn new(probe: DataBlock, build_blocks: &'a [DataBlock]) -> Self {
+        ConstBuildLoopJoinStream {
+            probe,
+            build_blocks,
+            block_index: 0,
+            row_index: 0,
+        }
+    }
+}
+
+impl<'a> JoinStream for ConstBuildLoopJoinStream<'a> {
+    fn next(&mut self) -> Result<Option<DataBlock>> {
+        let Some(build_block) = self.build_blocks.get(self.block_index) else {
+            return Ok(None);
+        };
+
+        let num_rows = self.probe.num_rows();
+        let entries = self
+            .probe
+            .columns()
+            .iter()
+            .cloned()
+            .chain(build_block.columns().iter().map(|entry| {
+                BlockEntry::Const(
+                    entry.index(self.row_index).unwrap().to_owned(),
+                    entry.data_type(),
+                    num_rows,
+                )
+            }))
+            .collect();
+
+        self.row_index += 1;
+        if self.row_index >= build_block.num_rows() {
+            self.row_index = 0;
+            self.block_index += 1;
+        }
+
+        Ok(Some(DataBlock::new(entries, num_rows)))
     }
 }
