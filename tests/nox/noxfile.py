@@ -22,7 +22,7 @@ def python_client(session, driver_version):
         session.run("behave", "tests/cursor", env=env)
 
 
-JDBC_DRIVER = ["0.4.0", "main"]
+JDBC_DRIVER = ["0.4.1", "main"]
 
 
 @nox.session
