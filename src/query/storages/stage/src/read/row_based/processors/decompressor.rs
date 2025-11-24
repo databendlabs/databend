@@ -58,6 +58,7 @@ impl Decompressor {
 
         if let Some(algo) = algo {
             if matches!(algo, CompressAlgorithm::Zip) {
+                self.zip_buf.clear();
                 return;
             }
             let decompressor = DecompressDecoder::new(algo);
@@ -88,7 +89,7 @@ impl AccumulatingTransform for Decompressor {
             let memory_limit = GLOBAL_MEM_STAT.get_limit() as usize;
             if memory_limit > 0 && self.zip_buf.len() + batch.data.len() > memory_limit / 3 {
                 return Err(ErrorCode::BadBytes(format!(
-                    "zip file {} is larger then memory_limit/3 ({}) ",
+                    "zip file {} is larger than memory_limit/3 ({})",
                     batch.path,
                     memory_limit / 3
                 )));
@@ -104,7 +105,7 @@ impl AccumulatingTransform for Decompressor {
                 let new_batch = Box::new(BytesBatch {
                     data: bytes,
                     path: batch.path.clone(),
-                    offset: batch.data.len(),
+                    offset: 0,
                     is_eof: batch.is_eof,
                 });
                 self.zip_buf.clear();

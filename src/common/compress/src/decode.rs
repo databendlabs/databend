@@ -376,9 +376,9 @@ impl DecompressDecoder {
         }
         if memory_limit > 0 {
             if let Some(size) = zip.decompressed_size() {
-                if size > memory_limit as u128 / 2 {
+                if size + compressed.len() as u128 > memory_limit as u128 / 2 {
                     return Err(ErrorCode::BadBytes(format!(
-                        "zip file {path} is too large, decompressed_size = {size} ",
+                        "zip file {path} is too large, decompressed_size = {size}",
                     )));
                 }
             }
