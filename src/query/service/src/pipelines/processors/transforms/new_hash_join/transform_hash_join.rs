@@ -120,7 +120,7 @@ impl Processor for TransformHashJoin {
         }
     }
 
-    fn process<'a>(&'a mut self) -> Result<()> {
+    fn process(&mut self) -> Result<()> {
         match &mut self.stage {
             Stage::Finished => Ok(()),
             Stage::Build(state) => {
@@ -147,7 +147,7 @@ impl Processor for TransformHashJoin {
                     let stream = self.join.probe_block(probe_data)?;
                     // This is safe because both join and stream are properties of the struct.
                     state.stream = Some(unsafe {
-                        std::mem::transmute::<Box<dyn JoinStream + 'a>, Box<dyn JoinStream>>(stream)
+                        std::mem::transmute::<Box<dyn JoinStream + '_>, Box<dyn JoinStream>>(stream)
                     });
                 }
 
@@ -166,7 +166,7 @@ impl Processor for TransformHashJoin {
                         state.initialize = true;
                         // This is safe because both join and stream are properties of the struct.
                         state.stream = Some(unsafe {
-                            std::mem::transmute::<Box<dyn JoinStream + 'a>, Box<dyn JoinStream>>(
+                            std::mem::transmute::<Box<dyn JoinStream + '_>, Box<dyn JoinStream>>(
                                 final_stream,
                             )
                         });

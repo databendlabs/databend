@@ -141,26 +141,26 @@ impl BasicHashJoin {
             return;
         }
 
-        if matches!(
-            self.state.hash_table.deref(),
-            HashJoinHashTable::NestedLoop(_)
-        ) {
-            return;
-        }
-
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-        if self.state.chunks.is_empty() || !self.state.columns.is_empty() {
+        debug_assert!(!matches!(
+            self.state.hash_table.deref(),
+            HashJoinHashTable::NestedLoop(_)
+        ));
+
+        if !self.state.columns.is_empty() {
             return;
         }
-
         if let Some(block) = self.state.chunks.first() {
-            for offset in 0..self.desc.build_projection.len() {
-                let column_type = self.state.column_types.as_mut();
-                column_type.push(block.get_by_offset(offset).data_type());
-            }
-        }
+            let column_type = self.state.column_types.as_mut();
+            column_type.extend(
+                (0..self.desc.build_projection.len())
+                    .map(|offset| block.get_by_offset(offset).data_type()),
+            );
+        } else {
+            return;
+        };
 
         let mut columns = Vec::with_capacity(self.desc.build_projection.len());
         for offset in 0..self.desc.build_projection.len() {
