@@ -17,18 +17,18 @@ create table db.t(a int)
 statement ok
 insert into db.t values(1),(2)
 
-onlyif http
+skipif mysql
 statement error 1005
 from db.t, db.t2;
 
-onlyif http
+skipif mysql
 query I
 from db.t
 ----
 1
 2
 
-onlyif http
+skipif mysql
 query I
 select db.t.a from db.t
 ----
@@ -38,14 +38,14 @@ select db.t.a from db.t
 statement ok
 select t1.a from `db`.``.`t` as t1
 
-onlyif http
+skipif mysql
 query I
 select t1.a from db.t as t1
 ----
 1
 2
 
-onlyif http
+skipif mysql
 statement error 1065
 select db.t1.a from db.t as t1
 

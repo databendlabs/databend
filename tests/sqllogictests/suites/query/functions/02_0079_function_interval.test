@@ -1,10 +1,10 @@
-onlyif http
+skipif mysql
 query T
 select interval '1 month 1 hour 1 microsecond ago'
 ----
 -1 month -1:00:00.000001
 
-onlyif http
+skipif mysql
 query T
 select interval  (number::string) month  a , a * 3, -3 * a  from numbers(4) where number > 0;
 ----
@@ -13,194 +13,194 @@ select interval  (number::string) month  a , a * 3, -3 * a  from numbers(4) wher
 3 months 9 months -9 months
 
 
-onlyif http
+skipif mysql
 statement ok
 create or replace table t(c1 interval, c2 interval);
 
-onlyif http
+skipif mysql
 statement ok
 insert into t values('1 year 1 month ago', '1'),('1 month 1 hour ago', '1000');
 
-onlyif http
+skipif mysql
 query TT
 select * from t order by c1;
 ----
 -1 year -1 month 0:00:00.000001
 -1 month -1:00:00 0:00:00.001
 
-onlyif http
+skipif mysql
 query TT
 select * from t where c1 > to_interval('-1 year');
 ----
 -1 month -1:00:00 0:00:00.001
 
-onlyif http
+skipif mysql
 query TT
 select * from t where c1 > '-1 year';
 ----
 -1 month -1:00:00 0:00:00.001
 
-onlyif http
+skipif mysql
 statement error 1006
 select to_interval('1 month 1 hour ago 1 micros');
 
-onlyif http
+skipif mysql
 query T
 select to_interval('1 month 1 hour 1 microsecond');
 ----
 1 month 1:00:00.000001
 
-onlyif http
+skipif mysql
 query T
 select to_interval('1 month 1 hour 1 microsecond ago');
 ----
 -1 month -1:00:00.000001
 
-onlyif http
+skipif mysql
 query T
 select to_interval('1 month 1 hour 1 microsecond ago');
 ----
 -1 month -1:00:00.000001
 
-onlyif http
+skipif mysql
 query T
 select to_interval('12 month') = to_interval('360 days')
 ----
 1
 
-onlyif http
+skipif mysql
 query T
 select to_interval('12 month') = to_interval('1 year');
 ----
 1
 
-onlyif http
+skipif mysql
 query TT
 select to_month(to_interval('12 month')), to_month(to_interval('1 year'));
 ----
 0 0
 
-onlyif http
+skipif mysql
 query T
 select to_interval('1 hours') = to_interval('3600 seconds') as eq, to_interval('2 hours') > to_interval('3600 seconds');
 ----
 1 1
 
-onlyif http
+skipif mysql
 query T
 SELECT to_centuries(2);
 ----
 200 years
 
-onlyif http
+skipif mysql
 query T
 SELECT to_days(5);
 ----
 5 days
 
-onlyif http
+skipif mysql
 query T
 SELECT to_decades(3);
 ----
 30 years
 
-onlyif http
+skipif mysql
 query T
 SELECT TIMESTAMP '2024-12-20 10:00:00' + to_hours(4);
 ----
 2024-12-20 14:00:00.000000
 
-onlyif http
+skipif mysql
 query T
 SELECT TIMESTAMP '2024-12-20 10:00:00' + to_microseconds(500000);
 ----
 2024-12-20 10:00:00.500000
 
-onlyif http
+skipif mysql
 query T
 SELECT to_millennia(1);
 ----
 1000 years
 
-onlyif http
+skipif mysql
 query T
 SELECT TIMESTAMP '2024-12-20 10:00:00' + to_milliseconds(750);
 ----
 2024-12-20 10:00:00.750000
 
-onlyif http
+skipif mysql
 query T
 SELECT TIMESTAMP '2024-12-20 10:00:00' + to_minutes(30);
 ----
 2024-12-20 10:30:00.000000
 
-onlyif http
+skipif mysql
 query T
 SELECT to_months(3);
 ----
 3 months
 
-onlyif http
+skipif mysql
 query T
 SELECT TIMESTAMP '2024-12-20 10:00:00' + to_seconds(60);
 ----
 2024-12-20 10:01:00.000000
 
-onlyif http
+skipif mysql
 query T
 SELECT to_weeks(2);
 ----
 14 days
 
-onlyif http
+skipif mysql
 query T
 SELECT to_years(10);
 ----
 10 years
 
-onlyif http
+skipif mysql
 query T
 select to_interval('1200000000 months');
 ----
 100000000 years
 
-onlyif http
+skipif mysql
 query T
 select to_interval('120000000000 months');
 ----
 00:00:00
 
-onlyif http
+skipif mysql
 query T
 select '2022-01-01'::timestamp - '2021-01-01'::timestamp
 ----
 31536000000000
 
-onlyif http
+skipif mysql
 query T
 select timestamp_diff('2022-01-01'::timestamp,'2021-01-01'::timestamp);
 ----
 8760:00:00
 
-onlyif http
+skipif mysql
 query T
 select timestamp_diff('2021-01-01'::timestamp, '2022-01-01'::timestamp);
 ----
 -8760:00:00
 
-onlyif http
+skipif mysql
 query T
 select timestamp_diff('2022-01-01'::timestamp,'2021-12-01'::timestamp);
 ----
 744:00:00
 
-onlyif http
+skipif mysql
 query T
 select '2022-01-01'::timestamp-'2021-12-01'::timestamp;
 ----
 2678400000000
 
-onlyif http
+skipif mysql
 query TT
 select '1 days'::INTERVAL::String, '11 days'::INTERVAL::String;
 ----
