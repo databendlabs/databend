@@ -296,6 +296,15 @@ impl BindContext {
         self.columns.push(column_binding);
     }
 
+    /// Assigns 1-based column positions for the current result columns.
+    /// This is mainly used for derived tables/subqueries so that `$n` style
+    /// ordinal references can resolve against their outputs.
+    pub fn reset_result_column_positions(&mut self) {
+        for (idx, column) in self.columns.iter_mut().enumerate() {
+            column.column_position = Some(idx + 1);
+        }
+    }
+
     /// Apply table alias like `SELECT * FROM t AS t1(a, b, c)`.
     /// This method will rename column bindings according to table alias.
     pub fn apply_table_alias(
