@@ -66,6 +66,24 @@ def create_user():
         headers={"Content-Type": "application/json"},
         json={"sql": "GRANT ROLE test_jdbc TO USER databend"},
     ).raise_for_status()
+    requests.post(
+        "http://localhost:8001/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": "SHOW GRANTS FOR USER databend"},
+    ).raise_for_status()
+    requests.post(
+        "http://localhost:8002/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": "SHOW GRANTS FOR USER databend"},
+    ).raise_for_status()
+    requests.post(
+        "http://localhost:8003/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": "SHOW GRANTS FOR USER databend"},
+    ).raise_for_status()
 
 def download_testng():
     urls = [
