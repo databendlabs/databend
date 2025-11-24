@@ -151,6 +151,8 @@ fn test_slice() {
     ];
 
     let array: Utf8ViewColumn = data.into_iter().collect();
+    assert_eq!(array.total_bytes_len(), 78);
+    assert_eq!(array.total_buffer_len(), 60);
     assert_eq!(array.memory_size(), 156);
 
     let a0 = array.clone().sliced(0, 2);

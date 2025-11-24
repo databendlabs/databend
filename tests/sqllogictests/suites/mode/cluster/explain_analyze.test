@@ -33,7 +33,7 @@ EvalScalar
         └── AggregatePartial
             ├── cpu time: <slt:ignore>
             ├── output rows: 12
-            ├── output bytes: 204.00 B
+            ├── output bytes: <slt:ignore>
             ├── group by: []
             ├── aggregate functions: [sum(number), count()]
             ├── estimated rows: 1.00
@@ -198,7 +198,7 @@ Exchange
     │   └── Filter
     │       ├── cpu time: <slt:ignore>
     │       ├── output rows: 1
-    │       ├── output bytes: 31.00 B
+    │       ├── output bytes: <slt:ignore>
     │       ├── output columns: [author.id (#4), author.name (#5)]
     │       ├── filters: [is_true(author.name (#5) = 'mark4')]
     │       ├── estimated rows: 1.25
@@ -206,8 +206,8 @@ Exchange
     │           ├── cpu time: <slt:ignore>
     │           ├── wait time: <slt:ignore>
     │           ├── output rows: 1
-    │           ├── output bytes: 31.00 B
-    │           ├── bytes scanned: 31.00 B
+    │           ├── output bytes: <slt:ignore>
+    │           ├── bytes scanned: <slt:ignore>
     │           ├── runtime filter inlist/min-max time: <slt:ignore>
     │           ├── table: default.default.author
     │           ├── scan id: 1

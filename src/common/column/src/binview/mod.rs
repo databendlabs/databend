@@ -19,7 +19,6 @@ mod iterator;
 mod view;
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -298,7 +297,8 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     }
 
     pub fn memory_size(&self) -> usize {
-        self.total_buffer_len + self.len() * 16
+        // when read back from parquet, the buffer is a bytes array without views
+        self.total_bytes_len + self.len() * 20
     }
 
     fn total_unshared_buffer_len(&self) -> usize {
@@ -399,20 +399,6 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         debug_assert!(offset + length <= self.len());
         self.views.slice_unchecked(offset, length);
         self.total_bytes_len = self.views.iter().map(|v| v.length as usize).sum::<usize>();
-        let mut seen = HashSet::with_capacity(self.views.len());
-        self.total_buffer_len = self
-            .views
-            .iter()
-            .filter(|view| view.length > View::MAX_INLINE_SIZE)
-            .map(|view| {
-                let key = (view.buffer_idx, view.offset, view.length);
-                if seen.insert(key) {
-                    view.length as usize
-                } else {
-                    0
-                }
-            })
-            .sum::<usize>();
     }
 
     impl_sliced!();
