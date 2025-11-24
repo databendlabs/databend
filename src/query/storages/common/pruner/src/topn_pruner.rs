@@ -106,6 +106,7 @@ impl TopNPruner {
                 a.1.max().cmp(b.1.max()).reverse()
             }
         });
+
         Ok(id_stats
             .iter()
             .map(|s| (s.0.clone(), s.2.clone()))

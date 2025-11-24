@@ -264,6 +264,14 @@ static BYTES_BLOCK_VECTOR_INDEX_PRUNING_BEFORE: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_bytes_block_vector_index_pruning_before"));
 static BYTES_BLOCK_VECTOR_INDEX_PRUNING_AFTER: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_bytes_block_vector_index_pruning_after"));
+static BLOCKS_TOPN_PRUNING_BEFORE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_blocks_topn_pruning_before"));
+static BLOCKS_TOPN_PRUNING_AFTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_blocks_topn_pruning_after"));
+static BYTES_BLOCK_TOPN_PRUNING_BEFORE: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_bytes_block_topn_pruning_before"));
+static BYTES_BLOCK_TOPN_PRUNING_AFTER: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_bytes_block_topn_pruning_after"));
 static PRUNING_PREWHERE_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_pruning_prewhere_nums"));
 static PRUNING_MILLISECONDS: LazyLock<Histogram> =
@@ -744,6 +752,22 @@ pub fn metrics_inc_bytes_block_vector_index_pruning_before(c: u64) {
 
 pub fn metrics_inc_bytes_block_vector_index_pruning_after(c: u64) {
     BYTES_BLOCK_VECTOR_INDEX_PRUNING_AFTER.inc_by(c);
+}
+
+pub fn metrics_inc_blocks_topn_pruning_before(c: u64) {
+    BLOCKS_TOPN_PRUNING_BEFORE.inc_by(c);
+}
+
+pub fn metrics_inc_blocks_topn_pruning_after(c: u64) {
+    BLOCKS_TOPN_PRUNING_AFTER.inc_by(c);
+}
+
+pub fn metrics_inc_bytes_block_topn_pruning_before(c: u64) {
+    BYTES_BLOCK_TOPN_PRUNING_BEFORE.inc_by(c);
+}
+
+pub fn metrics_inc_bytes_block_topn_pruning_after(c: u64) {
+    BYTES_BLOCK_TOPN_PRUNING_AFTER.inc_by(c);
 }
 
 pub fn metrics_inc_pruning_prewhere_nums(c: u64) {

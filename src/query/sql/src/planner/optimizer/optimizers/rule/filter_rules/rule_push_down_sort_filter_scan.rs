@@ -22,10 +22,13 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Filter;
+use crate::plans::IndexPredicateChecker;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Sort;
+use crate::plans::Visitor;
 
 /// Input:
 /// (1)    Sort
@@ -117,15 +120,20 @@ impl Rule for RulePushDownSortFilterScan {
         };
 
         // The following conditions must be met push down filter and sort for vector index:
-        // 1. Scan must contain `vector_index`, because .
+        // 1. Scan must contain `vector_index` or `inverted_index, because we can use the index
+        //    to determine which rows in the block match, and the topn pruner can use this information
+        //    to retain only the matched blocks.
         // 2. The number of `push_down_predicates` in Scan must be the same as the number of `predicates`
         //    in Filter to ensure that all filter conditions are pushed down.
         //    (Filter `predicates` has been pushed down in `RulePushDownFilterScan` rule.)
         // 3. Sort must have limit in order to prune unused blocks.
         let push_down_predicates = scan.push_down_predicates.clone().unwrap_or_default();
-        if scan.vector_index.is_none()
+        let has_inverted_index = scan.inverted_index.is_some();
+        let has_vector_index = scan.vector_index.is_some();
+        if (!has_inverted_index && !has_vector_index)
             || push_down_predicates.len() != filter.predicates.len()
             || sort.limit.is_none()
+            || !filter_contains_only_index_predicates(&filter, has_inverted_index, has_vector_index)
         {
             return Ok(());
         }
@@ -159,4 +167,25 @@ impl Default for RulePushDownSortFilterScan {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn filter_contains_only_index_predicates(
+    filter: &Filter,
+    has_inverted_index: bool,
+    has_vector_index: bool,
+) -> bool {
+    if !has_inverted_index && !has_vector_index {
+        return false;
+    }
+
+    filter
+        .predicates
+        .iter()
+        .all(|predicate| is_index_predicate(predicate, has_inverted_index, has_vector_index))
+}
+
+fn is_index_predicate(predicate: &ScalarExpr, allow_inverted: bool, allow_vector: bool) -> bool {
+    let mut checker = IndexPredicateChecker::new(allow_inverted, allow_vector);
+    let _ = checker.visit(predicate);
+    checker.valid && checker.has_index_column
 }

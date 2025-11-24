@@ -26,6 +26,10 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_metrics::storage::metrics_inc_blocks_topn_pruning_after;
+use databend_common_metrics::storage::metrics_inc_blocks_topn_pruning_before;
+use databend_common_metrics::storage::metrics_inc_bytes_block_topn_pruning_after;
+use databend_common_metrics::storage::metrics_inc_bytes_block_topn_pruning_before;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_storages_common_cache::CacheAccessor;
@@ -531,15 +535,36 @@ impl FusePruner {
         let push_down = self.push_down.clone();
         if push_down
             .as_ref()
-            .filter(|p| !p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
+            .filter(|p| !p.order_by.is_empty() && p.limit.is_some() && p.filters_only_use_index())
             .is_some()
         {
+            // Perf.
+            {
+                let block_size = metas.iter().map(|(_, m)| m.block_size).sum();
+                metrics_inc_blocks_topn_pruning_before(metas.len() as u64);
+                metrics_inc_bytes_block_topn_pruning_before(block_size);
+                self.pruning_ctx
+                    .pruning_stats
+                    .set_blocks_topn_pruning_before(metas.len() as u64);
+            }
+
             let schema = self.table_schema.clone();
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
             let topn_pruner = TopNPruner::create(schema, sort, limit);
-            return Ok(topn_pruner.prune(metas.clone()).unwrap_or(metas));
+            let pruned_metas = topn_pruner.prune(metas.clone()).unwrap_or(metas);
+
+            // Perf.
+            {
+                let block_size = pruned_metas.iter().map(|(_, m)| m.block_size).sum();
+                metrics_inc_blocks_topn_pruning_after(pruned_metas.len() as u64);
+                metrics_inc_bytes_block_topn_pruning_after(block_size);
+                self.pruning_ctx
+                    .pruning_stats
+                    .set_blocks_topn_pruning_after(pruned_metas.len() as u64);
+            }
+            return Ok(pruned_metas);
         }
         Ok(metas)
     }
@@ -599,6 +624,9 @@ impl FusePruner {
         let blocks_vector_index_pruning_after =
             stats.get_blocks_vector_index_pruning_after() as usize;
 
+        let blocks_topn_pruning_before = stats.get_blocks_topn_pruning_before() as usize;
+        let blocks_topn_pruning_after = stats.get_blocks_topn_pruning_after() as usize;
+
         databend_common_catalog::plan::PruningStatistics {
             segments_range_pruning_before,
             segments_range_pruning_after,
@@ -610,6 +638,8 @@ impl FusePruner {
             blocks_inverted_index_pruning_after,
             blocks_vector_index_pruning_before,
             blocks_vector_index_pruning_after,
+            blocks_topn_pruning_before,
+            blocks_topn_pruning_after,
         }
     }
 

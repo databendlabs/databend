@@ -33,6 +33,10 @@ pub struct PruningStatistics {
     /// Block vector index filter pruning stats.
     pub blocks_vector_index_pruning_before: usize,
     pub blocks_vector_index_pruning_after: usize,
+
+    /// Block topn pruning stats.
+    pub blocks_topn_pruning_before: usize,
+    pub blocks_topn_pruning_after: usize,
 }
 
 impl PruningStatistics {
@@ -47,5 +51,7 @@ impl PruningStatistics {
         self.blocks_inverted_index_pruning_after += other.blocks_inverted_index_pruning_after;
         self.blocks_vector_index_pruning_before += other.blocks_vector_index_pruning_before;
         self.blocks_vector_index_pruning_after += other.blocks_vector_index_pruning_after;
+        self.blocks_topn_pruning_before += other.blocks_topn_pruning_before;
+        self.blocks_topn_pruning_after += other.blocks_topn_pruning_after;
     }
 }
