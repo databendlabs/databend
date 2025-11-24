@@ -13,26 +13,37 @@
 // limitations under the License.
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
+#[serde(default)]
 pub struct PruningStatistics {
     /// Segment range pruning stats.
     pub segments_range_pruning_before: usize,
     pub segments_range_pruning_after: usize,
+    /// Segment range pruning cost in microseconds.
+    pub segments_range_pruning_cost: u64,
 
     /// Block range pruning stats.
     pub blocks_range_pruning_before: usize,
     pub blocks_range_pruning_after: usize,
+    /// Block range pruning cost in microseconds.
+    pub blocks_range_pruning_cost: u64,
 
     /// Block bloom filter pruning stats.
     pub blocks_bloom_pruning_before: usize,
     pub blocks_bloom_pruning_after: usize,
+    /// Block bloom pruning cost in microseconds.
+    pub blocks_bloom_pruning_cost: u64,
 
     /// Block inverted index filter pruning stats.
     pub blocks_inverted_index_pruning_before: usize,
     pub blocks_inverted_index_pruning_after: usize,
+    /// Block inverted index pruning cost in microseconds.
+    pub blocks_inverted_index_pruning_cost: u64,
 
     /// Block vector index filter pruning stats.
     pub blocks_vector_index_pruning_before: usize,
     pub blocks_vector_index_pruning_after: usize,
+    /// Block vector index pruning cost in microseconds.
+    pub blocks_vector_index_pruning_cost: u64,
 
     /// Block topn pruning stats.
     pub blocks_topn_pruning_before: usize,
@@ -43,14 +54,19 @@ impl PruningStatistics {
     pub fn merge(&mut self, other: &Self) {
         self.segments_range_pruning_before += other.segments_range_pruning_before;
         self.segments_range_pruning_after += other.segments_range_pruning_after;
+        self.segments_range_pruning_cost += other.segments_range_pruning_cost;
         self.blocks_range_pruning_before += other.blocks_range_pruning_before;
         self.blocks_range_pruning_after += other.blocks_range_pruning_after;
+        self.blocks_range_pruning_cost += other.blocks_range_pruning_cost;
         self.blocks_bloom_pruning_before += other.blocks_bloom_pruning_before;
         self.blocks_bloom_pruning_after += other.blocks_bloom_pruning_after;
+        self.blocks_bloom_pruning_cost += other.blocks_bloom_pruning_cost;
         self.blocks_inverted_index_pruning_before += other.blocks_inverted_index_pruning_before;
         self.blocks_inverted_index_pruning_after += other.blocks_inverted_index_pruning_after;
+        self.blocks_inverted_index_pruning_cost += other.blocks_inverted_index_pruning_cost;
         self.blocks_vector_index_pruning_before += other.blocks_vector_index_pruning_before;
         self.blocks_vector_index_pruning_after += other.blocks_vector_index_pruning_after;
+        self.blocks_vector_index_pruning_cost += other.blocks_vector_index_pruning_cost;
         self.blocks_topn_pruning_before += other.blocks_topn_pruning_before;
         self.blocks_topn_pruning_after += other.blocks_topn_pruning_after;
     }

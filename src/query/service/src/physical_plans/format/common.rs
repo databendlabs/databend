@@ -48,6 +48,16 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
     )
 }
 
+fn format_pruning_cost_suffix(cost_micros: u64) -> String {
+    if cost_micros == 0 {
+        String::new()
+    } else if cost_micros < 1_000 {
+        " cost: <1 ms".to_string()
+    } else {
+        format!(" cost: {} ms", cost_micros / 1_000)
+    }
+}
+
 pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
     let read_size = format_byte_size(info.read_bytes);
     let mut items = vec![
@@ -60,12 +70,23 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
     // format is like "pruning stats: [segments: <range pruning: x to y>, blocks: <range pruning: x to y>]"
     let mut blocks_pruning_description = String::new();
 
+    let show_cost = info.pruning_stats.segments_range_pruning_cost > 0
+        || info.pruning_stats.blocks_range_pruning_cost > 0
+        || info.pruning_stats.blocks_bloom_pruning_cost > 0
+        || info.pruning_stats.blocks_inverted_index_pruning_cost > 0
+        || info.pruning_stats.blocks_vector_index_pruning_cost > 0;
+
     // range pruning status.
     if info.pruning_stats.blocks_range_pruning_before > 0 {
         blocks_pruning_description += &format!(
-            "range pruning: {} to {}",
+            "range pruning: {} to {}{}",
             info.pruning_stats.blocks_range_pruning_before,
-            info.pruning_stats.blocks_range_pruning_after
+            info.pruning_stats.blocks_range_pruning_after,
+            if show_cost {
+                format_pruning_cost_suffix(info.pruning_stats.blocks_range_pruning_cost)
+            } else {
+                String::new()
+            }
         );
     }
 
@@ -75,9 +96,14 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
             blocks_pruning_description += ", ";
         }
         blocks_pruning_description += &format!(
-            "bloom pruning: {} to {}",
+            "bloom pruning: {} to {}{}",
             info.pruning_stats.blocks_bloom_pruning_before,
-            info.pruning_stats.blocks_bloom_pruning_after
+            info.pruning_stats.blocks_bloom_pruning_after,
+            if show_cost {
+                format_pruning_cost_suffix(info.pruning_stats.blocks_bloom_pruning_cost)
+            } else {
+                String::new()
+            }
         );
     }
 
@@ -87,9 +113,14 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
             blocks_pruning_description += ", ";
         }
         blocks_pruning_description += &format!(
-            "inverted pruning: {} to {}",
+            "inverted pruning: {} to {}{}",
             info.pruning_stats.blocks_inverted_index_pruning_before,
-            info.pruning_stats.blocks_inverted_index_pruning_after
+            info.pruning_stats.blocks_inverted_index_pruning_after,
+            if show_cost {
+                format_pruning_cost_suffix(info.pruning_stats.blocks_inverted_index_pruning_cost)
+            } else {
+                String::new()
+            }
         );
     }
 
@@ -111,9 +142,14 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
             blocks_pruning_description += ", ";
         }
         blocks_pruning_description += &format!(
-            "vector pruning: {} to {}",
+            "vector pruning: {} to {}{}",
             info.pruning_stats.blocks_vector_index_pruning_before,
-            info.pruning_stats.blocks_vector_index_pruning_after
+            info.pruning_stats.blocks_vector_index_pruning_after,
+            if show_cost {
+                format_pruning_cost_suffix(info.pruning_stats.blocks_vector_index_pruning_cost)
+            } else {
+                String::new()
+            }
         );
     }
 
@@ -125,9 +161,14 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
 
         if info.pruning_stats.segments_range_pruning_before > 0 {
             pruning_description += &format!(
-                "segments: <range pruning: {} to {}>",
+                "segments: <range pruning: {} to {}{}>",
                 info.pruning_stats.segments_range_pruning_before,
-                info.pruning_stats.segments_range_pruning_after
+                info.pruning_stats.segments_range_pruning_after,
+                if show_cost {
+                    format_pruning_cost_suffix(info.pruning_stats.segments_range_pruning_cost)
+                } else {
+                    String::new()
+                }
             );
         }
 

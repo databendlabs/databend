@@ -1286,6 +1286,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024 * 1024)),
                 }),
+                ("explain_pruner_cost", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Collect pruning phase timing information when running EXPLAIN queries. Disabled by default to avoid overhead.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_distributed_pruning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable distributed index pruning, as it is very necessary and should remain enabled in the vast majority of cases.",

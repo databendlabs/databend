@@ -19,6 +19,7 @@ use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -67,6 +68,7 @@ use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
 use crate::pruning::InvertedIndexPruner;
+use crate::pruning::PruningCostController;
 use crate::pruning::SegmentLocation;
 use crate::pruning::VectorIndexPruner;
 use crate::pruning::VirtualColumnPruner;
@@ -88,6 +90,7 @@ pub struct PruningContext {
     pub virtual_column_pruner: Option<Arc<VirtualColumnPruner>>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
+    pub pruning_cost: PruningCostController,
 }
 
 impl PruningContext {
@@ -105,6 +108,8 @@ impl PruningContext {
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
+        let collect_pruning_cost = matches!(ctx.get_query_kind(), QueryKind::Explain)
+            && ctx.get_settings().get_explain_pruner_cost()?;
 
         let filter_expr = push_down.as_ref().and_then(|extra| {
             extra
@@ -192,6 +197,8 @@ impl PruningContext {
         let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
         let pruning_stats = Arc::new(FusePruningStatistics::default());
 
+        let pruning_cost = PruningCostController::new(pruning_stats.clone(), collect_pruning_cost);
+
         let pruning_ctx = Arc::new(PruningContext {
             ctx: ctx.clone(),
             dal,
@@ -205,6 +212,7 @@ impl PruningContext {
             inverted_index_pruner,
             virtual_column_pruner,
             pruning_stats,
+            pruning_cost,
         });
         Ok(pruning_ctx)
     }
@@ -612,22 +620,27 @@ impl FusePruner {
 
         let segments_range_pruning_before = stats.get_segments_range_pruning_before() as usize;
         let segments_range_pruning_after = stats.get_segments_range_pruning_after() as usize;
+        let segments_range_pruning_cost = stats.get_segments_range_pruning_cost();
 
         let blocks_range_pruning_before = stats.get_blocks_range_pruning_before() as usize;
         let blocks_range_pruning_after = stats.get_blocks_range_pruning_after() as usize;
+        let blocks_range_pruning_cost = stats.get_blocks_range_pruning_cost();
 
         let blocks_bloom_pruning_before = stats.get_blocks_bloom_pruning_before() as usize;
         let blocks_bloom_pruning_after = stats.get_blocks_bloom_pruning_after() as usize;
+        let blocks_bloom_pruning_cost = stats.get_blocks_bloom_pruning_cost();
 
         let blocks_inverted_index_pruning_before =
             stats.get_blocks_inverted_index_pruning_before() as usize;
         let blocks_inverted_index_pruning_after =
             stats.get_blocks_inverted_index_pruning_after() as usize;
+        let blocks_inverted_index_pruning_cost = stats.get_blocks_inverted_index_pruning_cost();
 
         let blocks_vector_index_pruning_before =
             stats.get_blocks_vector_index_pruning_before() as usize;
         let blocks_vector_index_pruning_after =
             stats.get_blocks_vector_index_pruning_after() as usize;
+        let blocks_vector_index_pruning_cost = stats.get_blocks_vector_index_pruning_cost();
 
         let blocks_topn_pruning_before = stats.get_blocks_topn_pruning_before() as usize;
         let blocks_topn_pruning_after = stats.get_blocks_topn_pruning_after() as usize;
@@ -635,14 +648,19 @@ impl FusePruner {
         databend_common_catalog::plan::PruningStatistics {
             segments_range_pruning_before,
             segments_range_pruning_after,
+            segments_range_pruning_cost,
             blocks_range_pruning_before,
             blocks_range_pruning_after,
+            blocks_range_pruning_cost,
             blocks_bloom_pruning_before,
             blocks_bloom_pruning_after,
+            blocks_bloom_pruning_cost,
             blocks_inverted_index_pruning_before,
             blocks_inverted_index_pruning_after,
+            blocks_inverted_index_pruning_cost,
             blocks_vector_index_pruning_before,
             blocks_vector_index_pruning_after,
+            blocks_vector_index_pruning_cost,
             blocks_topn_pruning_before,
             blocks_topn_pruning_after,
         }
