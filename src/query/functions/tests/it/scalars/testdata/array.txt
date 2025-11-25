@@ -1491,6 +1491,15 @@ output domain  : {4..=4}
 output         : 4
 
 
+ast            : array_count(CAST(NULL AS Nullable(Array(Int64))))
+raw expr       : array_count(CAST(NULL AS Array(Int64) NULL))
+checked expr   : array_count<Array(Int64) NULL>(CAST<NULL>(NULL AS Array(Int64) NULL))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : array_count([a, b, c, d])
 raw expr       : array_count(array(a::Int16, b::Int16, c::Int16, d::Int16))
 checked expr   : array_count<Array(Int16)>(array<T0=Int16><T0, T0, T0, T0>(a, b, c, d))
@@ -1515,6 +1524,29 @@ evaluation (internal):
 | d      | Column(Int16([4, 8, 1, 9])) |
 | Output | UInt64([4, 4, 4, 4])        |
 +--------+-----------------------------+
+
+
+ast            : array_count(a)
+raw expr       : array_count(a::Array(Int16) NULL)
+checked expr   : array_count<Array(Int16) NULL>(a)
+evaluation:
++--------+--------------------+-------------+
+|        | a                  | Output      |
++--------+--------------------+-------------+
+| Type   | Array(Int16) NULL  | UInt64 NULL |
+| Domain | [{1..=8}] ∪ {NULL} | Unknown     |
+| Row 0  | NULL               | NULL        |
+| Row 1  | [1, 5, 8, 3]       | 4           |
+| Row 2  | [1, 5]             | 2           |
+| Row 3  | NULL               | NULL        |
++--------+--------------------+-------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                   |
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Column(NullableColumn { column: ArrayColumn { values: Int16([1, 5, 8, 3, 1, 5]), offsets: [0, 0, 4, 6, 6] }, validity: [0b____0110] }) |
+| Output | NullableColumn { column: UInt64([0, 4, 2, 0]), validity: [0b____0110] }                                                                |
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : array_count([a, b, c, d])
@@ -1568,6 +1600,22 @@ optimized expr : 4_u64
 output type    : UInt64
 output domain  : {4..=4}
 output         : 4
+
+
+ast            : array_count(a)
+raw expr       : array_count(a::Array(Nothing))
+checked expr   : array_count<Array(Nothing)>(a)
+output type    : UInt64
+output domain  : Unknown
+output         : 0
+
+
+ast            : array_count(a)
+raw expr       : array_count(a::Array(Nothing) NULL)
+checked expr   : array_count<Array(Nothing) NULL>(a)
+output type    : UInt64 NULL
+output domain  : Unknown
+output         : NULL
 
 
 ast            : array_max([])
@@ -1631,6 +1679,38 @@ optimized expr : "d"
 output type    : String NULL
 output domain  : {"d"..="d"}
 output         : 'd'
+
+
+ast            : array_max(CAST(NULL AS Nullable(Array(Int64))))
+raw expr       : array_max(CAST(NULL AS Array(Int64) NULL))
+checked expr   : array_max<Array(Int64) NULL>(CAST<NULL>(NULL AS Array(Int64) NULL))
+optimized expr : NULL
+output type    : Int64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_max(a)
+raw expr       : array_max(a::Array(Int16) NULL)
+checked expr   : array_max<Array(Int16) NULL>(a)
+evaluation:
++--------+--------------------+------------+
+|        | a                  | Output     |
++--------+--------------------+------------+
+| Type   | Array(Int16) NULL  | Int16 NULL |
+| Domain | [{1..=8}] ∪ {NULL} | Unknown    |
+| Row 0  | NULL               | NULL       |
+| Row 1  | [1, 5, 8, 3]       | 8          |
+| Row 2  | [1, 5]             | 5          |
+| Row 3  | NULL               | NULL       |
++--------+--------------------+------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                   |
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Column(NullableColumn { column: ArrayColumn { values: Int16([1, 5, 8, 3, 1, 5]), offsets: [0, 0, 4, 6, 6] }, validity: [0b____0110] }) |
+| Output | NullableColumn { column: Int16([0, 8, 5, 0]), validity: [0b____0110] }                                                                 |
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : array_max([a, b, c, d])
@@ -1710,6 +1790,22 @@ optimized expr : 0x200000001000000164
 output type    : Variant NULL
 output domain  : Undefined
 output         : '"d"'
+
+
+ast            : array_max(a)
+raw expr       : array_max(a::Array(Nothing))
+checked expr   : array_max<Array(Nothing)>(a)
+output type    : NULL
+output domain  : Unknown
+output         : NULL
+
+
+ast            : array_max(a)
+raw expr       : array_max(a::Array(Nothing) NULL)
+checked expr   : array_max<Array(Nothing) NULL>(a)
+output type    : NULL
+output domain  : Unknown
+output         : NULL
 
 
 ast            : array_min([])

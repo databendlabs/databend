@@ -3736,6 +3736,7 @@ dependencies = [
  "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-formats",
  "databend-common-hashtable",
  "databend-common-io",
  "databend-common-vector",
