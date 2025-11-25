@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
+use databend_common_hashtable::RowPtr;
 
-use super::inner_join::InnerHashJoinFilterStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
+use crate::pipelines::processors::transforms::new_hash_join::join::OneBlockJoinStream;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
@@ -34,17 +35,130 @@ use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 
 pub struct NestedLoopJoin<T> {
     inner: T,
-    basic_state: Arc<BasicHashJoinState>,
+    state: Arc<BasicHashJoinState>,
     desc: NestedLoopDesc,
 }
 
 impl<T> NestedLoopJoin<T> {
-    pub fn create(inner: T, basic_state: Arc<BasicHashJoinState>, desc: NestedLoopDesc) -> Self {
-        Self {
-            inner,
-            basic_state,
-            desc,
+    pub fn create(inner: T, state: Arc<BasicHashJoinState>, desc: NestedLoopDesc) -> Self {
+        Self { inner, state, desc }
+    }
+
+    fn finalize_chunks(&mut self) {
+        if !self.state.columns.is_empty() {
+            return;
         }
+
+        let locked = self.state.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        if !self.state.columns.is_empty() {
+            return;
+        }
+        let num_columns = if let Some(block) = self.state.chunks.first() {
+            *self.state.column_types.as_mut() = block
+                .columns()
+                .iter()
+                .map(|entry| entry.data_type())
+                .collect();
+            block.num_columns()
+        } else {
+            return;
+        };
+
+        *self.state.columns.as_mut() = (0..num_columns)
+            .map(|offset| {
+                let full_columns = self
+                    .state
+                    .chunks
+                    .iter()
+                    .map(|block| block.get_by_offset(offset).to_column())
+                    .collect::<Vec<_>>();
+
+                Column::take_downcast_column_vec(&full_columns)
+            })
+            .collect();
+    }
+
+    fn handle_block(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
+        let HashJoinHashTable::NestedLoop(build_blocks) = &*self.state.hash_table else {
+            unreachable!()
+        };
+
+        let probe_rows = data.num_rows();
+        let mut matched = Vec::with_capacity(probe_rows);
+        for (chunk_index, build) in build_blocks.iter().enumerate() {
+            for row_index in 0..build.num_rows() {
+                let entries = data
+                    .columns()
+                    .iter()
+                    .cloned()
+                    .chain(build.columns().iter().map(|entry| {
+                        BlockEntry::Const(
+                            entry.index(row_index).unwrap().to_owned(),
+                            entry.data_type(),
+                            probe_rows,
+                        )
+                    }))
+                    .collect();
+                let result_count = self
+                    .desc
+                    .filter
+                    .select(&DataBlock::new(entries, probe_rows))?;
+
+                matched.extend(
+                    self.desc.filter.true_selection()[..result_count]
+                        .iter()
+                        .copied()
+                        .map(|probe| {
+                            (probe, RowPtr {
+                                chunk_index: chunk_index as _,
+                                row_index: row_index as _,
+                            })
+                        }),
+                );
+            }
+        }
+
+        if matched.is_empty() {
+            return Ok(None);
+        }
+
+        let mut bitmap = MutableBitmap::with_capacity(matched.len());
+        for (i, _) in &matched {
+            bitmap.set(*i as _, true);
+        }
+        let probe = data.filter_with_bitmap(&bitmap.freeze())?;
+
+        matched.sort_by_key(|(v, _)| *v);
+        let indices = matched.into_iter().map(|(_, row)| row).collect::<Vec<_>>();
+
+        let build_entries = self
+            .state
+            .columns
+            .iter()
+            .zip(&*self.state.column_types)
+            .map(|(columns, data_type)| {
+                Column::take_column_vec_indices(columns, data_type.clone(), &indices, indices.len())
+                    .into()
+            });
+
+        let data_block = DataBlock::from_iter(
+            probe.take_columns().into_iter().chain(build_entries),
+            indices.len(),
+        );
+
+        let Some(field_reorder) = &self.desc.field_reorder else {
+            return Ok(Some(data_block));
+        };
+        let data_block = DataBlock::from_iter(
+            field_reorder
+                .iter()
+                .map(|offset| data_block.get_by_offset(*offset).clone()),
+            data_block.num_rows(),
+        );
+
+        Ok(Some(data_block))
     }
 }
 
@@ -62,139 +176,16 @@ impl<T: Join> Join for NestedLoopJoin<T> {
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
-        if data.is_empty() || *self.basic_state.build_rows == 0 {
+        if data.is_empty() || *self.state.build_rows == 0 {
             return Ok(Box::new(EmptyJoinStream));
         }
-        let HashJoinHashTable::NestedLoop(build_blocks) = &*self.basic_state.hash_table else {
+
+        if !matches!(*self.state.hash_table, HashJoinHashTable::NestedLoop(_)) {
             return self.inner.probe_block(data);
-        };
-
-        let nested: Box<dyn JoinStream + '_> = if data.num_rows() <= *self.basic_state.build_rows {
-            Box::new(ConstProbeLoopJoinStream::new(data, build_blocks))
-        } else {
-            Box::new(ConstBuildLoopJoinStream::new(data, build_blocks))
-        };
-
-        Ok(InnerHashJoinFilterStream::create(
-            nested,
-            &mut self.desc.filter,
-            self.desc.field_reorder.as_deref(),
-        ))
-    }
-}
-
-struct ConstProbeLoopJoinStream<'a> {
-    probe_rows: VecDeque<Vec<Scalar>>,
-    probe_types: Vec<DataType>,
-    build_blocks: &'a [DataBlock],
-    build_index: usize,
-}
-
-impl<'a> ConstProbeLoopJoinStream<'a> {
-    fn new(probe: DataBlock, build_blocks: &'a [DataBlock]) -> Self {
-        let mut probe_rows = vec![Vec::new(); probe.num_rows()];
-        for entry in probe.columns().iter() {
-            match entry {
-                BlockEntry::Const(scalar, _, _) => {
-                    for row in &mut probe_rows {
-                        row.push(scalar.to_owned());
-                    }
-                }
-                BlockEntry::Column(column) => {
-                    for (row, scalar) in probe_rows.iter_mut().zip(column.iter()) {
-                        row.push(scalar.to_owned());
-                    }
-                }
-            }
         }
 
-        let probe_types = probe
-            .columns()
-            .iter()
-            .map(|entry| entry.data_type())
-            .collect();
+        self.finalize_chunks();
 
-        ConstProbeLoopJoinStream {
-            probe_rows: probe_rows.into(),
-            probe_types,
-            build_blocks,
-            build_index: 0,
-        }
-    }
-}
-
-impl<'a> JoinStream for ConstProbeLoopJoinStream<'a> {
-    fn next(&mut self) -> Result<Option<DataBlock>> {
-        let Some(probe_entries) = self.probe_rows.front() else {
-            return Ok(None);
-        };
-
-        let build_block = &self.build_blocks[self.build_index];
-
-        let entries = probe_entries
-            .iter()
-            .zip(self.probe_types.iter())
-            .map(|(scalar, data_type)| {
-                BlockEntry::Const(scalar.clone(), data_type.clone(), build_block.num_rows())
-            })
-            .chain(build_block.columns().iter().cloned())
-            .collect();
-
-        self.build_index += 1;
-        if self.build_index >= self.build_blocks.len() {
-            self.build_index = 0;
-            self.probe_rows.pop_front();
-        }
-
-        Ok(Some(DataBlock::new(entries, build_block.num_rows())))
-    }
-}
-
-struct ConstBuildLoopJoinStream<'a> {
-    probe: DataBlock,
-    build_blocks: &'a [DataBlock],
-    block_index: usize,
-    row_index: usize,
-}
-
-impl<'a> ConstBuildLoopJoinStream<'a> {
-    fn new(probe: DataBlock, build_blocks: &'a [DataBlock]) -> Self {
-        ConstBuildLoopJoinStream {
-            probe,
-            build_blocks,
-            block_index: 0,
-            row_index: 0,
-        }
-    }
-}
-
-impl<'a> JoinStream for ConstBuildLoopJoinStream<'a> {
-    fn next(&mut self) -> Result<Option<DataBlock>> {
-        let Some(build_block) = self.build_blocks.get(self.block_index) else {
-            return Ok(None);
-        };
-
-        let num_rows = self.probe.num_rows();
-        let entries = self
-            .probe
-            .columns()
-            .iter()
-            .cloned()
-            .chain(build_block.columns().iter().map(|entry| {
-                BlockEntry::Const(
-                    entry.index(self.row_index).unwrap().to_owned(),
-                    entry.data_type(),
-                    num_rows,
-                )
-            }))
-            .collect();
-
-        self.row_index += 1;
-        if self.row_index >= build_block.num_rows() {
-            self.row_index = 0;
-            self.block_index += 1;
-        }
-
-        Ok(Some(DataBlock::new(entries, num_rows)))
+        Ok(Box::new(OneBlockJoinStream(self.handle_block(data)?)))
     }
 }

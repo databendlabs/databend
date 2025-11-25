@@ -153,11 +153,9 @@ impl BasicHashJoin {
             return;
         }
         if let Some(block) = self.state.chunks.first() {
-            let column_type = self.state.column_types.as_mut();
-            column_type.extend(
-                (0..self.desc.build_projection.len())
-                    .map(|offset| block.get_by_offset(offset).data_type()),
-            );
+            *self.state.column_types.as_mut() = (0..self.desc.build_projection.len())
+                .map(|offset| block.get_by_offset(offset).data_type())
+                .collect();
         } else {
             return;
         };
