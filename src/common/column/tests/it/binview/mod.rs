@@ -153,11 +153,11 @@ fn test_slice() {
     let array: Utf8ViewColumn = data.into_iter().collect();
     assert_eq!(array.total_bytes_len(), 78);
     assert_eq!(array.total_buffer_len(), 60);
-    assert_eq!(array.memory_size(), 156);
+    assert_eq!(array.memory_size(), 198);
 
     let a0 = array.clone().sliced(0, 2);
     assert_eq!(a0.into_iter().collect::<Vec<_>>(), vec!["hello", "world",]);
-    assert_eq!(a0.memory_size(), 32);
+    assert_eq!(a0.memory_size(), 50);
     assert_eq!(a0.total_bytes_len(), 10);
 
     let a1 = array.clone().sliced(2, 3);
@@ -166,14 +166,14 @@ fn test_slice() {
         "yyyyyyyyyyyyyyyyyyyyy",
         "zzzzzzzzzzzzzzzzzzzzz",
     ]);
-    assert_eq!(a1.memory_size(), 90);
+    assert_eq!(a1.memory_size(), 110);
     assert_eq!(a1.total_bytes_len(), 50);
 
     let a2 = array.sliced(5, 1);
     assert_eq!(a2.into_iter().collect::<Vec<_>>(), vec![
         "abcabcabcabcabcabc",
     ]);
-    assert_eq!(a2.memory_size(), 34);
+    assert_eq!(a2.memory_size(), 38);
     assert_eq!(a2.total_bytes_len(), 18);
 }
 
