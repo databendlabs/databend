@@ -146,7 +146,7 @@ impl HashJoinFactory {
                 )?;
 
                 match nested_loop_desc {
-                    Some(desc) => Ok(Box::new(NestedLoopJoin::create(inner, state, desc))),
+                    Some(desc) => Ok(Box::new(NestedLoopJoin::new(inner, state, desc))),
                     None => Ok(Box::new(inner)),
                 }
             }

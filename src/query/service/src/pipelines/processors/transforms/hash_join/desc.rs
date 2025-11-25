@@ -310,10 +310,11 @@ impl HashJoinDesc {
                 predicates,
                 function_ctx.clone(),
                 block_size,
-                Some(projection.iter().copied().collect()),
+                None,
                 &BUILTIN_FUNCTIONS,
                 false,
             ),
+            projections: projection.iter().copied().collect(),
             field_reorder,
             nested_loop_join_threshold,
         }))
@@ -323,5 +324,6 @@ impl HashJoinDesc {
 pub struct NestedLoopDesc {
     pub filter: FilterExecutor,
     pub field_reorder: Option<Vec<FieldIndex>>,
+    pub projections: ColumnSet,
     pub nested_loop_join_threshold: usize,
 }

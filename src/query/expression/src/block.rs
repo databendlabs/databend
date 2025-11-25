@@ -858,10 +858,9 @@ impl DataBlock {
     pub fn project(mut self, projections: &ColumnSet) -> Self {
         let mut entries = Vec::with_capacity(projections.len());
         for (index, column) in self.entries.into_iter().enumerate() {
-            if !projections.contains(&index) {
-                continue;
+            if projections.contains(&index) {
+                entries.push(column);
             }
-            entries.push(column);
         }
         self.entries = entries;
         self

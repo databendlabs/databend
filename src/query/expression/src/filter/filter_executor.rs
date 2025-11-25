@@ -208,4 +208,8 @@ impl FilterExecutor {
     pub fn mutable_true_selection(&mut self) -> &mut [u32] {
         &mut self.true_selection
     }
+
+    pub fn max_block_size(&self) -> usize {
+        self.max_block_size
+    }
 }
