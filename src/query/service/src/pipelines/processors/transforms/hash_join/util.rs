@@ -24,7 +24,7 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_hashtable::FastHash;
+use databend_common_hashtable::BloomHash;
 
 pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSchemaRef {
     let mut nullable_field = Vec::with_capacity(build_schema.fields().len());
@@ -64,7 +64,7 @@ where
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
+                    .map(|key| key.bloom_hash()),
             );
         }
         HashMethodKind::SingleBinary(method) => {
@@ -72,7 +72,7 @@ where
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
+                    .map(|key| key.bloom_hash()),
             );
         }
         HashMethodKind::KeysU8(method) => {
@@ -80,7 +80,7 @@ where
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
+                    .map(|key| key.bloom_hash()),
             );
         }
         HashMethodKind::KeysU16(method) => {
@@ -88,7 +88,7 @@ where
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
+                    .map(|key| key.bloom_hash()),
             );
         }
         HashMethodKind::KeysU32(method) => {
@@ -96,7 +96,7 @@ where
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
+                    .map(|key| key.bloom_hash()),
             );
         }
         HashMethodKind::KeysU64(method) => {
@@ -104,7 +104,7 @@ where
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
+                    .map(|key| key.bloom_hash()),
             );
         }
         HashMethodKind::KeysU128(method) => {
@@ -112,7 +112,7 @@ where
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
+                    .map(|key| key.bloom_hash()),
             );
         }
         HashMethodKind::KeysU256(method) => {
@@ -120,7 +120,7 @@ where
             hashes.extend(
                 method
                     .build_keys_iter(&keys_state)?
-                    .map(|key| key.fast_hash()),
+                    .map(|key| key.bloom_hash()),
             );
         }
     }

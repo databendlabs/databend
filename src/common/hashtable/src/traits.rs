@@ -176,6 +176,10 @@ pub trait FastHash {
     fn fast_hash(&self) -> u64;
 }
 
+pub trait BloomHash {
+    fn bloom_hash(&self) -> u64;
+}
+
 macro_rules! impl_fast_hash_for_primitive_types {
     ($t: ty) => {
         impl FastHash for $t {
@@ -208,6 +212,32 @@ impl_fast_hash_for_primitive_types!(i32);
 impl_fast_hash_for_primitive_types!(u64);
 impl_fast_hash_for_primitive_types!(i64);
 
+macro_rules! impl_bloom_hash_for_primitive_types {
+    ($t: ty) => {
+        impl BloomHash for $t {
+            #[inline(always)]
+            fn bloom_hash(&self) -> u64 {
+                let mut hasher = *self as u64;
+                hasher ^= hasher >> 33;
+                hasher = hasher.wrapping_mul(0xff51afd7ed558ccd_u64);
+                hasher ^= hasher >> 33;
+                hasher = hasher.wrapping_mul(0xc4ceb9fe1a85ec53_u64);
+                hasher ^= hasher >> 33;
+                hasher
+            }
+        }
+    };
+}
+
+impl_bloom_hash_for_primitive_types!(u8);
+impl_bloom_hash_for_primitive_types!(i8);
+impl_bloom_hash_for_primitive_types!(u16);
+impl_bloom_hash_for_primitive_types!(i16);
+impl_bloom_hash_for_primitive_types!(u32);
+impl_bloom_hash_for_primitive_types!(i32);
+impl_bloom_hash_for_primitive_types!(u64);
+impl_bloom_hash_for_primitive_types!(i64);
+
 impl FastHash for u128 {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
@@ -229,10 +259,30 @@ impl FastHash for u128 {
     }
 }
 
+impl BloomHash for u128 {
+    #[inline(always)]
+    fn bloom_hash(&self) -> u64 {
+        use std::hash::BuildHasher;
+        use std::hash::Hasher;
+
+        let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+        let mut hasher = state.build_hasher();
+        hasher.write_u128(*self);
+        hasher.finish()
+    }
+}
+
 impl FastHash for i128 {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
         (*self as u128).fast_hash()
+    }
+}
+
+impl BloomHash for i128 {
+    #[inline(always)]
+    fn bloom_hash(&self) -> u64 {
+        (*self as u128).bloom_hash()
     }
 }
 
@@ -263,6 +313,21 @@ impl FastHash for i256 {
     }
 }
 
+impl BloomHash for i256 {
+    #[inline(always)]
+    fn bloom_hash(&self) -> u64 {
+        use std::hash::BuildHasher;
+        use std::hash::Hasher;
+
+        let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+        let mut hasher = state.build_hasher();
+        for x in self.0 {
+            hasher.write_i128(x);
+        }
+        hasher.finish()
+    }
+}
+
 impl FastHash for U256 {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
@@ -290,10 +355,32 @@ impl FastHash for U256 {
     }
 }
 
+impl BloomHash for U256 {
+    #[inline(always)]
+    fn bloom_hash(&self) -> u64 {
+        use std::hash::BuildHasher;
+        use std::hash::Hasher;
+
+        let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+        let mut hasher = state.build_hasher();
+        for x in self.0 {
+            hasher.write_u128(x);
+        }
+        hasher.finish()
+    }
+}
+
 impl FastHash for bool {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
         (*self as u8).fast_hash()
+    }
+}
+
+impl BloomHash for bool {
+    #[inline(always)]
+    fn bloom_hash(&self) -> u64 {
+        (*self as u8).bloom_hash()
     }
 }
 
@@ -308,6 +395,17 @@ impl FastHash for OrderedFloat<f32> {
     }
 }
 
+impl BloomHash for OrderedFloat<f32> {
+    #[inline(always)]
+    fn bloom_hash(&self) -> u64 {
+        if self.is_nan() {
+            f32::NAN.to_bits().bloom_hash()
+        } else {
+            self.to_bits().bloom_hash()
+        }
+    }
+}
+
 impl FastHash for OrderedFloat<f64> {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
@@ -315,6 +413,17 @@ impl FastHash for OrderedFloat<f64> {
             f64::NAN.to_bits().fast_hash()
         } else {
             self.to_bits().fast_hash()
+        }
+    }
+}
+
+impl BloomHash for OrderedFloat<f64> {
+    #[inline(always)]
+    fn bloom_hash(&self) -> u64 {
+        if self.is_nan() {
+            f64::NAN.to_bits().bloom_hash()
+        } else {
+            self.to_bits().bloom_hash()
         }
     }
 }
@@ -358,10 +467,30 @@ impl FastHash for [u8] {
     }
 }
 
+impl BloomHash for [u8] {
+    #[inline(always)]
+    fn bloom_hash(&self) -> u64 {
+        use std::hash::BuildHasher;
+        use std::hash::Hasher;
+
+        let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+        let mut hasher = state.build_hasher();
+        hasher.write(self);
+        hasher.finish()
+    }
+}
+
 impl FastHash for str {
     #[inline(always)]
     fn fast_hash(&self) -> u64 {
         self.as_bytes().fast_hash()
+    }
+}
+
+impl BloomHash for str {
+    #[inline(always)]
+    fn bloom_hash(&self) -> u64 {
+        self.as_bytes().bloom_hash()
     }
 }
 
