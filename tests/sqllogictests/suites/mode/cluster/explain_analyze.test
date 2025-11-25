@@ -10,9 +10,9 @@ EvalScalar
     ├── output rows: 1
     ├── output bytes: 1.00 B
     ├── bytes scanned: 1.00 B
-    ├── bytes scanned from remote: <slt:ignore>
     ├── bytes scanned from local cache: <slt:ignore>
-    └── bytes scanned from memory cache: <slt:ignore>
+    ├── bytes scanned from memory cache: <slt:ignore>
+    └── bytes scanned from remote: <slt:ignore>
 
 query T
 settings (max_threads = 4) EXPLAIN ANALYZE select avg(number) from numbers(1000000);
@@ -45,9 +45,9 @@ EvalScalar
                 ├── output rows: 1 million
                 ├── output bytes: 7.63 MiB
                 ├── bytes scanned: 7.63 MiB
-                ├── bytes scanned from remote: <slt:ignore>
                 ├── bytes scanned from local cache: <slt:ignore>
                 ├── bytes scanned from memory cache: <slt:ignore>
+                ├── bytes scanned from remote: <slt:ignore>
                 ├── table: default.system.numbers
                 ├── scan id: 0
                 ├── output columns: [number (#0)]
@@ -134,9 +134,9 @@ Exchange
     ├── output rows: 6
     ├── output bytes: 120.00 B
     ├── bytes scanned: 120.00 B
-    ├── bytes scanned from remote: <slt:ignore>
     ├── bytes scanned from local cache: <slt:ignore>
     ├── bytes scanned from memory cache: <slt:ignore>
+    ├── bytes scanned from remote: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
     ├── scan id: 0
@@ -168,9 +168,9 @@ Exchange
         ├── output rows: 4
         ├── output bytes: 80.00 B
         ├── bytes scanned: 80.00 B
-        ├── bytes scanned from remote: <slt:ignore>
         ├── bytes scanned from local cache: <slt:ignore>
         ├── bytes scanned from memory cache: <slt:ignore>
+        ├── bytes scanned from remote: <slt:ignore>
         ├── runtime filter inlist/min-max time: <slt:ignore>
         ├── table: default.default.article
         ├── scan id: 0
@@ -220,9 +220,9 @@ Exchange
     │           ├── output rows: 1
     │           ├── output bytes: 31.00 B
     │           ├── bytes scanned: 31.00 B
-    │           ├── bytes scanned from remote: <slt:ignore>
     │           ├── bytes scanned from local cache: <slt:ignore>
     │           ├── bytes scanned from memory cache: <slt:ignore>
+    │           ├── bytes scanned from remote: <slt:ignore>
     │           ├── runtime filter inlist/min-max time: <slt:ignore>
     │           ├── table: default.default.author
     │           ├── scan id: 1
@@ -240,9 +240,9 @@ Exchange
         ├── output rows: 6
         ├── output bytes: 120.00 B
         ├── bytes scanned: 120.00 B
-        ├── bytes scanned from remote: <slt:ignore>
         ├── bytes scanned from local cache: <slt:ignore>
         ├── bytes scanned from memory cache: <slt:ignore>
+        ├── bytes scanned from remote: <slt:ignore>
         ├── runtime filter inlist/min-max time: <slt:ignore>
         ├── table: default.default.article
         ├── scan id: 0
