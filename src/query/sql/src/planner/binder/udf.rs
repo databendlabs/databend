@@ -78,6 +78,7 @@ impl Binder {
                         definition: definition.to_string(),
                     }),
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::UDFServer {
@@ -161,6 +162,7 @@ impl Binder {
                         immutable: *immutable,
                     }),
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::UDAFServer { .. } => unimplemented!(),
@@ -193,6 +195,7 @@ impl Binder {
                     description,
                     definition,
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::UDAFScript {
@@ -222,6 +225,7 @@ impl Binder {
                     description,
                     definition,
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::UDTFSql {
@@ -256,6 +260,7 @@ impl Binder {
                         sql: sql.to_string(),
                     }),
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::UDTFServer {
@@ -300,6 +305,7 @@ impl Binder {
                         immutable: *immutable,
                     }),
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::ScalarUDF {
@@ -326,6 +332,7 @@ impl Binder {
                         definition: definition.clone(),
                     }),
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
         }

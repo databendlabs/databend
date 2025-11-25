@@ -546,14 +546,21 @@ impl FromToProto for mt::UserDefinedFunction {
             }
         };
 
+        let created_on = match p.created_on {
+            Some(c) => DateTime::<Utc>::from_pb(c)?,
+            None => DateTime::<Utc>::default(),
+        };
+        let update_on = match p.update_on {
+            Some(u) => DateTime::<Utc>::from_pb(u)?,
+            None => created_on.clone(),
+        };
+
         Ok(mt::UserDefinedFunction {
             name: p.name,
             description: p.description,
             definition: udf_def,
-            created_on: match p.created_on {
-                Some(c) => DateTime::<Utc>::from_pb(c)?,
-                None => DateTime::<Utc>::default(),
-            },
+            created_on,
+            update_on,
         })
     }
 
@@ -589,6 +596,7 @@ impl FromToProto for mt::UserDefinedFunction {
             description: self.description.clone(),
             definition: Some(udf_def),
             created_on: Some(self.created_on.to_pb()?),
+            update_on: Some(self.update_on.to_pb()?),
         })
     }
 }

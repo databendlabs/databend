@@ -159,6 +159,7 @@ pub struct UserDefinedFunction {
     pub description: String,
     pub definition: UDFDefinition,
     pub created_on: DateTime<Utc>,
+    pub update_on: DateTime<Utc>,
 }
 
 impl UserDefinedFunction {
@@ -168,6 +169,7 @@ impl UserDefinedFunction {
         definition: &str,
         description: &str,
     ) -> Self {
+        let now = Utc::now();
         Self {
             name: name.to_string(),
             description: description.to_string(),
@@ -175,7 +177,8 @@ impl UserDefinedFunction {
                 parameters,
                 definition: definition.to_string(),
             }),
-            created_on: Utc::now(),
+            created_on: now,
+            update_on: now,
         }
     }
 
@@ -191,6 +194,7 @@ impl UserDefinedFunction {
         description: &str,
         immutable: Option<bool>,
     ) -> Self {
+        let now = Utc::now();
         Self {
             name: name.to_string(),
             description: description.to_string(),
@@ -204,7 +208,8 @@ impl UserDefinedFunction {
                 return_type,
                 immutable,
             }),
-            created_on: Utc::now(),
+            created_on: now,
+            update_on: now,
         }
     }
 
@@ -219,6 +224,7 @@ impl UserDefinedFunction {
         description: &str,
         immutable: Option<bool>,
     ) -> Self {
+        let now = Utc::now();
         Self {
             name: name.to_string(),
             description: description.to_string(),
@@ -233,7 +239,8 @@ impl UserDefinedFunction {
                 packages: vec![],
                 immutable,
             }),
-            created_on: Utc::now(),
+            created_on: now,
+            update_on: now,
         }
     }
 

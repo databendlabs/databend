@@ -56,6 +56,7 @@ fn test_decode_v152_external_udf() -> anyhow::Result<()> {
             immutable: None,
         }),
         created_on: DateTime::<Utc>::default(),
+        update_on: DateTime::<Utc>::default(),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(
