@@ -76,6 +76,10 @@ pub trait Rule {
         self.id().to_string()
     }
 
+    fn apply_matcher(&self, _: usize, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
+        self.apply(s_expr, state)
+    }
+
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()>;
 
     fn matchers(&self) -> &[Matcher];
