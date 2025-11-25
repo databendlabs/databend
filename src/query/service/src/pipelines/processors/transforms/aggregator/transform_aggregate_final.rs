@@ -53,7 +53,7 @@ impl TransformFinalAggregate {
 
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta) -> Result<DataBlock> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
-        if let AggregateMeta::Partitioned { bucket, data } = meta {
+        if let AggregateMeta::Partitioned { bucket, data, .. } = meta {
             for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {

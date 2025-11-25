@@ -146,7 +146,7 @@ impl Processor for TransformSpillReader {
 
                     self.deserialized_meta = Some(Box::new(Self::deserialize(payload, data)));
                 }
-                AggregateMeta::Partitioned { bucket, data } => {
+                AggregateMeta::Partitioned { bucket, data, .. } => {
                     let mut new_data = Vec::with_capacity(data.len());
 
                     for meta in data {
@@ -163,7 +163,7 @@ impl Processor for TransformSpillReader {
                     }
 
                     self.deserialized_meta =
-                        Some(AggregateMeta::create_partitioned(bucket, new_data));
+                        Some(AggregateMeta::create_partitioned(bucket, new_data, None));
                 }
                 AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                 AggregateMeta::NewSpilled(_) => unreachable!(),
@@ -220,7 +220,7 @@ impl Processor for TransformSpillReader {
 
                     self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
                 }
-                AggregateMeta::Partitioned { data, bucket } => {
+                AggregateMeta::Partitioned { data, bucket, .. } => {
                     let bucket = *bucket;
                     let total_task = data
                         .iter()

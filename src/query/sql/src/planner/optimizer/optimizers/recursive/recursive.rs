@@ -128,24 +128,24 @@ impl RecursiveRuleOptimizer {
 
             // Core optimization logic - exactly as original
             let mut state = TransformResult::new();
-            if rule
-                .matchers()
-                .iter()
-                .any(|matcher| matcher.matches(&s_expr))
-                && !s_expr.applied_rule(&rule.id())
-            {
-                s_expr.set_applied_rule(&rule.id());
-                rule.apply(&s_expr, &mut state)?;
-                if let Some(result) = state.results().first() {
-                    let result = result.clone();
 
-                    // For tracing only
-                    if trace_enabled {
-                        let duration = start_time.elapsed();
-                        self.trace_rule_execution(rule.name(), duration, &before_expr, &state)?;
+            for (idx, matcher) in rule.matchers().iter().enumerate() {
+                if matcher.matches(&s_expr) && !s_expr.applied_rule(&rule.id()) {
+                    s_expr.set_applied_rule(&rule.id());
+                    rule.apply_matcher(idx, &s_expr, &mut state)?;
+                    if let Some(result) = state.results().first() {
+                        let result = result.clone();
+
+                        // For tracing only
+                        if trace_enabled {
+                            let duration = start_time.elapsed();
+                            self.trace_rule_execution(rule.name(), duration, &before_expr, &state)?;
+                        }
+
+                        return Ok(Some(result));
                     }
 
-                    return Ok(Some(result));
+                    break;
                 }
             }
 

@@ -19,4 +19,6 @@ mod partition;
 mod table;
 mod table_source;
 
+mod arrow56_conversion;
+
 pub use table::DeltaTable;

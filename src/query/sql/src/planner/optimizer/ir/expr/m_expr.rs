@@ -85,10 +85,10 @@ impl MExpr {
         }
 
         let mut extractor = PatternExtractor::new();
-        for pattern in rule.matchers() {
+        for (idx, pattern) in rule.matchers().iter().enumerate() {
             let exprs = extractor.extract(memo, self, pattern)?;
             for expr in exprs.iter() {
-                rule.apply(expr, transform_state)?;
+                rule.apply_matcher(idx, expr, transform_state)?;
             }
             if !exprs.is_empty() {
                 break;

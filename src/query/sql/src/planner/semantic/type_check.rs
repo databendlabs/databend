@@ -51,6 +51,7 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::Span;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -5405,7 +5406,11 @@ impl<'a> TypeChecker<'a> {
             Some(algo) => {
                 log::trace!("Decompressing module using {:?} algorithm", algo);
                 if algo == CompressAlgorithm::Zip {
-                    DecompressDecoder::decompress_all_zip(&code_blob)
+                    DecompressDecoder::decompress_all_zip(
+                        &code_blob,
+                        &module_path,
+                        GLOBAL_MEM_STAT.get_limit() as usize,
+                    )
                 } else {
                     let mut decoder = DecompressDecoder::new(algo);
                     decoder.decompress_all(&code_blob)

@@ -118,11 +118,16 @@ impl LocalRoundState {
         Event::Async
     }
 
-    pub fn enqueue_partitioned_meta(&mut self, datablock: &mut DataBlock) -> Result<()> {
+    pub fn enqueue_partitioned_meta(&mut self, datablock: &mut DataBlock) -> Result<Option<usize>> {
         if let Some(block_meta) = datablock.take_meta().and_then(AggregateMeta::downcast_from) {
             match block_meta {
-                AggregateMeta::Partitioned { data, .. } => {
+                AggregateMeta::Partitioned {
+                    data,
+                    activate_worker,
+                    ..
+                } => {
                     self.working_queue.extend(data);
+                    return Ok(activate_worker);
                 }
                 _ => {
                     return Err(ErrorCode::Internal(
@@ -131,7 +136,7 @@ impl LocalRoundState {
                 }
             }
         }
-        Ok(())
+        Ok(None)
     }
 }
 
@@ -176,7 +181,7 @@ impl FinalAggregateSharedState {
         }
     }
 
-    pub fn add_repartitioned_queue(&mut self, queues: RepartitionedQueues) {
+    pub fn add_repartitioned_queue(&mut self, queues: RepartitionedQueues) -> bool {
         self.repartitioned_queues.merge_queues(queues);
 
         self.finished_count += 1;
@@ -212,7 +217,10 @@ impl FinalAggregateSharedState {
                         split_partitioned_meta_into_datablocks(0, queue.data, self.partition_count);
                 }
             }
+            // if it is the last one
+            return true;
         }
+        false
     }
 
     pub fn get_next_datablock(&mut self) -> Option<(DataBlock, usize)> {
