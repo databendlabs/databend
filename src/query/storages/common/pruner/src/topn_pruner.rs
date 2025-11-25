@@ -54,7 +54,7 @@ impl TopNPruner {
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        if self.sort.len() != 1 {
+        if self.sort.len() != 1 || metas.is_empty() {
             return Ok(metas);
         }
 
@@ -119,6 +119,9 @@ impl TopNPruner {
                         continue;
                     }
                     let matched_count = index_match_count(index);
+                    if matched_count == 0 {
+                        continue;
+                    }
                     topn_count += matched_count;
                     if stat.max() > upper_bound {
                         upper_bound = stat.max();
@@ -137,6 +140,9 @@ impl TopNPruner {
                         continue;
                     }
                     let matched_count = index_match_count(index);
+                    if matched_count == 0 {
+                        continue;
+                    }
                     topn_count += matched_count;
                     if stat.min() < lower_bound {
                         lower_bound = stat.min();
@@ -238,6 +244,10 @@ mod tests {
             let mut kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
             kept_blocks.sort_unstable();
             assert_eq!(kept_blocks, expected);
+
+            // test empty metas
+            let result = pruner.prune(vec![]).unwrap();
+            assert_eq!(result.len(), 0);
         }
     }
 

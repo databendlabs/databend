@@ -29,6 +29,7 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use futures_util::future;
+use log::info;
 
 use super::SegmentLocation;
 use crate::pruning::PruningContext;
@@ -298,9 +299,11 @@ impl BlockPruner {
         }
 
         // Perf
+        let elapsed = start.elapsed().as_millis() as u64;
         {
-            metrics_inc_pruning_milliseconds(start.elapsed().as_millis() as u64);
+            metrics_inc_pruning_milliseconds(elapsed);
         }
+        info!("[FUSE-PRUNER] block prune elapsed: {elapsed}");
 
         Ok(result)
     }
@@ -368,9 +371,11 @@ impl BlockPruner {
         }
 
         // Perf
+        let elapsed = start.elapsed().as_millis() as u64;
         {
-            metrics_inc_pruning_milliseconds(start.elapsed().as_millis() as u64);
+            metrics_inc_pruning_milliseconds(elapsed);
         }
+        info!("[FUSE-PRUNER] sync block prune elapsed: {elapsed}");
 
         Ok(result)
     }
