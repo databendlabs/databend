@@ -189,7 +189,7 @@ impl VectorIndexPruner {
                     .pruning_cost
                     .measure_async(
                         PruningCostKind::BlocksVector,
-                        self.vector_index_hnsw_topn_prune(param.limit, metas)
+                        self.vector_index_hnsw_topn_prune(param.limit, metas),
                     )
                     .await?
             } else {
@@ -197,7 +197,12 @@ impl VectorIndexPruner {
                     .pruning_cost
                     .measure_async(
                         PruningCostKind::BlocksVector,
-                        self.vector_index_topn_prune(&param.filter_expr, param.asc, param.limit, metas)
+                        self.vector_index_topn_prune(
+                            &param.filter_expr,
+                            param.asc,
+                            param.limit,
+                            metas,
+                        ),
                     )
                     .await?
             };
