@@ -69,7 +69,7 @@ RowFetch
             ├── filters: [t1._search_matched (#2)]
             ├── estimated rows: 10.00
             └── TableScan
-                ├── table: default.default.t1
+                ├── table: default.test_inverted_index_db.t1
                 ├── scan id: 0
                 ├── output columns: [id (#0), _search_matched (#2), _row_id (#3)]
                 ├── read rows: 2
@@ -138,7 +138,7 @@ Limit
         ├── filters: [t2._search_matched (#2)]
         ├── estimated rows: 10.00
         └── TableScan
-            ├── table: default.default.t2
+            ├── table: default.test_inverted_index_db.t2
             ├── scan id: 0
             ├── output columns: [id (#0), content (#1), _search_matched (#2)]
             ├── read rows: 2

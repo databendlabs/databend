@@ -70,6 +70,9 @@ impl TopNPruner {
         } else {
             return Ok(metas);
         };
+        if *nulls_first && self.filter_only_use_index {
+            return Ok(metas);
+        }
 
         let sort_column_id = if let Ok(index) = self.schema.column_id_of(column.as_str()) {
             index
