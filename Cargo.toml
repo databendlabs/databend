@@ -217,18 +217,18 @@ anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 apache-avro = { version = "0.17.0", features = ["snappy", "zstandard", "xz", "snappy", "bzip"] }
 approx = "0.5.1"
-arrow = { version = "55" }
-arrow-array = { version = "55" }
-arrow-buffer = { version = "55" }
-arrow-cast = { version = "55", features = ["prettyprint"] }
-arrow-csv = { version = "55" }
-arrow-data = { version = "55" }
-arrow-flight = { version = "55", features = ["flight-sql-experimental", "tls"] }
-arrow-ipc = { version = "55", features = ["lz4", "zstd"] }
-arrow-json = { version = "55" }
-arrow-ord = { version = "55" }
-arrow-schema = { version = "55", features = ["serde"] }
-arrow-select = { version = "55" }
+arrow = { version = "56" }
+arrow-array = { version = "56" }
+arrow-buffer = { version = "56" }
+arrow-cast = { version = "56", features = ["prettyprint"] }
+arrow-csv = { version = "56" }
+arrow-data = { version = "56" }
+arrow-flight = { version = "56", features = ["flight-sql-experimental", "tls-ring"] }
+arrow-ipc = { version = "56", features = ["lz4", "zstd"] }
+arrow-json = { version = "56" }
+arrow-ord = { version = "56" }
+arrow-schema = { version = "56", features = ["serde"] }
+arrow-select = { version = "56" }
 arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript", "wasm"] }
 async-backtrace = "0.2"
 async-channel = "2.3.1"
@@ -330,13 +330,13 @@ hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio"
 lru = "0.12"
 
 ## in branch dev
-iceberg = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "1dace26ea25a9b9e2066367cbd3b7badc75dd7f9", features = [
+iceberg = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403", features = [
     "storage-all",
 ] }
-iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "1dace26ea25a9b9e2066367cbd3b7badc75dd7f9" }
-iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "1dace26ea25a9b9e2066367cbd3b7badc75dd7f9" }
-iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "1dace26ea25a9b9e2066367cbd3b7badc75dd7f9" }
-iceberg-catalog-s3tables = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "1dace26ea25a9b9e2066367cbd3b7badc75dd7f9" }
+iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
+iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
+iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
+iceberg-catalog-s3tables = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "32b1403" }
 
 # Explicitly specify compatible AWS SDK versions
 aws-config = "1.5.18"
@@ -415,7 +415,7 @@ ordered-float = { version = "5.1.0", default-features = false }
 ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
-parquet = { version = "55", features = ["async"] }
+parquet = { version = "56", features = ["async"] }
 passwords = { version = "3.1.16" }
 paste = "1.0.15"
 percent-encoding = "2.3.1"
@@ -518,9 +518,9 @@ tokio = { version = "1.35.0", features = ["full"] }
 tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.13" }
 toml = { version = "0.8", features = ["parse"] }
-tonic = { version = "0.12.3", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
-tonic-build = { version = "0.12.3" }
-tonic-reflection = { version = "0.12.3" }
+tonic = { version = "0.13", features = ["transport", "codegen", "tls-native-roots"] }
+tonic-build = { version = "0.13" }
+tonic-reflection = { version = "0.13" }
 tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3.3"
 twox-hash = "1.6.3"
@@ -643,7 +643,7 @@ overflow-checks = true
 rpath = true
 
 [patch.crates-io]
-arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "a442343" }
+arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "2480dccf1" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
@@ -651,7 +651,7 @@ color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.11" }
-orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "d82aa6d" }
+orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc812ad7010" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }

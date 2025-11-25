@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
 use databend_common_compress::DecompressState;
@@ -32,6 +33,7 @@ pub struct Decompressor {
     algo: Option<CompressAlgorithm>,
     decompressor: Option<(DecompressDecoder, usize)>,
     path: Option<String>,
+    zip_buf: Vec<u8>,
 }
 
 impl Decompressor {
@@ -41,6 +43,7 @@ impl Decompressor {
             algo,
             path: None,
             decompressor: None,
+            zip_buf: Vec::new(),
         })
     }
 
@@ -55,6 +58,7 @@ impl Decompressor {
 
         if let Some(algo) = algo {
             if matches!(algo, CompressAlgorithm::Zip) {
+                self.zip_buf.clear();
                 return;
             }
             let decompressor = DecompressDecoder::new(algo);
@@ -82,15 +86,33 @@ impl AccumulatingTransform for Decompressor {
             }
         }
         if matches!(self.algo, Some(CompressAlgorithm::Zip)) {
-            let bytes = DecompressDecoder::decompress_all_zip(&batch.data)?;
+            let memory_limit = GLOBAL_MEM_STAT.get_limit() as usize;
+            if memory_limit > 0 && self.zip_buf.len() + batch.data.len() > memory_limit / 3 {
+                return Err(ErrorCode::BadBytes(format!(
+                    "zip file {} is larger than memory_limit/3 ({})",
+                    batch.path,
+                    memory_limit / 3
+                )));
+            }
+            self.zip_buf.extend_from_slice(&batch.data);
 
-            let new_batch = Box::new(BytesBatch {
-                data: bytes,
-                path: batch.path.clone(),
-                offset: batch.data.len(),
-                is_eof: batch.is_eof,
-            });
-            return Ok(vec![DataBlock::empty_with_meta(new_batch)]);
+            return if batch.is_eof {
+                let bytes = DecompressDecoder::decompress_all_zip(
+                    &self.zip_buf,
+                    &batch.path,
+                    memory_limit,
+                )?;
+                let new_batch = Box::new(BytesBatch {
+                    data: bytes,
+                    path: batch.path.clone(),
+                    offset: 0,
+                    is_eof: batch.is_eof,
+                });
+                self.zip_buf.clear();
+                Ok(vec![DataBlock::empty_with_meta(new_batch)])
+            } else {
+                Ok(vec![])
+            };
         }
         if let Some((de, offset)) = &mut self.decompressor {
             let mut data = de.decompress_batch(&batch.data).map_err(|e| {

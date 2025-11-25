@@ -58,6 +58,7 @@ use serde::Serialize;
 use tokio::sync::OnceCell;
 use url::Url;
 
+use super::arrow56_conversion::TryIntoValue;
 use crate::partition::DeltaPartInfo;
 use crate::table_source::DeltaTableSource;
 
@@ -140,7 +141,7 @@ impl DeltaTable {
         })?;
 
         // Build arrow schema from delta metadata.
-        let arrow_schema: ArrowSchema = delta_meta.try_into().map_err(|e| {
+        let arrow_schema: ArrowSchema = delta_meta.try_into_value().map_err(|e| {
             ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
         })?;
 

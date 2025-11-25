@@ -30,8 +30,9 @@ pub fn split_partitioned_meta_into_datablocks(
     let base_chunk_size = total_len / outputs_len;
     let remainder = total_len % outputs_len;
 
-    let mut result = Vec::with_capacity(outputs_len);
     let mut data_iter = data.into_iter();
+    let mut chunks = Vec::with_capacity(outputs_len);
+    let mut activated_workers = 0;
 
     for index in 0..outputs_len {
         let chunk_size = if index < remainder {
@@ -41,8 +42,17 @@ pub fn split_partitioned_meta_into_datablocks(
         };
 
         let chunk: Vec<AggregateMeta> = data_iter.by_ref().take(chunk_size).collect();
+        if !chunk.is_empty() {
+            activated_workers += 1;
+        }
+        chunks.push(chunk);
+    }
+
+    let activate_worker = Some(activated_workers);
+    let mut result = Vec::with_capacity(outputs_len);
+    for chunk in chunks {
         result.push(DataBlock::empty_with_meta(
-            AggregateMeta::create_partitioned(bucket, chunk),
+            AggregateMeta::create_partitioned(bucket, chunk, activate_worker),
         ));
     }
 
