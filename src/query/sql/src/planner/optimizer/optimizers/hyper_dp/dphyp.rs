@@ -1121,20 +1121,19 @@ impl DPhpyOptimizer {
         let rule = RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.opt_ctx.clone())?;
         let mut state = TransformResult::new();
 
-        if rule
-            .matchers()
-            .iter()
-            .any(|matcher| matcher.matches(&s_expr))
-            && !s_expr.applied_rule(&rule.id())
-        {
-            s_expr.set_applied_rule(&rule.id());
-            rule.apply(&s_expr, &mut state)?;
+        for (idx, matcher) in rule.matchers().iter().enumerate() {
+            if matcher.matches(&s_expr) && !s_expr.applied_rule(&rule.id()) {
+                s_expr.set_applied_rule(&rule.id());
+                rule.apply_matcher(idx, &s_expr, &mut state)?;
 
-            if !state.results().is_empty() {
-                // Recursive optimize the result
-                let result = &state.results()[0];
-                let optimized_result = self.push_down_filter(result)?;
-                return Ok(optimized_result);
+                if !state.results().is_empty() {
+                    // Recursive optimize the result
+                    let result = &state.results()[0];
+                    let optimized_result = self.push_down_filter(result)?;
+                    return Ok(optimized_result);
+                }
+
+                break;
             }
         }
 
