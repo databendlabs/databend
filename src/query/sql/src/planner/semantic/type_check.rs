@@ -51,6 +51,7 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::Span;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -206,6 +207,13 @@ use crate::UDFArgVisitor;
 
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct StageLocationParam {
+    pub param_name: String,
+    pub relative_path: String,
+    pub stage_info: StageInfo,
+}
 
 /// A helper for type checking.
 ///
@@ -4939,6 +4947,7 @@ impl<'a> TypeChecker<'a> {
             Some(Vec::with_capacity(exprs.len()));
         let mut element_type: Option<DataType> = None;
 
+        let mut data_type_set = HashSet::with_capacity(2);
         for expr in exprs {
             let box (arg, data_type) = self.resolve(expr)?;
             if let Some(values) = constant_values.as_mut() {
@@ -4948,6 +4957,13 @@ impl<'a> TypeChecker<'a> {
                     _ => None,
                 };
                 if let Some(value) = maybe_constant {
+                    // If the data type has already been computed,
+                    // we don't need to compute the common type again.
+                    if data_type_set.contains(&data_type) {
+                        elems.push(arg);
+                        values.push((value, data_type));
+                        continue;
+                    }
                     element_type = if let Some(current_ty) = element_type.clone() {
                         common_super_type(
                             current_ty.clone(),
@@ -4959,6 +4975,7 @@ impl<'a> TypeChecker<'a> {
                     };
 
                     if element_type.is_some() {
+                        data_type_set.insert(data_type.clone());
                         values.push((value, data_type));
                     } else {
                         constant_values = None;
@@ -5143,6 +5160,7 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_udaf_script(span, name, arguments, udf_def)?,
             )),
             UDFDefinition::UDTF(_) => unreachable!(),
+            UDFDefinition::UDTFServer(_) => unreachable!(),
             UDFDefinition::ScalarUDF(udf_def) => Ok(Some(
                 self.resolve_scalar_udf(span, name, arguments, udf_def)?,
             )),
@@ -5156,13 +5174,6 @@ impl<'a> TypeChecker<'a> {
         arguments: &[Expr],
         mut udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        #[derive(serde::Serialize, serde::Deserialize)]
-        struct StageLocationParam {
-            param_name: String,
-            relative_path: String,
-            stage_info: StageInfo,
-        }
-
         UDFValidator::is_udf_server_allowed(&udf_definition.address)?;
         if arguments.len() != udf_definition.arg_types.len() {
             return Err(ErrorCode::InvalidArgument(format!(
@@ -5337,13 +5348,13 @@ impl<'a> TypeChecker<'a> {
             .do_exchange(
                 name,
                 &udf_definition.handler,
-                num_rows,
+                Some(num_rows),
                 block_entries,
                 &udf_definition.return_type,
             )
             .await?;
 
-        let value = unsafe { result.index_unchecked(0) };
+        let value = unsafe { result.get_by_offset(0).index_unchecked(0) };
         Ok(value.to_owned())
     }
 
@@ -5395,7 +5406,11 @@ impl<'a> TypeChecker<'a> {
             Some(algo) => {
                 log::trace!("Decompressing module using {:?} algorithm", algo);
                 if algo == CompressAlgorithm::Zip {
-                    DecompressDecoder::decompress_all_zip(&code_blob)
+                    DecompressDecoder::decompress_all_zip(
+                        &code_blob,
+                        &module_path,
+                        GLOBAL_MEM_STAT.get_limit() as usize,
+                    )
                 } else {
                     let mut decoder = DecompressDecoder::new(algo);
                     decoder.decompress_all(&code_blob)

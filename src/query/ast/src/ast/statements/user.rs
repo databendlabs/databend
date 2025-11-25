@@ -169,6 +169,7 @@ pub enum GrantObjectName {
     Connection(String),
     Sequence(String),
     Procedure(ProcedureIdentity),
+    MaskingPolicy(String),
 }
 
 impl Display for GrantObjectName {
@@ -184,12 +185,13 @@ impl Display for GrantObjectName {
                     write!(f, "TABLE {table_name}")
                 }
             }
-            GrantObjectName::UDF(udf) => write!(f, " UDF {udf}"),
-            GrantObjectName::Stage(stage) => write!(f, " STAGE {stage}"),
-            GrantObjectName::Warehouse(w) => write!(f, " WAREHOUSE {w}"),
-            GrantObjectName::Connection(c) => write!(f, " CONNECTION {c}"),
-            GrantObjectName::Sequence(s) => write!(f, " SEQUENCE {s}"),
-            GrantObjectName::Procedure(p) => write!(f, " PROCEDURE {p}"),
+            GrantObjectName::UDF(udf) => write!(f, "UDF {udf}"),
+            GrantObjectName::Stage(stage) => write!(f, "STAGE {stage}"),
+            GrantObjectName::Warehouse(w) => write!(f, "WAREHOUSE {w}"),
+            GrantObjectName::Connection(c) => write!(f, "CONNECTION {c}"),
+            GrantObjectName::Sequence(s) => write!(f, "SEQUENCE {s}"),
+            GrantObjectName::Procedure(p) => write!(f, "PROCEDURE {p}"),
+            GrantObjectName::MaskingPolicy(policy) => write!(f, "MASKING POLICY {policy}"),
         }
     }
 }
@@ -224,6 +226,15 @@ impl Display for AccountMgrSource {
         match self {
             AccountMgrSource::Role { role } => write!(f, " ROLE '{role}'")?,
             AccountMgrSource::Privs { privileges, level } => {
+                if privileges.len() == 1
+                    && privileges[0] == UserPrivilegeType::ApplyMaskingPolicy
+                    && matches!(level, AccountMgrLevel::MaskingPolicy(_))
+                {
+                    if let AccountMgrLevel::MaskingPolicy(policy) = level {
+                        write!(f, " APPLY ON MASKING POLICY {policy}")?;
+                        return Ok(());
+                    }
+                }
                 write!(f, " ")?;
                 write_comma_separated_list(f, privileges.iter().map(|p| p.to_string()))?;
                 write!(f, " ON")?;
@@ -250,6 +261,7 @@ pub enum AccountMgrLevel {
     Connection(String),
     Sequence(String),
     Procedure(ProcedureIdentity),
+    MaskingPolicy(String),
 }
 
 impl Display for AccountMgrLevel {
@@ -276,6 +288,7 @@ impl Display for AccountMgrLevel {
             AccountMgrLevel::Connection(c) => write!(f, " CONNECTION {c}"),
             AccountMgrLevel::Sequence(s) => write!(f, " SEQUENCE {s}"),
             AccountMgrLevel::Procedure(p) => write!(f, " PROCEDURE {p}"),
+            AccountMgrLevel::MaskingPolicy(policy) => write!(f, " MASKING POLICY {policy}"),
         }
     }
 }

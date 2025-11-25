@@ -19,7 +19,7 @@
 
 extern crate databend_common_meta_types;
 pub mod catalog_api;
-mod data_mask_api;
+pub mod data_mask_api;
 mod data_mask_api_impl;
 pub mod data_retention_util;
 mod database_api;

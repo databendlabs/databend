@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod row_access_policy_id_ident;
+pub mod row_access_policy_id_to_name_ident;
 pub mod row_access_policy_name_ident;
 pub mod row_access_policy_table_id_ident;
 
@@ -20,7 +21,10 @@ use chrono::DateTime;
 use chrono::Utc;
 pub use row_access_policy_id_ident::RowAccessPolicyId;
 pub use row_access_policy_id_ident::RowAccessPolicyIdIdent;
+pub use row_access_policy_id_to_name_ident::RowAccessPolicyIdToNameIdent;
+pub use row_access_policy_id_to_name_ident::RowAccessPolicyIdToNameIdentRaw;
 pub use row_access_policy_name_ident::RowAccessPolicyNameIdent;
+pub use row_access_policy_name_ident::RowAccessPolicyNameIdentRaw;
 pub use row_access_policy_table_id_ident::RowAccessPolicyTableIdIdent;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,7 +39,6 @@ pub struct RowAccessPolicyMeta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateRowAccessPolicyReq {
-    pub can_replace: bool,
     pub name: RowAccessPolicyNameIdent,
     pub row_access_policy_meta: RowAccessPolicyMeta,
 }

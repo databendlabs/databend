@@ -878,6 +878,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
         let alias = TableAlias {
             name: table_name.clone(),
             columns,
+            keep_database_name: false,
         };
         let table = Table::new(None, table_name, schema);
 

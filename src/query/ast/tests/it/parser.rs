@@ -355,6 +355,7 @@ SELECT * from s;"#,
         r#"GRANT access connection on connection c1  TO 'test-grant';"#,
         r#"GRANT all on connection c1  TO 'test-grant';"#,
         r#"GRANT OWNERSHIP on connection c1  TO role r1;"#,
+        r#"GRANT OWNERSHIP on masking policy m1  TO role r1;"#,
         r#"GRANT access sequence, create sequence ON *.*  TO 'test-grant';"#,
         r#"GRANT access sequence on sequence s1  TO 'test-grant';"#,
         r#"GRANT all on sequence s1  TO 'test-grant';"#,
@@ -378,6 +379,11 @@ SELECT * from s;"#,
         r#"GRANT SELECT ON db01.tb1 TO ROLE role1;"#,
         r#"GRANT SELECT ON tb1 TO ROLE role1;"#,
         r#"GRANT ALL ON tb1 TO 'u1';"#,
+        r#"GRANT CREATE MASKING POLICY ON *.* TO USER a;"#,
+        r#"GRANT APPLY MASKING POLICY ON *.* TO USER a;"#,
+        r#"GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE human_resources;"#,
+        r#"GRANT OWNERSHIP ON MASKING POLICY mask_phone TO ROLE role_mask_apply;"#,
+        r#"SHOW GRANTS ON MASKING POLICY ssn_mask;"#,
         r#"SHOW GRANTS;"#,
         r#"SHOW GRANTS FOR 'test-grant';"#,
         r#"SHOW GRANTS FOR USER 'test-grant';"#,
@@ -676,7 +682,6 @@ SELECT * from s;"#,
         r#"SELECT * FROM t GROUP BY a, ROLLUP (b, c)"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b)), a, ROLLUP (b, c)"#,
         r#"CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
-        r#"CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
         r#"DESC MASKING POLICY email_mask"#,
         r#"DROP MASKING POLICY IF EXISTS email_mask"#,
         r#"REFRESH VIRTUAL COLUMN FOR t"#,
@@ -974,12 +979,12 @@ SELECT * from s;"#,
         r#"ALTER TABLE p1 CONNECTION=(CONNECTION_NAME='test')"#,
         r#"ALTER table t connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
         // row policy
-        r#"create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
+        r#"create row access policy rap_it as (empl_id varchar) returns boolean ->
           case
               when 'it_admin' = current_role() then true
               else false
           end"#,
-        r#"create or replace row access policy rap_sales_manager_regions_1 as (sales_region varchar) returns boolean ->
+        r#"create row access policy if not exists rap_sales_manager_regions_1 as (sales_region varchar) returns boolean ->
             'sales_executive_role' = current_role()
               or exists (
                     select 1 from salesmanagerregions

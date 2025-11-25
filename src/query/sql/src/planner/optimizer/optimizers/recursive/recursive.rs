@@ -51,23 +51,30 @@ impl RecursiveRuleOptimizer {
 
     #[recursive::recursive]
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut optimized_children = Vec::with_capacity(s_expr.arity());
-        let mut children_changed = false;
-        for expr in s_expr.children() {
-            let optimized_child = self.optimize_sync(expr)?;
-            if !optimized_child.eq(expr) {
-                children_changed = true;
+        let mut current = s_expr.clone();
+
+        loop {
+            let mut optimized_children = Vec::with_capacity(current.arity());
+            let mut children_changed = false;
+            for expr in current.children() {
+                let optimized_child = self.optimize_sync(expr)?;
+                if !optimized_child.eq(expr) {
+                    children_changed = true;
+                }
+                optimized_children.push(Arc::new(optimized_child));
             }
-            optimized_children.push(Arc::new(optimized_child));
-        }
-        let mut optimized_expr = s_expr.clone();
-        if children_changed {
-            optimized_expr = s_expr.replace_children(optimized_children);
-        }
 
-        let result = self.apply_transform_rules(&optimized_expr, self.rules)?;
+            if children_changed {
+                current = current.replace_children(optimized_children);
+            }
 
-        Ok(result)
+            match self.apply_transform_rules(&current, self.rules)? {
+                Some(new_expr) => {
+                    current = new_expr;
+                }
+                None => return Ok(current),
+            }
+        }
     }
 
     /// Trace rule execution, regardless of whether the rule had an effect
@@ -104,7 +111,7 @@ impl RecursiveRuleOptimizer {
         Ok(())
     }
 
-    fn apply_transform_rules(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<SExpr> {
+    fn apply_transform_rules(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<Option<SExpr>> {
         let mut s_expr = s_expr.clone();
         for rule_id in rules {
             let rule = RuleFactory::create_rule(*rule_id, self.ctx.clone())?;
@@ -121,25 +128,24 @@ impl RecursiveRuleOptimizer {
 
             // Core optimization logic - exactly as original
             let mut state = TransformResult::new();
-            if rule
-                .matchers()
-                .iter()
-                .any(|matcher| matcher.matches(&s_expr))
-                && !s_expr.applied_rule(&rule.id())
-            {
-                s_expr.set_applied_rule(&rule.id());
-                rule.apply(&s_expr, &mut state)?;
-                if !state.results().is_empty() {
-                    let result = &state.results()[0];
 
-                    // For tracing only
-                    if trace_enabled {
-                        let duration = start_time.elapsed();
-                        self.trace_rule_execution(rule.name(), duration, &before_expr, &state)?;
+            for (idx, matcher) in rule.matchers().iter().enumerate() {
+                if matcher.matches(&s_expr) && !s_expr.applied_rule(&rule.id()) {
+                    s_expr.set_applied_rule(&rule.id());
+                    rule.apply_matcher(idx, &s_expr, &mut state)?;
+                    if let Some(result) = state.results().first() {
+                        let result = result.clone();
+
+                        // For tracing only
+                        if trace_enabled {
+                            let duration = start_time.elapsed();
+                            self.trace_rule_execution(rule.name(), duration, &before_expr, &state)?;
+                        }
+
+                        return Ok(Some(result));
                     }
 
-                    let optimized_result = self.optimize_expression(result)?;
-                    return Ok(optimized_result);
+                    break;
                 }
             }
 
@@ -150,7 +156,7 @@ impl RecursiveRuleOptimizer {
             }
         }
 
-        Ok(s_expr)
+        Ok(None)
     }
 }
 

@@ -1,0 +1,9 @@
+[project]
+name = "udf-server"
+version = "0.1.0"
+description = "UDF server for testing"
+requires-python = ">=3.8"
+dependencies = [
+    "databend-udf>=0.2.7",
+    "pyarrow",
+]

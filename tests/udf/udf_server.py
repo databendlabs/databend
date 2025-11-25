@@ -425,12 +425,52 @@ def embedding_4(s: str):
     return [1.1, 1.2, 1.3, 1.4]
 
 
+def _stage_bucket(stage: StageLocation) -> str:
+    storage = stage.storage or {}
+    return storage.get("bucket") or storage.get("container") or ""
+
+
 @udf(stage_refs=["data_stage"], input_types=["INT"], result_type="VARCHAR")
 def stage_summary(data_stage: StageLocation, value: int) -> str:
     assert data_stage.stage_type.lower() == "external"
     assert data_stage.storage
-    bucket = data_stage.storage.get("bucket", data_stage.storage.get("container", ""))
+    bucket = _stage_bucket(data_stage)
     return f"{data_stage.stage_name}:{bucket}:{data_stage.relative_path}:{value}"
+
+
+@udf(
+    stage_refs=["data_stage"],
+    input_types=["INT"],
+    result_type=[
+        ("stage_name", "VARCHAR"),
+        ("stage_type", "VARCHAR"),
+        ("bucket", "VARCHAR"),
+        ("relative_path", "VARCHAR"),
+        ("value", "INT"),
+        ("summary", "VARCHAR"),
+    ],
+)
+def stage_summary_udtf(data_stage: StageLocation, value: int):
+    assert data_stage.stage_type.lower() == "external"
+    assert data_stage.storage
+    bucket = _stage_bucket(data_stage)
+    rows = []
+    for offset in (0, 1):
+        current_value = value + offset
+        summary = (
+            f"{data_stage.stage_name}:{bucket}:{data_stage.relative_path}:{current_value}"
+        )
+        rows.append(
+            {
+                "stage_name": data_stage.stage_name or "",
+                "stage_type": data_stage.stage_type or "",
+                "bucket": bucket,
+                "relative_path": data_stage.relative_path or "",
+                "value": current_value,
+                "summary": summary,
+            }
+        )
+    return rows
 
 
 @udf(
@@ -450,6 +490,45 @@ def multi_stage_process(
         + len(input_stage.storage.get("bucket", ""))
         + len(output_stage.storage.get("bucket", ""))
     )
+
+
+@udf(
+    stage_refs=["input_stage", "output_stage"],
+    input_types=["INT"],
+    result_type=[
+        ("input_stage", "VARCHAR"),
+        ("output_stage", "VARCHAR"),
+        ("input_bucket", "VARCHAR"),
+        ("output_bucket", "VARCHAR"),
+        ("input_relative_path", "VARCHAR"),
+        ("output_relative_path", "VARCHAR"),
+        ("result", "INT"),
+    ],
+)
+def multi_stage_process_udtf(
+    input_stage: StageLocation, output_stage: StageLocation, value: int
+):
+    assert input_stage.storage and output_stage.storage
+    assert input_stage.stage_type.lower() == "external"
+    assert output_stage.stage_type.lower() == "external"
+    input_bucket = _stage_bucket(input_stage)
+    output_bucket = _stage_bucket(output_stage)
+    rows = []
+    for offset in (0, 1):
+        current_value = value + offset
+        result = current_value + len(input_bucket) + len(output_bucket)
+        rows.append(
+            {
+                "input_stage": input_stage.stage_name or "",
+                "output_stage": output_stage.stage_name or "",
+                "input_bucket": input_bucket,
+                "output_bucket": output_bucket,
+                "input_relative_path": input_stage.relative_path or "",
+                "output_relative_path": output_stage.relative_path or "",
+                "result": result,
+            }
+        )
+    return rows
 
 
 @udf(
@@ -503,7 +582,9 @@ if __name__ == "__main__":
     udf_server.add_function(check_headers)
     udf_server.add_function(embedding_4)
     udf_server.add_function(stage_summary)
+    udf_server.add_function(stage_summary_udtf)
     udf_server.add_function(multi_stage_process)
+    udf_server.add_function(multi_stage_process_udtf)
     udf_server.add_function(immutable_multi_stage_process)
 
     # Built-in function

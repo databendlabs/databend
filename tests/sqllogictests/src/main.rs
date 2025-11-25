@@ -26,7 +26,6 @@ use sqllogictest::default_column_validator;
 use sqllogictest::default_validator;
 use sqllogictest::parse_file;
 use sqllogictest::DBOutput;
-use sqllogictest::DefaultColumnType;
 use sqllogictest::Location;
 use sqllogictest::QueryExpect;
 use sqllogictest::Record;
@@ -37,6 +36,7 @@ use testcontainers::GenericImage;
 use testcontainers::Image;
 
 use crate::arg::SqlLogicTestArgs;
+use crate::client::BodyFormat;
 use crate::client::Client;
 use crate::client::ClientType;
 use crate::client::HttpClient;
@@ -48,6 +48,7 @@ use crate::util::get_files;
 use crate::util::lazy_prepare_data;
 use crate::util::lazy_run_dictionary_containers;
 use crate::util::run_ttc_container;
+use crate::util::ColumnType;
 
 mod arg;
 mod client;
@@ -65,17 +66,27 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
     vec![
         (Box::new(ClientType::MySQL), 3),
         (
-            Box::new(ClientType::Ttc(
-                "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
-                TTC_PORT_START,
-            )),
+            Box::new(ClientType::Ttc {
+                image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
+                port: TTC_PORT_START,
+                body_format: BodyFormat::Arrow,
+            }),
             5,
         ),
         (
-            Box::new(ClientType::Ttc(
-                "ghcr.io/databendlabs/ttc-go:latest".to_string(),
-                TTC_PORT_START + 1,
-            )),
+            Box::new(ClientType::Ttc {
+                image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
+                port: TTC_PORT_START + 1,
+                body_format: BodyFormat::Json,
+            }),
+            5,
+        ),
+        (
+            Box::new(ClientType::Ttc {
+                image: "ghcr.io/databendlabs/ttc-go:latest".to_string(),
+                port: TTC_PORT_START + 2,
+                body_format: BodyFormat::Json,
+            }),
             5,
         ),
     ]
@@ -97,7 +108,7 @@ impl Databend {
 #[async_trait::async_trait]
 impl sqllogictest::AsyncDB for Databend {
     type Error = DSqlLogicTestError;
-    type ColumnType = DefaultColumnType;
+    type ColumnType = ColumnType;
 
     async fn run(&mut self, sql: &str) -> Result<DBOutput<Self::ColumnType>> {
         self.client.query(sql).await
@@ -138,12 +149,20 @@ pub async fn main() -> Result<()> {
             handler if handler.starts_with("ttc") => {
                 if handler != "ttc_dev" {
                     let image = format!("ghcr.io/databendlabs/{handler}:latest");
-                    run_ttc_container(&image, TTC_PORT_START, args.port, &mut containers).await?;
+                    run_ttc_container(
+                        &image,
+                        TTC_PORT_START,
+                        args.port,
+                        &mut containers,
+                        BodyFormat::Json,
+                    )
+                    .await?;
                 }
-                run_ttc_client(
-                    args.clone(),
-                    ClientType::Ttc(handler.to_string(), TTC_PORT_START),
-                )
+                run_ttc_client(args.clone(), ClientType::Ttc {
+                    image: handler.to_string(),
+                    port: TTC_PORT_START,
+                    body_format: BodyFormat::Json,
+                })
                 .await?;
             }
             _ => {
@@ -181,8 +200,12 @@ async fn run_hybrid_client(
     for (c, _) in HYBRID_CONFIGS.iter() {
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
-            ClientType::Ttc(image, port) => {
-                run_ttc_container(image, *port, args.port, cs).await?;
+            ClientType::Ttc {
+                image,
+                port,
+                body_format,
+            } => {
+                run_ttc_container(image, *port, args.port, cs, *body_format).await?;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
         }
@@ -221,7 +244,11 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
             client = Client::Http(HttpClient::create(args.port).await?);
         }
 
-        ClientType::Ttc(image, port) => {
+        ClientType::Ttc {
+            image,
+            port,
+            body_format: _,
+        } => {
             let conn = format!("127.0.0.1:{port}");
             client = Client::Ttc(TTCClient::create(image, &conn).await?);
         }
@@ -291,7 +318,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                     continue;
                 }
             }
-            num_of_tests += parse_file::<DefaultColumnType>(suit_file.as_ref().unwrap().path())
+            num_of_tests += parse_file::<ColumnType>(suit_file.as_ref().unwrap().path())
                 .unwrap()
                 .len();
 
@@ -355,23 +382,19 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
     Ok(())
 }
 
-fn column_validator(
-    loc: Location,
-    actual: Vec<DefaultColumnType>,
-    expected: Vec<DefaultColumnType>,
-) {
+fn column_validator(loc: Location, actual: Vec<ColumnType>, expected: Vec<ColumnType>) {
     let equals = if actual.len() != expected.len() {
         false
     } else {
         actual.iter().zip(expected.iter()).all(|x| {
-            use DefaultColumnType::*;
+            use ColumnType::*;
             matches!(
                 x,
-                (Text, Text)
+                (Bool, Bool)
+                    | (Text, Text)
                     | (Integer, Integer)
                     | (FloatingPoint, FloatingPoint)
                     | (Any, _)
-                    | (_, Any)
             )
         })
     };

@@ -164,13 +164,9 @@ pub struct StorageMetricsAccessor<A: Access> {
 impl<A: Access> LayeredAccess for StorageMetricsAccessor<A> {
     type Inner = A;
     type Reader = StorageMetricsWrapper<A::Reader>;
-    type BlockingReader = StorageMetricsWrapper<A::BlockingReader>;
     type Writer = StorageMetricsWrapper<A::Writer>;
-    type BlockingWriter = StorageMetricsWrapper<A::BlockingWriter>;
     type Lister = A::Lister;
-    type BlockingLister = A::BlockingLister;
     type Deleter = A::Deleter;
-    type BlockingDeleter = A::BlockingDeleter;
 
     fn inner(&self) -> &Self::Inner {
         &self.inner
@@ -201,26 +197,6 @@ impl<A: Access> LayeredAccess for StorageMetricsAccessor<A> {
     async fn delete(&self) -> Result<(RpDelete, Self::Deleter)> {
         self.inner.delete().await
     }
-
-    fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
-        self.inner
-            .blocking_read(path, args)
-            .map(|(rp, r)| (rp, StorageMetricsWrapper::new(r, self.metrics.clone())))
-    }
-
-    fn blocking_write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::BlockingWriter)> {
-        self.inner
-            .blocking_write(path, args)
-            .map(|(rp, r)| (rp, StorageMetricsWrapper::new(r, self.metrics.clone())))
-    }
-
-    fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingLister)> {
-        self.inner.blocking_list(path, args)
-    }
-
-    fn blocking_delete(&self) -> Result<(RpDelete, Self::BlockingDeleter)> {
-        self.inner.blocking_delete()
-    }
 }
 
 pub struct StorageMetricsWrapper<R> {
@@ -246,12 +222,6 @@ impl<R: oio::Read> oio::Read for StorageMetricsWrapper<R> {
     }
 }
 
-impl<R: oio::BlockingRead> oio::BlockingRead for StorageMetricsWrapper<R> {
-    fn read(&mut self) -> Result<Buffer> {
-        self.inner.read()
-    }
-}
-
 impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
     async fn write(&mut self, bs: Buffer) -> Result<()> {
         let start = Instant::now();
@@ -270,22 +240,5 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
 
     async fn abort(&mut self) -> Result<()> {
         self.inner.abort().await
-    }
-}
-
-impl<R: oio::BlockingWrite> oio::BlockingWrite for StorageMetricsWrapper<R> {
-    fn write(&mut self, bs: Buffer) -> Result<()> {
-        let start = Instant::now();
-        let size = bs.len();
-
-        self.inner.write(bs).inspect(|_| {
-            self.metrics.inc_write_bytes(size);
-            self.metrics
-                .inc_write_bytes_cost(start.elapsed().as_millis() as u64);
-        })
-    }
-
-    fn close(&mut self) -> Result<Metadata> {
-        self.inner.close()
     }
 }

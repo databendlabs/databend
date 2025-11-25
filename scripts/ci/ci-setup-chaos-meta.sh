@@ -6,7 +6,7 @@ set -ex
 
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
-curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.6.0 bash
+curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.8.3 bash
 k3d registry create registry.localhost --port 0.0.0.0:5111 -i registry:latest
 k3d cluster create --config ./scripts/ci/meta-chaos/k3d.yaml meta-chaos
 
@@ -16,7 +16,7 @@ if kubectl version --client; then
 	echo "kubectl client already installed"
 else
 	echo "install kubectl client"
-	curl -LO "https://dl.k8s.io/release/v1.29.5/bin/linux/amd64/kubectl"
+	curl -LO "https://dl.k8s.io/release/v1.34.1/bin/linux/amd64/kubectl"
 	chmod +x kubectl
 	sudo mv kubectl /usr/local/bin/
 fi

@@ -39,8 +39,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thrift = { workspace = true }
+twox-hash = { workspace = true }
 typetag = { workspace = true }
-xorf = { workspace = true }
 
 [dev-dependencies]
 goldenfile = { workspace = true }

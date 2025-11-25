@@ -84,6 +84,7 @@ fn build_partition_bucket_experimental(
             ctx.clone(),
             output_num,
             shared_partition_stream.clone(),
+            true,
         )?;
         let input_port = InputPort::create();
         let output_port = OutputPort::create();

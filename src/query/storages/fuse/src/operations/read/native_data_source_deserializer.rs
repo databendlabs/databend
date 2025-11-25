@@ -27,6 +27,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
+use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
@@ -59,7 +60,6 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use roaring::RoaringTreemap;
-use xorf::BinaryFuse16;
 
 use super::native_data_source::NativeDataSource;
 use super::util::add_data_block_meta;
@@ -237,7 +237,7 @@ pub struct NativeDeserializeDataTransform {
 struct BloomRuntimeFilterRef {
     column_index: FieldIndex,
     filter_id: usize,
-    filter: BinaryFuse16,
+    filter: RuntimeBloomFilter,
     stats: Arc<RuntimeFilterStats>,
 }
 

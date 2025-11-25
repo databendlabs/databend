@@ -39,6 +39,7 @@ use super::assert_variadic_arguments;
 use super::batch_merge1;
 use super::batch_serialize1;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::SerializeInfo;
@@ -201,5 +202,11 @@ pub fn try_create_aggregate_string_agg_function(
 }
 
 pub fn aggregate_string_agg_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_string_agg_function))
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_string_agg_function),
+        AggregateFunctionFeatures {
+            allow_sort: true,
+            ..Default::default()
+        },
+    )
 }

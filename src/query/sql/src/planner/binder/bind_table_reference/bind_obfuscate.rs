@@ -267,6 +267,7 @@ fn build_subquery(
             alias: Some(TableAlias {
                 name: ident(model_table_name.to_string()),
                 columns: vec![],
+                keep_database_name: false,
             }),
             pivot: None,
             unpivot: None,

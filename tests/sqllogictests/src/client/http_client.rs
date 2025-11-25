@@ -24,11 +24,11 @@ use reqwest::Client;
 use reqwest::ClientBuilder;
 use serde::Deserialize;
 use sqllogictest::DBOutput;
-use sqllogictest::DefaultColumnType;
 
 use crate::client::global_cookie_store::GlobalCookieStore;
 use crate::error::Result;
 use crate::util::parser_rows;
+use crate::util::ColumnType;
 use crate::util::HttpSessionConf;
 
 pub struct HttpClient {
@@ -57,7 +57,7 @@ struct SchemaItem {
 }
 
 impl SchemaItem {
-    fn parse_type(&self) -> Result<DefaultColumnType> {
+    fn parse_type(&self) -> Result<ColumnType> {
         let nullable = Regex::new(r"^Nullable\((.+)\)$").unwrap();
         let value = match nullable.captures(&self.r#type) {
             Some(captures) => {
@@ -67,13 +67,14 @@ impl SchemaItem {
             None => &self.r#type,
         };
         let typ = match value {
-            "String" => DefaultColumnType::Text,
+            "Boolean" => ColumnType::Bool,
+            "String" => ColumnType::Text,
             "Int8" | "Int16" | "Int32" | "Int64" | "UInt8" | "UInt16" | "UInt32" | "UInt64" => {
-                DefaultColumnType::Integer
+                ColumnType::Integer
             }
-            "Float32" | "Float64" => DefaultColumnType::FloatingPoint,
-            decimal if decimal.starts_with("Decimal") => DefaultColumnType::FloatingPoint,
-            _ => DefaultColumnType::Any,
+            "Float32" | "Float64" => ColumnType::FloatingPoint,
+            decimal if decimal.starts_with("Decimal") => ColumnType::FloatingPoint,
+            _ => ColumnType::Any,
         };
         Ok(typ)
     }
@@ -155,7 +156,7 @@ impl HttpClient {
         })
     }
 
-    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
+    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<ColumnType>> {
         let start = Instant::now();
         let port = self.port;
         let mut response = self
@@ -193,7 +194,7 @@ impl HttpClient {
 
         let types = schema
             .iter()
-            .map(|item| item.parse_type().unwrap_or(DefaultColumnType::Any))
+            .map(|item| item.parse_type().unwrap_or(ColumnType::Any))
             .collect();
 
         Ok(DBOutput::Rows {

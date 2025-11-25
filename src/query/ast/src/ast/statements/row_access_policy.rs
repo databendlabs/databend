@@ -19,7 +19,6 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::TypeName;
@@ -54,23 +53,19 @@ impl Display for RowAccessPolicyDefinition {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateRowAccessPolicyStmt {
-    pub create_option: CreateOption,
+    pub if_not_exists: bool,
     pub name: Identifier,
     pub description: Option<String>,
     pub definition: RowAccessPolicyDefinition,
 }
 
-// CREATE [ OR REPLACE ] ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS
+// CREATE ROW ACCESS POLICY [ IF NOT EXISTS ] <name> AS
 // ( <arg_name> <arg_type> [ , ... ] ) RETURNS BOOLEAN -> <body>
 // [ COMMENT = '<string_literal>' ]
 impl Display for CreateRowAccessPolicyStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
-            write!(f, " OR REPLACE")?;
-        }
-        write!(f, " ROW ACCESS POLICY")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
+        write!(f, "CREATE ROW ACCESS POLICY")?;
+        if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
         }
         write!(f, " {} AS {}", self.name, self.definition)?;
