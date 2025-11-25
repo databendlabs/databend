@@ -27,6 +27,7 @@ members = [
     "src/common/tracing",
     "src/common/storage",
     "src/common/vector",
+    "src/common/timezone",
     "src/common/license",
     "src/common/version",
     "src/query/ast",
@@ -175,6 +176,7 @@ databend-common-storages-stage = { path = "src/query/storages/stage" }
 databend-common-storages-stream = { path = "src/query/storages/stream" }
 databend-common-storages-system = { path = "src/query/storages/system" }
 databend-common-telemetry = { path = "src/common/telemetry" }
+databend-common-timezone = { path = "src/common/timezone" }
 databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
@@ -352,7 +354,7 @@ jaq-core = "1.5.1"
 jaq-interpret = "1.5.0"
 jaq-parse = "1.0.3"
 jaq-std = "1.6.0"
-jiff = { version = "0.2.10", features = ["serde", "tzdb-bundle-always"] }
+jiff = { version = "0.2.16", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.5.5"
 jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"

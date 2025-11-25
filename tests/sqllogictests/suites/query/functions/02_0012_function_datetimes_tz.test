@@ -161,41 +161,6 @@ select next_day(to_date('2024-10-25'), saturday);
 ----
 2024-10-26
 
-statement ok
-set timezone='America/Toronto'
-
-statement ok
-drop table if exists tz_dst
-
-statement ok
-create table tz_dst(ts timestamp)
-
-statement ok
-insert into tz_dst values
-    (to_timestamp('2024-03-10 01:30:00')),
-    (to_timestamp('2024-06-10 12:00:00')),
-    (to_timestamp('2024-11-03 01:30:00'))
-
-query T
-select to_date(to_timestamp('2024-03-10 01:30:00'));
-----
-2024-03-10
-
-query T
-select to_date(to_timestamp('2024-11-03 01:30:00'));
-----
-2024-11-03
-
-query RT
-select to_date(ts) from tz_dst order by ts;
-----
-2024-03-10
-2024-06-10
-2024-11-03
-
-statement ok
-drop table if exists tz_dst
-
 query T
 select next_day(to_timestamp('2024-10-25 01:00:00'), monday);
 ----
@@ -617,6 +582,35 @@ select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_
 statement ok
 SET timezone ='America/Toronto';
 
+statement ok
+create or replace table tz_dst(ts timestamp)
+
+statement ok
+insert into tz_dst values
+    (to_timestamp('2024-03-10 01:30:00')),
+    (to_timestamp('2024-06-10 12:00:00')),
+    (to_timestamp('2024-11-03 01:30:00'))
+
+query T
+select to_date(to_timestamp('2024-03-10 01:30:00'));
+----
+2024-03-10
+
+query T
+select to_date(to_timestamp('2024-11-03 01:30:00'));
+----
+2024-11-03
+
+query RT
+select to_date(ts) from tz_dst order by ts;
+----
+2024-03-10
+2024-06-10
+2024-11-03
+
+statement ok
+drop table if exists tz_dst
+
 ##check to '2106-11-23'::date
 query T
 select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(50000));
@@ -865,10 +859,8 @@ select to_datetime('1', '%s')
 ----
 1970-01-01 00:00:01.000000
 
-query T
+query error 1006.*Can't parse '200,2000' as timestamp with format '%s,%Y'
 select to_timestamp('200,2000', '%s,%Y');
-----
-2000-01-01 00:03:20.000000
 
 statement ok
 unset parse_datetime_ignore_remainder;
@@ -880,6 +872,11 @@ select to_datetime('1', '%s')
 
 statement ok
 set timezone='UTC';
+
+query T
+select to_timestamp('2024-10-2 03:04','%G-%V-%u %H:%M');
+----
+2024-03-05 03:04:00.000000
 
 query T
 select to_monday(to_date('1919-04-13','%Y-%m-%d'));

@@ -37,6 +37,8 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
+use databend_common_timezone::fast_components_from_timestamp;
+use databend_common_timezone::DateTimeComponents;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone;
 use jiff::Timestamp;
@@ -260,9 +262,16 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         is_negative = true;
                     }
                     let tz = &ctx.func_ctx.tz;
-                    let t1 = t1.to_timestamp(tz);
-                    let t2 = t2.to_timestamp(tz);
-                    output.push(calc_age(t1, t2, is_negative));
+                    if let (Some(c1), Some(c2)) = (
+                        fast_components_from_timestamp(t1, tz),
+                        fast_components_from_timestamp(t2, tz),
+                    ) {
+                        output.push(calc_age_from_components(&c1, &c2, is_negative));
+                    } else {
+                        let t1 = t1.to_timestamp(tz);
+                        let t2 = t2.to_timestamp(tz);
+                        output.push(calc_age(t1, t2, is_negative));
+                    }
                 },
             ),
         );
@@ -273,13 +282,6 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<TimestampTzType, TimestampTzType, IntervalType>(
                 |t1, t2, output, ctx| {
-                    let fn_to_zoned = |ts_tz: timestamp_tz| {
-                        let ts = Timestamp::from_microsecond(ts_tz.timestamp())?;
-                        let zone = TimeZone::fixed(Offset::from_seconds(ts_tz.seconds_offset())?);
-
-                        Result::Ok(ts.to_zoned(zone))
-                    };
-
                     let mut is_negative = false;
                     let mut t1 = t1;
                     let mut t2 = t2;
@@ -287,10 +289,42 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         std::mem::swap(&mut t1, &mut t2);
                         is_negative = true;
                     }
-                    let (t1, t2) = match (fn_to_zoned(t1), fn_to_zoned(t2)) {
+                    let zone1 = match Offset::from_seconds(t1.seconds_offset())
+                        .map(TimeZone::fixed)
+                    {
+                        Ok(zone) => zone,
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            return;
+                        }
+                    };
+                    let zone2 = match Offset::from_seconds(t2.seconds_offset())
+                        .map(TimeZone::fixed)
+                    {
+                        Ok(zone) => zone,
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            return;
+                        }
+                    };
+                    if let (Some(c1), Some(c2)) = (
+                        fast_components_from_timestamp(t1.timestamp(), &zone1),
+                        fast_components_from_timestamp(t2.timestamp(), &zone2),
+                    ) {
+                        output.push(calc_age_from_components(&c1, &c2, is_negative));
+                        return;
+                    }
+                    let to_zoned = |ts_tz: timestamp_tz,
+                                    zone: &TimeZone|
+                     -> std::result::Result<Zoned, String> {
+                        let ts =
+                            Timestamp::from_microsecond(ts_tz.timestamp()).map_err(|err| err.to_string())?;
+                        Ok(ts.to_zoned(zone.clone()))
+                    };
+                    let (t1, t2) = match (to_zoned(t1, &zone1), to_zoned(t2, &zone2)) {
                         (Ok(t1), Ok(t2)) => (t1, t2),
                         (Err(err), _) | (_, Err(err)) => {
-                            ctx.set_error(output.len(), err.to_string());
+                            ctx.set_error(output.len(), err);
                             return;
                         }
                     };
@@ -310,14 +344,28 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             let today_date = today_date(&ctx.func_ctx.now, &ctx.func_ctx.tz);
             match calc_date_to_timestamp(today_date, tz) {
                 Ok(t) => {
-                    let mut t1 = t.to_timestamp(tz);
-                    let mut t2 = t2.to_timestamp(tz);
+                    let mut t1 = t;
+                    let mut t2_val = t2;
 
-                    if t1 < t2 {
-                        std::mem::swap(&mut t1, &mut t2);
+                    if t1 < t2_val {
+                        std::mem::swap(&mut t1, &mut t2_val);
                         is_negative = true;
                     }
-                    output.push(calc_age(t1, t2, is_negative));
+                    if let (Some(c1), Some(c2)) = (
+                        fast_components_from_timestamp(t1, tz),
+                        fast_components_from_timestamp(t2_val, tz),
+                    ) {
+                        output.push(calc_age_from_components(&c1, &c2, is_negative));
+                    } else {
+                        let mut t1 = t1.to_timestamp(tz);
+                        let mut t2 = t2_val.to_timestamp(tz);
+
+                        if t1 < t2 {
+                            std::mem::swap(&mut t1, &mut t2);
+                            is_negative = true;
+                        }
+                        output.push(calc_age(t1, t2, is_negative));
+                    }
                 }
                 Err(e) => {
                     ctx.set_error(output.len(), e);
@@ -337,8 +385,21 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
 
                 let zone = TimeZone::fixed(Offset::from_seconds(t2.seconds_offset())?);
                 let today_date = today_date(&ctx.func_ctx.now, &zone);
-                let mut t2 = Timestamp::from_microsecond(t2.timestamp())?.to_zoned(zone.clone());
-                let mut t1 = calc_date_to_timestamp(today_date, &zone)?.to_timestamp(&zone);
+                let mut t1 = calc_date_to_timestamp(today_date, &zone)?;
+                let mut t2_micros = t2.timestamp();
+
+                if t1 < t2_micros {
+                    std::mem::swap(&mut t1, &mut t2_micros);
+                    is_negative = true;
+                }
+                if let (Some(c1), Some(c2)) = (
+                    fast_components_from_timestamp(t1, &zone),
+                    fast_components_from_timestamp(t2_micros, &zone),
+                ) {
+                    return Result::Ok(calc_age_from_components(&c1, &c2, is_negative));
+                }
+                let mut t1 = Timestamp::from_microsecond(t1)?.to_zoned(zone.clone());
+                let mut t2 = Timestamp::from_microsecond(t2_micros)?.to_zoned(zone.clone());
 
                 if t1 < t2 {
                     std::mem::swap(&mut t1, &mut t2);
@@ -612,6 +673,48 @@ fn register_number_to_interval(registry: &mut FunctionRegistry) {
             output.push(total_seconds.into());
         }),
     );
+}
+
+fn calc_age_from_components(
+    t1: &DateTimeComponents,
+    t2: &DateTimeComponents,
+    is_negative: bool,
+) -> months_days_micros {
+    let mut years = t1.year - t2.year;
+    let mut months = t1.month as i32 - t2.month as i32;
+    let mut days = t1.day as i32 - t2.day as i32;
+
+    let t1_total_nanos = (t1.hour as i64 * 3600 + t1.minute as i64 * 60 + t1.second as i64)
+        * 1_000_000_000
+        + (t1.micro as i64) * 1_000;
+    let t2_total_nanos = (t2.hour as i64 * 3600 + t2.minute as i64 * 60 + t2.second as i64)
+        * 1_000_000_000
+        + (t2.micro as i64) * 1_000;
+    let mut total_nanoseconds_diff = t1_total_nanos - t2_total_nanos;
+
+    if total_nanoseconds_diff < 0 {
+        total_nanoseconds_diff += 24 * 3600 * 1_000_000_000;
+        days -= 1;
+    }
+
+    if days < 0 {
+        days += t2.days_in_month as i32;
+        months -= 1;
+    }
+
+    if months < 0 {
+        months += 12;
+        years -= 1;
+    }
+
+    let total_months = months + years * 12;
+    let diff_micros = total_nanoseconds_diff / 1_000;
+
+    if is_negative {
+        months_days_micros::new(-total_months, -days, -diff_micros)
+    } else {
+        months_days_micros::new(total_months, days, diff_micros)
+    }
 }
 
 fn calc_age(t1: Zoned, t2: Zoned, is_negative: bool) -> months_days_micros {
