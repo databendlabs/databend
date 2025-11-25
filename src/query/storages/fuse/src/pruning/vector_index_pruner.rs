@@ -184,18 +184,23 @@ impl VectorIndexPruner {
             // we can use the HNSW index to get the results.
             // Otherwise, we need to calculate all the scores and then filter them
             // by conditions or sort them in descending order to get the results.
-            let pruned_metas = self.pruning_ctx
-                .pruning_cost
-                .measure_async(PruningCostKind::BlocksVector, async move {
-                    if !param.has_filter && param.asc {
+            let pruned_metas = if !param.has_filter && param.asc {
+                self.pruning_ctx
+                    .pruning_cost
+                    .measure_async(
+                        PruningCostKind::BlocksVector,
                         self.vector_index_hnsw_topn_prune(param.limit, metas)
-                            .await
-                    } else {
+                    )
+                    .await?
+            } else {
+                self.pruning_ctx
+                    .pruning_cost
+                    .measure_async(
+                        PruningCostKind::BlocksVector,
                         self.vector_index_topn_prune(&param.filter_expr, param.asc, param.limit, metas)
-                            .await
-                    }
-                })
-                .await?;
+                    )
+                    .await?
+            };
 
             let elapsed = start.elapsed().as_millis() as u64;
             // Perf.
