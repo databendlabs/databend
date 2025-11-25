@@ -93,18 +93,6 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
         );
     }
 
-    // vector index pruning status.
-    if info.pruning_stats.blocks_vector_index_pruning_before > 0 {
-        if !blocks_pruning_description.is_empty() {
-            blocks_pruning_description += ", ";
-        }
-        blocks_pruning_description += &format!(
-            "vector pruning: {} to {}",
-            info.pruning_stats.blocks_vector_index_pruning_before,
-            info.pruning_stats.blocks_vector_index_pruning_after
-        );
-    }
-
     // topn pruning status.
     if info.pruning_stats.blocks_topn_pruning_before > 0 {
         if !blocks_pruning_description.is_empty() {
@@ -114,6 +102,18 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
             "topn pruning: {} to {}",
             info.pruning_stats.blocks_topn_pruning_before,
             info.pruning_stats.blocks_topn_pruning_after
+        );
+    }
+
+    // vector index pruning status.
+    if info.pruning_stats.blocks_vector_index_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description += ", ";
+        }
+        blocks_pruning_description += &format!(
+            "vector pruning: {} to {}",
+            info.pruning_stats.blocks_vector_index_pruning_before,
+            info.pruning_stats.blocks_vector_index_pruning_after
         );
     }
 

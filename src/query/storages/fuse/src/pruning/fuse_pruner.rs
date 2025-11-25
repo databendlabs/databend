@@ -535,7 +535,11 @@ impl FusePruner {
         let push_down = self.push_down.clone();
         if push_down
             .as_ref()
-            .filter(|p| !p.order_by.is_empty() && p.limit.is_some() && p.filters_only_use_index())
+            .filter(|p| {
+                !p.order_by.is_empty()
+                    && p.limit.is_some()
+                    && (p.filters.is_none() || p.filter_only_use_index())
+            })
             .is_some()
         {
             // Perf.
@@ -552,7 +556,8 @@ impl FusePruner {
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let topn_pruner = TopNPruner::create(schema, sort, limit);
+            let filter_only_use_index = push_down.filter_only_use_index();
+            let topn_pruner = TopNPruner::create(schema, sort, limit, filter_only_use_index);
             let pruned_metas = topn_pruner.prune(metas.clone()).unwrap_or(metas);
 
             // Perf.

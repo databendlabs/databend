@@ -187,18 +187,16 @@ pub struct PushDownInfo {
 }
 
 impl PushDownInfo {
-    pub fn filters_only_use_index(&self) -> bool {
-        if self.filters.is_none() {
-            return true;
-        }
-
+    pub fn filter_only_use_index(&self) -> bool {
         let allow_search = self.inverted_index.is_some();
         if !allow_search {
             return false;
         }
-
-        let filter = &self.filters.as_ref().unwrap().filter;
-        remote_expr_only_uses_index_columns(filter)
+        if let Some(filters) = &self.filters {
+            remote_expr_only_uses_index_columns(&filters.filter)
+        } else {
+            false
+        }
     }
 }
 
