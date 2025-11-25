@@ -552,7 +552,7 @@ impl FromToProto for mt::UserDefinedFunction {
         };
         let update_on = match p.update_on {
             Some(u) => DateTime::<Utc>::from_pb(u)?,
-            None => created_on.clone(),
+            None => created_on,
         };
 
         Ok(mt::UserDefinedFunction {
