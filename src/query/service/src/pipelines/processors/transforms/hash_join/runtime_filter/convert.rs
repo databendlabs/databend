@@ -123,7 +123,15 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<
             data_type: DataType::Boolean,
         }));
     }
-    let probe_key = probe_key.as_column_ref().unwrap();
+    let probe_key = match probe_key {
+        Expr::ColumnRef(col) => col,
+        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
+        Expr::Cast(cast) => match cast.expr.as_ref() {
+            Expr::ColumnRef(col) => col,
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
 
     let raw_probe_key = RawExpr::ColumnRef {
         span: probe_key.span,
@@ -249,7 +257,15 @@ async fn build_bloom_filter(
     probe_key: &Expr<String>,
     max_threads: usize,
 ) -> Result<RuntimeFilterBloom> {
-    let probe_key = probe_key.as_column_ref().unwrap();
+    let probe_key = match probe_key {
+        Expr::ColumnRef(col) => col,
+        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
+        Expr::Cast(cast) => match cast.expr.as_ref() {
+            Expr::ColumnRef(col) => col,
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
     let column_name = probe_key.id.to_string();
     let total_items = bloom.len();
 
