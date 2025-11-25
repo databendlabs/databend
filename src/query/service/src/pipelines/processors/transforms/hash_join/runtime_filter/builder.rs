@@ -33,7 +33,7 @@ use super::packet::JoinRuntimeFilterPacket;
 use super::packet::RuntimeFilterPacket;
 use super::packet::SerializableDomain;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
-use crate::pipelines::processors::transforms::hash_join::util::hash_by_method;
+use crate::pipelines::processors::transforms::hash_join::util::hash_by_method_for_bloom;
 
 struct JoinRuntimeFilterPacketBuilder<'a> {
     build_key_column: Column,
@@ -156,7 +156,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
         let mut hashes = Vec::with_capacity(num_rows);
         let key_columns = &[self.build_key_column.clone().into()];
-        hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;
+        hash_by_method_for_bloom(&method, key_columns.into(), num_rows, &mut hashes)?;
         Ok(hashes)
     }
 
