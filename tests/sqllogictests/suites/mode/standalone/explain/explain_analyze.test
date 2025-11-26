@@ -6,6 +6,10 @@ EvalScalar
 ├── expressions: [1]
 ├── estimated rows: 1.00
 └── DummyTableScan
+    ├── cpu time: <slt:ignore>
+    ├── output rows: 1
+    ├── output bytes: 1.00 B
+    └── bytes scanned: 1.00 B
 
 query T
 settings (max_threads = 4) EXPLAIN ANALYZE select avg(number) from numbers(1000000);

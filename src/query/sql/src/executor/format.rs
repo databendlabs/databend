@@ -618,15 +618,21 @@ fn append_profile_info(
             + prof.statistics[ProfileStatisticsName::ScanBytesFromLocal as usize]
             + prof.statistics[ProfileStatisticsName::ScanBytesFromMemory as usize];
 
+        // Get the total scan bytes to determine if we should show scan IO breakdown
+        let scan_bytes = prof.statistics[ProfileStatisticsName::ScanBytes as usize];
+
         for (stat_name, desc) in get_statistics_desc().iter() {
             let value = prof.statistics[desc.index];
-            let always_show = matches!(
-                stat_name,
-                ProfileStatisticsName::ScanBytes
-                    | ProfileStatisticsName::ScanBytesFromRemote
-                    | ProfileStatisticsName::ScanBytesFromLocal
-                    | ProfileStatisticsName::ScanBytesFromMemory
-            );
+
+            // Only show scan IO breakdown metrics when there are actual scan bytes
+            let always_show = matches!(stat_name, ProfileStatisticsName::ScanBytes)
+                || (scan_bytes > 0
+                    && matches!(
+                        stat_name,
+                        ProfileStatisticsName::ScanBytesFromRemote
+                            | ProfileStatisticsName::ScanBytesFromLocal
+                            | ProfileStatisticsName::ScanBytesFromMemory
+                    ));
 
             if value == 0 && !always_show {
                 continue;
@@ -904,7 +910,12 @@ fn table_scan_to_format_tree(
     context: &mut FormatContext,
 ) -> Result<FormatTreeNode<String>> {
     if plan.table_index == Some(DUMMY_TABLE_INDEX) {
-        return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
+        let mut children = vec![];
+        append_profile_info(&mut children, profs, plan.plan_id);
+        return Ok(FormatTreeNode::with_children(
+            "DummyTableScan".to_string(),
+            children,
+        ));
     }
 
     let table_name = match plan.table_index {
