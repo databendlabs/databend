@@ -59,24 +59,43 @@ class TestContext:
     def raft_addr(self, node_id: int) -> str:
         return f"127.0.0.1:{12000 + node_id}"
 
-    def start_node(self, version: str, node_id: int, extra_args: list[str], raft_dir: Path = None) -> None:
+    def start_node(
+        self, version: str, node_id: int, extra_args: list[str], raft_dir: Path = None
+    ) -> None:
         """Start databend-meta node."""
         if raft_dir is None:
             raft_dir = self.data_dir / f"meta_{node_id}"
 
         cmd = [
             str(self.binary(version, "databend-meta")),
-            "--id", str(node_id),
-            "--admin-api-address", self.admin_addr(node_id),
-            "--grpc-api-address", self.grpc_addr(node_id),
-            "--raft-listen-host", "127.0.0.1",
-            "--raft-advertise-host", "127.0.0.1",
-            "--raft-api-port", str(12000 + node_id),
-            "--raft-dir", str(raft_dir),
-            "--max-applied-log-to-keep", "0",
-            "--log-dir", str(self.data_dir / f"meta_log_{node_id}"),
-            "--log-stderr-on", "--log-stderr-level", "WARN", "--log-stderr-format", "text",
-            "--log-file-on", "--log-file-level", "DEBUG", "--log-file-format", "text",
+            "--id",
+            str(node_id),
+            "--admin-api-address",
+            self.admin_addr(node_id),
+            "--grpc-api-address",
+            self.grpc_addr(node_id),
+            "--raft-listen-host",
+            "127.0.0.1",
+            "--raft-advertise-host",
+            "127.0.0.1",
+            "--raft-api-port",
+            str(12000 + node_id),
+            "--raft-dir",
+            str(raft_dir),
+            "--max-applied-log-to-keep",
+            "0",
+            "--log-dir",
+            str(self.data_dir / f"meta_log_{node_id}"),
+            "--log-stderr-on",
+            "--log-stderr-level",
+            "WARN",
+            "--log-stderr-format",
+            "text",
+            "--log-file-on",
+            "--log-file-level",
+            "DEBUG",
+            "--log-file-format",
+            "text",
             *extra_args,
         ]
         print(f" === Running: {' '.join(cmd)}")
@@ -95,10 +114,14 @@ class TestContext:
             value = f"test_value_{i}_data"
             cmd = [
                 str(self.binary(self.leader_ver, "databend-meta")),
-                "--grpc-api-address", self.grpc_addr(node_id),
-                "--cmd", "kvapi::upsert",
-                "--key", key,
-                "--value", value,
+                "--grpc-api-address",
+                self.grpc_addr(node_id),
+                "--cmd",
+                "kvapi::upsert",
+                "--key",
+                key,
+                "--value",
+                value,
             ]
             subprocess.run(cmd, stdout=subprocess.DEVNULL, check=True)
         print(f" === Successfully fed {number} entries to node {node_id}")
@@ -115,9 +138,16 @@ class TestContext:
         with open(output, "w") as f:
             subprocess.run(cmd, stdout=f, check=True)
 
-    def import_filtered(self, input_file: Path, raft_dir: Path, exclude_pattern: str) -> None:
+    def import_filtered(
+        self, input_file: Path, raft_dir: Path, exclude_pattern: str
+    ) -> None:
         """Import data excluding lines matching pattern."""
-        cmd = [str(self.binary("current", "databend-metactl")), "--import", "--raft-dir", str(raft_dir)]
+        cmd = [
+            str(self.binary("current", "databend-metactl")),
+            "--import",
+            "--raft-dir",
+            str(raft_dir),
+        ]
         print(f" === Running: {' '.join(cmd)} < {input_file} (filtered)")
         pattern = re.compile(exclude_pattern)
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, text=True)
@@ -131,7 +161,15 @@ class TestContext:
         if proc.wait() != 0:
             raise subprocess.CalledProcessError(proc.returncode, cmd)
 
-    def filter_and_compare_exports(self, raw1: Path, raw2: Path, include: str = None, exclude: list[str] = None, remove_proposed_at: bool = True, normalize_time_ms: bool = False) -> None:
+    def filter_and_compare_exports(
+        self,
+        raw1: Path,
+        raw2: Path,
+        include: str = None,
+        exclude: list[str] = None,
+        remove_proposed_at: bool = True,
+        normalize_time_ms: bool = False,
+    ) -> None:
         """Filter exported data and compare for consistency."""
         filtered1 = raw1.parent / f"{raw1.stem}-filtered"
         filtered2 = raw2.parent / f"{raw2.stem}-filtered"
@@ -144,17 +182,20 @@ class TestContext:
             if normalize_time_ms:
                 # Normalize time_ms: truncate last 3 digits
                 time_ms = re.compile(r'"time_ms":(\d+)')
+
                 def replace_time(match):
                     val = match.group(1)
                     if len(val) >= 3:
-                        normalized = val[:-3] + '000'
+                        normalized = val[:-3] + "000"
                     else:
                         normalized = val
                     return f'"time_ms":{normalized}'
+
                 line = time_ms.sub(replace_time, line)
 
                 # Normalize expire_at: convert milliseconds to seconds
                 expire_at = re.compile(r'"expire_at":(\d+)')
+
                 def replace_expire(match):
                     val = match.group(1)
                     if len(val) > 10:
@@ -163,21 +204,26 @@ class TestContext:
                     else:
                         normalized = val
                     return f'"expire_at":{normalized}'
+
                 line = expire_at.sub(replace_expire, line)
 
             expire_at = re.compile(r',?"expire_at":null')
-            line = expire_at.sub('', line)
+            line = expire_at.sub("", line)
 
             meta = re.compile(r',?"meta":{}')
-            line = meta.sub('', line)
+            line = meta.sub("", line)
 
             meta = re.compile(r',?"meta":null')
-            line = meta.sub('', line)
+            line = meta.sub("", line)
 
             return line
 
-        filter_and_sort(raw1, filtered1, include=include, exclude=exclude, transform=transform)
-        filter_and_sort(raw2, filtered2, include=include, exclude=exclude, transform=transform)
+        filter_and_sort(
+            raw1, filtered1, include=include, exclude=exclude, transform=transform
+        )
+        filter_and_sort(
+            raw2, filtered2, include=include, exclude=exclude, transform=transform
+        )
 
         print(" === Compare filtered data")
         diff_files(filtered1, filtered2)
@@ -198,9 +244,13 @@ class TestContext:
         self.export("current", {"raft_dir": upgrade_dirs[0]}, final1_raw)
         self.export("current", {"raft_dir": upgrade_dirs[1]}, final2_raw)
 
-        self.filter_and_compare_exports(final1_raw, final2_raw, exclude=["NodeId", "DataHeader"])
+        self.filter_and_compare_exports(
+            final1_raw, final2_raw, exclude=["NodeId", "DataHeader"]
+        )
 
-    def export_and_compare(self, prefix: str, normalize_time_ms: bool = False) -> tuple[Path, Path]:
+    def export_and_compare(
+        self, prefix: str, normalize_time_ms: bool = False
+    ) -> tuple[Path, Path]:
         """Export data from nodes 1 and 2 and verify consistency. Returns raw export file paths."""
         print(" === Export and compare state machine data")
         raw1 = self.data_dir / f"{prefix}-node1-raw"
@@ -214,7 +264,14 @@ class TestContext:
         subprocess.run(cmd, check=True)
         time.sleep(3)
 
-        self.filter_and_compare_exports(raw1, raw2, include="state_machine", exclude=["DataHeader"], remove_proposed_at = True, normalize_time_ms=normalize_time_ms, )
+        self.filter_and_compare_exports(
+            raw1,
+            raw2,
+            include="state_machine",
+            exclude=["DataHeader"],
+            remove_proposed_at=True,
+            normalize_time_ms=normalize_time_ms,
+        )
 
         return raw1, raw2
 
@@ -261,7 +318,13 @@ def download_binary(ctx: TestContext, version: str) -> None:
     tarball_path.unlink()
 
 
-def filter_and_sort(input_file: Path, output_file: Path, include: str = None, exclude: list[str] = None, transform=None) -> None:
+def filter_and_sort(
+    input_file: Path,
+    output_file: Path,
+    include: str = None,
+    exclude: list[str] = None,
+    transform=None,
+) -> None:
     """Generic filter: keep lines matching include, excluding patterns, apply transform, then sort."""
     lines = []
 
@@ -304,7 +367,9 @@ def test_snapshot_replication(ctx: TestContext) -> None:
     ctx.feed_data(1)
 
     print(" === Trigger snapshot and feed more data")
-    urllib.request.urlopen(f"http://{ctx.admin_addr(1)}/v1/ctrl/trigger_snapshot").read()
+    urllib.request.urlopen(
+        f"http://{ctx.admin_addr(1)}/v1/ctrl/trigger_snapshot"
+    ).read()
     time.sleep(3)
     ctx.feed_data(1)
 
@@ -352,12 +417,10 @@ def test_vote_request(ctx: TestContext) -> None:
     print(" === Feed data to node 1")
     ctx.feed_data(1, number=5)
 
-
     cmd = ["killall", "databend-meta"]
     print(f" === Running: {' '.join(cmd)}")
     subprocess.run(cmd, check=False, stderr=subprocess.DEVNULL)
     time.sleep(3)
-
 
     print(f" === Restart cluster of two nodes")
 
@@ -373,11 +436,14 @@ def test_vote_request(ctx: TestContext) -> None:
     ctx.feed_data(1, number=5)
     time.sleep(1)
 
-
     # Trigger snapshot on both nodes
     print(" === Trigger snapshot on both nodes")
-    urllib.request.urlopen(f"http://{ctx.admin_addr(1)}/v1/ctrl/trigger_snapshot").read()
-    urllib.request.urlopen(f"http://{ctx.admin_addr(2)}/v1/ctrl/trigger_snapshot").read()
+    urllib.request.urlopen(
+        f"http://{ctx.admin_addr(1)}/v1/ctrl/trigger_snapshot"
+    ).read()
+    urllib.request.urlopen(
+        f"http://{ctx.admin_addr(2)}/v1/ctrl/trigger_snapshot"
+    ).read()
     time.sleep(3)
 
     ctx.export_and_compare("vote", normalize_time_ms=True)
@@ -386,9 +452,15 @@ def test_vote_request(ctx: TestContext) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test databend-meta compatibility between versions")
-    parser.add_argument("leader_version", help="Leader version (e.g., '0.7.151' or 'current')")
-    parser.add_argument("follower_version", help="Follower version (e.g., '0.7.151' or 'current')")
+    parser = argparse.ArgumentParser(
+        description="Test databend-meta compatibility between versions"
+    )
+    parser.add_argument(
+        "leader_version", help="Leader version (e.g., '0.7.151' or 'current')"
+    )
+    parser.add_argument(
+        "follower_version", help="Follower version (e.g., '0.7.151' or 'current')"
+    )
     args = parser.parse_args()
 
     ctx = TestContext(args.leader_version, args.follower_version)
