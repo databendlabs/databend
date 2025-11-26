@@ -16,9 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::number::F32;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::BlockMetaIndex;
@@ -78,7 +80,7 @@ impl TopNPruner {
             }
             pruned_metas.push((index, meta));
             limit_count += matched_count;
-            if limit_count > self.limit {
+            if limit_count >= self.limit {
                 break;
             }
         }
@@ -107,6 +109,11 @@ impl TopNPruner {
         };
         if *nulls_first && self.filter_only_use_index {
             return Ok(metas);
+        }
+
+        // order by search score
+        if column == SEARCH_SCORE_COL_NAME && self.filter_only_use_index {
+            return self.prune_topn_by_score(*asc, metas);
         }
 
         let sort_column_id = if let Ok(index) = self.schema.column_id_of(column.as_str()) {
@@ -218,6 +225,74 @@ impl TopNPruner {
             Ok(pruned_metas)
         }
     }
+
+    fn prune_topn_by_score(
+        &self,
+        asc: bool,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        if metas.is_empty() {
+            return Ok(metas);
+        }
+
+        let mut score_stats = Vec::new();
+        for (pos, (index, _)) in metas.iter().enumerate() {
+            let Some(rows) = &index.matched_rows else {
+                continue;
+            };
+            if rows.is_empty() {
+                continue;
+            }
+            let Some((min_score, max_score)) = block_score_range(rows) else {
+                return Ok(metas);
+            };
+            score_stats.push((pos, min_score, max_score, rows.len()));
+        }
+
+        if score_stats.is_empty() {
+            return Ok(metas);
+        }
+
+        let mut pruned_metas = Vec::new();
+        if asc {
+            score_stats.sort_by(|a, b| a.1.cmp(&b.1));
+            let mut topn_count = 0usize;
+            let mut upper_bound = score_stats[0].2;
+            for (_, min_score, max_score, matched_count) in &score_stats {
+                if *min_score > upper_bound && topn_count >= self.limit {
+                    continue;
+                }
+                topn_count += *matched_count;
+                if *max_score > upper_bound {
+                    upper_bound = *max_score;
+                }
+            }
+            for (pos, min_score, _, _) in score_stats {
+                if min_score <= upper_bound {
+                    pruned_metas.push(metas[pos].clone());
+                }
+            }
+        } else {
+            score_stats.sort_by(|a, b| b.2.cmp(&a.2));
+            let mut topn_count = 0usize;
+            let mut lower_bound = score_stats[0].1;
+            for (_, min_score, max_score, matched_count) in &score_stats {
+                if *max_score < lower_bound && topn_count >= self.limit {
+                    continue;
+                }
+                topn_count += *matched_count;
+                if *min_score < lower_bound {
+                    lower_bound = *min_score;
+                }
+            }
+            for (pos, _, max_score, _) in score_stats {
+                if max_score >= lower_bound {
+                    pruned_metas.push(metas[pos].clone());
+                }
+            }
+        }
+        Ok(pruned_metas)
+    }
 }
 
 fn index_match_count(index: &BlockMetaIndex) -> usize {
@@ -227,16 +302,35 @@ fn index_match_count(index: &BlockMetaIndex) -> usize {
     0
 }
 
+fn block_score_range(rows: &[(usize, Option<F32>)]) -> Option<(F32, F32)> {
+    let mut min_score: Option<F32> = None;
+    let mut max_score: Option<F32> = None;
+    for (_, score) in rows {
+        let score = (*score)?;
+        min_score = Some(match min_score {
+            Some(current) => current.min(score),
+            None => score,
+        });
+        max_score = Some(match max_score {
+            Some(current) => current.max(score),
+            None => score,
+        });
+    }
+    min_score.zip(max_score)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
     use databend_common_expression::types::number::NumberDataType;
+    use databend_common_expression::types::number::F32;
     use databend_common_expression::types::DataType;
     use databend_common_expression::ColumnId;
     use databend_common_expression::Scalar;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::SEARCH_SCORE_COL_NAME;
     use databend_storages_common_table_meta::meta::ColumnMeta;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
     use databend_storages_common_table_meta::meta::Compression;
@@ -297,6 +391,32 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_prune_topn_by_search_score_desc() {
+        let schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "c",
+            TableDataType::Number(NumberDataType::Int64),
+        )]));
+        let sort_expr = RemoteExpr::ColumnRef {
+            span: None,
+            id: SEARCH_SCORE_COL_NAME.to_string(),
+            data_type: DataType::Number(NumberDataType::Float32),
+            display_name: SEARCH_SCORE_COL_NAME.to_string(),
+        };
+        let pruner = TopNPruner::create(schema.clone(), vec![(sort_expr, false, false)], 2, true);
+        let column_id = schema.column_id_of("c").unwrap();
+
+        let metas = vec![
+            build_block_with_scores(column_id, 0, 0, 0, &[0.9, 0.8]),
+            build_block_with_scores(column_id, 1, 0, 0, &[0.85, 0.75]),
+            build_block_with_scores(column_id, 2, 0, 0, &[0.3, 0.2]),
+        ];
+
+        let result = pruner.prune(metas).unwrap();
+        let kept_blocks: Vec<_> = result.iter().map(|(idx, _)| idx.block_id).collect();
+        assert_eq!(kept_blocks, vec![0, 1]);
+    }
+
     fn build_block(
         column_id: ColumnId,
         block_id: usize,
@@ -352,5 +472,25 @@ mod tests {
         };
 
         (index, Arc::new(block_meta))
+    }
+
+    fn build_block_with_scores(
+        column_id: ColumnId,
+        block_id: usize,
+        min: i64,
+        max: i64,
+        scores: &[f32],
+    ) -> (BlockMetaIndex, Arc<BlockMeta>) {
+        let (mut index, meta) = build_block(column_id, block_id, min, max, scores.len());
+        let matched_rows = scores
+            .iter()
+            .enumerate()
+            .map(|(row, score)| {
+                let ordered: F32 = (*score).into();
+                (row, Some(ordered))
+            })
+            .collect();
+        index.matched_rows = Some(matched_rows);
+        (index, meta)
     }
 }

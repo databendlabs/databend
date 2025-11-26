@@ -101,9 +101,7 @@ impl Rule for RulePushDownLimitFilterScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        println!("\n-----limit matched=======");
         let limit: Limit = s_expr.plan().clone().try_into()?;
-        println!("limit={:?}", limit);
         let child = s_expr.child(0)?;
         let (eval_scalar, filter, mut scan) = match child.plan() {
             RelOperator::Filter(filter) => {
