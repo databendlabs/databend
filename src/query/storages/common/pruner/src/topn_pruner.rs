@@ -54,6 +54,41 @@ impl TopNPruner {
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        if !self.sort.is_empty() {
+            self.prune_topn(metas)
+        } else {
+            self.prune_limit(metas)
+        }
+    }
+
+    fn prune_limit(
+        &self,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        if !self.filter_only_use_index {
+            return Ok(metas);
+        }
+
+        let mut limit_count = 0;
+        let mut pruned_metas = Vec::new();
+        for (index, meta) in metas.into_iter() {
+            let matched_count = index_match_count(&index);
+            if matched_count == 0 {
+                continue;
+            }
+            pruned_metas.push((index, meta));
+            limit_count += matched_count;
+            if limit_count > self.limit {
+                break;
+            }
+        }
+        Ok(pruned_metas)
+    }
+
+    fn prune_topn(
+        &self,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if self.sort.len() != 1 || metas.is_empty() {
             return Ok(metas);
         }
@@ -116,9 +151,9 @@ impl TopNPruner {
 
                 // Determine the upper_bound for the Nth smallest value. Once topn_count
                 // reaches the limit, any block whose min exceeds this bound can be skipped.
-                let mut upper_bound = id_stats[0].1.max();
-                for (index, stat, meta) in &id_stats {
-                    if stat.min() > upper_bound && topn_count >= self.limit {
+                let mut upper_bound = id_stats[0].1.max().clone();
+                for (index, stat, _) in &id_stats {
+                    if *stat.min() > upper_bound && topn_count >= self.limit {
                         continue;
                     }
                     let matched_count = index_match_count(index);
@@ -126,10 +161,14 @@ impl TopNPruner {
                         continue;
                     }
                     topn_count += matched_count;
-                    if stat.max() > upper_bound {
-                        upper_bound = stat.max();
+                    if *stat.max() > upper_bound {
+                        upper_bound = stat.max().clone();
                     }
-                    pruned_metas.push((index.clone(), meta.clone()));
+                }
+                for (index, stat, meta) in id_stats.into_iter() {
+                    if *stat.min() <= upper_bound {
+                        pruned_metas.push((index, meta));
+                    }
                 }
             } else {
                 // Sort in descending order by the max_val so the most promising candidates go first.
@@ -137,9 +176,9 @@ impl TopNPruner {
 
                 // Determine the lower_bound for the Nth largest value. Once topn_count
                 // reaches the limit, any block whose min exceeds this bound can be skipped.
-                let mut lower_bound = id_stats[0].1.min();
-                for (index, stat, meta) in &id_stats {
-                    if stat.max() < lower_bound && topn_count >= self.limit {
+                let mut lower_bound = id_stats[0].1.min().clone();
+                for (index, stat, _) in &id_stats {
+                    if *stat.max() < lower_bound && topn_count >= self.limit {
                         continue;
                     }
                     let matched_count = index_match_count(index);
@@ -147,10 +186,14 @@ impl TopNPruner {
                         continue;
                     }
                     topn_count += matched_count;
-                    if stat.min() < lower_bound {
-                        lower_bound = stat.min();
+                    if *stat.min() < lower_bound {
+                        lower_bound = stat.min().clone();
                     }
-                    pruned_metas.push((index.clone(), meta.clone()));
+                }
+                for (index, stat, meta) in id_stats.into_iter() {
+                    if *stat.max() >= lower_bound {
+                        pruned_metas.push((index, meta));
+                    }
                 }
             }
             Ok(pruned_metas)
@@ -168,8 +211,8 @@ impl TopNPruner {
             });
 
             let pruned_metas = id_stats
-                .iter()
-                .map(|s| (s.0.clone(), s.2.clone()))
+                .into_iter()
+                .map(|s| (s.0, s.2))
                 .take(self.limit)
                 .collect();
             Ok(pruned_metas)

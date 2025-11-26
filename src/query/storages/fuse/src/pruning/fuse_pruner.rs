@@ -119,6 +119,7 @@ impl PruningContext {
             .as_ref()
             .filter(|p| p.order_by.is_empty() && p.filters.is_none())
             .and_then(|p| p.limit);
+
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
         let limit_pruner = LimiterPrunerCreator::create(limit);
 
@@ -536,9 +537,8 @@ impl FusePruner {
         if push_down
             .as_ref()
             .filter(|p| {
-                !p.order_by.is_empty()
-                    && p.limit.is_some()
-                    && (p.filters.is_none() || p.filter_only_use_index())
+                (!p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
+                    || (p.limit.is_some() && p.filter_only_use_index())
             })
             .is_some()
         {

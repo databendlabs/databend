@@ -467,13 +467,11 @@ impl FuseTable {
         }
 
         let push_down = pruner.push_down.clone();
-
         if push_down
             .as_ref()
             .filter(|p| {
-                !p.order_by.is_empty()
-                    && p.limit.is_some()
-                    && (p.filters.is_none() || p.filter_only_use_index())
+                (!p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
+                    || (p.limit.is_some() && p.filter_only_use_index())
             })
             .is_some()
         {
