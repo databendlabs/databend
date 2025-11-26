@@ -618,21 +618,20 @@ fn append_profile_info(
             + prof.statistics[ProfileStatisticsName::ScanBytesFromLocal as usize]
             + prof.statistics[ProfileStatisticsName::ScanBytesFromMemory as usize];
 
-        // Get the total scan bytes to determine if we should show scan IO breakdown
-        let scan_bytes = prof.statistics[ProfileStatisticsName::ScanBytes as usize];
+        // Only show scan IO breakdown metrics when there is actual scan IO
+        let has_scan_io = total_scan_io > 0;
 
         for (stat_name, desc) in get_statistics_desc().iter() {
             let value = prof.statistics[desc.index];
 
-            // Only show scan IO breakdown metrics when there are actual scan bytes
-            let always_show = matches!(stat_name, ProfileStatisticsName::ScanBytes)
-                || (scan_bytes > 0
-                    && matches!(
-                        stat_name,
-                        ProfileStatisticsName::ScanBytesFromRemote
-                            | ProfileStatisticsName::ScanBytesFromLocal
-                            | ProfileStatisticsName::ScanBytesFromMemory
-                    ));
+            // Always show scan IO breakdown metrics (even if 0) when there is any scan IO
+            let always_show = has_scan_io
+                && matches!(
+                    stat_name,
+                    ProfileStatisticsName::ScanBytesFromRemote
+                        | ProfileStatisticsName::ScanBytesFromLocal
+                        | ProfileStatisticsName::ScanBytesFromMemory
+                );
 
             if value == 0 && !always_show {
                 continue;
