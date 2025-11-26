@@ -73,6 +73,6 @@ def go_client(session, driver_version):
         if os.path.exists("go.mod"):
             os.remove("go.mod")
         if driver_version == "v100.0.0":
-            session.run("make", "integration", external=True, env=env)
+            session.run("make", "-o", "up", "integration", external=True, env=env)
         else:
-            session.run("make", "compat", external=True, env=env)
+            session.run("make", "-o", "up", "compat", external=True, env=env)
