@@ -904,7 +904,12 @@ fn table_scan_to_format_tree(
     context: &mut FormatContext,
 ) -> Result<FormatTreeNode<String>> {
     if plan.table_index == Some(DUMMY_TABLE_INDEX) {
-        return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
+        let mut children = vec![];
+        append_profile_info(&mut children, profs, plan.plan_id);
+        return Ok(FormatTreeNode::with_children(
+            "DummyTableScan".to_string(),
+            children,
+        ));
     }
 
     let table_name = match plan.table_index {
