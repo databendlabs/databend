@@ -139,7 +139,10 @@ impl PhysicalPlan {
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("HashJoin: {} estimated_rows: {}", plan.join_type, estimated_rows),
+                    format!(
+                        "HashJoin: {} estimated_rows: {}",
+                        plan.join_type, estimated_rows
+                    ),
                     children,
                 ))
             }
@@ -613,17 +616,8 @@ fn append_profile_info(
     plan_id: u32,
 ) {
     if let Some(prof) = profs.get(&plan_id) {
-        // Calculate total scan IO bytes for percentage
-        let total_scan_io = prof.statistics[ProfileStatisticsName::ScanBytesFromRemote as usize]
-            + prof.statistics[ProfileStatisticsName::ScanBytesFromLocal as usize]
-            + prof.statistics[ProfileStatisticsName::ScanBytesFromMemory as usize];
-
         let statistics_desc = get_statistics_desc();
-
         for (stat_name, desc) in statistics_desc.iter() {
-            let value = prof.statistics[desc.index];
-
-            // Always show scan IO metrics, skip zero values for other metrics
             let is_scan_io_metric = matches!(
                 stat_name,
                 ProfileStatisticsName::ScanBytesFromRemote
@@ -631,13 +625,52 @@ fn append_profile_info(
                     | ProfileStatisticsName::ScanBytesFromMemory
             );
 
-            // For non-scan-IO metrics: skip if value is 0
-            if value == 0 && !is_scan_io_metric {
+            // Scan IO metrics are handled separately in table scan formatting.
+            if is_scan_io_metric {
                 continue;
             }
 
-            // Add percentage for scan IO statistics when total > 0
-            let display_text = if is_scan_io_metric && total_scan_io > 0 {
+            let value = prof.statistics[desc.index];
+
+            // Non scan metrics: skip zeros to reduce noise.
+            if value == 0 {
+                continue;
+            }
+
+            let display_text = format!(
+                "{}: {}",
+                desc.display_name.to_lowercase(),
+                desc.human_format(value)
+            );
+
+            children.push(FormatTreeNode::new(display_text));
+        }
+    }
+}
+
+fn append_scan_io_metrics(
+    children: &mut Vec<FormatTreeNode<String>>,
+    profs: &HashMap<u32, PlanProfile>,
+    plan_id: u32,
+) {
+    if let Some(prof) = profs.get(&plan_id) {
+        let statistics_desc = get_statistics_desc();
+
+        let total_scan_io = prof.statistics[ProfileStatisticsName::ScanBytesFromRemote as usize]
+            + prof.statistics[ProfileStatisticsName::ScanBytesFromLocal as usize]
+            + prof.statistics[ProfileStatisticsName::ScanBytesFromMemory as usize];
+
+        let metrics = [
+            ProfileStatisticsName::ScanBytesFromRemote,
+            ProfileStatisticsName::ScanBytesFromLocal,
+            ProfileStatisticsName::ScanBytesFromMemory,
+        ];
+
+        for metric in metrics.iter() {
+            let desc = &statistics_desc[metric];
+            let value = prof.statistics[desc.index];
+
+            let display_text = if total_scan_io > 0 {
                 let percentage = (value as f64 / total_scan_io as f64) * 100.0;
                 format!(
                     "{}: {} ({:.2}%)",
@@ -899,6 +932,7 @@ fn table_scan_to_format_tree(
     if plan.table_index == Some(DUMMY_TABLE_INDEX) {
         let mut children = vec![];
         append_profile_info(&mut children, profs, plan.plan_id);
+        append_scan_io_metrics(&mut children, profs, plan.plan_id);
         return Ok(FormatTreeNode::with_children(
             "DummyTableScan".to_string(),
             children,
@@ -1020,7 +1054,9 @@ fn table_scan_to_format_tree(
         children.extend(items);
     }
 
+    // Keep scan IO metrics grouped right after generic scan stats.
     append_profile_info(&mut children, profs, plan.plan_id);
+    append_scan_io_metrics(&mut children, profs, plan.plan_id);
 
     Ok(FormatTreeNode::with_children(
         "TableScan".to_string(),
