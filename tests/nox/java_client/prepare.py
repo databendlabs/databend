@@ -31,9 +31,9 @@ def download_jdbc(version):
     target.write_bytes(resp.content)
 
 
-def exec(sql):
+def exec(sql, port=8000):
     requests.post(
-        "http://localhost:8000/v1/query/",
+        f"http://localhost:{port}/v1/query/",
         auth=HTTPBasicAuth("root", ""),
         headers={"Content-Type": "application/json"},
         json={"sql": sql},
@@ -47,7 +47,9 @@ def create_user():
     )
     exec("GRANT ROLE account_admin TO USER databend'")
     # need for cluster to sync the GRANT op
-    time.sleep(16)
+    time.sleep(18)
+    for p in [8001, 8002, 8003]:
+        exec("SHOW GRANTS FOR USER databend", port=p)
 
 
 def download_testng():
