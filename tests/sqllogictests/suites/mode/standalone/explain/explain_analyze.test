@@ -139,7 +139,6 @@ Filter
     ├── output bytes: 80.00 B
     ├── bytes scanned: 80.00 B
     ├── bytes scanned from remote: <slt:ignore>
-    ├── bytes scanned from local cache: <slt:ignore>
     ├── bytes scanned from memory cache: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
@@ -180,7 +179,6 @@ HashJoin
 │       ├── output bytes: <slt:ignore>
 │       ├── bytes scanned: <slt:ignore>
 │       ├── bytes scanned from remote: <slt:ignore>
-│       ├── bytes scanned from local cache: <slt:ignore>
 │       ├── bytes scanned from memory cache: <slt:ignore>
 │       ├── runtime filter inlist/min-max time: <slt:ignore>
 │       ├── table: default.default.author
@@ -200,7 +198,6 @@ HashJoin
     ├── output bytes: 120.00 B
     ├── bytes scanned: 120.00 B
     ├── bytes scanned from remote: <slt:ignore>
-    ├── bytes scanned from local cache: <slt:ignore>
     ├── bytes scanned from memory cache: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
