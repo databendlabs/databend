@@ -32,12 +32,23 @@ def download_jdbc(version):
 
 
 def exec(sql, port=8000):
-    requests.post(
+    print(f"{port}: {sql}")
+    print("----")
+    resp = requests.post(
         f"http://localhost:{port}/v1/query/",
         auth=HTTPBasicAuth("root", ""),
         headers={"Content-Type": "application/json"},
         json={"sql": sql},
-    ).raise_for_status()
+    )
+    if resp.status_code != 200:
+        print(f"error({resp.status_code}, {resp.reason}):{resp.text}")
+        raise Exception()
+    j = resp.json()
+    if j["error"]:
+        print(f"sql error: {j['error']}")
+        raise Exception()
+    print(j)
+    print("====")
 
 
 def create_user():
@@ -45,9 +56,9 @@ def create_user():
     exec(
         "CREATE USER databend IDENTIFIED BY 'databend' with default_role='account_admin'"
     )
-    exec("GRANT ROLE account_admin TO USER databend'")
+    exec("GRANT ROLE account_admin TO USER databend")
     # need for cluster to sync the GRANT op
-    time.sleep(18)
+    time.sleep(16)
     for p in [8001, 8002, 8003]:
         exec("SHOW GRANTS FOR USER databend", port=p)
 
