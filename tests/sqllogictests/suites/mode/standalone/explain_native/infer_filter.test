@@ -748,6 +748,8 @@ HashJoin
 ├── probe keys: [CAST(t1.id (#0) AS Int64 NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:CAST(t2.id (#1) AS Int64 NULL), probe targets:[CAST(t1.id (#0) AS Int64 NULL)@scan0], filter type:bloom,inlist,min_max
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -770,6 +772,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
     ├── push downs: [filters: [t1.id (#0) = 869550529], limit: NONE]
+    ├── apply join filters: [#0]
     └── estimated rows: 1.00
 
 statement ok
