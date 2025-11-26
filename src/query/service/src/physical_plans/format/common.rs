@@ -70,23 +70,13 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
     // format is like "pruning stats: [segments: <range pruning: x to y>, blocks: <range pruning: x to y>]"
     let mut blocks_pruning_description = String::new();
 
-    let show_cost = info.pruning_stats.segments_range_pruning_cost > 0
-        || info.pruning_stats.blocks_range_pruning_cost > 0
-        || info.pruning_stats.blocks_bloom_pruning_cost > 0
-        || info.pruning_stats.blocks_inverted_index_pruning_cost > 0
-        || info.pruning_stats.blocks_vector_index_pruning_cost > 0;
-
     // range pruning status.
     if info.pruning_stats.blocks_range_pruning_before > 0 {
         blocks_pruning_description += &format!(
             "range pruning: {} to {}{}",
             info.pruning_stats.blocks_range_pruning_before,
             info.pruning_stats.blocks_range_pruning_after,
-            if show_cost {
-                format_pruning_cost_suffix(info.pruning_stats.blocks_range_pruning_cost)
-            } else {
-                String::new()
-            }
+            format_pruning_cost_suffix(info.pruning_stats.blocks_range_pruning_cost)
         );
     }
 
@@ -99,11 +89,7 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
             "bloom pruning: {} to {}{}",
             info.pruning_stats.blocks_bloom_pruning_before,
             info.pruning_stats.blocks_bloom_pruning_after,
-            if show_cost {
-                format_pruning_cost_suffix(info.pruning_stats.blocks_bloom_pruning_cost)
-            } else {
-                String::new()
-            }
+            format_pruning_cost_suffix(info.pruning_stats.blocks_bloom_pruning_cost)
         );
     }
 
@@ -116,11 +102,7 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
             "inverted pruning: {} to {}{}",
             info.pruning_stats.blocks_inverted_index_pruning_before,
             info.pruning_stats.blocks_inverted_index_pruning_after,
-            if show_cost {
-                format_pruning_cost_suffix(info.pruning_stats.blocks_inverted_index_pruning_cost)
-            } else {
-                String::new()
-            }
+            format_pruning_cost_suffix(info.pruning_stats.blocks_inverted_index_pruning_cost)
         );
     }
 
@@ -145,11 +127,7 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
             "vector pruning: {} to {}{}",
             info.pruning_stats.blocks_vector_index_pruning_before,
             info.pruning_stats.blocks_vector_index_pruning_after,
-            if show_cost {
-                format_pruning_cost_suffix(info.pruning_stats.blocks_vector_index_pruning_cost)
-            } else {
-                String::new()
-            }
+            format_pruning_cost_suffix(info.pruning_stats.blocks_vector_index_pruning_cost)
         );
     }
 
@@ -164,11 +142,7 @@ pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNo
                 "segments: <range pruning: {} to {}{}>",
                 info.pruning_stats.segments_range_pruning_before,
                 info.pruning_stats.segments_range_pruning_after,
-                if show_cost {
-                    format_pruning_cost_suffix(info.pruning_stats.segments_range_pruning_cost)
-                } else {
-                    String::new()
-                }
+                format_pruning_cost_suffix(info.pruning_stats.segments_range_pruning_cost)
             );
         }
 
