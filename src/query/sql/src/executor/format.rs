@@ -627,7 +627,7 @@ fn append_profile_info(
             // Always show scan IO breakdown metrics (even if 0) when there is any scan IO
             let always_show = has_scan_io
                 && matches!(
-                    stat_name,
+                    *stat_name,
                     ProfileStatisticsName::ScanBytesFromRemote
                         | ProfileStatisticsName::ScanBytesFromLocal
                         | ProfileStatisticsName::ScanBytesFromMemory
