@@ -7,7 +7,7 @@ insert into t1 values ('abc'), ('abd')
 statement ok
 insert into t1 values ('xyy'), ('xyz')
 
-# expects that range pruning prunes 1 block: "range pruning: 2 to 1"
+# expects that range pruning prunes 1 block: "range pruning: 2 to 1 cost: <slt:ignore>"
 query T
 explain select * from t1 where substr(c, 1, 2) = 'ab'
 ----
@@ -23,7 +23,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 2
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(substr(t1.c (#0), 1, 2) = 'ab')], limit: NONE]
     └── estimated rows: 4.00
 
@@ -42,11 +42,11 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 2
     ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(substr(t1.c (#0), 2, 2) = 'ab')], limit: NONE]
     └── estimated rows: 4.00
 
-# expects that range pruning prunes 1 block: "range pruning: 2 to 1"
+# expects that range pruning prunes 1 block: "range pruning: 2 to 1 cost: <slt:ignore>"
 query T
 explain select * from t1 where left(c, 2) = 'ab'
 ----
@@ -62,7 +62,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 2
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(left(t1.c (#0), 2) = 'ab')], limit: NONE]
     └── estimated rows: 4.00
 

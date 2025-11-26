@@ -44,7 +44,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 5
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 5 to 5, inverted pruning: 5 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [t1._search_matched (#2)], limit: NONE]
     └── estimated rows: 10.00
 
@@ -177,7 +177,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 5
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 5 to 5, inverted pruning: 5 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [t2._search_matched (#2)], limit: NONE]
     └── estimated rows: 10.00
 

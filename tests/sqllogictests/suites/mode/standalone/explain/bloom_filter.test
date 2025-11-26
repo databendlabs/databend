@@ -33,7 +33,7 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 2
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
+        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(bloom_test_t.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 6.00
 
@@ -120,7 +120,7 @@ EvalScalar
         ├── read size: 0
         ├── partitions total: 3
         ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 3 to 2>, blocks: <range pruning: 2 to 0>]
+        ├── pruning stats: [segments: <range pruning: 3 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 0 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 0)], limit: NONE]
         └── estimated rows: 8.00
 
@@ -143,7 +143,7 @@ EvalScalar
         ├── read size: 0
         ├── partitions total: 3
         ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 1, bloom pruning: 1 to 0>]
+        ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 3)], limit: NONE]
         └── estimated rows: 8.00
 
@@ -166,7 +166,7 @@ EvalScalar
         ├── read size: 0
         ├── partitions total: 3
         ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 1, bloom pruning: 1 to 0>]
+        ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(bloom_test_t.c3 (#2) = 12345)], limit: NONE]
         └── estimated rows: 8.00
 
@@ -209,7 +209,7 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(bloom_test_alter_t1.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 6.00
 
@@ -244,7 +244,7 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 6.00
 
@@ -276,7 +276,7 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, bloom pruning: 3 to 2>]
+        ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, bloom pruning: 3 to 2 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 9.00
 
@@ -303,7 +303,7 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
+        ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 7)], limit: NONE]
         └── estimated rows: 9.00
 
@@ -341,7 +341,7 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 2
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
+        ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 5, bloom_test_nullable_t.c2 (#1) > 1)], limit: NONE]
         └── estimated rows: 6.00
 
@@ -364,7 +364,7 @@ EvalScalar
         ├── read size: 0
         ├── partitions total: 2
         ├── partitions scanned: 0
-        ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 0>]
+        ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(bloom_test_nullable_t.c2 (#1) = 12345)], limit: NONE]
         └── estimated rows: 6.00
 
@@ -395,7 +395,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [NOT is_not_null(bloom_test_nullable_t2.c2 (#2) = '1')], limit: NONE]
     └── estimated rows: 2.00
 
@@ -414,6 +414,6 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(NOT NOT bloom_test_nullable_t2.c0 (#0))], limit: NONE]
     └── estimated rows: 2.00

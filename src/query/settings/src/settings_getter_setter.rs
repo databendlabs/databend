@@ -940,10 +940,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
 
-    pub fn get_explain_pruner_cost(&self) -> Result<bool> {
-        Ok(self.try_get_u64("explain_pruner_cost")? == 1)
-    }
-
     pub fn get_persist_materialized_cte(&self) -> Result<bool> {
         Ok(self.try_get_u64("persist_materialized_cte")? != 0)
     }

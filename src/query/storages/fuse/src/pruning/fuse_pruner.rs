@@ -108,8 +108,7 @@ impl PruningContext {
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
-        let collect_pruning_cost = matches!(ctx.get_query_kind(), QueryKind::Explain)
-            && ctx.get_settings().get_explain_pruner_cost()?;
+        let collect_pruning_cost = matches!(ctx.get_query_kind(), QueryKind::Explain);
 
         let filter_expr = push_down.as_ref().and_then(|extra| {
             extra
