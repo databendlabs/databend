@@ -623,7 +623,7 @@ fn append_profile_info(
         for (stat_name, desc) in statistics_desc.iter() {
             let value = prof.statistics[desc.index];
 
-            // Skip zero values for non-scan-IO metrics
+            // Always show scan IO metrics, skip zero values for other metrics
             let is_scan_io_metric = matches!(
                 stat_name,
                 ProfileStatisticsName::ScanBytesFromRemote
@@ -631,18 +631,12 @@ fn append_profile_info(
                     | ProfileStatisticsName::ScanBytesFromMemory
             );
 
-            // For scan IO metrics: show all three when any has non-zero value
-            // For other metrics: skip if value is 0
+            // For non-scan-IO metrics: skip if value is 0
             if value == 0 && !is_scan_io_metric {
                 continue;
             }
 
-            // Skip scan IO metrics if there's no scan IO at all
-            if is_scan_io_metric && total_scan_io == 0 {
-                continue;
-            }
-
-            // Add percentage for scan IO statistics
+            // Add percentage for scan IO statistics when total > 0
             let display_text = if is_scan_io_metric && total_scan_io > 0 {
                 let percentage = (value as f64 / total_scan_io as f64) * 100.0;
                 format!(
