@@ -129,7 +129,7 @@ Exchange
     ├── output bytes: 120.00 B
     ├── bytes scanned: 120.00 B
     ├── bytes scanned from remote: <slt:ignore>
-    ├── bytes scanned from local disk: <slt:ignore>
+    ├── bytes scanned from local cache: <slt:ignore>
     ├── bytes scanned from memory cache: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
@@ -163,7 +163,7 @@ Exchange
         ├── output bytes: 80.00 B
         ├── bytes scanned: 80.00 B
         ├── bytes scanned from remote: <slt:ignore>
-        ├── bytes scanned from local disk: <slt:ignore>
+        ├── bytes scanned from local cache: <slt:ignore>
         ├── bytes scanned from memory cache: <slt:ignore>
         ├── runtime filter inlist/min-max time: <slt:ignore>
         ├── table: default.default.article
@@ -215,7 +215,7 @@ Exchange
     │           ├── output bytes: <slt:ignore>
     │           ├── bytes scanned: <slt:ignore>
     │           ├── bytes scanned from remote: <slt:ignore>
-    │           ├── bytes scanned from local disk: <slt:ignore>
+    │           ├── bytes scanned from local cache: <slt:ignore>
     │           ├── bytes scanned from memory cache: <slt:ignore>
     │           ├── runtime filter inlist/min-max time: <slt:ignore>
     │           ├── table: default.default.author
@@ -235,7 +235,7 @@ Exchange
         ├── output bytes: 120.00 B
         ├── bytes scanned: 120.00 B
         ├── bytes scanned from remote: <slt:ignore>
-        ├── bytes scanned from local disk: <slt:ignore>
+        ├── bytes scanned from local cache: <slt:ignore>
         ├── bytes scanned from memory cache: <slt:ignore>
         ├── runtime filter inlist/min-max time: <slt:ignore>
         ├── table: default.default.article
