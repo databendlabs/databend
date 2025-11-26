@@ -618,45 +618,39 @@ fn append_profile_info(
             + prof.statistics[ProfileStatisticsName::ScanBytesFromLocal as usize]
             + prof.statistics[ProfileStatisticsName::ScanBytesFromMemory as usize];
 
-        // Only show scan IO breakdown metrics when there is actual scan IO
-        let has_scan_io = total_scan_io > 0;
+        let statistics_desc = get_statistics_desc();
 
-        for (stat_name, desc) in get_statistics_desc().iter() {
+        for (stat_name, desc) in statistics_desc.iter() {
             let value = prof.statistics[desc.index];
 
-            // Always show scan IO breakdown metrics (even if 0) when there is any scan IO
-            let always_show = has_scan_io
-                && matches!(
-                    *stat_name,
-                    ProfileStatisticsName::ScanBytesFromRemote
-                        | ProfileStatisticsName::ScanBytesFromLocal
-                        | ProfileStatisticsName::ScanBytesFromMemory
-                );
+            // Skip zero values for non-scan-IO metrics
+            let is_scan_io_metric = matches!(
+                stat_name,
+                ProfileStatisticsName::ScanBytesFromRemote
+                    | ProfileStatisticsName::ScanBytesFromLocal
+                    | ProfileStatisticsName::ScanBytesFromMemory
+            );
 
-            if value == 0 && !always_show {
+            // For scan IO metrics: show all three when any has non-zero value
+            // For other metrics: skip if value is 0
+            if value == 0 && !is_scan_io_metric {
                 continue;
             }
 
-            // Add percentage for cache-related statistics
-            let display_text = if total_scan_io > 0 {
-                match stat_name {
-                    ProfileStatisticsName::ScanBytesFromRemote
-                    | ProfileStatisticsName::ScanBytesFromLocal
-                    | ProfileStatisticsName::ScanBytesFromMemory => {
-                        let percentage = (value as f64 / total_scan_io as f64) * 100.0;
-                        format!(
-                            "{}: {} ({:.2}%)",
-                            desc.display_name.to_lowercase(),
-                            desc.human_format(value),
-                            percentage
-                        )
-                    }
-                    _ => format!(
-                        "{}: {}",
-                        desc.display_name.to_lowercase(),
-                        desc.human_format(value)
-                    ),
-                }
+            // Skip scan IO metrics if there's no scan IO at all
+            if is_scan_io_metric && total_scan_io == 0 {
+                continue;
+            }
+
+            // Add percentage for scan IO statistics
+            let display_text = if is_scan_io_metric && total_scan_io > 0 {
+                let percentage = (value as f64 / total_scan_io as f64) * 100.0;
+                format!(
+                    "{}: {} ({:.2}%)",
+                    desc.display_name.to_lowercase(),
+                    desc.human_format(value),
+                    percentage
+                )
             } else {
                 format!(
                     "{}: {}",

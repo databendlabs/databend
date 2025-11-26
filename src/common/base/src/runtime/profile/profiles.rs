@@ -207,7 +207,7 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 plain_statistics: true,
             }),
             (ProfileStatisticsName::ScanBytesFromLocal, ProfileDesc {
-                display_name: "bytes scanned from local cache",
+                display_name: "bytes scanned from local disk",
                 desc: "The bytes scanned from local disk cache (compressed)",
                 index: ProfileStatisticsName::ScanBytesFromLocal as usize,
                 unit: StatisticsUnit::Bytes,
