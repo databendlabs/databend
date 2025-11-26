@@ -238,7 +238,11 @@ echo "drop stage if exists s3;" | $BENDSQL_CLIENT_CONNECT
 
 echo "create table t(id int)" | $BENDSQL_CLIENT_CONNECT
 echo "create table t1(id int)" | $BENDSQL_CLIENT_CONNECT
-echo "grant create on default.* to b" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role_test_b" | $BENDSQL_CLIENT_CONNECT
+echo "create role role_test_b" | $BENDSQL_CLIENT_CONNECT
+echo "grant role role_test_b to b" | $BENDSQL_CLIENT_CONNECT
+echo "grant create on default.* to role role_test_b" | $BENDSQL_CLIENT_CONNECT
+echo "alter user b with default_role=role_test_b" | $BENDSQL_CLIENT_CONNECT
 echo "grant insert, delete on default.t to b" | $BENDSQL_CLIENT_CONNECT
 echo "grant select on system.* to b" | $BENDSQL_CLIENT_CONNECT
 
@@ -328,4 +332,5 @@ echo "SET variable a = 'a';" | $USER_C_CONNECT
 echo "set global max_threads=1000;" | $USER_C_CONNECT 2>&1  | grep "Super" | wc -l
 echo "unset global max_threads;" | $USER_C_CONNECT 2>&1  | grep "Super" | wc -l
 echo "drop user if exists c" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists role_test_b" | $BENDSQL_CLIENT_CONNECT
 echo "=== set privilege check succ ==="

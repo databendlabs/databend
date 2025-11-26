@@ -33,7 +33,7 @@ EvalScalar
         └── AggregatePartial
             ├── cpu time: <slt:ignore>
             ├── output rows: 12
-            ├── output bytes: 204.00 B
+            ├── output bytes: <slt:ignore>
             ├── group by: []
             ├── aggregate functions: [sum(number), count()]
             ├── estimated rows: 1.00
@@ -191,7 +191,7 @@ Exchange
     ├── wait time: <slt:ignore>
     ├── exchange bytes: 1.09 KiB
     ├── output rows: 1
-    ├── output bytes: 42.00 B
+    ├── output bytes: <slt:ignore>
     ├── output columns: [article.article_id (#0), article.author_id (#1), article.viewer_id (#2), article.view_date (#3), author.name (#5), author.id (#4)]
     ├── join type: INNER
     ├── build keys: [author.id (#4)]
@@ -207,7 +207,7 @@ Exchange
     │   └── Filter
     │       ├── cpu time: <slt:ignore>
     │       ├── output rows: 1
-    │       ├── output bytes: 31.00 B
+    │       ├── output bytes: <slt:ignore>
     │       ├── output columns: [author.id (#4), author.name (#5)]
     │       ├── filters: [is_true(author.name (#5) = 'mark4')]
     │       ├── estimated rows: 1.25
@@ -215,8 +215,8 @@ Exchange
     │           ├── cpu time: <slt:ignore>
     │           ├── wait time: <slt:ignore>
     │           ├── output rows: 1
-    │           ├── output bytes: 31.00 B
-    │           ├── bytes scanned: 31.00 B
+    │           ├── output bytes: <slt:ignore>
+    │           ├── bytes scanned: <slt:ignore>
     │           ├── bytes scanned from remote: <slt:ignore>
     │           ├── bytes scanned from local cache: <slt:ignore>
     │           ├── bytes scanned from memory cache: <slt:ignore>

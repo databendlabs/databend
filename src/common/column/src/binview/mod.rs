@@ -297,7 +297,8 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     }
 
     pub fn memory_size(&self) -> usize {
-        self.total_buffer_len + self.len() * 16
+        // when read back from parquet, the buffer is a bytes array without views
+        self.total_bytes_len + self.len() * 20
     }
 
     fn total_unshared_buffer_len(&self) -> usize {
