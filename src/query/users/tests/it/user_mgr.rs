@@ -162,7 +162,7 @@ async fn test_user_manager() -> Result<()> {
                 &tenant,
                 user_info.identity(),
                 GrantObject::Global,
-                UserPrivilegeSet::all_privileges(),
+                UserPrivilegeSet::available_privileges_on_global(),
             )
             .await?;
         let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;
@@ -173,7 +173,7 @@ async fn test_user_manager() -> Result<()> {
                 &tenant,
                 user_info.identity(),
                 GrantObject::Global,
-                UserPrivilegeSet::all_privileges(),
+                UserPrivilegeSet::available_privileges_on_global(),
             )
             .await?;
         let user_info = user_mgr.get_user(&tenant, user_info.identity()).await?;

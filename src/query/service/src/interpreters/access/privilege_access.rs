@@ -1725,7 +1725,7 @@ impl AccessChecker for PrivilegeAccess {
                     .validate_access(
                         &GrantObject::Global,
                         UserPrivilegeType::CreateMaskingPolicy,
-                        false,
+                        true,
                         false,
                     )
                     .await?;

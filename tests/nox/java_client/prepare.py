@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import requests
 from requests.auth import HTTPBasicAuth
+import time
 
 
 def main():
@@ -29,21 +30,62 @@ def download_jdbc(version):
     resp.raise_for_status()
     target.write_bytes(resp.content)
 
-
 def create_user():
     requests.post(
         "http://localhost:8000/v1/query/",
         auth=HTTPBasicAuth("root", ""),
         headers={"Content-Type": "application/json"},
-        json={"sql": "CREATE USER IF NOT EXISTS databend IDENTIFIED BY 'databend'"},
+        json={"sql": "DROP USER IF EXISTS databend"},
     ).raise_for_status()
     requests.post(
         "http://localhost:8000/v1/query/",
         auth=HTTPBasicAuth("root", ""),
         headers={"Content-Type": "application/json"},
-        json={"sql": "GRANT ALL ON *.* TO databend"},
+        json={"sql": "DROP ROLE IF EXISTS test_jdbc"},
     ).raise_for_status()
-
+    requests.post(
+        "http://localhost:8000/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": "CREATE USER databend IDENTIFIED BY 'databend' with default_role='test_jdbc'"},
+    ).raise_for_status()
+    requests.post(
+        "http://localhost:8000/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": "CREATE ROLE test_jdbc"},
+    ).raise_for_status()
+    requests.post(
+        "http://localhost:8000/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": "GRANT ALL ON *.* TO ROLE test_jdbc"},
+    ).raise_for_status()
+    requests.post(
+        "http://localhost:8000/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": "GRANT ROLE test_jdbc TO USER databend"},
+    ).raise_for_status()
+    time.sleep(16)
+    requests.post(
+        "http://localhost:8001/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": "SHOW GRANTS FOR USER databend"},
+    ).raise_for_status()
+    requests.post(
+        "http://localhost:8002/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": "SHOW GRANTS FOR USER databend"},
+    ).raise_for_status()
+    requests.post(
+        "http://localhost:8003/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": "SHOW GRANTS FOR USER databend"},
+    ).raise_for_status()
 
 def download_testng():
     urls = [
