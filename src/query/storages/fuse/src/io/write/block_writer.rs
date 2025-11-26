@@ -46,7 +46,7 @@ use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::NgramArgs;
-use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::{encode_column_hll, StatisticsOfColumns};
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -74,6 +74,18 @@ use crate::FuseStorageFormat;
 pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
+    block: DataBlock,
+    buf: &mut Vec<u8>,
+) -> Result<HashMap<ColumnId, ColumnMeta>> {
+   serialize_block_with_column_stats(
+       write_settings,schema, None, block, buf
+   )
+}
+
+pub fn serialize_block_with_column_stats(
+    write_settings: &WriteSettings,
+    schema: &TableSchemaRef,
+    column_stats: Option<&StatisticsOfColumns>,
     block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
@@ -248,9 +260,10 @@ impl BlockBuilder {
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let block_size = data_block.estimate_block_size() as u64;
-        let col_metas = serialize_block(
+        let col_metas = serialize_block_with_column_stats(
             &self.write_settings,
             &self.source_schema,
+            Some(&col_stats),
             data_block,
             &mut buffer,
         )?;

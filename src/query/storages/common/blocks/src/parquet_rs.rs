@@ -26,6 +26,7 @@ use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterPropertiesBuilder;
 use parquet::file::properties::WriterVersion;
 use parquet::format::FileMetaData;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
@@ -35,6 +36,18 @@ pub fn blocks_to_parquet(
     compression: TableCompression,
     enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
+) -> Result<FileMetaData> {
+    blocks_to_parquet_with_stats(table_schema, blocks, write_buffer, compression, enable_dictionary, metadata, None)
+}
+
+pub fn blocks_to_parquet_with_stats(
+    table_schema: &TableSchema,
+    blocks: Vec<DataBlock>,
+    write_buffer: &mut Vec<u8>,
+    compression: TableCompression,
+    enable_dictionary: bool,
+    metadata: Option<Vec<KeyValue>>,
+    column_stats: Option<&ColumnStatistics>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
     let builder = parquet_writer_properties_builder(compression, enable_dictionary, metadata);
