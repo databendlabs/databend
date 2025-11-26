@@ -38,9 +38,6 @@ EvalScalar
             ├── output rows: 1 million
             ├── output bytes: 7.63 MiB
             ├── bytes scanned: 7.63 MiB
-            ├── bytes scanned from remote: <slt:ignore>
-            ├── bytes scanned from local cache: <slt:ignore>
-            ├── bytes scanned from memory cache: <slt:ignore>
             ├── table: default.system.numbers
             ├── scan id: 0
             ├── output columns: [number (#0)]
