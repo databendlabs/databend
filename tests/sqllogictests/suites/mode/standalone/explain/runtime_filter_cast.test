@@ -1,0 +1,63 @@
+statement ok
+drop table if exists rf_cast_probe;
+
+statement ok
+drop table if exists rf_cast_build;
+
+statement ok
+create table rf_cast_build (id Nullable(Int32));
+
+statement ok
+create table rf_cast_probe (a Int not null);
+
+statement ok
+insert into rf_cast_build values (1), (3), (5);
+
+statement ok
+insert into rf_cast_probe values (1), (2), (3);
+
+query T
+EXPLAIN SELECT *
+FROM rf_cast_probe p
+JOIN rf_cast_build b
+    ON CAST(p.a AS Nullable(Int32)) = b.id;
+----
+HashJoin
+├── output columns: [p.a (#0), b.id (#1)]
+├── join type: INNER
+├── build keys: [b.id (#1)]
+├── probe keys: [CAST(p.a (#0) AS Int32 NULL)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:b.id (#1), probe targets:[CAST(p.a (#0) AS Int32 NULL)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 1.80
+├── TableScan(Build)
+│   ├── table: default.default.rf_cast_build
+│   ├── scan id: 1
+│   ├── output columns: [id (#1)]
+│   ├── read rows: 3
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 3.00
+└── TableScan(Probe)
+    ├── table: default.default.rf_cast_probe
+    ├── scan id: 0
+    ├── output columns: [a (#0)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 3.00
+
+statement ok
+drop table rf_cast_probe;
+
+statement ok
+drop table rf_cast_build;

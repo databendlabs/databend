@@ -23,7 +23,7 @@ use databend_common_expression::HashMethodKind;
 use databend_common_expression::KeysState;
 use databend_common_expression::KeysState::U128;
 use databend_common_expression::KeysState::U256;
-use databend_common_hashtable::FastHash;
+use databend_common_hashtable::BloomHash;
 
 pub struct ExprBloomFilter<'a> {
     filter: &'a Sbbf,
@@ -48,8 +48,8 @@ impl<'a> ExprBloomFilter<'a> {
                 let key_state = method.build_keys_state(group_columns, num_rows)?;
                 match key_state {
                     KeysState::Column(Column::Binary(col)) => col.iter().for_each(|key| {
-                        let hash = key.fast_hash();
-                        if self.filter.check_digest(hash) {
+                        let hash = key.bloom_hash();
+                        if self.filter.check_hash(hash) {
                             bitmap.set(idx, true);
                         }
                         idx += 1;
@@ -63,15 +63,15 @@ impl<'a> ExprBloomFilter<'a> {
                     KeysState::Column(Column::Binary(col))
                     | KeysState::Column(Column::Variant(col))
                     | KeysState::Column(Column::Bitmap(col)) => col.iter().for_each(|key| {
-                        let hash = key.fast_hash();
-                        if self.filter.check_digest(hash) {
+                        let hash = key.bloom_hash();
+                        if self.filter.check_hash(hash) {
                             bitmap.set(idx, true);
                         }
                         idx += 1;
                     }),
                     KeysState::Column(Column::String(col)) => col.iter().for_each(|key| {
-                        let hash = key.as_bytes().fast_hash();
-                        if self.filter.check_digest(hash) {
+                        let hash = key.as_bytes().bloom_hash();
+                        if self.filter.check_hash(hash) {
                             bitmap.set(idx, true);
                         }
                         idx += 1;
@@ -84,8 +84,8 @@ impl<'a> ExprBloomFilter<'a> {
                 match key_state {
                     KeysState::Column(Column::Number(NumberColumn::UInt8(c))) => {
                         c.iter().for_each(|key| {
-                            let hash = key.fast_hash();
-                            if self.filter.check_digest(hash) {
+                            let hash = key.bloom_hash();
+                            if self.filter.check_hash(hash) {
                                 bitmap.set(idx, true);
                             }
                             idx += 1;
@@ -99,8 +99,8 @@ impl<'a> ExprBloomFilter<'a> {
                 match key_state {
                     KeysState::Column(Column::Number(NumberColumn::UInt16(c))) => {
                         c.iter().for_each(|key| {
-                            let hash = key.fast_hash();
-                            if self.filter.check_digest(hash) {
+                            let hash = key.bloom_hash();
+                            if self.filter.check_hash(hash) {
                                 bitmap.set(idx, true);
                             }
                             idx += 1;
@@ -114,8 +114,8 @@ impl<'a> ExprBloomFilter<'a> {
                 match key_state {
                     KeysState::Column(Column::Number(NumberColumn::UInt32(c))) => {
                         c.iter().for_each(|key| {
-                            let hash = key.fast_hash();
-                            if self.filter.check_digest(hash) {
+                            let hash = key.bloom_hash();
+                            if self.filter.check_hash(hash) {
                                 bitmap.set(idx, true);
                             }
                             idx += 1;
@@ -129,8 +129,8 @@ impl<'a> ExprBloomFilter<'a> {
                 match key_state {
                     KeysState::Column(Column::Number(NumberColumn::UInt64(c))) => {
                         c.iter().for_each(|key| {
-                            let hash = key.fast_hash();
-                            if self.filter.check_digest(hash) {
+                            let hash = key.bloom_hash();
+                            if self.filter.check_hash(hash) {
                                 bitmap.set(idx, true);
                             }
                             idx += 1;
@@ -143,8 +143,8 @@ impl<'a> ExprBloomFilter<'a> {
                 let key_state = hash_method.build_keys_state(group_columns, num_rows)?;
                 match key_state {
                     U128(c) => c.iter().for_each(|key| {
-                        let hash = key.fast_hash();
-                        if self.filter.check_digest(hash) {
+                        let hash = key.bloom_hash();
+                        if self.filter.check_hash(hash) {
                             bitmap.set(idx, true);
                         }
                         idx += 1;
@@ -156,8 +156,8 @@ impl<'a> ExprBloomFilter<'a> {
                 let key_state = hash_method.build_keys_state(group_columns, num_rows)?;
                 match key_state {
                     U256(c) => c.iter().for_each(|key| {
-                        let hash = key.fast_hash();
-                        if self.filter.check_digest(hash) {
+                        let hash = key.bloom_hash();
+                        if self.filter.check_hash(hash) {
                             bitmap.set(idx, true);
                         }
                         idx += 1;

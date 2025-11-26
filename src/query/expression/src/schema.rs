@@ -1678,7 +1678,10 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),
         DataType::Decimal(size) => match size.data_kind() {
-            DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
+            DecimalDataKind::Decimal64 => {
+                Ok(TableDataType::Decimal(DecimalDataType::Decimal64(*size)))
+            }
+            DecimalDataKind::Decimal128 => {
                 Ok(TableDataType::Decimal(DecimalDataType::Decimal128(*size)))
             }
             DecimalDataKind::Decimal256 => {

@@ -101,7 +101,12 @@ echo 'SET ROLE role_c;SET SECONDARY ROLES ALL;create database db_d' | $TEST_C_CO
 echo "show grants for role role_c where object_name in ('db_c', 'db_d')" | $TEST_C_CONNECT | awk -F ' ' '{$3=""; print $0}'
 
 echo 'revoke ROLE `role_c` from test_c' | $BENDSQL_CLIENT_CONNECT
-echo 'grant all on *.* to test_c' | $BENDSQL_CLIENT_CONNECT
+echo 'drop ROLE if exists `role_test`' | $BENDSQL_CLIENT_CONNECT
+echo 'create ROLE `role_test`' | $BENDSQL_CLIENT_CONNECT
+echo 'grant all on *.* to role `role_test`' | $BENDSQL_CLIENT_CONNECT
+echo 'grant ROLE `role_test` to test_c' | $BENDSQL_CLIENT_CONNECT
+echo "alter user test_c with default_role='role_test'" | $BENDSQL_CLIENT_CONNECT
+
 echo 'create database db_e' | $TEST_C_CONNECT
 echo "show grants for role public where object_name in ('db_e')" | $TEST_C_CONNECT | awk -F ' ' '{$3=""; print $0}'
 
@@ -110,3 +115,4 @@ echo 'drop database if exists db_d' | $BENDSQL_CLIENT_CONNECT
 echo 'drop database if exists db_e' | $BENDSQL_CLIENT_CONNECT
 echo "DROP USER if exists 'test_c';" | $BENDSQL_CLIENT_CONNECT
 echo "DROP role if exists 'role_c';" | $BENDSQL_CLIENT_CONNECT
+echo 'drop ROLE if exists `role_test`' | $BENDSQL_CLIENT_CONNECT
