@@ -171,6 +171,7 @@ impl StreamBlockBuilder {
         let block_writer = match properties.write_settings.storage_format {
             FuseStorageFormat::Parquet => {
                 let write_settings = &properties.write_settings;
+                // TODO NDV for heuristic rule
                 let props = parquet_writer_properties_builder(
                     write_settings.table_compression,
                     write_settings.enable_parquet_dictionary,
