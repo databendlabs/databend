@@ -44,14 +44,15 @@ use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_num
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
-use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
-use databend_storages_common_table_meta::meta::{encode_column_hll, StatisticsOfColumns};
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
@@ -77,9 +78,7 @@ pub fn serialize_block(
     block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
-   serialize_block_with_column_stats(
-       write_settings,schema, None, block, buf
-   )
+    serialize_block_with_column_stats(write_settings, schema, None, block, buf)
 }
 
 pub fn serialize_block_with_column_stats(
@@ -92,13 +91,14 @@ pub fn serialize_block_with_column_stats(
     let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
-            let result = blocks_to_parquet(
+            let result = blocks_to_parquet_with_stats(
                 &schema,
                 vec![block],
                 buf,
                 write_settings.table_compression,
                 write_settings.enable_parquet_dictionary,
                 None,
+                column_stats,
             )?;
             let meta = column_parquet_metas(&result, &schema)?;
             Ok(meta)

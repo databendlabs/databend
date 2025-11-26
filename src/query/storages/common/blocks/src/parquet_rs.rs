@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Encoding;
@@ -26,7 +28,7 @@ use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterPropertiesBuilder;
 use parquet::file::properties::WriterVersion;
 use parquet::format::FileMetaData;
-use databend_storages_common_table_meta::meta::ColumnStatistics;
+use parquet::schema::types::ColumnPath;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
@@ -37,7 +39,15 @@ pub fn blocks_to_parquet(
     enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
 ) -> Result<FileMetaData> {
-    blocks_to_parquet_with_stats(table_schema, blocks, write_buffer, compression, enable_dictionary, metadata, None)
+    blocks_to_parquet_with_stats(
+        table_schema,
+        blocks,
+        write_buffer,
+        compression,
+        enable_dictionary,
+        metadata,
+        None,
+    )
 }
 
 pub fn blocks_to_parquet_with_stats(
@@ -47,10 +57,22 @@ pub fn blocks_to_parquet_with_stats(
     compression: TableCompression,
     enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
-    column_stats: Option<&ColumnStatistics>,
+    column_stats: Option<&StatisticsOfColumns>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
     let builder = parquet_writer_properties_builder(compression, enable_dictionary, metadata);
+    let builder = if let Some(cols_stats) = column_stats {
+        let num_rows = blocks[0].num_rows();
+        adjust_writer_properties_by_col_stats(
+            builder,
+            enable_dictionary,
+            cols_stats,
+            num_rows,
+            table_schema,
+        )
+    } else {
+        builder
+    };
 
     let props = builder.build();
     let batches = blocks
@@ -87,4 +109,34 @@ pub fn parquet_writer_properties_builder(
     } else {
         builder.set_dictionary_enabled(false)
     }
+}
+
+pub fn adjust_writer_properties_by_col_stats(
+    builder: WriterPropertiesBuilder,
+    enable_dictionary: bool,
+    cols_stats: &StatisticsOfColumns,
+    num_rows: usize,
+    table_schema: &TableSchema,
+) -> WriterPropertiesBuilder {
+    if !enable_dictionary {
+        return builder;
+    };
+
+    let mut builder = builder.set_dictionary_enabled(false);
+
+    let colum_names: HashMap<_, _> = table_schema
+        .fields
+        .iter()
+        .map(|f| (f.column_id, f.name.as_str()))
+        .collect();
+    for (col_id, stats) in cols_stats.iter() {
+        if let Some(ndv) = stats.distinct_of_values {
+            if (ndv as f64 / num_rows as f64) < 0.1 {
+                // DOC safe to unwrap
+                let col_name = colum_names.get(col_id).unwrap();
+                builder = builder.set_column_dictionary_enabled(ColumnPath::from(*col_name), true);
+            }
+        }
+    }
+    builder
 }
