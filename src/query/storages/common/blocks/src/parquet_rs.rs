@@ -61,12 +61,12 @@ pub fn blocks_to_parquet_with_stats(
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
     let builder = parquet_writer_properties_builder(compression, enable_dictionary, metadata);
-    let builder = if let Some(cols_stats) = column_stats {
+    let builder = if let Some(stats) = column_stats {
         let num_rows = blocks[0].num_rows();
         adjust_writer_properties_by_col_stats(
             builder,
             enable_dictionary,
-            cols_stats,
+            stats,
             num_rows,
             table_schema,
         )
@@ -124,7 +124,7 @@ pub fn adjust_writer_properties_by_col_stats(
 
     let mut builder = builder.set_dictionary_enabled(false);
 
-    let colum_names: HashMap<_, _> = table_schema
+    let column_names: HashMap<_, _> = table_schema
         .fields
         .iter()
         .map(|f| (f.column_id, f.name.as_str()))
@@ -133,8 +133,8 @@ pub fn adjust_writer_properties_by_col_stats(
         if let Some(ndv) = stats.distinct_of_values {
             if (ndv as f64 / num_rows as f64) < 0.1 {
                 // DOC safe to unwrap
-                let col_name = colum_names.get(col_id).unwrap();
-                builder = builder.set_column_dictionary_enabled(ColumnPath::from(*col_name), true);
+                let name = column_names.get(col_id).unwrap();
+                builder = builder.set_column_dictionary_enabled(ColumnPath::from(*name), true);
             }
         }
     }
