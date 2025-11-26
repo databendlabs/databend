@@ -2,181 +2,181 @@ skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('1 year')
 ----
-1993-03-01 00:00:00.000000
+1993-03-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('0 month')
 ----
-1992-03-01 00:00:00.000000
+1992-03-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('0 month')
 ----
-1992-03-01 00:00:00.000000
+1992-03-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('1 month')
 ----
-1992-04-01 00:00:00.000000
+1992-04-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('1 month')
 ----
-1992-02-01 00:00:00.000000
+1992-02-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('2 month')
 ----
-1992-05-01 00:00:00.000000
+1992-05-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('2 month')
 ----
-1992-01-01 00:00:00.000000
+1992-01-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('3 month')
 ----
-1992-06-01 00:00:00.000000
+1992-06-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('3 month')
 ----
-1991-12-01 00:00:00.000000
+1991-12-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('4 month')
 ----
-1992-07-01 00:00:00.000000
+1992-07-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('4 month')
 ----
-1991-11-01 00:00:00.000000
+1991-11-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('5 month')
 ----
-1992-08-01 00:00:00.000000
+1992-08-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('5 month')
 ----
-1991-10-01 00:00:00.000000
+1991-10-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('6 month')
 ----
-1992-09-01 00:00:00.000000
+1992-09-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('6 month')
 ----
-1991-09-01 00:00:00.000000
+1991-09-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('7 month')
 ----
-1992-10-01 00:00:00.000000
+1992-10-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('7 month')
 ----
-1991-08-01 00:00:00.000000
+1991-08-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('8 month')
 ----
-1992-11-01 00:00:00.000000
+1992-11-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('8 month')
 ----
-1991-07-01 00:00:00.000000
+1991-07-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('9 month')
 ----
-1992-12-01 00:00:00.000000
+1992-12-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('9 month')
 ----
-1991-06-01 00:00:00.000000
+1991-06-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('10 month')
 ----
-1993-01-01 00:00:00.000000
+1993-01-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('10 month')
 ----
-1991-05-01 00:00:00.000000
+1991-05-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('11 month')
 ----
-1993-02-01 00:00:00.000000
+1993-02-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('11 month')
 ----
-1991-04-01 00:00:00.000000
+1991-04-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('12 month')
 ----
-1993-03-01 00:00:00.000000
+1993-03-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('12 month')
 ----
-1991-03-01 00:00:00.000000
+1991-03-01
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' + to_interval('10 day')
 ----
-1992-03-11 00:00:00.000000
+1992-03-11
 
 skipif mysql
 query T
 SELECT DATE '1992-03-01' - to_interval('10 day')
 ----
-1992-02-20 00:00:00.000000
+1992-02-20
 
 skipif mysql
 query T
 SELECT DATE '1993-03-01' - to_interval('10 day')
 ----
-1993-02-19 00:00:00.000000
+1993-02-19
 
 skipif mysql
 query T
@@ -217,6 +217,30 @@ query T
 SELECT TIMESTAMP '1992-01-01 10:00:00' + to_interval('1 day')
 ----
 1992-01-02 10:00:00.000000
+
+skipif mysql
+statement ok
+CREATE OR REPLACE TABLE date_interval_rewrite(id DATE)
+
+skipif mysql
+statement ok
+INSERT INTO date_interval_rewrite VALUES('2022-02-02')
+
+skipif mysql
+query T
+SELECT id - interval '2 days' FROM date_interval_rewrite
+----
+2022-01-31
+
+skipif mysql
+query T
+SELECT id - interval '1 hour' FROM date_interval_rewrite
+----
+2022-02-01 23:00:00.000000
+
+skipif mysql
+statement ok
+DROP TABLE date_interval_rewrite
 
 skipif mysql
 query T
