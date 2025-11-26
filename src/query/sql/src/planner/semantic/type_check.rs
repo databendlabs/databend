@@ -3459,11 +3459,91 @@ impl<'a> TypeChecker<'a> {
                 }
                 Ok(Box::new((res, ty)))
             }
+            BinaryOperator::Plus | BinaryOperator::Minus => {
+                let name = op.to_func_name();
+                let (mut left_expr, left_type) = *self.resolve(left)?;
+                let (mut right_expr, right_type) = *self.resolve(right)?;
+                self.adjust_date_interval_operands(
+                    op,
+                    &mut left_expr,
+                    &left_type,
+                    &mut right_expr,
+                    &right_type,
+                )?;
+                self.resolve_scalar_function_call(span, name.as_str(), vec![], vec![
+                    left_expr, right_expr,
+                ])
+            }
             other => {
                 let name = other.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[left, right])
             }
         }
+    }
+
+    fn adjust_date_interval_operands(
+        &self,
+        op: &BinaryOperator,
+        left_expr: &mut ScalarExpr,
+        left_type: &DataType,
+        right_expr: &mut ScalarExpr,
+        right_type: &DataType,
+    ) -> Result<()> {
+        match op {
+            BinaryOperator::Plus => {
+                self.adjust_single_date_interval_operand(
+                    left_expr, left_type, right_expr, right_type,
+                )?;
+                self.adjust_single_date_interval_operand(
+                    right_expr, right_type, left_expr, left_type,
+                )?;
+            }
+            BinaryOperator::Minus => {
+                self.adjust_single_date_interval_operand(
+                    left_expr, left_type, right_expr, right_type,
+                )?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn adjust_single_date_interval_operand(
+        &self,
+        date_expr: &mut ScalarExpr,
+        date_type: &DataType,
+        interval_expr: &ScalarExpr,
+        interval_type: &DataType,
+    ) -> Result<()> {
+        if date_type.remove_nullable() != DataType::Date
+            || interval_type.remove_nullable() != DataType::Interval
+        {
+            return Ok(());
+        }
+
+        if self.interval_contains_only_date_parts(interval_expr)? {
+            return Ok(());
+        }
+
+        // Preserve nullability when casting DATE to TIMESTAMP
+        let target_type = if date_type.is_nullable_or_null() {
+            DataType::Timestamp.wrap_nullable()
+        } else {
+            DataType::Timestamp
+        };
+        *date_expr = wrap_cast(date_expr, &target_type);
+        Ok(())
+    }
+
+    fn interval_contains_only_date_parts(&self, interval_expr: &ScalarExpr) -> Result<bool> {
+        let expr = interval_expr.as_expr()?;
+        let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        if let EExpr::Constant(constant) = folded {
+            if let Scalar::Interval(value) = constant.scalar {
+                return Ok(value.microseconds() == 0);
+            }
+        }
+        Ok(false)
     }
 
     /// Resolve unary expressions.
