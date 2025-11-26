@@ -58,11 +58,11 @@ docker run -p 8000:8000 datafuselabs/databend
 
 ## 🚀 Use Cases
 
-- **BI & Analytics**: High-speed SQL on massive datasets. See [Query Processing](https://docs.databend.com/guides/query/query-processing).
+- **BI & Analytics**: High-speed SQL on massive datasets. See [Query Processing](https://docs.databend.com/guides/query/sql-analytics).
 - **AI & Vectors**: Built-in vector search and embedding management. See [Vector Database](https://docs.databend.com/guides/query/vector-db).
-- **Full-Text Search**: Fast indexing and retrieval on text and semi-structured data (JSON). See [Full-Text Index](https://docs.databend.com/guides/query/full-text).
-- **Geospatial**: Advanced geo-analytics and mapping. See [Geospatial Analysis](https://docs.databend.com/guides/query/geospatial).
-- **Stream & Task**: Continuous data ingestion and transformation. See [Lakehouse ETL](https://docs.databend.com/guides/query/lakehouse-etl).
+- **Full-Text Search**: Fast indexing and retrieval on text and semi-structured data (JSON). See [JSON Search](https://docs.databend.com/guides/query/json-search).
+- **Geospatial**: Advanced geo-analytics and mapping. See [Geospatial Analysis](https://docs.databend.com/guides/query/geo-analytics).
+- **Stream & Task**: Continuous data ingestion and transformation. See [Real-Time ETL](https://docs.databend.com/guides/query/lakehouse-etl).
 
 ## 🤝 Community & Support
 
