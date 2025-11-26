@@ -125,9 +125,22 @@ impl From<&TableField> for Field {
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
-            TableDataType::Decimal(
-                DecimalDataType::Decimal64(size) | DecimalDataType::Decimal128(size),
-            ) => ArrowDataType::Decimal128(size.precision(), size.scale() as i8),
+            TableDataType::Decimal(DecimalDataType::Decimal64(size)) => {
+                ArrowDataType::Decimal64(size.precision(), size.scale() as i8)
+            }
+            TableDataType::Decimal(DecimalDataType::Decimal128(size)) => {
+                // The proto layer of meta supports only Decimal128/256 , so Decimal64 columns
+                // are still serialized into Decimal128 metadata (see datatype.proto and schema_from_to_protobuf_impl.rs).
+                //
+                // For rolling upgrades we leave the proto definition untouched and instead coerce
+                // the Arrow type here based on the precision.
+
+                if size.can_carried_by_64() {
+                    ArrowDataType::Decimal64(size.precision(), size.scale() as i8)
+                } else {
+                    ArrowDataType::Decimal128(size.precision(), size.scale() as i8)
+                }
+            }
             TableDataType::Decimal(DecimalDataType::Decimal256(size)) => {
                 ArrowDataType::Decimal256(size.precision(), size.scale() as i8)
             }
@@ -338,7 +351,10 @@ impl From<&Column> for ArrayData {
             Column::Decimal(c) => {
                 let c = c.clone().strict_decimal();
                 let arrow_type = match c {
-                    DecimalColumn::Decimal64(_, size) | DecimalColumn::Decimal128(_, size) => {
+                    DecimalColumn::Decimal64(_, size) => {
+                        ArrowDataType::Decimal64(size.precision(), size.scale() as _)
+                    }
+                    DecimalColumn::Decimal128(_, size) => {
                         ArrowDataType::Decimal128(size.precision(), size.scale() as _)
                     }
                     DecimalColumn::Decimal256(_, size) => {
