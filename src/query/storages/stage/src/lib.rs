@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(internal_features)]
-#![feature(core_intrinsics)]
+#![feature(likely_unlikely)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(box_patterns)]
 #![feature(iter_intersperse)]
-#![allow(clippy::uninlined_format_args)]
+#![feature(iter_map_windows)]
 
 mod append;
 mod compression;

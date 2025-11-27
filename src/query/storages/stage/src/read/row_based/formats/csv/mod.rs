@@ -14,6 +14,8 @@
 
 mod block_builder;
 mod format;
+mod partitions;
 mod separator;
 
 pub use format::CsvInputFormat;
+pub use partitions::*;

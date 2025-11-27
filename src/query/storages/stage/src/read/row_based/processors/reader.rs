@@ -27,6 +27,7 @@ use log::debug;
 use opendal::Operator;
 
 use crate::read::row_based::batch::BytesBatch;
+use crate::read::row_based::split::SplitRowBase;
 
 struct FileState {
     file: SingleFilePartition,
@@ -114,15 +115,26 @@ impl PrefetchAsyncSource for BytesReader {
                 Some(part) => part,
                 None => return Ok(None),
             };
-            let file = SingleFilePartition::from_part(&part)?.clone();
 
-            let reader = self.op.reader(&file.path).await?;
-
-            self.file_state = Some(FileState {
-                file,
-                reader,
-                offset: 0,
-            })
+            if let Ok(file) = SingleFilePartition::from_part(&part) {
+                let reader = self.op.reader(&file.path).await?;
+                self.file_state = Some(FileState {
+                    file: file.clone(),
+                    reader,
+                    offset: 0,
+                })
+            } else {
+                let split = SplitRowBase::from_part(&part)?;
+                let reader = self.op.reader(&split.file.path).await?;
+                self.file_state = Some(FileState {
+                    file: SingleFilePartition {
+                        path: split.file.path.clone(),
+                        size: split.offset + split.size,
+                    },
+                    reader,
+                    offset: split.offset,
+                })
+            }
         }
         match self.read_batch().await {
             Ok(block) => Ok(Some(block)),
