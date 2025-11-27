@@ -284,6 +284,7 @@ impl StreamBlockBuilder {
         }
         self.row_count += block.num_rows();
         self.block_size += block.estimate_block_size();
+
         self.block_writer
             .write(block, &self.properties.source_schema)?;
         Ok(())
