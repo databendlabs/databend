@@ -138,7 +138,10 @@ impl PhysicalPlan {
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("HashJoin: {} estimated_rows: {}", plan.join_type, estimated_rows),
+                    format!(
+                        "HashJoin: {} estimated_rows: {}",
+                        plan.join_type, estimated_rows
+                    ),
                     children,
                 ))
             }
@@ -613,11 +616,12 @@ fn append_profile_info(
 ) {
     if let Some(prof) = profs.get(&plan_id) {
         for (_, desc) in get_statistics_desc().iter() {
-            if prof.statistics[desc.index] != 0 {
+            let value = prof.statistics[desc.index];
+            if value != 0 {
                 children.push(FormatTreeNode::new(format!(
                     "{}: {}",
                     desc.display_name.to_lowercase(),
-                    desc.human_format(prof.statistics[desc.index])
+                    desc.human_format(value)
                 )));
             }
         }

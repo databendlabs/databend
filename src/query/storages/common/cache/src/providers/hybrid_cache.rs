@@ -152,10 +152,14 @@ where
 
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Self::V>> {
         if let Some(item) = self.memory_cache.get(k.as_ref()) {
+            // Record memory cache hit
+            // Note: The actual size recording happens in memory_cache.get()
             // try putting it bach to on-disk cache if necessary
             self.insert_to_disk_cache_if_necessary(k.as_ref(), item.as_ref());
             Some(item)
         } else if let Some(bytes) = self.disk_cache.get(k.as_ref()) {
+            // Record disk cache hit
+            // Note: The actual size recording happens in disk_cache.get()
             let bytes = bytes.as_ref().clone();
             match bytes.try_into() {
                 Ok(v) => Some(self.memory_cache.insert(k.as_ref().to_owned(), v)),
@@ -169,7 +173,7 @@ where
                 }
             }
         } else {
-            // Cache Miss
+            // Cache Miss - will need to read from remote
             None
         }
     }

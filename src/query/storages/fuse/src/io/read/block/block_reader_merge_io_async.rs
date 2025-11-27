@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
@@ -87,6 +89,12 @@ impl BlockReader {
                     metrics_inc_remote_io_seeks(1);
                     metrics_inc_remote_io_read_bytes(len);
                 }
+
+                // Record bytes scanned from remote storage
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::ScanBytesFromRemote,
+                    len as usize,
+                );
             }
         }
 
