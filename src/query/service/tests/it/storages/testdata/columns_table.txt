@@ -462,6 +462,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'unique_constraint_schema'        | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'unit'                            | 'system'             | 'caches'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'update_on'                       | 'system'             | 'roles'                   | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'update_on'                       | 'system'             | 'user_functions'          | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'update_on'                       | 'system'             | 'users'                   | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'update_rule'                     | 'information_schema' | 'referential_constraints' | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'updated_on'                      | 'system'             | 'constraints'             | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |

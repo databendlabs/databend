@@ -1,6 +1,6 @@
 ==TEST SHOW USER FUNCTIONS==
-isnotempty	0		{"parameters":["p"]}	SQL	yyyy-mm-dd HH:MM:SS.ssssss
-ping	0	Built-in UDF	{"arg_types":["String NULL"],"return_type":"String NULL","server":"http://0.0.0.0:8815"}	python	yyyy-mm-dd HH:MM:SS.ssssss
+isnotempty	0		{"parameters":["p"]}	SQL	yyyy-mm-dd HH:MM:SS.ssssss	yyyy-mm-dd HH:MM:SS.ssssss
+ping	0	Built-in UDF	{"arg_types":["String NULL"],"return_type":"String NULL","server":"http://0.0.0.0:8815"}	python	yyyy-mm-dd HH:MM:SS.ssssss	yyyy-mm-dd HH:MM:SS.ssssss
 ==TEST SELECT * FROM SYSTEM.USER_FUNCTIONS==
-isnotempty	0		{"parameters":["p"]}	SQL	 (p) -> NOT is_null(p)	yyyy-mm-dd HH:MM:SS.ssssss
-ping	0	Built-in UDF	{"arg_types":["String NULL"],"return_type":"String NULL","server":"http://0.0.0.0:8815"}	python	 (String NULL) RETURNS String NULL LANGUAGE python HANDLER = ping ADDRESS = http://0.0.0.0:8815	yyyy-mm-dd HH:MM:SS.ssssss
+isnotempty	0		{"parameters":["p"]}	SQL	 (p) -> NOT is_null(p)	yyyy-mm-dd HH:MM:SS.ssssss	yyyy-mm-dd HH:MM:SS.ssssss
+ping	0	Built-in UDF	{"arg_types":["String NULL"],"return_type":"String NULL","server":"http://0.0.0.0:8815"}	python	 (String NULL) RETURNS String NULL LANGUAGE python HANDLER = ping ADDRESS = http://0.0.0.0:8815	yyyy-mm-dd HH:MM:SS.ssssss	yyyy-mm-dd HH:MM:SS.ssssss

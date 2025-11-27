@@ -53,6 +53,7 @@ fn test_decode_v143_udtf() -> anyhow::Result<()> {
             sql: "select * from t1".to_string(),
         }),
         created_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
+        update_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

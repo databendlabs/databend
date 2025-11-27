@@ -49,7 +49,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn update_udf(&self, tenant: &Tenant, info: UserDefinedFunction) -> Result<u64> {
         if self.get_configured_udf(&info.name).is_some() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
+            return Err(ErrorCode::UdfAlreadyExists(format!(
                 "Built-in UDF `{}` cannot be updated",
                 info.name
             )));
