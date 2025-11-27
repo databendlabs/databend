@@ -49,6 +49,7 @@ pub struct FusePruningStatistics {
     /// Block topn pruning stats.
     pub blocks_topn_pruning_before: AtomicU64,
     pub blocks_topn_pruning_after: AtomicU64,
+    pub blocks_topn_pruning_cost: AtomicU64,
 }
 
 impl FusePruningStatistics {
@@ -210,6 +211,15 @@ impl FusePruningStatistics {
     pub fn get_blocks_topn_pruning_after(&self) -> u64 {
         self.blocks_topn_pruning_after.load(Ordering::Relaxed)
     }
+
+    pub fn add_blocks_topn_pruning_cost(&self, duration: Duration) {
+        self.blocks_topn_pruning_cost
+            .fetch_add(duration_to_micros(duration), Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_topn_pruning_cost(&self) -> u64 {
+        self.blocks_topn_pruning_cost.load(Ordering::Relaxed)
+    }
 }
 
 fn duration_to_micros(duration: Duration) -> u64 {
@@ -266,6 +276,7 @@ pub enum PruningCostKind {
     BlocksBloom,
     BlocksInverted,
     BlocksVector,
+    BlocksTopN,
 }
 
 pub struct PruningCostGuard {
@@ -295,6 +306,9 @@ impl Drop for PruningCostGuard {
             }
             PruningCostKind::BlocksVector => {
                 self.stats.add_blocks_vector_index_pruning_cost(elapsed);
+            }
+            PruningCostKind::BlocksTopN => {
+                self.stats.add_blocks_topn_pruning_cost(elapsed);
             }
         }
     }

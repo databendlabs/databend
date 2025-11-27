@@ -30,6 +30,7 @@ use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::pruning::PruningContext;
+use crate::pruning::PruningCostKind;
 use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 
 // TopNPruneTransform is a processor that will accumulate the block meta and not push to
@@ -78,10 +79,11 @@ impl TopNPruneTransform {
                 .pruning_stats
                 .set_blocks_topn_pruning_before(self.metas.len() as u64);
         }
-        let pruned_metas = self
-            .topn_pruner
-            .prune(self.metas.clone())
-            .unwrap_or_else(|_| self.metas.clone());
+        let pruning_cost = self.pruning_ctx.pruning_cost.clone();
+        let pruned_res = pruning_cost.measure(PruningCostKind::BlocksTopN, || {
+            self.topn_pruner.prune(self.metas.clone())
+        });
+        let pruned_metas = pruned_res.unwrap_or_else(|_| self.metas.clone());
 
         // Perf.
         {

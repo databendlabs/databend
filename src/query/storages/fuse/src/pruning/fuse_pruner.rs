@@ -69,6 +69,7 @@ use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
 use crate::pruning::InvertedIndexPruner;
 use crate::pruning::PruningCostController;
+use crate::pruning::PruningCostKind;
 use crate::pruning::SegmentLocation;
 use crate::pruning::VectorIndexPruner;
 use crate::pruning::VirtualColumnPruner;
@@ -565,7 +566,11 @@ impl FusePruner {
             let sort = push_down.order_by.clone();
             let filter_only_use_index = push_down.filter_only_use_index();
             let topn_pruner = TopNPruner::create(schema, sort, limit, filter_only_use_index);
-            let pruned_metas = topn_pruner.prune(metas.clone()).unwrap_or(metas);
+            let pruning_cost = self.pruning_ctx.pruning_cost.clone();
+            let pruned_res = pruning_cost.measure(PruningCostKind::BlocksTopN, || {
+                topn_pruner.prune(metas.clone())
+            });
+            let pruned_metas = pruned_res.unwrap_or(metas);
 
             // Perf.
             {
@@ -643,6 +648,7 @@ impl FusePruner {
 
         let blocks_topn_pruning_before = stats.get_blocks_topn_pruning_before() as usize;
         let blocks_topn_pruning_after = stats.get_blocks_topn_pruning_after() as usize;
+        let blocks_topn_pruning_cost = stats.get_blocks_topn_pruning_cost();
 
         databend_common_catalog::plan::PruningStatistics {
             segments_range_pruning_before,
@@ -662,6 +668,7 @@ impl FusePruner {
             blocks_vector_index_pruning_cost,
             blocks_topn_pruning_before,
             blocks_topn_pruning_after,
+            blocks_topn_pruning_cost,
         }
     }
 

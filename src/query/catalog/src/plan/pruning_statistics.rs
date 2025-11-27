@@ -48,6 +48,8 @@ pub struct PruningStatistics {
     /// Block topn pruning stats.
     pub blocks_topn_pruning_before: usize,
     pub blocks_topn_pruning_after: usize,
+    /// Block topn pruning cost in microseconds.
+    pub blocks_topn_pruning_cost: u64,
 }
 
 impl PruningStatistics {
@@ -69,5 +71,6 @@ impl PruningStatistics {
         self.blocks_vector_index_pruning_cost += other.blocks_vector_index_pruning_cost;
         self.blocks_topn_pruning_before += other.blocks_topn_pruning_before;
         self.blocks_topn_pruning_after += other.blocks_topn_pruning_after;
+        self.blocks_topn_pruning_cost += other.blocks_topn_pruning_cost;
     }
 }
