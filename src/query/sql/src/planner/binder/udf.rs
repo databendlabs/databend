@@ -36,6 +36,7 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::principal::UDTF;
+use databend_common_users::UserApiProvider;
 
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
@@ -355,9 +356,19 @@ impl Binder {
         &mut self,
         stmt: &AlterUDFStmt,
     ) -> Result<Plan> {
-        let udf = self
+        let tenant = self.ctx.get_tenant();
+        let udf_name =
+            normalize_identifier(&stmt.udf_name, &self.name_resolution_ctx).to_string();
+        let existing_udf = UserApiProvider::instance()
+            .get_udf(&tenant, &udf_name)
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::UnknownUDF(format!("UDF '{}' does not exist and cannot be altered", udf_name))
+            })?;
+        let mut udf = self
             .bind_udf_definition(&stmt.udf_name, &stmt.description, &stmt.definition)
             .await?;
+        udf.created_on = existing_udf.created_on;
         Ok(Plan::AlterUDF(Box::new(AlterUDFPlan { udf })))
     }
 
