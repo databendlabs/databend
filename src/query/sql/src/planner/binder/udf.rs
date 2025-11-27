@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 
 use chrono::Utc;
-use databend_common_functions::is_builtin_function;
 use databend_common_ast::ast::AlterUDFStmt;
 use databend_common_ast::ast::CreateUDFStmt;
 use databend_common_ast::ast::Identifier;
@@ -28,6 +27,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::DataField;
+use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::UDAFScript;
