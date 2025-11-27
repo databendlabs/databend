@@ -13,7 +13,10 @@
 // limitations under the License.
 
 mod builder;
+mod routing;
 mod types;
+mod utils;
 
 pub use builder::build_runtime_filter;
+pub use routing::RuntimeFilterRouting;
 pub use types::*;

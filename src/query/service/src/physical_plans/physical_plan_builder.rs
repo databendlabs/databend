@@ -31,6 +31,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::physical_plans::runtime_filter::RuntimeFilterRouting;
 
 pub struct PhysicalPlanBuilder {
     pub metadata: MetadataRef,
@@ -39,6 +40,7 @@ pub struct PhysicalPlanBuilder {
     pub dry_run: bool,
     // DataMutation info, used to build MergeInto physical plan
     pub mutation_build_info: Option<MutationBuildInfo>,
+    pub runtime_filter_routing: Option<Arc<RuntimeFilterRouting>>,
 }
 
 impl PhysicalPlanBuilder {
@@ -50,6 +52,7 @@ impl PhysicalPlanBuilder {
             func_ctx,
             dry_run,
             mutation_build_info: None,
+            runtime_filter_routing: None,
         }
     }
 
@@ -63,6 +66,12 @@ impl PhysicalPlanBuilder {
     }
 
     pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
+        if self.runtime_filter_routing.is_none()
+            && self.ctx.get_settings().get_enable_join_runtime_filter()?
+        {
+            let routing = RuntimeFilterRouting::build(&self.metadata, s_expr)?;
+            self.runtime_filter_routing = Some(Arc::new(routing));
+        }
         let mut plan = self.build_physical_plan(s_expr, required).await?;
         plan.adjust_plan_id(&mut 0);
 

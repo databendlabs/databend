@@ -1339,6 +1339,7 @@ impl PhysicalPlanBuilder {
             &right_join_conditions,
             left_join_conditions_rt,
             build_table_indexes,
+            self.runtime_filter_routing.as_deref(),
         )
         .await?;
 
