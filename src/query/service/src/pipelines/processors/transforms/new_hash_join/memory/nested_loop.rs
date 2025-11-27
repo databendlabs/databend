@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::SELECTIVITY_THRESHOLD;
 use databend_common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
@@ -170,17 +171,21 @@ impl<'a> NestedLoopJoinStream<'a> {
     }
 
     fn emit_block(&mut self, count: usize) -> Result<DataBlock> {
-        self.matches.sort_by_key(|(probe, _)| *probe);
-
+        let use_range = count as f64 > SELECTIVITY_THRESHOLD * self.max_block_size as f64;
         let block = {
+            if use_range {
+                self.matches.sort_unstable_by_key(|(probe, _)| *probe);
+            }
             let (probe_indices, build_indices): (Vec<_>, Vec<_>) =
                 self.matches.drain(..count).unzip();
 
-            let probe = self
-                .probe_block
-                .clone()
-                .project(&self.desc.projections)
-                .take(&probe_indices)?;
+            let probe = self.probe_block.clone().project(&self.desc.projections);
+            let probe = if use_range {
+                let ranges = DataBlock::merge_indices_to_ranges(&probe_indices);
+                probe.take_ranges(&ranges, count)?
+            } else {
+                probe.take_with_optimize_size(&probe_indices)?
+            };
 
             let build_entries = self
                 .state
