@@ -89,9 +89,15 @@ impl BasicHashJoin {
     }
 
     pub(crate) fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        if let Some(true) = self.init_memory_hash_table() {
-            return Ok(Some(self.build_nested_loop()));
-        };
+        match self.state.hash_table.deref() {
+            HashJoinHashTable::Null => match self.init_memory_hash_table() {
+                Some(true) => return Ok(Some(self.build_nested_loop())),
+                Some(false) => return Ok(None),
+                None => {}
+            },
+            HashJoinHashTable::NestedLoop(_) => return Ok(None),
+            _ => {}
+        }
 
         let Some(chunk_index) = self.state.steal_chunk_index() else {
             return Ok(None);
@@ -176,16 +182,15 @@ impl BasicHashJoin {
     }
 
     fn init_memory_hash_table(&mut self) -> Option<bool> {
-        if !matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
-            return None;
-        }
         let skip_duplicates = matches!(self.desc.join_type, JoinType::InnerAny | JoinType::LeftAny);
 
         let locked = self.state.mutex.lock();
         let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-        if !matches!(self.state.hash_table.deref(), HashJoinHashTable::Null) {
-            return None;
+        match self.state.hash_table.deref() {
+            HashJoinHashTable::Null => {}
+            HashJoinHashTable::NestedLoop(_) => return Some(false),
+            _ => return None,
         }
 
         let build_num_rows = *self.state.build_rows.deref();
@@ -304,7 +309,7 @@ impl BasicHashJoin {
                 )
             }
         };
-        Some(false)
+        None
     }
 
     fn build_hash_table(&self, keys: DataBlock, chunk_idx: usize) -> Result<()> {
