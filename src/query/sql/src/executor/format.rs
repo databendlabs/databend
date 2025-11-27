@@ -138,7 +138,10 @@ impl PhysicalPlan {
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("HashJoin: {} estimated_rows: {}", plan.join_type, estimated_rows),
+                    format!(
+                        "HashJoin: {} estimated_rows: {}",
+                        plan.join_type, estimated_rows
+                    ),
                     children,
                 ))
             }
@@ -612,12 +615,22 @@ fn append_profile_info(
     plan_id: u32,
 ) {
     if let Some(prof) = profs.get(&plan_id) {
-        for (_, desc) in get_statistics_desc().iter() {
-            if prof.statistics[desc.index] != 0 {
+        for (stat_name, desc) in get_statistics_desc().iter() {
+            let is_scan_io = matches!(
+                stat_name,
+                ProfileStatisticsName::ScanBytesFromRemote
+                    | ProfileStatisticsName::ScanBytesFromLocal
+                    | ProfileStatisticsName::ScanBytesFromMemory
+            );
+
+            let value = prof.statistics[desc.index];
+
+            // Always show scan IO metrics even when zero; others only when >0.
+            if is_scan_io || value != 0 {
                 children.push(FormatTreeNode::new(format!(
                     "{}: {}",
                     desc.display_name.to_lowercase(),
-                    desc.human_format(prof.statistics[desc.index])
+                    desc.human_format(value)
                 )));
             }
         }
