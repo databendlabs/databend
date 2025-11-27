@@ -12,28 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod concat;
-mod filter;
-mod group_by;
-mod group_by_hash;
-mod scatter;
-mod sort;
-mod sort_compare;
-mod stream_partition;
-mod take;
-mod take_chunks;
-mod take_compact;
-mod take_ranges;
-mod topk;
-mod utils;
+/// # Safety
+/// # As: core::ptr::copy_nonoverlapping
+#[inline]
+pub unsafe fn store<T: Copy>(val: &T, ptr: *mut u8) {
+    core::ptr::copy_nonoverlapping(val as *const T as *const u8, ptr, std::mem::size_of::<T>());
+}
 
-pub use filter::FilterVisitor;
-pub use filter::IterationStrategy;
-pub use filter::SELECTIVITY_THRESHOLD;
-pub use group_by_hash::*;
-pub use sort::*;
-pub use sort_compare::*;
-pub use stream_partition::*;
-pub use take_chunks::*;
-pub use topk::*;
-pub use utils::*;
+/// # Safety
+/// # As: core::ptr::read_unaligned
+#[inline]
+pub unsafe fn read<T>(ptr: *const u8) -> T {
+    core::ptr::read_unaligned::<T>(ptr as _)
+}

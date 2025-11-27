@@ -19,13 +19,11 @@ mod aggregate_function;
 mod aggregate_function_state;
 mod aggregate_hashtable;
 mod group_hash;
-mod hash_index;
 mod partitioned_payload;
 mod payload;
 mod payload_flush;
 mod payload_row;
 mod probe_state;
-mod row_ptr;
 
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -35,12 +33,10 @@ pub use aggregate_function::*;
 pub use aggregate_function_state::*;
 pub use aggregate_hashtable::*;
 pub use group_hash::*;
-use hash_index::Entry;
 pub use partitioned_payload::*;
 pub use payload::*;
 pub use payload_flush::*;
 pub use probe_state::*;
-use row_ptr::RowPtr;
 
 pub type SelectVector = [usize; BATCH_SIZE];
 
@@ -50,7 +46,7 @@ pub fn new_sel() -> SelectVector {
 
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
-const LOAD_FACTOR: f64 = 1.5;
+pub(crate) const LOAD_FACTOR: f64 = 1.5;
 pub(crate) const MAX_PAGE_SIZE: usize = 256 * 1024;
 
 // Assume (1 << 15) = 32KB L1 cache per core, divided by two because hyperthreading
