@@ -205,11 +205,17 @@ impl RuntimeFilterRoutingBuilder {
         for condition in join.equi_conditions.iter() {
             let left = scalar_to_remote_expr(&self.metadata, &condition.left)?;
             let right = scalar_to_remote_expr(&self.metadata, &condition.right)?;
-            if let (Some(left), Some(right)) = (left, right) {
-                self.union_find.union(left.2, right.2);
-                self.insert_column(left);
-                self.insert_column(right);
-            }
+            match (left, right) {
+                (Some(left), Some(right)) => {
+                    self.union_find.union(left.2, right.2);
+                    self.insert_column(left);
+                    self.insert_column(right);
+                }
+                (Some(column), None) | (None, Some(column)) => {
+                    self.insert_column(column);
+                }
+                (None, None) => {}
+            };
         }
         Ok(())
     }
