@@ -87,7 +87,7 @@ pub async fn build_runtime_filter(
     let routing = routing.unwrap();
 
     // Process each probe key that has runtime filter information
-    for (build_key, probe_key, _scan_id, _table_index, column_idx, build_table_index) in build_keys
+    for (build_key, probe_key, _scan_id, table_index, column_idx, build_table_index) in build_keys
         .iter()
         .zip(probe_keys.into_iter())
         .zip(build_table_indexes.into_iter())
@@ -113,8 +113,8 @@ pub async fn build_runtime_filter(
 
         let probe_targets = cast_probe_targets(targets, column_idx, &probe_key, build_key)?;
 
-        let build_table_rows =
-            get_build_table_rows(ctx.clone(), metadata, build_table_index).await?;
+        let build_table_rows = get_table_rows(ctx.clone(), metadata, build_table_index).await?;
+        let probe_table_rows = get_table_rows(ctx.clone(), metadata, Some(table_index)).await?;
 
         let build_key_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
         let data_type = build_key_expr.data_type().remove_nullable();
@@ -130,6 +130,7 @@ pub async fn build_runtime_filter(
             build_key: build_key.clone(),
             probe_targets,
             build_table_rows,
+            probe_table_rows,
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter,
@@ -140,12 +141,12 @@ pub async fn build_runtime_filter(
     Ok(PhysicalRuntimeFilters { filters })
 }
 
-async fn get_build_table_rows(
+async fn get_table_rows(
     ctx: Arc<dyn TableContext>,
     metadata: &MetadataRef,
-    build_table_index: Option<IndexType>,
+    table_index: Option<IndexType>,
 ) -> Result<Option<u64>> {
-    if let Some(table_index) = build_table_index {
+    if let Some(table_index) = table_index {
         let table = {
             let metadata_read = metadata.read();
             metadata_read.table(table_index).table().clone()
