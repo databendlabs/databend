@@ -23,20 +23,20 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Filter;
 use crate::plans::IndexPredicateChecker;
+use crate::plans::Limit;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
-use crate::plans::Sort;
 use crate::plans::Visitor;
 
 /// Input:
-/// (1)    Sort
+/// (1)    Limit
 ///          \
 ///          Filter
 ///            \
 ///            Scan
-/// (2)    Sort
+/// (2)    Limit
 ///          \
 ///          EvalScalar
 ///            \
@@ -45,30 +45,30 @@ use crate::plans::Visitor;
 ///              Scan
 ///
 /// Output:
-/// (1)    Sort
+/// (1)    Limit
 ///          \
 ///          Filter
 ///            \
 ///            Scan(padding order_by and limit)
-/// (2)    Sort
+/// (2)    Limit
 ///          \
 ///          EvalScalar
 ///            \
 ///            Filter
 ///              \
 ///              Scan(padding order_by and limit)
-pub struct RulePushDownSortFilterScan {
+pub struct RulePushDownLimitFilterScan {
     id: RuleID,
     matchers: Vec<Matcher>,
 }
 
-impl RulePushDownSortFilterScan {
+impl RulePushDownLimitFilterScan {
     pub fn new() -> Self {
         Self {
-            id: RuleID::PushDownSortFilterScan,
+            id: RuleID::PushDownLimitFilterScan,
             matchers: vec![
                 Matcher::MatchOp {
-                    op_type: RelOp::Sort,
+                    op_type: RelOp::Limit,
                     children: vec![Matcher::MatchOp {
                         op_type: RelOp::Filter,
                         children: vec![Matcher::MatchOp {
@@ -78,7 +78,7 @@ impl RulePushDownSortFilterScan {
                     }],
                 },
                 Matcher::MatchOp {
-                    op_type: RelOp::Sort,
+                    op_type: RelOp::Limit,
                     children: vec![Matcher::MatchOp {
                         op_type: RelOp::EvalScalar,
                         children: vec![Matcher::MatchOp {
@@ -95,14 +95,13 @@ impl RulePushDownSortFilterScan {
     }
 }
 
-impl Rule for RulePushDownSortFilterScan {
+impl Rule for RulePushDownLimitFilterScan {
     fn id(&self) -> RuleID {
         self.id
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let sort: Sort = s_expr.plan().clone().try_into()?;
-
+        let limit: Limit = s_expr.plan().clone().try_into()?;
         let child = s_expr.child(0)?;
         let (eval_scalar, filter, mut scan) = match child.plan() {
             RelOperator::Filter(filter) => {
@@ -120,28 +119,26 @@ impl Rule for RulePushDownSortFilterScan {
             _ => unreachable!(),
         };
 
-        // The following conditions must be met push down filter and sort for index:
+        // The following conditions must be met push down filter and limit for index:
         // 1. Scan must contain `vector_index` or `inverted_index, because we can use the index
         //    to determine which rows in the block match, and the topn pruner can use this information
         //    to retain only the matched blocks.
         // 2. The number of `push_down_predicates` in Scan must be the same as the number of `predicates`
         //    in Filter to ensure that all filter conditions are pushed down.
         //    (Filter `predicates` has been pushed down in `RulePushDownFilterScan` rule.)
-        // 3. Sort must have limit in order to prune unused blocks.
+        // 3. Limit must have limit in order to prune unused blocks.
         let push_down_predicates = scan.push_down_predicates.clone().unwrap_or_default();
         let has_inverted_index = scan.inverted_index.is_some();
         let has_vector_index = scan.vector_index.is_some();
         if (!has_inverted_index && !has_vector_index)
             || push_down_predicates.len() != filter.predicates.len()
-            || sort.limit.is_none()
+            || limit.limit.is_none()
             || !filter_contains_only_index_predicates(&filter, has_inverted_index, has_vector_index)
         {
             return Ok(());
         }
 
-        scan.order_by = Some(sort.items);
-        scan.limit = sort.limit;
-
+        scan.limit = Some(limit.limit.unwrap() + limit.offset);
         let new_scan = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
 
         let mut result = if eval_scalar.is_some() {
@@ -164,7 +161,7 @@ impl Rule for RulePushDownSortFilterScan {
     }
 }
 
-impl Default for RulePushDownSortFilterScan {
+impl Default for RulePushDownLimitFilterScan {
     fn default() -> Self {
         Self::new()
     }

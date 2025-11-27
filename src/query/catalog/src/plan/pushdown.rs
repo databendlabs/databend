@@ -26,6 +26,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_storages_common_table_meta::table::ChangeType;
 
 use super::AggIndexInfo;
@@ -183,6 +184,30 @@ pub struct PushDownInfo {
     pub vector_index: Option<VectorIndexInfo>,
     /// Used by table sample
     pub sample: Option<SampleConfig>,
+}
+
+impl PushDownInfo {
+    pub fn filter_only_use_index(&self) -> bool {
+        let allow_search = self.inverted_index.is_some();
+        if !allow_search {
+            return false;
+        }
+        if let Some(filters) = &self.filters {
+            remote_expr_only_uses_index_columns(&filters.filter)
+        } else {
+            false
+        }
+    }
+}
+
+fn remote_expr_only_uses_index_columns(expr: &RemoteExpr<String>) -> bool {
+    // @TODO support other inverted index filter expr, like score() > 1.0
+    if let RemoteExpr::ColumnRef { id, .. } = expr {
+        if id == SEARCH_MATCHED_COL_NAME {
+            return true;
+        }
+    }
+    false
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

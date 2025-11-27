@@ -36,6 +36,10 @@ pub struct FusePruningStatistics {
     /// Block vector index filter pruning stats.
     pub blocks_vector_index_pruning_before: AtomicU64,
     pub blocks_vector_index_pruning_after: AtomicU64,
+
+    /// Block topn pruning stats.
+    pub blocks_topn_pruning_before: AtomicU64,
+    pub blocks_topn_pruning_after: AtomicU64,
 }
 
 impl FusePruningStatistics {
@@ -131,5 +135,23 @@ impl FusePruningStatistics {
     pub fn get_blocks_vector_index_pruning_after(&self) -> u64 {
         self.blocks_vector_index_pruning_after
             .load(Ordering::Relaxed)
+    }
+
+    pub fn set_blocks_topn_pruning_before(&self, v: u64) {
+        self.blocks_topn_pruning_before
+            .fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_topn_pruning_before(&self) -> u64 {
+        self.blocks_topn_pruning_before.load(Ordering::Relaxed)
+    }
+
+    pub fn set_blocks_topn_pruning_after(&self, v: u64) {
+        self.blocks_topn_pruning_after
+            .fetch_add(v, Ordering::Relaxed);
+    }
+
+    pub fn get_blocks_topn_pruning_after(&self) -> u64 {
+        self.blocks_topn_pruning_after.load(Ordering::Relaxed)
     }
 }

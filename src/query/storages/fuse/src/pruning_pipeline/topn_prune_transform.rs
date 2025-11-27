@@ -16,6 +16,10 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_metrics::storage::metrics_inc_blocks_topn_pruning_after;
+use databend_common_metrics::storage::metrics_inc_blocks_topn_pruning_before;
+use databend_common_metrics::storage::metrics_inc_bytes_block_topn_pruning_after;
+use databend_common_metrics::storage::metrics_inc_bytes_block_topn_pruning_before;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -25,11 +29,13 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 
+use crate::pruning::PruningContext;
 use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 
 // TopNPruneTransform is a processor that will accumulate the block meta and not push to
 // downstream until all data is received and pruned.
 pub struct TopNPruneTransform {
+    pruning_ctx: Arc<PruningContext>,
     topn_pruner: TopNPruner,
     metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
 }
@@ -51,25 +57,47 @@ impl TopNPruneTransform {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        pruning_ctx: Arc<PruningContext>,
         topn_pruner: TopNPruner,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(
             BlockMetaAccumulatingTransformer::create(input, output, TopNPruneTransform {
+                pruning_ctx,
                 topn_pruner,
                 metas: vec![],
             }),
         ))
     }
     fn do_topn_prune(&self) -> Result<Option<DataBlock>> {
-        let pruned = self
+        // Perf.
+        {
+            let block_size = self.metas.iter().map(|(_, m)| m.block_size).sum();
+            metrics_inc_blocks_topn_pruning_before(self.metas.len() as u64);
+            metrics_inc_bytes_block_topn_pruning_before(block_size);
+            self.pruning_ctx
+                .pruning_stats
+                .set_blocks_topn_pruning_before(self.metas.len() as u64);
+        }
+        let pruned_metas = self
             .topn_pruner
             .prune(self.metas.clone())
             .unwrap_or_else(|_| self.metas.clone());
-        if pruned.is_empty() {
+
+        // Perf.
+        {
+            let block_size = pruned_metas.iter().map(|(_, m)| m.block_size).sum();
+            metrics_inc_blocks_topn_pruning_after(pruned_metas.len() as u64);
+            metrics_inc_bytes_block_topn_pruning_after(block_size);
+            self.pruning_ctx
+                .pruning_stats
+                .set_blocks_topn_pruning_after(pruned_metas.len() as u64);
+        }
+
+        if pruned_metas.is_empty() {
             Ok(None)
         } else {
             Ok(Some(DataBlock::empty_with_meta(BlockPruneResult::create(
-                pruned,
+                pruned_metas,
             ))))
         }
     }
