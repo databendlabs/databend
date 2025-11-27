@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 
 use chrono::Utc;
+use databend_common_functions::is_builtin_function;
 use databend_common_ast::ast::AlterUDFStmt;
 use databend_common_ast::ast::CreateUDFStmt;
 use databend_common_ast::ast::Identifier;
@@ -358,15 +359,24 @@ impl Binder {
     ) -> Result<Plan> {
         let tenant = self.ctx.get_tenant();
         let udf_name = normalize_identifier(&stmt.udf_name, &self.name_resolution_ctx).to_string();
-        let existing_udf = UserApiProvider::instance()
+        let existing_udf = match UserApiProvider::instance()
             .get_udf(&tenant, &udf_name)
             .await?
-            .ok_or_else(|| {
-                ErrorCode::UnknownUDF(format!(
+        {
+            Some(udf) => udf,
+            None if is_builtin_function(&udf_name) => {
+                return Err(ErrorCode::UdfAlreadyExists(format!(
+                    "Built-in function '{}' cannot be altered",
+                    udf_name
+                )));
+            }
+            None => {
+                return Err(ErrorCode::UnknownUDF(format!(
                     "UDF '{}' does not exist and cannot be altered",
                     udf_name
-                ))
-            })?;
+                )));
+            }
+        };
         let mut udf = self
             .bind_udf_definition(&stmt.udf_name, &stmt.description, &stmt.definition)
             .await?;
