@@ -50,7 +50,7 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
 
 fn format_pruning_cost_suffix(cost_micros: u64) -> String {
     if cost_micros < 1_000 {
-        " cost: <1 ms".to_string()
+        " cost: 1 ms".to_string()
     } else {
         format!(" cost: {} ms", cost_micros / 1_000)
     }

@@ -76,7 +76,7 @@ RowFetch
                 ├── read size: < 1 KiB
                 ├── partitions total: 5
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: 1 ms, topn pruning: 3 to 1 cost: <slt:ignore>>]
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: <slt:ignore>, topn pruning: 3 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [t1._search_matched (#2)], limit: 1]
                 └── estimated rows: 10.00
 
@@ -108,7 +108,7 @@ RowFetch
                 ├── read size: 0
                 ├── partitions total: 5
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: 1 ms, topn pruning: 3 to 1 cost: <slt:ignore>>]
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: <slt:ignore>, topn pruning: 3 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [t1._search_matched (#2)], limit: 1]
                 └── estimated rows: 10.00
 
@@ -136,7 +136,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 5
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: 1 ms, topn pruning: 3 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: <slt:ignore>, topn pruning: 3 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [t1._search_matched (#2)], limit: 1]
             └── estimated rows: 10.00
 
@@ -205,7 +205,7 @@ Limit
             ├── read size: < 1 KiB
             ├── partitions total: 5
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: 1 ms, topn pruning: 3 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: <slt:ignore>, topn pruning: 3 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [t2._search_matched (#2)], limit: 1]
             └── estimated rows: 10.00
 
