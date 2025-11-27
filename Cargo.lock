@@ -3633,6 +3633,7 @@ dependencies = [
  "databend-common-hashtable",
  "databend-common-io",
  "databend-common-metrics",
+ "databend-common-timezone",
  "databend_educe",
  "divan",
  "either",
@@ -3847,6 +3848,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "databend-common-base",
  "databend-common-exception",
+ "databend-common-timezone",
  "enquote",
  "enumflags2",
  "ethnum",
@@ -4967,6 +4969,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-timezone"
+version = "0.1.0"
+dependencies = [
+ "jiff",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
@@ -5261,6 +5271,7 @@ dependencies = [
  "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-timezone",
  "dtparse",
  "jiff",
  "num-traits",
@@ -9719,9 +9730,9 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.2.13"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f02000660d30638906021176af16b17498bd0d12813dbfe7b276d8bc7f3c0806"
+checksum = "49cce2b81f2098e7e3efc35bc2e0a6b7abec9d34128283d7a26fa8f32a6dbb35"
 dependencies = [
  "jiff-static",
  "jiff-tzdb",
@@ -9729,15 +9740,15 @@ dependencies = [
  "log",
  "portable-atomic",
  "portable-atomic-util",
- "serde",
- "windows-sys 0.59.0",
+ "serde_core",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "jiff-static"
-version = "0.2.13"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3c30758ddd7188629c6713fc45d1188af4f44c90582311d0c8d8c9907f60c48"
+checksum = "980af8b43c3ad5d8d349ace167ec8170839f753a42d233ba19e08afe1850fa69"
 dependencies = [
  "proc-macro2",
  "quote",

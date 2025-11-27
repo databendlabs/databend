@@ -73,6 +73,8 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
+use databend_common_timezone::fast_components_from_timestamp;
+use databend_common_timezone::fast_utc_from_local;
 use dtparse::parse;
 use jiff::civil::date;
 use jiff::civil::Date;
@@ -508,6 +510,7 @@ fn string_to_format_datetime(
         return Ok((0, true));
     }
 
+    let raw_format = format;
     let format = if ctx.func_ctx.date_format_style == *"oracle" {
         pg_format_to_strftime(format)
     } else {
@@ -516,6 +519,20 @@ fn string_to_format_datetime(
 
     let (mut tm, offset) = BrokenDownTime::parse_prefix(&format, timestamp)
         .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))?;
+    let parsed_unix_timestamp = tm.timestamp();
+    let had_explicit_time = tm.hour().is_some() || tm.minute().is_some() || tm.second().is_some();
+    let had_civil_date = tm.year().is_some()
+        || tm.month().is_some()
+        || tm.day().is_some()
+        || tm.day_of_year().is_some()
+        || tm.iso_week_year().is_some()
+        || tm.iso_week().is_some()
+        || tm.sunday_based_week().is_some()
+        || tm.monday_based_week().is_some()
+        || tm.weekday().is_some();
+    let had_subsecond = tm.subsec_nanosecond().is_some();
+    let had_meridiem = tm.meridiem().is_some();
+    let had_timezone = tm.offset().is_some() || tm.iana_time_zone().is_some();
 
     if !ctx.func_ctx.parse_datetime_ignore_remainder && offset != timestamp.len() {
         return Err(Box::new(ErrorCode::BadArguments(format!(
@@ -533,12 +550,46 @@ fn string_to_format_datetime(
         let _ = tm.set_second(Some(0));
     }
 
-    if !ctx.func_ctx.enable_strict_datetime_parser {
+    // Jiff 0.2.16 requires a complete civil date when converting to a datetime.
+    // To preserve historical to_timestamp() behaviour (which accepted inputs
+    // like `%s,%Y`), synthesize missing date parts when we're parsing a
+    // timestamp, but only when there isn't already alternate date information
+    // (e.g. ISO week fields) present. Non-timestamp callers can still opt-in by
+    // disabling the strict parser.
+    if needs_civil_date_synthesis(&tm, ctx, parse_timestamp) {
         if tm.day().is_none() {
             let _ = tm.set_day(Some(1));
         }
         if tm.month().is_none() {
             let _ = tm.set_month(Some(1));
+        }
+        if parse_timestamp && tm.year().is_none() {
+            let _ = tm.set_year(Some(1970));
+        }
+    }
+
+    if parse_timestamp && parsed_unix_timestamp.is_some() {
+        let has_conflicting_directives =
+            had_civil_date || had_explicit_time || had_subsecond || had_meridiem || had_timezone;
+        if has_conflicting_directives {
+            return Err(Box::new(ErrorCode::BadArguments(format!(
+                "Can't parse '{timestamp}' as timestamp with format '{raw_format}'"
+            ))));
+        }
+
+        // When `%s` is present the parsed Unix timestamp already encodes the full
+        // instant, so return it directly instead of trying to synthesize a civil
+        // date (which would lose the seconds component).
+        return Ok((parsed_unix_timestamp.unwrap().as_microsecond(), false));
+    }
+
+    if parse_timestamp
+        && parsed_unix_timestamp.is_none()
+        && tm.offset().is_none()
+        && tm.iana_time_zone().is_none()
+    {
+        if let Some(micros) = fast_timestamp_from_tm(&tm, &ctx.func_ctx.tz) {
+            return Ok((micros, false));
         }
     }
 
@@ -557,6 +608,34 @@ fn string_to_format_datetime(
     }
     .map_err(|err| ErrorCode::BadArguments(format!("{err}")))?;
     Ok((z.timestamp().as_microsecond(), false))
+}
+
+fn needs_civil_date_synthesis(
+    tm: &BrokenDownTime,
+    ctx: &EvalContext,
+    parse_timestamp: bool,
+) -> bool {
+    if parse_timestamp || !ctx.func_ctx.enable_strict_datetime_parser {
+        !(tm.day_of_year().is_some()
+            || tm.iso_week_year().is_some()
+            || tm.iso_week().is_some()
+            || tm.sunday_based_week().is_some()
+            || tm.monday_based_week().is_some())
+    } else {
+        false
+    }
+}
+
+fn fast_timestamp_from_tm(tm: &BrokenDownTime, tz: &TimeZone) -> Option<i64> {
+    let year = i32::from(tm.year()?);
+    let month: u8 = tm.month()?.try_into().ok()?;
+    let day: u8 = tm.day()?.try_into().ok()?;
+    let hour: u8 = tm.hour().unwrap_or(0).try_into().ok()?;
+    let minute: u8 = tm.minute().unwrap_or(0).try_into().ok()?;
+    let second: u8 = tm.second().unwrap_or(0).try_into().ok()?;
+    let nanos = tm.subsec_nanosecond().unwrap_or(0);
+    let micro = (nanos / 1_000).max(0) as u32;
+    fast_utc_from_local(tz, year, month, day, hour, minute, second, micro)
 }
 
 fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
@@ -893,17 +972,35 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
 
     fn eval_timestamp_to_date(val: Value<TimestampType>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<TimestampType, DateType>(|val, output, ctx| {
-            let tz = &ctx.func_ctx.tz;
-            output.push(calc_timestamp_to_date(val, tz));
+            output.push(timestamp_to_date_days(val, &ctx.func_ctx.tz));
         })(val, ctx)
     }
     fn calc_timestamp_to_date(val: i64, tz: &TimeZone) -> i32 {
-        val.to_timestamp(tz)
-            .date()
-            .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
-            .unwrap()
-            .get_days()
+        timestamp_to_date_days(val, tz)
     }
+}
+
+fn timestamp_to_date_days(value: i64, tz: &TimeZone) -> i32 {
+    timestamp_days_via_lut(value, tz).unwrap_or_else(|| timestamp_days_via_jiff(value, tz))
+}
+
+fn timestamp_days_via_lut(value: i64, tz: &TimeZone) -> Option<i32> {
+    let components = fast_components_from_timestamp(value, tz)?;
+    days_from_components(components.year, components.month, components.day)
+}
+
+fn days_from_components(year: i32, month: u8, day: u8) -> Option<i32> {
+    NaiveDate::from_ymd_opt(year, month as u32, day as u32)
+        .map(|d| clamp_date((d.num_days_from_ce() - EPOCH_DAYS_FROM_CE) as i64))
+}
+
+fn timestamp_days_via_jiff(value: i64, tz: &TimeZone) -> i32 {
+    value
+        .to_timestamp(tz)
+        .date()
+        .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+        .unwrap()
+        .get_days()
 }
 
 fn register_timestamp_tz_to_date(registry: &mut FunctionRegistry) {
@@ -1207,7 +1304,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match EvalYearsImpl::eval_timestamp(ts, &ctx.func_ctx.tz, $signed_wrapper!{delta}, false) {
+                        match EvalYearsImpl::eval_timestamp(ts, &ctx.func_ctx.tz, $signed_wrapper! {delta}, false) {
                             Ok(t) => builder.push(t),
                             Err(e) => {
                                 ctx.set_error(builder.len(), e);
@@ -1238,7 +1335,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match EvalMonthsImpl::eval_timestamp(ts, &ctx.func_ctx.tz, $signed_wrapper!{delta} * 3, false) {
+                        match EvalMonthsImpl::eval_timestamp(ts, &ctx.func_ctx.tz, $signed_wrapper! {delta} * 3, false) {
                             Ok(t) => builder.push(t),
                             Err(e) => {
                                 ctx.set_error(builder.len(), e);
@@ -1269,7 +1366,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match EvalMonthsImpl::eval_timestamp(ts, &ctx.func_ctx.tz, $signed_wrapper!{delta}, false) {
+                        match EvalMonthsImpl::eval_timestamp(ts, &ctx.func_ctx.tz, $signed_wrapper! {delta}, false) {
                             Ok(t) => builder.push(t),
                             Err(e) => {
                                 ctx.set_error(builder.len(), e);
@@ -1302,7 +1399,7 @@ macro_rules! impl_register_arith_functions {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
                     |ts, delta, builder, ctx| {
-                        match EvalMonthsImpl::eval_timestamp(ts, &ctx.func_ctx.tz, $signed_wrapper!{delta}, true) {
+                        match EvalMonthsImpl::eval_timestamp(ts, &ctx.func_ctx.tz, $signed_wrapper! {delta}, true) {
                             Ok(t) => builder.push(t),
                             Err(e) => {
                                 ctx.set_error(builder.len(), e);
