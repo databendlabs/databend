@@ -50,7 +50,7 @@ Filter
     ├── read size: 1.03 KiB
     ├── partitions total: 8
     ├── partitions scanned: 8
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 8>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 8 to 8 cost: <slt:ignore>, bloom pruning: 8 to 8 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like(t1.content (#1), '%yo%'))], limit: NONE]
     └── estimated rows: 16.00
 
@@ -69,7 +69,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 8
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 8 to 8 cost: <slt:ignore>, bloom pruning: 8 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like(t1.content (#1), '%your eggs%'))], limit: NONE]
     └── estimated rows: 16.00
 
@@ -88,7 +88,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 8
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 8 to 8 cost: <slt:ignore>, bloom pruning: 8 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like(t1.content (#1), '%your eggs'))], limit: NONE]
     └── estimated rows: 16.00
 
@@ -107,7 +107,7 @@ Filter
     ├── read size: 1.03 KiB
     ├── partitions total: 8
     ├── partitions scanned: 8
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 8>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 8 to 8 cost: <slt:ignore>, bloom pruning: 8 to 8 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like(t1.content (#1), '%风来%'))], limit: NONE]
     └── estimated rows: 16.00
 
@@ -126,7 +126,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 8
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 8 to 8 cost: <slt:ignore>, bloom pruning: 8 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like(t1.content (#1), '%月无声%'))], limit: NONE]
     └── estimated rows: 16.00
 
@@ -174,7 +174,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 8
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 1>]
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 8 to 8 cost: <slt:ignore>, bloom pruning: 8 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%your eggs%'))], limit: NONE]
 └── estimated rows: 0.06
 
@@ -189,7 +189,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 8
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 1>]
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 8 to 8 cost: <slt:ignore>, bloom pruning: 8 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%your eggs'))], limit: NONE]
 └── estimated rows: 0.03
 
@@ -209,7 +209,7 @@ TableScan
 ├── read size: 1.26 KiB
 ├── partitions total: 8
 ├── partitions scanned: 8
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 8>]
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 8 to 8 cost: <slt:ignore>, bloom pruning: 8 to 8 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%yo%'))], limit: NONE]
 └── estimated rows: 8.00
 
@@ -224,7 +224,7 @@ TableScan
 ├── read size: 1.26 KiB
 ├── partitions total: 8
 ├── partitions scanned: 8
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 8>]
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 8 to 8 cost: <slt:ignore>, bloom pruning: 8 to 8 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%风来%'))], limit: NONE]
 └── estimated rows: 8.00
 
@@ -239,7 +239,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 8
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 8 to 8, bloom pruning: 8 to 1>]
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 8 to 8 cost: <slt:ignore>, bloom pruning: 8 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%月无声%'))], limit: NONE]
 └── estimated rows: 4.00
 
@@ -278,7 +278,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 2
 ├── partitions scanned: 5
-├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 13 to 5>]
+├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 13 to 5 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%your eggs%'))], limit: NONE]
 └── estimated rows: 0.10
 
@@ -299,7 +299,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 3
 ├── partitions scanned: 5
-├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 14 to 6, bloom pruning: 6 to 5>]
+├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 14 to 6 cost: <slt:ignore>, bloom pruning: 6 to 5 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(like(t2.content (#1), '%your eggs%'))], limit: NONE]
 └── estimated rows: 0.11
 
@@ -354,7 +354,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 2
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
+    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like(t3.content1 (#1), '%speak%'))], limit: NONE]
     └── estimated rows: 4.00
 
@@ -378,7 +378,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 2
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
+    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like(t3.content2 (#2), '%arrow%'))], limit: NONE]
     └── estimated rows: 4.00
 

@@ -33,6 +33,7 @@ use log::info;
 
 use super::SegmentLocation;
 use crate::pruning::PruningContext;
+use crate::pruning::PruningCostKind;
 
 pub struct BlockPruner {
     pub pruning_ctx: Arc<PruningContext>,
@@ -97,6 +98,7 @@ impl BlockPruner {
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
+        let pruning_cost = self.pruning_ctx.pruning_cost.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
@@ -132,8 +134,9 @@ impl BlockPruner {
                     BlockPruneResult::new(block_idx, block_meta.location.0.clone());
                 let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
-                prune_result.keep =
-                    range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas));
+                prune_result.keep = pruning_cost.measure(PruningCostKind::BlocksRange, || {
+                    range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas))
+                });
                 if prune_result.keep {
                     // Perf.
                     {
@@ -154,6 +157,7 @@ impl BlockPruner {
                     let index_size = block_meta.bloom_filter_index_size;
                     let column_ids = block_meta.col_metas.keys().cloned().collect::<Vec<_>>();
 
+                    let pruning_cost = pruning_cost.clone();
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
@@ -168,16 +172,18 @@ impl BlockPruner {
                                     pruning_stats.set_blocks_bloom_pruning_before(1);
                                 }
 
-                                let keep_by_bloom = bloom_pruner
-                                    .should_keep(
-                                        &index_location,
-                                        index_size,
-                                        &block_meta.col_stats,
-                                        column_ids,
-                                        &block_meta.as_ref().into(),
+                                let keep_by_bloom = pruning_cost
+                                    .measure_async(
+                                        PruningCostKind::BlocksBloom,
+                                        bloom_pruner.should_keep(
+                                            &index_location,
+                                            index_size,
+                                            &block_meta.col_stats,
+                                            column_ids,
+                                            &block_meta.as_ref().into(),
+                                        ),
                                     )
                                     .await;
-
                                 prune_result.keep =
                                     keep_by_bloom && limit_pruner.within_limit(row_count);
                                 if prune_result.keep {
@@ -212,8 +218,12 @@ impl BlockPruner {
 
                                         pruning_stats.set_blocks_inverted_index_pruning_before(1);
                                     }
-                                    let matched_rows = inverted_index_pruner
-                                        .should_keep(&block_location.0, row_count)
+                                    let matched_rows = pruning_cost
+                                        .measure_async(
+                                            PruningCostKind::BlocksInverted,
+                                            inverted_index_pruner
+                                                .should_keep(&block_location.0, row_count),
+                                        )
                                         .await?;
                                     prune_result.keep = matched_rows.is_some();
                                     prune_result.matched_rows = matched_rows;
@@ -315,6 +325,7 @@ impl BlockPruner {
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
+        let pruning_cost = self.pruning_ctx.pruning_cost.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
         let page_pruner = self.pruning_ctx.page_pruner.clone();
@@ -337,9 +348,10 @@ impl BlockPruner {
                 break;
             }
             let row_count = block_meta.row_count;
-            if range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas))
-                && limit_pruner.within_limit(row_count)
-            {
+            let keep_by_range = pruning_cost.measure(PruningCostKind::BlocksRange, || {
+                range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas))
+            });
+            if keep_by_range && limit_pruner.within_limit(row_count) {
                 // Perf.
                 {
                     metrics_inc_blocks_range_pruning_after(1);

@@ -48,7 +48,7 @@ EvalScalar
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 1.00
 
@@ -67,7 +67,7 @@ EvalScalar
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(TRY_CAST(get_by_keypath(t1.v (#1), '{"b","c"}') AS UInt8 NULL) = 10)], limit: NONE]
     └── estimated rows: 0.20
 
@@ -91,7 +91,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [], limit: NONE]
 ├── virtual columns: [v['a'][0], v['b']['c']]
 └── estimated rows: 1.00
@@ -111,7 +111,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(TRY_CAST(t2.v['b']['c'] (#5) AS UInt8 NULL) = 10)], limit: NONE]
     ├── virtual columns: [v['a'][0], v['b']['c']]
     └── estimated rows: 1.00
@@ -135,7 +135,7 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(like(CAST(t2.v['b']['c'] (#5) AS String NULL), '%10%'))], limit: NONE]
         ├── virtual columns: [v['a'][0], v['b']['c']]
         └── estimated rows: 1.00
@@ -155,7 +155,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(TRY_CAST(t2.v['d'] (#6) AS UInt8 NULL) = 20)], limit: NONE]
     ├── virtual columns: [v['d']]
     └── estimated rows: 1.00
@@ -171,7 +171,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [], limit: NONE]
 ├── virtual columns: [v['a'][0], v['b']['c']]
 └── estimated rows: 1.00
@@ -191,7 +191,7 @@ EvalScalar
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── virtual columns: [v['d']]
     └── estimated rows: 1.00
@@ -220,7 +220,7 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(like(CAST(t2.v['d'] (#6) AS String NULL), '%20%'))], limit: NONE]
         ├── virtual columns: [v['d']]
         └── estimated rows: 1.00
@@ -248,7 +248,7 @@ EvalScalar
     │   ├── read size: < 1 KiB
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     │   ├── push downs: [filters: [], limit: NONE]
     │   └── estimated rows: 1.00
     └── TableScan(Probe)
@@ -259,7 +259,7 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [], limit: NONE]
         ├── virtual columns: [v['b']['c']]
         └── estimated rows: 1.00
@@ -289,7 +289,7 @@ HashJoin
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [is_true(TRY_CAST(t2.v['a'][0] (#2) AS UInt8 NULL) = 1)], limit: NONE]
 │       ├── virtual columns: [v['a'][0], v['b']['c']]
 │       └── estimated rows: 1.00
@@ -301,7 +301,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 1.00
@@ -329,7 +329,7 @@ HashJoin
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [is_true(TRY_CAST(t2.v['b']['c'] (#7) AS Int32 NULL) = t2.a (#2))], limit: NONE]
 │       ├── virtual columns: [v['b']['c']]
 │       └── estimated rows: 1.00
@@ -341,7 +341,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 1.00
 
@@ -368,7 +368,7 @@ HashJoin
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [is_true(TRY_CAST(t2.v['b']['c'] (#7) AS Int32 NULL) > t2.a (#2))], limit: NONE]
 │       ├── virtual columns: [v['b']['c']]
 │       └── estimated rows: 1.00
@@ -380,7 +380,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 1.00
 
@@ -412,7 +412,7 @@ AggregateFinal
         │   ├── read size: < 1 KiB
         │   ├── partitions total: 1
         │   ├── partitions scanned: 1
-        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
         │   ├── push downs: [filters: [], limit: NONE]
         │   └── estimated rows: 1.00
         └── TableScan(Probe)
@@ -423,7 +423,7 @@ AggregateFinal
             ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: NONE]
             ├── virtual columns: [v['b']['c']]
             └── estimated rows: 1.00
@@ -534,7 +534,7 @@ EvalScalar
                 │       ├── read size: < 1 KiB
                 │       ├── partitions total: 1
                 │       ├── partitions scanned: 1
-                │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 │       ├── push downs: [filters: [and_filters(and_filters(is_not_null(CAST(a.content_object['category_a'] (#6) AS String NULL)), is_not_null(CAST(a.content_object['category_b'] (#7) AS String NULL))), is_not_null(CAST(CAST(CAST(a.content_object['event_date'] (#8) AS Int64 NULL) AS Timestamp NULL) AS Date NULL)))], limit: NONE]
                 │       ├── virtual columns: [content_object['category_a'], content_object['category_b'], content_object['event_date'], metadata_object['type']]
                 │       └── estimated rows: 1.00
@@ -578,7 +578,7 @@ EvalScalar
                                     │       ├── read size: < 1 KiB
                                     │       ├── partitions total: 1
                                     │       ├── partitions scanned: 1
-                                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                                    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                                     │       ├── push downs: [filters: [is_not_null(CAST(CAST(CAST(a.content_object['event_date'] (#17) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))], limit: NONE]
                                     │       ├── apply join filters: [#2, #3]
                                     │       ├── virtual columns: [content_object['event_date']]
@@ -595,7 +595,7 @@ EvalScalar
                                             ├── read size: < 1 KiB
                                             ├── partitions total: 1
                                             ├── partitions scanned: 1
-                                            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+                                            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
                                             ├── push downs: [filters: [is_true(config_table.process_mode (#20) = 'standard_mode')], limit: NONE]
                                             ├── apply join filters: [#2, #3, #0, #1]
                                             └── estimated rows: 1.00
@@ -724,7 +724,7 @@ CommitSink
                 │       ├── read size: < 1 KiB
                 │       ├── partitions total: 1
                 │       ├── partitions scanned: 1
-                │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 │       ├── push downs: [filters: [], limit: NONE]
                 │       ├── virtual columns: [data_object['metadata']['category_id'], data_object['unique_key']]
                 │       └── estimated rows: 1.00
@@ -736,7 +736,7 @@ CommitSink
                     ├── read size: < 1 KiB
                     ├── partitions total: 1
                     ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                     ├── push downs: [filters: [], limit: NONE]
                     ├── apply join filters: [#0, #1]
                     └── estimated rows: 1.00

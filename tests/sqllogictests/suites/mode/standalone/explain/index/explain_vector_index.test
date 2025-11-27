@@ -62,7 +62,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 4
             ├── partitions scanned: 3
-            ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4, topn pruning: 4 to 4, vector pruning: 4 to 3>]
+            ├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, topn pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 3 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 5]
             └── estimated rows: 16.00
 
@@ -90,7 +90,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 4
             ├── partitions scanned: 2
-            ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4, topn pruning: 4 to 4, vector pruning: 4 to 2>]
+            ├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, topn pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 2 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 3]
             └── estimated rows: 16.00
 
@@ -122,7 +122,7 @@ RowFetch
                 ├── read size: 0
                 ├── partitions total: 4
                 ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4, vector pruning: 4 to 3>]
+                ├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, vector pruning: 4 to 3 cost: <slt:ignore>>]
                 ├── push downs: [filters: [t._vector_score (#2) > 0.1], limit: 3]
                 └── estimated rows: 16.00
 
@@ -167,7 +167,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 2
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, topn pruning: 2 to 2, vector pruning: 2 to 1>]
+            ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, topn pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 1]
             └── estimated rows: 8.00
 
@@ -195,7 +195,7 @@ RowFetch
             ├── read size: 0
             ├── partitions total: 2
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, topn pruning: 2 to 2, vector pruning: 2 to 1>]
+            ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, topn pruning: 2 to 2 cost: <slt:ignore>, vector pruning: 2 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [], limit: 1]
             └── estimated rows: 8.00
 
