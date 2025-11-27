@@ -3130,6 +3130,8 @@ impl<'a> TypeChecker<'a> {
             Self::rewrite_substring(&mut args);
         }
 
+        self.adjust_date_interval_function_args(func_name, &mut args)?;
+
         // Type check
         let mut arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
         // inject the params
@@ -3508,6 +3510,29 @@ impl<'a> TypeChecker<'a> {
         Ok(())
     }
 
+    fn adjust_date_interval_function_args(
+        &self,
+        func_name: &str,
+        args: &mut [ScalarExpr],
+    ) -> Result<()> {
+        if args.len() != 2 {
+            return Ok(());
+        }
+        let op = if func_name.eq_ignore_ascii_case("plus") {
+            BinaryOperator::Plus
+        } else if func_name.eq_ignore_ascii_case("minus") {
+            BinaryOperator::Minus
+        } else {
+            return Ok(());
+        };
+        let (left_slice, right_slice) = args.split_at_mut(1);
+        let left_expr = &mut left_slice[0];
+        let right_expr = &mut right_slice[0];
+        let left_type = left_expr.data_type()?;
+        let right_type = right_expr.data_type()?;
+        self.adjust_date_interval_operands(&op, left_expr, &left_type, right_expr, &right_type)
+    }
+
     fn adjust_single_date_interval_operand(
         &self,
         date_expr: &mut ScalarExpr,
@@ -3538,10 +3563,12 @@ impl<'a> TypeChecker<'a> {
     fn interval_contains_only_date_parts(&self, interval_expr: &ScalarExpr) -> Result<bool> {
         let expr = interval_expr.as_expr()?;
         let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        if let EExpr::Constant(constant) = folded {
-            if let Scalar::Interval(value) = constant.scalar {
-                return Ok(value.microseconds() == 0);
-            }
+        if let EExpr::Constant(Constant {
+            scalar: Scalar::Interval(value),
+            ..
+        }) = folded
+        {
+            return Ok(value.microseconds() == 0);
         }
         Ok(false)
     }
