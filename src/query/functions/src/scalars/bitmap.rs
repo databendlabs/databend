@@ -38,8 +38,8 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::parse_bitmap;
+use databend_common_io::HybridBitmap;
 use itertools::join;
-use roaring::RoaringTreemap;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, BitmapType, _, _>(
@@ -74,7 +74,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            let mut rb = RoaringTreemap::new();
+            let mut rb = HybridBitmap::new();
             rb.insert(arg);
 
             rb.serialize_into(&mut builder.data).unwrap();
@@ -95,7 +95,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 return;
                             }
                         }
-                        let mut rb = RoaringTreemap::new();
+                        let mut rb = HybridBitmap::new();
                         for a in arg.iter() {
                             if let Some(a) = a {
                                 rb.insert(a.try_into().unwrap());
@@ -124,7 +124,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 return;
                             }
                         }
-                        let mut rb = RoaringTreemap::new();
+                        let mut rb = HybridBitmap::new();
                         for a in arg.iter() {
                             if let Some(a) = a {
                                 if a >= 0 {
@@ -255,7 +255,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 match deserialize_bitmap(b) {
                     Ok(rb) => {
                         let collection = rb.iter().filter(|x| x >= &range_start).take(limit as usize);
-                        let subset_bitmap = RoaringTreemap::from_iter(collection);
+                        let subset_bitmap = HybridBitmap::from_iter(collection);
                         subset_bitmap.serialize_into(&mut builder.data).unwrap();
                     }
                     Err(e) => {
@@ -281,7 +281,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 match deserialize_bitmap(b) {
                     Ok(rb) => {
                         let collection = rb.iter().filter(|x| x >= &start && x < &end);
-                        let subset_bitmap = RoaringTreemap::from_iter(collection);
+                        let subset_bitmap = HybridBitmap::from_iter(collection);
                         subset_bitmap.serialize_into(&mut builder.data).unwrap();
                     }
                     Err(e) => {
@@ -309,12 +309,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                         let subset_start = offset;
                         let subset_length = length;
                         if subset_start >= b.len() as u64 {
-                            let rb = RoaringTreemap::new();
+                            let rb = HybridBitmap::new();
                             rb.serialize_into(&mut builder.data).unwrap();
                         } else {
                             let adjusted_length = (subset_start + subset_length).min(b.len() as u64) - subset_start;
                             let subset_bitmap = &rb.into_iter().collect::<Vec<_>>()[subset_start as usize..(subset_start + adjusted_length) as usize];
-                            let rb = RoaringTreemap::from_iter(subset_bitmap.iter());
+                            let rb = HybridBitmap::from_iter(subset_bitmap.iter());
                             rb.serialize_into(&mut builder.data).unwrap();
                         }
                     }

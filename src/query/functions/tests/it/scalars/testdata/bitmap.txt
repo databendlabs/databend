@@ -1,7 +1,7 @@
 ast            : build_bitmap([NULL, 8])
 raw expr       : build_bitmap(array(NULL, 8))
 checked expr   : build_bitmap<Array(UInt8 NULL)>(array<T0=UInt8 NULL><T0, T0>(CAST<NULL>(NULL AS UInt8 NULL), CAST<UInt8>(8_u8 AS UInt8 NULL)))
-optimized expr : RoaringTreemap<[8]>
+optimized expr : HybridBitmap<[8]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '8'
@@ -10,7 +10,7 @@ output         : '8'
 ast            : build_bitmap([7, 8])
 raw expr       : build_bitmap(array(7, 8))
 checked expr   : build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(7_u8, 8_u8) AS Array(UInt8 NULL)))
-optimized expr : RoaringTreemap<[7, 8]>
+optimized expr : HybridBitmap<[7, 8]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '7,8'
@@ -50,7 +50,7 @@ evaluation (internal):
 ast            : to_bitmap('0, 1, 2')
 raw expr       : to_bitmap('0, 1, 2')
 checked expr   : CAST<String>("0, 1, 2" AS Bitmap)
-optimized expr : RoaringTreemap<[0, 1, 2]>
+optimized expr : HybridBitmap<[0, 1, 2]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '0,1,2'
@@ -59,7 +59,7 @@ output         : '0,1,2'
 ast            : to_bitmap(1024)
 raw expr       : to_bitmap(1024)
 checked expr   : CAST<UInt64>(CAST<UInt16>(1024_u16 AS UInt64) AS Bitmap)
-optimized expr : RoaringTreemap<[1024]>
+optimized expr : HybridBitmap<[1024]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '1024'
@@ -140,7 +140,7 @@ output         : 1
 ast            : sub_bitmap(build_bitmap([1, 2, 3, 4, 5]), 1, 3)
 raw expr       : sub_bitmap(build_bitmap(array(1, 2, 3, 4, 5)), 1, 3)
 checked expr   : sub_bitmap<Bitmap, UInt64, UInt64>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0, T0, T0>(1_u8, 2_u8, 3_u8, 4_u8, 5_u8) AS Array(UInt8 NULL))), CAST<UInt8>(1_u8 AS UInt64), CAST<UInt8>(3_u8 AS UInt64))
-optimized expr : RoaringTreemap<[2, 3, 4]>
+optimized expr : HybridBitmap<[2, 3, 4]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '2,3,4'
@@ -149,7 +149,7 @@ output         : '2,3,4'
 ast            : bitmap_subset_limit(build_bitmap([3,5,7]), 4, 2)
 raw expr       : bitmap_subset_limit(build_bitmap(array(3, 5, 7)), 4, 2)
 checked expr   : bitmap_subset_limit<Bitmap, UInt64, UInt64>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 5_u8, 7_u8) AS Array(UInt8 NULL))), CAST<UInt8>(4_u8 AS UInt64), CAST<UInt8>(2_u8 AS UInt64))
-optimized expr : RoaringTreemap<[5, 7]>
+optimized expr : HybridBitmap<[5, 7]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '5,7'
@@ -158,7 +158,7 @@ output         : '5,7'
 ast            : bitmap_subset_in_range(build_bitmap([5,7,9]), 6, 9)
 raw expr       : bitmap_subset_in_range(build_bitmap(array(5, 7, 9)), 6, 9)
 checked expr   : bitmap_subset_in_range<Bitmap, UInt64, UInt64>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(5_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))), CAST<UInt8>(6_u8 AS UInt64), CAST<UInt8>(9_u8 AS UInt64))
-optimized expr : RoaringTreemap<[7]>
+optimized expr : HybridBitmap<[7]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '7'
@@ -167,7 +167,7 @@ output         : '7'
 ast            : bitmap_or(build_bitmap([1,4,5]), build_bitmap([1,5]))
 raw expr       : bitmap_or(build_bitmap(array(1, 4, 5)), build_bitmap(array(1, 5)))
 checked expr   : bitmap_or<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 4_u8, 5_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 5_u8) AS Array(UInt8 NULL))))
-optimized expr : RoaringTreemap<[1, 4, 5]>
+optimized expr : HybridBitmap<[1, 4, 5]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '1,4,5'
@@ -176,7 +176,7 @@ output         : '1,4,5'
 ast            : bitmap_and(build_bitmap([1,3,5]), build_bitmap([2,4,6]))
 raw expr       : bitmap_and(build_bitmap(array(1, 3, 5)), build_bitmap(array(2, 4, 6)))
 checked expr   : bitmap_and<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 3_u8, 5_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(2_u8, 4_u8, 6_u8) AS Array(UInt8 NULL))))
-optimized expr : RoaringTreemap<[]>
+optimized expr : HybridBitmap<[]>
 output type    : Bitmap
 output domain  : Undefined
 output         : ''
@@ -185,7 +185,7 @@ output         : ''
 ast            : bitmap_xor(build_bitmap([1,3,5]), build_bitmap([2,4,6]))
 raw expr       : bitmap_xor(build_bitmap(array(1, 3, 5)), build_bitmap(array(2, 4, 6)))
 checked expr   : bitmap_xor<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 3_u8, 5_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(2_u8, 4_u8, 6_u8) AS Array(UInt8 NULL))))
-optimized expr : RoaringTreemap<[1, 2, 3, 4, 5, 6]>
+optimized expr : HybridBitmap<[1, 2, 3, 4, 5, 6]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '1,2,3,4,5,6'
@@ -194,7 +194,7 @@ output         : '1,2,3,4,5,6'
 ast            : bitmap_not(build_bitmap([1,3,5]), build_bitmap([1,5]))
 raw expr       : bitmap_not(build_bitmap(array(1, 3, 5)), build_bitmap(array(1, 5)))
 checked expr   : bitmap_not<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 3_u8, 5_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 5_u8) AS Array(UInt8 NULL))))
-optimized expr : RoaringTreemap<[3]>
+optimized expr : HybridBitmap<[3]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '3'
@@ -203,7 +203,7 @@ output         : '3'
 ast            : bitmap_and_not(build_bitmap([1,3,5]), build_bitmap([1,5]))
 raw expr       : bitmap_and_not(build_bitmap(array(1, 3, 5)), build_bitmap(array(1, 5)))
 checked expr   : bitmap_not<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 3_u8, 5_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 5_u8) AS Array(UInt8 NULL))))
-optimized expr : RoaringTreemap<[3]>
+optimized expr : HybridBitmap<[3]>
 output type    : Bitmap
 output domain  : Undefined
 output         : '3'
