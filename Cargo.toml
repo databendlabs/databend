@@ -487,6 +487,7 @@ siphasher = "0.3"
 sled = { version = "0.34", default-features = false }
 snailquote = "0.3.1"
 snap = "1"
+smallvec = "1.13.2"
 socket2 = "0.5.3"
 span-map = { version = "0.2.0" }
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
