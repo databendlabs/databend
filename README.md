@@ -31,6 +31,8 @@ Databend is an open-source **unified multimodal database** built in Rust. It emp
 - **Cloud Native**: Stateless compute nodes over object storage (S3, GCS, Azure) with full ACID support.
 - **High Performance**: Vectorized execution and Zero-Copy processing.
 
+![Databend Architecture](https://github.com/user-attachments/assets/288dea8d-0243-4c45-8d18-d4d402b08075)
+
 ## ⚡ Quick Start
 
 ### 1. Cloud (Recommended)
