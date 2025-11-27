@@ -113,6 +113,7 @@ impl<T: Join> Join for NestedLoopJoin<T> {
             matches: Vec::with_capacity(max_block_size),
             build_block_index: 0,
             build_row_index: 0,
+            use_range: false,
         }))
     }
 }
@@ -126,6 +127,7 @@ struct NestedLoopJoinStream<'a> {
     build_block_index: usize,
     build_row_index: usize,
     matches: Vec<(u32, RowPtr)>,
+    use_range: bool,
 }
 
 impl<'a> NestedLoopJoinStream<'a> {
@@ -171,16 +173,23 @@ impl<'a> NestedLoopJoinStream<'a> {
     }
 
     fn emit_block(&mut self, count: usize) -> Result<DataBlock> {
-        let use_range = count as f64 > SELECTIVITY_THRESHOLD * self.max_block_size as f64;
+        if !self.use_range
+            && self.matches.len() as f64
+                > SELECTIVITY_THRESHOLD * self.probe_block.num_rows() as f64
+        {
+            // Need to test the scenario where a probe matches multiple builds
+            self.use_range = true;
+        }
+
         let block = {
-            if use_range {
+            if self.use_range {
                 self.matches.sort_unstable_by_key(|(probe, _)| *probe);
             }
             let (probe_indices, build_indices): (Vec<_>, Vec<_>) =
                 self.matches.drain(..count).unzip();
 
             let probe = self.probe_block.clone().project(&self.desc.projections);
-            let probe = if use_range {
+            let probe = if self.use_range {
                 let ranges = DataBlock::merge_indices_to_ranges(&probe_indices);
                 probe.take_ranges(&ranges, count)?
             } else {
