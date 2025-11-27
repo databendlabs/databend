@@ -18,7 +18,7 @@ use databend_common_io::prelude::bincode_deserialize_from_slice;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
-use super::row_ptr::RowPtr;
+use crate::read;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::Decimal;
@@ -57,7 +57,7 @@ pub struct PayloadFlushState {
     pub flush_page: usize,
     pub flush_page_row: usize,
 
-    pub addresses: [RowPtr; BATCH_SIZE],
+    pub addresses: [*const u8; BATCH_SIZE],
     pub state_places: [StateAddr; BATCH_SIZE],
 }
 
@@ -71,7 +71,7 @@ impl Default for PayloadFlushState {
             flush_partition: 0,
             flush_page: 0,
             flush_page_row: 0,
-            addresses: [RowPtr::null(); BATCH_SIZE],
+            addresses: [std::ptr::null::<u8>(); BATCH_SIZE],
             state_places: [StateAddr::new(0); BATCH_SIZE],
         }
     }
@@ -137,7 +137,7 @@ impl Payload {
         let row_count = state.row_count;
 
         let mut entries = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
-        if let Some(state_layout) = self.row_layout.states_layout.as_ref() {
+        if let Some(state_layout) = self.states_layout.as_ref() {
             let mut builders = state_layout.serialize_builders(row_count);
 
             for ((loc, func), builder) in state_layout
@@ -196,10 +196,15 @@ impl Payload {
 
         for idx in 0..rows {
             state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
-            state.probe_state.group_hashes[idx] = state.addresses[idx].hash(&self.row_layout);
+            state.probe_state.group_hashes[idx] =
+                unsafe { read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
 
             if !self.aggrs.is_empty() {
-                state.state_places[idx] = state.addresses[idx].state_addr(&self.row_layout);
+                state.state_places[idx] = unsafe {
+                    StateAddr::new(
+                        read::<u64>(state.addresses[idx].add(self.state_offset) as _) as usize,
+                    )
+                };
             }
         }
 
@@ -215,7 +220,7 @@ impl Payload {
     fn flush_column(&self, col_index: usize, state: &mut PayloadFlushState) -> Column {
         let len = state.probe_state.row_count;
 
-        let col_offset = self.row_layout.group_offsets[col_index];
+        let col_offset = self.group_offsets[col_index];
         let col = match self.group_types[col_index].remove_nullable() {
             DataType::Null => Column::Null { len },
             DataType::EmptyArray => Column::EmptyArray { len },
@@ -247,7 +252,7 @@ impl Payload {
             other => self.flush_generic_column(&other, col_offset, state),
         };
 
-        let validity_offset = self.row_layout.validity_offsets[col_index];
+        let validity_offset = self.validity_offsets[col_index];
         if self.group_types[col_index].is_nullable() {
             let b = self.flush_type_column::<BooleanType>(validity_offset, state);
             let validity = b.into_boolean().unwrap();
@@ -264,8 +269,8 @@ impl Payload {
         state: &mut PayloadFlushState,
     ) -> Column {
         let len = state.probe_state.row_count;
-        let iter =
-            (0..len).map(|idx| unsafe { state.addresses[idx].read::<T::Scalar>(col_offset) });
+        let iter = (0..len)
+            .map(|idx| unsafe { read::<T::Scalar>(state.addresses[idx].add(col_offset) as _) });
         let col = T::column_from_iter(iter, &[]);
         T::upcast_column(col)
     }
@@ -278,7 +283,9 @@ impl Payload {
     ) -> Column {
         let len = state.probe_state.row_count;
         let iter = (0..len).map(|idx| unsafe {
-            state.addresses[idx].read::<<DecimalType<Num> as AccessType>::Scalar>(col_offset)
+            read::<<DecimalType<Num> as AccessType>::Scalar>(
+                state.addresses[idx].add(col_offset) as _
+            )
         });
         let col = DecimalType::<Num>::column_from_iter(iter, &[]);
         Num::upcast_column(col, decimal_size)
@@ -294,9 +301,9 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len = state.addresses[idx].read::<u32>(col_offset) as usize;
-                let data_address =
-                    state.addresses[idx].read::<u64>(col_offset + 4) as usize as *const u8;
+                let str_len = read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address = read::<u64>(state.addresses[idx].add(col_offset + 4) as _)
+                    as usize as *const u8;
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
 
@@ -317,9 +324,9 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len = state.addresses[idx].read::<u32>(col_offset) as usize;
-                let data_address =
-                    state.addresses[idx].read::<u64>(col_offset + 4) as usize as *const u8;
+                let str_len = read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address = read::<u64>(state.addresses[idx].add(col_offset + 4) as _)
+                    as usize as *const u8;
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
 
@@ -340,9 +347,9 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len = state.addresses[idx].read::<u32>(col_offset) as usize;
-                let data_address =
-                    state.addresses[idx].read::<u64>(col_offset + 4) as usize as *const u8;
+                let str_len = read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address = read::<u64>(state.addresses[idx].add(col_offset + 4) as _)
+                    as usize as *const u8;
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
                 let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
