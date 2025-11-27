@@ -172,6 +172,18 @@ select to_interval('120000000000 months');
 
 skipif mysql
 query T
+select plus('2022-02-02'::date, interval '1 day 1 second');
+----
+2022-02-03 00:00:01.000000
+
+skipif mysql
+query T
+select plus('2022-02-02'::date, interval '1 day');
+----
+2022-02-03
+
+skipif mysql
+query T
 select '2022-01-01'::timestamp - '2021-01-01'::timestamp
 ----
 31536000000000

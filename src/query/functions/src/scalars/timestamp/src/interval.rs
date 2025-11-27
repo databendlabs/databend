@@ -20,11 +20,13 @@ use databend_common_exception::Result;
 use databend_common_expression::date_helper::calc_date_to_timestamp;
 use databend_common_expression::date_helper::today_date;
 use databend_common_expression::date_helper::DateConverter;
+use databend_common_expression::date_helper::EvalDaysImpl;
 use databend_common_expression::date_helper::EvalMonthsImpl;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
+use databend_common_expression::types::DateType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::IntervalType;
@@ -111,6 +113,26 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     a.days() + b.days(),
                     a.microseconds() + b.microseconds(),
                 ))
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, IntervalType, DateType, _, _>(
+        "plus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, IntervalType, DateType>(
+            |date, interval, output, ctx| {
+                eval_date_plus(date, interval, output, ctx);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<IntervalType, DateType, DateType, _, _>(
+        "plus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<IntervalType, DateType, DateType>(
+            |interval, date, output, ctx| {
+                eval_date_plus(date, interval, output, ctx);
             },
         ),
     );
@@ -204,6 +226,16 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     a.days() - b.days(),
                     a.microseconds() - b.microseconds(),
                 ));
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, IntervalType, DateType, _, _>(
+        "minus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, IntervalType, DateType>(
+            |date, interval, output, ctx| {
+                eval_date_minus(date, interval, output, ctx);
             },
         ),
     );
@@ -495,6 +527,64 @@ fn eval_timestamp_minus<F1, F2, T>(
             output.push(T::default());
         }
     }
+}
+
+fn eval_date_plus(
+    date: i32,
+    interval: months_days_micros,
+    output: &mut Vec<i32>,
+    ctx: &mut EvalContext,
+) {
+    match apply_interval_to_date(date, interval, &ctx.func_ctx.tz, true) {
+        Ok(result) => output.push(result),
+        Err(err) => {
+            ctx.set_error(output.len(), err);
+            output.push(0);
+        }
+    }
+}
+
+fn eval_date_minus(
+    date: i32,
+    interval: months_days_micros,
+    output: &mut Vec<i32>,
+    ctx: &mut EvalContext,
+) {
+    match apply_interval_to_date(date, interval, &ctx.func_ctx.tz, false) {
+        Ok(result) => output.push(result),
+        Err(err) => {
+            ctx.set_error(output.len(), err);
+            output.push(0);
+        }
+    }
+}
+
+fn apply_interval_to_date(
+    mut date: i32,
+    interval: months_days_micros,
+    tz: &TimeZone,
+    is_addition: bool,
+) -> std::result::Result<i32, String> {
+    if interval.microseconds() != 0 {
+        return Err(
+            "DATE +/- INTERVAL with time parts should be evaluated as TIMESTAMP".to_string(),
+        );
+    }
+
+    let (days, months) = if is_addition {
+        (interval.days(), interval.months())
+    } else {
+        (-interval.days(), -interval.months())
+    };
+
+    if days != 0 {
+        date = EvalDaysImpl::eval_date(date, days);
+    }
+    if months != 0 {
+        date = EvalMonthsImpl::eval_date(date, tz, months, false)?;
+    }
+
+    Ok(date)
 }
 
 fn register_number_to_interval(registry: &mut FunctionRegistry) {
