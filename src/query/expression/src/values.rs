@@ -35,6 +35,7 @@ use databend_common_exception::Result;
 use databend_common_frozen_api::frozen_api;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_io::prelude::BinaryRead;
+use databend_common_io::HybridBitmap;
 use enum_as_inner::EnumAsInner;
 use geo::Geometry;
 use geo::Point;
@@ -42,7 +43,6 @@ use geozero::CoordDimensions;
 use geozero::ToWkb;
 use itertools::Itertools;
 use jsonb::RawJsonb;
-use roaring::RoaringTreemap;
 use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -1641,10 +1641,10 @@ impl Column {
                 (0..len)
                     .map(|_| {
                         let data: [u64; 4] = rng.gen();
-                        let rb = RoaringTreemap::from_iter(data.iter());
+                        let rb = HybridBitmap::from_iter(data.iter());
                         let mut buf = vec![];
                         rb.serialize_into(&mut buf)
-                            .expect("failed serialize roaring treemap");
+                            .expect("failed serialize hybrid bitmap");
                         buf
                     })
                     .collect_vec(),
