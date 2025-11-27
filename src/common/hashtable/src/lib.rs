@@ -44,6 +44,7 @@ mod utils;
 
 pub use table0::Entry as HashtableEntry;
 pub use traits::hash_join_fast_string_hash;
+pub use traits::BloomHash;
 pub use traits::EntryMutRefLike as HashtableEntryMutRefLike;
 pub use traits::EntryRefLike as HashtableEntryRefLike;
 pub use traits::FastHash;

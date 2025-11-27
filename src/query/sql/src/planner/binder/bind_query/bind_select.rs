@@ -23,6 +23,7 @@ use databend_common_ast::ast::Expr::Array;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Join;
 use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
@@ -30,8 +31,11 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Pivot;
 use databend_common_ast::ast::PivotValues;
+use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnpivotName;
 use databend_common_ast::Span;
@@ -50,7 +54,6 @@ use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::QueryExecutor;
 use crate::AsyncFunctionRewriter;
-use crate::ColumnBinding;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -84,6 +87,12 @@ impl Binder {
                 .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
                 .is_ok();
 
+        let mut rewriter =
+            SelectRewriter::new(self.name_resolution_ctx.unquoted_ident_case_sensitive)
+                .with_subquery_executor(self.subquery_executor.clone());
+        let new_stmt = rewriter.rewrite(stmt)?;
+        let stmt = new_stmt.as_ref().unwrap_or(stmt);
+
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             let select_list = &stmt.select_list;
             self.bind_dummy_table(bind_context, select_list)?
@@ -110,14 +119,6 @@ impl Binder {
                 .unwrap();
             self.bind_table_reference(bind_context, &cross_joins)?
         };
-
-        let mut rewriter = SelectRewriter::new(
-            from_context.all_column_bindings(),
-            self.name_resolution_ctx.unquoted_ident_case_sensitive,
-        )
-        .with_subquery_executor(self.subquery_executor.clone());
-        let new_stmt = rewriter.rewrite(stmt)?;
-        let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
@@ -275,19 +276,16 @@ impl Binder {
 
 /// It is useful when implementing some SQL syntax sugar,
 ///
-/// [`column_binding`] contains the column binding information of the SelectStmt.
-///
 /// to rewrite the SelectStmt, just add a new rewrite_* function and call it in the `rewrite` function.
 #[allow(dead_code)]
-struct SelectRewriter<'a> {
-    column_binding: &'a [ColumnBinding],
+struct SelectRewriter {
     new_stmt: Option<SelectStmt>,
     is_unquoted_ident_case_sensitive: bool,
     subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 // helper functions to SelectRewriter
-impl SelectRewriter<'_> {
+impl SelectRewriter {
     fn parse_aggregate_function(expr: &Expr) -> Result<(&Identifier, &[Expr])> {
         match expr {
             Expr::FunctionCall {
@@ -372,10 +370,9 @@ impl SelectRewriter<'_> {
     }
 }
 
-impl<'a> SelectRewriter<'a> {
-    fn new(column_binding: &'a [ColumnBinding], is_unquoted_ident_case_sensitive: bool) -> Self {
+impl SelectRewriter {
+    fn new(is_unquoted_ident_case_sensitive: bool) -> Self {
         SelectRewriter {
-            column_binding,
             new_stmt: None,
             is_unquoted_ident_case_sensitive,
             subquery_executor: None,
@@ -430,14 +427,14 @@ impl<'a> SelectRewriter<'a> {
                 .set_span(expr.span())),
             })
             .collect::<Result<Vec<_>>>()?;
-        let new_group_by = stmt.group_by.clone().unwrap_or_else(|| GroupBy::All);
-
-        let mut new_select_list = stmt.select_list.clone();
-        if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            let mut exclude_columns = aggregate_args_names;
-            exclude_columns.push(pivot.value_column.clone());
-            star.exclude(exclude_columns);
+        let mut exclude_columns = aggregate_args_names.clone();
+        exclude_columns.push(pivot.value_column.clone());
+        let mut star_target = SelectTarget::StarColumns {
+            qualified: vec![Indirection::Star(None)],
+            column_filter: None,
         };
+        star_target.exclude(exclude_columns);
+        let mut inner_select_list = vec![star_target];
         let new_aggregate_name = Identifier {
             name: format!("{}_if", aggregate_name.name),
             ..aggregate_name.clone()
@@ -465,7 +462,7 @@ impl<'a> SelectRewriter<'a> {
                     &values,
                     &new_aggregate_name,
                     aggregate_args,
-                    &mut new_select_list,
+                    &mut inner_select_list,
                     stmt,
                 )?;
             }
@@ -485,7 +482,7 @@ impl<'a> SelectRewriter<'a> {
                         &values,
                         &new_aggregate_name,
                         aggregate_args,
-                        &mut new_select_list,
+                        &mut inner_select_list,
                         stmt,
                     )?;
                 } else {
@@ -526,7 +523,7 @@ impl<'a> SelectRewriter<'a> {
                         &values,
                         &new_aggregate_name,
                         aggregate_args,
-                        &mut new_select_list,
+                        &mut inner_select_list,
                         stmt,
                     )?;
                 } else {
@@ -537,16 +534,46 @@ impl<'a> SelectRewriter<'a> {
             }
         }
 
-        if let Some(ref mut new_stmt) = self.new_stmt {
-            new_stmt.select_list = new_select_list;
-            new_stmt.group_by = Some(new_group_by);
-        } else {
-            self.new_stmt = Some(SelectStmt {
-                select_list: new_select_list,
-                group_by: Some(new_group_by),
-                ..stmt.clone()
-            });
-        }
+        let mut inner_from = stmt.from[0].clone();
+        Self::strip_pivot(&mut inner_from);
+
+        let inner_stmt = SelectStmt {
+            span: stmt.span,
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: inner_select_list,
+            from: vec![inner_from],
+            selection: None,
+            group_by: Some(GroupBy::All),
+            having: None,
+            window_list: None,
+            qualify: None,
+        };
+
+        let inner_query = Query {
+            span: stmt.span,
+            with: None,
+            body: SetExpr::Select(Box::new(inner_stmt)),
+            order_by: vec![],
+            limit: vec![],
+            offset: None,
+            ignore_result: false,
+        };
+
+        let subquery_ref = TableReference::Subquery {
+            span: Self::table_ref_span(&stmt.from[0]),
+            lateral: false,
+            subquery: Box::new(inner_query),
+            alias: Some(Self::table_ref_alias(&stmt.from[0])),
+            pivot: None,
+            unpivot: None,
+        };
+
+        let mut outer_stmt = stmt.clone();
+        outer_stmt.from = vec![subquery_ref];
+
+        self.new_stmt = Some(outer_stmt);
         Ok(())
     }
 
@@ -623,6 +650,50 @@ impl<'a> SelectRewriter<'a> {
             }
         }
         Ok(values)
+    }
+
+    fn strip_pivot(table_ref: &mut TableReference) {
+        match table_ref {
+            TableReference::Table { pivot, .. } => {
+                *pivot = None;
+            }
+            TableReference::Subquery { pivot, .. } => {
+                *pivot = None;
+            }
+            _ => {}
+        }
+    }
+
+    fn table_ref_span(table_ref: &TableReference) -> Span {
+        match table_ref {
+            TableReference::Table { span, .. } => *span,
+            TableReference::TableFunction { span, .. } => *span,
+            TableReference::Subquery { span, .. } => *span,
+            TableReference::Join { span, .. } => *span,
+            TableReference::Location { span, .. } => *span,
+        }
+    }
+
+    fn table_ref_alias(table_ref: &TableReference) -> TableAlias {
+        match table_ref {
+            TableReference::Table { table, alias, .. } => {
+                alias.clone().unwrap_or_else(|| TableAlias {
+                    name: table.clone(),
+                    columns: vec![],
+                    keep_database_name: true,
+                })
+            }
+            TableReference::Subquery { alias, .. } => alias.clone().unwrap_or_else(|| TableAlias {
+                name: Identifier::from_name(Self::table_ref_span(table_ref), "__pivot_subquery"),
+                columns: vec![],
+                keep_database_name: false,
+            }),
+            _ => TableAlias {
+                name: Identifier::from_name(Self::table_ref_span(table_ref), "__pivot_subquery"),
+                columns: vec![],
+                keep_database_name: false,
+            },
+        }
     }
 
     fn build_pivot_source_query(&self, stmt: &SelectStmt) -> Result<String> {

@@ -29,7 +29,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_not_null(t1.s (#0))], limit: NONE]
     └── estimated rows: 5.00
 
@@ -52,7 +52,7 @@ Sort(Single)
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [and_filters(t1.s (#0) >= 'abcd', t1.s (#0) < 'abce')], limit: NONE]
         └── estimated rows: 5.00
 
@@ -80,7 +80,7 @@ Sort(Single)
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [is_true(t1.s (#0) = 'abcd')], limit: NONE]
         └── estimated rows: 5.00
 
@@ -108,7 +108,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like_any(t1.s (#0), 'abc%'))], limit: NONE]
     └── estimated rows: 5.00
 
@@ -135,7 +135,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like_any(t1.s (#0), ('abc%', '%bcd')))], limit: NONE]
     └── estimated rows: 5.00
 
@@ -159,7 +159,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like(t1.s (#0), '%b$%c%', '$'))], limit: NONE]
     └── estimated rows: 5.00
 
@@ -183,7 +183,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like_any(t1.s (#0), '%b$%c%', '$'))], limit: NONE]
     └── estimated rows: 5.00
 
@@ -205,7 +205,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 1
 ├── partitions scanned: 1
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [], limit: NONE]
 └── estimated rows: 2.00
 

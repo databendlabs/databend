@@ -184,8 +184,8 @@ fn convert_page_index_int96(
 ) -> Option<ColumnStatistics> {
     match (&index.min, &index.max, index.null_count) {
         (Some(min), Some(max), Some(null_count)) => Some(ColumnStatistics::new(
-            Scalar::Timestamp(min.to_i64()),
-            Scalar::Timestamp(max.to_i64()),
+            Scalar::Timestamp(min.to_micros()),
+            Scalar::Timestamp(max.to_micros()),
             null_count as u64,
             0,
             None,

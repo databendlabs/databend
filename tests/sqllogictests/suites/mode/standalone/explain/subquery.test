@@ -624,7 +624,7 @@ EvalScalar
     │                       ├── read size: 0
     │                       ├── partitions total: 1
     │                       ├── partitions scanned: 0
-    │                       ├── pruning stats: [segments: <range pruning: 1 to 0>]
+    │                       ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
     │                       ├── push downs: [filters: [is_true(t.i (#1) > 10)], limit: NONE]
     │                       └── estimated rows: 4.00
     └── TableScan(Probe)
@@ -635,7 +635,7 @@ EvalScalar
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 4.00
 
@@ -795,7 +795,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like(t.i (#0), 'data%'))], limit: NONE]
     └── estimated rows: 3.00
 
@@ -828,7 +828,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 3.00
 
@@ -852,7 +852,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(like(t.i (#0), 'data$%%', '$'))], limit: NONE]
     └── estimated rows: 3.00
 
@@ -883,7 +883,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 3.00
 

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::str::FromStr;
 
 use databend_common_exception::ErrorCode;
@@ -48,6 +50,15 @@ impl FuseTableType {
 pub enum FuseStorageFormat {
     Parquet,
     Native,
+}
+
+impl Display for FuseStorageFormat {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            FuseStorageFormat::Parquet => write!(f, "Parquet"),
+            FuseStorageFormat::Native => write!(f, "Native"),
+        }
+    }
 }
 
 impl FromStr for FuseStorageFormat {

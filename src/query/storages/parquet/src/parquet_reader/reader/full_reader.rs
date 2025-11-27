@@ -37,11 +37,11 @@ use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::arrow_reader::RowFilter;
 use parquet::arrow::async_reader::AsyncFileReader;
-use parquet::arrow::async_reader::MetadataLoader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
 use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use parquet::arrow::ProjectionMask;
 use parquet::file::metadata::ParquetMetaData;
+use parquet::file::metadata::ParquetMetaDataReader;
 use parquet::schema::types::SchemaDescPtr;
 
 use crate::meta::check_parquet_schema;
@@ -297,12 +297,11 @@ impl AsyncFileReader for ParquetFileReader {
         _options: Option<&'_ ArrowReaderOptions>,
     ) -> BoxFuture<'_, parquet::errors::Result<Arc<ParquetMetaData>>> {
         Box::pin(async move {
-            let size = self.size as usize;
-            #[allow(deprecated)]
-            let mut loader = MetadataLoader::load(self, size, None).await?;
-            #[allow(deprecated)]
-            loader.load_page_index(false, false).await?;
-            Ok(Arc::new(loader.finish()))
+            let size = self.size;
+            let meta_data = ParquetMetaDataReader::new()
+                .load_and_finish(self, size)
+                .await?;
+            Ok(Arc::new(meta_data))
         })
     }
 }

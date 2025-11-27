@@ -38,6 +38,7 @@ use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
+use crate::clusters::ClusterHelper;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::AggregatePartialFormatter;
 use crate::physical_plans::format::PhysicalFormat;
@@ -45,7 +46,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
-use crate::pipelines::processors::transforms::aggregator::NewTransformAggregateSpillWriter;
+use crate::pipelines::processors::transforms::aggregator::NewTransformPartialAggregate;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
@@ -211,75 +212,103 @@ impl IPhysicalPlan for AggregatePartial {
                 .cluster_with_partial(true, builder.ctx.get_cluster().nodes.len())
         };
 
-        // For rank limit, we can filter data using sort with rank before partial
-        if let Some(rank_limit) = &self.rank_limit {
-            let sort_desc = rank_limit
-                .0
-                .iter()
-                .map(|desc| {
-                    let offset = schema_before_group_by.index_of(&desc.order_by.to_string())?;
-                    Ok(SortColumnDescription {
-                        offset,
-                        asc: desc.asc,
-                        nulls_first: desc.nulls_first,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let sort_desc: Arc<[_]> = sort_desc.into();
-
+        // For rank limit, we can filter data using sort with rank before partial.
+        if let Some((sort_desc, limit)) =
+            self.resolve_rank_limit_descriptions(&schema_before_group_by)
+        {
             builder.main_pipeline.add_transformer(|| {
-                TransformSortPartial::new(LimitType::LimitRank(rank_limit.1), sort_desc.clone())
+                TransformSortPartial::new(LimitType::LimitRank(limit), sort_desc.clone())
             });
         }
 
-        builder.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
-                builder.ctx.clone(),
-                input,
-                output,
-                params.clone(),
-                partial_agg_config.clone(),
-            )?))
-        })?;
+        if params.enable_experiment_aggregate {
+            let cluster = &builder.ctx.get_cluster();
+            let streams_num = if !builder.is_exchange_parent() {
+                1
+            } else {
+                cluster.nodes.len()
+            };
+            let local_pos = cluster.ordered_index();
+            let shared_partition_streams = (0..streams_num)
+                .map(|_| {
+                    SharedPartitionStream::new(
+                        builder.main_pipeline.output_len(),
+                        max_block_rows,
+                        max_block_bytes,
+                        MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            builder.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(
+                    NewTransformPartialAggregate::try_create(
+                        builder.ctx.clone(),
+                        input,
+                        output,
+                        params.clone(),
+                        partial_agg_config.clone(),
+                        shared_partition_streams.clone(),
+                        local_pos,
+                    )?,
+                ))
+            })?;
+        } else {
+            builder.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
+                    builder.ctx.clone(),
+                    input,
+                    output,
+                    params.clone(),
+                    partial_agg_config.clone(),
+                )?))
+            })?;
+        }
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        if !builder.is_exchange_parent() {
+        if !builder.is_exchange_parent() && !params.enable_experiment_aggregate {
             let operator = DataOperator::instance().spill_operator();
             let location_prefix = builder.ctx.query_id_spill_prefix();
-            if params.enable_experiment_aggregate {
-                let shared_partition_stream = SharedPartitionStream::new(
-                    builder.main_pipeline.output_len(),
-                    max_block_rows,
-                    max_block_bytes,
-                    MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
-                );
-                builder.main_pipeline.add_transform(|input, output| {
-                    Ok(ProcessorPtr::create(
-                        NewTransformAggregateSpillWriter::try_create(
-                            input,
-                            output,
-                            builder.ctx.clone(),
-                            shared_partition_stream.clone(),
-                        )?,
-                    ))
-                })?;
-            } else {
-                builder.main_pipeline.add_transform(|input, output| {
-                    Ok(ProcessorPtr::create(
-                        TransformAggregateSpillWriter::try_create(
-                            builder.ctx.clone(),
-                            input,
-                            output,
-                            operator.clone(),
-                            params.clone(),
-                            location_prefix.clone(),
-                        )?,
-                    ))
-                })?;
-            }
+            builder.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(
+                    TransformAggregateSpillWriter::try_create(
+                        builder.ctx.clone(),
+                        input,
+                        output,
+                        operator.clone(),
+                        params.clone(),
+                        location_prefix.clone(),
+                    )?,
+                ))
+            })?;
         }
 
         builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());
         Ok(())
+    }
+}
+
+impl AggregatePartial {
+    fn resolve_rank_limit_descriptions(
+        &self,
+        schema_before_group_by: &DataSchemaRef,
+    ) -> Option<(Arc<[SortColumnDescription]>, usize)> {
+        let (sort_descs, limit) = self.rank_limit.as_ref()?;
+        let mut resolved = Vec::with_capacity(sort_descs.len());
+        for desc in sort_descs {
+            let field_name = desc.order_by.to_string();
+            let offset = match schema_before_group_by.index_of(&field_name) {
+                Ok(offset) => offset,
+                Err(_) => {
+                    return None;
+                }
+            };
+            resolved.push(SortColumnDescription {
+                offset,
+                asc: desc.asc,
+                nulls_first: desc.nulls_first,
+            });
+        }
+        Some((resolved.into(), *limit))
     }
 }

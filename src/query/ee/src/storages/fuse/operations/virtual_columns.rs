@@ -39,6 +39,7 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::plans::RefreshSelection;
 use databend_common_storages_fuse::io::read::read_segment_stats;
 use databend_common_storages_fuse::io::write_data;
 use databend_common_storages_fuse::io::BlockReader;
@@ -60,6 +61,8 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
+use log::debug;
+use log::info;
 use opendal::Operator;
 
 // The big picture of refresh virtual column into pipeline:
@@ -81,6 +84,9 @@ pub async fn do_refresh_virtual_column(
     ctx: Arc<dyn TableContext>,
     fuse_table: &FuseTable,
     pipeline: &mut Pipeline,
+    limit: Option<u64>,
+    overwrite: bool,
+    selection: Option<RefreshSelection>,
 ) -> Result<()> {
     let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
         // no snapshot
@@ -107,9 +113,11 @@ pub async fn do_refresh_virtual_column(
     });
 
     if !fuse_table.support_virtual_columns() {
-        return Err(ErrorCode::VirtualColumnError(
-            "table don't support virtual column".to_string(),
-        ));
+        return Err(ErrorCode::VirtualColumnError(format!(
+            "Table don't support virtual column, storage_format: {} read_only: {}",
+            fuse_table.get_storage_format(),
+            fuse_table.is_read_only()
+        )));
     }
     let virtual_column_builder = VirtualColumnBuilder::try_create(ctx.clone(), source_schema)?;
 
@@ -125,9 +133,29 @@ pub async fn do_refresh_virtual_column(
 
     let operator = fuse_table.get_operator_ref();
 
+    let limit = limit.unwrap_or_default() as usize;
+    let segment_filter = selection.as_ref().and_then(|sel| match sel {
+        RefreshSelection::SegmentLocation(loc) => Some(loc.clone()),
+        _ => None,
+    });
+    let block_filter = selection.as_ref().and_then(|sel| match sel {
+        RefreshSelection::BlockLocation(loc) => Some(loc.clone()),
+        _ => None,
+    });
+    let mut matched_selection = false;
+    let mut reached_limit = false;
     // Iterates through all segments and collect blocks don't have virtual block meta.
     let mut virtual_column_metas = VecDeque::new();
     for (segment_idx, (location, ver)) in snapshot.segments.iter().enumerate() {
+        if reached_limit {
+            break;
+        }
+        if let Some(target) = segment_filter.as_ref() {
+            if location != target {
+                continue;
+            }
+            matched_selection = true;
+        }
         let segment_info = segment_reader
             .read(&LoadParams {
                 location: location.to_string(),
@@ -142,9 +170,23 @@ pub async fn do_refresh_virtual_column(
         };
 
         for (block_idx, block_meta) in segment_info.block_metas()?.into_iter().enumerate() {
-            if block_meta.virtual_block_meta.is_some() {
+            let mut matched_block_filter = false;
+            if let Some(target) = block_filter.as_ref() {
+                if &block_meta.location.0 != target {
+                    continue;
+                }
+                matched_selection = true;
+                matched_block_filter = true;
+            }
+
+            if !overwrite && block_meta.virtual_block_meta.is_some() {
+                if matched_block_filter {
+                    reached_limit = true;
+                    break;
+                }
                 continue;
             }
+
             virtual_column_metas.push_back(VirtualColumnMeta {
                 index: BlockMetaIndex {
                     segment_idx,
@@ -156,12 +198,39 @@ pub async fn do_refresh_virtual_column(
                     .and_then(|v| v.block_hlls.get(block_idx))
                     .cloned(),
             });
+
+            if limit > 0 && virtual_column_metas.len() >= limit {
+                reached_limit = true;
+                break;
+            }
+            if matched_block_filter {
+                reached_limit = true;
+                break;
+            }
         }
+    }
+
+    if let (Some(sel), false) = (selection.as_ref(), matched_selection) {
+        let message = match sel {
+            RefreshSelection::SegmentLocation(loc) => {
+                format!("segment_location '{loc}' not found")
+            }
+            RefreshSelection::BlockLocation(loc) => {
+                format!("block_location '{loc}' not found")
+            }
+        };
+        return Err(ErrorCode::VirtualColumnError(message));
     }
 
     if virtual_column_metas.is_empty() {
         return Ok(());
     }
+
+    let block_nums = virtual_column_metas.len();
+    info!(
+        "Prepared {} blocks for virtual column refresh (limit={}, overwrite={})",
+        block_nums, limit, overwrite
+    );
 
     // Read source blocks.
     let settings = ReadSettings::from_ctx(&ctx)?;
@@ -179,9 +248,12 @@ pub async fn do_refresh_virtual_column(
     )?;
 
     // Extract inner fields as virtual columns and write virtual block data.
-    let block_nums = virtual_column_metas.len();
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
     let max_threads = std::cmp::min(block_nums, max_threads);
+    info!(
+        "Virtual column pipeline will process {} blocks with {} async workers",
+        block_nums, max_threads
+    );
     pipeline.try_resize(max_threads)?;
     pipeline.add_async_transformer(|| {
         VirtualColumnTransform::new(
@@ -227,12 +299,16 @@ pub async fn do_refresh_virtual_column(
     Ok(())
 }
 
+const VIRTUAL_COLUMN_PROGRESS_LOG_STEP: usize = 10;
+
 /// `VirtualColumnSource` is used to read data blocks that need generate virtual columns.
 pub struct VirtualColumnSource {
     settings: ReadSettings,
     storage_format: FuseStorageFormat,
     block_reader: Arc<BlockReader>,
     virtual_column_metas: VecDeque<VirtualColumnMeta>,
+    total_blocks: usize,
+    processed_blocks: usize,
     is_finished: bool,
 }
 
@@ -243,11 +319,14 @@ impl VirtualColumnSource {
         block_reader: Arc<BlockReader>,
         virtual_column_metas: VecDeque<VirtualColumnMeta>,
     ) -> Self {
+        let total_blocks = virtual_column_metas.len();
         Self {
             settings,
             storage_format,
             block_reader,
             virtual_column_metas,
+            total_blocks,
+            processed_blocks: 0,
             is_finished: false,
         }
     }
@@ -265,6 +344,21 @@ impl AsyncSource for VirtualColumnSource {
 
         match self.virtual_column_metas.pop_front() {
             Some(meta) => {
+                self.processed_blocks += 1;
+                if self.processed_blocks == 1
+                    || self.processed_blocks == self.total_blocks
+                    || self.processed_blocks % VIRTUAL_COLUMN_PROGRESS_LOG_STEP == 0
+                {
+                    info!(
+                        "Virtual column source progress: {}/{}",
+                        self.processed_blocks, self.total_blocks
+                    );
+                } else {
+                    debug!(
+                        "Virtual column source progress: {}/{}",
+                        self.processed_blocks, self.total_blocks
+                    );
+                }
                 let block = self
                     .block_reader
                     .read_by_meta(&self.settings, &meta.block_meta, &self.storage_format)
@@ -273,6 +367,12 @@ impl AsyncSource for VirtualColumnSource {
                 Ok(Some(block))
             }
             None => {
+                if !self.is_finished {
+                    info!(
+                        "Virtual column source finished reading {} blocks",
+                        self.processed_blocks
+                    );
+                }
                 self.is_finished = true;
                 Ok(None)
             }
@@ -346,6 +446,15 @@ impl AsyncTransform for VirtualColumnTransform {
                     start.elapsed().as_millis() as u64
                 );
             }
+            info!(
+                "Virtual column written for segment {} block {} at {} ({} bytes)",
+                index.segment_idx, index.block_idx, location, virtual_column_size
+            );
+        } else {
+            info!(
+                "No virtual column data produced for segment {} block {}",
+                index.segment_idx, index.block_idx
+            );
         }
 
         let extended_block_meta = ExtendedBlockMeta {

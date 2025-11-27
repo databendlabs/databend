@@ -25,7 +25,7 @@ select * from '@s10/a b/'
 2
 
 # for compatibility with old versions only, should fail in future
-onlyif http
+skipif mysql
 query ??
 select * from @s10/a\ b/
 ----

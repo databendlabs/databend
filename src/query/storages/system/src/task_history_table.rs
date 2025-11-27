@@ -163,7 +163,7 @@ impl AsyncSystemTable for TaskHistoryTable {
                     if col_name == "scheduled_time" {
                         if let Scalar::Timestamp(s) = scalar {
                             scheduled_time_end =
-                                Some(s.to_timestamp(TimeZone::UTC).timestamp().to_string());
+                                Some(s.to_timestamp(&TimeZone::UTC).timestamp().to_string());
                         }
                     }
                 });
@@ -171,7 +171,7 @@ impl AsyncSystemTable for TaskHistoryTable {
                     if col_name == "scheduled_time" {
                         if let Scalar::Timestamp(s) = scalar {
                             scheduled_time_start =
-                                Some(s.to_timestamp(TimeZone::UTC).timestamp().to_string());
+                                Some(s.to_timestamp(&TimeZone::UTC).timestamp().to_string());
                         }
                     }
                 });

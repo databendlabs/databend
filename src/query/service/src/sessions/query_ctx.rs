@@ -58,6 +58,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
@@ -142,7 +143,6 @@ use log::debug;
 use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use xorf::BinaryFuse16;
 
 use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
@@ -228,8 +228,26 @@ impl QueryContext {
                     .shared
                     .catalog_manager
                     .get_default_catalog(self.session_state()?)?;
-                let table_function =
-                    default_catalog.get_table_function(&table_info.name, table_args)?;
+                let udtf_result = databend_common_base::runtime::block_on(async {
+                    if let Some(udtf) = UserApiProvider::instance()
+                        .get_udf(&self.get_tenant(), &table_info.name)
+                        .await?
+                        .and_then(|func| func.as_udtf_server())
+                    {
+                        return default_catalog
+                            .transform_udtf_as_table_function(
+                                self,
+                                &table_args,
+                                udtf,
+                                &table_info.name,
+                            )
+                            .map(Some);
+                    }
+                    Ok(None)
+                });
+                let table_function = udtf_result.transpose().unwrap_or_else(|| {
+                    default_catalog.get_table_function(&table_info.name, table_args)
+                })?;
                 Ok(table_function.as_table())
             }
             (Some(_), false) => Err(ErrorCode::InvalidArgument(
@@ -1745,7 +1763,7 @@ impl TableContext for QueryContext {
             .unwrap_or_default()
     }
 
-    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
+    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, RuntimeBloomFilter)> {
         self.get_runtime_filters(id)
             .into_iter()
             .filter_map(|entry| entry.bloom.map(|bloom| (bloom.column_name, bloom.filter)))

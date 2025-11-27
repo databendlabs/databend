@@ -132,6 +132,7 @@ impl DistinctToGroupBy {
                             alias: Some(TableAlias {
                                 name: Identifier::from_name(None, sub_query_name),
                                 columns: vec![Identifier::from_name(None, "_1")],
+                                keep_database_name: false,
                             }),
                             pivot: None,
                             unpivot: None,

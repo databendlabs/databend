@@ -101,6 +101,8 @@ impl Binder {
             s_expr = self.bind_materialized_cte(with, s_expr, bind_context.cte_context.clone())?;
         }
 
+        bind_context.reset_result_column_positions();
+
         Ok((s_expr, bind_context))
     }
 

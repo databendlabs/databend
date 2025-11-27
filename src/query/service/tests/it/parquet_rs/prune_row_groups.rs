@@ -19,6 +19,7 @@ use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
 use databend_common_storages_parquet::ParquetPruner;
+use parquet::file::metadata::ParquetMetaDataReader;
 
 use super::data::make_test_file_rg;
 use super::data::Scenario;
@@ -46,8 +47,9 @@ async fn test_impl_batch(args: &[(Scenario, &str, Vec<usize>)], prune: bool) {
         let plan = get_data_source_plan(fixture.new_query_ctx().await.unwrap(), &sql)
             .await
             .unwrap();
-        #[allow(deprecated)]
-        let parquet_meta = parquet::file::footer::parse_metadata(file.as_file()).unwrap();
+        let parquet_meta = ParquetMetaDataReader::new()
+            .parse_and_finish(file.as_file())
+            .unwrap();
         let schema = TableSchema::try_from(arrow_schema.as_ref()).unwrap();
         let leaf_fields = Arc::new(schema.leaf_fields());
 

@@ -54,6 +54,7 @@ fn test_aggr_functions() {
     let file = &mut mint.new_goldenfile("agg.txt").unwrap();
 
     test_count(file, eval_aggr);
+    test_count_distinct(file, eval_aggr);
     test_sum(file, eval_aggr);
     test_avg(file, eval_aggr);
     test_uniq(file, eval_aggr);
@@ -103,6 +104,7 @@ fn test_aggr_functions_group_by() {
     let file = &mut mint.new_goldenfile("agg_group_by.txt").unwrap();
 
     test_count(file, simulate_two_groups_group_by);
+    test_count_distinct(file, simulate_two_groups_group_by);
     test_sum(file, simulate_two_groups_group_by);
     test_avg(file, simulate_two_groups_group_by);
     test_uniq(file, simulate_two_groups_group_by);
@@ -386,6 +388,31 @@ fn test_count(file: &mut impl Write, simulator: impl AggregationSimulator) {
         simulator,
         vec![],
     );
+}
+
+fn test_count_distinct(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    let columns = &get_example();
+    run_agg_ast(file, "count_distinct(null)", columns, simulator, vec![]);
+    run_agg_ast(
+        file,
+        "count_distinct(null,null)",
+        columns,
+        simulator,
+        vec![],
+    );
+    run_agg_ast(file, "count_distinct(1)", columns, simulator, vec![]);
+    run_agg_ast(file, "count_distinct(a)", columns, simulator, vec![]);
+    run_agg_ast(file, "count_distinct(x_null)", columns, simulator, vec![]);
+    run_agg_ast(file, "count_distinct(x_null,a)", columns, simulator, vec![]);
+    run_agg_ast(file, "count_distinct(all_null)", columns, simulator, vec![]);
+    run_agg_ast(
+        file,
+        "count_distinct(all_null,s)",
+        columns,
+        simulator,
+        vec![],
+    );
+    run_agg_ast(file, "count_distinct(s_null,s)", columns, simulator, vec![]);
 }
 
 fn test_sum(file: &mut impl Write, simulator: impl AggregationSimulator) {

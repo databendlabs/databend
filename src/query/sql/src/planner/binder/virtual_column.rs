@@ -12,15 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::RefreshVirtualColumnStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowVirtualColumnsStmt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::Plan;
+use crate::plans::RefreshSelection;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RewriteKind;
 use crate::BindContext;
@@ -36,16 +43,28 @@ impl Binder {
             catalog,
             database,
             table,
+            selection,
+            limit,
+            overwrite,
         } = stmt;
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
+
+        let parsed_selection = if let Some(selection) = selection {
+            Some(self.parse_refresh_virtual_column_selection(selection)?)
+        } else {
+            None
+        };
 
         Ok(Plan::RefreshVirtualColumn(Box::new(
             RefreshVirtualColumnPlan {
                 catalog,
                 database,
                 table,
+                limit: *limit,
+                overwrite: *overwrite,
+                selection: parsed_selection,
             },
         )))
     }
@@ -113,5 +132,68 @@ impl Binder {
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowVirtualColumns)
             .await
+    }
+
+    fn parse_refresh_virtual_column_selection(&self, expr: &Expr) -> Result<RefreshSelection> {
+        match expr {
+            Expr::BinaryOp {
+                op, left, right, ..
+            } if op == &BinaryOperator::Eq => {
+                if let Some(selection) =
+                    self.try_build_selection_from_operands(left.as_ref(), right.as_ref())?
+                {
+                    return Ok(selection);
+                }
+                if let Some(selection) =
+                    self.try_build_selection_from_operands(right.as_ref(), left.as_ref())?
+                {
+                    return Ok(selection);
+                }
+                Err(ErrorCode::BadArguments(
+                    "Only equality predicate between segment_location, block_location and string literal is supported",
+                ))
+            }
+            _ => Err(ErrorCode::BadArguments(
+                "Only equality predicate between segment_location, block_location and string literal is supported",
+            )),
+        }
+    }
+
+    fn try_build_selection_from_operands(
+        &self,
+        column_expr: &Expr,
+        literal_expr: &Expr,
+    ) -> Result<Option<RefreshSelection>> {
+        let column_name = match column_expr {
+            Expr::ColumnRef {
+                column:
+                    ColumnRef {
+                        database: None,
+                        table: None,
+                        column: ColumnID::Name(ident),
+                    },
+                ..
+            } => normalize_identifier(ident, &self.name_resolution_ctx).name,
+            _ => {
+                return Ok(None);
+            }
+        };
+
+        let literal_value = match literal_expr {
+            Expr::Literal {
+                value: Literal::String(value),
+                ..
+            } => value.clone(),
+            _ => {
+                return Ok(None);
+            }
+        };
+
+        let column_name_lower = column_name.to_lowercase();
+        match column_name_lower.as_str() {
+            "block_location" => Ok(Some(RefreshSelection::BlockLocation(literal_value))),
+            "segment_location" => Ok(Some(RefreshSelection::SegmentLocation(literal_value))),
+            _ => Ok(None),
+        }
     }
 }

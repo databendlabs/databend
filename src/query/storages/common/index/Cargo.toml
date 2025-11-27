@@ -9,6 +9,9 @@ edition = { workspace = true }
 [package.metadata.cargo-machete]
 ignored = ["xorfilter-rs", "match-template"]
 
+[build-dependencies]
+cc = "1.0"
+
 [dependencies]
 databend-common-ast = { workspace = true }
 databend-common-exception = { workspace = true }

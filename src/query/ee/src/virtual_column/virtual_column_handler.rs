@@ -18,6 +18,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_sql::plans::RefreshSelection;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_virtual_column::VirtualColumnHandler;
 use databend_enterprise_virtual_column::VirtualColumnHandlerWrapper;
@@ -33,8 +34,11 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         ctx: Arc<dyn TableContext>,
         fuse_table: &FuseTable,
         pipeline: &mut Pipeline,
+        limit: Option<u64>,
+        overwrite: bool,
+        selection: Option<RefreshSelection>,
     ) -> Result<()> {
-        do_refresh_virtual_column(ctx, fuse_table, pipeline).await
+        do_refresh_virtual_column(ctx, fuse_table, pipeline, limit, overwrite, selection).await
     }
 }
 

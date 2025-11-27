@@ -50,7 +50,7 @@ impl Binder {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         // rewrite show user functions to select * FROM default.system.user_functions ...
         let query = format!(
-            "SELECT name, is_aggregate, description, arguments, language, created_on FROM default.system.user_functions {} ORDER BY name {}",
+            "SELECT name, is_aggregate, description, arguments, language, created_on, update_on FROM default.system.user_functions {} ORDER BY name {}",
             show_limit, limit_str,
         );
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)

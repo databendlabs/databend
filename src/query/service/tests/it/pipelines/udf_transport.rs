@@ -246,7 +246,7 @@ async fn malformed_data_returns_parse_hint() -> Result<()> {
 async fn schema_mismatch_returns_schema_hint() -> Result<()> {
     let message = run_mock_exchange(MockMode::SchemaMismatch).await?;
     assert!(
-        message.contains("returned an unexpected schema"),
+        message.contains("return incorrect type"),
         "unexpected schema mismatch message: {message}"
     );
     Ok(())
@@ -279,7 +279,13 @@ async fn run_mock_exchange(mode: MockMode) -> Result<String> {
     let return_type = DataType::Null;
     let result = timeout(
         std::time::Duration::from_secs(5),
-        client.do_exchange("mock_udf", "mock_handler", num_rows, args, &return_type),
+        client.do_exchange(
+            "mock_udf",
+            "mock_handler",
+            Some(num_rows),
+            args,
+            &return_type,
+        ),
     )
     .await
     .expect("do_exchange future timed out");

@@ -83,8 +83,13 @@ impl RuntimeFiltersDesc {
         }
 
         let runtime_filter_descs = self.filters_desc.iter().map(|r| (r.id, r)).collect();
-        let runtime_filter_infos =
-            build_runtime_filter_infos(packet, runtime_filter_descs, self.selectivity_threshold)?;
+        let runtime_filter_infos = build_runtime_filter_infos(
+            packet,
+            runtime_filter_descs,
+            self.selectivity_threshold,
+            self.ctx.get_settings().get_max_threads()? as usize,
+        )
+        .await?;
 
         self.ctx.set_runtime_filter(runtime_filter_infos);
 

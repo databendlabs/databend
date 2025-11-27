@@ -74,8 +74,7 @@ impl TransformPartialAggregate {
         let arena = Arc::new(Bump::new());
         // when enable_experiment_aggregate, we will repartition again in the final stage
         // it will be too small if we use max radix bits here
-        let hash_table = if params.has_distinct_combinator() && !params.enable_experiment_aggregate
-        {
+        let hash_table = if params.has_distinct_combinator() {
             let max_radix_bits = config.max_radix_bits;
             HashTable::AggregateHashTable(AggregateHashTable::new(
                 params.group_data_types.clone(),

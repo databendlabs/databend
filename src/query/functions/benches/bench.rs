@@ -68,3 +68,197 @@ mod dummy {
         });
     }
 }
+
+#[divan::bench_group(max_time = 0.5)]
+mod datetime_fast_path {
+    use std::sync::LazyLock;
+
+    use databend_common_expression::type_check;
+    use databend_common_expression::types::string::StringColumn;
+    use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_common_expression::types::timestamp::microseconds_to_days;
+    use databend_common_expression::types::timestamp::timestamp_to_string;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Column;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Evaluator;
+    use databend_common_expression::Expr;
+    use databend_common_expression::FunctionContext;
+    use databend_common_functions::test_utils as parser;
+    use databend_common_functions::BUILTIN_FUNCTIONS;
+    use jiff::civil::date;
+    use jiff::tz::TimeZone;
+    use rand::rngs::StdRng;
+    use rand::Rng;
+    use rand::SeedableRng;
+
+    const ROWS: usize = 100_000;
+    const SPECIAL_EVERY: usize = 20_000;
+
+    static SAMPLES: LazyLock<DateTimeSamples> =
+        LazyLock::new(|| DateTimeSamples::new(ROWS, SPECIAL_EVERY));
+
+    struct DateTimeSamples {
+        timestamps: databend_common_column::buffer::Buffer<i64>,
+        dates: databend_common_column::buffer::Buffer<i32>,
+        timestamp_strings: StringColumn,
+    }
+
+    impl DateTimeSamples {
+        fn new(rows: usize, interval: usize) -> Self {
+            let timestamps = generate_timestamp_values(rows, interval);
+            let dates: Vec<i32> = timestamps
+                .iter()
+                .map(|&micros| microseconds_to_days(micros))
+                .collect();
+            let tz_sh = TimeZone::get("Asia/Shanghai").unwrap();
+            let mut string_builder = StringColumnBuilder::with_capacity(rows);
+            for &micros in timestamps.iter() {
+                let formatted = timestamp_to_string(micros, &tz_sh).to_string();
+                string_builder.put_and_commit(formatted);
+            }
+            Self {
+                timestamps: timestamps.into(),
+                dates: dates.into(),
+                timestamp_strings: string_builder.build(),
+            }
+        }
+
+        fn rows(&self) -> usize {
+            self.timestamps.len()
+        }
+
+        fn timestamp_entry(&self) -> BlockEntry {
+            BlockEntry::Column(Column::Timestamp(self.timestamps.clone()))
+        }
+
+        fn date_entry(&self) -> BlockEntry {
+            BlockEntry::Column(Column::Date(self.dates.clone()))
+        }
+
+        fn string_entry(&self) -> BlockEntry {
+            BlockEntry::Column(Column::String(self.timestamp_strings.clone()))
+        }
+    }
+
+    #[divan::bench]
+    fn timestamp_extract_components(bencher: divan::Bencher) {
+        let expr = build_expr(
+            "tuple(to_year(ts), to_month(ts), to_day_of_year(ts), to_hour(ts))",
+            &[("ts", DataType::Timestamp)],
+        );
+        let data = &*SAMPLES;
+        let block = DataBlock::new(vec![data.timestamp_entry()], data.rows());
+        let func_ctx = FunctionContext {
+            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            ..Default::default()
+        };
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        bencher.bench(|| {
+            let value = evaluator.run(&expr).unwrap();
+            divan::black_box(value);
+        });
+    }
+
+    #[divan::bench]
+    fn timestamp_add_months(bencher: divan::Bencher) {
+        let expr = build_expr("add_months(ts, 1)", &[("ts", DataType::Timestamp)]);
+        let data = &*SAMPLES;
+        let block = DataBlock::new(vec![data.timestamp_entry()], data.rows());
+        let func_ctx = FunctionContext {
+            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            ..Default::default()
+        };
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        bencher.bench(|| {
+            let value = evaluator.run(&expr).unwrap();
+            divan::black_box(value);
+        });
+    }
+
+    #[divan::bench]
+    fn date_add_days(bencher: divan::Bencher) {
+        let expr = build_expr("add_days(d, 7)", &[("d", DataType::Date)]);
+        let data = &*SAMPLES;
+        let block = DataBlock::new(vec![data.date_entry()], data.rows());
+        let func_ctx = FunctionContext {
+            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            ..Default::default()
+        };
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        bencher.bench(|| {
+            let value = evaluator.run(&expr).unwrap();
+            divan::black_box(value);
+        });
+    }
+
+    #[divan::bench]
+    fn string_parse_to_date(bencher: divan::Bencher) {
+        let expr = build_expr("to_date(to_timestamp(s))", &[("s", DataType::String)]);
+        let data = &*SAMPLES;
+        let block = DataBlock::new(vec![data.string_entry()], data.rows());
+        let func_ctx = FunctionContext {
+            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            ..Default::default()
+        };
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        bencher.bench(|| {
+            let value = evaluator.run(&expr).unwrap();
+            divan::black_box(value);
+        });
+    }
+
+    fn build_expr(sql: &str, columns: &[(&str, DataType)]) -> Expr {
+        let raw_expr = parser::parse_raw_expr(sql, columns);
+        type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap()
+    }
+
+    fn generate_timestamp_values(rows: usize, interval: usize) -> Vec<i64> {
+        let tz_sh = TimeZone::get("Asia/Shanghai").unwrap();
+        let tz_alg = TimeZone::get("Africa/Algiers").unwrap();
+        let specials = [
+            local_micros(&tz_sh, 1941, 3, 14, 23, 55, 0),
+            local_micros(&tz_sh, 1941, 3, 15, 1, 5, 0),
+            local_micros(&tz_sh, 1941, 11, 1, 0, 30, 0),
+            local_micros(&tz_sh, 1941, 11, 1, 1, 30, 0),
+            local_micros(&tz_alg, 1939, 11, 18, 23, 30, 0),
+            local_micros(&tz_alg, 1939, 11, 19, 0, 0, 30),
+        ];
+
+        let mut rng = StdRng::seed_from_u64(0x5453_5450);
+        let mut values = Vec::with_capacity(rows);
+        for i in 0..rows {
+            if (i % interval) < specials.len() {
+                values.push(specials[i % specials.len()]);
+            } else {
+                let secs = rng.gen_range(-2_208_988_800_i64..4_102_444_800_i64);
+                let micros = secs * 1_000_000 + rng.gen_range(0..1_000_000) as i64;
+                values.push(micros);
+            }
+        }
+        values
+    }
+
+    fn local_micros(
+        tz: &TimeZone,
+        year: i32,
+        month: u8,
+        day: u8,
+        hour: u8,
+        minute: u8,
+        second: u8,
+    ) -> i64 {
+        let dt =
+            date(year as i16, month as i8, day as i8).at(hour as i8, minute as i8, second as i8, 0);
+        tz.to_ambiguous_zoned(dt)
+            .later()
+            .unwrap()
+            .timestamp()
+            .as_microsecond()
+    }
+}

@@ -359,6 +359,88 @@ impl FromToProto for mt::UDTF {
     }
 }
 
+impl FromToProto for mt::UDTFServer {
+    type PB = pb::UdtfServer;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let mut arg_types = Vec::with_capacity(p.arg_types.len());
+        for arg_type in p.arg_types {
+            let arg_type = DataType::from(&TableDataType::from_pb(arg_type)?);
+            arg_types.push(arg_type);
+        }
+        let mut return_types = Vec::new();
+        for return_ty in p.return_types {
+            let ty_pb = return_ty.ty.ok_or_else(|| {
+                Incompatible::new("UDTF.arg_types.ty can not be None".to_string())
+            })?;
+            let ty = TableDataType::from_pb(ty_pb)?;
+
+            return_types.push((return_ty.name, (&ty).into()));
+        }
+
+        Ok(mt::UDTFServer {
+            address: p.address,
+            arg_types,
+            return_types,
+            handler: p.handler,
+            headers: p.headers,
+            language: p.language,
+            immutable: p.immutable,
+            arg_names: p.arg_names,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let mut arg_types = Vec::with_capacity(self.arg_types.len());
+        for arg_type in self.arg_types.iter() {
+            let arg_type = infer_schema_type(arg_type)
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
+                })?
+                .to_pb()?;
+            arg_types.push(arg_type);
+        }
+        let mut return_types = Vec::with_capacity(self.return_types.len());
+        for (return_name, return_type) in self.return_types.iter() {
+            let return_type = infer_schema_type(return_type)
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
+                })?
+                .to_pb()?;
+            return_types.push(UdtfArg {
+                name: return_name.clone(),
+                ty: Some(return_type),
+            });
+        }
+
+        Ok(pb::UdtfServer {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            address: self.address.clone(),
+            handler: self.handler.clone(),
+            headers: self.headers.clone(),
+            language: self.language.clone(),
+            arg_types,
+            return_types,
+            immutable: self.immutable,
+            arg_names: self.arg_names.clone(),
+        })
+    }
+}
+
 impl FromToProto for mt::ScalarUDF {
     type PB = pb::ScalarUdf;
 
@@ -454,6 +536,9 @@ impl FromToProto for mt::UserDefinedFunction {
             Some(pb::user_defined_function::Definition::ScalarUdf(scalar_udf)) => {
                 mt::UDFDefinition::ScalarUDF(mt::ScalarUDF::from_pb(scalar_udf)?)
             }
+            Some(pb::user_defined_function::Definition::UdtfServer(udtf_server)) => {
+                mt::UDFDefinition::UDTFServer(mt::UDTFServer::from_pb(udtf_server)?)
+            }
             None => {
                 return Err(Incompatible::new(
                     "UserDefinedFunction.definition cannot be None".to_string(),
@@ -461,14 +546,21 @@ impl FromToProto for mt::UserDefinedFunction {
             }
         };
 
+        let created_on = match p.created_on {
+            Some(c) => DateTime::<Utc>::from_pb(c)?,
+            None => DateTime::<Utc>::default(),
+        };
+        let update_on = match p.update_on {
+            Some(u) => DateTime::<Utc>::from_pb(u)?,
+            None => created_on,
+        };
+
         Ok(mt::UserDefinedFunction {
             name: p.name,
             description: p.description,
             definition: udf_def,
-            created_on: match p.created_on {
-                Some(c) => DateTime::<Utc>::from_pb(c)?,
-                None => DateTime::<Utc>::default(),
-            },
+            created_on,
+            update_on,
         })
     }
 
@@ -492,6 +584,9 @@ impl FromToProto for mt::UserDefinedFunction {
             mt::UDFDefinition::ScalarUDF(scalar_udf) => {
                 pb::user_defined_function::Definition::ScalarUdf(scalar_udf.to_pb()?)
             }
+            mt::UDFDefinition::UDTFServer(udtf_server) => {
+                pb::user_defined_function::Definition::UdtfServer(udtf_server.to_pb()?)
+            }
         };
 
         Ok(pb::UserDefinedFunction {
@@ -501,6 +596,7 @@ impl FromToProto for mt::UserDefinedFunction {
             description: self.description.clone(),
             definition: Some(udf_def),
             created_on: Some(self.created_on.to_pb()?),
+            update_on: Some(self.update_on.to_pb()?),
         })
     }
 }

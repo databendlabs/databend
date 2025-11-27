@@ -26,17 +26,27 @@ use rand::distributions::Alphanumeric;
 use rand::Rng;
 use regex::Regex;
 use sqllogictest::DBOutput;
-use sqllogictest::DefaultColumnType;
 pub use ttc_client::TTCClient;
 
 use crate::error::Result;
+use crate::util::ColumnType;
+
+#[derive(Debug, Clone, Copy)]
+pub enum BodyFormat {
+    Json,
+    Arrow,
+}
 
 #[derive(Debug, Clone)]
 pub enum ClientType {
     MySQL,
     Http,
     // Tcp Testing Container
-    Ttc(String, u16),
+    Ttc {
+        image: String,
+        port: u16,
+        body_format: BodyFormat,
+    },
     Hybird,
 }
 
@@ -54,7 +64,7 @@ pub enum Client {
 }
 
 impl Client {
-    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
+    pub async fn query(&mut self, sql: &str) -> Result<DBOutput<ColumnType>> {
         let sql = replace_rand_values(sql);
         match self {
             Client::MySQL(client) => client.query(&sql).await,

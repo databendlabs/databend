@@ -1104,6 +1104,8 @@ impl Display for TableReference {
 pub struct TableAlias {
     pub name: Identifier,
     pub columns: Vec<Identifier>,
+    /// When true, keep the original database name on bound columns even after aliasing.
+    pub keep_database_name: bool,
 }
 
 impl Display for TableAlias {

@@ -78,7 +78,14 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
         build_res.main_pipeline.add_lock_guard(lock_guard);
         let handler = get_virtual_column_handler();
         let _ = handler
-            .do_refresh_virtual_column(self.ctx.clone(), fuse_table, &mut build_res.main_pipeline)
+            .do_refresh_virtual_column(
+                self.ctx.clone(),
+                fuse_table,
+                &mut build_res.main_pipeline,
+                self.plan.limit,
+                self.plan.overwrite,
+                self.plan.selection.clone(),
+            )
             .await?;
 
         Ok(build_res)

@@ -24,6 +24,7 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_hashtable::BloomHash;
 use databend_common_hashtable::FastHash;
 
 pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSchemaRef {
@@ -48,7 +49,7 @@ pub(crate) fn probe_schema_wrap_nullable(probe_schema: &DataSchemaRef) -> DataSc
     DataSchemaRefExt::create(nullable_field)
 }
 
-// Get row hash by HashMethod
+// Get row hash by HashMethod (uses FastHash, i.e. the hashtable hash)
 pub fn hash_by_method<T>(
     method: &HashMethodKind,
     columns: ProjectedBlock,
@@ -127,12 +128,100 @@ where
     Ok(())
 }
 
+// Get row hash for Bloom filter by HashMethod. This always uses BloomHash,
+// which is independent of SSE4.2 and provides a well-distributed 64-bit hash.
+pub fn hash_by_method_for_bloom<T>(
+    method: &HashMethodKind,
+    columns: ProjectedBlock,
+    num_rows: usize,
+    hashes: &mut T,
+) -> Result<()>
+where
+    T: Extend<u64>,
+{
+    match method {
+        HashMethodKind::Serializer(method) => {
+            let keys_state = method.build_keys_state(columns, num_rows)?;
+            hashes.extend(
+                method
+                    .build_keys_iter(&keys_state)?
+                    .map(|key| key.bloom_hash()),
+            );
+        }
+        HashMethodKind::SingleBinary(method) => {
+            let keys_state = method.build_keys_state(columns, num_rows)?;
+            hashes.extend(
+                method
+                    .build_keys_iter(&keys_state)?
+                    .map(|key| key.bloom_hash()),
+            );
+        }
+        HashMethodKind::KeysU8(method) => {
+            let keys_state = method.build_keys_state(columns, num_rows)?;
+            hashes.extend(
+                method
+                    .build_keys_iter(&keys_state)?
+                    .map(|key| key.bloom_hash()),
+            );
+        }
+        HashMethodKind::KeysU16(method) => {
+            let keys_state = method.build_keys_state(columns, num_rows)?;
+            hashes.extend(
+                method
+                    .build_keys_iter(&keys_state)?
+                    .map(|key| key.bloom_hash()),
+            );
+        }
+        HashMethodKind::KeysU32(method) => {
+            let keys_state = method.build_keys_state(columns, num_rows)?;
+            hashes.extend(
+                method
+                    .build_keys_iter(&keys_state)?
+                    .map(|key| key.bloom_hash()),
+            );
+        }
+        HashMethodKind::KeysU64(method) => {
+            let keys_state = method.build_keys_state(columns, num_rows)?;
+            hashes.extend(
+                method
+                    .build_keys_iter(&keys_state)?
+                    .map(|key| key.bloom_hash()),
+            );
+        }
+        HashMethodKind::KeysU128(method) => {
+            let keys_state = method.build_keys_state(columns, num_rows)?;
+            hashes.extend(
+                method
+                    .build_keys_iter(&keys_state)?
+                    .map(|key| key.bloom_hash()),
+            );
+        }
+        HashMethodKind::KeysU256(method) => {
+            let keys_state = method.build_keys_state(columns, num_rows)?;
+            hashes.extend(
+                method
+                    .build_keys_iter(&keys_state)?
+                    .map(|key| key.bloom_hash()),
+            );
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn min_max_filter(
     min: Scalar,
     max: Scalar,
     probe_key: &Expr<String>,
 ) -> Result<Expr<String>> {
-    let probe_key = probe_key.as_column_ref().unwrap();
+    let probe_key = match probe_key {
+        Expr::ColumnRef(col) => col,
+        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
+        Expr::Cast(cast) => match cast.expr.as_ref() {
+            Expr::ColumnRef(col) => col,
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
     let raw_probe_key = RawExpr::ColumnRef {
         span: probe_key.span,
         id: probe_key.id.to_string(),

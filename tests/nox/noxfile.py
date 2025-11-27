@@ -65,31 +65,14 @@ def test_suites(session):
 
 
 @nox.session
-@nox.parametrize("driver_version", ["100.0.0", "0.8.3"])
+@nox.parametrize("driver_version", ["v100.0.0", "v0.8.3"])
 def go_client(session, driver_version):
     env = {"DATABEND_GO_VERSION": driver_version}
     test_dir = f"cache/databend-go/tests"
     with session.cd(test_dir):
-        if driver_version == "100.0.0":
-            if os.path.exists("go.mod"):
-                os.remove("go.mod")
+        if os.path.exists("go.mod"):
+            os.remove("go.mod")
+        if driver_version == "v100.0.0":
+            session.run("make", "-o", "up", "integration", external=True, env=env)
         else:
-            session.run("go", "mod", "init", f"it", external=True)
-            session.run(
-                "go",
-                "get",
-                f"github.com/datafuselabs/databend-go@v{driver_version}",
-                external=True,
-            )
-            session.run("go", "get", "-t", "./", external=True)
-
-        session.run(
-            "go",
-            "test",
-            "-v",
-            "-timeout",
-            "5m",
-            "./",
-            external=True,
-            env=env,
-        )
+            session.run("make", "-o", "up", "compat", external=True, env=env)

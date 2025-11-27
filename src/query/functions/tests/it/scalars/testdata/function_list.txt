@@ -2918,10 +2918,12 @@ Functions overloads:
 233 minus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 234 minus(Interval, Interval) :: Interval
 235 minus(Interval NULL, Interval NULL) :: Interval NULL
-236 minus(Timestamp, Interval) :: Timestamp
-237 minus(Timestamp NULL, Interval NULL) :: Timestamp NULL
-238 minus(TimestampTz, Interval) :: TimestampTz
-239 minus(TimestampTz NULL, Interval NULL) :: TimestampTz NULL
+236 minus(Date, Interval) :: Date
+237 minus(Date NULL, Interval NULL) :: Date NULL
+238 minus(Timestamp, Interval) :: Timestamp
+239 minus(Timestamp NULL, Interval NULL) :: Timestamp NULL
+240 minus(TimestampTz, Interval) :: TimestampTz
+241 minus(TimestampTz NULL, Interval NULL) :: TimestampTz NULL
 0 modulo(UInt8, UInt8) :: UInt8
 1 modulo(UInt8 NULL, UInt8 NULL) :: UInt8 NULL
 2 modulo(UInt8, UInt16) :: UInt16
@@ -3641,14 +3643,18 @@ Functions overloads:
 204 plus(Timestamp NULL, Int64 NULL) :: Timestamp NULL
 205 plus(Interval, Interval) :: Interval
 206 plus(Interval NULL, Interval NULL) :: Interval NULL
-207 plus(Timestamp, Interval) :: Timestamp
-208 plus(Timestamp NULL, Interval NULL) :: Timestamp NULL
-209 plus(TimestampTz, Interval) :: TimestampTz
-210 plus(TimestampTz NULL, Interval NULL) :: TimestampTz NULL
-211 plus(Interval, Timestamp) :: Timestamp
-212 plus(Interval NULL, Timestamp NULL) :: Timestamp NULL
-213 plus(Interval, TimestampTz) :: TimestampTz
-214 plus(Interval NULL, TimestampTz NULL) :: TimestampTz NULL
+207 plus(Date, Interval) :: Date
+208 plus(Date NULL, Interval NULL) :: Date NULL
+209 plus(Interval, Date) :: Date
+210 plus(Interval NULL, Date NULL) :: Date NULL
+211 plus(Timestamp, Interval) :: Timestamp
+212 plus(Timestamp NULL, Interval NULL) :: Timestamp NULL
+213 plus(TimestampTz, Interval) :: TimestampTz
+214 plus(TimestampTz NULL, Interval NULL) :: TimestampTz NULL
+215 plus(Interval, Timestamp) :: Timestamp
+216 plus(Interval NULL, Timestamp NULL) :: Timestamp NULL
+217 plus(Interval, TimestampTz) :: TimestampTz
+218 plus(Interval NULL, TimestampTz NULL) :: TimestampTz NULL
 0 point_in_ellipses FACTORY
 0 point_in_polygon FACTORY
 1 point_in_polygon FACTORY

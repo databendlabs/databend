@@ -52,7 +52,11 @@ pub trait DatamaskHandler: Sync + Send {
         MetaError,
     >;
 
-    async fn drop_data_mask(&self, meta_api: Arc<MetaStore>, req: DropDatamaskReq) -> Result<()>;
+    async fn drop_data_mask(
+        &self,
+        meta_api: Arc<MetaStore>,
+        req: DropDatamaskReq,
+    ) -> Result<Option<u64>>;
 
     async fn get_data_mask(
         &self,
@@ -93,7 +97,7 @@ impl DatamaskHandlerWrapper {
         &self,
         meta_api: Arc<MetaStore>,
         req: DropDatamaskReq,
-    ) -> Result<()> {
+    ) -> Result<Option<u64>> {
         self.handler.drop_data_mask(meta_api, req).await
     }
 

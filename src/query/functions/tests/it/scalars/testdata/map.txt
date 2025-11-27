@@ -72,12 +72,12 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                            |
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| a_col  | Int8([1, 2, 3])                                                                                                                                                                                 |
-| b_col  | Int8([4, 5, 6])                                                                                                                                                                                 |
-| c_col  | Int8([7, 8, 9])                                                                                                                                                                                 |
-| d_col  | NullableColumn { column: StringColumn[a, b, c], validity: [0b_____111] }                                                                                                                        |
-| e_col  | NullableColumn { column: StringColumn[d, e, ], validity: [0b_____011] }                                                                                                                         |
-| f_col  | NullableColumn { column: StringColumn[f, , g], validity: [0b_____101] }                                                                                                                         |
+| a_col  | Column(Int8([1, 2, 3]))                                                                                                                                                                         |
+| b_col  | Column(Int8([4, 5, 6]))                                                                                                                                                                         |
+| c_col  | Column(Int8([7, 8, 9]))                                                                                                                                                                         |
+| d_col  | Column(NullableColumn { column: StringColumn[a, b, c], validity: [0b_____111] })                                                                                                                |
+| e_col  | Column(NullableColumn { column: StringColumn[d, e, ], validity: [0b_____011] })                                                                                                                 |
+| f_col  | Column(NullableColumn { column: StringColumn[f, , g], validity: [0b_____101] })                                                                                                                 |
 | Output | ArrayColumn { values: Tuple([Int8([1, 4, 7, 2, 5, 8, 3, 6, 9]), NullableColumn { column: StringColumn[a, d, f, b, e, , c, , g], validity: [0b01011111, 0b_______1] }]), offsets: [0, 3, 6, 9] } |
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
@@ -100,8 +100,8 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                   |
 +--------+------------------------------------------------------------------------------------------------------------------------+
-| a_col  | Int8([1, 2, 3])                                                                                                        |
-| b_col  | Int8([4, 5, 6])                                                                                                        |
+| a_col  | Column(Int8([1, 2, 3]))                                                                                                |
+| b_col  | Column(Int8([4, 5, 6]))                                                                                                |
 | Output | ArrayColumn { values: Tuple([StringColumn[k1, k2, k1, k2, k1, k2], Int8([1, 4, 2, 5, 3, 6])]), offsets: [0, 2, 4, 6] } |
 +--------+------------------------------------------------------------------------------------------------------------------------+
 
@@ -204,10 +204,10 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------+
 | Column | Data                                                                  |
 +--------+-----------------------------------------------------------------------+
-| k1     | Int16([1, 2])                                                         |
-| k2     | Int16([3, 4])                                                         |
-| v1     | StringColumn[v1, v2]                                                  |
-| v2     | StringColumn[v3, v4]                                                  |
+| k1     | Column(Int16([1, 2]))                                                 |
+| k2     | Column(Int16([3, 4]))                                                 |
+| v1     | Column(StringColumn[v1, v2])                                          |
+| v2     | Column(StringColumn[v3, v4])                                          |
 | Output | NullableColumn { column: StringColumn[v1, ], validity: [0b______01] } |
 +--------+-----------------------------------------------------------------------+
 
@@ -265,12 +265,12 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------------------+
 | Column | Data                                                                                   |
 +--------+----------------------------------------------------------------------------------------+
-| a_col  | StringColumn[a, b, c]                                                                  |
-| b_col  | StringColumn[d, e, f]                                                                  |
-| c_col  | StringColumn[x, y, z]                                                                  |
-| d_col  | NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] }            |
-| e_col  | NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] }              |
-| f_col  | NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] }              |
+| a_col  | Column(StringColumn[a, b, c])                                                          |
+| b_col  | Column(StringColumn[d, e, f])                                                          |
+| c_col  | Column(StringColumn[x, y, z])                                                          |
+| d_col  | Column(NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] })    |
+| e_col  | Column(NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] })      |
+| f_col  | Column(NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] })      |
 | Output | ArrayColumn { values: StringColumn[a, d, x, b, e, y, c, f, z], offsets: [0, 3, 6, 9] } |
 +--------+----------------------------------------------------------------------------------------+
 
@@ -337,12 +337,12 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                       |
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| a_col  | StringColumn[a, b, c]                                                                                                                                      |
-| b_col  | StringColumn[d, e, f]                                                                                                                                      |
-| c_col  | StringColumn[x, y, z]                                                                                                                                      |
-| d_col  | NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] }                                                                                |
-| e_col  | NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] }                                                                                  |
-| f_col  | NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] }                                                                                  |
+| a_col  | Column(StringColumn[a, b, c])                                                                                                                              |
+| b_col  | Column(StringColumn[d, e, f])                                                                                                                              |
+| c_col  | Column(StringColumn[x, y, z])                                                                                                                              |
+| d_col  | Column(NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] })                                                                        |
+| e_col  | Column(NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] })                                                                          |
+| f_col  | Column(NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] })                                                                          |
 | Output | ArrayColumn { values: NullableColumn { column: StringColumn[v1, v4, v6, v2, v5, , v3, , v7], validity: [0b01011111, 0b_______1] }, offsets: [0, 3, 6, 9] } |
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
@@ -388,17 +388,17 @@ evaluation:
 | Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                   | 'v7'                   | 3       |
 +--------+-------------+-------------+-------------+---------------+------------------------+------------------------+---------+
 evaluation (internal):
-+--------+-----------------------------------------------------------------------------+
-| Column | Data                                                                        |
-+--------+-----------------------------------------------------------------------------+
-| a_col  | StringColumn[a, b, c]                                                       |
-| b_col  | StringColumn[d, e, f]                                                       |
-| c_col  | StringColumn[x, y, z]                                                       |
-| d_col  | NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] } |
-| e_col  | NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] }   |
-| f_col  | NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] }   |
-| Output | UInt64([3, 3, 3])                                                           |
-+--------+-----------------------------------------------------------------------------+
++--------+-------------------------------------------------------------------------------------+
+| Column | Data                                                                                |
++--------+-------------------------------------------------------------------------------------+
+| a_col  | Column(StringColumn[a, b, c])                                                       |
+| b_col  | Column(StringColumn[d, e, f])                                                       |
+| c_col  | Column(StringColumn[x, y, z])                                                       |
+| d_col  | Column(NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] }) |
+| e_col  | Column(NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] })   |
+| f_col  | Column(NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] })   |
+| Output | UInt64([3, 3, 3])                                                                   |
++--------+-------------------------------------------------------------------------------------+
 
 
 ast            : map_cat({}, {})
@@ -445,12 +445,12 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                           |
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| a_col  | StringColumn[a_k1, a_k2, a_k3]                                                                                                                                                                 |
-| b_col  | StringColumn[b_k1, b_k2, b_k3]                                                                                                                                                                 |
-| c_col  | StringColumn[c_k1, c_k2, c_k3]                                                                                                                                                                 |
-| d_col  | StringColumn[aaa1, aaa2, aaa3]                                                                                                                                                                 |
-| e_col  | StringColumn[bbb1, bbb2, bbb3]                                                                                                                                                                 |
-| f_col  | StringColumn[ccc1, ccc2, ccc3]                                                                                                                                                                 |
+| a_col  | Column(StringColumn[a_k1, a_k2, a_k3])                                                                                                                                                         |
+| b_col  | Column(StringColumn[b_k1, b_k2, b_k3])                                                                                                                                                         |
+| c_col  | Column(StringColumn[c_k1, c_k2, c_k3])                                                                                                                                                         |
+| d_col  | Column(StringColumn[aaa1, aaa2, aaa3])                                                                                                                                                         |
+| e_col  | Column(StringColumn[bbb1, bbb2, bbb3])                                                                                                                                                         |
+| f_col  | Column(StringColumn[ccc1, ccc2, ccc3])                                                                                                                                                         |
 | Output | ArrayColumn { values: Tuple([StringColumn[a_k1, b_k1, c_k1, a_k2, b_k2, c_k2, a_k3, b_k3, c_k3], StringColumn[aaa1, bbb1, ccc1, aaa2, bbb2, ccc2, aaa3, bbb3, ccc3]]), offsets: [0, 3, 6, 9] } |
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
@@ -481,12 +481,12 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                   |
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| a_col  | StringColumn[a_k1, a_k2, c_k3]                                                                                                                                         |
-| b_col  | StringColumn[b_k1, c_k2, b_k3]                                                                                                                                         |
-| c_col  | StringColumn[c_k1, c_k2, c_k3]                                                                                                                                         |
-| d_col  | StringColumn[aaa1, aaa2, aaa3]                                                                                                                                         |
-| e_col  | StringColumn[bbb1, bbb2, bbb3]                                                                                                                                         |
-| f_col  | StringColumn[ccc1, ccc2, ccc3]                                                                                                                                         |
+| a_col  | Column(StringColumn[a_k1, a_k2, c_k3])                                                                                                                                 |
+| b_col  | Column(StringColumn[b_k1, c_k2, b_k3])                                                                                                                                 |
+| c_col  | Column(StringColumn[c_k1, c_k2, c_k3])                                                                                                                                 |
+| d_col  | Column(StringColumn[aaa1, aaa2, aaa3])                                                                                                                                 |
+| e_col  | Column(StringColumn[bbb1, bbb2, bbb3])                                                                                                                                 |
+| f_col  | Column(StringColumn[ccc1, ccc2, ccc3])                                                                                                                                 |
 | Output | ArrayColumn { values: Tuple([StringColumn[a_k1, b_k1, c_k1, a_k2, c_k2, c_k3, b_k3], StringColumn[aaa1, bbb1, ccc1, aaa2, ccc2, ccc3, bbb3]]), offsets: [0, 3, 5, 7] } |
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
@@ -605,10 +605,10 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                               |
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
-| a_col  | StringColumn[a_k1, a_k2, a_k3]                                                                                                     |
-| b_col  | StringColumn[b_k1, b_k2, b_k3]                                                                                                     |
-| d_col  | StringColumn[aaa1, aaa2, aaa3]                                                                                                     |
-| e_col  | StringColumn[bbb1, bbb2, bbb3]                                                                                                     |
+| a_col  | Column(StringColumn[a_k1, a_k2, a_k3])                                                                                             |
+| b_col  | Column(StringColumn[b_k1, b_k2, b_k3])                                                                                             |
+| d_col  | Column(StringColumn[aaa1, aaa2, aaa3])                                                                                             |
+| e_col  | Column(StringColumn[bbb1, bbb2, bbb3])                                                                                             |
 | Output | ArrayColumn { values: Tuple([StringColumn[a_k1, b_k1, b_k2, a_k3], StringColumn[aaa1, bbb1, bbb2, aaa3]]), offsets: [0, 2, 3, 4] } |
 +--------+------------------------------------------------------------------------------------------------------------------------------------+
 
@@ -630,7 +630,7 @@ evaluation (internal):
 +----------------+---------------------------------------------------------------------------------------------------------------------------------+
 | Column         | Data                                                                                                                            |
 +----------------+---------------------------------------------------------------------------------------------------------------------------------+
-| string_key_col | StringColumn[k3, k2]                                                                                                            |
+| string_key_col | Column(StringColumn[k3, k2])                                                                                                    |
 | Output         | ArrayColumn { values: Tuple([StringColumn[k1, k2, k4, k1, k3, k4], StringColumn[v1, v2, v4, v1, v3, v4]]), offsets: [0, 3, 6] } |
 +----------------+---------------------------------------------------------------------------------------------------------------------------------+
 
@@ -687,10 +687,10 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                      |
 +--------+---------------------------------------------------------------------------------------------------------------------------+
-| a_col  | StringColumn[a_k1, a_k2, a_k3]                                                                                            |
-| b_col  | Int16([555, 557, 559])                                                                                                    |
-| d_col  | StringColumn[aaa1, aaa2, aaa3]                                                                                            |
-| e_col  | Int16([666, 664, 662])                                                                                                    |
+| a_col  | Column(StringColumn[a_k1, a_k2, a_k3])                                                                                    |
+| b_col  | Column(Int16([555, 557, 559]))                                                                                            |
+| d_col  | Column(StringColumn[aaa1, aaa2, aaa3])                                                                                    |
+| e_col  | Column(Int16([666, 664, 662]))                                                                                            |
 | Output | ArrayColumn { values: Tuple([StringColumn[a_k1, aaa1, aaa2, a_k3], Int16([555, 666, 664, 559])]), offsets: [0, 2, 3, 4] } |
 +--------+---------------------------------------------------------------------------------------------------------------------------+
 
@@ -753,17 +753,17 @@ evaluation:
 | Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                   | 'v7'                   | false   |
 +--------+-------------+-------------+-------------+---------------+------------------------+------------------------+---------+
 evaluation (internal):
-+--------+-----------------------------------------------------------------------------+
-| Column | Data                                                                        |
-+--------+-----------------------------------------------------------------------------+
-| a_col  | StringColumn[a, b, c]                                                       |
-| b_col  | StringColumn[d, e, f]                                                       |
-| c_col  | StringColumn[x, y, z]                                                       |
-| d_col  | NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] } |
-| e_col  | NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] }   |
-| f_col  | NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] }   |
-| Output | Boolean([0b_____001])                                                       |
-+--------+-----------------------------------------------------------------------------+
++--------+-------------------------------------------------------------------------------------+
+| Column | Data                                                                                |
++--------+-------------------------------------------------------------------------------------+
+| a_col  | Column(StringColumn[a, b, c])                                                       |
+| b_col  | Column(StringColumn[d, e, f])                                                       |
+| c_col  | Column(StringColumn[x, y, z])                                                       |
+| d_col  | Column(NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] }) |
+| e_col  | Column(NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] })   |
+| f_col  | Column(NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] })   |
+| Output | Boolean([0b_____001])                                                               |
++--------+-------------------------------------------------------------------------------------+
 
 
 ast            : map_contains_key(map([a_col, b_col, c_col], [d_col, e_col, f_col]), 'd')
@@ -780,17 +780,17 @@ evaluation:
 | Row 2  | 'c'         | 'f'         | 'z'         | 'v3'          | NULL                   | 'v7'                   | false   |
 +--------+-------------+-------------+-------------+---------------+------------------------+------------------------+---------+
 evaluation (internal):
-+--------+-----------------------------------------------------------------------------+
-| Column | Data                                                                        |
-+--------+-----------------------------------------------------------------------------+
-| a_col  | StringColumn[a, b, c]                                                       |
-| b_col  | StringColumn[d, e, f]                                                       |
-| c_col  | StringColumn[x, y, z]                                                       |
-| d_col  | NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] } |
-| e_col  | NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] }   |
-| f_col  | NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] }   |
-| Output | Boolean([0b_____001])                                                       |
-+--------+-----------------------------------------------------------------------------+
++--------+-------------------------------------------------------------------------------------+
+| Column | Data                                                                                |
++--------+-------------------------------------------------------------------------------------+
+| a_col  | Column(StringColumn[a, b, c])                                                       |
+| b_col  | Column(StringColumn[d, e, f])                                                       |
+| c_col  | Column(StringColumn[x, y, z])                                                       |
+| d_col  | Column(NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] }) |
+| e_col  | Column(NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] })   |
+| f_col  | Column(NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] })   |
+| Output | Boolean([0b_____001])                                                               |
++--------+-------------------------------------------------------------------------------------+
 
 
 ast            : map_pick({'a':1,'b':2,'c':3}, 'a', 'b')
@@ -864,12 +864,12 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
-| a_col  | StringColumn[a, b, c]                                                                                                                               |
-| b_col  | StringColumn[d, e, f]                                                                                                                               |
-| c_col  | StringColumn[x, y, z]                                                                                                                               |
-| d_col  | NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] }                                                                         |
-| e_col  | NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] }                                                                           |
-| f_col  | NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] }                                                                           |
+| a_col  | Column(StringColumn[a, b, c])                                                                                                                       |
+| b_col  | Column(StringColumn[d, e, f])                                                                                                                       |
+| c_col  | Column(StringColumn[x, y, z])                                                                                                                       |
+| d_col  | Column(NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] })                                                                 |
+| e_col  | Column(NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] })                                                                   |
+| f_col  | Column(NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] })                                                                   |
 | Output | ArrayColumn { values: Tuple([StringColumn[a, b], NullableColumn { column: StringColumn[v1, v2], validity: [0b______11] }]), offsets: [0, 1, 2, 2] } |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
 
@@ -927,12 +927,12 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                     |
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| a_col  | StringColumn[a, b, c]                                                                                                                                                                                                                    |
-| b_col  | StringColumn[d, e, f]                                                                                                                                                                                                                    |
-| c_col  | StringColumn[x, y, z]                                                                                                                                                                                                                    |
-| d_col  | NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] }                                                                                                                                                              |
-| e_col  | NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] }                                                                                                                                                                |
-| f_col  | NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] }                                                                                                                                                                |
+| a_col  | Column(StringColumn[a, b, c])                                                                                                                                                                                                            |
+| b_col  | Column(StringColumn[d, e, f])                                                                                                                                                                                                            |
+| c_col  | Column(StringColumn[x, y, z])                                                                                                                                                                                                            |
+| d_col  | Column(NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] })                                                                                                                                                      |
+| e_col  | Column(NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] })                                                                                                                                                        |
+| f_col  | Column(NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] })                                                                                                                                                        |
 | Output | ArrayColumn { values: Tuple([StringColumn[a, d, x, k1, b, e, y, k1, c, f, z, k1], NullableColumn { column: StringColumn[v1, v4, v6, v10, v2, v5, , v10, v3, , v7, v10], validity: [0b10111111, 0b____1101] }]), offsets: [0, 4, 8, 12] } |
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
@@ -955,12 +955,12 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                           |
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| a_col  | StringColumn[a, b, c]                                                                                                                                                                                                          |
-| b_col  | StringColumn[d, e, f]                                                                                                                                                                                                          |
-| c_col  | StringColumn[x, y, z]                                                                                                                                                                                                          |
-| d_col  | NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] }                                                                                                                                                    |
-| e_col  | NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] }                                                                                                                                                      |
-| f_col  | NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] }                                                                                                                                                      |
+| a_col  | Column(StringColumn[a, b, c])                                                                                                                                                                                                  |
+| b_col  | Column(StringColumn[d, e, f])                                                                                                                                                                                                  |
+| c_col  | Column(StringColumn[x, y, z])                                                                                                                                                                                                  |
+| d_col  | Column(NullableColumn { column: StringColumn[v1, v2, v3], validity: [0b_____111] })                                                                                                                                            |
+| e_col  | Column(NullableColumn { column: StringColumn[v4, v5, ], validity: [0b_____011] })                                                                                                                                              |
+| f_col  | Column(NullableColumn { column: StringColumn[v6, , v7], validity: [0b_____101] })                                                                                                                                              |
 | Output | ArrayColumn { values: Tuple([StringColumn[a, d, x, b, e, y, a, c, f, z, a], NullableColumn { column: StringColumn[v10, v4, v6, v2, v5, , v10, v3, , v7, v10], validity: [0b11011111, 0b_____110] }]), offsets: [0, 3, 7, 11] } |
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 

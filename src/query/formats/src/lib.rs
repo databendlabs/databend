@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
 #![feature(cursor_split)]
 
-extern crate core;
-
 mod binary;
 mod clickhouse;
+pub mod column_from_json;
 mod common_settings;
 mod delimiter;
 mod field_decoder;
@@ -28,6 +26,7 @@ mod file_format_type;
 pub mod output_format;
 
 pub use clickhouse::ClickhouseFormatType;
+pub use column_from_json::column_from_json_value;
 pub use delimiter::RecordDelimiter;
 pub use field_decoder::*;
 pub use file_format_type::parse_timezone;

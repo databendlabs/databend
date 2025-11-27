@@ -23,6 +23,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
 use crate::io::read::SegmentReader;
 use crate::pruning::PruningContext;
+use crate::pruning::PruningCostKind;
 use crate::pruning::SegmentLocation;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
 use crate::pruning_pipeline::PrunedSegmentMeta;
@@ -59,6 +60,7 @@ impl SegmentPruner {
 
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
+        let pruning_cost = self.pruning_ctx.pruning_cost.clone();
 
         for segment_location in segment_locs {
             let info = T::SegmentReader::read_compact_segment_through_cache(
@@ -78,7 +80,9 @@ impl SegmentPruner {
                 pruning_stats.set_segments_range_pruning_before(1);
             }
 
-            if range_pruner.should_keep(&info.summary().col_stats, None) {
+            if pruning_cost.measure(PruningCostKind::SegmentsRange, || {
+                range_pruner.should_keep(&info.summary().col_stats, None)
+            }) {
                 // Perf.
                 {
                     metrics_inc_segments_range_pruning_after(1);

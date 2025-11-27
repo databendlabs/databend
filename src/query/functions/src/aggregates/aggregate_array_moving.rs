@@ -44,6 +44,7 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::SerializeInfo;
@@ -678,7 +679,13 @@ pub fn try_create_aggregate_array_moving_avg_function(
 }
 
 pub fn aggregate_array_moving_avg_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_array_moving_avg_function))
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_array_moving_avg_function),
+        AggregateFunctionFeatures {
+            keep_nullable: true,
+            ..Default::default()
+        },
+    )
 }
 
 #[derive(Clone)]
@@ -859,5 +866,11 @@ pub fn try_create_aggregate_array_moving_sum_function(
 }
 
 pub fn aggregate_array_moving_sum_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(try_create_aggregate_array_moving_sum_function))
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_array_moving_sum_function),
+        AggregateFunctionFeatures {
+            keep_nullable: true,
+            ..Default::default()
+        },
+    )
 }

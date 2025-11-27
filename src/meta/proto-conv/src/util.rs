@@ -187,6 +187,9 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (155, "2025-10-24: Add: RowAccessPolicyMeta::RowAccessPolicyArg"),
     (156, "2025-10-22: Add: DataMaskMeta add DataMaskArg"),
     (157, "2025-10-22: Add: TableDataType TimestampTz"),
+    (158, "2025-10-22: Add: Server UDTF"),
+    (159, "2025-11-18: Add: Grant/OwnershipMaskingPolicyObject and masking policy privileges"),
+    (160, "2025-11-27: Add: udf.proto/UserDefinedFunction add update_on field"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

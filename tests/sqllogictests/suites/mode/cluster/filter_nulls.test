@@ -63,7 +63,7 @@ Exchange
     │           ├── read size: 2.30 KiB
     │           ├── partitions total: 6
     │           ├── partitions scanned: 3
-    │           ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
     │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
     │           └── estimated rows: 4000.00
     └── Filter(Probe)
@@ -78,7 +78,7 @@ Exchange
             ├── read size: 3.94 KiB
             ├── partitions total: 6
             ├── partitions scanned: 3
-            ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+            ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
             ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
             ├── apply join filters: [#0]
             └── estimated rows: 4000.00
@@ -127,7 +127,7 @@ Exchange
     │       │           ├── read size: 2.30 KiB
     │       │           ├── partitions total: 6
     │       │           ├── partitions scanned: 3
-    │       │           ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │       │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
     │       │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
     │       │           └── estimated rows: 4000.00
     │       └── Filter(Probe)
@@ -142,7 +142,7 @@ Exchange
     │               ├── read size: 3.94 KiB
     │               ├── partitions total: 6
     │               ├── partitions scanned: 3
-    │               ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │               ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
     │               ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
     │               ├── apply join filters: [#0]
     │               └── estimated rows: 4000.00
@@ -158,7 +158,7 @@ Exchange
             ├── read size: 3.94 KiB
             ├── partitions total: 6
             ├── partitions scanned: 3
-            ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+            ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
             ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
             ├── apply join filters: [#1]
             └── estimated rows: 4000.00
@@ -193,7 +193,7 @@ Exchange
     │           ├── read size: 2.30 KiB
     │           ├── partitions total: 6
     │           ├── partitions scanned: 3
-    │           ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
     │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
     │           └── estimated rows: 4000.00
     └── Filter(Probe)
@@ -208,7 +208,7 @@ Exchange
             ├── read size: 3.94 KiB
             ├── partitions total: 6
             ├── partitions scanned: 3
-            ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+            ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
             ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
             └── estimated rows: 4000.00
 
@@ -243,7 +243,7 @@ Exchange
     │           ├── read size: 2.30 KiB
     │           ├── partitions total: 6
     │           ├── partitions scanned: 3
-    │           ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
     │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
     │           └── estimated rows: 4000.00
     └── Exchange(Probe)
@@ -261,7 +261,7 @@ Exchange
                 ├── read size: 3.94 KiB
                 ├── partitions total: 6
                 ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+                ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
                 ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
                 ├── apply join filters: [#0]
                 └── estimated rows: 4000.00

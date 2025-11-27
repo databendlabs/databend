@@ -1,4 +1,8 @@
 # use prepared data ontime
+# Test with small buffer to simulate chunked reading
+statement ok
+set input_read_buffer_size = 1024
+
 statement ok
 truncate table ontime
 
@@ -84,6 +88,19 @@ query TIITI
 copy into ontime from @data/ontime_200.parquet pattern = '' FILE_FORMAT = (type = PARQUET)
 ----
 ontime_200.parquet	199	0	NULL	NULL
+
+query III
+select count(1), avg(Year), sum(DayOfWeek)  from ontime
+----
+199 2020.0 769
+
+statement ok
+truncate table ontime
+
+query TIITI
+copy into ontime from @data/ontime_200.csv.zip pattern = '' FILE_FORMAT = (type = csv skip_header = 1 compression = 'zip')
+----
+ontime_200.csv.zip	199	0	NULL	NULL
 
 query III
 select count(1), avg(Year), sum(DayOfWeek)  from ontime

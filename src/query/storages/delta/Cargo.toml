@@ -24,6 +24,7 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 deltalake = { workspace = true }
 fastrace = { workspace = true }
+itertools = { workspace = true }
 object_store_opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }

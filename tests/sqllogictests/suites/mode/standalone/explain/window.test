@@ -54,7 +54,7 @@ explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY d
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "ShufflePartition(Window)" ]
     5 [ label = "ShuffleMergePartition(Window)" ]
@@ -118,7 +118,7 @@ explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY d
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "ShufflePartition(Window)" ]
     5 [ label = "ShuffleMergePartition(Window)" ]
@@ -464,7 +464,7 @@ explain pipeline select a, sum(a) over (partition by a order by a desc) from t l
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "ShufflePartition(Window)" ]
     5 [ label = "ShuffleMergePartition(Window)" ]
@@ -494,7 +494,7 @@ explain pipeline select a, sum(a) over (partition by a order by a desc) from t l
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "ShufflePartition(Window)" ]
     5 [ label = "ShuffleMergePartition(Window)" ]
@@ -525,7 +525,7 @@ explain pipeline select a, dense_rank() over (partition by a order by a desc) fr
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "ShufflePartition(Window)" ]
     5 [ label = "ShuffleMergePartition(Window)" ]
@@ -551,7 +551,7 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "ShufflePartition(Window)" ]
     5 [ label = "ShuffleMergePartition(Window)" ]
@@ -577,7 +577,7 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "ShufflePartition(Window)" ]
     5 [ label = "ShuffleMergePartition(Window)" ]
@@ -604,7 +604,7 @@ avg(a) over (order by a rows between unbounded preceding and current row) from t
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "ShufflePartition(Window)" ]
     5 [ label = "ShuffleMergePartition(Window)" ]
@@ -668,7 +668,7 @@ explain pipeline select *, sum(a) over (partition by a order by a desc rows betw
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "AddInternalColumnsTransform" ]
     5 [ label = "TransformFilter" ]
@@ -784,7 +784,7 @@ explain pipeline select time, rowkey from (select *, row_number() over(partition
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadParquetDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "ShufflePartition(WindowTopN)" ]
     5 [ label = "ShuffleMergePartition(WindowTopN)" ]

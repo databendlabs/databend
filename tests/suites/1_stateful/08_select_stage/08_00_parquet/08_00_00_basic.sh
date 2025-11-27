@@ -45,7 +45,7 @@ echo "select * from @s4;" | $BENDSQL_CLIENT_CONNECT
 echo '--- large parquet file should be worked on parallel by rowgroups'
 echo 'remove @s4;' | $BENDSQL_CLIENT_CONNECT
 echo 'remove @s1;' | $BENDSQL_CLIENT_CONNECT
-echo "copy into @s4 from (select number a, number::string b, number::decimal(15,2) c from numbers(5000000)) file_format=(type=parquet) single=true;" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
+echo "copy into @s4 from (select number a, number::string b, number::decimal(15,2) c from numbers(5000000)) file_format=(type=parquet) single=true;" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1
 
 ## 12MB divide by 2MB = 6, so we will read 6 partitions
 echo """

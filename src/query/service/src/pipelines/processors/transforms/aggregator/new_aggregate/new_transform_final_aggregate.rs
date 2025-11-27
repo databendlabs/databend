@@ -161,54 +161,40 @@ impl NewFinalAggregateTransform {
             new_produced.push_to_queue(partition_id, meta);
         }
 
-        // if spill already triggered, local repartition queue is all spilled out
-        // we only need to spill the new produced repartitioned queues out
         if self.round_state.is_spilled {
-            // when no more task, we need to finalize the partition stream
-            if self.round_state.working_queue.is_empty() {
-                self.spill(new_produced, true)?;
-            } else {
-                self.spill(new_produced, false)?;
-            }
+            self.spill(new_produced)?;
             return Ok(());
         }
 
-        // merge new produced repartitioned queues into local repartitioned queues
         self.repartitioned_queues.merge_queues(new_produced);
 
-        // if the queue is triggered spill and repartition too many times, considering performance affect, we may not
-        // continue to trigger spill
-        let can_trigger_spill =
-            self.round_state.current_queue_spill_round < self.round_state.max_aggregate_spill_level;
-        let need_spill = self.spiller.memory_settings.check_spill();
-
-        if !can_trigger_spill {
-            if need_spill {
-                debug!(
-                    "NewFinalAggregateTransform[{}] skip spill after {} rounds",
-                    self.id, self.round_state.current_queue_spill_round
-                );
-            }
+        // other processor has spilled in this round, we need to spill too
+        if self.shared_state.lock().is_spilled {
+            let queues = self.repartitioned_queues.take_queues();
+            self.spill(queues)?;
+            self.round_state.is_spilled = true;
             return Ok(());
         }
 
-        if need_spill {
+        // we issue spill based on memory usage
+        let need_spill = self.spiller.memory_settings.check_spill();
+        let can_trigger_spill =
+            self.round_state.current_queue_spill_round < self.round_state.max_aggregate_spill_level;
+
+        if need_spill && can_trigger_spill {
             debug!(
-                "NewFinalAggregateTransform[{}] trigger spill due to memory limit, spilled round {}",
-                self.id, self.round_state.current_queue_spill_round
+                "[FinalAggregateTransform-{}] detected memory pressure",
+                self.id
             );
+            self.round_state.is_spilled = true;
             self.shared_state.lock().is_spilled = true;
+            let queues = self.repartitioned_queues.take_queues();
+            self.spill(queues)?;
+
+            return Ok(());
         }
 
-        // if other processor or itself trigger spill, this processor will need spill its local repartitioned queue out
-        if self.shared_state.lock().is_spilled
-            && !self.round_state.is_spilled
-            && !self.round_state.working_queue.is_empty()
-        {
-            self.round_state.is_spilled = true;
-            let queues = self.repartitioned_queues.take_queues();
-            self.spill(queues, false)?;
-        }
+        self.try_finish_spill_round()?;
 
         Ok(())
     }
@@ -308,7 +294,7 @@ impl NewFinalAggregateTransform {
         Ok(())
     }
 
-    pub fn spill(&mut self, mut queues: RepartitionedQueues, finalize: bool) -> Result<()> {
+    pub fn spill(&mut self, mut queues: RepartitionedQueues) -> Result<()> {
         for (id, queue) in queues.0.iter_mut().enumerate() {
             while let Some(meta) = queue.pop() {
                 match meta {
@@ -329,8 +315,14 @@ impl NewFinalAggregateTransform {
                 }
             }
         }
+        self.try_finish_spill_round()?;
 
-        if finalize {
+        Ok(())
+    }
+
+    /// this need to be called because the shared partition stream depends on it
+    pub fn try_finish_spill_round(&mut self) -> Result<()> {
+        if self.round_state.working_queue.is_empty() {
             let spilled_payloads = self.spiller.spill_finish()?;
             for payload in spilled_payloads {
                 self.repartitioned_queues.push_to_queue(
@@ -391,9 +383,11 @@ impl Processor for NewFinalAggregateTransform {
             // begin a new round, reset spilled flag and reported flag
             round_state.reset_for_new_round(spill_round);
 
-            round_state.enqueue_partitioned_meta(&mut datablock)?;
+            if let Some(activate_worker) = round_state.enqueue_partitioned_meta(&mut datablock)? {
+                self.spiller.update_activate_worker(activate_worker);
+            }
 
-            // schedule next task from working queue, if empty, begin to wait other processors
+            // schedule next task from working queue
             if let Some(event) = round_state.schedule_next_task() {
                 return Ok(event);
             } else {
@@ -408,9 +402,10 @@ impl Processor for NewFinalAggregateTransform {
             round_state.first_data_ready = true;
 
             let mut data_block = self.input.pull_data().unwrap()?;
-            round_state.enqueue_partitioned_meta(&mut data_block)?;
-
-            // schedule next task from working queue, if empty, begin to wait other processors
+            if let Some(activate_worker) = round_state.enqueue_partitioned_meta(&mut data_block)? {
+                self.spiller.update_activate_worker(activate_worker);
+            }
+            // schedule next task from working queue
             if let Some(event) = round_state.schedule_next_task() {
                 return Ok(event);
             } else {
@@ -462,7 +457,12 @@ impl Processor for NewFinalAggregateTransform {
             RoundPhase::AsyncWait => {
                 // report local repartitioned queues to shared state
                 let queues = self.repartitioned_queues.take_queues();
-                self.shared_state.lock().add_repartitioned_queue(queues);
+                if self.shared_state.lock().add_repartitioned_queue(queues) {
+                    // if it is the last one called, we add a checkpoint to ensure
+                    // the spiller finished in every round
+                    #[cfg(debug_assertions)]
+                    debug_assert!(self.spiller.is_stream_partition_clean());
+                }
 
                 self.barrier.wait().await;
 

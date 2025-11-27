@@ -140,8 +140,10 @@ pub enum UserPrivilegeType {
     DropRole,
     // Privilege to Drop user.
     DropUser,
-    // Privilege to Create/Drop DataMask.
-    CreateDataMask,
+    // Privilege to Create/Drop Masking Policy.
+    CreateMaskingPolicy,
+    // Privilege to Apply Masking Policy.
+    ApplyMaskingPolicy,
     // Privilege to Own a databend object such as database/table.
     Ownership,
     // Privilege to Read stage
@@ -187,7 +189,8 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::CreateStage => "CREATE STAGE",
             UserPrivilegeType::Grant => "GRANT",
             UserPrivilegeType::Set => "SET",
-            UserPrivilegeType::CreateDataMask => "CREATE DATAMASK",
+            UserPrivilegeType::CreateMaskingPolicy => "CREATE MASKING POLICY",
+            UserPrivilegeType::ApplyMaskingPolicy => "APPLY MASKING POLICY",
             UserPrivilegeType::Ownership => "OWNERSHIP",
             UserPrivilegeType::Read => "Read",
             UserPrivilegeType::Write => "Write",

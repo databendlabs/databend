@@ -48,6 +48,7 @@ use crate::optimizer::optimizers::rule::RulePushDownFilterWindow;
 use crate::optimizer::optimizers::rule::RulePushDownFilterWindowTopN;
 use crate::optimizer::optimizers::rule::RulePushDownLimit;
 use crate::optimizer::optimizers::rule::RulePushDownLimitEvalScalar;
+use crate::optimizer::optimizers::rule::RulePushDownLimitFilterScan;
 use crate::optimizer::optimizers::rule::RulePushDownLimitOuterJoin;
 use crate::optimizer::optimizers::rule::RulePushDownLimitScan;
 use crate::optimizer::optimizers::rule::RulePushDownLimitSort;
@@ -90,6 +91,7 @@ impl RuleFactory {
             RuleID::PushDownSortEvalScalar => {
                 Ok(Box::new(RulePushDownSortEvalScalar::new(metadata)))
             }
+            RuleID::PushDownLimitFilterScan => Ok(Box::new(RulePushDownLimitFilterScan::new())),
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
             RuleID::PushDownLimitEvalScalar => Ok(Box::new(RulePushDownLimitEvalScalar::new())),
             RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new(

@@ -148,14 +148,39 @@ pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a TimeZone>(
         .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f %z", ts_str))
         .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f %:z", ts_str))
         .or_else(|_| fmt::strtime::parse("%Y-%m-%d %H:%M:%S%.f", ts_str))?;
-    let datetime = time.to_datetime()?;
-    let timestamp = tz::offset(0).to_timestamp(datetime)?;
-    let offset = time
-        .offset()
-        .unwrap_or_else(|| fn_tz().to_offset(timestamp));
+    match time.offset() {
+        None => {
+            let datetime = time.to_datetime()?;
+            let timestamp = tz::offset(0).to_timestamp(datetime)?;
+            let offset = fn_tz().to_offset(timestamp);
 
-    Ok(timestamp_tz::new(
-        timestamp.as_microsecond(),
-        offset.seconds(),
-    ))
+            Ok(timestamp_tz::new(
+                timestamp.as_microsecond() - (offset.seconds() as i64 * 1_000_000),
+                offset.seconds(),
+            ))
+        }
+        Some(offset) => {
+            let timestamp = time.to_timestamp()?;
+
+            Ok(timestamp_tz::new(
+                timestamp.as_microsecond(),
+                offset.seconds(),
+            ))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stores_utc_in_timestamp_field() {
+        let tz = TimeZone::get("Asia/Shanghai").unwrap();
+        let value = string_to_timestamp_tz(b"2021-12-20 17:01:01 +0800", || &tz).expect("parse tz");
+        assert_eq!(value.seconds_offset(), 28_800);
+        // timestamp() keeps the UTC instant (09:01:01).
+        assert_eq!(value.timestamp(), 1_639_990_861_000_000);
+        assert_eq!(value.to_string(), "2021-12-20 17:01:01.000000 +0800");
+    }
 }

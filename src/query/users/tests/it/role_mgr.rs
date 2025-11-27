@@ -102,7 +102,7 @@ async fn test_role_manager() -> Result<()> {
                 &tenant,
                 &role_name,
                 GrantObject::Global,
-                UserPrivilegeSet::all_privileges(),
+                UserPrivilegeSet::available_privileges_on_global(),
             )
             .await?;
         let role = role_mgr.get_role(&tenant, role_name.clone()).await?;
@@ -118,7 +118,7 @@ async fn test_role_manager() -> Result<()> {
                 &tenant,
                 &role_name,
                 GrantObject::Global,
-                UserPrivilegeSet::all_privileges(),
+                UserPrivilegeSet::available_privileges_on_global(),
             )
             .await?;
 

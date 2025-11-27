@@ -26,8 +26,15 @@ echo 'create table t_owner(c1 int)' | $TEST_USER_CONNECT
 echo 'insert into t_owner values(2)' | $TEST_USER_CONNECT
 stmt 'revoke create on default.* from role role1'
 
+echo 'drop role if exists role2' | $BENDSQL_CLIENT_CONNECT
+echo 'create role role2' | $BENDSQL_CLIENT_CONNECT
+echo 'grant create on default.* to role role2' | $BENDSQL_CLIENT_CONNECT
+echo 'grant role role2 to owner' | $BENDSQL_CLIENT_CONNECT
+echo 'alter user owner with default_role=role2' | $BENDSQL_CLIENT_CONNECT
+
 echo 'need failed: with 1063'
 echo 'create view v_t as select * from t' | $TEST_USER_CONNECT
+
 echo 'need failed: with 1063'
 echo 'create view v_t_union as select * from t union all select * from t_owner' | $TEST_USER_CONNECT
 echo 'create view v_t_owner as select * from t_owner' | $TEST_USER_CONNECT
@@ -67,3 +74,4 @@ stmt 'drop view if exists v_t_union'
 stmt 'drop view if exists v_t1'
 stmt 'drop user if exists owner'
 stmt 'drop role if exists role1'
+echo 'drop role if exists role2' | $BENDSQL_CLIENT_CONNECT

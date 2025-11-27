@@ -32,7 +32,7 @@ SET query_result_cache_min_execute_secs = 0;
 statement error `RESULT_SCAN` failed: No cache key found in current session for query ID '.*'\.
 SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
 
-onlyif http
+skipif mysql
 statement error found NULL
 SELECT * FROM RESULT_SCAN(last_query_id(-100)) ORDER BY a;
 

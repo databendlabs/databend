@@ -14,6 +14,8 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -31,10 +33,11 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use itertools::Itertools;
+use futures::future::try_join_all;
 use log::info;
 use opendal::Operator;
 use tokio::sync::Semaphore;
+use tokio::task::JoinHandle;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
@@ -143,7 +146,7 @@ impl Processor for TransformSpillReader {
 
                     self.deserialized_meta = Some(Box::new(Self::deserialize(payload, data)));
                 }
-                AggregateMeta::Partitioned { bucket, data } => {
+                AggregateMeta::Partitioned { bucket, data, .. } => {
                     let mut new_data = Vec::with_capacity(data.len());
 
                     for meta in data {
@@ -160,7 +163,7 @@ impl Processor for TransformSpillReader {
                     }
 
                     self.deserialized_meta =
-                        Some(AggregateMeta::create_partitioned(bucket, new_data));
+                        Some(AggregateMeta::create_partitioned(bucket, new_data, None));
                 }
                 AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                 AggregateMeta::NewSpilled(_) => unreachable!(),
@@ -190,28 +193,51 @@ impl Processor for TransformSpillReader {
                         .await?
                         .to_vec();
 
+                    let elapsed = instant.elapsed();
+
                     info!(
-                        "Read aggregate spill {} successfully, elapsed: {:?}",
+                        "Read aggregate finished: (location: {}, bytes: {}, elapsed: {:?})",
                         &payload.location,
-                        instant.elapsed()
+                        data.len(),
+                        elapsed
                     );
+
+                    // perf
+                    {
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::RemoteSpillReadCount,
+                            1,
+                        );
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::RemoteSpillReadBytes,
+                            data.len(),
+                        );
+                        Profile::record_usize_profile(
+                            ProfileStatisticsName::RemoteSpillReadTime,
+                            elapsed.as_millis() as usize,
+                        );
+                    }
 
                     self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
                 }
-                AggregateMeta::Partitioned { data, .. } => {
-                    // For log progress.
-                    let mut total_elapsed = Duration::default();
-                    let log_interval = 100;
-                    let mut processed_count = 0;
+                AggregateMeta::Partitioned { data, bucket, .. } => {
+                    let bucket = *bucket;
+                    let total_task = data
+                        .iter()
+                        .filter(|meta| matches!(meta, AggregateMeta::BucketSpilled(_)))
+                        .count();
 
-                    let mut read_data = Vec::with_capacity(data.len());
-                    for meta in data {
+                    let processed_count = Arc::new(AtomicUsize::new(0));
+
+                    let mut read_tasks: Vec<JoinHandle<Result<(Vec<u8>, Duration)>>> = Vec::new();
+                    for meta in data.iter() {
                         if let AggregateMeta::BucketSpilled(payload) = meta {
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
                             let data_range = payload.data_range.clone();
                             let semaphore = self.semaphore.clone();
-                            read_data.push(databend_common_base::runtime::spawn(async move {
+                            let processed_count = processed_count.clone();
+                            read_tasks.push(databend_common_base::runtime::spawn(async move {
                                 let _guard = semaphore.acquire().await;
                                 let instant = Instant::now();
                                 let data = operator
@@ -236,40 +262,50 @@ impl Processor for TransformSpillReader {
                                     );
                                 }
 
-                                total_elapsed += instant.elapsed();
-                                processed_count += 1;
+                                let elapsed = instant.elapsed();
 
                                 // log the progress
-                                if processed_count % log_interval == 0 {
+                                let finished = processed_count.fetch_add(1, Ordering::Relaxed) + 1;
+                                if finished % 100 == 0 {
                                     info!(
-                                        "Read aggregate {}/{} spilled buckets, elapsed: {:?}",
-                                        processed_count,
-                                        data.len(),
-                                        total_elapsed
+                                        "Read aggregate {}/{} spilled task, elapsed: {:?}",
+                                        finished, total_task, elapsed
                                     );
                                 }
 
-                                Ok(data)
+                                Ok((data, elapsed))
                             }));
                         }
                     }
 
-                    match futures::future::try_join_all(read_data).await {
-                        Err(_) => {
-                            return Err(ErrorCode::TokioError("Cannot join tokio job"));
-                        }
-                        Ok(read_data) => {
-                            let read_data: std::result::Result<VecDeque<Vec<u8>>, opendal::Error> =
-                                read_data.into_iter().try_collect();
+                    let read_tasks = try_join_all(read_tasks)
+                        .await
+                        .map_err(|_| ErrorCode::TokioError("Cannot join tokio job"))?;
 
-                            self.deserializing_meta = Some((block_meta, read_data?));
-                        }
-                    };
+                    let mut processed_count = 0usize;
+                    let mut processed_bytes = 0usize;
+                    let mut total_elapsed = 0u64;
+                    let mut read_data = Vec::with_capacity(read_tasks.len());
+                    for result in read_tasks {
+                        let (data, elapsed) = result?;
+
+                        processed_count += 1;
+                        processed_bytes += data.len();
+                        total_elapsed += elapsed.as_millis() as u64;
+
+                        read_data.push(data);
+                    }
+
+                    let read_data: VecDeque<Vec<u8>> = VecDeque::from(read_data);
+                    self.deserializing_meta = Some((block_meta, read_data));
 
                     if processed_count != 0 {
                         info!(
-                            "Read {} aggregate spills successfully, total elapsed: {:?}",
-                            processed_count, total_elapsed
+                            "Read aggregate finished: (bucket: {}, total read count: {}, total bytes: {}, total elapsed: {:?})",
+                            bucket,
+                            processed_count,
+                            processed_bytes,
+                            Duration::from_millis(total_elapsed)
                         );
                     }
                 }

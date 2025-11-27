@@ -662,6 +662,7 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
         |(name, opt_columns)| TableAlias {
             name,
             columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
+            keep_database_name: false,
         },
     )
     .parse(i)
@@ -673,6 +674,7 @@ pub fn table_alias_without_as(i: Input) -> IResult<TableAlias> {
         |(name, opt_columns)| TableAlias {
             name,
             columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
+            keep_database_name: false,
         },
     )
     .parse(i)

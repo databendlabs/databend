@@ -39,6 +39,7 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_management::RoleApi;
 use databend_common_management::UserApi;
 use databend_common_management::WarehouseInfo;
+use databend_common_meta_api::DatamaskApi;
 use databend_common_meta_app::principal::GrantEntry;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -247,7 +248,7 @@ impl AsyncSource for ShowGrantsSource {
                 show_account_grants(self.ctx.clone(), &self.grant_type, &self.name).await?
             }
             "table" | "database" | "udf" | "stage" | "warehouse" | "connection" | "sequence"
-            | "procedure" => {
+            | "procedure" | "masking_policy" => {
                 show_object_grant(
                     self.ctx.clone(),
                     &self.grant_type,
@@ -260,7 +261,7 @@ impl AsyncSource for ShowGrantsSource {
             "role_grantee" => show_role_grantees(self.ctx.clone(), &self.name).await?,
             _ => {
                 return Err(ErrorCode::InvalidArgument(format!(
-                    "Expected 'user|role|table|database|udf|stage|warehouse|connection|sequence|procedure|role_grantee', but got {:?}",
+                    "Expected 'user|role|table|database|udf|stage|warehouse|connection|sequence|procedure|masking_policy|role_grantee', but got {:?}",
                     self.grant_type
                 )));
             }
@@ -564,6 +565,18 @@ async fn show_account_grants(
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
                 }
+                GrantObject::MaskingPolicy(policy_id) => {
+                    let meta_api = UserApiProvider::instance().get_meta_store_client();
+                    if let Some(policy_name) = meta_api
+                        .get_data_mask_name_by_id(&ctx.get_tenant(), *policy_id)
+                        .await?
+                    {
+                        object_name.push(policy_name);
+                        object_id.push(Some(policy_id.to_string()));
+                        privileges.push(get_priv_str(&grant_entry));
+                        grant_list.push(format!("{} TO {}", grant_entry, identity));
+                    }
+                }
                 GrantObject::Global => {
                     // grant all on *.* to a
                     object_name.push("*.*".to_string());
@@ -679,12 +692,27 @@ async fn show_account_grants(
                             if let Some(p) =
                                 procedure_api.get_procedure_name_by_id(procedure_id).await?
                             {
-                                object_name.push(p);
+                                object_name.push(p.to_string());
                                 object_id.push(Some(procedure_id.to_string()));
                                 privileges.push("OWNERSHIP".to_string());
                                 grant_list.push(format!(
                                     "GRANT OWNERSHIP ON PROCEDURE {} TO {}",
-                                    procedure_id, identity
+                                    p, identity
+                                ));
+                            }
+                        }
+                        OwnershipObject::MaskingPolicy { policy_id } => {
+                            let meta_api = UserApiProvider::instance().get_meta_store_client();
+                            if let Some(policy_name) = meta_api
+                                .get_data_mask_name_by_id(&ctx.get_tenant(), policy_id)
+                                .await?
+                            {
+                                object_name.push(policy_name.clone());
+                                object_id.push(Some(policy_id.to_string()));
+                                privileges.push("OWNERSHIP".to_string());
+                                grant_list.push(format!(
+                                    "GRANT OWNERSHIP ON MASKING POLICY {} TO {}",
+                                    policy_name, identity
                                 ));
                             }
                         }
@@ -972,9 +1000,39 @@ async fn show_object_grant(
                 )));
             }
         }
+        "masking_policy" => {
+            let policy_id = name.parse::<u64>()?;
+            if !visibility_checker.check_masking_policy_visibility(&policy_id) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege APPLY MASKING POLICY or OWNERSHIP is required on masking policy {} for user {}",
+                    name, current_user
+                )));
+            }
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            if let Some(policy_name) = meta_api
+                .get_data_mask_name_by_id(&ctx.get_tenant(), policy_id)
+                .await?
+            {
+                (
+                    GrantObject::MaskingPolicy(policy_id),
+                    OwnershipObject::MaskingPolicy { policy_id },
+                    Some(policy_id.to_string()),
+                    policy_name,
+                )
+            } else {
+                (
+                    // Already get the policy id but old version policy does not have key DataMaskIdToNameIdent
+                    // directly return policy id as name. Extremely low probability event
+                    GrantObject::MaskingPolicy(policy_id),
+                    OwnershipObject::MaskingPolicy { policy_id },
+                    Some(policy_id.to_string()),
+                    policy_id.to_string(),
+                )
+            }
+        }
         _ => {
             return Err(ErrorCode::InvalidArgument(format!(
-                "Expected 'table|database|udf|stage|warehouse|connection|sequence|procedure', but got {:?}",
+                "Expected 'table|database|udf|stage|warehouse|connection|sequence|procedure|masking_policy', but got {:?}",
                 grant_type
             )));
         }
@@ -992,12 +1050,13 @@ async fn show_object_grant(
         }
     }
 
-    let ownerships = user_api.role_api(&tenant).list_ownerships().await?;
-    for ownership in ownerships {
-        if ownership.data.object == owner_object {
-            privileges.push("OWNERSHIP".to_string());
-            names.push(ownership.data.role);
-        }
+    if let Some(ownership) = user_api
+        .role_api(&tenant)
+        .get_ownership(&owner_object)
+        .await?
+    {
+        privileges.push("OWNERSHIP".to_string());
+        names.push(ownership.role);
     }
 
     let object_ids = vec![object_id; privileges.len()];

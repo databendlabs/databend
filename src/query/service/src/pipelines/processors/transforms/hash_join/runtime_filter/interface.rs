@@ -85,8 +85,14 @@ pub async fn build_and_push_down_runtime_filter(
         .iter()
         .map(|r| (r.id, r))
         .collect();
-    let runtime_filter_infos =
-        build_runtime_filter_infos(packet, runtime_filter_descs, selectivity_threshold)?;
+    let max_threads = join.ctx.get_settings().get_max_threads()? as usize;
+    let runtime_filter_infos = build_runtime_filter_infos(
+        packet,
+        runtime_filter_descs,
+        selectivity_threshold,
+        max_threads,
+    )
+    .await?;
 
     let total_time = overall_start.elapsed();
     let filter_count = runtime_filter_infos.len();

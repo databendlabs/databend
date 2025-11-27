@@ -44,9 +44,101 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 5
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 5 to 5, inverted pruning: 5 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [t1._search_matched (#2)], limit: NONE]
     └── estimated rows: 10.00
+
+query T
+EXPLAIN SELECT id, content FROM t1 WHERE query('content:a') ORDER BY id LIMIT 1;
+----
+RowFetch
+├── output columns: [t1.id (#0), t1._row_id (#3), t1.content (#1)]
+├── columns to fetch: [content]
+├── estimated rows: 1.00
+└── Limit
+    ├── output columns: [t1.id (#0), t1._row_id (#3)]
+    ├── limit: 1
+    ├── offset: 0
+    ├── estimated rows: 1.00
+    └── Sort(Single)
+        ├── output columns: [t1.id (#0), t1._row_id (#3)]
+        ├── sort keys: [id ASC NULLS LAST]
+        ├── estimated rows: 10.00
+        └── Filter
+            ├── output columns: [t1.id (#0), t1._row_id (#3)]
+            ├── filters: [t1._search_matched (#2)]
+            ├── estimated rows: 10.00
+            └── TableScan
+                ├── table: default.test_inverted_index_db.t1
+                ├── scan id: 0
+                ├── output columns: [id (#0), _search_matched (#2), _row_id (#3)]
+                ├── read rows: 2
+                ├── read size: < 1 KiB
+                ├── partitions total: 5
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: <slt:ignore>, topn pruning: 3 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [t1._search_matched (#2)], limit: 1]
+                └── estimated rows: 10.00
+
+query T
+EXPLAIN SELECT id, content FROM t1 WHERE query('content:a') ORDER BY score() LIMIT 1;
+----
+RowFetch
+├── output columns: [t1._search_score (#3), t1._row_id (#4), t1.id (#0), t1.content (#1)]
+├── columns to fetch: [id, content]
+├── estimated rows: 1.00
+└── Limit
+    ├── output columns: [t1._search_score (#3), t1._row_id (#4)]
+    ├── limit: 1
+    ├── offset: 0
+    ├── estimated rows: 1.00
+    └── Sort(Single)
+        ├── output columns: [t1._search_score (#3), t1._row_id (#4)]
+        ├── sort keys: [_search_score ASC NULLS LAST]
+        ├── estimated rows: 10.00
+        └── Filter
+            ├── output columns: [t1._search_score (#3), t1._row_id (#4)]
+            ├── filters: [t1._search_matched (#2)]
+            ├── estimated rows: 10.00
+            └── TableScan
+                ├── table: default.test_inverted_index_db.t1
+                ├── scan id: 0
+                ├── output columns: [_search_matched (#2), _search_score (#3), _row_id (#4)]
+                ├── read rows: 2
+                ├── read size: 0
+                ├── partitions total: 5
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: <slt:ignore>, topn pruning: 3 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [t1._search_matched (#2)], limit: 1]
+                └── estimated rows: 10.00
+
+query T
+EXPLAIN SELECT id, content FROM t1 WHERE query('content:a') LIMIT 1;
+----
+RowFetch
+├── output columns: [t1._row_id (#3), t1.id (#0), t1.content (#1)]
+├── columns to fetch: [id, content]
+├── estimated rows: 1.00
+└── Limit
+    ├── output columns: [t1._row_id (#3)]
+    ├── limit: 1
+    ├── offset: 0
+    ├── estimated rows: 1.00
+    └── Filter
+        ├── output columns: [t1._row_id (#3)]
+        ├── filters: [t1._search_matched (#2)]
+        ├── estimated rows: 10.00
+        └── TableScan
+            ├── table: default.test_inverted_index_db.t1
+            ├── scan id: 0
+            ├── output columns: [_search_matched (#2), _row_id (#3)]
+            ├── read rows: 2
+            ├── read size: 0
+            ├── partitions total: 5
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: <slt:ignore>, topn pruning: 3 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [t1._search_matched (#2)], limit: 1]
+            └── estimated rows: 10.00
 
 statement ok
 DROP TABLE IF EXISTS t2
@@ -85,12 +177,41 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 5
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 5 to 5, inverted pruning: 5 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [t2._search_matched (#2)], limit: NONE]
     └── estimated rows: 10.00
+
+query T
+EXPLAIN SELECT id, content FROM t2 WHERE query('content:a') ORDER BY id LIMIT 1;
+----
+Limit
+├── output columns: [t2.id (#0), t2.content (#1)]
+├── limit: 1
+├── offset: 0
+├── estimated rows: 1.00
+└── Sort(Single)
+    ├── output columns: [t2.id (#0), t2.content (#1)]
+    ├── sort keys: [id ASC NULLS LAST]
+    ├── estimated rows: 10.00
+    └── Filter
+        ├── output columns: [t2.id (#0), t2.content (#1)]
+        ├── filters: [t2._search_matched (#2)]
+        ├── estimated rows: 10.00
+        └── TableScan
+            ├── table: default.test_inverted_index_db.t2
+            ├── scan id: 0
+            ├── output columns: [id (#0), content (#1), _search_matched (#2)]
+            ├── read rows: 2
+            ├── read size: < 1 KiB
+            ├── partitions total: 5
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 5 to 5 cost: <slt:ignore>, inverted pruning: 5 to 3 cost: <slt:ignore>, topn pruning: 3 to 1 cost: <slt:ignore>>]
+            ├── push downs: [filters: [t2._search_matched (#2)], limit: 1]
+            └── estimated rows: 10.00
 
 statement ok
 USE default
 
 statement ok
 DROP DATABASE IF EXISTS test_inverted_index_db
+

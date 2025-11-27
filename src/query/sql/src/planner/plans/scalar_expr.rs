@@ -34,6 +34,9 @@ use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::SEARCH_MATCHED_COL_NAME;
+use databend_common_expression::SEARCH_SCORE_COL_NAME;
+use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::AutoIncrementKey;
@@ -1519,4 +1522,47 @@ pub fn walk_window_mut<'a, V: VisitorMut<'a>>(
         | WindowFuncType::Ntile(_) => (),
     }
     Ok(())
+}
+
+pub struct IndexPredicateChecker {
+    allow_search_columns: bool,
+    allow_vector_columns: bool,
+    pub has_index_column: bool,
+    pub valid: bool,
+}
+
+impl IndexPredicateChecker {
+    pub fn new(allow_search_columns: bool, allow_vector_columns: bool) -> Self {
+        Self {
+            allow_search_columns,
+            allow_vector_columns,
+            has_index_column: false,
+            valid: true,
+        }
+    }
+}
+
+impl<'a> Visitor<'a> for IndexPredicateChecker {
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        if !self.valid {
+            return Ok(());
+        }
+        walk_expr(self, expr)
+    }
+
+    fn visit_bound_column_ref(&mut self, column: &'a BoundColumnRef) -> Result<()> {
+        let name = column.column.column_name.as_str();
+        let is_search_column = name == SEARCH_MATCHED_COL_NAME || name == SEARCH_SCORE_COL_NAME;
+        let is_vector_column = name == VECTOR_SCORE_COL_NAME;
+
+        if (is_search_column && self.allow_search_columns)
+            || (is_vector_column && self.allow_vector_columns)
+        {
+            self.has_index_column = true;
+        } else {
+            self.valid = false;
+        }
+
+        Ok(())
+    }
 }

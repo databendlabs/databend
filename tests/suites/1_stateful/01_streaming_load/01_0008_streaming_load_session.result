@@ -3,5 +3,5 @@
 >>>> copy into @streaming_load_08/data.csv from (select '2020-01-02', 110) file_format=(type=csv)  single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
 data.csv	17	1
 {"need_sticky":false,"need_keep_alive":false,"internal":"{\"last_query_ids\":[\"load-csv\"]}"}
-{"id":"load-csv","stats":{"rows":1,"bytes":22}}
-{"id":"load-csv","stats":{"rows":1,"bytes":22}}
+{"id":"load-csv","stats":{"rows":1,"bytes":36}}
+{"id":"load-csv","stats":{"rows":1,"bytes":36}}

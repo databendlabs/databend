@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_sql::plans::DescPasswordPolicyPlan;
@@ -127,6 +126,11 @@ impl Interpreter for DescPasswordPolicyInterpreter {
             Some(DEFAULT_PASSWORD_HISTORY),
         ];
 
+        let defaults = defaults
+            .iter()
+            .map(|opt| opt.map(|v| v.to_string()))
+            .collect::<Vec<_>>();
+
         let descriptions = vec![
             "Name of password policy.".to_string(),
             "Comment of password policy.".to_string(),
@@ -146,7 +150,7 @@ impl Interpreter for DescPasswordPolicyInterpreter {
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(properties),
             StringType::from_data(values),
-            UInt64Type::from_opt_data(defaults),
+            StringType::from_opt_data(defaults),
             StringType::from_data(descriptions),
         ])])
     }

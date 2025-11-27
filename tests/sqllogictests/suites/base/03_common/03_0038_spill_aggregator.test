@@ -1,18 +1,18 @@
-onlyif http
+skipif mysql
 statement ok
 set max_threads = 8;
 
-onlyif http
+skipif mysql
 statement ok
 SET force_aggregate_data_spill = 1;
 
-onlyif http
+skipif mysql
 query T
 SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string);
 ----
 100000
 
-onlyif http
+skipif mysql
 query T
 SELECT COUNT() FROM (SELECT number::string FROM numbers_mt(100000) group by number::string);
 ----
@@ -27,7 +27,7 @@ drop table t2
 statement ok
 set group_by_shuffle_mode = 'before_partial';
 
-onlyif http
+skipif mysql
 query T
 SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string);
 ----
@@ -36,10 +36,10 @@ SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) grou
 statement ok
 unset group_by_shuffle_mode;
 
-onlyif http
+skipif mysql
 statement ok
 unset max_threads;
 
-onlyif http
+skipif mysql
 statement ok
 unset force_aggregate_data_spill;

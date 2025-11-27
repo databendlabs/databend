@@ -110,6 +110,7 @@ impl Binder {
                 let alias = alias_name.as_ref().map(|name| TableAlias {
                     name: name.clone(),
                     columns: vec![],
+                    keep_database_name: false,
                 });
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, &alias)
                     .await

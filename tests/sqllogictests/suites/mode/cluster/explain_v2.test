@@ -34,7 +34,7 @@ Exchange
         ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
         ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
         └── estimated rows: 100.00
 
@@ -73,7 +73,7 @@ Exchange
         │           ├── read size: < 1 KiB
         │           ├── partitions total: 3
         │           ├── partitions scanned: 3
-        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
+        │           ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
         │           ├── push downs: [filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)], limit: NONE]
         │           └── estimated rows: 100.00
         └── Filter(Probe)
@@ -88,7 +88,7 @@ Exchange
                 ├── read size: < 1 KiB
                 ├── partitions total: 3
                 ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
                 ├── push downs: [filters: [(t1.a (#0) > 3 OR t1.a (#0) > 1)], limit: NONE]
                 ├── apply join filters: [#0]
                 └── estimated rows: 100.00
@@ -120,7 +120,7 @@ Exchange
     │       ├── read size: < 1 KiB
     │       ├── partitions total: 3
     │       ├── partitions scanned: 3
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
     │       ├── push downs: [filters: [], limit: NONE]
     │       └── estimated rows: 100.00
     └── TableScan(Probe)
@@ -131,7 +131,7 @@ Exchange
         ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
         ├── push downs: [filters: [], limit: NONE]
         ├── apply join filters: [#0]
         └── estimated rows: 100.00
@@ -250,7 +250,7 @@ Limit
                     │       ├── read size: < 1 KiB
                     │       ├── partitions total: 3
                     │       ├── partitions scanned: 3
-                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
+                    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
                     │       ├── push downs: [filters: [], limit: NONE]
                     │       └── estimated rows: 100.00
                     └── TableScan(Probe)
@@ -261,7 +261,7 @@ Limit
                         ├── read size: < 1 KiB
                         ├── partitions total: 3
                         ├── partitions scanned: 3
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
+                        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
                         ├── push downs: [filters: [], limit: NONE]
                         ├── apply join filters: [#0]
                         └── estimated rows: 100.00
@@ -296,7 +296,7 @@ Exchange
     │       ├── read size: < 1 KiB
     │       ├── partitions total: 3
     │       ├── partitions scanned: 3
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
     │       ├── push downs: [filters: [], limit: NONE]
     │       └── estimated rows: 100.00
     └── TableScan(Probe)
@@ -307,7 +307,7 @@ Exchange
         ├── read size: < 1 KiB
         ├── partitions total: 3
         ├── partitions scanned: 3
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
         ├── push downs: [filters: [], limit: NONE]
         ├── apply join filters: [#0]
         └── estimated rows: 100.00
@@ -456,7 +456,7 @@ Exchange
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [], limit: NONE]
         ├── apply join filters: [#0]
         └── estimated rows: 3.00

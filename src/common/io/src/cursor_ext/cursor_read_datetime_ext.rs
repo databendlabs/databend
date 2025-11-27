@@ -26,7 +26,7 @@ use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
-use jiff::civil::date;
+use databend_common_timezone::fast_utc_from_local;
 use jiff::civil::Date;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone;
@@ -45,7 +45,6 @@ pub trait BufferReadDateTimeExt {
     fn read_timestamp_text(&mut self, tz: &TimeZone) -> Result<DateTimeResType>;
     fn parse_time_offset(
         &mut self,
-        tz: &TimeZone,
         buf: &mut Vec<u8>,
         dt: &Zoned,
         west_tz: bool,
@@ -87,14 +86,12 @@ where T: AsRef<[u8]>
     // Only support HH:mm format
     fn parse_time_offset(
         &mut self,
-        tz: &TimeZone,
         buf: &mut Vec<u8>,
         dt: &Zoned,
         west_tz: bool,
         calc_offset: impl Fn(i64, i64, &Zoned) -> Result<Zoned>,
     ) -> Result<Zoned> {
         fn get_hour_minute_offset(
-            tz: &TimeZone,
             dt: &Zoned,
             west_tz: bool,
             calc_offset: &impl Fn(i64, i64, &Zoned) -> Result<Zoned>,
@@ -104,24 +101,14 @@ where T: AsRef<[u8]>
             if (hour_offset == 14 && minute_offset == 0)
                 || ((0..60).contains(&minute_offset) && hour_offset < 14)
             {
-                if dt.year() < 1970 {
-                    Ok(date(1970, 1, 1)
-                        .at(0, 0, 0, 0)
-                        .to_zoned(tz.clone())
-                        .map_err_to_code(ErrorCode::BadBytes, || format!("dt parse error"))?)
-                } else {
-                    let current_tz_sec = dt.offset().seconds();
-                    let mut val_tz_sec =
-                        Offset::from_seconds(hour_offset * 3600 + minute_offset * 60)
-                            .map_err_to_code(ErrorCode::BadBytes, || {
-                                "calc offset failed.".to_string()
-                            })?
-                            .seconds();
-                    if west_tz {
-                        val_tz_sec = -val_tz_sec;
-                    }
-                    calc_offset(current_tz_sec.into(), val_tz_sec.into(), dt)
+                let current_tz_sec = dt.offset().seconds();
+                let mut val_tz_sec = Offset::from_seconds(hour_offset * 3600 + minute_offset * 60)
+                    .map_err_to_code(ErrorCode::BadBytes, || "calc offset failed.".to_string())?
+                    .seconds();
+                if west_tz {
+                    val_tz_sec = -val_tz_sec;
                 }
+                calc_offset(current_tz_sec.into(), val_tz_sec.into(), dt)
             } else {
                 Err(ErrorCode::BadBytes(format!(
                     "Invalid Timezone Offset: The minute offset '{}' is outside the valid range. Expected range is [00-59] within a timezone gap of [-14:00, +14:00]",
@@ -146,16 +133,9 @@ where T: AsRef<[u8]>
                         let minute_offset: i32 =
                             lexical_core::FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || "minute offset parse error".to_string())?;
                         // max utc: 14:00, min utc: 00:00
-                        get_hour_minute_offset(
-                            tz,
-                            dt,
-                            west_tz,
-                            &calc_offset,
-                            hour_offset,
-                            minute_offset,
-                        )
+                        get_hour_minute_offset(dt, west_tz, &calc_offset, hour_offset, minute_offset)
                     } else {
-                        get_hour_minute_offset(tz, dt, west_tz, &calc_offset, hour_offset, 0)
+                        get_hour_minute_offset(dt, west_tz, &calc_offset, hour_offset, 0)
                     }
                 } else {
                     Err(ErrorCode::BadBytes(format!(
@@ -174,14 +154,7 @@ where T: AsRef<[u8]>
                 buf.clear();
                 // max utc: 14:00, min utc: 00:00
                 if (0..15).contains(&hour_offset) {
-                    get_hour_minute_offset(
-                        tz,
-                        dt,
-                        west_tz,
-                        &calc_offset,
-                        hour_offset,
-                        minute_offset,
-                    )
+                    get_hour_minute_offset(dt, west_tz, &calc_offset, hour_offset, minute_offset)
                 } else {
                     Err(ErrorCode::BadBytes(format!(
                         "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00]",
@@ -279,13 +252,9 @@ where T: AsRef<[u8]>
             buf.clear();
             let calc_offset = |current_tz_sec: i64, val_tz_sec: i64, dt: &Zoned| {
                 let offset = (current_tz_sec - val_tz_sec) * 1000 * 1000;
-                let mut ts = dt.timestamp().as_microsecond();
-                ts += offset;
-                let (mut secs, mut micros) = (ts / 1_000_000, ts % 1_000_000);
-                if ts < 0 {
-                    secs -= 1;
-                    micros += 1_000_000;
-                }
+                let ts = dt.timestamp().as_microsecond() + offset;
+                let secs = ts.div_euclid(1_000_000);
+                let micros = ts.rem_euclid(1_000_000);
                 Ok(Timestamp::new(secs, (micros as i32) * 1000)
                     .map_err_to_code(ErrorCode::BadBytes, || {
                         format!("Datetime {} add offset {} with error", dt, offset)
@@ -302,7 +271,6 @@ where T: AsRef<[u8]>
                 )?))
             } else if self.ignore_byte(b'+') {
                 Ok(DateTimeResType::Datetime(self.parse_time_offset(
-                    tz,
                     &mut buf,
                     &dt,
                     false,
@@ -310,7 +278,6 @@ where T: AsRef<[u8]>
                 )?))
             } else if self.ignore_byte(b'-') {
                 Ok(DateTimeResType::Datetime(self.parse_time_offset(
-                    tz,
                     &mut buf,
                     &dt,
                     true,
@@ -324,6 +291,8 @@ where T: AsRef<[u8]>
             // only date part
             if need_date {
                 Ok(DateTimeResType::Date(d))
+            } else if let Some(zoned) = fast_local_to_zoned(tz, &d, 0, 0, 0, 0) {
+                Ok(DateTimeResType::Datetime(zoned))
             } else {
                 Ok(DateTimeResType::Datetime(
                     d.to_zoned(tz.clone())
@@ -336,15 +305,41 @@ where T: AsRef<[u8]>
     }
 }
 
-// Can not directly unwrap, because of DST.
-// e.g.
-// set timezone='Europe/London';
-// -- if unwrap() will cause session panic.
-// -- https://github.com/chronotope/chrono/blob/v0.4.24/src/offset/mod.rs#L186
-// select to_date(to_timestamp('2021-03-28 01:00:00'));
-// Now add a setting enable_dst_hour_fix to control this behavior. If true, try to add a hour.
+/// Convert a local civil time into a `Zoned` instant by first attempting the
+/// LUT-based `fast_utc_from_local`. When the LUT cannot represent the request
+/// (e.g. outside 1900–2299 or in a DST gap), fall back to Jiff's slower but
+/// fully general conversion. The behavior mirrors ClickHouse/Jiff: gaps return
+/// `None`, folds prefer the later instant.
+fn fast_local_to_zoned(
+    tz: &TimeZone,
+    date: &Date,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    micro: u32,
+) -> Option<Zoned> {
+    let micros = fast_utc_from_local(
+        tz,
+        i32::from(date.year()),
+        date.month() as u8,
+        date.day() as u8,
+        hour,
+        minute,
+        second,
+        micro,
+    )?;
+    let ts = Timestamp::from_microsecond(micros).ok()?;
+    Some(ts.to_zoned(tz.clone()))
+}
+
 fn get_local_time(tz: &TimeZone, d: &Date, times: &mut Vec<u32>) -> Result<Zoned> {
-    d.at(times[0] as i8, times[1] as i8, times[2] as i8, 0)
+    let hour = times[0] as u8;
+    let minute = times[1] as u8;
+    let second = times[2] as u8;
+    if let Some(zoned) = fast_local_to_zoned(tz, d, hour, minute, second, 0) {
+        return Ok(zoned);
+    }
+    d.at(hour as i8, minute as i8, second as i8, 0)
         .to_zoned(tz.clone())
         .map_err_to_code(ErrorCode::BadBytes, || {
             format!("Invalid time provided in times: {:?}", times)

@@ -22,6 +22,7 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::UserPrivilegeType::Ownership;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::GrantPrivilegePlan;
@@ -135,6 +136,9 @@ impl GrantPrivilegeInterpreter {
             GrantObject::Procedure(p) => Ok(OwnershipObject::Procedure {
                 procedure_id: *p,
             }),
+            GrantObject::MaskingPolicy(policy_id) => Ok(OwnershipObject::MaskingPolicy {
+                policy_id: *policy_id,
+            }),
             GrantObject::Global => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
             )),
@@ -213,7 +217,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
 
         let plan = self.plan.clone();
 
-        validate_grant_privileges(&plan.on, plan.priv_types)?;
+        validate_grant_privileges(&plan.principal, &plan.on, plan.priv_types)?;
         validate_grant_object_exists(&self.ctx, &plan.on).await?;
 
         // TODO: check user existence
@@ -248,7 +252,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                         self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)
                             .await?;
                     } else {
-                        return Err(databend_common_exception::ErrorCode::UnknownRole(
+                        return Err(ErrorCode::UnknownRole(
                             "No current role, cannot grant ownership",
                         ));
                     }
@@ -270,7 +274,11 @@ impl Interpreter for GrantPrivilegeInterpreter {
 /// Check if there's any privilege which can not be granted to this GrantObject.
 /// Some global privileges can not be granted to a database or table, for example,
 /// a KILL statement is meaningless for a table.
-pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilegeSet) -> Result<()> {
+pub fn validate_grant_privileges(
+    principal: &PrincipalIdentity,
+    object: &GrantObject,
+    privileges: UserPrivilegeSet,
+) -> Result<()> {
     let available_privileges = object.available_privileges(true);
     let ok = privileges
         .iter()
@@ -280,5 +288,26 @@ pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilege
             "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
         ));
     }
+    if matches!(principal, PrincipalIdentity::User(_))
+        && privileges.iter().any(is_create_ownership_object_privilege)
+    {
+        return Err(ErrorCode::IllegalGrant(
+            "CREATE-like privileges cannot be granted directly to USER; please grant them to a role"
+        ));
+    }
     Ok(())
+}
+
+fn is_create_ownership_object_privilege(privilege: UserPrivilegeType) -> bool {
+    matches!(
+        privilege,
+        UserPrivilegeType::Create
+            | UserPrivilegeType::CreateStage
+            | UserPrivilegeType::CreateDatabase
+            | UserPrivilegeType::CreateWarehouse
+            | UserPrivilegeType::CreateConnection
+            | UserPrivilegeType::CreateSequence
+            | UserPrivilegeType::CreateProcedure
+            | UserPrivilegeType::CreateMaskingPolicy
+    )
 }

@@ -51,6 +51,12 @@ pub trait RowAccessPolicyApi: Send + Sync {
         name_ident: &RowAccessPolicyNameIdent,
     ) -> Result<Option<(SeqV<RowAccessPolicyId>, SeqV<RowAccessPolicyMeta>)>, MetaError>;
 
+    async fn get_row_access_policy_name_by_id(
+        &self,
+        tenant: &Tenant,
+        policy_id: u64,
+    ) -> Result<Option<String>, MetaError>;
+
     async fn get_row_access_policy_by_id(
         &self,
         tenant: &Tenant,

@@ -11598,6 +11598,7 @@ Query(
                                     ident_type: None,
                                 },
                                 columns: [],
+                                keep_database_name: false,
                             },
                         ),
                         pivot: None,
@@ -16303,6 +16304,28 @@ Grant(
 
 
 ---------- Input ----------
+GRANT OWNERSHIP on masking policy m1  TO role r1;
+---------- Output ---------
+GRANT OWNERSHIP ON  MASKING POLICY m1 TO ROLE 'r1'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: MaskingPolicy(
+                "m1",
+            ),
+        },
+        principal: Role(
+            "r1",
+        ),
+    },
+)
+
+
+---------- Input ----------
 GRANT access sequence, create sequence ON *.*  TO 'test-grant';
 ---------- Output ---------
 GRANT ACCESS SEQUENCE, CREATE SEQUENCE ON  *.* TO USER 'test-grant'@'%'
@@ -16831,6 +16854,116 @@ Grant(
             UserIdentity {
                 username: "u1",
                 hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT CREATE MASKING POLICY ON *.* TO USER a;
+---------- Output ---------
+GRANT CREATE MASKING POLICY ON  *.* TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                CreateMaskingPolicy,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT APPLY MASKING POLICY ON *.* TO USER a;
+---------- Output ---------
+GRANT APPLY MASKING POLICY ON  *.* TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                ApplyMaskingPolicy,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE human_resources;
+---------- Output ---------
+GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE 'human_resources'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                ApplyMaskingPolicy,
+            ],
+            level: MaskingPolicy(
+                "ssn_mask",
+            ),
+        },
+        principal: Role(
+            "human_resources",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON MASKING POLICY mask_phone TO ROLE role_mask_apply;
+---------- Output ---------
+GRANT OWNERSHIP ON  MASKING POLICY mask_phone TO ROLE 'role_mask_apply'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: MaskingPolicy(
+                "mask_phone",
+            ),
+        },
+        principal: Role(
+            "role_mask_apply",
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS ON MASKING POLICY ssn_mask;
+---------- Output ---------
+SHOW GRANTS ON MASKING POLICY ssn_mask 
+---------- AST ------------
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
+        object: MaskingPolicy(
+            "ssn_mask",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
             },
         ),
     },
@@ -19452,7 +19585,7 @@ ShowObjectPrivileges(
 ---------- Input ----------
 SHOW GRANTS ON CONNECTION c1;
 ---------- Output ---------
-SHOW GRANTS ON  CONNECTION c1 
+SHOW GRANTS ON CONNECTION c1 
 ---------- AST ------------
 ShowObjectPrivileges(
     ShowObjectPrivilegesStmt {
@@ -20438,6 +20571,7 @@ Query(
                                     ident_type: None,
                                 },
                                 columns: [],
+                                keep_database_name: false,
                             },
                         ),
                     },
@@ -20582,6 +20716,7 @@ Query(
                                             ident_type: None,
                                         },
                                         columns: [],
+                                        keep_database_name: false,
                                     },
                                 ),
                             },
@@ -20707,6 +20842,7 @@ Query(
                                     ident_type: None,
                                 },
                                 columns: [],
+                                keep_database_name: false,
                             },
                         ),
                     },
@@ -22257,7 +22393,7 @@ CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN cur
 ---------- AST ------------
 CreateDatamaskPolicy(
     CreateDatamaskPolicyStmt {
-        create_option: Create,
+        if_not_exists: false,
         name: "email_mask",
         policy: DataMaskPolicy {
             args: [
@@ -22352,107 +22488,6 @@ CreateDatamaskPolicy(
 
 
 ---------- Input ----------
-CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
----------- Output ---------
-CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
----------- AST ------------
-CreateDatamaskPolicy(
-    CreateDatamaskPolicyStmt {
-        create_option: CreateOrReplace,
-        name: "email_mask",
-        policy: DataMaskPolicy {
-            args: [
-                DataMaskArg {
-                    arg_name: "val",
-                    arg_type: String,
-                },
-            ],
-            return_type: String,
-            body: Case {
-                span: Some(
-                    78..146,
-                ),
-                operand: None,
-                conditions: [
-                    InList {
-                        span: Some(
-                            103..117,
-                        ),
-                        expr: FunctionCall {
-                            span: Some(
-                                88..102,
-                            ),
-                            func: FunctionCall {
-                                distinct: false,
-                                name: Identifier {
-                                    span: Some(
-                                        88..100,
-                                    ),
-                                    name: "current_role",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                                args: [],
-                                params: [],
-                                order_by: [],
-                                window: None,
-                                lambda: None,
-                            },
-                        },
-                        list: [
-                            Literal {
-                                span: Some(
-                                    107..116,
-                                ),
-                                value: String(
-                                    "ANALYST",
-                                ),
-                            },
-                        ],
-                        not: false,
-                    },
-                ],
-                results: [
-                    ColumnRef {
-                        span: Some(
-                            123..126,
-                        ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        123..126,
-                                    ),
-                                    name: "VAL",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                            ),
-                        },
-                    },
-                ],
-                else_result: Some(
-                    Literal {
-                        span: Some(
-                            132..143,
-                        ),
-                        value: String(
-                            "*********",
-                        ),
-                    },
-                ),
-            },
-            comment: Some(
-                "this is a masking policy",
-            ),
-        },
-    },
-)
-
-
----------- Input ----------
 DESC MASKING POLICY email_mask
 ---------- Output ---------
 DESCRIBE MASKING POLICY email_mask
@@ -22480,7 +22515,7 @@ DropDatamaskPolicy(
 ---------- Input ----------
 REFRESH VIRTUAL COLUMN FOR t
 ---------- Output ---------
-REFRESH VIRTUAL COLUMN FOR t
+REFRESH VIRTUAL COLUMN ON t
 ---------- AST ------------
 RefreshVirtualColumn(
     RefreshVirtualColumnStmt {
@@ -22494,6 +22529,9 @@ RefreshVirtualColumn(
             quote: None,
             ident_type: None,
         },
+        selection: None,
+        limit: None,
+        overwrite: false,
     },
 )
 
@@ -27405,6 +27443,7 @@ Query(
                                 ident_type: None,
                             },
                             columns: [],
+                            keep_database_name: false,
                         },
                         user_specified_materialized: false,
                         materialized: false,
@@ -28610,20 +28649,20 @@ AlterTable(
 
 
 ---------- Input ----------
-create or replace row access policy rap_it as (empl_id varchar) returns boolean ->
+create row access policy rap_it as (empl_id varchar) returns boolean ->
 case
     when 'it_admin' = current_role() then true
     else false
 end
 ---------- Output ---------
-CREATE OR REPLACE ROW ACCESS POLICY rap_it AS (empl_id STRING) RETURNS BOOLEAN -> CASE WHEN 'it_admin' = current_role() THEN TRUE ELSE FALSE END
+CREATE ROW ACCESS POLICY rap_it AS (empl_id STRING) RETURNS BOOLEAN -> CASE WHEN 'it_admin' = current_role() THEN TRUE ELSE FALSE END
 ---------- AST ------------
 CreateRowAccessPolicy(
     CreateRowAccessPolicyStmt {
-        create_option: CreateOrReplace,
+        if_not_exists: false,
         name: Identifier {
             span: Some(
-                36..42,
+                25..31,
             ),
             name: "rap_it",
             quote: None,
@@ -28639,18 +28678,18 @@ CreateRowAccessPolicy(
             ],
             definition: Case {
                 span: Some(
-                    83..153,
+                    72..142,
                 ),
                 operand: None,
                 conditions: [
                     BinaryOp {
                         span: Some(
-                            108..109,
+                            97..98,
                         ),
                         op: Eq,
                         left: Literal {
                             span: Some(
-                                97..107,
+                                86..96,
                             ),
                             value: String(
                                 "it_admin",
@@ -28658,13 +28697,13 @@ CreateRowAccessPolicy(
                         },
                         right: FunctionCall {
                             span: Some(
-                                110..124,
+                                99..113,
                             ),
                             func: FunctionCall {
                                 distinct: false,
                                 name: Identifier {
                                     span: Some(
-                                        110..122,
+                                        99..111,
                                     ),
                                     name: "current_role",
                                     quote: None,
@@ -28682,7 +28721,7 @@ CreateRowAccessPolicy(
                 results: [
                     Literal {
                         span: Some(
-                            130..134,
+                            119..123,
                         ),
                         value: Boolean(
                             true,
@@ -28692,7 +28731,7 @@ CreateRowAccessPolicy(
                 else_result: Some(
                     Literal {
                         span: Some(
-                            144..149,
+                            133..138,
                         ),
                         value: Boolean(
                             false,
@@ -28706,7 +28745,7 @@ CreateRowAccessPolicy(
 
 
 ---------- Input ----------
-create or replace row access policy rap_sales_manager_regions_1 as (sales_region varchar) returns boolean ->
+create row access policy if not exists rap_sales_manager_regions_1 as (sales_region varchar) returns boolean ->
     'sales_executive_role' = current_role()
       or exists (
             select 1 from salesmanagerregions
@@ -28714,14 +28753,14 @@ create or replace row access policy rap_sales_manager_regions_1 as (sales_region
                 and region = sales_region
 )
 ---------- Output ---------
-CREATE OR REPLACE ROW ACCESS POLICY rap_sales_manager_regions_1 AS (sales_region STRING) RETURNS BOOLEAN -> 'sales_executive_role' = current_role() OR EXISTS (SELECT 1 FROM salesmanagerregions WHERE sales_manager = current_role() AND region = sales_region)
+CREATE ROW ACCESS POLICY IF NOT EXISTS rap_sales_manager_regions_1 AS (sales_region STRING) RETURNS BOOLEAN -> 'sales_executive_role' = current_role() OR EXISTS (SELECT 1 FROM salesmanagerregions WHERE sales_manager = current_role() AND region = sales_region)
 ---------- AST ------------
 CreateRowAccessPolicy(
     CreateRowAccessPolicyStmt {
-        create_option: CreateOrReplace,
+        if_not_exists: true,
         name: Identifier {
             span: Some(
-                36..63,
+                39..66,
             ),
             name: "rap_sales_manager_regions_1",
             quote: None,
@@ -28737,17 +28776,17 @@ CreateRowAccessPolicy(
             ],
             definition: BinaryOp {
                 span: Some(
-                    159..161,
+                    162..164,
                 ),
                 op: Or,
                 left: BinaryOp {
                     span: Some(
-                        136..137,
+                        139..140,
                     ),
                     op: Eq,
                     left: Literal {
                         span: Some(
-                            113..135,
+                            116..138,
                         ),
                         value: String(
                             "sales_executive_role",
@@ -28755,13 +28794,13 @@ CreateRowAccessPolicy(
                     },
                     right: FunctionCall {
                         span: Some(
-                            138..152,
+                            141..155,
                         ),
                         func: FunctionCall {
                             distinct: false,
                             name: Identifier {
                                 span: Some(
-                                    138..150,
+                                    141..153,
                                 ),
                                 name: "current_role",
                                 quote: None,
@@ -28777,18 +28816,18 @@ CreateRowAccessPolicy(
                 },
                 right: Exists {
                     span: Some(
-                        162..311,
+                        165..314,
                     ),
                     not: false,
                     subquery: Query {
                         span: Some(
-                            183..309,
+                            186..312,
                         ),
                         with: None,
                         body: Select(
                             SelectStmt {
                                 span: Some(
-                                    183..309,
+                                    186..312,
                                 ),
                                 hints: None,
                                 distinct: false,
@@ -28797,7 +28836,7 @@ CreateRowAccessPolicy(
                                     AliasedExpr {
                                         expr: Literal {
                                             span: Some(
-                                                190..191,
+                                                193..194,
                                             ),
                                             value: UInt64(
                                                 1,
@@ -28809,13 +28848,13 @@ CreateRowAccessPolicy(
                                 from: [
                                     Table {
                                         span: Some(
-                                            197..216,
+                                            200..219,
                                         ),
                                         catalog: None,
                                         database: None,
                                         table: Identifier {
                                             span: Some(
-                                                197..216,
+                                                200..219,
                                             ),
                                             name: "salesmanagerregions",
                                             quote: None,
@@ -28832,17 +28871,17 @@ CreateRowAccessPolicy(
                                 selection: Some(
                                     BinaryOp {
                                         span: Some(
-                                            284..287,
+                                            287..290,
                                         ),
                                         op: And,
                                         left: BinaryOp {
                                             span: Some(
-                                                251..252,
+                                                254..255,
                                             ),
                                             op: Eq,
                                             left: ColumnRef {
                                                 span: Some(
-                                                    237..250,
+                                                    240..253,
                                                 ),
                                                 column: ColumnRef {
                                                     database: None,
@@ -28850,7 +28889,7 @@ CreateRowAccessPolicy(
                                                     column: Name(
                                                         Identifier {
                                                             span: Some(
-                                                                237..250,
+                                                                240..253,
                                                             ),
                                                             name: "sales_manager",
                                                             quote: None,
@@ -28861,13 +28900,13 @@ CreateRowAccessPolicy(
                                             },
                                             right: FunctionCall {
                                                 span: Some(
-                                                    253..267,
+                                                    256..270,
                                                 ),
                                                 func: FunctionCall {
                                                     distinct: false,
                                                     name: Identifier {
                                                         span: Some(
-                                                            253..265,
+                                                            256..268,
                                                         ),
                                                         name: "current_role",
                                                         quote: None,
@@ -28883,12 +28922,12 @@ CreateRowAccessPolicy(
                                         },
                                         right: BinaryOp {
                                             span: Some(
-                                                295..296,
+                                                298..299,
                                             ),
                                             op: Eq,
                                             left: ColumnRef {
                                                 span: Some(
-                                                    288..294,
+                                                    291..297,
                                                 ),
                                                 column: ColumnRef {
                                                     database: None,
@@ -28896,7 +28935,7 @@ CreateRowAccessPolicy(
                                                     column: Name(
                                                         Identifier {
                                                             span: Some(
-                                                                288..294,
+                                                                291..297,
                                                             ),
                                                             name: "region",
                                                             quote: None,
@@ -28907,7 +28946,7 @@ CreateRowAccessPolicy(
                                             },
                                             right: ColumnRef {
                                                 span: Some(
-                                                    297..309,
+                                                    300..312,
                                                 ),
                                                 column: ColumnRef {
                                                     database: None,
@@ -28915,7 +28954,7 @@ CreateRowAccessPolicy(
                                                     column: Name(
                                                         Identifier {
                                                             span: Some(
-                                                                297..309,
+                                                                300..312,
                                                             ),
                                                             name: "sales_region",
                                                             quote: None,

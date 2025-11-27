@@ -192,6 +192,6 @@ pub fn string_to_timestamp(
 
 #[inline]
 pub fn timestamp_to_string(ts: i64, tz: &TimeZone) -> impl Display {
-    let zdt = ts.to_timestamp(tz.clone());
+    let zdt = ts.to_timestamp(tz);
     strtime::format(TIMESTAMP_FORMAT, &zdt).unwrap()
 }

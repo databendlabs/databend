@@ -44,9 +44,7 @@ def run_transaction_batch(thread_id: int) -> None:
 
     try:
         for tx_index in range(TRANSACTIONS_PER_THREAD):
-            base_value = (
-                thread_id * VALUE_GAP + tx_index * ROWS_PER_TRANSACTION
-            )
+            base_value = thread_id * VALUE_GAP + tx_index * ROWS_PER_TRANSACTION
             values_clause = ", ".join(
                 f"({base_value + offset})" for offset in range(ROWS_PER_TRANSACTION)
             )
@@ -58,9 +56,7 @@ def run_transaction_batch(thread_id: int) -> None:
                     cursor.execute("BEGIN")
                     drain(cursor)
 
-                    cursor.execute(
-                        f"INSERT INTO {TABLE_NAME} VALUES {values_clause}"
-                    )
+                    cursor.execute(f"INSERT INTO {TABLE_NAME} VALUES {values_clause}")
                     drain(cursor)
 
                     cursor.execute("COMMIT")

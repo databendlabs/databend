@@ -14,8 +14,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| i32    | Int32([0])                                                               |
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| i32    | Column(Int32([0]))                                                       |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -36,8 +36,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| i32    | Int32([0])                                                               |
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| i32    | Column(Int32([0]))                                                       |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -58,8 +58,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| i64    | Int64([0])                                                               |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| i64    | Column(Int64([0]))                                                       |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -80,8 +80,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| i64    | Int64([0])                                                               |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| i64    | Column(Int64([0]))                                                       |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -102,8 +102,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| u32    | UInt32([0])                                                              |
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| u32    | Column(UInt32([0]))                                                      |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -124,8 +124,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| u32    | UInt32([0])                                                              |
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| u32    | Column(UInt32([0]))                                                      |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -146,8 +146,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| u64    | UInt64([0])                                                              |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| u64    | Column(UInt64([0]))                                                      |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -168,8 +168,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| u64    | UInt64([0])                                                              |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| u64    | Column(UInt64([0]))                                                      |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -190,8 +190,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_i32  | NullableColumn { column: Int32([0]), validity: [0b_______1] }            |
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_i32  | Column(NullableColumn { column: Int32([0]), validity: [0b_______1] })    |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -212,8 +212,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_i32  | NullableColumn { column: Int32([0]), validity: [0b_______1] }            |
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_i32  | Column(NullableColumn { column: Int32([0]), validity: [0b_______1] })    |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -234,8 +234,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_i64  | NullableColumn { column: Int64([0]), validity: [0b_______1] }            |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| n_i64  | Column(NullableColumn { column: Int64([0]), validity: [0b_______1] })    |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -256,8 +256,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_i64  | NullableColumn { column: Int64([0]), validity: [0b_______1] }            |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| n_i64  | Column(NullableColumn { column: Int64([0]), validity: [0b_______1] })    |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -278,7 +278,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -299,7 +299,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -320,8 +320,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -342,8 +342,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -364,8 +364,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| f32    | Float32([0])                                                             |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| f32    | Column(Float32([0]))                                                     |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -386,8 +386,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| f32    | Float32([0])                                                             |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| f32    | Column(Float32([0]))                                                     |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -408,8 +408,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_f32  | NullableColumn { column: Float32([0]), validity: [0b_______1] }          |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| n_f32  | Column(NullableColumn { column: Float32([0]), validity: [0b_______1] })  |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -430,8 +430,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_f32  | NullableColumn { column: Float32([0]), validity: [0b_______1] }          |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| n_f32  | Column(NullableColumn { column: Float32([0]), validity: [0b_______1] })  |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -452,8 +452,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| f64    | Float64([0])                                                             |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| f64    | Column(Float64([0]))                                                     |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -474,8 +474,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| f64    | Float64([0])                                                             |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| f64    | Column(Float64([0]))                                                     |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -496,8 +496,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_f64  | NullableColumn { column: Float64([0]), validity: [0b_______1] }          |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| n_f64  | Column(NullableColumn { column: Float64([0]), validity: [0b_______1] })  |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -518,8 +518,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_f64  | NullableColumn { column: Float64([0]), validity: [0b_______1] }          |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| n_f64  | Column(NullableColumn { column: Float64([0]), validity: [0b_______1] })  |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -540,8 +540,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| d128   | Decimal128([0])                                                          |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| d128   | Column(Decimal128([0]))                                                  |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -562,8 +562,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| d128   | Decimal128([0])                                                          |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| d128   | Column(Decimal128([0]))                                                  |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -581,13 +581,13 @@ evaluation:
 | Row 0  | 0           | 0                   | false        |
 +--------+-------------+---------------------+--------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------------------+
-| Column | Data                                                                     |
-+--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
-| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
-+--------+--------------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })     |
+| n_d128 | Column(NullableColumn { column: Decimal128([0]), validity: [0b_______1] }) |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] }   |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : n_u32 = n_d128
@@ -603,13 +603,13 @@ evaluation:
 | Row 0  | 0           | 0                   | true         |
 +--------+-------------+---------------------+--------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------------------+
-| Column | Data                                                                     |
-+--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
-| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
-+--------+--------------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })     |
+| n_d128 | Column(NullableColumn { column: Decimal128([0]), validity: [0b_______1] }) |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] }   |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : n_u32 > d256
@@ -628,8 +628,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| d256   | Decimal256([0])                                                          |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| d256   | Column(Decimal256([0]))                                                  |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -650,8 +650,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| d256   | Decimal256([0])                                                          |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| d256   | Column(Decimal256([0]))                                                  |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -669,13 +669,13 @@ evaluation:
 | Row 0  | 0           | 0                   | false        |
 +--------+-------------+---------------------+--------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------------------+
-| Column | Data                                                                     |
-+--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
-| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
-+--------+--------------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })     |
+| n_d256 | Column(NullableColumn { column: Decimal256([0]), validity: [0b_______1] }) |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] }   |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : n_u32 = n_d256
@@ -691,13 +691,13 @@ evaluation:
 | Row 0  | 0           | 0                   | true         |
 +--------+-------------+---------------------+--------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------------------+
-| Column | Data                                                                     |
-+--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
-| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
-+--------+--------------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })     |
+| n_d256 | Column(NullableColumn { column: Decimal256([0]), validity: [0b_______1] }) |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] }   |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : n_u64 > i32
@@ -716,8 +716,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| i32    | Int32([0])                                                               |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| i32    | Column(Int32([0]))                                                       |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -738,8 +738,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| i32    | Int32([0])                                                               |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| i32    | Column(Int32([0]))                                                       |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -760,8 +760,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| i64    | Int64([0])                                                               |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| i64    | Column(Int64([0]))                                                       |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -782,8 +782,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| i64    | Int64([0])                                                               |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| i64    | Column(Int64([0]))                                                       |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -804,8 +804,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| u32    | UInt32([0])                                                              |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| u32    | Column(UInt32([0]))                                                      |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -826,8 +826,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| u32    | UInt32([0])                                                              |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| u32    | Column(UInt32([0]))                                                      |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -848,8 +848,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| u64    | UInt64([0])                                                              |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| u64    | Column(UInt64([0]))                                                      |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -870,8 +870,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| u64    | UInt64([0])                                                              |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| u64    | Column(UInt64([0]))                                                      |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -892,8 +892,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_i32  | NullableColumn { column: Int32([0]), validity: [0b_______1] }            |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_i32  | Column(NullableColumn { column: Int32([0]), validity: [0b_______1] })    |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -914,8 +914,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_i32  | NullableColumn { column: Int32([0]), validity: [0b_______1] }            |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_i32  | Column(NullableColumn { column: Int32([0]), validity: [0b_______1] })    |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -936,8 +936,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_i64  | NullableColumn { column: Int64([0]), validity: [0b_______1] }            |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_i64  | Column(NullableColumn { column: Int64([0]), validity: [0b_______1] })    |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -958,8 +958,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_i64  | NullableColumn { column: Int64([0]), validity: [0b_______1] }            |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_i64  | Column(NullableColumn { column: Int64([0]), validity: [0b_______1] })    |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -980,8 +980,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1002,8 +1002,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1024,7 +1024,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1045,7 +1045,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1066,8 +1066,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| f32    | Float32([0])                                                             |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| f32    | Column(Float32([0]))                                                     |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1088,8 +1088,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| f32    | Float32([0])                                                             |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| f32    | Column(Float32([0]))                                                     |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1110,8 +1110,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| n_f32  | NullableColumn { column: Float32([0]), validity: [0b_______1] }          |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| n_f32  | Column(NullableColumn { column: Float32([0]), validity: [0b_______1] })  |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1132,8 +1132,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| n_f32  | NullableColumn { column: Float32([0]), validity: [0b_______1] }          |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| n_f32  | Column(NullableColumn { column: Float32([0]), validity: [0b_______1] })  |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1154,8 +1154,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| f64    | Float64([0])                                                             |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| f64    | Column(Float64([0]))                                                     |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1176,8 +1176,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| f64    | Float64([0])                                                             |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| f64    | Column(Float64([0]))                                                     |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1198,8 +1198,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| n_f64  | NullableColumn { column: Float64([0]), validity: [0b_______1] }          |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| n_f64  | Column(NullableColumn { column: Float64([0]), validity: [0b_______1] })  |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1220,8 +1220,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| n_f64  | NullableColumn { column: Float64([0]), validity: [0b_______1] }          |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| n_f64  | Column(NullableColumn { column: Float64([0]), validity: [0b_______1] })  |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1242,8 +1242,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| d128   | Decimal128([0])                                                          |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| d128   | Column(Decimal128([0]))                                                  |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1264,8 +1264,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| d128   | Decimal128([0])                                                          |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| d128   | Column(Decimal128([0]))                                                  |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1283,13 +1283,13 @@ evaluation:
 | Row 0  | 0           | 0                   | false        |
 +--------+-------------+---------------------+--------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------------------+
-| Column | Data                                                                     |
-+--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
-| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
-+--------+--------------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })     |
+| n_d128 | Column(NullableColumn { column: Decimal128([0]), validity: [0b_______1] }) |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] }   |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : n_u64 = n_d128
@@ -1305,13 +1305,13 @@ evaluation:
 | Row 0  | 0           | 0                   | true         |
 +--------+-------------+---------------------+--------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------------------+
-| Column | Data                                                                     |
-+--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| n_d128 | NullableColumn { column: Decimal128([0]), validity: [0b_______1] }       |
-| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
-+--------+--------------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })     |
+| n_d128 | Column(NullableColumn { column: Decimal128([0]), validity: [0b_______1] }) |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] }   |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : n_u64 > d256
@@ -1330,8 +1330,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| d256   | Decimal256([0])                                                          |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| d256   | Column(Decimal256([0]))                                                  |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1352,8 +1352,8 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| d256   | Decimal256([0])                                                          |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
+| d256   | Column(Decimal256([0]))                                                  |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1371,13 +1371,13 @@ evaluation:
 | Row 0  | 0           | 0                   | false        |
 +--------+-------------+---------------------+--------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------------------+
-| Column | Data                                                                     |
-+--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
-| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
-+--------+--------------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })     |
+| n_d256 | Column(NullableColumn { column: Decimal256([0]), validity: [0b_______1] }) |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] }   |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : n_u64 = n_d256
@@ -1393,13 +1393,13 @@ evaluation:
 | Row 0  | 0           | 0                   | true         |
 +--------+-------------+---------------------+--------------+
 evaluation (internal):
-+--------+--------------------------------------------------------------------------+
-| Column | Data                                                                     |
-+--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
-| n_d256 | NullableColumn { column: Decimal256([0]), validity: [0b_______1] }       |
-| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
-+--------+--------------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })     |
+| n_d256 | Column(NullableColumn { column: Decimal256([0]), validity: [0b_______1] }) |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] }   |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : n_u32 > 1
@@ -1418,7 +1418,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1439,7 +1439,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1460,7 +1460,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1481,7 +1481,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1502,7 +1502,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1523,7 +1523,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1544,7 +1544,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1565,7 +1565,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1586,7 +1586,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1607,7 +1607,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1628,7 +1628,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1649,7 +1649,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1670,7 +1670,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1691,7 +1691,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1712,7 +1712,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1733,7 +1733,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1754,7 +1754,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u32  | NullableColumn { column: UInt32([0]), validity: [0b_______1] }           |
+| n_u32  | Column(NullableColumn { column: UInt32([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1775,7 +1775,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1796,7 +1796,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1817,7 +1817,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1838,7 +1838,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1859,7 +1859,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1880,7 +1880,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1901,7 +1901,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1922,7 +1922,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1943,7 +1943,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1964,7 +1964,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -1985,7 +1985,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -2006,7 +2006,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -2027,7 +2027,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -2048,7 +2048,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -2069,7 +2069,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -2090,7 +2090,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 
@@ -2111,7 +2111,7 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
 +--------+--------------------------------------------------------------------------+
-| n_u64  | NullableColumn { column: UInt64([0]), validity: [0b_______1] }           |
+| n_u64  | Column(NullableColumn { column: UInt64([0]), validity: [0b_______1] })   |
 | Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
 +--------+--------------------------------------------------------------------------+
 

@@ -42,6 +42,7 @@ use walkdir::DirEntry;
 use walkdir::WalkDir;
 
 use crate::arg::SqlLogicTestArgs;
+use crate::client::BodyFormat;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
@@ -254,6 +255,7 @@ pub async fn run_ttc_container(
     port: u16,
     http_server_port: u16,
     cs: &mut Vec<ContainerAsync<GenericImage>>,
+    body_format: BodyFormat,
 ) -> Result<()> {
     let docker = &docker_client_instance().await?;
     let mut images = image.split(":");
@@ -271,10 +273,13 @@ pub async fn run_ttc_container(
     let container_name = format!("databend-ttc-{}-{}", port, x);
     let start = Instant::now();
     println!("Starting container {container_name}");
-    let dsn = format!(
+    let mut dsn = format!(
         "databend://root:@127.0.0.1:{}?sslmode=disable",
         http_server_port
     );
+    if matches!(body_format, BodyFormat::Arrow) {
+        dsn = format!("{dsn}&body_format=arrow");
+    }
 
     let mut i = 1;
     loop {
@@ -505,6 +510,37 @@ async fn stop_container(docker: &Docker, container_name: &str) {
             Err(err) => {
                 eprintln!("Failed to remove container {container_name}: {err}");
             }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ColumnType {
+    Bool,
+    Text,
+    Integer,
+    FloatingPoint,
+    Any,
+}
+
+impl sqllogictest::ColumnType for ColumnType {
+    fn from_char(value: char) -> Option<Self> {
+        match value {
+            'B' => Some(Self::Bool),
+            'T' => Some(Self::Text),
+            'I' => Some(Self::Integer),
+            'R' => Some(Self::FloatingPoint),
+            _ => Some(Self::Any),
+        }
+    }
+
+    fn to_char(&self) -> char {
+        match self {
+            Self::Bool => 'B',
+            Self::Text => 'T',
+            Self::Integer => 'I',
+            Self::FloatingPoint => 'R',
+            Self::Any => '?',
         }
     }
 }

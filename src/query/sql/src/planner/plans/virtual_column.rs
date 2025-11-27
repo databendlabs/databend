@@ -18,10 +18,19 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RefreshSelection {
+    SegmentLocation(String),
+    BlockLocation(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RefreshVirtualColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub limit: Option<u64>,
+    pub overwrite: bool,
+    pub selection: Option<RefreshSelection>,
 }
 
 impl RefreshVirtualColumnPlan {

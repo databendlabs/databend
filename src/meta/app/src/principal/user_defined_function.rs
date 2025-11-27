@@ -52,6 +52,18 @@ pub struct UDFScript {
     pub immutable: Option<bool>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct UDTFServer {
+    pub address: String,
+    pub handler: String,
+    pub headers: BTreeMap<String, String>,
+    pub language: String,
+    pub arg_names: Vec<String>,
+    pub arg_types: Vec<DataType>,
+    pub return_types: Vec<(String, DataType)>,
+    pub immutable: Option<bool>,
+}
+
 /// User Defined Table Function (UDTF)
 ///
 /// # Fields
@@ -98,6 +110,7 @@ pub enum UDFDefinition {
     UDFServer(UDFServer),
     UDFScript(UDFScript),
     UDAFScript(UDAFScript),
+    UDTFServer(UDTFServer),
     UDTF(UDTF),
     ScalarUDF(ScalarUDF),
 }
@@ -110,7 +123,8 @@ impl UDFDefinition {
             Self::UDFScript(_) => "UDFScript",
             Self::UDAFScript(_) => "UDAFScript",
             Self::UDTF(_) => "UDTF",
-            UDFDefinition::ScalarUDF(_) => "ScalarUDF",
+            Self::UDTFServer(_) => "UDTFServer",
+            Self::ScalarUDF(_) => "ScalarUDF",
         }
     }
 
@@ -120,6 +134,7 @@ impl UDFDefinition {
             Self::UDFServer(_) => false,
             Self::UDFScript(_) => false,
             Self::UDTF(_) => false,
+            Self::UDTFServer(_) => false,
             Self::ScalarUDF(_) => false,
             Self::UDAFScript(_) => true,
         }
@@ -130,6 +145,7 @@ impl UDFDefinition {
             Self::LambdaUDF(_) => "SQL",
             Self::UDTF(_) => "SQL",
             Self::ScalarUDF(_) => "SQL",
+            Self::UDTFServer(x) => x.language.as_str(),
             Self::UDFServer(x) => x.language.as_str(),
             Self::UDFScript(x) => x.language.as_str(),
             Self::UDAFScript(x) => x.language.as_str(),
@@ -143,6 +159,7 @@ pub struct UserDefinedFunction {
     pub description: String,
     pub definition: UDFDefinition,
     pub created_on: DateTime<Utc>,
+    pub update_on: DateTime<Utc>,
 }
 
 impl UserDefinedFunction {
@@ -152,6 +169,7 @@ impl UserDefinedFunction {
         definition: &str,
         description: &str,
     ) -> Self {
+        let now = Utc::now();
         Self {
             name: name.to_string(),
             description: description.to_string(),
@@ -159,7 +177,8 @@ impl UserDefinedFunction {
                 parameters,
                 definition: definition.to_string(),
             }),
-            created_on: Utc::now(),
+            created_on: now,
+            update_on: now,
         }
     }
 
@@ -175,6 +194,7 @@ impl UserDefinedFunction {
         description: &str,
         immutable: Option<bool>,
     ) -> Self {
+        let now = Utc::now();
         Self {
             name: name.to_string(),
             description: description.to_string(),
@@ -188,7 +208,8 @@ impl UserDefinedFunction {
                 return_type,
                 immutable,
             }),
-            created_on: Utc::now(),
+            created_on: now,
+            update_on: now,
         }
     }
 
@@ -203,6 +224,7 @@ impl UserDefinedFunction {
         description: &str,
         immutable: Option<bool>,
     ) -> Self {
+        let now = Utc::now();
         Self {
             name: name.to_string(),
             description: description.to_string(),
@@ -217,8 +239,16 @@ impl UserDefinedFunction {
                 packages: vec![],
                 immutable,
             }),
-            created_on: Utc::now(),
+            created_on: now,
+            update_on: now,
         }
+    }
+
+    pub fn as_udtf_server(self) -> Option<UDTFServer> {
+        if let UDFDefinition::UDTFServer(udtf_server) = self.definition {
+            return Some(udtf_server);
+        }
+        None
     }
 }
 
@@ -352,6 +382,50 @@ impl Display for UDFDefinition {
                     write!(f, "{name} {ty}")?;
                 }
                 write!(f, ") AS $${sql}$$")?;
+            }
+            UDFDefinition::UDTFServer(UDTFServer {
+                address,
+                handler,
+                headers,
+                language,
+                arg_names,
+                arg_types,
+                return_types,
+                immutable,
+            }) => {
+                for (i, (name, ty)) in arg_names.iter().zip(arg_types.iter()).enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{name} {ty}")?;
+                }
+                write!(f, ") RETURNS (")?;
+                for (i, (name, ty)) in return_types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{name} {ty}")?;
+                }
+                write!(f, ") LANGUAGE {language}")?;
+                if let Some(immutable) = immutable {
+                    if *immutable {
+                        write!(f, " IMMUTABLE")?;
+                    } else {
+                        write!(f, " VOLATILE")?;
+                    }
+                }
+                write!(f, " HANDLER = {handler}")?;
+                if !headers.is_empty() {
+                    write!(f, " HEADERS = (")?;
+                    for (i, (key, value)) in headers.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{key} = {value}")?;
+                    }
+                    write!(f, ")")?;
+                }
+                write!(f, " ADDRESS = {address}")?;
             }
             UDFDefinition::ScalarUDF(ScalarUDF {
                 arg_types,

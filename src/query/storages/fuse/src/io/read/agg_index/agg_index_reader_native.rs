@@ -25,63 +25,6 @@ use crate::io::NativeSourceData;
 use crate::FuseBlockPartInfo;
 
 impl AggIndexReader {
-    pub fn sync_read_native_data(&self, loc: &str) -> Option<NativeSourceData> {
-        match self.reader.operator.blocking().stat(loc) {
-            Ok(meta) => {
-                let mut reader = self
-                    .reader
-                    .operator
-                    .blocking()
-                    .reader(loc)
-                    .ok()?
-                    .into_std_read(0..meta.content_length())
-                    .ok()?;
-                let metadata = nread::reader::read_meta(&mut reader)
-                    .inspect_err(|e| {
-                        debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
-                    })
-                    .ok()?;
-                let num_rows = metadata[0].pages.iter().map(|p| p.num_values).sum();
-                debug_assert!(metadata.iter().all(|c| c
-                    .pages
-                    .iter()
-                    .map(|p| p.num_values)
-                    .sum::<u64>()
-                    == num_rows));
-
-                let columns_meta = metadata
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, c)| (i as u32, ColumnMeta::Native(c)))
-                    .collect();
-                let part = FuseBlockPartInfo::create(
-                    loc.to_string(),
-                    num_rows,
-                    columns_meta,
-                    None,
-                    self.compression.into(),
-                    None,
-                    None,
-                    None,
-                );
-                let res = self
-                    .reader
-                    .sync_read_native_columns_data(&part, &None)
-                    .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
-                    .ok()?;
-                Some(res)
-            }
-            Err(e) => {
-                if e.kind() == opendal::ErrorKind::NotFound {
-                    debug!("Aggregating index `{loc}` not found.")
-                } else {
-                    debug!("Read aggregating index `{loc}` failed: {e}");
-                }
-                None
-            }
-        }
-    }
-
     pub async fn read_native_data(&self, loc: &str) -> Option<NativeSourceData> {
         match self.reader.operator.stat(loc).await {
             Ok(meta) => {

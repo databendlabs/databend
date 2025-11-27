@@ -67,6 +67,7 @@ fn test_decode_v79_udf_python() -> anyhow::Result<()> {
             immutable: None,
         }),
         created_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
+        update_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
     };
 
     common::test_pb_from_to(func_name!(), want())?;
@@ -91,6 +92,7 @@ fn test_decode_v79_udf_sql() -> anyhow::Result<()> {
             definition: "(p) -> (NOT is_null(p))".to_string(),
         }),
         created_on: DateTime::<Utc>::from_timestamp(170267984, 0).unwrap(),
+        update_on: DateTime::<Utc>::from_timestamp(170267984, 0).unwrap(),
     };
 
     common::test_pb_from_to(func_name!(), want())?;
