@@ -759,6 +759,13 @@ fn register_timestamp_to_timestamp_tz(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampTzType> {
         vectorize_with_builder_1_arg::<TimestampType, TimestampTzType>(|val, output, ctx| {
+            if let Some(components) = fast_components_from_timestamp(val, &ctx.func_ctx.tz) {
+                let offset = components.offset_seconds;
+                let ts_tz = timestamp_tz::new(val - (offset as i64 * MICROS_PER_SEC), offset);
+                output.push(ts_tz);
+                return;
+            }
+
             let ts = match Timestamp::from_microsecond(val) {
                 Ok(ts) => ts,
                 Err(err) => {
@@ -1003,6 +1010,23 @@ fn timestamp_days_via_jiff(value: i64, tz: &TimeZone) -> i32 {
         .get_days()
 }
 
+fn timestamp_tz_days_via_lut(value: timestamp_tz) -> Option<i32> {
+    timestamp_tz_components_via_lut(value)
+        .and_then(|c| days_from_components(c.year, c.month, c.day))
+}
+
+fn timestamp_tz_days_via_jiff(value: timestamp_tz) -> Result<i32, String> {
+    let offset = Offset::from_seconds(value.seconds_offset()).map_err(|err| err.to_string())?;
+
+    Ok(value
+        .timestamp()
+        .to_timestamp(&TimeZone::fixed(offset))
+        .date()
+        .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+        .unwrap()
+        .get_days())
+}
+
 fn register_timestamp_tz_to_date(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<TimestampTzType, DateType, _, _>(
         "to_date",
@@ -1053,15 +1077,11 @@ fn register_timestamp_tz_to_date(registry: &mut FunctionRegistry) {
     }
 
     fn calc_timestamp_tz_to_date(val: timestamp_tz) -> Result<i32, String> {
-        let offset = Offset::from_seconds(val.seconds_offset()).map_err(|err| err.to_string())?;
-
-        Ok(val
-            .timestamp()
-            .to_timestamp(&TimeZone::fixed(offset))
-            .date()
-            .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
-            .unwrap()
-            .get_days())
+        if let Some(days) = timestamp_tz_days_via_lut(val) {
+            Ok(days)
+        } else {
+            timestamp_tz_days_via_jiff(val)
+        }
     }
 }
 

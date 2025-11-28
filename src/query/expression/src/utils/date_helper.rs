@@ -14,6 +14,7 @@
 
 use std::sync::LazyLock;
 
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::Result;
 use databend_common_timezone::fast_components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
@@ -258,6 +259,18 @@ fn components_time_less_than(a: &DateTimeComponents, b: &DateTimeComponents) -> 
 
 fn date_from_components(c: &DateTimeComponents) -> Option<Date> {
     Date::new(c.year as i16, c.month as i8, c.day as i8).ok()
+}
+
+#[inline]
+pub fn timestamp_tz_local_micros(value: timestamp_tz) -> Option<i64> {
+    let offset = value.micros_offset()?;
+    value.timestamp().checked_add(offset)
+}
+
+#[inline]
+pub fn timestamp_tz_components_via_lut(value: timestamp_tz) -> Option<DateTimeComponents> {
+    let local = timestamp_tz_local_micros(value)?;
+    fast_components_from_timestamp(local, &TimeZone::UTC)
 }
 
 fn datetime_from_components(c: &DateTimeComponents) -> Option<DateTime> {
