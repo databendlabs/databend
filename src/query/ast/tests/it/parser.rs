@@ -23,6 +23,7 @@ use databend_common_ast::parser::query::*;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::script::script_stmt;
 use databend_common_ast::parser::statement::insert_stmt;
+use databend_common_ast::parser::statement::statement_body;
 use databend_common_ast::parser::token::*;
 use databend_common_ast::parser::*;
 use goldenfile::Mint;
@@ -1284,6 +1285,28 @@ fn test_query_error() {
 
     for case in cases {
         run_parser(file, query, case);
+    }
+}
+
+#[test]
+fn test_reserved_error() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("reserved-error.txt").unwrap();
+    let cases = &[r#"CREATE OR
+            REPLACE FUNCTION ai_list_files (data_stage STAGE_LOCATION, l INT) RETURNS TABLE (
+            stage VARCHAR,
+            relative_path VARCHAR,
+            path VARCHAR,
+            is_dir BOOLEAN,
+            size BIGINT,
+            mode VARCHAR,
+            content_type VARCHAR,
+            etag VARCHAR,
+            truncated BOOLEAN
+           ) LANGUAGE python HANDLER='ai_list_files' address='https://api.bendml.com'"#];
+
+    for case in cases {
+        run_parser(file, statement_body, case);
     }
 }
 
