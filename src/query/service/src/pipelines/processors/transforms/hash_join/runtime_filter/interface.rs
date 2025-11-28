@@ -53,6 +53,10 @@ pub async fn build_and_push_down_runtime_filter(
         .ctx
         .get_settings()
         .get_join_runtime_filter_selectivity_threshold()?;
+    let probe_ratio_threshold = join
+        .ctx
+        .get_settings()
+        .get_join_runtime_filter_probe_ratio_threshold()?;
 
     let build_start = Instant::now();
     let mut packet = build_runtime_filter_packet(
@@ -64,6 +68,7 @@ pub async fn build_and_push_down_runtime_filter(
         bloom_threshold,
         min_max_threshold,
         selectivity_threshold,
+        probe_ratio_threshold,
         is_spill_happened,
     )?;
     let build_time = build_start.elapsed();
@@ -90,6 +95,7 @@ pub async fn build_and_push_down_runtime_filter(
         packet,
         runtime_filter_descs,
         selectivity_threshold,
+        probe_ratio_threshold,
         max_threads,
     )
     .await?;
