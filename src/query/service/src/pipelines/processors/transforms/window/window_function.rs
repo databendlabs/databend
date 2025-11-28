@@ -58,6 +58,8 @@ pub struct WindowFuncAggImpl {
     args: Vec<usize>,
 }
 
+unsafe impl Send for WindowFuncAggImpl {}
+
 impl WindowFuncAggImpl {
     #[inline]
     pub fn reset(&self) {

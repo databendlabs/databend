@@ -26,8 +26,6 @@ use crate::ColumnBuilder;
 #[derive(Clone, Copy, Debug)]
 pub struct StateAddr(*mut u8);
 
-unsafe impl Send for StateAddr {}
-
 pub type StateAddrs = Vec<StateAddr>;
 
 impl StateAddr {
