@@ -83,7 +83,7 @@ impl InvertedIndexReader {
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
         index_loc: &str,
-    ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
+    ) -> Result<Option<(Vec<usize>, Option<Vec<F32>>)>> {
         let start = Instant::now();
 
         let matched_rows = self
@@ -113,7 +113,7 @@ impl InvertedIndexReader {
         field_ids: &HashSet<u32>,
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
-    ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
+    ) -> Result<Option<(Vec<usize>, Option<Vec<F32>>)>> {
         // read index meta.
         let inverted_index_meta = load_inverted_index_meta(self.dal.clone(), index_path).await?;
         let version = inverted_index_meta.version;
@@ -158,7 +158,7 @@ impl InvertedIndexReader {
         query: Box<dyn Query>,
         version: usize,
         inverted_index_meta_map: HashMap<String, SingleColumnMeta>,
-    ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
+    ) -> Result<Option<(Vec<usize>, Option<Vec<F32>>)>> {
         let directory = load_inverted_index_directory(
             settings,
             index_path,
@@ -173,17 +173,19 @@ impl InvertedIndexReader {
         let reader = index.reader()?;
         let searcher = reader.searcher();
 
-        let matched_rows = if self.has_score {
+        let (matched_rows, matched_scores) = if self.has_score {
             let collector = TopDocs::with_limit(self.row_count as usize);
             let docs = searcher.search(&query, &collector)?;
 
             let mut matched_rows = Vec::with_capacity(docs.len());
+            let mut matched_scores = Vec::with_capacity(docs.len());
             for (score, doc_addr) in docs {
                 let doc_id = doc_addr.doc_id as usize;
                 let score = F32::from(score);
-                matched_rows.push((doc_id, Some(score)));
+                matched_rows.push(doc_id);
+                matched_scores.push(score);
             }
-            matched_rows
+            (matched_rows, Some(matched_scores))
         } else {
             let collector = DocSetCollector;
             let docs = searcher.search(&query, &collector)?;
@@ -191,12 +193,13 @@ impl InvertedIndexReader {
             let mut matched_rows = Vec::with_capacity(docs.len());
             for doc_addr in docs {
                 let doc_id = doc_addr.doc_id as usize;
-                matched_rows.push((doc_id, None));
+                matched_rows.push(doc_id);
             }
-            matched_rows
+            (matched_rows, None)
         };
+
         if !matched_rows.is_empty() {
-            Ok(Some(matched_rows))
+            Ok(Some((matched_rows, matched_scores)))
         } else {
             Ok(None)
         }
@@ -242,7 +245,7 @@ impl InvertedIndexReader {
         index_record: &IndexRecordOption,
         fuzziness: &Option<u8>,
         mut inverted_index_meta_map: HashMap<String, SingleColumnMeta>,
-    ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
+    ) -> Result<Option<(Vec<usize>, Option<Vec<F32>>)>> {
         // 1. read fst and term files.
         let mut columns = Vec::with_capacity(field_ids.len() * 2);
         for field_id in field_ids {
@@ -479,19 +482,24 @@ impl InvertedIndexReader {
 
         if let Some(matched_doc_ids) = matched_doc_ids {
             if !matched_doc_ids.is_empty() {
-                let mut matched_rows = Vec::with_capacity(matched_doc_ids.len() as usize);
-                if self.has_score {
+                let (matched_rows, matched_scores) = if self.has_score {
+                    let mut matched_rows = Vec::with_capacity(matched_doc_ids.len() as usize);
+                    let mut matched_scores = Vec::with_capacity(matched_doc_ids.len() as usize);
                     let scores =
                         collector.calculate_scores(query.box_clone(), &matched_doc_ids, None)?;
                     for (doc_id, score) in matched_doc_ids.into_iter().zip(scores.into_iter()) {
-                        matched_rows.push((doc_id as usize, Some(score)));
+                        matched_rows.push(doc_id as usize);
+                        matched_scores.push(score);
                     }
+                    (matched_rows, Some(matched_scores))
                 } else {
+                    let mut matched_rows = Vec::with_capacity(matched_doc_ids.len() as usize);
                     for doc_id in matched_doc_ids.into_iter() {
-                        matched_rows.push((doc_id as usize, None));
+                        matched_rows.push(doc_id as usize);
                     }
-                }
-                return Ok(Some(matched_rows));
+                    (matched_rows, None)
+                };
+                return Ok(Some((matched_rows, matched_scores)));
             }
         }
         Ok(None)

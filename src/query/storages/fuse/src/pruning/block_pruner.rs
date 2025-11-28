@@ -225,8 +225,13 @@ impl BlockPruner {
                                                 .should_keep(&block_location.0, row_count),
                                         )
                                         .await?;
-                                    prune_result.keep = matched_rows.is_some();
-                                    prune_result.matched_rows = matched_rows;
+                                    if let Some((rows, scores)) = matched_rows {
+                                        prune_result.keep = true;
+                                        prune_result.matched_rows = Some(rows);
+                                        prune_result.matched_scores = scores;
+                                    } else {
+                                        prune_result.keep = false;
+                                    }
 
                                     if prune_result.keep {
                                         // Perf.
@@ -300,6 +305,7 @@ impl BlockPruner {
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
                         matched_rows: prune_result.matched_rows.clone(),
+                        matched_scores: prune_result.matched_scores.clone(),
                         vector_scores: None,
                         virtual_block_meta: prune_result.virtual_block_meta.clone(),
                     },
@@ -373,6 +379,7 @@ impl BlockPruner {
                             segment_location: segment_location.location.0.clone(),
                             snapshot_location: segment_location.snapshot_loc.clone(),
                             matched_rows: None,
+                            matched_scores: None,
                             vector_scores: None,
                             virtual_block_meta: None,
                         },
@@ -403,9 +410,11 @@ struct BlockPruneResult {
     keep: bool,
     // the page ranges should keeped in the block
     range: Option<Range<usize>>,
-    // the matched rows and scores should keeped in the block
+    // the matched rows in the block (aligned with `matched_scores` when present)
     // only used by inverted index search
-    matched_rows: Option<Vec<(usize, Option<F32>)>>,
+    matched_rows: Option<Vec<usize>>,
+    // optional scores for the matched rows
+    matched_scores: Option<Vec<F32>>,
     // the optional block meta of virtual columns
     virtual_block_meta: Option<VirtualBlockMetaIndex>,
 }
@@ -418,6 +427,7 @@ impl BlockPruneResult {
             keep: false,
             range: None,
             matched_rows: None,
+            matched_scores: None,
             virtual_block_meta: None,
         }
     }
