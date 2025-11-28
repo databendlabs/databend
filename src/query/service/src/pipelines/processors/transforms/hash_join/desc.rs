@@ -43,11 +43,13 @@ pub const MARKER_KIND_TRUE: u8 = 0;
 pub const MARKER_KIND_FALSE: u8 = 1;
 pub const MARKER_KIND_NULL: u8 = 2;
 
+#[derive(Debug)]
 pub struct MarkJoinDesc {
     // pub(crate) marker_index: Option<IndexType>,
     pub(crate) has_null: RwLock<bool>,
 }
 
+#[derive(Debug)]
 pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
@@ -81,6 +83,7 @@ pub struct RuntimeFilterDesc {
     pub enable_min_max_runtime_filter: bool,
 }
 
+#[derive(Debug)]
 pub(crate) struct RuntimeFiltersDesc {
     pub filters: Vec<RuntimeFilterDesc>,
 }
@@ -299,7 +302,9 @@ impl HashJoinDesc {
         let field_reorder = if !projection.is_sorted() {
             let mut mapper = projection.iter().cloned().enumerate().collect::<Vec<_>>();
             mapper.sort_by_key(|(_, field)| *field);
-            let reorder = mapper.iter().map(|(i, _)| *i).collect::<Vec<_>>();
+            let reorder = (0..projection.len())
+                .map(|j| mapper.iter().position(|(i, _)| *i == j).unwrap())
+                .collect::<Vec<_>>();
             Some(reorder)
         } else {
             None
@@ -323,7 +328,7 @@ impl HashJoinDesc {
 
 pub struct NestedLoopDesc {
     pub filter: FilterExecutor,
-    pub field_reorder: Option<Vec<FieldIndex>>,
     pub projections: ColumnSet,
+    pub field_reorder: Option<Vec<FieldIndex>>,
     pub nested_loop_join_threshold: usize,
 }
