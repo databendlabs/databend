@@ -213,6 +213,26 @@ mod datetime_fast_path {
         });
     }
 
+    #[divan::bench]
+    fn convert_timezone(bencher: divan::Bencher) {
+        let expr = build_expr("convert_timezone('America/Los_Angeles', ts)", &[(
+            "ts",
+            DataType::Timestamp,
+        )]);
+        let data = &*SAMPLES;
+        let block = DataBlock::new(vec![data.timestamp_entry()], data.rows());
+        let func_ctx = FunctionContext {
+            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            ..Default::default()
+        };
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        bencher.bench(|| {
+            let value = evaluator.run(&expr).unwrap();
+            divan::black_box(value);
+        });
+    }
+
     fn build_expr(sql: &str, columns: &[(&str, DataType)]) -> Expr {
         let raw_expr = parser::parse_raw_expr(sql, columns);
         type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap()

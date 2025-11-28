@@ -18,6 +18,7 @@ use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::Result;
 use databend_common_expression::date_helper::calc_date_to_timestamp;
+use databend_common_expression::date_helper::timestamp_tz_components_via_lut;
 use databend_common_expression::date_helper::today_date;
 use databend_common_expression::date_helper::DateConverter;
 use databend_common_expression::date_helper::EvalDaysImpl;
@@ -155,26 +156,36 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                 },
             ),
         );
-    registry
-        .register_passthrough_nullable_2_arg::<TimestampTzType, IntervalType, TimestampTzType, _, _>(
-            "plus",
-            |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<TimestampTzType, IntervalType, TimestampTzType>(
-                |a, b, output, ctx| {
-                    let offset = match Offset::from_seconds(a.seconds_offset()) {
-                        Ok(offset) => offset,
-                        Err(err) => {
-                            ctx.set_error(output.len(), err.to_string());
-                            output.push(timestamp_tz::default());
-                            return;
-                        }
-                    };
-                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp(), |result| {
-                        timestamp_tz::new(result, a.seconds_offset())
-                    }, TimeZone::fixed(offset));
-                },
-            ),
-        );
+    registry.register_passthrough_nullable_2_arg::<TimestampTzType, IntervalType, TimestampTzType, _, _>(
+        "plus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampTzType, IntervalType, TimestampTzType>(
+            |a, b, output, ctx| {
+                let offset = a.seconds_offset();
+                let offset_micros = match timestamp_tz::micros_offset_inner(offset as i64) {
+                    Some(v) => v,
+                    None => {
+                        ctx.set_error(output.len(), "invalid timestamp timezone offset");
+                        output.push(timestamp_tz::default());
+                        return;
+                    }
+                };
+                let local = a.timestamp().wrapping_add(offset_micros);
+                eval_timestamp_plus(
+                    a,
+                    b,
+                    output,
+                    ctx,
+                    move |_| local,
+                    move |result| {
+                        let utc = result.wrapping_sub(offset_micros);
+                        timestamp_tz::new(utc, offset)
+                    },
+                    TimeZone::UTC,
+                );
+            },
+        ),
+    );
 
     registry
         .register_passthrough_nullable_2_arg::<IntervalType, TimestampType, TimestampType, _, _>(
@@ -195,26 +206,36 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             ),
         );
 
-    registry
-        .register_passthrough_nullable_2_arg::<IntervalType, TimestampTzType, TimestampTzType, _, _>(
-            "plus",
-            |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<IntervalType, TimestampTzType, TimestampTzType>(
-                |b, a, output, ctx| {
-                    let offset = match Offset::from_seconds(a.seconds_offset()) {
-                        Ok(offset) => offset,
-                        Err(err) => {
-                            ctx.set_error(output.len(), err.to_string());
-                            output.push(timestamp_tz::default());
-                            return;
-                        }
-                    };
-                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp(), |result| {
-                        timestamp_tz::new(result, a.seconds_offset())
-                    }, TimeZone::fixed(offset));
-                },
-            ),
-        );
+    registry.register_passthrough_nullable_2_arg::<IntervalType, TimestampTzType, TimestampTzType, _, _>(
+        "plus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<IntervalType, TimestampTzType, TimestampTzType>(
+            |b, a, output, ctx| {
+                let offset = a.seconds_offset();
+                let offset_micros = match timestamp_tz::micros_offset_inner(offset as i64) {
+                    Some(v) => v,
+                    None => {
+                        ctx.set_error(output.len(), "invalid timestamp timezone offset");
+                        output.push(timestamp_tz::default());
+                        return;
+                    }
+                };
+                let local = a.timestamp().wrapping_add(offset_micros);
+                eval_timestamp_plus(
+                    a,
+                    b,
+                    output,
+                    ctx,
+                    move |_| local,
+                    move |result| {
+                        let utc = result.wrapping_sub(offset_micros);
+                        timestamp_tz::new(utc, offset)
+                    },
+                    TimeZone::UTC,
+                );
+            },
+        ),
+    );
 
     registry.register_passthrough_nullable_2_arg::<IntervalType, IntervalType, IntervalType, _, _>(
         "minus",
@@ -259,26 +280,36 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             ),
         );
 
-    registry
-        .register_passthrough_nullable_2_arg::<TimestampTzType, IntervalType, TimestampTzType, _, _>(
-            "minus",
-            |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<TimestampTzType, IntervalType, TimestampTzType>(
-                |a, b, output, ctx| {
-                    let offset = match Offset::from_seconds(a.seconds_offset()) {
-                        Ok(offset) => offset,
-                        Err(err) => {
-                            ctx.set_error(output.len(), err.to_string());
-                            output.push(timestamp_tz::default());
-                            return;
-                        }
-                    };
-                    eval_timestamp_minus(a, b, output, ctx, |input| input.timestamp(), |result| {
-                        timestamp_tz::new(result, a.seconds_offset())
-                    }, TimeZone::fixed(offset));
-                },
-            ),
-        );
+    registry.register_passthrough_nullable_2_arg::<TimestampTzType, IntervalType, TimestampTzType, _, _>(
+        "minus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampTzType, IntervalType, TimestampTzType>(
+            |a, b, output, ctx| {
+                let offset = a.seconds_offset();
+                let offset_micros = match timestamp_tz::micros_offset_inner(offset as i64) {
+                    Some(v) => v,
+                    None => {
+                        ctx.set_error(output.len(), "invalid timestamp timezone offset");
+                        output.push(timestamp_tz::default());
+                        return;
+                    }
+                };
+                let local = a.timestamp().wrapping_add(offset_micros);
+                eval_timestamp_minus(
+                    a,
+                    b,
+                    output,
+                    ctx,
+                    move |_| local,
+                    move |result| {
+                        let utc = result.wrapping_sub(offset_micros);
+                        timestamp_tz::new(utc, offset)
+                    },
+                    TimeZone::UTC,
+                );
+            },
+        ),
+    );
 
     registry
         .register_passthrough_nullable_2_arg::<TimestampType, TimestampType, IntervalType, _, _>(
@@ -321,6 +352,15 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         std::mem::swap(&mut t1, &mut t2);
                         is_negative = true;
                     }
+
+                    if let (Some(c1), Some(c2)) = (
+                        timestamp_tz_components_via_lut(t1),
+                        timestamp_tz_components_via_lut(t2),
+                    ) {
+                        output.push(calc_age_from_components(&c1, &c2, is_negative));
+                        return;
+                    }
+
                     let zone1 = match Offset::from_seconds(t1.seconds_offset())
                         .map(TimeZone::fixed)
                     {
@@ -415,14 +455,24 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             let fn_eval_age = |t2: timestamp_tz, ctx: &mut EvalContext| {
                 let mut is_negative = false;
 
-                let zone = TimeZone::fixed(Offset::from_seconds(t2.seconds_offset())?);
+                let offset = Offset::from_seconds(t2.seconds_offset())?;
+                let zone = TimeZone::fixed(offset);
                 let today_date = today_date(&ctx.func_ctx.now, &zone);
-                let mut t1 = calc_date_to_timestamp(today_date, &zone)?;
-                let mut t2_micros = t2.timestamp();
-
-                if t1 < t2_micros {
-                    std::mem::swap(&mut t1, &mut t2_micros);
+                let t1_raw = calc_date_to_timestamp(today_date, &zone)?;
+                let t2_raw = t2.timestamp();
+                let today_ts = timestamp_tz::new(t1_raw, t2.seconds_offset());
+                let (t1, t2_micros, later_ts, earlier_ts) = if t1_raw >= t2_raw {
+                    (t1_raw, t2_raw, today_ts, t2)
+                } else {
                     is_negative = true;
+                    (t2_raw, t1_raw, t2, today_ts)
+                };
+
+                if let (Some(c1), Some(c2)) = (
+                    timestamp_tz_components_via_lut(later_ts),
+                    timestamp_tz_components_via_lut(earlier_ts),
+                ) {
+                    return Result::Ok(calc_age_from_components(&c1, &c2, is_negative));
                 }
                 if let (Some(c1), Some(c2)) = (
                     fast_components_from_timestamp(t1, &zone),
