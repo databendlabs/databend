@@ -20,9 +20,6 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::VIRTUAL_COLUMNS_ID_UPPER;
-use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
-use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
