@@ -108,38 +108,34 @@ impl PartitionedPayload {
     ) {
         if self.payloads.len() == 1 {
             self.payloads[0].reserve_append_rows(
-                &state.empty_vector,
+                &state.empty_vector[..new_group_rows],
                 &state.group_hashes,
                 &mut state.addresses,
                 &mut state.page_index,
-                new_group_rows,
                 group_columns,
             );
         } else {
             // generate partition selection indices
             state.reset_partitions(self.partition_count());
-            let select_vector = &state.empty_vector;
-
-            for idx in select_vector.iter().take(new_group_rows).copied() {
-                let hash = state.group_hashes[idx];
+            for &row in &state.empty_vector[..new_group_rows] {
+                let hash = state.group_hashes[row];
                 let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
                 let sel = &mut state.partition_entries[partition_idx];
 
-                sel[state.partition_count[partition_idx]] = idx;
+                sel[state.partition_count[partition_idx]] = row;
                 state.partition_count[partition_idx] += 1;
             }
 
             for partition_index in 0..self.payloads.len() {
                 let count = state.partition_count[partition_index];
                 if count > 0 {
-                    let sel = &state.partition_entries[partition_index];
+                    let sel = &state.partition_entries[partition_index][..count];
 
                     self.payloads[partition_index].reserve_append_rows(
                         sel,
                         &state.group_hashes,
                         &mut state.addresses,
                         &mut state.page_index,
-                        count,
                         group_columns,
                     );
                 }

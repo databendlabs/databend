@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::new_sel;
 use super::row_ptr::RowPtr;
-use super::SelectVector;
 use super::StateAddr;
 use super::BATCH_SIZE;
+
+pub type SelectVector = [usize; BATCH_SIZE];
 
 /// ProbeState is the state to probe HT
 /// It could be reuse during multiple probe process
@@ -26,10 +26,14 @@ pub struct ProbeState {
     pub(super) addresses: [RowPtr; BATCH_SIZE],
     pub(super) page_index: [usize; BATCH_SIZE],
     pub(super) state_places: [StateAddr; BATCH_SIZE],
+
+    pub(super) empty_vector: SelectVector,
+
     pub(super) group_compare_vector: SelectVector,
     pub(super) no_match_vector: SelectVector,
-    pub(super) empty_vector: SelectVector,
     pub(super) temp_vector: SelectVector,
+    pub(super) slots: SelectVector,
+
     pub(super) row_count: usize,
 
     pub partition_entries: Vec<SelectVector>,
@@ -43,13 +47,15 @@ impl Default for ProbeState {
             addresses: [RowPtr::null(); BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
             state_places: [StateAddr::new(0); BATCH_SIZE],
-            group_compare_vector: new_sel(),
-            no_match_vector: new_sel(),
-            empty_vector: new_sel(),
-            temp_vector: new_sel(),
+            group_compare_vector: [0; BATCH_SIZE],
+            no_match_vector: [0; BATCH_SIZE],
+            empty_vector: [0; BATCH_SIZE],
+            temp_vector: [0; BATCH_SIZE],
+            slots: [0; BATCH_SIZE],
+
+            row_count: 0,
             partition_entries: vec![],
             partition_count: vec![],
-            row_count: 0,
         }
     }
 }
@@ -58,15 +64,10 @@ unsafe impl Send for ProbeState {}
 unsafe impl Sync for ProbeState {}
 
 impl ProbeState {
-    pub fn set_incr_empty_vector(&mut self, row_count: usize) {
-        for i in 0..row_count {
-            self.empty_vector[i] = i;
-        }
-    }
-
     pub fn reset_partitions(&mut self, partition_count: usize) {
         if self.partition_entries.len() < partition_count {
-            self.partition_entries.resize(partition_count, new_sel());
+            self.partition_entries
+                .resize(partition_count, [0; BATCH_SIZE]);
             self.partition_count.resize(partition_count, 0);
         }
 
