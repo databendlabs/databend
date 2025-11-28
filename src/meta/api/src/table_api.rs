@@ -42,8 +42,6 @@ use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
-use databend_common_meta_app::app_error::VirtualColumnIdOutBound;
-use databend_common_meta_app::app_error::VirtualColumnTooMany;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::principal::AutoIncrementKey;
@@ -1236,28 +1234,6 @@ where
             // `update_table_meta` MUST NOT modify `shared_by` field
             let table_meta = table_meta.as_ref().unwrap();
 
-            if let Some(virtual_schema) = &mut req.0.new_table_meta.virtual_schema {
-                if virtual_schema.fields.len() > VIRTUAL_COLUMNS_LIMIT {
-                    return Err(KVAppError::AppError(AppError::VirtualColumnTooMany(
-                        VirtualColumnTooMany::new(req.0.table_id, VIRTUAL_COLUMNS_LIMIT),
-                    )));
-                }
-                for virtual_field in virtual_schema.fields.iter_mut() {
-                    if !matches!(
-                        virtual_field.column_id,
-                        VIRTUAL_COLUMN_ID_START..=VIRTUAL_COLUMNS_ID_UPPER
-                    ) {
-                        return Err(KVAppError::AppError(AppError::VirtualColumnIdOutBound(
-                            VirtualColumnIdOutBound::new(
-                                virtual_field.column_id,
-                                VIRTUAL_COLUMN_ID_START,
-                                VIRTUAL_COLUMNS_ID_UPPER,
-                            ),
-                        )));
-                    }
-                    virtual_field.data_types.dedup();
-                }
-            }
             let mut new_table_meta = req.0.new_table_meta.clone();
             new_table_meta.shared_by = table_meta.shared_by.clone();
 

@@ -1456,7 +1456,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("enable_experimental_virtual_column", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enables experimental virtual column",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
