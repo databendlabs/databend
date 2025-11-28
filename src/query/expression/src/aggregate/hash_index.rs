@@ -119,7 +119,7 @@ impl Entry {
     }
 
     pub fn get_pointer(&self) -> RowPtr {
-        RowPtr::new((self.0 & POINTER_MASK) as *const u8)
+        RowPtr::new((self.0 & POINTER_MASK) as *mut u8)
     }
 
     pub fn set_pointer(&mut self, ptr: RowPtr) {

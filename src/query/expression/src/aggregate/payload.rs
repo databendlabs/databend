@@ -118,13 +118,11 @@ impl Payload {
         }
 
         let hash_offset = tuple_size;
-
-        let hash_size = 8;
-        tuple_size += hash_size;
+        tuple_size += size_of::<u64>();
 
         let state_offset = tuple_size;
         if !aggrs.is_empty() {
-            tuple_size += 8;
+            tuple_size += size_of::<StateAddr>();
         }
 
         let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1);

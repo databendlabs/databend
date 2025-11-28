@@ -46,7 +46,7 @@ impl Default for ProbeState {
             group_hashes: [0; BATCH_SIZE],
             addresses: [RowPtr::null(); BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
-            state_places: [StateAddr::new(0); BATCH_SIZE],
+            state_places: [StateAddr::null(); BATCH_SIZE],
             group_compare_vector: [0; BATCH_SIZE],
             no_match_vector: [0; BATCH_SIZE],
             empty_vector: [0; BATCH_SIZE],

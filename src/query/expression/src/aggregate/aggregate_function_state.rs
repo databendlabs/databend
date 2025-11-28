@@ -24,50 +24,28 @@ use crate::types::DataType;
 use crate::ColumnBuilder;
 
 #[derive(Clone, Copy, Debug)]
-pub struct StateAddr {
-    addr: usize,
-}
+pub struct StateAddr(*mut u8);
+
+unsafe impl Send for StateAddr {}
 
 pub type StateAddrs = Vec<StateAddr>;
 
 impl StateAddr {
     #[inline]
-    pub fn new(addr: usize) -> StateAddr {
-        Self { addr }
+    pub fn null() -> StateAddr {
+        Self(std::ptr::null_mut())
     }
 
     #[inline]
     pub fn get<'a, T>(&self) -> &'a mut T
     where T: Send + 'static {
-        unsafe { &mut *(self.addr as *mut T) }
-    }
-
-    #[inline]
-    pub fn addr(&self) -> usize {
-        self.addr
-    }
-
-    /// # Safety
-    /// ptr must ensure point to valid memory
-    #[inline]
-    pub unsafe fn from_ptr(ptr: *mut u8) -> Self {
-        Self { addr: ptr as usize }
+        unsafe { &mut *self.0.cast::<T>() }
     }
 
     #[inline]
     #[must_use]
     pub fn next(&self, offset: usize) -> Self {
-        Self {
-            addr: self.addr + offset,
-        }
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn prev(&self, offset: usize) -> Self {
-        Self {
-            addr: self.addr.wrapping_sub(offset),
-        }
+        unsafe { Self(self.0.add(offset)) }
     }
 
     #[inline]
@@ -77,7 +55,7 @@ impl StateAddr {
         T: Send + 'static,
     {
         unsafe {
-            let ptr = self.addr as *mut T;
+            let ptr = self.0.cast::<T>();
             std::ptr::write(ptr, f());
         }
     }
@@ -86,7 +64,7 @@ impl StateAddr {
     pub fn write_state<T>(&self, state: T)
     where T: Send + 'static {
         unsafe {
-            let ptr = self.addr as *mut T;
+            let ptr = self.0.cast::<T>();
             std::ptr::write(ptr, state);
         }
     }
@@ -94,27 +72,13 @@ impl StateAddr {
 
 impl From<NonNull<u8>> for StateAddr {
     fn from(s: NonNull<u8>) -> Self {
-        Self {
-            addr: s.as_ptr() as usize,
-        }
+        Self(s.as_ptr())
     }
 }
 
-impl From<usize> for StateAddr {
-    fn from(addr: usize) -> Self {
-        Self { addr }
-    }
-}
-
-impl From<StateAddr> for NonNull<u8> {
-    fn from(s: StateAddr) -> Self {
-        unsafe { NonNull::new_unchecked(s.addr as *mut u8) }
-    }
-}
-
-impl From<StateAddr> for usize {
-    fn from(s: StateAddr) -> Self {
-        s.addr
+impl From<*mut u8> for StateAddr {
+    fn from(s: *mut u8) -> Self {
+        Self(s)
     }
 }
 

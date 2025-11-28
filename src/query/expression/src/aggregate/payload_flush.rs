@@ -72,7 +72,7 @@ impl Default for PayloadFlushState {
             flush_page: 0,
             flush_page_row: 0,
             addresses: [RowPtr::null(); BATCH_SIZE],
-            state_places: [StateAddr::new(0); BATCH_SIZE],
+            state_places: [StateAddr::null(); BATCH_SIZE],
         }
     }
 }
