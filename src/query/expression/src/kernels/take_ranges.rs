@@ -60,6 +60,21 @@ impl DataBlock {
             self.get_meta().cloned(),
         ))
     }
+
+    pub fn merge_indices_to_ranges(indices: &[u32]) -> Vec<Range<u32>> {
+        debug_assert!(indices.is_sorted());
+        let mut ranges: Vec<Range<u32>> = Vec::with_capacity(indices.len() / 2);
+        for &index in indices {
+            if let Some(cur) = ranges.last_mut()
+                && cur.end == index
+            {
+                cur.end += 1;
+            } else {
+                ranges.push(index..index + 1)
+            }
+        }
+        ranges
+    }
 }
 
 struct TakeRangeVisitor<'a> {
