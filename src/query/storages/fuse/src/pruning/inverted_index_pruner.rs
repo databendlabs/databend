@@ -123,7 +123,7 @@ impl InvertedIndexPruner {
         &self,
         block_loc: &str,
         row_count: u64,
-    ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
+    ) -> Result<Option<(Vec<usize>, Option<Vec<F32>>)>> {
         let index_loc = TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
             block_loc,
             &self.index_name,
