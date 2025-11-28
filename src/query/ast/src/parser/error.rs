@@ -243,23 +243,23 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
 
         // Check for intelligent keyword suggestions first
         let has_suggestion = suggest_keyword_correction(span_text, source, &expected_tokens);
+        let mut msg = if span_text.is_empty() {
+            "unexpected end of input".to_string()
+        } else if all_reserved_keywords()
+            .iter()
+            .any(|keyword| keyword.to_lowercase() == span_text.to_lowercase())
+        {
+            format!("unexpected `{span_text}`. this is a reserved keyword, please avoid using it")
+        } else {
+            format!("unexpected `{span_text}`")
+        };
         if let Some(suggestion) = has_suggestion {
-            let mut msg = if span_text.is_empty() {
-                "unexpected end of input".to_string()
-            } else {
-                format!("unexpected `{span_text}`")
-            };
             msg += &format!(". {}", suggestion);
             labels = vec![(inner.span, msg)];
 
             // Return early to skip context labels when we have intelligent suggestions
             return pretty_print_error(source, labels);
         } else {
-            let mut msg = if span_text.is_empty() {
-                "unexpected end of input".to_string()
-            } else {
-                format!("unexpected `{span_text}`")
-            };
             let mut iter = expected_tokens.iter().enumerate().peekable();
             while let Some((i, error)) = iter.next() {
                 if i == MAX_DISPLAY_ERROR_COUNT {

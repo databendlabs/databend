@@ -1,0 +1,27 @@
+---------- Input ----------
+CREATE OR
+ REPLACE FUNCTION ai_list_files (data_stage STAGE_LOCATION, l INT) RETURNS TABLE (
+ stage VARCHAR,
+ relative_path VARCHAR,
+ path VARCHAR,
+ is_dir BOOLEAN,
+ size BIGINT,
+ mode VARCHAR,
+ content_type VARCHAR,
+ etag VARCHAR,
+ truncated BOOLEAN
+) LANGUAGE python HANDLER='ai_list_files' address='https://api.bendml.com'
+---------- Output ---------
+error: 
+  --> SQL:3:2
+  |
+1 | CREATE OR
+  | ------ while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
+2 |  REPLACE FUNCTION ai_list_files (data_stage STAGE_LOCATION, l INT) RETURNS TABLE (
+  |                                 -                                          ----- while parsing TABLE (<return_type>, ...)
+  |                                 |                                           
+  |                                 while parsing (<arg_name arg_type>, ...) RETURNS <return body> { AS <sql> | LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address> } }
+3 |  stage VARCHAR,
+  |  ^^^^^ unexpected `stage`. this is a reserved keyword, please avoid using it, expecting <LiteralString>, <Ident>, `IDENTIFIER`, or `)`
+
+

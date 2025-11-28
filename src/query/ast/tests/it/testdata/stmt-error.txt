@@ -140,7 +140,7 @@ error:
   --> SQL:1:6
   |
 1 | show column
-  |      ^^^^^^ unexpected `column`. Did you mean `SHOW COLUMNS`?
+  |      ^^^^^^ unexpected `column`. this is a reserved keyword, please avoid using it. Did you mean `SHOW COLUMNS`?
 
 
 ---------- Input ----------
@@ -150,7 +150,7 @@ error:
   --> SQL:1:6
   |
 1 | show function
-  |      ^^^^^^^^ unexpected `function`. Did you mean `SHOW FUNCTIONS`?
+  |      ^^^^^^^^ unexpected `function`. this is a reserved keyword, please avoid using it. Did you mean `SHOW FUNCTIONS`?
 
 
 ---------- Input ----------
@@ -160,7 +160,7 @@ error:
   --> SQL:1:6
   |
 1 | show database
-  |      ^^^^^^^^ unexpected `database`. Did you mean `SHOW DATABASES`?
+  |      ^^^^^^^^ unexpected `database`. this is a reserved keyword, please avoid using it. Did you mean `SHOW DATABASES`?
 
 
 ---------- Input ----------
@@ -227,7 +227,7 @@ error:
   --> SQL:1:15
   |
 1 | insert into t format
-  | ------        ^^^^^^ unexpected `format`, expecting `FROM`, `ORDER`, `LIMIT`, `OFFSET`, `IGNORE_RESULT`, `WITH`, `VALUES`, `EXCEPT`, `SELECT`, `INTERSECT`, `(`, `UNION`, or `.`
+  | ------        ^^^^^^ unexpected `format`. this is a reserved keyword, please avoid using it, expecting `FROM`, `ORDER`, `LIMIT`, `OFFSET`, `IGNORE_RESULT`, `WITH`, `VALUES`, `EXCEPT`, `SELECT`, `INTERSECT`, `(`, `UNION`, or `.`
   | |              
   | while parsing `INSERT INTO [TABLE] <table> [(<column>, ...)] (VALUES <values> | <query>)`
 
@@ -393,7 +393,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `VIRTUAL`, `NETWORK`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TASKS`, `TABLE`, `ROLES`, `ONLINE`, `INDEXES`, `COLUMNS`, `WORKLOAD`, `PASSWORD`, `SEQUENCES`, `PROCEDURES`, `PROCESSLIST`, `STAGES`, `TABLES`, `DICTIONARIES`, `METRICS`, `ENGINES`, `SETTINGS`, `VARIABLES`, `WAREHOUSES`, `STATISTICS`, `USER`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`. this is a reserved keyword, please avoid using it, expecting `GRANTS`, `CREATE`, `VIRTUAL`, `NETWORK`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TASKS`, `TABLE`, `ROLES`, `ONLINE`, `INDEXES`, `COLUMNS`, `WORKLOAD`, `PASSWORD`, `SEQUENCES`, `PROCEDURES`, `PROCESSLIST`, `STAGES`, `TABLES`, `DICTIONARIES`, `METRICS`, `ENGINES`, `SETTINGS`, `VARIABLES`, `WAREHOUSES`, `STATISTICS`, `USER`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `FILE`, or `FULL`
 
 
 ---------- Input ----------
@@ -413,7 +413,7 @@ error:
   --> SQL:1:15
   |
 1 | GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';
-  | ----- ------  ^^^ unexpected `ALL`, expecting `ALTER`, `APPLY`, `SELECT`, `DELETE`, `ACCESS`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
+  | ----- ------  ^^^ unexpected `ALL`. this is a reserved keyword, please avoid using it, expecting `ALTER`, `APPLY`, `SELECT`, `DELETE`, `ACCESS`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
   | |     |        
   | |     while parsing <privileges> ON <privileges_level>
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
@@ -438,7 +438,7 @@ error:
   --> SQL:1:17
   |
 1 | GRANT select ON UDF a TO 'test-grant';
-  | ----- ------    ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <Ident>, `FALSE`, `*`, <LiteralString>, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, or `MASKING`
+  | ----- ------    ^^^ unexpected `UDF`. this is a reserved keyword, please avoid using it, expecting `IDENTIFIER`, <Ident>, `FALSE`, `*`, <LiteralString>, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, or `MASKING`
   | |     |          
   | |     while parsing <privileges> ON <privileges_level>
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
@@ -451,7 +451,7 @@ error:
   --> SQL:1:24
   |
 1 | REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
-  | ------ ------          ^^^ unexpected `ALL`, expecting `ALTER`, `APPLY`, `SELECT`, `DELETE`, `ACCESS`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
+  | ------ ------          ^^^ unexpected `ALL`. this is a reserved keyword, please avoid using it, expecting `ALTER`, `APPLY`, `SELECT`, `DELETE`, `ACCESS`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
   | |      |                
   | |      while parsing <privileges> ON <privileges_level>
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
@@ -464,7 +464,7 @@ error:
   --> SQL:1:28
   |
 1 | REVOKE SELECT, CREATE ON * TO 'test-grant';
-  | ------                     ^^ unexpected `TO`, expecting `FROM` or `.`
+  | ------                     ^^ unexpected `TO`. this is a reserved keyword, please avoid using it, expecting `FROM` or `.`
   | |                           
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -486,7 +486,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CONNECTION = ();
-  |                                 ^^^^^^^^^^ unexpected `CONNECTION`, expecting `ON_ERROR`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
+  |                                 ^^^^^^^^^^ unexpected `CONNECTION`. this is a reserved keyword, please avoid using it, expecting `ON_ERROR`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
@@ -542,7 +542,7 @@ error:
   --> SQL:1:25
   |
 1 | show columns from db1.t from ctl.db
-  |                         ^^^^ unexpected `from`. Did you mean `SHOW COLUMNS`?
+  |                         ^^^^ unexpected `from`. this is a reserved keyword, please avoid using it. Did you mean `SHOW COLUMNS`?
 
 
 ---------- Input ----------
@@ -598,7 +598,7 @@ error:
   --> SQL:1:35
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS a, b
-  |                                   ^^^^ unexpected `SETS`, expecting `SELECT`, `INTERSECT`, `WITH`, `EXCEPT`, `VALUES`, `OFFSET`, `IGNORE_RESULT`, `,`, `HAVING`, `WINDOW`, `QUALIFY`, `(`, `UNION`, `FROM`, `ORDER`, `LIMIT`, `FORMAT`, or `;`
+  |                                   ^^^^ unexpected `SETS`. this is a reserved keyword, please avoid using it, expecting `SELECT`, `INTERSECT`, `WITH`, `EXCEPT`, `VALUES`, `OFFSET`, `IGNORE_RESULT`, `,`, `HAVING`, `WINDOW`, `QUALIFY`, `(`, `UNION`, `FROM`, `ORDER`, `LIMIT`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -728,7 +728,7 @@ error:
   --> SQL:1:6
   |
 1 | with as t2(tt) as (select a from t) select t2.tt from t2
-  |      ^^ unexpected `as`, expecting <LiteralString>, <Ident>, `IDENTIFIER`, or `RECURSIVE`
+  |      ^^ unexpected `as`. this is a reserved keyword, please avoid using it, expecting <LiteralString>, <Ident>, `IDENTIFIER`, or `RECURSIVE`
 
 
 ---------- Input ----------
@@ -976,7 +976,7 @@ error:
   --> SQL:1:34
   |
 1 | GRANT OWNERSHIP ON d20_0014.* TO USER A;
-  | -----                            ^^^^ unexpected `USER`, expecting `ROLE`
+  | -----                            ^^^^ unexpected `USER`. this is a reserved keyword, please avoid using it, expecting `ROLE`
   | |                                 
   | while parsing GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>
 
@@ -988,7 +988,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`. this is a reserved keyword, please avoid using it, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
   | |       
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -1000,7 +1000,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP ON d20_0014.* FROM USER A;
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`. this is a reserved keyword, please avoid using it, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
   | |       
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -1012,7 +1012,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`. this is a reserved keyword, please avoid using it, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
   | |       
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -1051,7 +1051,7 @@ error:
   --> SQL:1:85
   |
 1 | CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';
-  | ------                 -                                                            ^^^^^^^ unexpected `HANDLER`, expecting `HEADERS`, `ADDRESS`, `PACKAGES`, `AS`, or `IMPORTS`
+  | ------                 -                                                            ^^^^^^^ unexpected `HANDLER`. this is a reserved keyword, please avoid using it, expecting `HEADERS`, `ADDRESS`, `PACKAGES`, `AS`, or `IMPORTS`
   | |                      |                                                             
   | |                      while parsing (<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
@@ -1113,7 +1113,7 @@ error:
   --> SQL:1:16
   |
 1 | SHOW GRANTS ON task t1;
-  |                ^^^^ unexpected `task`, expecting `MASKING`, `STAGE`, `TABLE`, `SEQUENCE`, `WAREHOUSE`, `DATABASE`, `UDF`, `CONNECTION`, or `PROCEDURE`
+  |                ^^^^ unexpected `task`. this is a reserved keyword, please avoid using it, expecting `MASKING`, `STAGE`, `TABLE`, `SEQUENCE`, `WAREHOUSE`, `DATABASE`, `UDF`, `CONNECTION`, or `PROCEDURE`
 
 
 ---------- Input ----------
@@ -1235,7 +1235,7 @@ error:
   --> SQL:1:44
   |
 1 | create PROCEDURE p1() returns table(string not null, int null) language sql comment = 'test' as $$
-  | ------                        -----        ^^^ unexpected `not`, expecting `INT8`, `INT16`, `INT32`, `INT64`, `UINT16`, `UINT32`, `UINT64`, `INTEGER`, `FLOAT32`, `FLOAT64`, `INTERVAL`, `GEOMETRY`, `INT`, `BOOL`, `DATE`, `BLOB`, `TEXT`, `JSON`, `UINT8`, `FLOAT`, `TUPLE`, `DOUBLE`, `BITMAP`, `BINARY`, `STRING`, `VECTOR`, `BOOLEAN`, `NUMERIC`, `UNSIGNED`, `DATETIME`, `NULLABLE`, `TIMESTAMP`, `GEOGRAPHY`, `TIMESTAMP_TZ`, `TINYINT`, `LONGBLOB`, `TINYBLOB`, `STAGE_LOCATION`, `SMALLINT`, `BIGINT`, `SIGNED`, `REAL`, `DECIMAL`, `ARRAY`, `MAP`, `VARBINARY`, `MEDIUMBLOB`, `VARCHAR`, `CHAR`, `CHARACTER`, or `VARIANT`
+  | ------                        -----        ^^^ unexpected `not`. this is a reserved keyword, please avoid using it, expecting `INT8`, `INT16`, `INT32`, `INT64`, `UINT16`, `UINT32`, `UINT64`, `INTEGER`, `FLOAT32`, `FLOAT64`, `INTERVAL`, `GEOMETRY`, `INT`, `BOOL`, `DATE`, `BLOB`, `TEXT`, `JSON`, `UINT8`, `FLOAT`, `TUPLE`, `DOUBLE`, `BITMAP`, `BINARY`, `STRING`, `VECTOR`, `BOOLEAN`, `NUMERIC`, `UNSIGNED`, `DATETIME`, `NULLABLE`, `TIMESTAMP`, `GEOGRAPHY`, `TIMESTAMP_TZ`, `TINYINT`, `LONGBLOB`, `TINYBLOB`, `STAGE_LOCATION`, `SMALLINT`, `BIGINT`, `SIGNED`, `REAL`, `DECIMAL`, `ARRAY`, `MAP`, `VARBINARY`, `MEDIUMBLOB`, `VARCHAR`, `CHAR`, `CHARACTER`, or `VARIANT`
   | |                             |             
   | |                             while parsing TABLE(<var_name> <type_name>, ...)
   | while parsing `CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`
@@ -1269,7 +1269,7 @@ error:
   --> SQL:1:51
   |
 1 | copy into t1 from (select a from @data/not_exists where a = 1)
-  | ----                                              ^^^^^ unexpected `where`, expecting `IDENTIFIER`, <LiteralString>, <Ident>, `)`, or `AS`
+  | ----                                              ^^^^^ unexpected `where`. this is a reserved keyword, please avoid using it, expecting `IDENTIFIER`, <LiteralString>, <Ident>, `)`, or `AS`
   | |                                                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
