@@ -483,14 +483,15 @@ impl InvertedIndexReader {
         if let Some(matched_doc_ids) = matched_doc_ids {
             if !matched_doc_ids.is_empty() {
                 let (matched_rows, matched_scores) = if self.has_score {
-                    let mut matched_rows = Vec::with_capacity(matched_doc_ids.len() as usize);
-                    let mut matched_scores = Vec::with_capacity(matched_doc_ids.len() as usize);
                     let scores =
                         collector.calculate_scores(query.box_clone(), &matched_doc_ids, None)?;
-                    for (doc_id, score) in matched_doc_ids.into_iter().zip(scores.into_iter()) {
-                        matched_rows.push(doc_id as usize);
-                        matched_scores.push(score);
-                    }
+                    let mut rows_scores = matched_doc_ids
+                        .into_iter()
+                        .zip(scores.into_iter())
+                        .map(|(doc_id, score)| (doc_id as usize, score))
+                        .collect::<Vec<_>>();
+                    rows_scores.sort_by(|a, b| b.1.cmp(&a.1));
+                    let (matched_rows, matched_scores) = rows_scores.into_iter().unzip();
                     (matched_rows, Some(matched_scores))
                 } else {
                     let mut matched_rows = Vec::with_capacity(matched_doc_ids.len() as usize);
