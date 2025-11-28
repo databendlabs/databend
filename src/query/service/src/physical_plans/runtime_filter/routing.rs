@@ -189,7 +189,7 @@ impl RuntimeFilterRoutingBuilder {
             }
             RelOperator::Scan(scan) => {
                 self.scan_infos.insert(scan.scan_id, ScanInfo {
-                    ancestors: std::mem::take(ancestors),
+                    ancestors: ancestors.clone(),
                 });
             }
             _ => {
