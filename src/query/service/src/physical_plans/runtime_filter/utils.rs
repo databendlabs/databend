@@ -71,10 +71,26 @@ pub fn scalar_to_remote_expr(
                     .project_column_ref(|col| Ok(col.column_name.clone()))?
                     .as_remote_expr();
 
+                if !is_valid_probe_key(&remote_expr) {
+                    return Ok(None);
+                }
+
                 return Ok(Some((remote_expr, scan_id, *column_idx)));
             }
         }
     }
 
     Ok(None)
+}
+
+pub fn is_valid_probe_key(probe_key: &RemoteExpr<String>) -> bool {
+    match probe_key {
+        RemoteExpr::ColumnRef { .. } => true,
+        RemoteExpr::Cast {
+            expr: box RemoteExpr::ColumnRef { data_type, .. },
+            dest_type,
+            ..
+        } if &dest_type.remove_nullable() == data_type => true,
+        _ => false,
+    }
 }

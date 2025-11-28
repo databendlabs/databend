@@ -33,6 +33,7 @@ use super::types::PhysicalRuntimeFilters;
 use super::utils::is_type_supported_for_bloom_filter;
 use super::utils::is_type_supported_for_min_max_filter;
 use super::utils::supported_join_type_for_runtime_filter;
+use crate::physical_plans::runtime_filter::utils::is_valid_probe_key;
 
 /// Type alias for probe keys with runtime filter information
 /// Contains: (RemoteExpr, scan_id, table_index, column_idx)
@@ -99,14 +100,8 @@ pub async fn build_runtime_filter(
     {
         // Skip if the probe expression is neither a direct column reference nor a
         // cast from not null to nullable type (e.g. CAST(col AS Nullable(T))).
-        match &probe_key {
-            RemoteExpr::ColumnRef { .. } => {}
-            RemoteExpr::Cast {
-                expr: box RemoteExpr::ColumnRef { data_type, .. },
-                dest_type,
-                ..
-            } if &dest_type.remove_nullable() == data_type => {}
-            _ => continue,
+        if !is_valid_probe_key(&probe_key) {
+            continue;
         }
 
         let targets = routing.find_targets(s_expr, column_idx)?;
