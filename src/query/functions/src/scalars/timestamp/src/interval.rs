@@ -461,7 +461,7 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                 let t1_raw = calc_date_to_timestamp(today_date, &zone)?;
                 let t2_raw = t2.timestamp();
                 let today_ts = timestamp_tz::new(t1_raw, t2.seconds_offset());
-                let (mut t1, mut t2_micros, later_ts, earlier_ts) = if t1_raw >= t2_raw {
+                let (t1, t2_micros, later_ts, earlier_ts) = if t1_raw >= t2_raw {
                     (t1_raw, t2_raw, today_ts, t2)
                 } else {
                     is_negative = true;
