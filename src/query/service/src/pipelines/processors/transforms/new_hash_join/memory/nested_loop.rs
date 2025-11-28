@@ -148,20 +148,35 @@ impl<'a> NestedLoopJoinStream<'a> {
                 )
             }))
             .collect();
-
-        let result_count = self
-            .desc
-            .filter
-            .select(&DataBlock::new(entries, probe_rows))?;
+        let merged = DataBlock::new(entries, probe_rows);
         let row_ptr = RowPtr {
             chunk_index: self.build_block_index as u32,
             row_index: self.build_row_index as u32,
         };
-        self.matches.extend(
-            self.desc.filter.true_selection()[..result_count]
-                .iter()
-                .map(|probe| (*probe, row_ptr)),
-        );
+
+        let max_block_size = self.desc.filter.max_block_size();
+        if merged.num_rows() <= max_block_size {
+            let result_count = self.desc.filter.select(&merged)?;
+            self.matches.extend(
+                self.desc.filter.true_selection()[..result_count]
+                    .iter()
+                    .map(|probe| (*probe, row_ptr)),
+            );
+        } else {
+            for (i, block) in merged
+                .split_by_rows_no_tail(max_block_size)
+                .into_iter()
+                .enumerate()
+            {
+                let offset = (i * max_block_size) as u32;
+                let result_count = self.desc.filter.select(&block)?;
+                self.matches.extend(
+                    self.desc.filter.true_selection()[..result_count]
+                        .iter()
+                        .map(|probe| (*probe + offset, row_ptr)),
+                );
+            }
+        }
 
         self.build_row_index += 1;
         if self.build_row_index >= build_block.num_rows() {
