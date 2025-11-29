@@ -142,7 +142,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 76 more
+... and 78 more
 
 
 
@@ -429,7 +429,7 @@ candidate functions:
   noteq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 76 more
+... and 78 more
 
 
 
