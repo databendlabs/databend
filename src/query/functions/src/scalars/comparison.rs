@@ -21,7 +21,7 @@ use databend_common_expression::type_check;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
-use databend_common_expression::types::AccessType;
+use databend_common_expression::types::{AccessType, BitmapType};
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
@@ -84,6 +84,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_tuple_cmp(registry);
     register_like(registry);
     register_interval_cmp(registry);
+    register_bitmap_cmp(registry);
 }
 
 pub const ALL_COMP_FUNC_NAMES: &[&str] = &["eq", "noteq", "lt", "lte", "gt", "gte"];
@@ -1286,4 +1287,37 @@ fn vectorize_regexp(
             }
         }
     }
+}
+
+fn register_bitmap_cmp(registry: &mut FunctionRegistry) {
+    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
+        "eq",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs == rhs,
+    );
+    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
+        "noteq",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs != rhs,
+    );
+    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
+        "gt",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs > rhs,
+    );
+    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
+        "gte",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs >= rhs,
+    );
+    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
+        "lt",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs < rhs,
+    );
+    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
+        "lte",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs <= rhs,
+    );
 }
