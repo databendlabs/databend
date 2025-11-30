@@ -244,9 +244,8 @@ impl<'a> AggrState<'a> {
     pub fn get<'b, T>(&self) -> &'b mut T
     where T: Send + 'static {
         debug_assert_eq!(self.loc.len(), 1);
-        self.addr
-            .next(self.loc[0].into_custom().unwrap().1)
-            .get::<T>()
+        debug_assert!(self.loc[0].is_custom());
+        self.addr.next(self.loc[0].offset()).get::<T>()
     }
 
     pub fn write<T, F>(&self, f: F)
@@ -255,9 +254,8 @@ impl<'a> AggrState<'a> {
         T: Send + 'static,
     {
         debug_assert_eq!(self.loc.len(), 1);
-        self.addr
-            .next(self.loc[0].into_custom().unwrap().1)
-            .write(f);
+        debug_assert!(self.loc[0].is_custom());
+        self.addr.next(self.loc[0].offset()).write(f);
     }
 
     pub fn remove_last_loc(&self) -> Self {
