@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod io;
 pub mod operations;
 
-pub use io::snapshots::get_snapshot_referenced_segments;
 pub use operations::vacuum_drop_tables::vacuum_drop_tables;
 pub use operations::vacuum_table::do_vacuum;
 pub use operations::vacuum_table_v2::do_vacuum2;

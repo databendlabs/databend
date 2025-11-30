@@ -86,6 +86,7 @@ async fn location_snapshot(
                 snapshot_location,
                 snapshot_version,
                 tbl.meta_location_generator().clone(),
+                tbl.get_table_branch_name(),
             );
 
             // find the element by snapshot_id in stream

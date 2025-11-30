@@ -10,7 +10,6 @@ edition = { workspace = true }
 jiff = { workspace = true }
 
 [dev-dependencies]
-rand = { workspace = true }
 
 [lints]
 workspace = true

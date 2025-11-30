@@ -141,6 +141,25 @@ message TableMeta {
   map<string, Constraint> constraints = 34;
   optional RowAccessPolicyColumnMap row_access_policy_columns_ids = 35;
   map<uint32, RowAccessPolicyColumnMap> column_mask_policy_columns_ids = 36;
+
+  map<string, SnapshotRef> refs = 37;
+}
+
+message SnapshotRef {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  optional string expire_at = 1;
+
+  message Branch {
+    string head = 1;
+    string anchor = 2;
+  }
+
+  oneof info {
+    Branch branch = 2;
+    string tag = 3;
+  }
 }
 
 message RowAccessPolicyColumnMap {

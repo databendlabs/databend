@@ -26,6 +26,7 @@ use std::time::Duration;
 use anyerror::func_name;
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::ast::SnapshotRefType as AstSnapshotRefType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -184,6 +185,68 @@ pub struct TableMeta {
     pub row_access_policy_columns_ids: Option<SecurityPolicyColumnMap>,
     pub indexes: BTreeMap<String, TableIndex>,
     pub constraints: BTreeMap<String, Constraint>,
+
+    pub refs: BTreeMap<String, SnapshotRef>,
+}
+
+// Inspired by iceberg(https://github.com/apache/iceberg-rust/blob/main/crates/iceberg/src/spec/snapshot.rs#L443-L449)
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct SnapshotRef {
+    /// After this timestamp, the reference becomes inactive.
+    pub expire_at: Option<DateTime<Utc>>,
+
+    pub info: SnapshotRefInfo,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum SnapshotRefInfo {
+    Branch {
+        /// The latest snapshot location that this reference currently points to.
+        head: String,
+        /// The earliest protected snapshot location on the snapshot chain.
+        anchor: String,
+    },
+    Tag(String),
+}
+
+impl SnapshotRef {
+    pub fn ref_type(&self) -> SnapshotRefType {
+        match self.info {
+            SnapshotRefInfo::Branch { .. } => SnapshotRefType::Branch,
+            SnapshotRefInfo::Tag(_) => SnapshotRefType::Tag,
+        }
+    }
+
+    pub fn head(&self) -> &String {
+        match &self.info {
+            SnapshotRefInfo::Branch { head, .. } => head,
+            SnapshotRefInfo::Tag(loc) => loc,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SnapshotRefType {
+    Branch,
+    Tag,
+}
+
+impl From<&AstSnapshotRefType> for SnapshotRefType {
+    fn from(v: &AstSnapshotRefType) -> Self {
+        match v {
+            AstSnapshotRefType::Branch => SnapshotRefType::Branch,
+            AstSnapshotRefType::Tag => SnapshotRefType::Tag,
+        }
+    }
+}
+
+impl Display for SnapshotRefType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SnapshotRefType::Branch => write!(f, "BRANCH"),
+            SnapshotRefType::Tag => write!(f, "TAG"),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -316,6 +379,31 @@ impl TableInfo {
             .clone()
             .map(|k| (self.meta.cluster_key_seq, k))
     }
+
+    pub fn get_table_ref(&self, typ: Option<&SnapshotRefType>, name: &str) -> Result<&SnapshotRef> {
+        let Some(table_ref) = self.meta.refs.get(name) else {
+            return Err(ErrorCode::UnknownReference(format!(
+                "Unknown reference '{}' in table {}",
+                name, self.desc
+            )));
+        };
+        let ref_type = table_ref.ref_type();
+        if let Some(typ) = typ {
+            if &ref_type != typ {
+                return Err(ErrorCode::MismatchedReferenceType(format!(
+                    "'{}' is a {} reference, please use 'AT({} => {})' instead.",
+                    name, ref_type, ref_type, name,
+                )));
+            }
+        }
+        if table_ref.expire_at.is_some_and(|v| v < Utc::now()) {
+            return Err(ErrorCode::ReferenceExpired(format!(
+                "{} '{}' in table {} is expired",
+                ref_type, name, self.desc,
+            )));
+        }
+        Ok(table_ref)
+    }
 }
 
 impl Default for TablePartition {
@@ -359,6 +447,7 @@ impl Default for TableMeta {
             row_access_policy_columns_ids: None,
             indexes: BTreeMap::new(),
             constraints: BTreeMap::new(),
+            refs: BTreeMap::new(),
         }
     }
 }

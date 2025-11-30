@@ -75,6 +75,7 @@ impl SnapshotsIO {
     pub async fn read_snapshot(
         snapshot_location: String,
         data_accessor: Operator,
+        put_cache: bool,
     ) -> Result<(Arc<TableSnapshot>, FormatVersion)> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
         let ver: u64 = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
@@ -82,7 +83,7 @@ impl SnapshotsIO {
             location: snapshot_location,
             len_hint: None,
             ver,
-            put_cache: true,
+            put_cache,
         };
         info!(
             "[FUSE-SNAPSHOT] Reading snapshot with parameters: {:?}",
@@ -206,7 +207,7 @@ impl SnapshotsIO {
         }
 
         let (root_snapshot, format_version) =
-            Self::read_snapshot(root_snapshot_file.clone(), data_accessor.clone()).await?;
+            Self::read_snapshot(root_snapshot_file.clone(), data_accessor.clone(), true).await?;
 
         Ok(Self::chain_snapshots(
             snapshot_lites,
@@ -222,12 +223,13 @@ impl SnapshotsIO {
         dal: Operator,
         location_generator: TableMetaLocationGenerator,
         root_snapshot: String,
+        ref_name: Option<String>,
         limit: Option<usize>,
     ) -> Result<Vec<TableSnapshotLite>> {
         let table_snapshot_reader = MetaReaders::table_snapshot_reader(dal);
         let format_version = TableMetaLocationGenerator::snapshot_version(root_snapshot.as_str());
         let lite_snapshot_stream = table_snapshot_reader
-            .snapshot_history(root_snapshot, format_version, location_generator)
+            .snapshot_history(root_snapshot, format_version, location_generator, ref_name)
             .map_ok(|(snapshot, format_version)| {
                 TableSnapshotLite::from((snapshot.as_ref(), format_version))
             });
@@ -414,5 +416,33 @@ impl SnapshotsIO {
             return Some(prefix);
         }
         None
+    }
+
+    /// Read a snapshot from a location for vacuum operations
+    ///
+    /// Returns Ok(None) if snapshot not found (concurrent GC case)
+    /// Returns Err for other errors
+    #[async_backtrace::framed]
+    pub async fn read_snapshot_for_vacuum(
+        operator: Operator,
+        location: &str,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader(operator);
+        let ver = TableMetaLocationGenerator::snapshot_version(location);
+        let params = LoadParams {
+            location: location.to_string(),
+            len_hint: None,
+            ver,
+            put_cache: true,
+        };
+
+        match reader.read(&params).await {
+            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                // Concurrent gc: someone else has already collected this snapshot
+                Ok(None)
+            }
+            Err(e) => Err(e),
+            Ok(v) => Ok(Some(v)),
+        }
     }
 }

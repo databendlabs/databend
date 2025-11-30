@@ -210,6 +210,10 @@ impl FromToProto for mt::TableMeta {
         for (constraint_name, constraint) in p.constraints {
             constraints.insert(constraint_name, mt::Constraint::from_pb(constraint)?);
         }
+        let mut refs = BTreeMap::new();
+        for (ref_name, snapshot_ref) in p.refs {
+            refs.insert(ref_name, mt::SnapshotRef::from_pb(snapshot_ref)?);
+        }
         let v = Self {
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
             engine: p.engine,
@@ -254,6 +258,7 @@ impl FromToProto for mt::TableMeta {
             indexes,
             virtual_schema,
             constraints,
+            refs,
         };
         Ok(v)
     }
@@ -266,6 +271,10 @@ impl FromToProto for mt::TableMeta {
         let mut constraints = BTreeMap::new();
         for (constraint_name, constraint) in &self.constraints {
             constraints.insert(constraint_name.clone(), constraint.to_pb()?);
+        }
+        let mut refs = BTreeMap::new();
+        for (ref_name, snapshot_ref) in &self.refs {
+            refs.insert(ref_name.clone(), snapshot_ref.to_pb()?);
         }
         let p = pb::TableMeta {
             ver: VER,
@@ -315,6 +324,7 @@ impl FromToProto for mt::TableMeta {
                 .map(VirtualDataSchema::to_pb)
                 .transpose()?,
             constraints,
+            refs,
         };
         Ok(p)
     }
@@ -477,6 +487,51 @@ impl FromToProto for mt::TableIndex {
             version: self.version.clone(),
             options: self.options.clone(),
             index_type: self.index_type.clone() as i32,
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto for mt::SnapshotRef {
+    type PB = pb::SnapshotRef;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: pb::SnapshotRef) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let expire_at = p.expire_at.map(DateTime::<Utc>::from_pb).transpose()?;
+        let Some(info) = p.info else {
+            return Err(Incompatible::new(
+                "SnapshotRefInfo cannot be None".to_string(),
+            ));
+        };
+        let info = match info {
+            pb::snapshot_ref::Info::Branch(branch) => mt::SnapshotRefInfo::Branch {
+                head: branch.head,
+                anchor: branch.anchor,
+            },
+            pb::snapshot_ref::Info::Tag(loc) => mt::SnapshotRefInfo::Tag(loc),
+        };
+        let v = Self { expire_at, info };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::SnapshotRef, Incompatible> {
+        let expire_at = self.expire_at.map(|x| x.to_pb()).transpose()?;
+        let info = match &self.info {
+            mt::SnapshotRefInfo::Branch { head, anchor } => {
+                pb::snapshot_ref::Info::Branch(pb::snapshot_ref::Branch {
+                    head: head.clone(),
+                    anchor: anchor.clone(),
+                })
+            }
+            mt::SnapshotRefInfo::Tag(loc) => pb::snapshot_ref::Info::Tag(loc.clone()),
+        };
+        let p = pb::SnapshotRef {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            expire_at,
+            info: Some(info),
         };
         Ok(p)
     }
