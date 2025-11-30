@@ -39,7 +39,6 @@ use crate::with_number_mapped_type;
 use crate::Column;
 use crate::ProjectedBlock;
 use crate::Scalar;
-use crate::SelectVector;
 use crate::BATCH_SIZE;
 
 pub(super) fn rowformat_size(data_type: &DataType) -> usize {
@@ -78,8 +77,7 @@ pub(super) fn rowformat_size(data_type: &DataType) -> usize {
 pub(super) unsafe fn serialize_column_to_rowformat(
     arena: &Bump,
     column: &Column,
-    select_vector: &SelectVector,
-    rows: usize,
+    select_vector: &[usize],
     address: &[RowPtr; BATCH_SIZE],
     offset: usize,
     scratch: &mut Vec<u8>,
@@ -88,7 +86,7 @@ pub(super) unsafe fn serialize_column_to_rowformat(
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(buffer) => {
-                for index in select_vector.iter().take(rows).copied() {
+                for &index in select_vector {
                     address[index].write(offset, &buffer[index]);
                 }
             }
@@ -100,7 +98,7 @@ pub(super) unsafe fn serialize_column_to_rowformat(
                         DecimalDataKind::T => {
                             serialize_fixed_size_column_to_rowformat::<DecimalView<F, T>>(
                                 buffer,
-                                &select_vector[0..rows],
+                                select_vector,
                                 address,
                                 offset,
                             );
@@ -113,50 +111,44 @@ pub(super) unsafe fn serialize_column_to_rowformat(
             if v.null_count() == 0 || v.null_count() == v.len() {
                 let val: u8 = if v.null_count() == 0 { 1 } else { 0 };
                 // faster path
-                for index in select_vector.iter().take(rows).copied() {
+                for &index in select_vector {
                     address[index].write_u8(offset, val);
                 }
             } else {
-                for index in select_vector.iter().take(rows).copied() {
+                for &index in select_vector {
                     address[index].write_u8(offset, v.get_bit(index) as u8);
                 }
             }
         }
         Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
-            for index in select_vector.iter().take(rows).copied() {
+            for &index in select_vector {
                 let data = arena.alloc_slice_copy(v.index_unchecked(index));
                 address[index].write_bytes(offset, data);
             }
         }
         Column::String(v) => {
-            for index in select_vector.iter().take(rows).copied() {
+            for &index in select_vector {
                 let data = arena.alloc_str(v.index_unchecked(index));
                 address[index].write_bytes(offset, data.as_bytes());
             }
         }
         Column::Timestamp(buffer) => {
-            for index in select_vector.iter().take(rows).copied() {
+            for &index in select_vector {
                 address[index].write(offset, &buffer[index]);
             }
         }
         Column::Date(buffer) => {
-            for index in select_vector.iter().take(rows).copied() {
+            for &index in select_vector {
                 address[index].write(offset, &buffer[index]);
             }
         }
-        Column::Nullable(c) => serialize_column_to_rowformat(
-            arena,
-            &c.column,
-            select_vector,
-            rows,
-            address,
-            offset,
-            scratch,
-        ),
+        Column::Nullable(c) => {
+            serialize_column_to_rowformat(arena, &c.column, select_vector, address, offset, scratch)
+        }
 
         // for complex column
         other => {
-            for index in select_vector.iter().take(rows).copied() {
+            for &index in select_vector {
                 let s = other.index_unchecked(index).to_owned();
                 scratch.clear();
                 bincode_serialize_into_buf(scratch, &s).unwrap();

@@ -35,6 +35,12 @@ runs:
       run: |
         ./benchmark_local.sh
 
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: compat_fuse
+
     - name: Prepare Metadata
       working-directory: benchmark/clickbench
       shell: bash

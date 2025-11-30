@@ -42,12 +42,6 @@ pub use payload_flush::*;
 pub use probe_state::*;
 use row_ptr::RowPtr;
 
-pub type SelectVector = [usize; BATCH_SIZE];
-
-pub fn new_sel() -> SelectVector {
-    [0; BATCH_SIZE]
-}
-
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;
 const LOAD_FACTOR: f64 = 1.5;
