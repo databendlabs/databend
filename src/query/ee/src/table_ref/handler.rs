@@ -116,7 +116,11 @@ impl TableRefHandler for RealTableRefHandler {
         // write down new snapshot
         let new_snapshot_location = fuse_table
             .meta_location_generator()
-            .gen_ref_snapshot_location(&plan.ref_name, &new_snapshot.snapshot_id);
+            .ref_snapshot_location_from_uuid(
+                &plan.ref_name,
+                &new_snapshot.snapshot_id,
+                new_snapshot.format_version,
+            )?;
         let data = new_snapshot.to_bytes()?;
         fuse_table
             .get_operator_ref()

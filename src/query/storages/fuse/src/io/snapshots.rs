@@ -223,12 +223,13 @@ impl SnapshotsIO {
         dal: Operator,
         location_generator: TableMetaLocationGenerator,
         root_snapshot: String,
+        ref_name: Option<String>,
         limit: Option<usize>,
     ) -> Result<Vec<TableSnapshotLite>> {
         let table_snapshot_reader = MetaReaders::table_snapshot_reader(dal);
         let format_version = TableMetaLocationGenerator::snapshot_version(root_snapshot.as_str());
         let lite_snapshot_stream = table_snapshot_reader
-            .snapshot_history(root_snapshot, format_version, location_generator)
+            .snapshot_history(root_snapshot, format_version, location_generator, ref_name)
             .map_ok(|(snapshot, format_version)| {
                 TableSnapshotLite::from((snapshot.as_ref(), format_version))
             });

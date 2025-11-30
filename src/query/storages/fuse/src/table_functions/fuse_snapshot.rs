@@ -241,6 +241,7 @@ impl SimpleTableFunc for FuseSnapshotFunc {
                         table.operator.clone(),
                         meta_location_generator.clone(),
                         snapshot_location,
+                        table.get_table_branch_name(),
                         limit,
                     )
                     .await?;

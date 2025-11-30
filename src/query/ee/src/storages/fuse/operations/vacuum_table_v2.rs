@@ -39,7 +39,6 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ASSUMPTION_MAX_TXN_DURATION;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::RetentionPolicy;
-use databend_common_storages_fuse::FUSE_TBL_REF_PREFIX;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
@@ -621,6 +620,9 @@ async fn process_snapshot_refs(
 ) -> Result<RefVacuumInfo> {
     let start = std::time::Instant::now();
     let op = fuse_table.get_operator();
+    let ref_snapshot_location_prefix = fuse_table
+        .meta_location_generator()
+        .ref_snapshot_location_prefix();
     // Refs that expired and should be cleaned up
     let mut expired_refs = Vec::new();
     // Updated refs map (branch anchors updated)
@@ -652,12 +654,7 @@ async fn process_snapshot_refs(
             }
             SnapshotRefInfo::Branch { head, anchor } => {
                 // Branch: need to clean up snapshots, get gc_root and snapshots_to_gc
-                let ref_prefix = format!(
-                    "{}/{}/{}/",
-                    fuse_table.meta_location_generator().prefix(),
-                    FUSE_TBL_REF_PREFIX,
-                    ref_name
-                );
+                let ref_prefix = format!("{}{}/", ref_snapshot_location_prefix, ref_name);
 
                 let snapshots_before_retention = fuse_table
                     .list_files_until_timestamp(&ref_prefix, retention_time, true, None)
@@ -665,6 +662,7 @@ async fn process_snapshot_refs(
 
                 let (gc_root_location, gc_root_snap) = match process_branch_gc_root(
                     fuse_table,
+                    ref_name,
                     head,
                     &snapshots_before_retention,
                     &mut ref_snapshots_to_gc,
@@ -729,12 +727,7 @@ async fn process_snapshot_refs(
     // Step 3: Cleanup expired ref directories
     if !expired_refs.is_empty() {
         for ref_name in &expired_refs {
-            let dir = format!(
-                "{}/{}/{}/",
-                fuse_table.meta_location_generator().prefix(),
-                FUSE_TBL_REF_PREFIX,
-                ref_name
-            );
+            let dir = format!("{}{}/", ref_snapshot_location_prefix, ref_name);
             op.remove_all(&dir).await.inspect_err(|err| {
                 error!("Failed to remove expired ref directory {}: {}", dir, err);
             })?;
@@ -762,6 +755,7 @@ async fn process_snapshot_refs(
 #[async_backtrace::framed]
 async fn process_branch_gc_root(
     fuse_table: &FuseTable,
+    ref_name: &str,
     head: &str,
     snapshots_before_retention: &[Entry],
     ref_snapshots_to_gc: &mut Vec<String>,
@@ -791,7 +785,7 @@ async fn process_branch_gc_root(
     };
     let gc_root_path = fuse_table
         .meta_location_generator()
-        .snapshot_location_from_uuid(&gc_root_id, gc_root_ver)?;
+        .ref_snapshot_location_from_uuid(ref_name, &gc_root_id, gc_root_ver)?;
 
     // Try to read gc_root snapshot
     match SnapshotsIO::read_snapshot(gc_root_path.clone(), op, false).await {

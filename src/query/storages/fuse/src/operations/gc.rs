@@ -42,7 +42,6 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
-use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use log::error;
 use log::info;
 use log::warn;
@@ -58,7 +57,6 @@ use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::FuseTable;
 use crate::RetentionPolicy;
-use crate::FUSE_TBL_REF_PREFIX;
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 
 impl FuseTable {
@@ -743,7 +741,7 @@ impl FuseTable {
     /// Returns gc_root location if found
     async fn select_branch_gc_root(
         &self,
-        ref_prefix: &str,
+        ref_name: &str,
         snapshots_before_retention: &[Entry],
         ref_protected_segments: &mut HashSet<Location>,
         ref_snapshots_to_purge: &mut Vec<String>,
@@ -761,15 +759,9 @@ impl FuseTable {
         let Some((gc_root_id, gc_root_ver)) = last_snapshot.prev_snapshot_id else {
             return Ok(None);
         };
-
-        let gc_root_path = format!(
-            "{}{}{}_v{}.mpk",
-            ref_prefix,
-            VACUUM2_OBJECT_KEY_PREFIX,
-            gc_root_id.simple(),
-            gc_root_ver,
-        );
-
+        let gc_root_path = self
+            .meta_location_generator()
+            .ref_snapshot_location_from_uuid(ref_name, &gc_root_id, gc_root_ver)?;
         // Try to read gc_root snapshot
         match SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await {
             Ok((gc_root_snap, _)) => {
@@ -818,6 +810,9 @@ impl FuseTable {
         let now = Utc::now();
         let table_info = self.get_table_info();
         let retention_policy = self.get_data_retention_policy(ctx.as_ref())?;
+        let ref_snapshot_location_prefix = self
+            .meta_location_generator()
+            .ref_snapshot_location_prefix();
 
         let mut ref_protected_segments = HashSet::new();
         let mut ref_snapshots_to_purge = Vec::new();
@@ -847,12 +842,7 @@ impl FuseTable {
                 }
                 SnapshotRefInfo::Branch { head, anchor } => {
                     // Branch: process based on retention policy
-                    let ref_prefix = format!(
-                        "{}/{}/{}/",
-                        self.meta_location_generator().prefix(),
-                        FUSE_TBL_REF_PREFIX,
-                        ref_name
-                    );
+                    let ref_prefix = format!("{}{}/", ref_snapshot_location_prefix, ref_name);
 
                     let snapshots_before_lvt = match &retention_policy {
                         RetentionPolicy::ByTimePeriod(delta_duration) => {
@@ -887,7 +877,7 @@ impl FuseTable {
 
                     let new_anchor = match self
                         .select_branch_gc_root(
-                            &ref_prefix,
+                            ref_name,
                             &snapshots_before_lvt,
                             &mut ref_protected_segments,
                             &mut ref_snapshots_to_purge,
@@ -954,12 +944,7 @@ impl FuseTable {
         if !expired_refs.is_empty() {
             let operator = self.get_operator();
             for ref_name in &expired_refs {
-                let dir = format!(
-                    "{}/{}/{}/",
-                    self.meta_location_generator().prefix(),
-                    FUSE_TBL_REF_PREFIX,
-                    ref_name
-                );
+                let dir = format!("{}{}/", ref_snapshot_location_prefix, ref_name);
                 operator.remove_all(&dir).await.inspect_err(|err| {
                     error!("Failed to remove expired ref directory {}: {}", dir, err);
                 })?;

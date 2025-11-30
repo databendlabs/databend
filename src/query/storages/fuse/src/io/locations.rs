@@ -23,7 +23,6 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
@@ -131,6 +130,10 @@ impl TableMetaLocationGenerator {
         &self.segment_statistics_location_prefix
     }
 
+    pub fn ref_snapshot_location_prefix(&self) -> &str {
+        &self.ref_snapshot_location_prefix
+    }
+
     pub fn gen_block_location(
         &self,
         table_meta_timestamps: TableMetaTimestamps,
@@ -200,14 +203,14 @@ impl TableMetaLocationGenerator {
         Ok(snapshot_version.create(id, &self.prefix))
     }
 
-    pub fn gen_ref_snapshot_location(&self, name: &str, uuid: &Uuid) -> String {
-        format!(
-            "{}/{name}/{}{}_v{}.mpk",
-            &self.ref_snapshot_location_prefix,
-            VACUUM2_OBJECT_KEY_PREFIX,
-            uuid.simple(),
-            TableSnapshot::VERSION,
-        )
+    pub fn ref_snapshot_location_from_uuid(
+        &self,
+        name: &str,
+        id: &Uuid,
+        version: u64,
+    ) -> Result<String> {
+        let snapshot_version = SnapshotVersion::try_from(version)?;
+        Ok(snapshot_version.create_ref(name, id, &self.prefix))
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
@@ -353,6 +356,7 @@ impl TableMetaLocationGenerator {
 
 trait SnapshotLocationCreator {
     fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String;
+    fn create_ref(&self, name: &str, id: &Uuid, prefix: impl AsRef<str>) -> String;
     fn suffix(&self) -> String;
 }
 
@@ -371,6 +375,18 @@ impl SnapshotLocationCreator for SnapshotVersion {
             "{}/{}/{vacuum_prefix}{}{}",
             prefix.as_ref(),
             FUSE_TBL_SNAPSHOT_PREFIX,
+            id.simple(),
+            self.suffix(),
+        )
+    }
+
+    fn create_ref(&self, name: &str, id: &Uuid, prefix: impl AsRef<str>) -> String {
+        format!(
+            "{}/{}/{}/{}{}{}",
+            prefix.as_ref(),
+            FUSE_TBL_REF_PREFIX,
+            name,
+            VACUUM2_OBJECT_KEY_PREFIX,
             id.simple(),
             self.suffix(),
         )
@@ -396,6 +412,10 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
             id.simple(),
             self.suffix(),
         )
+    }
+
+    fn create_ref(&self, _name: &str, _id: &Uuid, _prefix: impl AsRef<str>) -> String {
+        unimplemented!()
     }
 
     fn suffix(&self) -> String {

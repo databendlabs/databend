@@ -455,6 +455,10 @@ impl FuseTable {
         &self.operator
     }
 
+    pub fn get_table_branch_name(&self) -> Option<String> {
+        self.table_branch.as_ref().map(|(name, _)| name.clone())
+    }
+
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
         tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Internal(format!(
@@ -1010,19 +1014,39 @@ impl Table for FuseTable {
                 }
             }
             _ => {
-                let s = &self.table_info.meta.statistics;
-                TableStatistics {
-                    num_rows: Some(s.number_of_rows),
-                    data_size: Some(s.data_bytes),
-                    data_size_compressed: Some(s.compressed_data_bytes),
-                    index_size: Some(s.index_data_bytes),
-                    bloom_index_size: s.bloom_index_size,
-                    ngram_index_size: s.ngram_index_size,
-                    inverted_index_size: s.inverted_index_size,
-                    vector_index_size: s.vector_index_size,
-                    virtual_column_size: s.virtual_column_size,
-                    number_of_blocks: s.number_of_blocks,
-                    number_of_segments: s.number_of_segments,
+                if self.table_branch.is_some() {
+                    let Some(ss) = self.read_table_snapshot().await? else {
+                        return Ok(None);
+                    };
+                    let stats = &ss.summary;
+                    TableStatistics {
+                        num_rows: Some(stats.row_count),
+                        data_size: Some(stats.uncompressed_byte_size),
+                        data_size_compressed: Some(stats.compressed_byte_size),
+                        index_size: Some(stats.index_size),
+                        bloom_index_size: stats.bloom_index_size,
+                        ngram_index_size: stats.ngram_index_size,
+                        inverted_index_size: stats.inverted_index_size,
+                        vector_index_size: stats.vector_index_size,
+                        virtual_column_size: stats.virtual_column_size,
+                        number_of_blocks: Some(stats.block_count),
+                        number_of_segments: Some(ss.segments.len() as u64),
+                    }
+                } else {
+                    let s = &self.table_info.meta.statistics;
+                    TableStatistics {
+                        num_rows: Some(s.number_of_rows),
+                        data_size: Some(s.data_bytes),
+                        data_size_compressed: Some(s.compressed_data_bytes),
+                        index_size: Some(s.index_data_bytes),
+                        bloom_index_size: s.bloom_index_size,
+                        ngram_index_size: s.ngram_index_size,
+                        inverted_index_size: s.inverted_index_size,
+                        vector_index_size: s.vector_index_size,
+                        virtual_column_size: s.virtual_column_size,
+                        number_of_blocks: s.number_of_blocks,
+                        number_of_segments: s.number_of_segments,
+                    }
                 }
             }
         };
