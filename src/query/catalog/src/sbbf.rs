@@ -73,6 +73,9 @@
 //! [sbbf-paper]: https://arxiv.org/pdf/2101.01719
 //! [bf-formulae]: http://tfk.mit.edu/pdf/bloom.pdf
 
+use core::simd::cmp::SimdPartialEq;
+use core::simd::Simd;
+
 /// Salt values as defined in the [spec](https://github.com/apache/parquet-format/blob/master/BloomFilter.md#technical-approach).
 const SALT: [u32; 8] = [
     0x47b6137b_u32,
@@ -90,20 +93,16 @@ const SALT: [u32; 8] = [
 #[derive(Debug, Copy, Clone)]
 #[repr(transparent)]
 struct Block([u32; 8]);
+
+type U32x8 = Simd<u32, 8>;
+
 impl Block {
     const ZERO: Block = Block([0; 8]);
 
     /// takes as its argument a single unsigned 32-bit integer and returns a block in which each
     /// word has exactly one bit set.
     fn mask(x: u32) -> Self {
-        let mut result = [0_u32; 8];
-        for i in 0..8 {
-            // wrapping instead of checking for overflow
-            let y = x.wrapping_mul(SALT[i]);
-            let y = y >> 27;
-            result[i] = 1 << y;
-        }
-        Self(result)
+        Self(Self::mask_simd(x).to_array())
     }
 
     #[inline]
@@ -136,13 +135,17 @@ impl Block {
 
     /// Returns true when every bit that is set in the result of mask is also set in the block.
     fn check(&self, hash: u32) -> bool {
-        let mask = Self::mask(hash);
-        for i in 0..8 {
-            if self[i] & mask[i] == 0 {
-                return false;
-            }
-        }
-        true
+        let mask = Self::mask_simd(hash);
+        let block_vec = U32x8::from_array(self.0);
+        (block_vec & mask).simd_ne(U32x8::splat(0)).all()
+    }
+
+    #[inline(always)]
+    fn mask_simd(x: u32) -> U32x8 {
+        let hash_vec = U32x8::splat(x);
+        let salt_vec = U32x8::from_array(SALT);
+        let bit_index = (hash_vec * salt_vec) >> U32x8::splat(27);
+        U32x8::splat(1) << bit_index
     }
 }
 
