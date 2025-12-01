@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use std::mem;
 use std::sync::Arc;
 
+use arrow_schema::Schema;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -69,6 +70,26 @@ use crate::operations::column_parquet_metas;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
+struct UninitializedArrowWriter {
+    write_settings: WriteSettings,
+    arrow_schema: Arc<Schema>,
+}
+
+impl UninitializedArrowWriter {
+    fn init(self, cols_ndv: HashMap<ColumnId, usize>) -> Result<ArrowWriter<Vec<u8>>> {
+        let write_settings = &self.write_settings;
+        let props = parquet_writer_properties_builder(
+            write_settings.table_compression,
+            write_settings.enable_parquet_dictionary,
+            None,
+        )
+        .build();
+        let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
+        let writer = ArrowWriter::try_new(buffer, self.arrow_schema, Some(props))?;
+        Ok(writer)
+    }
+}
+
 pub enum BlockWriterImpl {
     Arrow(ArrowWriter<Vec<u8>>),
     // Native format doesnot support stream write.
@@ -76,7 +97,7 @@ pub enum BlockWriterImpl {
 }
 
 pub trait BlockWriter {
-    fn start(&mut self) -> Result<()>;
+    fn start(&mut self, cols_ndv: HashMap<ColumnId, usize>) -> Result<()>;
 
     fn write(&mut self, block: DataBlock, schema: &TableSchema) -> Result<()>;
 
@@ -88,10 +109,10 @@ pub trait BlockWriter {
 }
 
 impl BlockWriter for BlockWriterImpl {
-    fn start(&mut self) -> Result<()> {
+    fn start(&mut self, cols_ndv: HashMap<ColumnId, usize>) -> Result<()> {
         match self {
-            BlockWriterImpl::Arrow(_) => Ok(()),
-            BlockWriterImpl::Native(writer) => Ok(writer.start()?),
+            BlockWriterImpl::Arrow(arrow_writer) => Ok(()),
+            BlockWriterImpl::Native(native_writer) => Ok(native_writer.start()?),
         }
     }
 
@@ -264,10 +285,6 @@ impl StreamBlockBuilder {
             return Ok(());
         }
 
-        if self.row_count == 0 {
-            self.block_writer.start()?;
-        }
-
         let block = self.cluster_stats_state.add_block(block)?;
         self.column_stats_state
             .add_block(&self.properties.source_schema, &block)?;
@@ -284,6 +301,11 @@ impl StreamBlockBuilder {
         }
         self.row_count += block.num_rows();
         self.block_size += block.estimate_block_size();
+
+        if self.row_count == 0 {
+            let cols_ndv = self.column_stats_state.peek_cols_ndv();
+            self.block_writer.start(cols_ndv)?;
+        }
 
         self.block_writer
             .write(block, &self.properties.source_schema)?;
