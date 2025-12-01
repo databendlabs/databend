@@ -48,7 +48,7 @@ use crate::StateAddr;
 use crate::BATCH_SIZE;
 
 pub struct PayloadFlushState {
-    pub probe_state: ProbeState,
+    pub probe_state: Box<ProbeState>,
     pub group_columns: Vec<BlockEntry>,
     pub(super) aggregate_results: Vec<BlockEntry>,
     pub row_count: usize,
@@ -64,7 +64,7 @@ pub struct PayloadFlushState {
 impl Default for PayloadFlushState {
     fn default() -> Self {
         PayloadFlushState {
-            probe_state: ProbeState::default(),
+            probe_state: ProbeState::new_boxed(),
             group_columns: Vec::new(),
             aggregate_results: Vec::new(),
             row_count: 0,

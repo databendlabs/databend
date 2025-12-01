@@ -473,7 +473,7 @@ serde_derive = "1"
 serde_ignored = "0.1.10"
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order", "unbounded_depth"] }
 serde_repr = "0.1.9"
-serde_stacker = { version = "0.1" }
+serde_stacker = "0.1"
 serde_test = "1.0"
 serde_urlencoded = "0.7.1"
 serde_with = { version = "3.8.1" }
@@ -492,6 +492,7 @@ snap = "1"
 socket2 = "0.5.3"
 span-map = { version = "0.2.0" }
 sqlx = { version = "0.8", features = ["mysql", "runtime-tokio"] }
+stacker = "0.1"
 state = "0.6.0"
 state-machine-api = { version = "0.3.4" }
 stream-more = "0.1.3"

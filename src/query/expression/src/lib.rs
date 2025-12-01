@@ -43,6 +43,7 @@
 #![feature(debug_closure_helpers)]
 #![feature(never_type)]
 #![feature(slice_as_array)]
+#![feature(new_zeroed_alloc)]
 
 #[allow(dead_code)]
 mod block;

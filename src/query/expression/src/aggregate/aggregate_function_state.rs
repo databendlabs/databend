@@ -15,6 +15,7 @@
 use std::alloc::Layout;
 use std::ptr::NonNull;
 
+use databend_common_base::hints::assume;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
@@ -243,7 +244,7 @@ impl<'a> AggrState<'a> {
 
     pub fn get<'b, T>(&self) -> &'b mut T
     where T: Send + 'static {
-        debug_assert_eq!(self.loc.len(), 1);
+        assume(self.loc.len() == 1);
         debug_assert!(self.loc[0].is_custom());
         self.addr.next(self.loc[0].offset()).get::<T>()
     }
@@ -253,7 +254,7 @@ impl<'a> AggrState<'a> {
         F: FnOnce() -> T,
         T: Send + 'static,
     {
-        debug_assert_eq!(self.loc.len(), 1);
+        assume(self.loc.len() == 1);
         debug_assert!(self.loc[0].is_custom());
         self.addr.next(self.loc[0].offset()).write(f);
     }

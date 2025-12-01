@@ -15,6 +15,7 @@
 use std::fmt;
 use std::sync::Arc;
 
+use databend_common_base::hints::assume;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -74,7 +75,7 @@ fn merge_flag(place: AggrState, other: bool) {
 
 fn flag_offset(place: AggrState) -> usize {
     let n = place.loc.len();
-    debug_assert!(n > 0);
+    assume(n > 0);
     let loc = unsafe { place.loc.get_unchecked(n - 1) };
     debug_assert!(loc.is_bool());
     loc.offset()

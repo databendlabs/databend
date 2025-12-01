@@ -64,6 +64,24 @@ unsafe impl Send for ProbeState {}
 unsafe impl Sync for ProbeState {}
 
 impl ProbeState {
+    pub fn new_boxed() -> Box<ProbeState> {
+        let mut state = Box::<ProbeState>::new_zeroed();
+        unsafe {
+            let state_mut = state.assume_init_mut();
+            state_mut.partition_entries = vec![];
+            state_mut.partition_count = vec![];
+
+            for ptr in &mut state_mut.addresses {
+                *ptr = RowPtr::null();
+            }
+            for addr in &mut state_mut.state_places {
+                *addr = StateAddr::null()
+            }
+
+            state.assume_init()
+        }
+    }
+
     pub fn reset_partitions(&mut self, partition_count: usize) {
         if self.partition_entries.len() < partition_count {
             self.partition_entries
