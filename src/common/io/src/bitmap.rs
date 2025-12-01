@@ -23,11 +23,12 @@ use std::ops::SubAssign;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use roaring::treemap::Iter;
 use roaring::RoaringTreemap;
 use smallvec::SmallVec;
 
 // https://github.com/ClickHouse/ClickHouse/blob/516a6ed6f8bd8c5f6eed3a10e9037580b2fb6152/src/AggregateFunctions/AggregateFunctionGroupBitmapData.h#L914
-const LARGE_THRESHOLD: usize = 32;
+const LARGE_THRESHOLD: usize = 16;
 const HYBRID_MAGIC: [u8; 2] = *b"HB";
 const HYBRID_VERSION: u8 = 1;
 const HYBRID_KIND_SMALL: u8 = 0;
@@ -38,13 +39,13 @@ type SmallBitmap = SmallVec<[u64; LARGE_THRESHOLD]>;
 
 #[derive(Clone)]
 pub enum HybridBitmap {
-    Small(Box<SmallBitmap>),
+    Small(SmallBitmap),
     Large(RoaringTreemap),
 }
 
 impl Default for HybridBitmap {
     fn default() -> Self {
-        HybridBitmap::Small(Box::new(SmallBitmap::new()))
+        HybridBitmap::Small(SmallBitmap::new())
     }
 }
 
@@ -156,7 +157,7 @@ impl HybridBitmap {
     pub fn iter(&self) -> HybridBitmapIter<'_> {
         match self {
             HybridBitmap::Large(tree) => HybridBitmapIter {
-                inner: HybridBitmapIterInner::Large(Box::new(tree.into_iter())),
+                inner: HybridBitmapIterInner::Large(Box::new(tree.iter())),
             },
             HybridBitmap::Small(set) => HybridBitmapIter {
                 inner: HybridBitmapIterInner::Small(set.iter()),
@@ -168,7 +169,7 @@ impl HybridBitmap {
         if let HybridBitmap::Small(set) = self {
             let data = mem::take(set);
             let mut tree = RoaringTreemap::new();
-            for value in *data {
+            for value in data {
                 tree.insert(value);
             }
             *self = HybridBitmap::Large(tree);
@@ -187,7 +188,7 @@ impl HybridBitmap {
                 for value in data.into_iter() {
                     set.push(value);
                 }
-                *self = HybridBitmap::Small(Box::new(set));
+                *self = HybridBitmap::Small(set);
             }
         }
     }
@@ -200,7 +201,7 @@ impl From<RoaringTreemap> for HybridBitmap {
             for v in value.into_iter() {
                 set.push(v);
             }
-            HybridBitmap::Small(Box::new(set))
+            HybridBitmap::Small(set)
         } else {
             HybridBitmap::Large(value)
         }
@@ -242,7 +243,7 @@ impl std::ops::BitOrAssign for HybridBitmap {
                 }
                 HybridBitmap::Small(lhs_set) => {
                     let left = mem::take(lhs_set);
-                    *lhs_set = Box::new(small_union(*left, rhs_set.as_slice()));
+                    *lhs_set = small_union(left, rhs_set.as_slice());
                 }
             },
         }
@@ -266,15 +267,14 @@ impl std::ops::BitAndAssign for HybridBitmap {
                 lhs_tree.bitand_assign(rhs_tree);
                 self.try_demote();
             }
-            HybridBitmap::Small(rhs_set) => match self {
+            HybridBitmap::Small(mut rhs_set) => match self {
                 HybridBitmap::Large(lhs_tree) => {
                     let rhs_tree = RoaringTreemap::from_iter(rhs_set.iter().copied());
                     lhs_tree.bitand_assign(rhs_tree);
                     self.try_demote();
                 }
                 HybridBitmap::Small(lhs_set) => {
-                    let result = small_intersection(lhs_set.as_slice(), rhs_set.as_slice());
-                    *lhs_set = Box::new(result);
+                    small_intersection(lhs_set, &mut rhs_set);
                 }
             },
         }
@@ -306,7 +306,7 @@ impl std::ops::BitXorAssign for HybridBitmap {
                 }
                 HybridBitmap::Small(lhs_set) => {
                     let result = small_symmetric_difference(lhs_set.as_slice(), rhs_set.as_slice());
-                    *lhs_set = Box::new(result);
+                    *lhs_set = result;
                 }
             },
         }
@@ -338,7 +338,7 @@ impl std::ops::SubAssign for HybridBitmap {
                 }
                 HybridBitmap::Small(lhs_set) => {
                     let result = small_difference(lhs_set.as_slice(), rhs_set.as_slice());
-                    *lhs_set = Box::new(result);
+                    *lhs_set = result;
                 }
             },
         }
@@ -359,7 +359,7 @@ pub struct HybridBitmapIter<'a> {
 }
 
 enum HybridBitmapIterInner<'a> {
-    Large(Box<<&'a RoaringTreemap as IntoIterator>::IntoIter>),
+    Large(Box<Iter<'a>>),
     Small(std::slice::Iter<'a, u64>),
 }
 
@@ -540,7 +540,7 @@ fn decode_small_bitmap(payload: &[u8]) -> Result<HybridBitmap> {
         data.copy_from_slice(chunk);
         set.push(u64::from_le_bytes(data));
     }
-    Ok(HybridBitmap::Small(Box::new(set)))
+    Ok(HybridBitmap::Small(set))
 }
 
 fn small_insert(set: &mut SmallBitmap, value: u64) -> bool {
@@ -586,25 +586,52 @@ fn small_union(left: SmallBitmap, right: &[u64]) -> SmallBitmap {
     result
 }
 
-fn small_intersection(lhs: &[u64], rhs: &[u64]) -> SmallBitmap {
-    let mut result = SmallBitmap::new();
+fn small_intersection(lhs: &mut SmallBitmap, rhs: &mut SmallBitmap) {
+    if lhs.is_empty() || rhs.is_empty() {
+        lhs.clear();
+        return;
+    }
+
+    if lhs.len() <= rhs.len() {
+        let other = rhs.as_slice();
+        small_intersection_in_place(lhs, other);
+    } else {
+        {
+            let other = lhs.as_slice();
+            small_intersection_in_place(rhs, other);
+        }
+        mem::swap(lhs, rhs);
+    }
+}
+
+#[inline]
+fn small_intersection_in_place(target: &mut SmallBitmap, other: &[u64]) {
+    if other.is_empty() {
+        target.clear();
+        return;
+    }
+
+    let mut write = 0;
     let mut i = 0;
     let mut j = 0;
+    let target_len = target.len();
 
-    while i < lhs.len() && j < rhs.len() {
-        let lv = lhs[i];
-        let rv = rhs[j];
+    while i < target_len && j < other.len() {
+        let lv = target[i];
+        let rv = other[j];
         if lv < rv {
             i += 1;
         } else if rv < lv {
             j += 1;
         } else {
-            result.push(lv);
+            target[write] = lv;
+            write += 1;
             i += 1;
             j += 1;
         }
     }
-    result
+
+    target.truncate(write);
 }
 
 fn small_difference(lhs: &[u64], rhs: &[u64]) -> SmallBitmap {
@@ -731,10 +758,22 @@ mod tests {
 
     #[test]
     fn small_intersection_returns_common_values() {
-        let lhs = [1_u64, 2, 4, 6];
-        let rhs = [0_u64, 2, 3, 4, 5];
-        let result = small_intersection(&lhs, &rhs);
-        assert_eq!(result.as_slice(), &[2, 4]);
+        let mut lhs: SmallBitmap = smallvec![1_u64, 2, 4, 6];
+        let mut rhs: SmallBitmap = smallvec![0_u64, 2, 3, 4, 5];
+        small_intersection(&mut lhs, &mut rhs);
+        assert_eq!(lhs.as_slice(), &[2, 4]);
+    }
+
+    #[test]
+    fn small_intersection_prefers_smaller_buffer() {
+        let mut lhs: SmallBitmap = smallvec![0_u64, 1, 2, 3, 4, 6];
+        let mut rhs: SmallBitmap = smallvec![2_u64, 3];
+        let expected_lhs = lhs.clone();
+
+        small_intersection(&mut lhs, &mut rhs);
+
+        assert_eq!(lhs.as_slice(), &[2, 3]);
+        assert_eq!(rhs.as_slice(), expected_lhs.as_slice());
     }
 
     #[test]
