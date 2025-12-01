@@ -312,6 +312,33 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : build_bitmap([3, 7, 9]) = build_bitmap([3, 7, 9])
+raw expr       : eq(build_bitmap(array(3, 7, 9)), build_bitmap(array(3, 7, 9)))
+checked expr   : eq<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : build_bitmap([3, 7, 9]) = build_bitmap([3, 7, 10])
+raw expr       : eq(build_bitmap(array(3, 7, 9)), build_bitmap(array(3, 7, 10)))
+checked expr   : eq<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 10_u8) AS Array(UInt8 NULL))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : null = build_bitmap([3, 7, 10])
+raw expr       : eq(NULL, build_bitmap(array(3, 7, 10)))
+checked expr   : eq<Bitmap NULL, Bitmap NULL>(CAST<NULL>(NULL AS Bitmap NULL), CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 10_u8) AS Array(UInt8 NULL))) AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : '1'!='2'
 raw expr       : noteq('1', '2')
 checked expr   : noteq<String, String>("1", "2")
@@ -544,6 +571,33 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------+
 
 
+ast            : build_bitmap([3, 7, 9]) != build_bitmap([3, 7, 9])
+raw expr       : noteq(build_bitmap(array(3, 7, 9)), build_bitmap(array(3, 7, 9)))
+checked expr   : noteq<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : build_bitmap([3, 7, 9]) != build_bitmap([3, 7, 10])
+raw expr       : noteq(build_bitmap(array(3, 7, 9)), build_bitmap(array(3, 7, 10)))
+checked expr   : noteq<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 10_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : null != build_bitmap([3, 7, 10])
+raw expr       : noteq(NULL, build_bitmap(array(3, 7, 10)))
+checked expr   : noteq<Bitmap NULL, Bitmap NULL>(CAST<NULL>(NULL AS Bitmap NULL), CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 10_u8) AS Array(UInt8 NULL))) AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : '1'<'2'
 raw expr       : lt('1', '2')
 checked expr   : lt<String, String>("1", "2")
@@ -766,6 +820,60 @@ evaluation (internal):
 | rhs    | Column(StringColumn[null, true, 9223372036854775800, -33768, 1234.5678, 1.912e2, [0,2,3,["a","b","c"]]]) |
 | Output | Boolean([0b_0001000])                                                                                    |
 +--------+----------------------------------------------------------------------------------------------------------+
+
+
+ast            : build_bitmap([1]) < build_bitmap([1, 2])
+raw expr       : lt(build_bitmap(array(1)), build_bitmap(array(1, 2)))
+checked expr   : lt<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : build_bitmap([1, 2]) < build_bitmap([1, 2])
+raw expr       : lt(build_bitmap(array(1, 2)), build_bitmap(array(1, 2)))
+checked expr   : lt<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : build_bitmap([1, 2]) < build_bitmap([1, 3])
+raw expr       : lt(build_bitmap(array(1, 2)), build_bitmap(array(1, 3)))
+checked expr   : lt<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 3_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : build_bitmap([1, 3]) < build_bitmap([1, 2])
+raw expr       : lt(build_bitmap(array(1, 3)), build_bitmap(array(1, 2)))
+checked expr   : lt<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 3_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : null < build_bitmap([1])
+raw expr       : lt(NULL, build_bitmap(array(1)))
+checked expr   : lt<Bitmap NULL, Bitmap NULL>(CAST<NULL>(NULL AS Bitmap NULL), CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8 NULL))) AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : build_bitmap([1]) < null
+raw expr       : lt(build_bitmap(array(1)), NULL)
+checked expr   : lt<Bitmap NULL, Bitmap NULL>(CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8 NULL))) AS Bitmap NULL), CAST<NULL>(NULL AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : '5'<='2'
@@ -1000,6 +1108,51 @@ evaluation (internal):
 | rhs    | Column(StringColumn["databend", {"k":"a","a":"d"}, [0,2,3,["a","b","c"]]]) |
 | Output | Boolean([0b_____001])                                                      |
 +--------+----------------------------------------------------------------------------+
+
+
+ast            : build_bitmap([1]) <= build_bitmap([1, 2])
+raw expr       : lte(build_bitmap(array(1)), build_bitmap(array(1, 2)))
+checked expr   : lte<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : build_bitmap([1, 2]) <= build_bitmap([1, 2])
+raw expr       : lte(build_bitmap(array(1, 2)), build_bitmap(array(1, 2)))
+checked expr   : lte<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : build_bitmap([1, 3]) <= build_bitmap([1, 2])
+raw expr       : lte(build_bitmap(array(1, 3)), build_bitmap(array(1, 2)))
+checked expr   : lte<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 3_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : null <= build_bitmap([1])
+raw expr       : lte(NULL, build_bitmap(array(1)))
+checked expr   : lte<Bitmap NULL, Bitmap NULL>(CAST<NULL>(NULL AS Bitmap NULL), CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8 NULL))) AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : build_bitmap([1]) <= null
+raw expr       : lte(build_bitmap(array(1)), NULL)
+checked expr   : lte<Bitmap NULL, Bitmap NULL>(CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8 NULL))) AS Bitmap NULL), CAST<NULL>(NULL AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : '3'>'2'
@@ -1262,6 +1415,51 @@ evaluation (internal):
 +--------+--------------------------------+
 
 
+ast            : build_bitmap([1, 3]) > build_bitmap([1, 2])
+raw expr       : gt(build_bitmap(array(1, 3)), build_bitmap(array(1, 2)))
+checked expr   : gt<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 3_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : build_bitmap([1, 2]) > build_bitmap([1, 3])
+raw expr       : gt(build_bitmap(array(1, 2)), build_bitmap(array(1, 3)))
+checked expr   : gt<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 3_u8) AS Array(UInt8 NULL))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : build_bitmap([1, 2]) > build_bitmap([1, 2])
+raw expr       : gt(build_bitmap(array(1, 2)), build_bitmap(array(1, 2)))
+checked expr   : gt<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : null > build_bitmap([1])
+raw expr       : gt(NULL, build_bitmap(array(1)))
+checked expr   : gt<Bitmap NULL, Bitmap NULL>(CAST<NULL>(NULL AS Bitmap NULL), CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8 NULL))) AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : build_bitmap([1]) > null
+raw expr       : gt(build_bitmap(array(1)), NULL)
+checked expr   : gt<Bitmap NULL, Bitmap NULL>(CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8 NULL))) AS Bitmap NULL), CAST<NULL>(NULL AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : '2'>='1'
 raw expr       : gte('2', '1')
 checked expr   : gte<String, String>("2", "1")
@@ -1502,6 +1700,51 @@ evaluation (internal):
 | rhs    | Column(StringColumn[9223372036854775806, -32768, 1234.5678, 1.912e2, "\\\"abc\\\"", {"k":"v","a":"d"}, [1,2,3,["a","b","c"]]]) |
 | Output | Boolean([0b_1011111])                                                                                                          |
 +--------+--------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : build_bitmap([1, 3]) >= build_bitmap([1, 2])
+raw expr       : gte(build_bitmap(array(1, 3)), build_bitmap(array(1, 2)))
+checked expr   : gte<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 3_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : build_bitmap([1, 2]) >= build_bitmap([1, 3])
+raw expr       : gte(build_bitmap(array(1, 2)), build_bitmap(array(1, 3)))
+checked expr   : gte<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 3_u8) AS Array(UInt8 NULL))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : build_bitmap([1, 2]) >= build_bitmap([1, 2])
+raw expr       : gte(build_bitmap(array(1, 2)), build_bitmap(array(1, 2)))
+checked expr   : gte<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : null >= build_bitmap([1])
+raw expr       : gte(NULL, build_bitmap(array(1)))
+checked expr   : gte<Bitmap NULL, Bitmap NULL>(CAST<NULL>(NULL AS Bitmap NULL), CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8 NULL))) AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : build_bitmap([1]) >= null
+raw expr       : gte(build_bitmap(array(1)), NULL)
+checked expr   : gte<Bitmap NULL, Bitmap NULL>(CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0>(1_u8) AS Array(UInt8 NULL))) AS Bitmap NULL), CAST<NULL>(NULL AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : '1' like '2'
