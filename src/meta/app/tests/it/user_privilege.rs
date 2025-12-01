@@ -26,7 +26,7 @@ fn test_user_privilege() -> Result<()> {
     let r = privileges.has_privilege(UserPrivilegeType::Insert);
     assert!(r);
 
-    privileges.set_all_privileges();
+    privileges |= UserPrivilegeSet::available_privileges_on_global();
     let r = privileges.has_privilege(UserPrivilegeType::Create);
     assert!(r);
 

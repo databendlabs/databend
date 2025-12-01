@@ -464,10 +464,12 @@ impl FuseTable {
         }
 
         let push_down = pruner.push_down.clone();
-
         if push_down
             .as_ref()
-            .filter(|p| !p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
+            .filter(|p| {
+                (!p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
+                    || (p.limit.is_some() && p.filter_only_use_index())
+            })
             .is_some()
         {
             // if there are ordering + limit clause and no filter, use topn pruner
@@ -475,10 +477,12 @@ impl FuseTable {
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let topn_pruner = TopNPruner::create(schema, sort, limit);
+            let filter_only_use_index = push_down.filter_only_use_index();
+            let topn_pruner = TopNPruner::create(schema, sort, limit, filter_only_use_index);
+            let pruning_ctx = pruner.pruning_ctx.clone();
             prune_pipeline.resize(1, false)?;
             prune_pipeline.add_transform(move |input, output| {
-                TopNPruneTransform::create(input, output, topn_pruner.clone())
+                TopNPruneTransform::create(input, output, pruning_ctx.clone(), topn_pruner.clone())
             })?;
         }
 

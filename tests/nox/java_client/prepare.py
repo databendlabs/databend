@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import requests
 from requests.auth import HTTPBasicAuth
+import time
 
 
 def main():
@@ -30,19 +31,36 @@ def download_jdbc(version):
     target.write_bytes(resp.content)
 
 
+def exec(sql, port=8000):
+    print(f"{port}: {sql}")
+    print("----")
+    resp = requests.post(
+        f"http://localhost:{port}/v1/query/",
+        auth=HTTPBasicAuth("root", ""),
+        headers={"Content-Type": "application/json"},
+        json={"sql": sql},
+    )
+    if resp.status_code != 200:
+        print(f"error({resp.status_code}, {resp.reason}):{resp.text}")
+        raise Exception()
+    j = resp.json()
+    if j["error"]:
+        print(f"sql error: {j['error']}")
+        raise Exception()
+    print(j)
+    print("====")
+
+
 def create_user():
-    requests.post(
-        "http://localhost:8000/v1/query/",
-        auth=HTTPBasicAuth("root", ""),
-        headers={"Content-Type": "application/json"},
-        json={"sql": "CREATE USER IF NOT EXISTS databend IDENTIFIED BY 'databend'"},
-    ).raise_for_status()
-    requests.post(
-        "http://localhost:8000/v1/query/",
-        auth=HTTPBasicAuth("root", ""),
-        headers={"Content-Type": "application/json"},
-        json={"sql": "GRANT ALL ON *.* TO databend"},
-    ).raise_for_status()
+    exec("DROP USER IF EXISTS databend")
+    exec(
+        "CREATE USER databend IDENTIFIED BY 'databend' with default_role='account_admin'"
+    )
+    exec("GRANT ROLE account_admin TO USER databend")
+    # need for cluster to sync the GRANT op
+    time.sleep(16)
+    for p in [8001, 8002, 8003]:
+        exec("SHOW GRANTS FOR USER databend", port=p)
 
 
 def download_testng():

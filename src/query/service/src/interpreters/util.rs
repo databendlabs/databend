@@ -137,7 +137,10 @@ impl Client for ScriptClient {
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
-        let schema = plan.schema();
+        let mut schema = plan.schema();
+        if let Some(real_schema) = interpreter.get_dynamic_schema().await {
+            schema = real_schema;
+        }
 
         let block = match blocks.len() {
             0 => DataBlock::empty_with_schema(schema.clone()),

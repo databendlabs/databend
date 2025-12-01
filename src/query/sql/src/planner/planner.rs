@@ -346,7 +346,7 @@ pub fn get_query_kind(stmt: &Statement) -> QueryKind {
         Statement::StatementWithSettings { stmt, .. } => get_query_kind(stmt),
         Statement::CopyIntoTable(_) => QueryKind::CopyIntoTable,
         Statement::CopyIntoLocation(_) => QueryKind::CopyIntoLocation,
-        Statement::Explain { .. } => QueryKind::Explain,
+        Statement::Explain { .. } | Statement::ExplainAnalyze { .. } => QueryKind::Explain,
         Statement::Insert(_) => QueryKind::Insert,
         Statement::Replace(_)
         | Statement::Delete(_)

@@ -1456,7 +1456,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("enable_experimental_virtual_column", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enables experimental virtual column",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1515,7 +1515,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("max_aggregate_spill_level", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Maximum recursion depth for the aggregate spill. Each recursion level repartition data into `num_cpu` smaller parts to ensure it fits in memory.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

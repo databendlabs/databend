@@ -173,10 +173,22 @@ pub fn eval_aggr(
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    eval_aggr_for_test(name, params, entries, rows, false, sort_descs)
+    eval_aggr_inner(name, params, entries, rows, false, sort_descs)
 }
 
 pub fn eval_aggr_for_test(
+    name: &str,
+    params: Vec<Scalar>,
+    entries: &[BlockEntry],
+    rows: usize,
+    with_serialize: bool,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
+) -> Result<(Column, DataType)> {
+    eval_aggr_inner(name, params, entries, rows, with_serialize, sort_descs)
+}
+
+#[inline]
+fn eval_aggr_inner(
     name: &str,
     params: Vec<Scalar>,
     entries: &[BlockEntry],

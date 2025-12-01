@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::runtime_filter_info::RuntimeFilterBloom;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
+use databend_common_catalog::sbbf::Sbbf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
@@ -33,7 +33,6 @@ use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use xorf::BinaryFuse16;
 
 use super::builder::should_enable_runtime_filter;
 use super::packet::JoinRuntimeFilterPacket;
@@ -48,10 +47,11 @@ use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 ///
 /// Each runtime filter (identified by packet.id) is built once and then applied to multiple scans.
 /// The probe_targets in RuntimeFilterDesc specify all (probe_key, scan_id) pairs where this filter should be applied.
-pub fn build_runtime_filter_infos(
+pub async fn build_runtime_filter_infos(
     packet: JoinRuntimeFilterPacket,
     runtime_filter_descs: HashMap<usize, &RuntimeFilterDesc>,
     selectivity_threshold: u64,
+    max_threads: usize,
 ) -> Result<HashMap<usize, RuntimeFilterInfo>> {
     let total_build_rows = packet.build_rows;
     let Some(packets) = packet.packets else {
@@ -74,7 +74,7 @@ pub fn build_runtime_filter_infos(
                 probe_expr: probe_key.clone(),
                 bloom: if enabled {
                     if let Some(ref bloom) = packet.bloom {
-                        Some(build_bloom_filter(bloom.clone(), probe_key)?)
+                        Some(build_bloom_filter(bloom.clone(), probe_key, max_threads).await?)
                     } else {
                         None
                     }
@@ -123,7 +123,15 @@ fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<
             data_type: DataType::Boolean,
         }));
     }
-    let probe_key = probe_key.as_column_ref().unwrap();
+    let probe_key = match probe_key {
+        Expr::ColumnRef(col) => col,
+        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
+        Expr::Cast(cast) => match cast.expr.as_ref() {
+            Expr::ColumnRef(col) => col,
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
 
     let raw_probe_key = RawExpr::ColumnRef {
         span: probe_key.span,
@@ -244,14 +252,94 @@ fn build_min_max_filter(
     Ok(min_max_filter)
 }
 
-fn build_bloom_filter(bloom: HashSet<u64>, probe_key: &Expr<String>) -> Result<RuntimeFilterBloom> {
-    let probe_key = probe_key.as_column_ref().unwrap();
-    let hashes_vec = bloom.into_iter().collect::<Vec<_>>();
-    let filter = BinaryFuse16::try_from(&hashes_vec)?;
+async fn build_bloom_filter(
+    bloom: Vec<u64>,
+    probe_key: &Expr<String>,
+    max_threads: usize,
+) -> Result<RuntimeFilterBloom> {
+    let probe_key = match probe_key {
+        Expr::ColumnRef(col) => col,
+        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
+        Expr::Cast(cast) => match cast.expr.as_ref() {
+            Expr::ColumnRef(col) => col,
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+    let column_name = probe_key.id.to_string();
+    let total_items = bloom.len();
+
+    if total_items < 50000 {
+        let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
+            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        for hash in bloom {
+            filter.insert_hash(hash);
+        }
+        return Ok(RuntimeFilterBloom {
+            column_name,
+            filter,
+        });
+    }
+
+    let chunk_size = total_items.div_ceil(max_threads);
+
+    let chunks: Vec<Vec<u64>> = bloom
+        .chunks(chunk_size)
+        .map(|chunk| chunk.to_vec())
+        .collect();
+
+    let tasks: Vec<_> = chunks
+        .into_iter()
+        .map(|chunk| {
+            databend_common_base::runtime::spawn(async move {
+                let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
+                    .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+
+                for hash in chunk {
+                    filter.insert_hash(hash);
+                }
+                Ok::<Sbbf, ErrorCode>(filter)
+            })
+        })
+        .collect();
+
+    let task_results = futures::future::join_all(tasks).await;
+
+    let filters: Vec<Sbbf> = task_results
+        .into_iter()
+        .map(|r| r.expect("Task panicked"))
+        .collect::<Result<Vec<_>>>()?;
+
+    let merged_filter = merge_bloom_filters_tree(filters);
+
     Ok(RuntimeFilterBloom {
-        column_name: probe_key.id.to_string(),
-        filter,
+        column_name,
+        filter: merged_filter,
     })
+}
+
+fn merge_bloom_filters_tree(mut filters: Vec<Sbbf>) -> Sbbf {
+    if filters.is_empty() {
+        return Sbbf::new_with_ndv_fpp(1, 0.01).unwrap();
+    }
+
+    while filters.len() > 1 {
+        let mut next_level = Vec::new();
+        let mut iter = filters.into_iter();
+
+        while let Some(mut left) = iter.next() {
+            if let Some(right) = iter.next() {
+                left.union(&right);
+                next_level.push(left);
+            } else {
+                next_level.push(left);
+            }
+        }
+
+        filters = next_level;
+    }
+
+    filters.pop().unwrap()
 }
 
 #[cfg(test)]

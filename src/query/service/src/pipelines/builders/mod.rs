@@ -27,9 +27,12 @@ mod builder_on_finished;
 mod builder_project;
 mod builder_replace_into;
 mod builder_sort;
+mod builder_udtf;
 mod merge_into_join_optimizations;
 mod transform_builder;
 
 pub use builder_replace_into::RawValueSource;
 pub use builder_replace_into::ValueSource;
 pub use builder_sort::SortPipelineBuilder;
+pub use builder_udtf::UdtfFunctionDesc;
+pub use builder_udtf::UdtfServerSource;

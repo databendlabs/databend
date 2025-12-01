@@ -113,9 +113,20 @@ impl FieldJsonAstDecoder {
             ColumnBuilder::Geography(c) => self.read_geography(c, value),
             ColumnBuilder::Interval(c) => self.read_interval(c, value),
             ColumnBuilder::Vector(c) => self.read_vector(c, value),
-            ColumnBuilder::EmptyArray { .. } | ColumnBuilder::EmptyMap { .. } => {
-                Err(ErrorCode::Unimplemented("empty array/map literal"))
-            }
+            ColumnBuilder::EmptyArray { len } => match value.as_array() {
+                Some(array) if array.is_empty() => {
+                    *len += 1;
+                    Ok(())
+                }
+                _ => Err(ErrorCode::BadBytes("Incorrect empty array value")),
+            },
+            ColumnBuilder::EmptyMap { len } => match value.as_object() {
+                Some(array) if array.is_empty() => {
+                    *len += 1;
+                    Ok(())
+                }
+                _ => Err(ErrorCode::BadBytes("Incorrect empty map value")),
+            },
             ColumnBuilder::Opaque(_) => Err(ErrorCode::Unimplemented(
                 "Opaque type not supported in json_ast",
             )),

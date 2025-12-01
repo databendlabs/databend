@@ -62,49 +62,6 @@ impl VirtualBlockReadResult {
 }
 
 impl VirtualColumnReader {
-    pub fn sync_read_parquet_data_by_merge_io(
-        &self,
-        read_settings: &ReadSettings,
-        virtual_block_meta: &Option<&VirtualBlockMetaIndex>,
-        num_rows: usize,
-    ) -> Option<VirtualBlockReadResult> {
-        let Some(virtual_block_meta) = virtual_block_meta else {
-            return None;
-        };
-
-        let mut schema = TableSchema::empty();
-        let mut ranges = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
-        for (virtual_column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
-            let (offset, len) = virtual_column_meta.offset_length();
-            ranges.push((*virtual_column_id, offset..(offset + len)));
-            let data_type = virtual_column_meta.data_type();
-
-            let name = format!("{}", virtual_column_id);
-            schema.add_internal_field(&name, data_type, *virtual_column_id);
-        }
-
-        let virtual_loc = &virtual_block_meta.virtual_block_location;
-        let merge_io_result = MergeIOReader::sync_merge_io_read(
-            read_settings,
-            self.dal.clone(),
-            virtual_loc,
-            &ranges,
-        )
-        .ok()?;
-
-        let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
-        let ignore_column_ids =
-            self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
-
-        Some(VirtualBlockReadResult::create(
-            num_rows,
-            self.compression.into(),
-            block_read_res,
-            Arc::new(schema),
-            ignore_column_ids,
-        ))
-    }
-
     pub async fn read_parquet_data_by_merge_io(
         &self,
         read_settings: &ReadSettings,

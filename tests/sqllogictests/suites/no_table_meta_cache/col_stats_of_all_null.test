@@ -27,7 +27,7 @@ Filter
     ├── read size: 0
     ├── partitions total: 1
     ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(t.c (#0) > 6)], limit: NONE]
     └── estimated rows: 1.00
 
@@ -50,6 +50,6 @@ TableScan
 ├── read size: 0
 ├── partitions total: 1
 ├── partitions scanned: 0
-├── pruning stats: [segments: <range pruning: 1 to 0>]
+├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(t.c (#0) > 6)], limit: NONE]
 └── estimated rows: 0.50

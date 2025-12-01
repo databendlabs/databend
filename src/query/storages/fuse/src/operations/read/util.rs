@@ -70,17 +70,46 @@ pub(crate) fn add_data_block_meta(
         let block_meta = fuse_part.block_meta_index().unwrap();
 
         // Transform matched_rows indices from block-level to page-level
-        let matched_rows = block_meta.matched_rows.clone().map(|matched_rows| {
-            if let Some(offsets) = &offsets {
-                matched_rows
-                    .into_iter()
-                    .filter(|(idx, _)| offsets.contains(*idx as u64))
-                    .map(|(idx, score)| ((offsets.rank(idx as u64) - 1) as usize, score))
-                    .collect::<Vec<_>>()
-            } else {
-                matched_rows
+        let (matched_rows, matched_scores) = if let Some(offsets) = &offsets {
+            match (
+                block_meta.matched_rows.clone(),
+                block_meta.matched_scores.clone(),
+            ) {
+                (Some(rows), Some(scores)) => {
+                    debug_assert_eq!(rows.len(), scores.len());
+                    let mut filtered_rows = Vec::with_capacity(rows.len());
+                    let mut filtered_scores = Vec::with_capacity(scores.len());
+                    for (idx, score) in rows.into_iter().zip(scores.into_iter()) {
+                        if offsets.contains(idx as u64) {
+                            let rank = offsets.rank(idx as u64);
+                            debug_assert!(rank > 0);
+                            let new_idx = (rank - 1) as usize;
+                            filtered_rows.push(new_idx);
+                            filtered_scores.push(score);
+                        }
+                    }
+                    (Some(filtered_rows), Some(filtered_scores))
+                }
+                (Some(rows), None) => {
+                    let mut filtered_rows = Vec::with_capacity(rows.len());
+                    for idx in rows.into_iter() {
+                        if offsets.contains(idx as u64) {
+                            let rank = offsets.rank(idx as u64);
+                            debug_assert!(rank > 0);
+                            let new_idx = (rank - 1) as usize;
+                            filtered_rows.push(new_idx);
+                        }
+                    }
+                    (Some(filtered_rows), None)
+                }
+                (None, _) => (None, None),
             }
-        });
+        } else {
+            (
+                block_meta.matched_rows.clone(),
+                block_meta.matched_scores.clone(),
+            )
+        };
 
         // Transform vector_scores indices from block-level to page-level
         let vector_scores = block_meta.vector_scores.clone().map(|vector_scores| {
@@ -105,6 +134,7 @@ pub(crate) fn add_data_block_meta(
             base_block_ids,
             inner: meta,
             matched_rows,
+            matched_scores,
             vector_scores,
         };
         meta = Some(Box::new(internal_column_meta));

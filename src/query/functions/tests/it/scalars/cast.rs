@@ -764,7 +764,7 @@ fn test_decimal_to_decimal() {
     let file = &mut mint.new_goldenfile("decimal_to_decimal_cast.txt").unwrap();
 
     run_ast_with_context(file, "a::decimal(15,2)", TestContext {
-        columns: &[("a", UInt64Type::from_data(vec![0_u64, 100]))],
+        entries: &[("a", UInt64Type::from_data(vec![0_u64, 100]).into())],
         input_domains: Some(&[(
             "a",
             Domain::Number(NumberDomain::UInt64(UInt64Type::full_domain())),
@@ -916,12 +916,13 @@ fn test_cast_decimal_scale_reduction(file: &mut impl Write, is_try: bool, roundi
 
     // Test scale reduction with column data
     let test_ctx = TestContext {
-        columns: &[(
+        entries: &[(
             "c",
             Decimal128Type::from_data_with_size(
                 [12345i128, 67890, -11111, 99999, 0, -99999, 123456],
                 Some(DecimalSize::new_unchecked(8, 3)),
-            ),
+            )
+            .into(),
         )],
         func_ctx,
         ..TestContext::default()

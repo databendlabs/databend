@@ -27,14 +27,17 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::DataField;
+use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition as PlanUDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
+use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::principal::UDTF;
+use databend_common_users::UserApiProvider;
 
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
@@ -77,6 +80,7 @@ impl Binder {
                         definition: definition.to_string(),
                     }),
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::UDFServer {
@@ -160,6 +164,7 @@ impl Binder {
                         immutable: *immutable,
                     }),
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::UDAFServer { .. } => unimplemented!(),
@@ -192,6 +197,7 @@ impl Binder {
                     description,
                     definition,
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::UDAFScript {
@@ -221,6 +227,7 @@ impl Binder {
                     description,
                     definition,
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::UDTFSql {
@@ -255,6 +262,52 @@ impl Binder {
                         sql: sql.to_string(),
                     }),
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
+                })
+            }
+            UDFDefinition::UDTFServer {
+                arg_types,
+                return_types,
+                address,
+                handler,
+                headers,
+                language,
+                immutable,
+            } => {
+                UDFValidator::is_udf_server_allowed(address.as_str())?;
+
+                let mut arg_datatypes = Vec::with_capacity(arg_types.len());
+                let mut arg_names = Vec::with_capacity(arg_types.len());
+
+                for (arg_name, arg_type) in arg_types {
+                    arg_names.push(normalize_identifier(arg_name, &self.name_resolution_ctx).name);
+                    arg_datatypes.push(DataType::from(&resolve_type_name_udf(arg_type)?));
+                }
+
+                let return_types = return_types
+                    .iter()
+                    .map(|(name, arg_type)| {
+                        let column = normalize_identifier(name, &self.name_resolution_ctx).name;
+                        let ty = DataType::from(&resolve_type_name_udf(arg_type)?);
+                        Ok((column, ty))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                Ok(UserDefinedFunction {
+                    name,
+                    description,
+                    definition: PlanUDFDefinition::UDTFServer(UDTFServer {
+                        address: address.clone(),
+                        handler: handler.clone(),
+                        headers: headers.clone(),
+                        language: language.clone(),
+                        arg_names,
+                        arg_types: arg_datatypes,
+                        return_types,
+                        immutable: *immutable,
+                    }),
+                    created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
             UDFDefinition::ScalarUDF {
@@ -281,6 +334,7 @@ impl Binder {
                         definition: definition.clone(),
                     }),
                     created_on: Utc::now(),
+                    update_on: Utc::now(),
                 })
             }
         }
@@ -303,9 +357,30 @@ impl Binder {
         &mut self,
         stmt: &AlterUDFStmt,
     ) -> Result<Plan> {
-        let udf = self
+        let tenant = self.ctx.get_tenant();
+        let udf_name = normalize_identifier(&stmt.udf_name, &self.name_resolution_ctx).to_string();
+        let existing_udf = match UserApiProvider::instance()
+            .get_udf(&tenant, &udf_name)
+            .await?
+        {
+            Some(udf) => udf,
+            None if is_builtin_function(&udf_name) => {
+                return Err(ErrorCode::UdfAlreadyExists(format!(
+                    "Built-in function '{}' cannot be altered",
+                    udf_name
+                )));
+            }
+            None => {
+                return Err(ErrorCode::UnknownUDF(format!(
+                    "UDF '{}' does not exist and cannot be altered",
+                    udf_name
+                )));
+            }
+        };
+        let mut udf = self
             .bind_udf_definition(&stmt.udf_name, &stmt.description, &stmt.definition)
             .await?;
+        udf.created_on = existing_udf.created_on;
         Ok(Plan::AlterUDF(Box::new(AlterUDFPlan { udf })))
     }
 

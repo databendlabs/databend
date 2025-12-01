@@ -73,6 +73,16 @@ fn read_nested_column<R: NativeReadBuf>(
         }
         ),
         Decimal(decimal) => match decimal {
+            DecimalDataType::Decimal64(decimal_size) => {
+                init.push(InitNested::Primitive(is_nullable));
+                read_nested_decimal::<i64, i64, _>(
+                    &mut readers.pop().unwrap(),
+                    data_type.clone(),
+                    decimal_size,
+                    init,
+                    page_metas.pop().unwrap(),
+                )?
+            }
             DecimalDataType::Decimal128(decimal_size) => {
                 init.push(InitNested::Primitive(is_nullable));
                 let mut results = read_nested_decimal::<i128, i128, _>(
@@ -115,7 +125,6 @@ fn read_nested_column<R: NativeReadBuf>(
                     page_metas.pop().unwrap(),
                 )?
             }
-            _ => unreachable!(),
         },
         Interval => {
             init.push(InitNested::Primitive(is_nullable));

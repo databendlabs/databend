@@ -76,7 +76,6 @@ tantivy-jieba = { workspace = true }
 thrift = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
-xorf = { workspace = true }
 
 [dev-dependencies]
 divan = { workspace = true }

@@ -2,10 +2,10 @@
 >>>> CREATE or replace TABLE streaming_load_parquet (c1 string default 'ok', c2 int, c3 date);
 --'2021-01-01' as c3, '1' as c2
 >>>> copy into @streaming_load_parquet/q1.parquet from (select '2021-01-01' as c3, '1' as c2)  single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
-q1.parquet	624	1
+q1.parquet	637	1
 >>>> streaming load: q1.parquet error :
 + curl -sS -H x-databend-query-id:load-q1 -H 'X-Databend-SQL:insert into streaming_load_parquet(c2,c3) from @_databend_load file_format = (type='\''parquet'\'', missing_field_as=error, null_if=())' -F upload=@/tmp/streaming_load_parquet/q1.parquet -u root: -XPUT http://localhost:8000/v1/streaming_load
-{"id":"load-q1","stats":{"rows":1,"bytes":27}}
+{"id":"load-q1","stats":{"rows":1,"bytes":33}}
 <<<<
 >>>> select * from streaming_load_parquet;
 ok	1	2021-01-01
@@ -13,7 +13,7 @@ ok	1	2021-01-01
 >>>> truncate table streaming_load_parquet
 --'2021-01-01' as c3
 >>>> copy into @streaming_load_parquet/q2.parquet from (select '2021-01-01' as c3)  single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
-q2.parquet	426	1
+q2.parquet	431	1
 >>>> streaming load: q2.parquet error :
 + curl -sS -H x-databend-query-id:load-q2 -H 'X-Databend-SQL:insert into streaming_load_parquet(c2,c3) from @_databend_load file_format = (type='\''parquet'\'', missing_field_as=error, null_if=())' -F upload=@/tmp/streaming_load_parquet/q2.parquet -u root: -XPUT http://localhost:8000/v1/streaming_load
 {"error":{"code":400,"message":"Query execution failed: file q2.parquet missing column `c2`"}}
@@ -23,10 +23,10 @@ q2.parquet	426	1
 >>>> truncate table streaming_load_parquet
 --'2021-01-01' as c3
 >>>> copy into @streaming_load_parquet/q3.parquet from (select '2021-01-01' as c3)  single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
-q3.parquet	426	1
+q3.parquet	431	1
 >>>> streaming load: q3.parquet field_default :
 + curl -sS -H x-databend-query-id:load-q3 -H 'X-Databend-SQL:insert into streaming_load_parquet(c2,c3) from @_databend_load file_format = (type='\''parquet'\'', missing_field_as=field_default, null_if=())' -F upload=@/tmp/streaming_load_parquet/q3.parquet -u root: -XPUT http://localhost:8000/v1/streaming_load
-{"id":"load-q3","stats":{"rows":1,"bytes":23}}
+{"id":"load-q3","stats":{"rows":1,"bytes":29}}
 <<<<
 >>>> select * from streaming_load_parquet;
 ok	NULL	2021-01-01
@@ -34,7 +34,7 @@ ok	NULL	2021-01-01
 >>>> truncate table streaming_load_parquet
 --'2021-01-01' as c3, 'my_null' as c1
 >>>> copy into @streaming_load_parquet/q4.parquet from (select '2021-01-01' as c3, 'my_null' as c1)  single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
-q4.parquet	643	1
+q4.parquet	655	1
 >>>> streaming load: q4.parquet error :
 + curl -sS -H x-databend-query-id:load-q4 -H 'X-Databend-SQL:insert into streaming_load_parquet(c1,c3) from @_databend_load file_format = (type='\''parquet'\'', missing_field_as=error, null_if=())' -F upload=@/tmp/streaming_load_parquet/q4.parquet -u root: -XPUT http://localhost:8000/v1/streaming_load
 {"id":"load-q4","stats":{"rows":1,"bytes":34}}
@@ -45,7 +45,7 @@ my_null	NULL	2021-01-01
 >>>> truncate table streaming_load_parquet
 --'2021-01-01' as c3, 'my_null' as c1
 >>>> copy into @streaming_load_parquet/q5.parquet from (select '2021-01-01' as c3, 'my_null' as c1)  single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
-q5.parquet	643	1
+q5.parquet	655	1
 >>>> streaming load: q5.parquet error 'my_null':
 + curl -sS -H x-databend-query-id:load-q5 -H 'X-Databend-SQL:insert into streaming_load_parquet(c1,c3) from @_databend_load file_format = (type='\''parquet'\'', missing_field_as=error, null_if=('\''my_null'\''))' -F upload=@/tmp/streaming_load_parquet/q5.parquet -u root: -XPUT http://localhost:8000/v1/streaming_load
 {"id":"load-q5","stats":{"rows":1,"bytes":7}}

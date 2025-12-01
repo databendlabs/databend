@@ -48,7 +48,7 @@ CommitSink
                 ├── read size: < 1 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 4.00
 
@@ -86,7 +86,7 @@ CommitSink
                 │   ├── read size: < 1 KiB
                 │   ├── partitions total: 1
                 │   ├── partitions scanned: 1
-                │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 │   ├── push downs: [filters: [], limit: NONE]
                 │   └── estimated rows: 4.00
                 └── TableScan(Probe)
@@ -97,7 +97,7 @@ CommitSink
                     ├── read size: < 1 KiB
                     ├── partitions total: 1
                     ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 4.00
 
@@ -135,7 +135,7 @@ CommitSink
                 │   ├── read size: < 1 KiB
                 │   ├── partitions total: 1
                 │   ├── partitions scanned: 1
-                │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 │   ├── push downs: [filters: [], limit: NONE]
                 │   └── estimated rows: 4.00
                 └── TableScan(Probe)
@@ -146,7 +146,7 @@ CommitSink
                     ├── read size: < 1 KiB
                     ├── partitions total: 2
                     ├── partitions scanned: 2
-                    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+                    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
                     ├── push downs: [filters: [], limit: NONE]
                     ├── apply join filters: [#0]
                     └── estimated rows: 6.00
@@ -182,7 +182,7 @@ CommitSink
                 │   ├── read size: < 1 KiB
                 │   ├── partitions total: 1
                 │   ├── partitions scanned: 1
-                │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 │   ├── push downs: [filters: [], limit: NONE]
                 │   └── estimated rows: 4.00
                 └── TableScan(Probe)
@@ -193,7 +193,7 @@ CommitSink
                     ├── read size: < 1 KiB
                     ├── partitions total: 2
                     ├── partitions scanned: 2
-                    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+                    ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
                     ├── push downs: [filters: [], limit: NONE]
                     ├── apply join filters: [#0]
                     └── estimated rows: 6.00

@@ -1,7 +1,7 @@
 [Unit]
 Description=Databend Query
 Documentation=https://docs.databend.com
-After=network-online.target
+After=network-online.target databend-meta.service
 Requires=network-online.target
 
 [Service]

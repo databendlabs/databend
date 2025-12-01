@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::io;
 use std::io::Write;
@@ -532,6 +533,7 @@ pub struct SpillsDataReader {
     spills_buffer_pool: Arc<SpillsBufferPool>,
     data_schema: DataSchemaRef,
     field_levels: FieldLevels,
+    read_bytes: usize,
 }
 
 impl SpillsDataReader {
@@ -563,7 +565,12 @@ impl SpillsDataReader {
             data_schema,
             field_levels,
             row_groups: VecDeque::from(row_groups),
+            read_bytes: 0,
         })
+    }
+
+    pub fn read_bytes(&self) -> usize {
+        self.read_bytes
     }
 
     pub fn read(&mut self, settings: ReadSettings) -> Result<Option<DataBlock>> {
@@ -572,14 +579,23 @@ impl SpillsDataReader {
         };
 
         let mut row_group = RowGroupCore::new(row_group, None);
+
+        let read_bytes = Cell::new(0usize);
+
         row_group.fetch(&ProjectionMask::all(), None, |fetch_ranges| {
-            self.spills_buffer_pool.fetch_ranges(
+            let chunk_data = self.spills_buffer_pool.fetch_ranges(
                 self.operator.clone(),
                 self.location.clone(),
                 fetch_ranges,
                 settings,
-            )
+            )?;
+            let bytes_read = chunk_data.iter().map(|c| c.len()).sum::<usize>();
+            read_bytes.set(read_bytes.get() + bytes_read);
+
+            Ok(chunk_data)
         })?;
+
+        self.read_bytes += read_bytes.get();
 
         let num_rows = row_group.num_rows();
         let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(

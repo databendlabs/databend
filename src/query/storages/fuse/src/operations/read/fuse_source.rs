@@ -65,92 +65,47 @@ pub fn build_fuse_native_source_pipeline(
         max_io_requests = max_io_requests.min(16);
     }
 
-    match block_reader.support_blocking_api() {
-        true => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
-            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+    let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
+    let mut partitions = StealablePartitions::new(partitions, ctx.clone());
 
-            if topk.is_some() {
-                partitions.disable_steal();
-            }
-            match receiver {
-                Some(rx) => {
-                    let pipe = build_receiver_source(max_threads, ctx.clone(), rx.clone())?;
-                    pipeline.add_pipe(pipe);
-                }
-                None => {
-                    let pipe = build_block_source(max_threads, partitions.clone(), 1, ctx.clone())?;
-                    pipeline.add_pipe(pipe);
-                }
-            }
-            pipeline.add_transform(|input, output| {
-                Ok(TransformRuntimeFilterWait::create(
-                    ctx.clone(),
-                    plan.scan_id,
-                    input,
-                    output,
-                ))
-            })?;
-            pipeline.add_transform(|input, output| {
-                ReadNativeDataTransform::<true>::create(
-                    plan.scan_id,
-                    ctx.clone(),
-                    table_schema.clone(),
-                    block_reader.clone(),
-                    index_reader.clone(),
-                    input,
-                    output,
-                )
-            })?;
+    if topk.is_some() {
+        partitions.disable_steal();
+    }
+    match receiver {
+        Some(rx) => {
+            let pipe = build_receiver_source(max_io_requests, ctx.clone(), rx.clone())?;
+            pipeline.add_pipe(pipe);
         }
-        false => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
-
-            if topk.is_some() {
-                partitions.disable_steal();
-            }
-            match receiver {
-                Some(rx) => {
-                    let pipe = build_receiver_source(max_io_requests, ctx.clone(), rx.clone())?;
-                    pipeline.add_pipe(pipe);
-                }
-                None => {
-                    let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-                    let pipe = build_block_source(
-                        max_io_requests,
-                        partitions.clone(),
-                        batch_size,
-                        ctx.clone(),
-                    )?;
-                    pipeline.add_pipe(pipe);
-                }
-            }
-
-            pipeline.add_transform(|input, output| {
-                Ok(TransformRuntimeFilterWait::create(
-                    ctx.clone(),
-                    plan.scan_id,
-                    input,
-                    output,
-                ))
-            })?;
-
-            pipeline.add_transform(|input, output| {
-                ReadNativeDataTransform::<false>::create(
-                    plan.scan_id,
-                    ctx.clone(),
-                    table_schema.clone(),
-                    block_reader.clone(),
-                    index_reader.clone(),
-                    input,
-                    output,
-                )
-            })?;
-
-            pipeline.try_resize(max_threads)?;
+        None => {
+            let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+            let pipe =
+                build_block_source(max_io_requests, partitions.clone(), batch_size, ctx.clone())?;
+            pipeline.add_pipe(pipe);
         }
-    };
+    }
+
+    pipeline.add_transform(|input, output| {
+        Ok(TransformRuntimeFilterWait::create(
+            ctx.clone(),
+            plan.scan_id,
+            input,
+            output,
+        ))
+    })?;
+
+    pipeline.add_transform(|input, output| {
+        ReadNativeDataTransform::create(
+            plan.scan_id,
+            ctx.clone(),
+            table_schema.clone(),
+            block_reader.clone(),
+            index_reader.clone(),
+            input,
+            output,
+        )
+    })?;
+
+    pipeline.try_resize(max_threads)?;
 
     pipeline.add_transform(|transform_input, transform_output| {
         NativeDeserializeDataTransform::create(
@@ -190,109 +145,59 @@ pub fn build_fuse_parquet_source_pipeline(
         blocks_pruned: AtomicU64::new(0),
     });
 
-    match block_reader.support_blocking_api() {
-        true => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
+    info!(
+        "[FUSE-SOURCE] Block data reader adjusted max_io_requests to {}",
+        max_io_requests
+    );
 
-            match receiver {
-                Some(rx) => {
-                    let pipe = build_receiver_source(max_threads, ctx.clone(), rx.clone())?;
-                    pipeline.add_pipe(pipe);
-                }
-                None => {
-                    let pipe = build_block_source(max_threads, partitions.clone(), 1, ctx.clone())?;
-                    pipeline.add_pipe(pipe);
-                }
-            }
-            let unfinished_processors_count =
-                Arc::new(AtomicU64::new(pipeline.output_len() as u64));
+    let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
+    let partitions = StealablePartitions::new(partitions, ctx.clone());
 
-            pipeline.add_transform(|input, output| {
-                Ok(TransformRuntimeFilterWait::create(
-                    ctx.clone(),
-                    plan.scan_id,
-                    input,
-                    output,
-                ))
-            })?;
-
-            pipeline.add_transform(|input, output| {
-                ReadParquetDataTransform::<true>::create(
-                    plan.scan_id,
-                    ctx.clone(),
-                    table_schema.clone(),
-                    block_reader.clone(),
-                    index_reader.clone(),
-                    virtual_reader.clone(),
-                    input,
-                    output,
-                    stats.clone(),
-                    unfinished_processors_count.clone(),
-                )
-            })?;
+    match receiver {
+        Some(rx) => {
+            let pipe = build_receiver_source(max_io_requests, ctx.clone(), rx.clone())?;
+            pipeline.add_pipe(pipe);
         }
-        false => {
-            info!(
-                "[FUSE-SOURCE] Block data reader adjusted max_io_requests to {}",
-                max_io_requests
-            );
-
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
-
-            match receiver {
-                Some(rx) => {
-                    let pipe = build_receiver_source(max_io_requests, ctx.clone(), rx.clone())?;
-                    pipeline.add_pipe(pipe);
-                }
-                None => {
-                    let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-                    let pipe = build_block_source(
-                        max_io_requests,
-                        partitions.clone(),
-                        batch_size,
-                        ctx.clone(),
-                    )?;
-                    pipeline.add_pipe(pipe);
-                }
-            }
-            let unfinished_processors_count =
-                Arc::new(AtomicU64::new(pipeline.output_len() as u64));
-
-            pipeline.add_transform(|input, output| {
-                Ok(TransformRuntimeFilterWait::create(
-                    ctx.clone(),
-                    plan.scan_id,
-                    input,
-                    output,
-                ))
-            })?;
-
-            pipeline.add_transform(|input, output| {
-                ReadParquetDataTransform::<false>::create(
-                    plan.table_index,
-                    ctx.clone(),
-                    table_schema.clone(),
-                    block_reader.clone(),
-                    index_reader.clone(),
-                    virtual_reader.clone(),
-                    input,
-                    output,
-                    stats.clone(),
-                    unfinished_processors_count.clone(),
-                )
-            })?;
-
-            pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
-
-            info!(
-                "[FUSE-SOURCE] Block read pipeline resized from {} to {} threads",
-                max_io_requests,
-                pipeline.output_len()
-            );
+        None => {
+            let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+            let pipe =
+                build_block_source(max_io_requests, partitions.clone(), batch_size, ctx.clone())?;
+            pipeline.add_pipe(pipe);
         }
-    };
+    }
+    let unfinished_processors_count = Arc::new(AtomicU64::new(pipeline.output_len() as u64));
+
+    pipeline.add_transform(|input, output| {
+        Ok(TransformRuntimeFilterWait::create(
+            ctx.clone(),
+            plan.scan_id,
+            input,
+            output,
+        ))
+    })?;
+
+    pipeline.add_transform(|input, output| {
+        ReadParquetDataTransform::create(
+            plan.table_index,
+            ctx.clone(),
+            table_schema.clone(),
+            block_reader.clone(),
+            index_reader.clone(),
+            virtual_reader.clone(),
+            input,
+            output,
+            stats.clone(),
+            unfinished_processors_count.clone(),
+        )
+    })?;
+
+    pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
+
+    info!(
+        "[FUSE-SOURCE] Block read pipeline resized from {} to {} threads",
+        max_io_requests,
+        pipeline.output_len()
+    );
 
     pipeline.add_transform(|transform_input, transform_output| {
         DeserializeDataTransform::create(

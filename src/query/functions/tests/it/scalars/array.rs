@@ -16,6 +16,7 @@ use std::io::Write;
 
 use databend_common_expression::types::*;
 use databend_common_expression::FromData;
+use databend_common_formats::column_from_json;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -422,6 +423,11 @@ fn test_array_count(file: &mut impl Write) {
     run_ast(file, "array_count([1.2, NULL, 3.4, 5.6, NULL])", &[]);
     run_ast(file, "array_count(['a', 'b', 'c', 'd', 'e'])", &[]);
     run_ast(file, "array_count(['a', 'b', NULL, 'c', 'd', NULL])", &[]);
+    run_ast(
+        file,
+        "array_count(CAST(NULL AS Nullable(Array(Int64))))",
+        &[],
+    );
 
     run_ast(file, "array_count([a, b, c, d])", &[
         ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
@@ -430,29 +436,35 @@ fn test_array_count(file: &mut impl Write) {
         ("d", Int16Type::from_data(vec![4i16, 8, 1, 9])),
     ]);
 
+    {
+        let data_type = DataType::Array(Box::new(Int16Type::data_type())).wrap_nullable();
+        let column = column_from_json!(data_type, [null, [1, 5, 8, 3], [1, 5], null]);
+        run_ast(file, "array_count(a)", &[("a", column)]);
+    }
+
+    let u64_type = UInt64Type::data_type().wrap_nullable();
     run_ast(file, "array_count([a, b, c, d])", &[
-        (
-            "a",
-            UInt64Type::from_data_with_validity(vec![1u64, 2, 0, 4], vec![true, true, false, true]),
-        ),
-        (
-            "b",
-            UInt64Type::from_data_with_validity(vec![2u64, 0, 5, 6], vec![true, false, true, true]),
-        ),
-        (
-            "c",
-            UInt64Type::from_data_with_validity(vec![3u64, 7, 8, 9], vec![true, true, true, true]),
-        ),
-        (
-            "d",
-            UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
-        ),
+        ("a", column_from_json!(u64_type, [1, 2, null, 4])),
+        ("b", column_from_json!(u64_type, [2, null, 5, 6])),
+        ("c", column_from_json!(u64_type, [3, 7, 8, 9])),
+        ("d", column_from_json!(u64_type, [4, 6, 5, null])),
     ]);
 
     // Test with variant type
     run_ast(file, "array_count(parse_json('[1, 2, 3, 4, 5]'))", &[]);
     run_ast(file, "array_count(parse_json('[1, 2, null, 4, 5]'))", &[]);
     run_ast(file, "array_count(parse_json('[1.2, 3.4, 5.6, 7.8]'))", &[]);
+
+    {
+        let column = column_from_json!(DataType::EmptyArray, [[], [], []]);
+        run_ast(file, "array_count(a)", &[("a", column)]);
+    }
+
+    {
+        let data_type = DataType::EmptyArray.wrap_nullable();
+        let column = column_from_json!(data_type, [null, [], null]);
+        run_ast(file, "array_count(a)", &[("a", column)]);
+    }
 }
 
 fn test_array_max(file: &mut impl Write) {
@@ -463,6 +475,15 @@ fn test_array_max(file: &mut impl Write) {
     run_ast(file, "array_max([1.2, NULL, 3.4, 5.6, NULL])", &[]);
     run_ast(file, "array_max(['a', 'b', 'c', 'd', 'e'])", &[]);
     run_ast(file, "array_max(['a', 'b', NULL, 'c', 'd', NULL])", &[]);
+    run_ast(file, "array_max(CAST(NULL AS Nullable(Array(Int64))))", &[]);
+
+    run_ast(file, "array_max(a)", &[(
+        "a",
+        column_from_json!(
+            DataType::Array(Box::new(Int16Type::data_type())).wrap_nullable(),
+            [null, [1, 5, 8, 3], [1, 5], null]
+        ),
+    )]);
 
     run_ast(file, "array_max([a, b, c, d])", &[
         ("a", Int16Type::from_data(vec![1i16, 5, 8, 3])),
@@ -498,6 +519,16 @@ fn test_array_max(file: &mut impl Write) {
         "array_max(parse_json('[\"a\", \"b\", \"c\", \"d\"]'))",
         &[],
     );
+
+    run_ast(file, "array_max(a)", &[(
+        "a",
+        column_from_json!(DataType::EmptyArray, [[], []]),
+    )]);
+
+    run_ast(file, "array_max(a)", &[(
+        "a",
+        column_from_json!(DataType::EmptyArray.wrap_nullable(), [null, [], []]),
+    )]);
 }
 
 fn test_array_min(file: &mut impl Write) {

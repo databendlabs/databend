@@ -68,6 +68,24 @@ SELECT *
 1 18000 8000 10400 11000
 2 5300 90700 39500 12000
 
+query I
+SELECT empid
+    FROM monthly_sales
+        PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+    ORDER BY EMPID
+----
+1
+2
+
+query I
+SELECT empid
+    FROM monthly_sales
+        PIVOT(SUM(amount) FOR MONTH IN (SELECT DISTINCT month FROM monthly_sales))
+    ORDER BY EMPID
+----
+1
+2
+
 query IIIII
 SELECT *
     FROM (SELECT * FROM monthly_sales)
@@ -76,6 +94,57 @@ SELECT *
 ----
 1 18000 8000 10400 11000
 2 5300 90700 39500 12000
+
+query IIIII
+SELECT empid, JAN, FEB, MAR, APR
+    FROM monthly_sales
+        PIVOT(SUM(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+    ORDER BY EMPID
+----
+1 10400 8000 11000 18000
+2 39500 90700 12000 5300
+
+query IIII
+SELECT empid, APR, FEB, JAN
+    FROM monthly_sales
+        PIVOT(SUM(amount) FOR MONTH IN (SELECT DISTINCT month FROM monthly_sales))
+    ORDER BY EMPID
+----
+1 18000 8000 10400
+2 5300 90700 39500
+
+# Ensure fully-qualified table references still work after pivot rewrite
+statement ok
+CREATE DATABASE IF NOT EXISTS pivot_db;
+
+statement ok
+CREATE OR REPLACE TABLE pivot_db.pivot_fqn (
+    region STRING,
+    month STRING,
+    amount INT
+);
+
+statement ok
+INSERT INTO pivot_db.pivot_fqn VALUES
+    ('apac', 'Jan', 10),
+    ('apac', 'Feb', 20),
+    ('emea', 'Jan', 5),
+    ('emea', 'Feb', 15);
+
+query III
+SELECT pivot_db.pivot_fqn.region, JAN, FEB
+    FROM pivot_db.pivot_fqn
+        PIVOT(SUM(amount) FOR month IN ('Jan', 'Feb'))
+    ORDER BY pivot_db.pivot_fqn.region;
+----
+apac 10 20
+emea 5 15
+
+statement ok
+DROP TABLE pivot_db.pivot_fqn;
+
+statement ok
+DROP DATABASE IF EXISTS pivot_db;
 
 ## The subquery of `pivot in` must return one column
 statement error 1065
