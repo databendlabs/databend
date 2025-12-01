@@ -277,9 +277,7 @@ impl std::ops::BitAndAssign for HybridBitmap {
                     }
                     *self = HybridBitmap::Small(result);
                 }
-                HybridBitmap::Small(lhs_set) => {
-                    small_intersection(lhs_set, &mut rhs_set)
-                }
+                HybridBitmap::Small(lhs_set) => small_intersection(lhs_set, &mut rhs_set),
             },
         }
     }
