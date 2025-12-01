@@ -122,8 +122,16 @@ fn test_eq(file: &mut impl Write) {
     run_ast(file, "parse_json(lhs) = parse_json(rhs)", &table);
     run_ast(file, "lhs = rhs", &table);
 
-    run_ast(file, "build_bitmap([3, 7, 9]) = build_bitmap([3, 7, 9])", &[]);
-    run_ast(file, "build_bitmap([3, 7, 9]) = build_bitmap([3, 7, 10])", &[]);
+    run_ast(
+        file,
+        "build_bitmap([3, 7, 9]) = build_bitmap([3, 7, 9])",
+        &[],
+    );
+    run_ast(
+        file,
+        "build_bitmap([3, 7, 9]) = build_bitmap([3, 7, 10])",
+        &[],
+    );
     run_ast(file, "null = build_bitmap([3, 7, 10])", &[]);
 }
 
@@ -191,8 +199,16 @@ fn test_noteq(file: &mut impl Write) {
     run_ast(file, "parse_json(lhs) != parse_json(rhs)", &table);
     run_ast(file, "lhs != rhs", &table);
 
-    run_ast(file, "build_bitmap([3, 7, 9]) != build_bitmap([3, 7, 9])", &[]);
-    run_ast(file, "build_bitmap([3, 7, 9]) != build_bitmap([3, 7, 10])", &[]);
+    run_ast(
+        file,
+        "build_bitmap([3, 7, 9]) != build_bitmap([3, 7, 9])",
+        &[],
+    );
+    run_ast(
+        file,
+        "build_bitmap([3, 7, 9]) != build_bitmap([3, 7, 10])",
+        &[],
+    );
     run_ast(file, "null != build_bitmap([3, 7, 10])", &[]);
 }
 
@@ -403,7 +419,6 @@ fn test_gt(file: &mut impl Write) {
     run_ast(file, "lhs > rhs", &table);
     let table = [("col", StringType::from_data(vec![r#"bcd"#, r#"efg"#]))];
     run_ast(file, "col > 'efg'", &table);
-
 
     run_ast(file, "build_bitmap([1, 3]) > build_bitmap([1, 2])", &[]);
     run_ast(file, "build_bitmap([1, 2]) > build_bitmap([1, 3])", &[]);
