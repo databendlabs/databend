@@ -1301,24 +1301,4 @@ fn register_bitmap_cmp(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| lhs != rhs,
     );
-    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
-        "gt",
-        |_, _, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs > rhs,
-    );
-    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
-        "gte",
-        |_, _, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs >= rhs,
-    );
-    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
-        "lt",
-        |_, _, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs < rhs,
-    );
-    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
-        "lte",
-        |_, _, _| FunctionDomain::Full,
-        |lhs, rhs, _| lhs <= rhs,
-    );
 }

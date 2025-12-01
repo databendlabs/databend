@@ -272,13 +272,6 @@ fn test_lt(file: &mut impl Write) {
     ];
     run_ast(file, "parse_json(lhs) >= parse_json(rhs)", &table);
     run_ast(file, "lhs < rhs", &table);
-
-    run_ast(file, "build_bitmap([1]) < build_bitmap([1, 2])", &[]);
-    run_ast(file, "build_bitmap([1, 2]) < build_bitmap([1, 2])", &[]);
-    run_ast(file, "build_bitmap([1, 2]) < build_bitmap([1, 3])", &[]);
-    run_ast(file, "build_bitmap([1, 3]) < build_bitmap([1, 2])", &[]);
-    run_ast(file, "null < build_bitmap([1])", &[]);
-    run_ast(file, "build_bitmap([1]) < null", &[]);
 }
 
 fn test_lte(file: &mut impl Write) {
@@ -343,12 +336,6 @@ fn test_lte(file: &mut impl Write) {
     ];
     run_ast(file, "parse_json(lhs) <= parse_json(rhs)", &table);
     run_ast(file, "lhs <= rhs", &table);
-
-    run_ast(file, "build_bitmap([1]) <= build_bitmap([1, 2])", &[]);
-    run_ast(file, "build_bitmap([1, 2]) <= build_bitmap([1, 2])", &[]);
-    run_ast(file, "build_bitmap([1, 3]) <= build_bitmap([1, 2])", &[]);
-    run_ast(file, "null <= build_bitmap([1])", &[]);
-    run_ast(file, "build_bitmap([1]) <= null", &[]);
 }
 
 fn test_gt(file: &mut impl Write) {
@@ -419,12 +406,6 @@ fn test_gt(file: &mut impl Write) {
     run_ast(file, "lhs > rhs", &table);
     let table = [("col", StringType::from_data(vec![r#"bcd"#, r#"efg"#]))];
     run_ast(file, "col > 'efg'", &table);
-
-    run_ast(file, "build_bitmap([1, 3]) > build_bitmap([1, 2])", &[]);
-    run_ast(file, "build_bitmap([1, 2]) > build_bitmap([1, 3])", &[]);
-    run_ast(file, "build_bitmap([1, 2]) > build_bitmap([1, 2])", &[]);
-    run_ast(file, "null > build_bitmap([1])", &[]);
-    run_ast(file, "build_bitmap([1]) > null", &[]);
 }
 
 fn test_gte(file: &mut impl Write) {
@@ -497,12 +478,6 @@ fn test_gte(file: &mut impl Write) {
     ];
     run_ast(file, "parse_json(lhs) >= parse_json(rhs)", &table);
     run_ast(file, "lhs >= rhs", &table);
-
-    run_ast(file, "build_bitmap([1, 3]) >= build_bitmap([1, 2])", &[]);
-    run_ast(file, "build_bitmap([1, 2]) >= build_bitmap([1, 3])", &[]);
-    run_ast(file, "build_bitmap([1, 2]) >= build_bitmap([1, 2])", &[]);
-    run_ast(file, "null >= build_bitmap([1])", &[]);
-    run_ast(file, "build_bitmap([1]) >= null", &[]);
 }
 
 // typos:off
