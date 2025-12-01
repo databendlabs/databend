@@ -192,7 +192,7 @@ impl Payload {
     }
 
     pub(super) fn data_ptr(&self, page: &Page, row: usize) -> RowPtr {
-        RowPtr::new(unsafe { page.data.as_ptr().add(row * self.tuple_size) as _ })
+        page.data_ptr(row, self.tuple_size)
     }
 
     pub(super) fn reserve_append_rows(
@@ -336,21 +336,15 @@ impl Payload {
         }
     }
 
-    pub fn copy_rows(
-        &mut self,
-        select_vector: &[usize; BATCH_SIZE],
-        row_count: usize,
-        address: &[RowPtr; BATCH_SIZE],
-    ) {
+    pub fn copy_rows(&mut self, select_vector: &[usize], address: &[RowPtr; BATCH_SIZE]) {
         let tuple_size = self.tuple_size;
         let agg_len = self.aggrs.len();
         let (mut page, _) = self.writable_page();
-        for i in 0..row_count {
-            let index = select_vector[i];
 
+        for index in select_vector {
             unsafe {
                 std::ptr::copy_nonoverlapping(
-                    address[index].as_ptr(),
+                    address[*index].as_ptr(),
                     page.data.as_mut_ptr().add(page.rows * tuple_size) as _,
                     tuple_size,
                 )
@@ -363,7 +357,7 @@ impl Payload {
             }
         }
 
-        self.total_rows += row_count;
+        self.total_rows += select_vector.len();
 
         debug_assert_eq!(
             self.total_rows,
@@ -371,40 +365,40 @@ impl Payload {
         );
     }
 
-    pub fn scatter(&self, state: &mut PayloadFlushState, partition_count: usize) -> bool {
-        if state.flush_page >= self.pages.len() {
+    pub fn scatter(&self, flush_state: &mut PayloadFlushState, partition_count: usize) -> bool {
+        if flush_state.flush_page >= self.pages.len() {
             return false;
         }
 
-        let page = &self.pages[state.flush_page];
+        let page = &self.pages[flush_state.flush_page];
 
         // ToNext
-        if state.flush_page_row >= page.rows {
-            state.flush_page += 1;
-            state.flush_page_row = 0;
-            state.row_count = 0;
-            return self.scatter(state, partition_count);
+        if flush_state.flush_page_row >= page.rows {
+            flush_state.flush_page += 1;
+            flush_state.flush_page_row = 0;
+            flush_state.row_count = 0;
+            return self.scatter(flush_state, partition_count);
         }
 
-        let end = (state.flush_page_row + BATCH_SIZE).min(page.rows);
-        let rows = end - state.flush_page_row;
-        state.row_count = rows;
+        let end = (flush_state.flush_page_row + BATCH_SIZE).min(page.rows);
+        let rows = end - flush_state.flush_page_row;
+        flush_state.row_count = rows;
 
-        state.probe_state.reset_partitions(partition_count);
+        let state = &mut *flush_state.probe_state;
+        state.reset_partitions(partition_count);
 
         let mods: StrengthReducedU64 = StrengthReducedU64::new(partition_count as u64);
-        for idx in 0..rows {
-            state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
 
-            let hash = state.addresses[idx].hash(&self.row_layout);
-
+        for (idx, row_ptr) in flush_state.addresses[..rows].iter_mut().enumerate() {
+            *row_ptr = self.data_ptr(page, idx + flush_state.flush_page_row);
+            let hash = row_ptr.hash(&self.row_layout);
             let partition_idx = (hash % mods) as usize;
 
-            let sel = &mut state.probe_state.partition_entries[partition_idx];
-            sel[state.probe_state.partition_count[partition_idx]] = idx;
-            state.probe_state.partition_count[partition_idx] += 1;
+            let (count, sel) = &mut state.partition_entries[partition_idx];
+            sel[*count] = idx;
+            *count += 1;
         }
-        state.flush_page_row = end;
+        flush_state.flush_page_row = end;
         true
     }
 

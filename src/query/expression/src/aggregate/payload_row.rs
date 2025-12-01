@@ -78,7 +78,7 @@ pub(super) unsafe fn serialize_column_to_rowformat(
     arena: &Bump,
     column: &Column,
     select_vector: &[usize],
-    address: &[RowPtr; BATCH_SIZE],
+    address: &mut [RowPtr; BATCH_SIZE],
     offset: usize,
     scratch: &mut Vec<u8>,
 ) {
@@ -163,7 +163,7 @@ pub(super) unsafe fn serialize_column_to_rowformat(
 unsafe fn serialize_fixed_size_column_to_rowformat<T>(
     column: &T::Column,
     select_vector: &[usize],
-    address: &[RowPtr; BATCH_SIZE],
+    address: &mut [RowPtr; BATCH_SIZE],
     offset: usize,
 ) where
     T: AccessType<Scalar: Copy>,
@@ -330,7 +330,8 @@ impl ProbeState {
     where
         F: Fn(usize, &RowPtr) -> bool,
     {
-        let mut match_count = 0;
+        let mut temp = self.get_temp();
+        temp.reserve(count);
 
         if let Some(validity) = validity {
             let is_all_set = validity.null_count() == 0;
@@ -345,8 +346,7 @@ impl ProbeState {
                 };
 
                 if equal {
-                    self.temp_vector[match_count] = idx;
-                    match_count += 1;
+                    temp.push(idx);
                 } else {
                     self.no_match_vector[no_match_count] = idx;
                     no_match_count += 1;
@@ -355,8 +355,7 @@ impl ProbeState {
         } else {
             for idx in self.group_compare_vector[..count].iter().copied() {
                 if compare_fn(idx, &self.addresses[idx]) {
-                    self.temp_vector[match_count] = idx;
-                    match_count += 1;
+                    temp.push(idx);
                 } else {
                     self.no_match_vector[no_match_count] = idx;
                     no_match_count += 1;
@@ -364,7 +363,9 @@ impl ProbeState {
             }
         }
 
-        self.group_compare_vector[..match_count].clone_from_slice(&self.temp_vector[..match_count]);
+        let match_count = temp.len();
+        self.group_compare_vector[..match_count].clone_from_slice(&temp);
+        self.save_temp(temp);
         (match_count, no_match_count)
     }
 
@@ -374,7 +375,8 @@ impl ProbeState {
         col_offset: usize,
         (count, mut no_match_count): (usize, usize),
     ) -> (usize, usize) {
-        let mut match_count = 0;
+        let mut temp = self.get_temp();
+        temp.reserve(count);
 
         for idx in self.group_compare_vector[..count].iter().copied() {
             let value = unsafe { AnyType::index_column_unchecked(col, idx) };
@@ -382,14 +384,15 @@ impl ProbeState {
             let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
 
             if scalar.as_ref() == value {
-                self.temp_vector[match_count] = idx;
-                match_count += 1;
+                temp.push(idx);
             } else {
                 self.no_match_vector[no_match_count] = idx;
                 no_match_count += 1;
             }
         }
-        self.group_compare_vector[..match_count].clone_from_slice(&self.temp_vector[..match_count]);
+        let match_count = temp.len();
+        self.group_compare_vector[..match_count].clone_from_slice(&temp);
+        self.save_temp(temp);
         (match_count, no_match_count)
     }
 }

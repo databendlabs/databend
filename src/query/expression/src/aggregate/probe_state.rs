@@ -31,13 +31,10 @@ pub struct ProbeState {
 
     pub(super) group_compare_vector: SelectVector,
     pub(super) no_match_vector: SelectVector,
-    pub(super) temp_vector: SelectVector,
-    pub(super) slots: SelectVector,
-
     pub(super) row_count: usize,
 
-    pub partition_entries: Vec<SelectVector>,
-    pub partition_count: Vec<usize>,
+    pub partition_entries: Vec<(usize, SelectVector)>,
+    pool: Vec<Vec<usize>>,
 }
 
 impl Default for ProbeState {
@@ -50,12 +47,10 @@ impl Default for ProbeState {
             group_compare_vector: [0; BATCH_SIZE],
             no_match_vector: [0; BATCH_SIZE],
             empty_vector: [0; BATCH_SIZE],
-            temp_vector: [0; BATCH_SIZE],
-            slots: [0; BATCH_SIZE],
 
             row_count: 0,
             partition_entries: vec![],
-            partition_count: vec![],
+            pool: vec![],
         }
     }
 }
@@ -67,14 +62,14 @@ impl ProbeState {
     pub fn new_boxed() -> Box<ProbeState> {
         let mut state = Box::<ProbeState>::new_zeroed();
         unsafe {
-            let state_mut = state.assume_init_mut();
-            state_mut.partition_entries = vec![];
-            state_mut.partition_count = vec![];
+            let uninit = state.assume_init_mut();
+            uninit.partition_entries = vec![];
+            uninit.pool = vec![];
 
-            for ptr in &mut state_mut.addresses {
+            for ptr in &mut uninit.addresses {
                 *ptr = RowPtr::null();
             }
-            for addr in &mut state_mut.state_places {
+            for addr in &mut uninit.state_places {
                 *addr = StateAddr::null()
             }
 
@@ -82,15 +77,30 @@ impl ProbeState {
         }
     }
 
-    pub fn reset_partitions(&mut self, partition_count: usize) {
-        if self.partition_entries.len() < partition_count {
+    pub(super) fn reset_partitions(&mut self, partition_count: usize) {
+        if partition_count > self.partition_entries.capacity() {
             self.partition_entries
-                .resize(partition_count, [0; BATCH_SIZE]);
-            self.partition_count.resize(partition_count, 0);
+                .reserve(partition_count - self.partition_entries.capacity());
         }
+        unsafe {
+            self.partition_entries.set_len(partition_count);
+        }
+        for (count, _) in &mut self.partition_entries {
+            *count = 0;
+        }
+    }
 
-        for i in 0..partition_count {
-            self.partition_count[i] = 0;
+    pub(super) fn get_temp(&mut self) -> Vec<usize> {
+        match self.pool.pop() {
+            Some(mut vec) => {
+                vec.clear();
+                vec
+            }
+            None => vec![],
         }
+    }
+
+    pub(super) fn save_temp(&mut self, vec: Vec<usize>) {
+        self.pool.push(vec);
     }
 }

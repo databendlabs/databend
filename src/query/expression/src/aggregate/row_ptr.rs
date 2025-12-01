@@ -37,7 +37,7 @@ impl RowPtr {
         core::ptr::read_unaligned(self.0.add(offset).cast::<T>().cast_const())
     }
 
-    pub(super) unsafe fn write<T: Copy>(&self, offset: usize, value: &T) {
+    pub(super) unsafe fn write<T: Copy>(&mut self, offset: usize, value: &T) {
         core::ptr::copy_nonoverlapping(
             value as *const T as *const u8,
             self.0.add(offset),
@@ -45,7 +45,7 @@ impl RowPtr {
         );
     }
 
-    pub(super) unsafe fn write_bytes(&self, offset: usize, value: &[u8]) {
+    pub(super) unsafe fn write_bytes(&mut self, offset: usize, value: &[u8]) {
         self.write(offset, &(value.len() as u32));
         self.write(offset + 4, &(value.as_ptr() as u64));
     }
@@ -61,7 +61,7 @@ impl RowPtr {
         scalar.len() == other.len() && databend_common_hashtable::fast_memcmp(scalar, other)
     }
 
-    pub(super) unsafe fn write_u8(&self, offset: usize, value: u8) {
+    pub(super) unsafe fn write_u8(&mut self, offset: usize, value: u8) {
         self.write::<u8>(offset, &value);
     }
 
@@ -69,7 +69,7 @@ impl RowPtr {
         unsafe { self.read::<u64>(layout.hash_offset) }
     }
 
-    pub(super) fn set_hash(&self, layout: &RowLayout, value: u64) {
+    pub(super) fn set_hash(&mut self, layout: &RowLayout, value: u64) {
         unsafe {
             self.write(layout.hash_offset, &value);
         }
@@ -79,7 +79,7 @@ impl RowPtr {
         unsafe { self.read::<StateAddr>(layout.state_offset) }
     }
 
-    pub(super) fn set_state_addr(&self, layout: &RowLayout, value: &StateAddr) {
+    pub(super) fn set_state_addr(&mut self, layout: &RowLayout, value: &StateAddr) {
         unsafe {
             self.write(layout.state_offset, value);
         }

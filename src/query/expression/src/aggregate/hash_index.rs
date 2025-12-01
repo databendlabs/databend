@@ -155,13 +155,12 @@ impl HashIndex {
             *row = i;
         }
 
-        for (hash, slot) in state.group_hashes[..row_count]
-            .iter()
-            .copied()
-            .zip(&mut state.slots[..row_count])
-        {
-            *slot = self.init_slot(hash)
-        }
+        let mut slots = state.get_temp();
+        slots.extend(
+            state.group_hashes[..row_count]
+                .iter()
+                .map(|hash| self.init_slot(*hash)),
+        );
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
@@ -173,7 +172,7 @@ impl HashIndex {
 
             // 1. inject new_group_count, new_entry_count, need_compare_count, no_match_count
             for row in state.no_match_vector[..remaining_entries].iter().copied() {
-                let slot = &mut state.slots[row];
+                let slot = &mut slots[row];
                 let hash = state.group_hashes[row];
 
                 let is_new;
@@ -195,7 +194,7 @@ impl HashIndex {
                 adapter.append_rows(state, new_entry_count);
 
                 for row in state.empty_vector[..new_entry_count].iter().copied() {
-                    let entry = self.mut_entry(state.slots[row]);
+                    let entry = self.mut_entry(slots[row]);
                     entry.set_pointer(state.addresses[row]);
                     debug_assert_eq!(entry.get_pointer(), state.addresses[row]);
                 }
@@ -207,7 +206,7 @@ impl HashIndex {
                     .iter()
                     .copied()
                 {
-                    let entry = self.mut_entry(state.slots[row]);
+                    let entry = self.mut_entry(slots[row]);
 
                     debug_assert!(entry.is_occupied());
                     debug_assert_eq!(entry.get_salt(), (state.group_hashes[row] >> 48) as u16);
@@ -220,7 +219,7 @@ impl HashIndex {
 
             // 5. Linear probing, just increase iter_times
             for row in state.no_match_vector[..no_match_count].iter().copied() {
-                let slot = &mut state.slots[row];
+                let slot = &mut slots[row];
                 *slot += 1;
                 if *slot >= self.capacity {
                     *slot = 0;
@@ -229,6 +228,7 @@ impl HashIndex {
             remaining_entries = no_match_count;
         }
 
+        state.save_temp(slots);
         self.count += new_group_count;
 
         new_group_count
@@ -284,10 +284,8 @@ mod tests {
         }
 
         fn init_state(&self) -> ProbeState {
-            let mut state = ProbeState {
-                row_count: self.incoming.len(),
-                ..Default::default()
-            };
+            let mut state = ProbeState::default();
+            state.row_count = self.incoming.len();
 
             for (i, (_, hash)) in self.incoming.iter().enumerate() {
                 state.group_hashes[i] = *hash

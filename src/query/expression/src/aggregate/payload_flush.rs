@@ -173,42 +173,41 @@ impl Payload {
         DataBlock::concat(&blocks)
     }
 
-    pub fn flush(&self, state: &mut PayloadFlushState) -> bool {
-        if state.flush_page >= self.pages.len() {
+    pub fn flush(&self, flush_state: &mut PayloadFlushState) -> bool {
+        let Some(page) = self.pages.get(flush_state.flush_page) else {
             return false;
+        };
+
+        if flush_state.flush_page_row >= page.rows {
+            flush_state.flush_page += 1;
+            flush_state.flush_page_row = 0;
+            flush_state.row_count = 0;
+
+            return self.flush(flush_state);
         }
 
-        let page = &self.pages[state.flush_page];
-
-        if state.flush_page_row >= page.rows {
-            state.flush_page += 1;
-            state.flush_page_row = 0;
-            state.row_count = 0;
-
-            return self.flush(state);
-        }
-
-        let end = (state.flush_page_row + BATCH_SIZE).min(page.rows);
-        let rows = end - state.flush_page_row;
-        state.group_columns.clear();
+        let end = (flush_state.flush_page_row + BATCH_SIZE).min(page.rows);
+        let rows = end - flush_state.flush_page_row;
+        flush_state.group_columns.clear();
+        flush_state.row_count = rows;
+        let state = &mut *flush_state.probe_state;
         state.row_count = rows;
-        state.probe_state.row_count = rows;
 
-        for idx in 0..rows {
-            state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
-            state.probe_state.group_hashes[idx] = state.addresses[idx].hash(&self.row_layout);
+        for (idx, row_ptr) in flush_state.addresses[..rows].iter_mut().enumerate() {
+            *row_ptr = self.data_ptr(page, idx + flush_state.flush_page_row);
+            state.group_hashes[idx] = row_ptr.hash(&self.row_layout);
 
             if !self.aggrs.is_empty() {
-                state.state_places[idx] = state.addresses[idx].state_addr(&self.row_layout);
+                flush_state.state_places[idx] = row_ptr.state_addr(&self.row_layout);
             }
         }
 
         for col_index in 0..self.group_types.len() {
-            let col = self.flush_column(col_index, state);
-            state.group_columns.push(col.into());
+            let col = self.flush_column(col_index, flush_state);
+            flush_state.group_columns.push(col.into());
         }
 
-        state.flush_page_row = end;
+        flush_state.flush_page_row = end;
         true
     }
 
