@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::{ColumnId, DataBlock};
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -111,8 +111,8 @@ pub fn parquet_writer_properties_builder(
     }
 }
 
-trait NdvProvider {
-   fn column_ndv(&self, column_id: &ColumnId) -> Option<u64>;
+pub trait NdvProvider {
+    fn column_ndv(&self, column_id: &ColumnId) -> Option<u64>;
 }
 
 impl NdvProvider for &StatisticsOfColumns {
@@ -124,7 +124,7 @@ impl NdvProvider for &StatisticsOfColumns {
 pub fn adjust_writer_properties_by_col_stats(
     builder: WriterPropertiesBuilder,
     enable_dictionary: bool,
-    cols_stats: &StatisticsOfColumns,
+    cols_stats: impl NdvProvider,
     num_rows: usize,
     table_schema: &TableSchema,
 ) -> WriterPropertiesBuilder {
@@ -135,7 +135,7 @@ pub fn adjust_writer_properties_by_col_stats(
     let mut builder = builder.set_dictionary_enabled(false);
 
     for field in table_schema.fields().iter() {
-       let col_id = field.column_id();
+        let col_id = field.column_id();
         if let Some(ndv) = cols_stats.column_ndv(&col_id) {
             if (ndv as f64 / num_rows as f64) < 0.1 {
                 let name = field.name().as_str();
