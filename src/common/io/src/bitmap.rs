@@ -269,12 +269,16 @@ impl std::ops::BitAndAssign for HybridBitmap {
             }
             HybridBitmap::Small(mut rhs_set) => match self {
                 HybridBitmap::Large(lhs_tree) => {
-                    let rhs_tree = RoaringTreemap::from_iter(rhs_set.iter().copied());
-                    lhs_tree.bitand_assign(rhs_tree);
-                    self.try_demote();
+                    let mut result = SmallBitmap::with_capacity(rhs_set.len());
+                    for value in rhs_set.iter().copied() {
+                        if lhs_tree.contains(value) {
+                            result.push(value);
+                        }
+                    }
+                    *self = HybridBitmap::Small(result);
                 }
                 HybridBitmap::Small(lhs_set) => {
-                    small_intersection(lhs_set, &mut rhs_set);
+                    small_intersection(lhs_set, &mut rhs_set)
                 }
             },
         }
@@ -836,6 +840,20 @@ mod tests {
         bitmap.bitand_assign(other.clone());
         assert!(matches!(bitmap, HybridBitmap::Small(_)));
         assert_eq!(bitmap.len(), other.len());
+    }
+
+    #[test]
+    fn bitand_large_with_small_demotes_to_small() {
+        let mut large = HybridBitmap::from_iter(0_u64..32);
+        let rhs = HybridBitmap::from_iter([1_u64, 5, 7, 40]);
+        large.bitand_assign(rhs);
+
+        match large {
+            HybridBitmap::Small(set) => {
+                assert_eq!(set.as_slice(), &[1, 5, 7]);
+            }
+            _ => panic!("expected small hybrid bitmap after intersection"),
+        }
     }
 
     #[test]
