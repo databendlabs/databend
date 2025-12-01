@@ -54,6 +54,7 @@ mod evaluator;
 mod expression;
 pub mod filter;
 mod function;
+pub mod hash_util;
 mod hilbert;
 mod kernels;
 mod projected_block;
