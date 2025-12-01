@@ -1911,6 +1911,8 @@ Functions overloads:
 77 eq FACTORY
 78 eq(Interval, Interval) :: Boolean
 79 eq(Interval NULL, Interval NULL) :: Boolean NULL
+80 eq(Bitmap, Bitmap) :: Boolean
+81 eq(Bitmap NULL, Bitmap NULL) :: Boolean NULL
 0 exp(UInt8) :: Float64
 1 exp(UInt8 NULL) :: Float64 NULL
 2 exp(UInt16) :: Float64
@@ -3415,6 +3417,8 @@ Functions overloads:
 77 noteq FACTORY
 78 noteq(Interval, Interval) :: Boolean
 79 noteq(Interval NULL, Interval NULL) :: Boolean NULL
+80 noteq(Bitmap, Bitmap) :: Boolean
+81 noteq(Bitmap NULL, Bitmap NULL) :: Boolean NULL
 0 now() :: Timestamp
 0 object_construct FACTORY
 0 object_construct_keep_null FACTORY
