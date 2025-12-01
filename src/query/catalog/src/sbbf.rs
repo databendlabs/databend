@@ -225,12 +225,31 @@ impl Sbbf {
         self.0[block_index].insert(hash as u32)
     }
 
+    /// Insert a batch of hashes into the filter.
+    pub fn insert_hash_batch(&mut self, hashes: &[u64]) {
+        for &hash in hashes {
+            let block_index = self.hash_to_block_index(hash);
+            self.0[block_index].insert(hash as u32);
+        }
+    }
+
     /// Check if a hash is in the filter. May return
     /// true for values that was never inserted ("false positive")
     /// but will always return false if a hash has not been inserted.
     pub fn check_hash(&self, hash: u64) -> bool {
         let block_index = self.hash_to_block_index(hash);
         self.0[block_index].check(hash as u32)
+    }
+
+    /// Check a batch of hashes. The callback is triggered for each matching hash index.
+    pub fn check_hash_batch<F>(&self, hashes: &[u64], mut on_match: F)
+    where F: FnMut(usize) {
+        for (idx, &hash) in hashes.iter().enumerate() {
+            let block_index = self.hash_to_block_index(hash);
+            if self.0[block_index].check(hash as u32) {
+                on_match(idx);
+            }
+        }
     }
 
     /// Merge another bloom filter into this one (bitwise OR operation)
@@ -283,6 +302,16 @@ mod tests {
             sbbf.insert_hash(i);
             assert!(sbbf.check_hash(i));
         }
+    }
+
+    #[test]
+    fn test_sbbf_batch_insert_and_check() {
+        let mut sbbf = Sbbf(vec![Block::ZERO; 1_000]);
+        let hashes: Vec<u64> = (0..10_000).collect();
+        sbbf.insert_hash_batch(&hashes);
+        let mut matched = 0;
+        sbbf.check_hash_batch(&hashes, |_| matched += 1);
+        assert_eq!(matched, hashes.len());
     }
 
     #[test]
