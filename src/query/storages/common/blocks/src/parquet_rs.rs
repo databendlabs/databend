@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
+use databend_common_expression::{ColumnId, DataBlock};
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -111,6 +111,16 @@ pub fn parquet_writer_properties_builder(
     }
 }
 
+trait NdvProvider {
+   fn column_ndv(&self, column_id: &ColumnId) -> Option<u64>;
+}
+
+impl NdvProvider for &StatisticsOfColumns {
+    fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
+        self.get(column_id).and_then(|item| item.distinct_of_values)
+    }
+}
+
 pub fn adjust_writer_properties_by_col_stats(
     builder: WriterPropertiesBuilder,
     enable_dictionary: bool,
@@ -124,19 +134,15 @@ pub fn adjust_writer_properties_by_col_stats(
 
     let mut builder = builder.set_dictionary_enabled(false);
 
-    let column_names: HashMap<_, _> = table_schema
-        .fields
-        .iter()
-        .map(|f| (f.column_id, f.name.as_str()))
-        .collect();
-    for (col_id, stats) in cols_stats.iter() {
-        if let Some(ndv) = stats.distinct_of_values {
+    for field in table_schema.fields().iter() {
+       let col_id = field.column_id();
+        if let Some(ndv) = cols_stats.column_ndv(&col_id) {
             if (ndv as f64 / num_rows as f64) < 0.1 {
-                // DOC safe to unwrap
-                let name = column_names.get(col_id).unwrap();
-                builder = builder.set_column_dictionary_enabled(ColumnPath::from(*name), true);
+                let name = field.name().as_str();
+                builder = builder.set_column_dictionary_enabled(ColumnPath::from(name), true);
             }
         }
     }
+
     builder
 }

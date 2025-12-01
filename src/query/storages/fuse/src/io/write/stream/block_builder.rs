@@ -73,6 +73,7 @@ use crate::FuseTable;
 struct UninitializedArrowWriter {
     write_settings: WriteSettings,
     arrow_schema: Arc<Schema>,
+    table_schema: TableSchemaRef,
 }
 
 impl UninitializedArrowWriter {
