@@ -874,4 +874,26 @@ mod tests {
         let decoded = deserialize_bitmap(&buf).unwrap();
         assert!(matches!(decoded, HybridBitmap::Large(_)));
     }
+
+    #[test]
+    fn small_bitmap_serialization_stays_compatible() {
+        let mut legacy = Vec::new();
+        legacy.extend_from_slice(&HYBRID_MAGIC);
+        legacy.push(HYBRID_VERSION);
+        legacy.push(HYBRID_KIND_SMALL);
+        legacy.push(3); // length in number of u64 values
+        for value in [4_u64, 7, 42] {
+            legacy.extend_from_slice(&value.to_le_bytes());
+        }
+
+        let decoded = deserialize_bitmap(&legacy).unwrap();
+        match &decoded {
+            HybridBitmap::Small(set) => assert_eq!(set.as_slice(), &[4, 7, 42]),
+            _ => panic!("expected small hybrid bitmap"),
+        }
+
+        let mut reencoded = Vec::new();
+        decoded.serialize_into(&mut reencoded).unwrap();
+        assert_eq!(reencoded, legacy);
+    }
 }
