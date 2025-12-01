@@ -237,6 +237,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
                         matched_rows: None,
+                        matched_scores: None,
                         vector_scores: None,
                         virtual_block_meta: None,
                     };

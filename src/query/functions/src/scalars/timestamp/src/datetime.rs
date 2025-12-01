@@ -235,10 +235,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                // Convert source timestamp from source timezone to target timezone
-                let p_src_timestamp = src_timestamp.to_timestamp(&ctx.func_ctx.tz);
-                let src_dst_from_utc = p_src_timestamp.offset().seconds();
-
+                let source_tz = &ctx.func_ctx.tz;
                 let t_tz = match TimeZone::get(target_tz) {
                     Ok(tz) => tz,
                     Err(e) => {
@@ -251,17 +248,33 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }
                 };
 
-                let result_timestamp = p_src_timestamp
-                    .with_time_zone(t_tz.clone())
-                    .timestamp()
-                    .as_microsecond();
-                let target_dst_from_utc = p_src_timestamp
-                    .with_time_zone(t_tz.clone())
-                    .offset()
-                    .seconds();
+                let source_components = fast_components_from_timestamp(src_timestamp, source_tz);
+                let target_components = fast_components_from_timestamp(src_timestamp, &t_tz);
+
+                let (instant_micros, src_dst_from_utc, target_dst_from_utc) =
+                    if let (Some(src_comp), Some(target_comp)) =
+                        (source_components, target_components)
+                    {
+                        (
+                            src_timestamp,
+                            src_comp.offset_seconds,
+                            target_comp.offset_seconds,
+                        )
+                    } else {
+                        // Fall back to the slower Jiff conversion for timestamps
+                        // outside the LUT coverage (e.g. <1900 or >2299).
+                        let src_zoned = src_timestamp.to_timestamp(source_tz);
+                        let target_zoned = src_zoned.with_time_zone(t_tz.clone());
+                        (
+                            target_zoned.timestamp().as_microsecond(),
+                            src_zoned.offset().seconds(),
+                            target_zoned.offset().seconds(),
+                        )
+                    };
+
                 let offset_as_micros_sec = (target_dst_from_utc - src_dst_from_utc) as i64;
                 match offset_as_micros_sec.checked_mul(MICROS_PER_SEC) {
-                    Some(offset) => match result_timestamp.checked_add(offset) {
+                    Some(offset) => match instant_micros.checked_add(offset) {
                         Some(res) => output.push(res),
                         None => {
                             ctx.set_error(output.len(), "calc final time error".to_string());
@@ -759,6 +772,13 @@ fn register_timestamp_to_timestamp_tz(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampTzType> {
         vectorize_with_builder_1_arg::<TimestampType, TimestampTzType>(|val, output, ctx| {
+            if let Some(components) = fast_components_from_timestamp(val, &ctx.func_ctx.tz) {
+                let offset = components.offset_seconds;
+                let ts_tz = timestamp_tz::new(val - (offset as i64 * MICROS_PER_SEC), offset);
+                output.push(ts_tz);
+                return;
+            }
+
             let ts = match Timestamp::from_microsecond(val) {
                 Ok(ts) => ts,
                 Err(err) => {
@@ -1053,15 +1073,22 @@ fn register_timestamp_tz_to_date(registry: &mut FunctionRegistry) {
     }
 
     fn calc_timestamp_tz_to_date(val: timestamp_tz) -> Result<i32, String> {
-        let offset = Offset::from_seconds(val.seconds_offset()).map_err(|err| err.to_string())?;
+        if let Some(days) = timestamp_tz_components_via_lut(val)
+            .and_then(|c| days_from_components(c.year, c.month, c.day))
+        {
+            Ok(days)
+        } else {
+            let offset =
+                Offset::from_seconds(val.seconds_offset()).map_err(|err| err.to_string())?;
 
-        Ok(val
-            .timestamp()
-            .to_timestamp(&TimeZone::fixed(offset))
-            .date()
-            .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
-            .unwrap()
-            .get_days())
+            Ok(val
+                .timestamp()
+                .to_timestamp(&TimeZone::fixed(offset))
+                .date()
+                .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+                .unwrap()
+                .get_days())
+        }
     }
 }
 

@@ -798,6 +798,16 @@ select to_date('1947-04-15 00:00:00')
 1947-04-15
 
 query T
+select to_timestamp(to_date('1947-04-15'))
+----
+1947-04-15 01:00:00.000000
+
+query T
+select to_timestamp(to_date('1947-04-16'))
+----
+1947-04-16 00:00:00.000000
+
+query T
 select to_date('1941-03-15 00:00:00')
 ----
 1941-03-15

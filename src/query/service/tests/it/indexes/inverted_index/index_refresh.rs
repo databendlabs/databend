@@ -196,10 +196,10 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
             )
             .await?;
         assert!(matched_rows.is_some());
-        let matched_rows = matched_rows.unwrap();
+        let (matched_rows, _) = matched_rows.unwrap();
         assert_eq!(matched_rows.len(), ids.len());
         for (matched_row, id) in matched_rows.iter().zip(ids.iter()) {
-            assert_eq!(matched_row.0, *id);
+            assert_eq!(matched_row, id);
         }
     }
 
