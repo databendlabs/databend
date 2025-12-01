@@ -86,6 +86,12 @@ impl ColumnStatisticsState {
         Ok(())
     }
 
+    pub fn peek_cols_ndv(&self) -> HashMap<ColumnId, usize> {
+        self.distinct_columns.iter().map(|(column_id, ndv_estimator)| {
+            (*column_id, ndv_estimator.peek())
+        }).collect()
+    }
+
     pub fn finalize(
         self,
         mut column_distinct_count: HashMap<ColumnId, usize>,
