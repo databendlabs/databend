@@ -34,7 +34,6 @@ match-template = { workspace = true }
 micromarshal = { workspace = true }
 num = { workspace = true }
 num-traits = { workspace = true }
-roaring = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
