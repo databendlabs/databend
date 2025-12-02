@@ -536,12 +536,14 @@ fn decode_small_bitmap(payload: &[u8]) -> Result<HybridBitmap> {
         )));
     }
 
-    let mut set = SmallBitmap::with_capacity(len);
-    for chunk in bytes.chunks_exact(std::mem::size_of::<u64>()) {
-        let mut data = [0u8; std::mem::size_of::<u64>()];
-        data.copy_from_slice(chunk);
-        set.push(u64::from_le_bytes(data));
-    }
+    let set: SmallBitmap = bytes
+        .chunks_exact(std::mem::size_of::<u64>())
+        .map(|chunk| {
+            let mut data = [0u8; std::mem::size_of::<u64>()];
+            data.copy_from_slice(chunk);
+            u64::from_le_bytes(data)
+        })
+        .collect();
     Ok(HybridBitmap::Small(set))
 }
 
