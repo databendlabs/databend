@@ -16,7 +16,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
-use databend_common_expression::{BlockEntry, ColumnId};
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;

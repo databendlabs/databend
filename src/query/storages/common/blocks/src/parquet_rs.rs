@@ -60,21 +60,16 @@ pub fn blocks_to_parquet_with_stats(
     column_stats: Option<&StatisticsOfColumns>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
-    let builder = parquet_writer_properties_builder(compression, enable_dictionary, metadata);
-    let builder = if let Some(stats) = column_stats {
-        let num_rows = blocks[0].num_rows();
-        adjust_writer_properties_by_col_stats(
-            builder,
-            enable_dictionary,
-            stats,
-            num_rows,
-            table_schema,
-        )
-    } else {
-        builder
-    };
+    let num_rows = blocks[0].num_rows();
+    let props = build_parquet_writer_properties(
+        compression,
+        enable_dictionary,
+        column_stats,
+        metadata,
+        num_rows,
+        table_schema,
+    );
 
-    let props = builder.build();
     let batches = blocks
         .into_iter()
         .map(|block| block.to_record_batch(table_schema))
@@ -110,6 +105,47 @@ pub fn parquet_writer_properties_builder(
         builder.set_dictionary_enabled(false)
     }
 }
+pub fn build_parquet_writer_properties(
+    compression: TableCompression,
+    enable_dictionary: bool,
+    cols_stats: Option<impl NdvProvider>,
+    metadata: Option<Vec<KeyValue>>,
+    num_rows: usize,
+    table_schema: &TableSchema,
+) -> WriterProperties {
+    let mut builder = WriterProperties::builder()
+        .set_compression(compression.into())
+        // use `usize::MAX` to effectively limit the number of row groups to 1
+        .set_max_row_group_size(usize::MAX)
+        .set_encoding(Encoding::PLAIN)
+        .set_statistics_enabled(EnabledStatistics::None)
+        .set_bloom_filter_enabled(false)
+        .set_key_value_metadata(metadata);
+
+    if enable_dictionary {
+        // Enable dictionary for all columns
+        builder = builder
+            .set_writer_version(WriterVersion::PARQUET_2_0)
+            .set_dictionary_enabled(true);
+        if let Some(cols_stats) = cols_stats {
+            // Disable dictionary of columns that hava high cardinality
+            for field in table_schema.fields().iter() {
+                let col_id = field.column_id();
+                if let Some(ndv) = cols_stats.column_ndv(&col_id) {
+                    let high_cardinality = (ndv as f64 / num_rows as f64) > 0.1;
+                    if high_cardinality {
+                        let name = field.name().as_str();
+                        builder =
+                            builder.set_column_dictionary_enabled(ColumnPath::from(name), false);
+                    }
+                }
+            }
+        }
+        builder.build()
+    } else {
+        builder.set_dictionary_enabled(false).build()
+    }
+}
 
 pub trait NdvProvider {
     fn column_ndv(&self, column_id: &ColumnId) -> Option<u64>;
@@ -136,7 +172,8 @@ pub fn adjust_writer_properties_by_col_stats(
         if let Some(ndv) = cols_stats.column_ndv(&col_id) {
             let enable_dictionary = (ndv as f64 / num_rows as f64) < 0.1;
             let name = field.name().as_str();
-            builder = builder.set_column_dictionary_enabled(ColumnPath::from(name), enable_dictionary);
+            builder =
+                builder.set_column_dictionary_enabled(ColumnPath::from(name), enable_dictionary);
         }
     }
 
