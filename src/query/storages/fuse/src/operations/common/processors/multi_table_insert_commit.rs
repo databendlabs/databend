@@ -42,6 +42,7 @@ use log::error;
 use log::info;
 
 use crate::operations::set_backoff;
+use crate::operations::set_compaction_num_block_hint;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;
@@ -272,8 +273,9 @@ async fn build_update_table_meta_req(
     let table_stats_gen = fuse_table
         .generate_table_stats(&previous, insert_hll, insert_rows)
         .await?;
+    let table_info = table.get_table_info();
     let snapshot = snapshot_generator.generate_new_snapshot(
-        table.get_table_info(),
+        table_info,
         fuse_table.cluster_key_id(),
         previous,
         txn_mgr,
@@ -281,6 +283,11 @@ async fn build_update_table_meta_req(
         table_stats_gen,
     )?;
     snapshot.ensure_segments_unique()?;
+    let _ = set_compaction_num_block_hint(
+        snapshot_generator.ctx.as_ref(),
+        table_info.name.as_str(),
+        &snapshot.summary,
+    );
 
     // write snapshot
     let dal = fuse_table.get_operator();

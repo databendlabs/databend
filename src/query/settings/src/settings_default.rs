@@ -892,7 +892,7 @@ impl DefaultSettings {
                 }),
                 ("auto_compaction_segments_limit", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
-                    desc: "The maximum number of segments that can be compacted automatically triggered after write(replace-into/merge-into).",
+                    desc: "The maximum number of segments that can be reclustered automatically triggered after write.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(2..=u64::MAX)),
