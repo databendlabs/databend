@@ -128,15 +128,16 @@ pub fn build_parquet_writer_properties(
             .set_writer_version(WriterVersion::PARQUET_2_0)
             .set_dictionary_enabled(true);
         if let Some(cols_stats) = cols_stats {
-            // Disable dictionary of columns that hava high cardinality
-            for field in table_schema.fields().iter() {
+            // Disable dictionary of columns that have high cardinality
+            for field in table_schema.leaf_fields() {
                 let col_id = field.column_id();
                 if let Some(ndv) = cols_stats.column_ndv(&col_id) {
                     let high_cardinality = (ndv as f64 / num_rows as f64) > 0.1;
                     if high_cardinality {
-                        let name = field.name().as_str();
-                        builder =
-                            builder.set_column_dictionary_enabled(ColumnPath::from(name), false);
+                        builder = builder.set_column_dictionary_enabled(
+                            ColumnPath::from(field.name().as_str()),
+                            false,
+                        );
                     }
                 }
             }
@@ -155,27 +156,4 @@ impl NdvProvider for &StatisticsOfColumns {
     fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
         self.get(column_id).and_then(|item| item.distinct_of_values)
     }
-}
-
-pub fn adjust_writer_properties_by_col_stats(
-    mut builder: WriterPropertiesBuilder,
-    enable_dictionary: bool,
-    cols_stats: impl NdvProvider,
-    num_rows: usize,
-    table_schema: &TableSchema,
-) -> WriterPropertiesBuilder {
-    if !enable_dictionary {
-        return builder;
-    };
-    for field in table_schema.fields().iter() {
-        let col_id = field.column_id();
-        if let Some(ndv) = cols_stats.column_ndv(&col_id) {
-            let enable_dictionary = (ndv as f64 / num_rows as f64) < 0.1;
-            let name = field.name().as_str();
-            builder =
-                builder.set_column_dictionary_enabled(ColumnPath::from(name), enable_dictionary);
-        }
-    }
-
-    builder
 }
