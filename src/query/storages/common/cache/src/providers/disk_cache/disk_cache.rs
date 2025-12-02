@@ -336,6 +336,13 @@ impl DiskCache {
         match self.cache.pop(&cache_key.0) {
             Some(_) => {
                 let path = self.abs_path_of_cache_key(&cache_key);
+
+                if !self.sync_data {
+                    if let Err(cause) = File::open(&path).map(|f| f.set_len(0)) {
+                        error!("Error truncate file from cache: `{:?}`: {}", path, cause);
+                    }
+                }
+
                 fs::remove_file(&path).map_err(|e| {
                     error!("Error removing file from cache: `{:?}`: {}", path, e);
                     Into::into(e)
