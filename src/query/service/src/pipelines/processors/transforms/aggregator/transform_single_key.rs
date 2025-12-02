@@ -54,6 +54,8 @@ pub struct PartialSingleStateAggregator {
     bytes: usize,
 }
 
+unsafe impl Send for PartialSingleStateAggregator {}
+
 impl PartialSingleStateAggregator {
     pub fn try_new(params: &Arc<AggregatorParams>) -> Result<Self> {
         let arena = Bump::new();
