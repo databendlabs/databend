@@ -3152,7 +3152,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Decimal(38, 0)` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(38, 0)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0)` with `String`
-... and 75 more
+... and 77 more
 
 
 
@@ -3502,7 +3502,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Decimal(38, 0) NULL` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(38, 0)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Decimal(38, 0) NULL` with `String`
-... and 75 more
+... and 77 more
 
 
 
@@ -3852,7 +3852,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Decimal(76, 0)` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(76, 0)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0)` with `String`
-... and 75 more
+... and 77 more
 
 
 
@@ -4202,7 +4202,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Decimal(76, 0) NULL` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Decimal(76, 0)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Decimal(76, 0) NULL` with `String`
-... and 75 more
+... and 77 more
 
 
 

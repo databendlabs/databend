@@ -26,6 +26,7 @@ use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::BitmapType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -84,6 +85,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_tuple_cmp(registry);
     register_like(registry);
     register_interval_cmp(registry);
+    register_bitmap_cmp(registry);
 }
 
 pub const ALL_COMP_FUNC_NAMES: &[&str] = &["eq", "noteq", "lt", "lte", "gt", "gte"];
@@ -1286,4 +1288,17 @@ fn vectorize_regexp(
             }
         }
     }
+}
+
+fn register_bitmap_cmp(registry: &mut FunctionRegistry) {
+    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
+        "eq",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs == rhs,
+    );
+    registry.register_comparison_2_arg::<BitmapType, BitmapType, _, _>(
+        "noteq",
+        |_, _, _| FunctionDomain::Full,
+        |lhs, rhs, _| lhs != rhs,
+    );
 }

@@ -73,6 +73,9 @@
 //! [sbbf-paper]: https://arxiv.org/pdf/2101.01719
 //! [bf-formulae]: http://tfk.mit.edu/pdf/bloom.pdf
 
+use core::simd::cmp::SimdPartialEq;
+use core::simd::Simd;
+
 /// Salt values as defined in the [spec](https://github.com/apache/parquet-format/blob/master/BloomFilter.md#technical-approach).
 const SALT: [u32; 8] = [
     0x47b6137b_u32,
@@ -90,20 +93,16 @@ const SALT: [u32; 8] = [
 #[derive(Debug, Copy, Clone)]
 #[repr(transparent)]
 struct Block([u32; 8]);
+
+type U32x8 = Simd<u32, 8>;
+
 impl Block {
     const ZERO: Block = Block([0; 8]);
 
     /// takes as its argument a single unsigned 32-bit integer and returns a block in which each
     /// word has exactly one bit set.
     fn mask(x: u32) -> Self {
-        let mut result = [0_u32; 8];
-        for i in 0..8 {
-            // wrapping instead of checking for overflow
-            let y = x.wrapping_mul(SALT[i]);
-            let y = y >> 27;
-            result[i] = 1 << y;
-        }
-        Self(result)
+        Self(Self::mask_simd(x).to_array())
     }
 
     #[inline]
@@ -136,13 +135,17 @@ impl Block {
 
     /// Returns true when every bit that is set in the result of mask is also set in the block.
     fn check(&self, hash: u32) -> bool {
-        let mask = Self::mask(hash);
-        for i in 0..8 {
-            if self[i] & mask[i] == 0 {
-                return false;
-            }
-        }
-        true
+        let mask = Self::mask_simd(hash);
+        let block_vec = U32x8::from_array(self.0);
+        (block_vec & mask).simd_ne(U32x8::splat(0)).all()
+    }
+
+    #[inline(always)]
+    fn mask_simd(x: u32) -> U32x8 {
+        let hash_vec = U32x8::splat(x);
+        let salt_vec = U32x8::from_array(SALT);
+        let bit_index = (hash_vec * salt_vec) >> U32x8::splat(27);
+        U32x8::splat(1) << bit_index
     }
 }
 
@@ -225,12 +228,31 @@ impl Sbbf {
         self.0[block_index].insert(hash as u32)
     }
 
+    /// Insert a batch of hashes into the filter.
+    pub fn insert_hash_batch(&mut self, hashes: &[u64]) {
+        for &hash in hashes {
+            let block_index = self.hash_to_block_index(hash);
+            self.0[block_index].insert(hash as u32);
+        }
+    }
+
     /// Check if a hash is in the filter. May return
     /// true for values that was never inserted ("false positive")
     /// but will always return false if a hash has not been inserted.
     pub fn check_hash(&self, hash: u64) -> bool {
         let block_index = self.hash_to_block_index(hash);
         self.0[block_index].check(hash as u32)
+    }
+
+    /// Check a batch of hashes. The callback is triggered for each matching hash index.
+    pub fn check_hash_batch<F>(&self, hashes: &[u64], mut on_match: F)
+    where F: FnMut(usize) {
+        for (idx, &hash) in hashes.iter().enumerate() {
+            let block_index = self.hash_to_block_index(hash);
+            if self.0[block_index].check(hash as u32) {
+                on_match(idx);
+            }
+        }
     }
 
     /// Merge another bloom filter into this one (bitwise OR operation)
@@ -283,6 +305,16 @@ mod tests {
             sbbf.insert_hash(i);
             assert!(sbbf.check_hash(i));
         }
+    }
+
+    #[test]
+    fn test_sbbf_batch_insert_and_check() {
+        let mut sbbf = Sbbf(vec![Block::ZERO; 1_000]);
+        let hashes: Vec<u64> = (0..10_000).collect();
+        sbbf.insert_hash_batch(&hashes);
+        let mut matched = 0;
+        sbbf.check_hash_batch(&hashes, |_| matched += 1);
+        assert_eq!(matched, hashes.len());
     }
 
     #[test]

@@ -142,7 +142,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 76 more
+... and 78 more
 
 
 
@@ -312,6 +312,33 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : build_bitmap([3, 7, 9]) = build_bitmap([3, 7, 9])
+raw expr       : eq(build_bitmap(array(3, 7, 9)), build_bitmap(array(3, 7, 9)))
+checked expr   : eq<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : build_bitmap([3, 7, 9]) = build_bitmap([3, 7, 10])
+raw expr       : eq(build_bitmap(array(3, 7, 9)), build_bitmap(array(3, 7, 10)))
+checked expr   : eq<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 10_u8) AS Array(UInt8 NULL))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : null = build_bitmap([3, 7, 10])
+raw expr       : eq(NULL, build_bitmap(array(3, 7, 10)))
+checked expr   : eq<Bitmap NULL, Bitmap NULL>(CAST<NULL>(NULL AS Bitmap NULL), CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 10_u8) AS Array(UInt8 NULL))) AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : '1'!='2'
 raw expr       : noteq('1', '2')
 checked expr   : noteq<String, String>("1", "2")
@@ -429,7 +456,7 @@ candidate functions:
   noteq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 76 more
+... and 78 more
 
 
 
@@ -542,6 +569,33 @@ evaluation (internal):
 | rhs    | Column(StringColumn[null, true, 9223372036854775807, [1,2,3,["a","b","c"]]]) |
 | Output | Boolean([0b____0000])                                                        |
 +--------+------------------------------------------------------------------------------+
+
+
+ast            : build_bitmap([3, 7, 9]) != build_bitmap([3, 7, 9])
+raw expr       : noteq(build_bitmap(array(3, 7, 9)), build_bitmap(array(3, 7, 9)))
+checked expr   : noteq<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : build_bitmap([3, 7, 9]) != build_bitmap([3, 7, 10])
+raw expr       : noteq(build_bitmap(array(3, 7, 9)), build_bitmap(array(3, 7, 10)))
+checked expr   : noteq<Bitmap, Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 9_u8) AS Array(UInt8 NULL))), build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 10_u8) AS Array(UInt8 NULL))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : null != build_bitmap([3, 7, 10])
+raw expr       : noteq(NULL, build_bitmap(array(3, 7, 10)))
+checked expr   : noteq<Bitmap NULL, Bitmap NULL>(CAST<NULL>(NULL AS Bitmap NULL), CAST<Bitmap>(build_bitmap<Array(UInt8 NULL)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(3_u8, 7_u8, 10_u8) AS Array(UInt8 NULL))) AS Bitmap NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : '1'<'2'

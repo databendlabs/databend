@@ -272,9 +272,7 @@ async fn build_bloom_filter(
     if total_items < 50000 {
         let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
-        for hash in bloom {
-            filter.insert_hash(hash);
-        }
+        filter.insert_hash_batch(&bloom);
         return Ok(RuntimeFilterBloom {
             column_name,
             filter,
@@ -295,9 +293,7 @@ async fn build_bloom_filter(
                 let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
                     .map_err(|e| ErrorCode::Internal(e.to_string()))?;
 
-                for hash in chunk {
-                    filter.insert_hash(hash);
-                }
+                filter.insert_hash_batch(&chunk);
                 Ok::<Sbbf, ErrorCode>(filter)
             })
         })
