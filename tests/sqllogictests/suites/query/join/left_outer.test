@@ -334,6 +334,9 @@ select distinct try_cast(flag as int) as f from t2 order by f;
 2
 
 statement ok
+select * from numbers(10000) a left join numbers(10000) b on a.number % 5 > 1 and b.number % 5 <= 2 and a.number = b.number;
+
+statement ok
 DROP TABLE IF EXISTS t1;
 
 statement ok
