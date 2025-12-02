@@ -379,7 +379,7 @@ mod tests {
         for _ in 0..threads {
             let barrier = barrier.clone();
             let controller = controller.clone();
-            handles.push(thread::spawn(move || {
+            handles.push(std::thread::spawn(move || {
                 barrier.wait();
                 controller.measure(PruningCostKind::BlocksTopN, || {
                     thread::sleep(sleep_time);
