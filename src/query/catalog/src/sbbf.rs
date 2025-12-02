@@ -76,6 +76,8 @@
 use core::simd::cmp::SimdPartialEq;
 use core::simd::Simd;
 
+use databend_common_base::hints::assume;
+
 /// Salt values as defined in the [spec](https://github.com/apache/parquet-format/blob/master/BloomFilter.md#technical-approach).
 const SALT: [u32; 8] = [
     0x47b6137b_u32,
@@ -249,6 +251,7 @@ impl Sbbf {
     where F: FnMut(usize) {
         for (idx, &hash) in hashes.iter().enumerate() {
             let block_index = self.hash_to_block_index(hash);
+            assume(block_index < self.0.len());
             if self.0[block_index].check(hash as u32) {
                 on_match(idx);
             }
