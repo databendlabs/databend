@@ -73,6 +73,7 @@ mod dummy {
 mod datetime_fast_path {
     use std::sync::LazyLock;
 
+    use databend_common_expression::date_helper::DateConverter;
     use databend_common_expression::type_check;
     use databend_common_expression::types::string::StringColumn;
     use databend_common_expression::types::string::StringColumnBuilder;
@@ -103,6 +104,7 @@ mod datetime_fast_path {
         timestamps: databend_common_column::buffer::Buffer<i64>,
         dates: databend_common_column::buffer::Buffer<i32>,
         timestamp_strings: StringColumn,
+        standard_timestamp_strings: StringColumn,
     }
 
     impl DateTimeSamples {
@@ -114,14 +116,34 @@ mod datetime_fast_path {
                 .collect();
             let tz_sh = TimeZone::get("Asia/Shanghai").unwrap();
             let mut string_builder = StringColumnBuilder::with_capacity(rows);
+            let mut standard_builder = StringColumnBuilder::with_capacity(rows);
             for &micros in timestamps.iter() {
                 let formatted = timestamp_to_string(micros, &tz_sh).to_string();
                 string_builder.put_and_commit(formatted);
+
+                let zoned = micros.to_timestamp(&tz_sh);
+                let offset_secs = zoned.offset().seconds();
+                let offset_hours = offset_secs / 3600;
+                let offset_minutes = (offset_secs.abs() % 3600) / 60;
+                let standard = format!(
+                    "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}{:+03}:{:02}",
+                    zoned.date().year(),
+                    zoned.date().month(),
+                    zoned.date().day(),
+                    zoned.time().hour(),
+                    zoned.time().minute(),
+                    zoned.time().second(),
+                    zoned.time().nanosecond() / 1_000,
+                    offset_hours,
+                    offset_minutes
+                );
+                standard_builder.put_and_commit(standard);
             }
             Self {
                 timestamps: timestamps.into(),
                 dates: dates.into(),
                 timestamp_strings: string_builder.build(),
+                standard_timestamp_strings: standard_builder.build(),
             }
         }
 
@@ -139,6 +161,10 @@ mod datetime_fast_path {
 
         fn string_entry(&self) -> BlockEntry {
             BlockEntry::Column(Column::String(self.timestamp_strings.clone()))
+        }
+
+        fn standard_string_entry(&self) -> BlockEntry {
+            BlockEntry::Column(Column::String(self.standard_timestamp_strings.clone()))
         }
     }
 
@@ -201,6 +227,40 @@ mod datetime_fast_path {
         let expr = build_expr("to_date(to_timestamp(s))", &[("s", DataType::String)]);
         let data = &*SAMPLES;
         let block = DataBlock::new(vec![data.string_entry()], data.rows());
+        let func_ctx = FunctionContext {
+            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            ..Default::default()
+        };
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        bencher.bench(|| {
+            let value = evaluator.run(&expr).unwrap();
+            divan::black_box(value);
+        });
+    }
+
+    #[divan::bench]
+    fn string_parse_standard_to_date(bencher: divan::Bencher) {
+        let expr = build_expr("to_date(to_timestamp(s))", &[("s", DataType::String)]);
+        let data = &*SAMPLES;
+        let block = DataBlock::new(vec![data.standard_string_entry()], data.rows());
+        let func_ctx = FunctionContext {
+            tz: TimeZone::get("Asia/Shanghai").unwrap(),
+            ..Default::default()
+        };
+        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        bencher.bench(|| {
+            let value = evaluator.run(&expr).unwrap();
+            divan::black_box(value);
+        });
+    }
+
+    #[divan::bench]
+    fn string_parse_to_timestamptz(bencher: divan::Bencher) {
+        let expr = build_expr("to_timestamp_tz(s)", &[("s", DataType::String)]);
+        let data = &*SAMPLES;
+        let block = DataBlock::new(vec![data.standard_string_entry()], data.rows());
         let func_ctx = FunctionContext {
             tz: TimeZone::get("Asia/Shanghai").unwrap(),
             ..Default::default()

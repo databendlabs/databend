@@ -174,15 +174,17 @@ pub fn string_to_timestamp(
     ts_str: impl AsRef<[u8]>,
     tz: &TimeZone,
 ) -> databend_common_exception::Result<Zoned> {
-    let mut reader = Cursor::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
+    let raw = std::str::from_utf8(ts_str.as_ref()).unwrap();
+    let mut reader = Cursor::new(raw.as_bytes());
     match reader.read_timestamp_text(tz) {
-        Ok(dt) => match dt {
-            DateTimeResType::Datetime(dt) => match reader.must_eof() {
-                Ok(..) => Ok(dt),
-                Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),
-            },
-            _ => unreachable!(),
-        },
+        Ok(DateTimeResType::Datetime(dt)) => {
+            if reader.must_eof().is_err() {
+                Err(ErrorCode::BadArguments("unexpected argument"))
+            } else {
+                Ok(dt)
+            }
+        }
+        Ok(DateTimeResType::Date(_)) => Err(ErrorCode::BadArguments("unexpected argument")),
         Err(e) => match e.code() {
             ErrorCode::BAD_BYTES => Err(e),
             _ => Err(ErrorCode::BadArguments("unexpected argument")),
