@@ -157,3 +157,104 @@ impl NdvProvider for &StatisticsOfColumns {
         self.get(column_id).and_then(|item| item.distinct_of_values)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_expression::types::number::NumberDataType;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+
+    use super::*;
+
+    struct TestNdvProvider {
+        ndv: HashMap<ColumnId, u64>,
+    }
+
+    impl NdvProvider for TestNdvProvider {
+        fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
+            self.ndv.get(column_id).copied()
+        }
+    }
+
+    fn sample_schema() -> TableSchema {
+        TableSchema::new(vec![
+            TableField::new("simple", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("nested", TableDataType::Tuple {
+                fields_name: vec!["leaf".to_string(), "arr".to_string()],
+                fields_type: vec![
+                    TableDataType::Number(NumberDataType::Int64),
+                    TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+                ],
+            }),
+            TableField::new("no_stats", TableDataType::String),
+        ])
+    }
+
+    fn column_id(schema: &TableSchema, name: &str) -> ColumnId {
+        schema
+            .leaf_fields()
+            .into_iter()
+            .find(|field| field.name() == name)
+            .unwrap_or_else(|| panic!("missing field {}", name))
+            .column_id()
+    }
+
+    #[test]
+    fn test_build_parquet_writer_properties_handles_nested_leaves() {
+        let schema = sample_schema();
+
+        let mut ndv = HashMap::new();
+        ndv.insert(column_id(&schema, "simple"), 500);
+        ndv.insert(column_id(&schema, "nested:leaf"), 50);
+        ndv.insert(column_id(&schema, "nested:arr:0"), 400);
+
+        let props = build_parquet_writer_properties(
+            TableCompression::Zstd,
+            true,
+            Some(TestNdvProvider { ndv }),
+            None,
+            1000,
+            &schema,
+        );
+
+        assert!(
+            !props.dictionary_enabled(&ColumnPath::from("simple")),
+            "high cardinality top-level column should disable dictionary"
+        );
+        assert!(
+            props.dictionary_enabled(&ColumnPath::from("nested:leaf")),
+            "low cardinality nested column should keep dictionary"
+        );
+        assert!(
+            !props.dictionary_enabled(&ColumnPath::from("nested:arr:0")),
+            "high cardinality nested array element should disable dictionary"
+        );
+        assert!(
+            props.dictionary_enabled(&ColumnPath::from("no_stats")),
+            "columns without NDV stats keep the default dictionary behavior"
+        );
+    }
+
+    #[test]
+    fn test_build_parquet_writer_properties_disabled_globally() {
+        let schema = sample_schema();
+
+        let props = build_parquet_writer_properties(
+            TableCompression::Zstd,
+            false,
+            None::<TestNdvProvider>,
+            None,
+            1000,
+            &schema,
+        );
+
+        for field in schema.leaf_fields() {
+            assert!(
+                !props.dictionary_enabled(&ColumnPath::from(field.name().as_str())),
+                "dictionary must remain disabled when enable_dictionary is false",
+            );
+        }
+    }
+}
