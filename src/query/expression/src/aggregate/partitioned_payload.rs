@@ -122,7 +122,7 @@ impl PartitionedPayload {
                 let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
                 let (count, sel) = &mut state.partition_entries[partition_idx];
 
-                sel[*count] = row;
+                sel[*count as usize] = row;
                 *count += 1;
             }
 
@@ -133,7 +133,7 @@ impl PartitionedPayload {
             {
                 if *count > 0 {
                     payload.reserve_append_rows(
-                        &sel[..*count],
+                        &sel[..*count as _],
                         &state.group_hashes,
                         &mut state.addresses,
                         &mut state.page_index,
@@ -200,7 +200,7 @@ impl PartitionedPayload {
                     let (count, sel) = &state.partition_entries[partition];
                     if *count > 0 {
                         let payload = &mut self.payloads[partition];
-                        payload.copy_rows(&sel[..*count], &flush_state.addresses);
+                        payload.copy_rows(&sel[..*count as _], &flush_state.addresses);
                     }
                 }
             }
@@ -239,7 +239,7 @@ impl PartitionedPayload {
             let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
 
             let (count, sel) = &mut state.partition_entries[partition_idx];
-            sel[*count] = idx;
+            sel[*count as usize] = idx.into();
             *count += 1;
         }
         flush_state.flush_page_row = end;

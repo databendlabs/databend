@@ -24,6 +24,7 @@ use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowPtr;
+use super::RowID;
 use crate::types::DataType;
 use crate::AggrState;
 use crate::AggregateFunctionRef;
@@ -197,7 +198,7 @@ impl Payload {
 
     pub(super) fn reserve_append_rows(
         &mut self,
-        select_vector: &[usize],
+        select_vector: &[RowID],
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
@@ -205,9 +206,9 @@ impl Payload {
     ) {
         let tuple_size = self.tuple_size;
         let (mut page, mut page_index_value) = self.writable_page();
-        for idx in select_vector.iter().copied() {
-            address[idx] = page.data_ptr(page.rows, tuple_size);
-            page_index[idx] = page_index_value;
+        for row in select_vector {
+            address[*row] = page.data_ptr(page.rows, tuple_size);
+            page_index[*row] = page_index_value;
             page.rows += 1;
 
             if page.rows == page.capacity {
@@ -226,7 +227,7 @@ impl Payload {
 
     fn append_rows(
         &mut self,
-        select_vector: &[usize],
+        select_vector: &[RowID],
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
@@ -240,15 +241,16 @@ impl Payload {
                 if bitmap.null_count() == 0 || bitmap.null_count() == bitmap.len() {
                     let val: u8 = if bitmap.null_count() == 0 { 1 } else { 0 };
                     // faster path
-                    for idx in select_vector.iter().copied() {
+                    for row in select_vector {
                         unsafe {
-                            address[idx].write_u8(write_offset, val);
+                            address[*row].write_u8(write_offset, val);
                         }
                     }
                 } else {
-                    for idx in select_vector.iter().copied() {
+                    for row in select_vector {
                         unsafe {
-                            address[idx].write_u8(write_offset, bitmap.get_bit(idx) as u8);
+                            address[*row]
+                                .write_u8(write_offset, bitmap.get_bit(row.to_index()) as u8);
                         }
                     }
                 }
@@ -276,8 +278,8 @@ impl Payload {
 
         // write group hashes
         debug_assert!(write_offset == self.row_layout.hash_offset);
-        for idx in select_vector.iter().copied() {
-            address[idx].set_hash(&self.row_layout, group_hashes[idx]);
+        for row in select_vector {
+            address[*row].set_hash(&self.row_layout, group_hashes[*row]);
         }
 
         debug_assert!(write_offset + 8 == self.row_layout.state_offset);
@@ -293,7 +295,7 @@ impl Payload {
                 .iter()
                 .copied()
                 .enumerate()
-                .map(|(i, idx)| (idx, unsafe { place.add(padded_size * i) }))
+                .map(|(i, row)| (row.to_index(), unsafe { place.add(padded_size * i) }))
             {
                 let place = StateAddr::from(place);
                 address[idx].set_state_addr(&self.row_layout, &place);
@@ -336,7 +338,7 @@ impl Payload {
         }
     }
 
-    pub fn copy_rows(&mut self, select_vector: &[usize], address: &[RowPtr; BATCH_SIZE]) {
+    pub fn copy_rows(&mut self, select_vector: &[RowID], address: &[RowPtr; BATCH_SIZE]) {
         let tuple_size = self.tuple_size;
         let agg_len = self.aggrs.len();
         let (mut page, _) = self.writable_page();
@@ -395,7 +397,7 @@ impl Payload {
             let partition_idx = (hash % mods) as usize;
 
             let (count, sel) = &mut state.partition_entries[partition_idx];
-            sel[*count] = idx;
+            sel[*count as usize] = idx.into();
             *count += 1;
         }
         flush_state.flush_page_row = end;

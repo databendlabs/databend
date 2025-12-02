@@ -189,8 +189,8 @@ impl AggregateHashTable {
         group_hash_columns(group_columns, &mut state.group_hashes);
 
         let new_group_count = if self.direct_append {
-            for idx in 0..row_count {
-                state.empty_vector[idx] = idx;
+            for i in 0..row_count {
+                state.empty_vector[i] = i.into();
             }
             self.payload.append_rows(state, row_count, group_columns);
             row_count

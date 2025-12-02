@@ -17,9 +17,10 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 
-use super::probe_state::ProbeState;
-use super::row_ptr::RowLayout;
-use super::row_ptr::RowPtr;
+use super::CompareItem;
+use super::RowID;
+use super::RowLayout;
+use super::RowPtr;
 use crate::types::decimal::DecimalColumn;
 use crate::types::i256;
 use crate::types::AccessType;
@@ -77,7 +78,7 @@ pub(super) fn rowformat_size(data_type: &DataType) -> usize {
 pub(super) unsafe fn serialize_column_to_rowformat(
     arena: &Bump,
     column: &Column,
-    select_vector: &[usize],
+    select_vector: &[RowID],
     address: &mut [RowPtr; BATCH_SIZE],
     offset: usize,
     scratch: &mut Vec<u8>,
@@ -86,8 +87,8 @@ pub(super) unsafe fn serialize_column_to_rowformat(
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(buffer) => {
-                for &index in select_vector {
-                    address[index].write(offset, &buffer[index]);
+                for row in select_vector {
+                    address[*row].write(offset, &buffer[*row]);
                 }
             }
         }),
@@ -111,35 +112,35 @@ pub(super) unsafe fn serialize_column_to_rowformat(
             if v.null_count() == 0 || v.null_count() == v.len() {
                 let val: u8 = if v.null_count() == 0 { 1 } else { 0 };
                 // faster path
-                for &index in select_vector {
-                    address[index].write_u8(offset, val);
+                for row in select_vector {
+                    address[*row].write_u8(offset, val);
                 }
             } else {
-                for &index in select_vector {
-                    address[index].write_u8(offset, v.get_bit(index) as u8);
+                for row in select_vector {
+                    address[*row].write_u8(offset, v.get_bit(row.to_index()) as u8);
                 }
             }
         }
         Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
-            for &index in select_vector {
-                let data = arena.alloc_slice_copy(v.index_unchecked(index));
-                address[index].write_bytes(offset, data);
+            for row in select_vector {
+                let data = arena.alloc_slice_copy(v.index_unchecked(row.to_index()));
+                address[*row].write_bytes(offset, data);
             }
         }
         Column::String(v) => {
-            for &index in select_vector {
-                let data = arena.alloc_str(v.index_unchecked(index));
-                address[index].write_bytes(offset, data.as_bytes());
+            for row in select_vector {
+                let data = arena.alloc_str(v.index_unchecked(row.to_index()));
+                address[*row].write_bytes(offset, data.as_bytes());
             }
         }
         Column::Timestamp(buffer) => {
-            for &index in select_vector {
-                address[index].write(offset, &buffer[index]);
+            for row in select_vector {
+                address[*row].write(offset, &buffer[*row]);
             }
         }
         Column::Date(buffer) => {
-            for &index in select_vector {
-                address[index].write(offset, &buffer[index]);
+            for row in select_vector {
+                address[*row].write(offset, &buffer[*row]);
             }
         }
         Column::Nullable(c) => {
@@ -148,13 +149,13 @@ pub(super) unsafe fn serialize_column_to_rowformat(
 
         // for complex column
         other => {
-            for &index in select_vector {
-                let s = other.index_unchecked(index).to_owned();
+            for row in select_vector {
+                let s = other.index_unchecked(row.to_index()).to_owned();
                 scratch.clear();
                 bincode_serialize_into_buf(scratch, &s).unwrap();
 
                 let data = arena.alloc_slice_copy(scratch);
-                address[index].write_bytes(offset, data);
+                address[*row].write_bytes(offset, data);
             }
         }
     }
@@ -162,21 +163,27 @@ pub(super) unsafe fn serialize_column_to_rowformat(
 
 unsafe fn serialize_fixed_size_column_to_rowformat<T>(
     column: &T::Column,
-    select_vector: &[usize],
+    select_vector: &[RowID],
     address: &mut [RowPtr; BATCH_SIZE],
     offset: usize,
 ) where
     T: AccessType<Scalar: Copy>,
 {
-    for index in select_vector.iter().copied() {
-        let val = T::index_column_unchecked_scalar(column, index);
-        address[index].write(offset, &val);
+    for row in select_vector {
+        let val = T::index_column_unchecked_scalar(column, row.to_index());
+        address[*row].write(offset, &val);
     }
 }
 
-impl ProbeState {
+pub struct CompareState<'a> {
+    pub(super) compare: &'a mut [CompareItem; BATCH_SIZE],
+    pub(super) matched: &'a mut [CompareItem; BATCH_SIZE],
+    pub(super) no_matched: &'a mut [CompareItem; BATCH_SIZE],
+}
+
+impl<'s> CompareState<'s> {
     pub(super) fn row_match_columns(
-        &mut self,
+        mut self,
         cols: ProjectedBlock,
         row_layout: &RowLayout,
         (mut count, mut no_match_count): (usize, usize),
@@ -186,12 +193,24 @@ impl ProbeState {
             .zip(row_layout.group_offsets.iter())
             .zip(row_layout.validity_offsets.iter())
         {
+            if matches!(
+                entry.data_type(),
+                DataType::Null | DataType::EmptyMap | DataType::EmptyArray
+            ) {
+                continue;
+            }
             (count, no_match_count) = self.row_match_column(
                 &entry.to_column(),
                 *validity_offset,
                 *col_offset,
                 (count, no_match_count),
             );
+
+            self = CompareState::<'s> {
+                compare: self.matched,
+                matched: self.compare,
+                no_matched: self.no_matched,
+            };
 
             // no row matches
             if count == 0 {
@@ -215,9 +234,12 @@ impl ProbeState {
         };
 
         match col {
-            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
-                (no_match_count, no_match_count)
-            }
+            Column::EmptyArray { .. } | Column::EmptyMap { .. } => self.row_match_column_generic(
+                validity,
+                validity_offset,
+                (count, no_match_count),
+                |_, _| true,
+            ),
 
             Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
                 NumberColumn::NUM_TYPE(_) => {
@@ -288,7 +310,7 @@ impl ProbeState {
                     },
                 )
             }
-            Column::Nullable(_) => unreachable!("nullable is unwrapped"),
+            Column::Nullable(_) | Column::Null { .. } => unreachable!(),
             other => self.row_match_generic_column(other, col_offset, (count, no_match_count)),
         }
     }
@@ -330,42 +352,40 @@ impl ProbeState {
     where
         F: Fn(usize, &RowPtr) -> bool,
     {
-        let mut temp = self.get_temp();
-        temp.reserve(count);
-
+        let mut match_count = 0;
         if let Some(validity) = validity {
             let is_all_set = validity.null_count() == 0;
-            for idx in self.group_compare_vector[..count].iter().copied() {
-                let is_set2 = unsafe { self.addresses[idx].read::<u8>(validity_offset) != 0 };
-                let is_set = is_all_set || unsafe { validity.get_bit_unchecked(idx) };
+            for item in &self.compare[..count] {
+                let row = item.row.to_index();
+                let is_set2 = unsafe { item.row_ptr.read::<u8>(validity_offset) != 0 };
+                let is_set = is_all_set || unsafe { validity.get_bit_unchecked(row) };
 
                 let equal = if is_set && is_set2 {
-                    compare_fn(idx, &self.addresses[idx])
+                    compare_fn(row, &item.row_ptr)
                 } else {
                     is_set == is_set2
                 };
 
                 if equal {
-                    temp.push(idx);
+                    self.matched[match_count] = item.clone();
+                    match_count += 1;
                 } else {
-                    self.no_match_vector[no_match_count] = idx;
+                    self.no_matched[no_match_count] = item.clone();
                     no_match_count += 1;
                 }
             }
         } else {
-            for idx in self.group_compare_vector[..count].iter().copied() {
-                if compare_fn(idx, &self.addresses[idx]) {
-                    temp.push(idx);
+            for item in &self.compare[..count] {
+                if compare_fn(item.row.to_index(), &item.row_ptr) {
+                    self.matched[match_count] = item.clone();
+                    match_count += 1;
                 } else {
-                    self.no_match_vector[no_match_count] = idx;
+                    self.no_matched[no_match_count] = item.clone();
                     no_match_count += 1;
                 }
             }
         }
 
-        let match_count = temp.len();
-        self.group_compare_vector[..match_count].clone_from_slice(&temp);
-        self.save_temp(temp);
         (match_count, no_match_count)
     }
 
@@ -375,24 +395,21 @@ impl ProbeState {
         col_offset: usize,
         (count, mut no_match_count): (usize, usize),
     ) -> (usize, usize) {
-        let mut temp = self.get_temp();
-        temp.reserve(count);
-
-        for idx in self.group_compare_vector[..count].iter().copied() {
-            let value = unsafe { AnyType::index_column_unchecked(col, idx) };
-            let scalar = unsafe { self.addresses[idx].read_bytes(col_offset) };
+        let mut match_count = 0;
+        for item in &self.compare[..count] {
+            let value = unsafe { AnyType::index_column_unchecked(col, item.row.to_index()) };
+            let scalar = unsafe { item.row_ptr.read_bytes(col_offset) };
             let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
 
             if scalar.as_ref() == value {
-                temp.push(idx);
+                self.matched[match_count] = item.clone();
+                match_count += 1;
             } else {
-                self.no_match_vector[no_match_count] = idx;
+                self.no_matched[no_match_count] = item.clone();
                 no_match_count += 1;
             }
         }
-        let match_count = temp.len();
-        self.group_compare_vector[..match_count].clone_from_slice(&temp);
-        self.save_temp(temp);
+
         (match_count, no_match_count)
     }
 }
