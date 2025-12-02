@@ -425,7 +425,7 @@ petgraph = { version = "0.6.2", features = ["serde-1"] }
 pin-project = "1"
 pin-project-lite = "0.2.9"
 poem = { version = "3.0", features = ["openssl-tls", "multipart", "compression", "cookie"] }
-pprof = { git = "https://github.com/datafuse-extras/pprof-rs", rev = "fe22b23", features = [
+pprof = { git = "https://github.com/datafuse-extras/pprof-rs", rev = "edecd74", features = [
     "flamegraph",
     "protobuf-codec",
     "protobuf",

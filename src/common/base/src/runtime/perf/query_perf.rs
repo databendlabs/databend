@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 use log::debug;
 use pprof::ProfilerGuard;
 use pprof::ProfilerGuardBuilder;
+use regex::Regex;
 
 use crate::runtime::ThreadTracker;
 use crate::runtime::TrackingGuard;
@@ -65,6 +66,7 @@ impl QueryPerf {
     pub fn dump(profiler_guard: &ProfilerGuard<'static>) -> Result<String> {
         let reporter = profiler_guard
             .report()
+            .frames_post_processor(frames_post_processor())
             .build()
             .map_err(|_e| ErrorCode::Internal("Failed to report profiler data"))?;
         debug!("perf stop, begin to dump flamegraph");
@@ -123,6 +125,49 @@ impl QueryPerf {
             .replace("{{CURRENT_NODE_IFRAME}}", &current_node_iframe)
             .replace("{{OTHER_NODES_IFRAMES}}", &other_nodes_iframes)
             .replace("var fluiddrawing = true", "var fluiddrawing = false")
+    }
+}
+
+const PPROF_TRACE_SYMBOL: &str =
+    "<pprof::backtrace::backtrace_rs::Trace as pprof::backtrace::Trace>::trace";
+
+fn frames_post_processor() -> impl Fn(&mut pprof::Frames) {
+    // If pprof cannot get thread name, it will use thread id as fallback
+    // this will make the flamegraph hard to read, so we rename such threads to "threads"
+    let thread_rename = [(Regex::new(r"^\d+$").unwrap(), "threads")];
+
+    move |frames| {
+        for (regex, name) in thread_rename.iter() {
+            if regex.is_match(&frames.thread_name) {
+                frames.thread_name = name.to_string();
+            }
+        }
+
+        // Remove frames introduced by pprof's own stack collection to keep user stacks clean.
+        if let Some(pos) = frames.frames.iter().position(|frame| {
+            frame
+                .iter()
+                .any(|symbol| symbol.name() == PPROF_TRACE_SYMBOL)
+        }) {
+            frames.frames.drain(..=pos);
+        }
+
+        // Mark inlined functions with "(inlined)" suffix
+        for inline_frames in frames.frames.iter_mut() {
+            if inline_frames.len() <= 1 {
+                continue;
+            }
+
+            // Mark every symbol except the outermost one as inlined.
+            let last_symbol_index = inline_frames.len() - 1;
+            for symbol in inline_frames.iter_mut().take(last_symbol_index) {
+                let symbol_name = symbol.name();
+                if symbol_name.ends_with(" (inlined)") {
+                    continue;
+                }
+                symbol.name = Some(format!("{symbol_name} (inlined)").into_bytes());
+            }
+        }
     }
 }
 
