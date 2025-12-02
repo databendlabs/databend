@@ -396,7 +396,9 @@ impl StreamBlockBuilder {
         self.block_size += block.estimate_block_size();
 
         if !had_existing_rows {
-            let cols_ndv = self.column_stats_state.peek_cols_ndv();
+            // Initialize the writer with columns ndv
+            let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
+            cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
             self.block_writer
                 .start(ColumnsNdvInfo::new(block.num_rows(), cols_ndv))?;
         }

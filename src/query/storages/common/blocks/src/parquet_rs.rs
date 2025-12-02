@@ -122,7 +122,7 @@ impl NdvProvider for &StatisticsOfColumns {
 }
 
 pub fn adjust_writer_properties_by_col_stats(
-    builder: WriterPropertiesBuilder,
+    mut builder: WriterPropertiesBuilder,
     enable_dictionary: bool,
     cols_stats: impl NdvProvider,
     num_rows: usize,
@@ -131,16 +131,12 @@ pub fn adjust_writer_properties_by_col_stats(
     if !enable_dictionary {
         return builder;
     };
-
-    let mut builder = builder.set_dictionary_enabled(false);
-
     for field in table_schema.fields().iter() {
         let col_id = field.column_id();
         if let Some(ndv) = cols_stats.column_ndv(&col_id) {
-            if (ndv as f64 / num_rows as f64) < 0.1 {
-                let name = field.name().as_str();
-                builder = builder.set_column_dictionary_enabled(ColumnPath::from(name), true);
-            }
+            let enable_dictionary = (ndv as f64 / num_rows as f64) < 0.1;
+            let name = field.name().as_str();
+            builder = builder.set_column_dictionary_enabled(ColumnPath::from(name), enable_dictionary);
         }
     }
 
