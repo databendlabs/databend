@@ -365,6 +365,8 @@ impl StreamBlockBuilder {
             return Ok(());
         }
 
+        let had_existing_rows = self.row_count > 0;
+
         let block = self.cluster_stats_state.add_block(block)?;
         self.column_stats_state
             .add_block(&self.properties.source_schema, &block)?;
@@ -382,7 +384,7 @@ impl StreamBlockBuilder {
         self.row_count += block.num_rows();
         self.block_size += block.estimate_block_size();
 
-        if self.row_count == 0 {
+        if !had_existing_rows {
             let cols_ndv = self.column_stats_state.peek_cols_ndv();
             self.block_writer.start(cols_ndv)?;
         }
