@@ -19,8 +19,8 @@ use itertools::Itertools;
 
 use super::payload::Payload;
 use super::probe_state::ProbeState;
-use super::row_ptr::RowLayout;
 use crate::get_states_layout;
+use crate::read;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::PayloadFlushState;
@@ -33,7 +33,12 @@ pub struct PartitionedPayload {
     pub group_types: Vec<DataType>,
     pub aggrs: Vec<AggregateFunctionRef>,
 
-    pub(super) row_layout: RowLayout,
+    pub group_sizes: Vec<usize>,
+    pub group_offsets: Vec<usize>,
+    pub validity_offsets: Vec<usize>,
+    pub hash_offset: usize,
+    pub state_offset: usize,
+    pub states_layout: Option<StatesLayout>,
 
     pub arenas: Vec<Arc<Bump>>,
 
@@ -72,26 +77,28 @@ impl PartitionedPayload {
             })
             .collect_vec();
 
-        let offsets = RowLayout {
-            states_layout,
-            ..payloads[0].row_layout.clone()
-        };
+        let group_sizes = payloads[0].group_sizes.clone();
+        let group_offsets = payloads[0].group_offsets.clone();
+        let validity_offsets = payloads[0].validity_offsets.clone();
+        let hash_offset = payloads[0].hash_offset;
+        let state_offset = payloads[0].state_offset;
 
         PartitionedPayload {
             payloads,
             group_types,
             aggrs,
-            row_layout: offsets,
+            group_sizes,
+            group_offsets,
+            validity_offsets,
+            hash_offset,
+            state_offset,
+            states_layout,
             partition_count,
 
             arenas,
             mask_v: mask(radix_bits),
             shift_v: shift(radix_bits),
         }
-    }
-
-    pub fn states_layout(&self) -> Option<&StatesLayout> {
-        self.row_layout.states_layout.as_ref()
     }
 
     pub fn mark_min_cardinality(&mut self) {
@@ -236,7 +243,7 @@ impl PartitionedPayload {
         for idx in 0..rows {
             state.addresses[idx] = other.data_ptr(page, idx + state.flush_page_row);
 
-            let hash = state.addresses[idx].hash(&self.row_layout);
+            let hash = unsafe { read::<u64>(state.addresses[idx].add(self.hash_offset) as _) };
 
             let partition_idx = ((hash & self.mask_v) >> self.shift_v) as usize;
 
