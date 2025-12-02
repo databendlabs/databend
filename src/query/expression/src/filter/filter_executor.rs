@@ -215,6 +215,10 @@ impl FilterExecutor {
     fn incr_max_block_size(&mut self, new_max_block_size: usize) {
         self.max_block_size = new_max_block_size;
         self.true_selection = vec![0; self.max_block_size];
+
+        if !self.selection_range.is_empty() {
+            self.selection_range = vec![0..0; self.max_block_size];
+        }
         if self.has_or {
             self.false_selection = vec![0; self.max_block_size];
         }
