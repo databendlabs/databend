@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::Weak;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -230,25 +233,44 @@ fn duration_to_micros(duration: Duration) -> u64 {
 pub struct PruningCostController {
     stats: Arc<FusePruningStatistics>,
     enabled: bool,
+    timers: Arc<Mutex<HashMap<PruningCostKind, Weak<PruningCostTimer>>>>,
 }
 
 impl PruningCostController {
     pub fn new(stats: Arc<FusePruningStatistics>, enabled: bool) -> Self {
-        Self { stats, enabled }
+        Self {
+            stats,
+            enabled,
+            timers: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     pub fn timer(&self, kind: PruningCostKind) -> PruningCostGuard {
         if self.enabled {
+            let timer = {
+                let mut timers = self.timers.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(existing) = timers.get(&kind).and_then(|w| w.upgrade()) {
+                    existing
+                } else {
+                    let timer = Arc::new(PruningCostTimer {
+                        start: Instant::now(),
+                    });
+                    timers.insert(kind, Arc::downgrade(&timer));
+                    timer
+                }
+            };
             PruningCostGuard {
-                start: Some(Instant::now()),
                 stats: self.stats.clone(),
-                kind,
+                token: Some(PruningCostGuardToken {
+                    kind,
+                    timer,
+                    timers: self.timers.clone(),
+                }),
             }
         } else {
             PruningCostGuard {
-                start: None,
                 stats: self.stats.clone(),
-                kind,
+                token: None,
             }
         }
     }
@@ -269,7 +291,7 @@ impl PruningCostController {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PruningCostKind {
     SegmentsRange,
     BlocksRange,
@@ -280,36 +302,102 @@ pub enum PruningCostKind {
 }
 
 pub struct PruningCostGuard {
-    start: Option<Instant>,
     stats: Arc<FusePruningStatistics>,
+    token: Option<PruningCostGuardToken>,
+}
+
+struct PruningCostGuardToken {
     kind: PruningCostKind,
+    timer: Arc<PruningCostTimer>,
+    timers: Arc<Mutex<HashMap<PruningCostKind, Weak<PruningCostTimer>>>>,
 }
 
 impl Drop for PruningCostGuard {
     fn drop(&mut self) {
-        let Some(start) = self.start.take() else {
-            return;
-        };
-        let elapsed = start.elapsed();
-        match self.kind {
-            PruningCostKind::SegmentsRange => {
-                self.stats.add_segments_range_pruning_cost(elapsed);
+        if let Some(token) = self.token.take() {
+            token.finish(&self.stats);
+        }
+    }
+}
+
+impl PruningCostGuardToken {
+    fn finish(self, stats: &Arc<FusePruningStatistics>) {
+        if Arc::strong_count(&self.timer) == 1 {
+            let elapsed = self.timer.start.elapsed();
+            let mut timers = self.timers.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(existing) = timers.get(&self.kind) {
+                if existing.ptr_eq(&Arc::downgrade(&self.timer)) {
+                    timers.remove(&self.kind);
+                }
             }
-            PruningCostKind::BlocksRange => {
-                self.stats.add_blocks_range_pruning_cost(elapsed);
-            }
-            PruningCostKind::BlocksBloom => {
-                self.stats.add_blocks_bloom_pruning_cost(elapsed);
-            }
-            PruningCostKind::BlocksInverted => {
-                self.stats.add_blocks_inverted_index_pruning_cost(elapsed);
-            }
-            PruningCostKind::BlocksVector => {
-                self.stats.add_blocks_vector_index_pruning_cost(elapsed);
-            }
-            PruningCostKind::BlocksTopN => {
-                self.stats.add_blocks_topn_pruning_cost(elapsed);
+            match self.kind {
+                PruningCostKind::SegmentsRange => {
+                    stats.add_segments_range_pruning_cost(elapsed);
+                }
+                PruningCostKind::BlocksRange => {
+                    stats.add_blocks_range_pruning_cost(elapsed);
+                }
+                PruningCostKind::BlocksBloom => {
+                    stats.add_blocks_bloom_pruning_cost(elapsed);
+                }
+                PruningCostKind::BlocksInverted => {
+                    stats.add_blocks_inverted_index_pruning_cost(elapsed);
+                }
+                PruningCostKind::BlocksVector => {
+                    stats.add_blocks_vector_index_pruning_cost(elapsed);
+                }
+                PruningCostKind::BlocksTopN => {
+                    stats.add_blocks_topn_pruning_cost(elapsed);
+                }
             }
         }
+    }
+}
+
+struct PruningCostTimer {
+    start: Instant,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::Barrier;
+    use std::thread;
+    use std::time::Duration;
+
+    use super::*;
+
+    #[test]
+    fn pruning_cost_controller_records_parallel_time_once() {
+        let stats = Arc::new(FusePruningStatistics::default());
+        let controller = PruningCostController::new(stats.clone(), true);
+        let threads = 6;
+        let barrier = Arc::new(Barrier::new(threads));
+        let sleep_time = Duration::from_millis(100);
+
+        let mut handles = Vec::with_capacity(threads);
+        for _ in 0..threads {
+            let barrier = barrier.clone();
+            let controller = controller.clone();
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+                controller.measure(PruningCostKind::BlocksTopN, || {
+                    thread::sleep(sleep_time);
+                });
+            }));
+        }
+        handles.into_iter().for_each(|h| h.join().unwrap());
+
+        let recorded = stats.get_blocks_topn_pruning_cost();
+        let lower = Duration::from_millis(80).as_micros() as u64;
+        let upper = Duration::from_millis(220).as_micros() as u64;
+        assert!(
+            recorded >= lower,
+            "recorded pruning cost {recorded}us is too small"
+        );
+        assert!(
+            recorded <= upper,
+            "recorded pruning cost {recorded}us exceeded expected bound"
+        );
     }
 }
