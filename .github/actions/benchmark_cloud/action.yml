@@ -71,7 +71,7 @@ runs:
         CLOUD_WAREHOUSE: benchmark-${{ inputs.run_id }}
       shell: bash
       run: |
-        ./benchmark_cloud.sh
+        python3 benchmark_cloud.py
 
     - name: Prepare Metadata
       working-directory: benchmark/clickbench
