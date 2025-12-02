@@ -81,7 +81,7 @@ pub struct UninitializedArrowWriter {
     table_schema: TableSchemaRef,
 }
 impl UninitializedArrowWriter {
-    fn init(&self, cols_ndv: HashMap<ColumnId, usize>) -> Result<ArrowWriter<Vec<u8>>> {
+    fn init(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<ArrowWriter<Vec<u8>>> {
         let write_settings = &self.write_settings;
         let builder = parquet_writer_properties_builder(
             write_settings.table_compression,
@@ -89,11 +89,12 @@ impl UninitializedArrowWriter {
             None,
         );
 
+        let num_rows = cols_ndv_info.num_rows;
         let builder = adjust_writer_properties_by_col_stats(
             builder,
             self.write_settings.enable_parquet_dictionary,
-            ColumnsNdv(cols_ndv),
-            0,
+            cols_ndv_info,
+            num_rows,
             self.table_schema.as_ref(),
         );
         let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
@@ -150,10 +151,20 @@ impl ArrowParquetWriter {
     }
 }
 
-struct ColumnsNdv(HashMap<ColumnId, usize>);
-impl NdvProvider for ColumnsNdv {
+pub struct ColumnsNdvInfo {
+    cols_ndv: HashMap<ColumnId, usize>,
+    num_rows: usize,
+}
+
+impl ColumnsNdvInfo {
+    fn new(num_rows: usize, cols_ndv: HashMap<ColumnId, usize>) -> Self {
+        Self { cols_ndv, num_rows }
+    }
+}
+
+impl NdvProvider for ColumnsNdvInfo {
     fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
-        self.0.get(column_id).map(|v| *v as u64)
+        self.cols_ndv.get(column_id).map(|v| *v as u64)
     }
 }
 
@@ -164,7 +175,7 @@ pub enum BlockWriterImpl {
 }
 
 pub trait BlockWriter {
-    fn start(&mut self, cols_ndv: HashMap<ColumnId, usize>) -> Result<()>;
+    fn start(&mut self, cols_ndv: ColumnsNdvInfo) -> Result<()>;
 
     fn write(&mut self, block: DataBlock, schema: &TableSchema) -> Result<()>;
 
@@ -176,7 +187,7 @@ pub trait BlockWriter {
 }
 
 impl BlockWriter for BlockWriterImpl {
-    fn start(&mut self, cols_ndv: HashMap<ColumnId, usize>) -> Result<()> {
+    fn start(&mut self, cols_ndv_info: ColumnsNdvInfo) -> Result<()> {
         match self {
             BlockWriterImpl::Parquet(arrow_writer) => {
                 let ArrowParquetWriter::Uninitialized(uninitialized) = arrow_writer else {
@@ -185,7 +196,7 @@ impl BlockWriter for BlockWriterImpl {
                     );
                 };
 
-                let inner = uninitialized.init(cols_ndv)?;
+                let inner = uninitialized.init(cols_ndv_info)?;
                 *arrow_writer = ArrowParquetWriter::Initialized(InitializedArrowWriter { inner });
                 Ok(())
             }
@@ -386,7 +397,8 @@ impl StreamBlockBuilder {
 
         if !had_existing_rows {
             let cols_ndv = self.column_stats_state.peek_cols_ndv();
-            self.block_writer.start(cols_ndv)?;
+            self.block_writer
+                .start(ColumnsNdvInfo::new(block.num_rows(), cols_ndv))?;
         }
 
         self.block_writer
