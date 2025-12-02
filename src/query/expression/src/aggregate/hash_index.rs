@@ -267,25 +267,8 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
         &mut self,
         state: &mut ProbeState,
         need_compare_count: usize,
-        mut no_match_count: usize,
+        no_match_count: usize,
     ) -> usize {
-        let mut count = 0;
-        for i in 0..need_compare_count {
-            let item = &state.group_compare_vector[i];
-            if state.group_hashes[item.row] == item.row_ptr.hash(&self.payload.row_layout) {
-                if i != count {
-                    state.group_compare_vector[count] = item.clone();
-                }
-                count += 1;
-            } else {
-                state.no_match_vector[no_match_count] = item.clone();
-                no_match_count += 1;
-            }
-        }
-        if count == 0 {
-            return no_match_count;
-        }
-
         CompareState {
             compare: &mut state.group_compare_vector,
             matched: &mut state.match_vector,
@@ -294,7 +277,7 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
         .row_match_columns(
             self.group_columns,
             &self.payload.row_layout,
-            (count, no_match_count),
+            (need_compare_count, no_match_count),
         )
     }
 }
