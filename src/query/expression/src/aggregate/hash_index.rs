@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 use super::payload_row::CompareState;
 use super::CompareItem;
 use super::PartitionedPayload;
@@ -96,7 +98,7 @@ const SALT_MASK: u64 = 0xFFFF000000000000;
 const POINTER_MASK: u64 = 0x0000FFFFFFFFFFFF;
 
 // The high 16 bits are the salt, the low 48 bits are the pointer address
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub(super) struct Entry(pub(super) u64);
 
 impl Entry {
@@ -132,6 +134,15 @@ impl Entry {
         debug_assert!(self.0 & POINTER_MASK == POINTER_MASK);
 
         self.0 &= ptr_value | SALT_MASK;
+    }
+}
+
+impl Debug for Entry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Entry")
+            .field(&self.get_salt())
+            .field(&self.get_pointer())
+            .finish()
     }
 }
 
@@ -256,8 +267,25 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
         &mut self,
         state: &mut ProbeState,
         need_compare_count: usize,
-        no_match_count: usize,
+        mut no_match_count: usize,
     ) -> usize {
+        let mut count = 0;
+        for i in 0..need_compare_count {
+            let item = &state.group_compare_vector[i];
+            if state.group_hashes[item.row] == item.row_ptr.hash(&self.payload.row_layout) {
+                if i != count {
+                    state.group_compare_vector[count] = item.clone();
+                }
+                count += 1;
+            } else {
+                state.no_match_vector[no_match_count] = item.clone();
+                no_match_count += 1;
+            }
+        }
+        if count == 0 {
+            return no_match_count;
+        }
+
         CompareState {
             compare: &mut state.group_compare_vector,
             matched: &mut state.match_vector,
@@ -266,7 +294,7 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
         .row_match_columns(
             self.group_columns,
             &self.payload.row_layout,
-            (need_compare_count, no_match_count),
+            (count, no_match_count),
         )
     }
 }
