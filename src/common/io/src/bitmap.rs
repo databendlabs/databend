@@ -896,4 +896,18 @@ mod tests {
         decoded.serialize_into(&mut reencoded).unwrap();
         assert_eq!(reencoded, legacy);
     }
+
+    #[test]
+    fn roaring_bytes_still_deserialize() {
+        let mut tree = RoaringTreemap::new();
+        tree.insert(1);
+        tree.insert(5);
+        tree.insert(42);
+
+        let mut legacy = Vec::new();
+        tree.serialize_into(&mut legacy).unwrap();
+
+        let decoded = deserialize_bitmap(&legacy).unwrap();
+        assert_eq!(decoded.into_iter().collect::<Vec<_>>(), vec![1, 5, 42]);
+    }
 }
