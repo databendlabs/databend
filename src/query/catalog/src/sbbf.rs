@@ -246,16 +246,15 @@ impl Sbbf {
         self.0[block_index].check(hash as u32)
     }
 
-    /// Check a batch of hashes. The callback is triggered for each matching hash index.
-    pub fn check_hash_batch<F>(&self, hashes: &[u64], mut on_match: F)
-    where F: FnMut(usize) {
-        for (idx, &hash) in hashes.iter().enumerate() {
+    /// Check a batch of hashes and return a boolean vector indicating which hashes match.
+    pub fn check_hash_batch(&self, hashes: &[u64]) -> Vec<bool> {
+        let mut matches = Vec::with_capacity(hashes.len());
+        for &hash in hashes {
             let block_index = self.hash_to_block_index(hash);
             assume(block_index < self.0.len());
-            if self.0[block_index].check(hash as u32) {
-                on_match(idx);
-            }
+            matches.push(self.0[block_index].check(hash as u32));
         }
+        matches
     }
 
     /// Merge another bloom filter into this one (bitwise OR operation)
@@ -315,9 +314,9 @@ mod tests {
         let mut sbbf = Sbbf(vec![Block::ZERO; 1_000]);
         let hashes: Vec<u64> = (0..10_000).collect();
         sbbf.insert_hash_batch(&hashes);
-        let mut matched = 0;
-        sbbf.check_hash_batch(&hashes, |_| matched += 1);
-        assert_eq!(matched, hashes.len());
+        let matches = sbbf.check_hash_batch(&hashes);
+        assert!(matches.iter().all(|m| *m));
+        assert_eq!(matches.len(), hashes.len());
     }
 
     #[test]
