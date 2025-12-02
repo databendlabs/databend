@@ -40,8 +40,7 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_blocks::adjust_writer_properties_by_col_stats;
-use databend_storages_common_blocks::parquet_writer_properties_builder;
+use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_blocks::NdvProvider;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -83,23 +82,19 @@ pub struct UninitializedArrowWriter {
 impl UninitializedArrowWriter {
     fn init(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<ArrowWriter<Vec<u8>>> {
         let write_settings = &self.write_settings;
-        let builder = parquet_writer_properties_builder(
+        let num_rows = cols_ndv_info.num_rows;
+
+        let writer_properties = build_parquet_writer_properties(
             write_settings.table_compression,
             write_settings.enable_parquet_dictionary,
+            Some(cols_ndv_info),
             None,
-        );
-
-        let num_rows = cols_ndv_info.num_rows;
-        let builder = adjust_writer_properties_by_col_stats(
-            builder,
-            self.write_settings.enable_parquet_dictionary,
-            cols_ndv_info,
             num_rows,
             self.table_schema.as_ref(),
         );
         let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let writer =
-            ArrowWriter::try_new(buffer, self.arrow_schema.clone(), Some(builder.build()))?;
+            ArrowWriter::try_new(buffer, self.arrow_schema.clone(), Some(writer_properties))?;
         Ok(writer)
     }
 }
@@ -161,7 +156,6 @@ impl ColumnsNdvInfo {
         Self { cols_ndv, num_rows }
     }
 }
-
 impl NdvProvider for ColumnsNdvInfo {
     fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
         self.cols_ndv.get(column_id).map(|v| *v as u64)
