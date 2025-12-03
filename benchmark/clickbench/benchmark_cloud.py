@@ -152,6 +152,11 @@ def quote_literal(value: str) -> str:
     return value.replace("'", "''")
 
 
+def resolve_sql_dataset(dataset: str) -> str:
+    trimmed = re.sub(r"\d+$", "", dataset)
+    return trimmed if trimmed else dataset
+
+
 def wait_for_warehouse(runner: BendSQLRunner, warehouse: str, retries: int = 20, delay: int = 10) -> None:
     logger.info("Waiting for warehouse %s to be ready...", warehouse)
     for attempt in range(retries + 1):
@@ -219,10 +224,13 @@ def main() -> None:
     logger.info("Running benchmark for Databend Cloud with S3 storage...")
 
     script_dir = Path(__file__).resolve().parent
-    dataset_dir = script_dir / config.dataset
+    sql_dataset = resolve_sql_dataset(config.dataset)
+    dataset_dir = script_dir / sql_dataset
     if not dataset_dir.exists():
         logger.error("Dataset directory %s does not exist", dataset_dir)
         sys.exit(1)
+    if sql_dataset != config.dataset:
+        logger.info("Dataset %s uses SQL directory %s", config.dataset, sql_dataset)
 
     if config.size not in SIZE_MAPPING:
         logger.error("Unsupported benchmark size: %s", config.size)
