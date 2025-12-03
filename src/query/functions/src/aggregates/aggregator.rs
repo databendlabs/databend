@@ -27,6 +27,8 @@ use super::aggregate_bitmap::aggregate_bitmap_not_count_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_or_count_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_union_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_xor_count_function_desc;
+use super::aggregate_bitmap::aggregate_group_bitmap_function_desc;
+use super::aggregate_bitmap::aggregate_group_bitmap_state_function_desc;
 use super::aggregate_boolean::aggregate_boolean_function_desc;
 use super::aggregate_covariance::aggregate_covariance_population_desc;
 use super::aggregate_covariance::aggregate_covariance_sample_desc;
@@ -141,6 +143,8 @@ impl Aggregators {
 
         factory.register("range_bound", aggregate_range_bound_function_desc());
 
+        factory.register("group_bitmap_count", aggregate_group_bitmap_function_desc());
+        factory.register("group_bitmap", aggregate_group_bitmap_state_function_desc());
         factory.register(
             "bitmap_and_count",
             aggregate_bitmap_and_count_function_desc(),
