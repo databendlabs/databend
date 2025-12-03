@@ -192,7 +192,7 @@ def wait_for_warehouse(runner: BendSQLRunner, warehouse: str, retries: int = 20,
     logger.info("Waiting for warehouse %s to be ready...", warehouse)
     for attempt in range(retries + 1):
         completed = runner.run(
-            ["--query", f"SHOW WAREHOUSES LIKE '{quote_literal(warehouse)}'"],
+            sql=f"SHOW WAREHOUSES LIKE '{quote_literal(warehouse)}'",
             capture_output=True,
         )
         if "Running" in completed.stdout:
@@ -317,7 +317,7 @@ def main() -> None:
             f"cache_size={config.cache_size};"
         ),
     )
-    runner.run(["--query", "SHOW WAREHOUSES;", "--output", "table"])
+    runner.run(["--output", "table"], sql="SHOW WAREHOUSES;")
     wait_for_warehouse(runner, config.warehouse)
 
     runner.set_dsn(build_dsn(config, warehouse=config.warehouse))
@@ -330,12 +330,8 @@ def main() -> None:
 
     logger.info("Checking session settings...")
     runner.run(
-        [
-            "--query",
-            "select * from system.settings where value != default;",
-            "--output",
-            "table",
-        ],
+        ["--output", "table"],
+        sql="select * from system.settings where value != default;",
     )
 
     analyze_sql = dataset_dir / "analyze.sql"
