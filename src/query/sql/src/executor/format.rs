@@ -616,22 +616,22 @@ fn append_profile_info(
 ) {
     // These scan IO metrics should be displayed together when any of them is non-zero
     // (i.e., when the scan involves Fuse table storage)
-    const SCAN_IO_METRICS: &[&str] = &[
-        "bytes scanned from remote",
-        "bytes scanned from local cache",
-        "bytes scanned from memory cache",
+    const SCAN_IO_METRICS: &[ProfileStatisticsName] = &[
+        ProfileStatisticsName::ScanBytesFromRemote,
+        ProfileStatisticsName::ScanBytesFromLocal,
+        ProfileStatisticsName::ScanBytesFromMemory,
     ];
 
     if let Some(prof) = profs.get(&plan_id) {
         // Check if any scan IO metric is non-zero (indicates Fuse table scan)
-        let has_scan_io = get_statistics_desc().iter().any(|(_, desc)| {
-            SCAN_IO_METRICS.contains(&desc.display_name) && prof.statistics[desc.index] != 0
-        });
+        let has_scan_io = SCAN_IO_METRICS
+            .iter()
+            .any(|name| prof.statistics[*name as usize] != 0);
 
-        for (_, desc) in get_statistics_desc().iter() {
+        for (name, desc) in get_statistics_desc().iter() {
             let value = prof.statistics[desc.index];
             // Show scan IO metrics together if any of them is non-zero
-            let is_scan_io_metric = SCAN_IO_METRICS.contains(&desc.display_name);
+            let is_scan_io_metric = SCAN_IO_METRICS.contains(name);
             if value != 0 || (is_scan_io_metric && has_scan_io) {
                 children.push(FormatTreeNode::new(format!(
                     "{}: {}",
