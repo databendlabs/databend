@@ -614,10 +614,18 @@ fn append_profile_info(
     profs: &HashMap<u32, PlanProfile>,
     plan_id: u32,
 ) {
+    // These scan IO metrics should always be displayed (even if zero) for consistent output format
+    const ALWAYS_DISPLAY_METRICS: &[&str] = &[
+        "bytes scanned from remote",
+        "bytes scanned from local cache",
+        "bytes scanned from memory cache",
+    ];
+
     if let Some(prof) = profs.get(&plan_id) {
         for (_, desc) in get_statistics_desc().iter() {
             let value = prof.statistics[desc.index];
-            if value != 0 {
+            let always_display = ALWAYS_DISPLAY_METRICS.contains(&desc.display_name);
+            if value != 0 || always_display {
                 children.push(FormatTreeNode::new(format!(
                     "{}: {}",
                     desc.display_name.to_lowercase(),
