@@ -191,6 +191,7 @@ jobs:
           artifacts: sqllogictests,sqlsmith,metactl,meta,query,bendsave
           features: python-udf
           category: docker
+          trim_debug: false
 
   publish:
     runs-on:
