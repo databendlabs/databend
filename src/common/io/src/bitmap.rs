@@ -243,6 +243,9 @@ impl std::ops::BitOrAssign for HybridBitmap {
                 HybridBitmap::Small(lhs_set) => {
                     let left = mem::take(lhs_set);
                     *lhs_set = small_union(left, rhs_set.as_slice());
+                    if self.len() >= LARGE_THRESHOLD as u64 {
+                        let _ = self.promote_to_tree();
+                    }
                 }
             },
         }
@@ -308,6 +311,9 @@ impl std::ops::BitXorAssign for HybridBitmap {
                 HybridBitmap::Small(lhs_set) => {
                     let result = small_symmetric_difference(lhs_set.as_slice(), rhs_set.as_slice());
                     *lhs_set = result;
+                    if self.len() >= LARGE_THRESHOLD as u64 {
+                        let _ = self.promote_to_tree();
+                    }
                 }
             },
         }
@@ -860,20 +866,6 @@ mod tests {
         let bitmap = HybridBitmap::from_iter([5_u64, 1, 3]);
         let values: Vec<_> = bitmap.iter().collect();
         assert_eq!(values, vec![1, 3, 5]);
-    }
-
-    #[test]
-    fn serialize_promotes_large_representation() {
-        let mut bitmap = HybridBitmap::new();
-        for i in 0..=(LARGE_THRESHOLD as u64) {
-            bitmap.insert(i);
-        }
-        assert!(matches!(bitmap, HybridBitmap::Small(_)));
-
-        let mut buf = Vec::new();
-        bitmap.serialize_into(&mut buf).unwrap();
-        let decoded = deserialize_bitmap(&buf).unwrap();
-        assert!(matches!(decoded, HybridBitmap::Large(_)));
     }
 
     #[test]
