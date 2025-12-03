@@ -487,6 +487,7 @@ simple_hll = { version = "0.0.4", features = ["serde_borsh"] }
 simsearch = "0.2"
 siphasher = "0.3"
 sled = { version = "0.34", default-features = false }
+smallvec = "1.13.2"
 snailquote = "0.3.1"
 snap = "1"
 socket2 = "0.5.3"
