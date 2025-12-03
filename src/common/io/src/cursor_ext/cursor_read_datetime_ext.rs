@@ -288,6 +288,9 @@ where T: AsRef<[u8]>
             if times.len() < 3 {
                 times.resize(3, 0);
                 let dt = get_local_time(tz, &d, &mut times)?;
+                if need_date {
+                    return Ok(DateTimeResType::Date(d));
+                }
                 return Ok(DateTimeResType::Datetime(dt));
             }
 
@@ -332,6 +335,19 @@ where T: AsRef<[u8]>
                     })?
                     .to_zoned(tz.clone()))
             };
+            if need_date {
+                if self.ignore(|b| b == b'z' || b == b'Z') {
+                    return Ok(DateTimeResType::Date(d));
+                } else if self.ignore_byte(b'+') {
+                    let _ = self.parse_time_offset(&mut buf, &dt, false, calc_offset)?;
+                    return Ok(DateTimeResType::Date(d));
+                } else if self.ignore_byte(b'-') {
+                    let _ = self.parse_time_offset(&mut buf, &dt, true, calc_offset)?;
+                    return Ok(DateTimeResType::Date(d));
+                } else {
+                    return Ok(DateTimeResType::Date(d));
+                }
+            }
             if self.ignore(|b| b == b'z' || b == b'Z') {
                 // ISO 8601 The Z on the end means UTC (that is, an offset-from-UTC of zero hours-minutes-seconds).
                 let current_tz = dt.offset().seconds();

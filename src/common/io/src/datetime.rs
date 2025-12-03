@@ -95,7 +95,6 @@ pub fn parse_standard_timestamp(input: &[u8]) -> Option<Result<ParsedTimestamp>>
     let mut micro = 0_u32;
     if idx < input.len() && input[idx] == b'.' {
         idx += 1;
-        let start = idx;
         let mut digits = 0_u32;
         while idx < input.len() && input[idx].is_ascii_digit() {
             if digits < 6 {

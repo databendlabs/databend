@@ -94,3 +94,18 @@ select id from db1.t1 where a <> '2022-03-02' order by id
 
 statement ok
 drop database db1
+
+query B
+SELECT '2022-02-03 03:00:00+09:00'::DATE = '2022-02-03 3:00:00+09:00'::DATE;
+----
+1
+
+query T
+SELECT '2022-02-03 03:00:00+09:00'::DATE;
+----
+2022-02-03
+
+query T
+SELECT '2022-02-03 3:00:00+09:00'::DATE;
+----
+2022-02-03
