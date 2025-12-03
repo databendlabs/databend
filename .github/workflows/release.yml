@@ -189,7 +189,6 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           artifacts: sqllogictests,sqlsmith,metactl,meta,query,bendsave
-          features: python-udf
           category: docker
 
   publish:

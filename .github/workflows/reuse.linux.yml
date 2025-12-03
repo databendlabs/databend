@@ -92,7 +92,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ needs.info.outputs.target }}
-          features: python-udf,storage-hdfs
+          features: storage-hdfs
           category: full
           artifacts: all
       - name: upload sccache log

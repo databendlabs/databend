@@ -76,7 +76,6 @@ jobs:
           target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: meta,query
           category: docker
-          features: python-udf
           trim_debug: false
 
   docker:
