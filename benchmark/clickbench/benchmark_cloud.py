@@ -192,10 +192,12 @@ def wait_for_warehouse(runner: BendSQLRunner, warehouse: str, retries: int = 20,
     logger.info("Waiting for warehouse %s to be ready...", warehouse)
     for attempt in range(retries + 1):
         completed = runner.run(
+            ["--output", "csv"],
             sql=f"SHOW WAREHOUSES LIKE '{quote_literal(warehouse)}'",
             capture_output=True,
         )
-        if "Running" in completed.stdout:
+        output = completed.stdout.strip()
+        if output and "Running" in output:
             logger.info("Warehouse %s is running.", warehouse)
             return
         logger.info("Warehouse not ready yet. Sleeping %s seconds...", delay)
