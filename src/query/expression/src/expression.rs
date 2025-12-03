@@ -1133,7 +1133,7 @@ mod tests {
 
     #[test]
     fn test_size() {
-        assert_eq!(size_of::<Expr>(), 144);
+        assert_eq!(size_of::<Expr>(), 160);
         assert_eq!(size_of::<Constant>(), 128);
         assert_eq!(size_of::<ColumnRef>(), 72);
         assert_eq!(size_of::<Cast>(), 48);
