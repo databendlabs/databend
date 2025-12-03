@@ -87,9 +87,9 @@ class BendSQLRunner:
             # If not capturing output, print it to stdout/stderr
             if not capture_output:
                 if result.stdout:
-                    print(result.stdout, end="", file=sys.stdout)
+                    print(result.stdout, end="", file=sys.stdout, flush=True)
                 if result.stderr:
-                    print(result.stderr, end="", file=sys.stderr)
+                    print(result.stderr, end="", file=sys.stderr, flush=True)
             return result
         except subprocess.CalledProcessError as exc:  # pragma: no cover - passthrough
             stdout = exc.stdout.strip() if exc.stdout else ""
