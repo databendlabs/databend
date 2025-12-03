@@ -179,8 +179,7 @@ False
             'token: bend-v1-s-xxx'}
 ---- do_query('select 4',)
 401
-{'code': 5101,
- 'message': 'Authentication failed: session token has expired'}
+{'code': 5101, 'message': 'Authentication failed: session token has expired'}
 ---- do_query('select 5',)
 401
 {'code': 5100,
@@ -204,8 +203,7 @@ False
 {'code': 5100, 'message': "invalid token type 'x'"}
 ---- do_refresh(4,)
 401
-{'code': 5102,
- 'message': 'Authentication failed: refresh token has expired'}
+{'code': 5102, 'message': 'Authentication failed: refresh token has expired'}
 ---- do_refresh(5,)
 401
 {'code': 5100,
