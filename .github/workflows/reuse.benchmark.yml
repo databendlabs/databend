@@ -119,6 +119,7 @@ jobs:
           cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
           cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
+          database: load
       - name: clean
         if: always()
         continue-on-error: true
@@ -136,10 +137,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - { dataset: hits, size: Small }
-          - { dataset: hits, size: Large }
-          - { dataset: tpch, size: Small }
-          - { dataset: tpch, size: Large }
+          - { dataset: hits, size: Small, database: clickbench }
+          - { dataset: hits, size: Large, database: clickbench }
+          - { dataset: tpch, size: Small, database: tpch }
+          - { dataset: tpch, size: Large, database: tpch }
+          - { dataset: tpch1000, size: Large, database: tpch_1000 }
       fail-fast: true
       max-parallel: 1
     steps:
@@ -167,6 +169,7 @@ jobs:
           cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
           cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
+          database: ${{ matrix.database }}
       - name: clean
         if: always()
         continue-on-error: true
@@ -233,6 +236,7 @@ jobs:
           - "tpch"
           - "hits"
           - "load"
+          - "tpch1000"
           # - "internal"
     steps:
       - uses: actions/checkout@v4
@@ -245,6 +249,20 @@ jobs:
           path: benchmark/clickbench/results
           pattern: benchmark-${{ matrix.dataset }}-*
           merge-multiple: true
+      - name: Prepare results directory
+        working-directory: benchmark/clickbench
+        run: |
+          shopt -s nullglob
+          for result in results/*.json; do
+            dataset=$(echo $result | sed -E 's/.*result-(\w+)-.*\.json/\1/')
+            mkdir -p results/${dataset}/
+            mv $result results/${dataset}/$(basename $result)
+          done
+          for ndjson in results/*.ndjson; do
+            dataset=$(echo $ndjson | sed -E 's/.*result-(\w+)-.*\.ndjson/\1/')
+            mkdir -p results/${dataset}/
+            mv $ndjson results/${dataset}/$(basename $ndjson)
+          done
       - name: Generate report and upload to R2
         working-directory: benchmark/clickbench
         env:
@@ -253,12 +271,6 @@ jobs:
           AWS_DEFAULT_REGION: auto
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         run: |
-          for result in results/*.json; do
-            dataset=$(echo $result | sed -E 's/.*result-(\w+)-.*\.json/\1/')
-            mkdir -p results/${dataset}/
-            mv $result results/${dataset}/$(basename $result)
-          done
-
           aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date --date='-1 month' -u +%Y)/$(date --date='-1 month' -u +%m)/ ./results/${{ matrix.dataset }}/
           aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/
           ./update_results.py --dataset ${{ matrix.dataset }} --release ${{ inputs.source_id }}
@@ -271,3 +283,20 @@ jobs:
           done
 
           aws s3 cp ./results/${{ matrix.dataset }}.html s3://benchmark/clickbench/release/${{ matrix.dataset }}.html --no-progress --checksum-algorithm=CRC32
+      - name: Upload NDJSON archives to R2
+        working-directory: benchmark/clickbench
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          DATASET: ${{ matrix.dataset }}
+        run: |
+          shopt -s nullglob
+          MONTH=$(date -u +%Y-%m)
+          ARCHIVE_PREFIX="s3://benchmark/results/${DATASET}/${MONTH}/"
+          IMPORT_PREFIX="s3://benchmark/results/import/"
+          for file in ./results/${DATASET}/*.ndjson; do
+            aws s3 cp $file "${ARCHIVE_PREFIX}$(basename $file)" --no-progress --checksum-algorithm=CRC32
+            aws s3 cp $file "${IMPORT_PREFIX}$(basename $file)" --no-progress --checksum-algorithm=CRC32
+          done
