@@ -20,6 +20,7 @@ use databend_common_exception::set_backtrace;
 use databend_common_exception::Result;
 use databend_common_sql::plans::SystemAction;
 use databend_common_sql::plans::SystemPlan;
+use databend_query::users::role_cache_mgr::RoleCacheManager;
 
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
@@ -89,6 +90,10 @@ impl Interpreter for SystemActionInterpreter {
         match self.plan.action {
             SystemAction::Backtrace(switch) => {
                 set_backtrace(switch);
+            }
+            SystemAction::FlushPrivileges => {
+                let tenant = self.ctx.get_tenant();
+                RoleCacheManager::instance().force_reload(&tenant).await?;
             }
         }
         Ok(PipelineBuildResult::create())

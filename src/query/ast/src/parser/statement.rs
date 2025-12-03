@@ -5013,9 +5013,15 @@ pub fn action(i: Input) -> IResult<SystemAction> {
         },
         |(switch, _)| SystemAction::Backtrace(switch),
     ));
+    let mut flush_privileges = parser_fn(map(
+        rule! {
+             FLUSH ~ PRIVILEGES
+        },
+        |_| SystemAction::FlushPrivileges,
+    ));
     // add other system action type here
     rule!(
-        #backtrace
+        #backtrace | #flush_privileges
     )
     .parse(i)
 }
