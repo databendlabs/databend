@@ -295,13 +295,11 @@ jobs:
     needs:
       - create_release
       - build_default
-      - build_docker
     strategy:
       fail-fast: false
       matrix:
         category:
           - default
-          - docker
         target:
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
