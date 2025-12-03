@@ -67,6 +67,9 @@ impl HybridBitmap {
     }
 
     pub fn insert(&mut self, value: u64) -> bool {
+        if matches!(self, HybridBitmap::Small(_)) && self.len() >= LARGE_THRESHOLD as u64 {
+            let _ = self.promote_to_tree();
+        }
         match self {
             HybridBitmap::Small(set) => small_insert(set, value),
             HybridBitmap::Large(tree) => tree.insert(value),
@@ -129,11 +132,6 @@ impl HybridBitmap {
         writer.write_all(&HYBRID_MAGIC)?;
         writer.write_all(&[HYBRID_VERSION])?;
         match self {
-            HybridBitmap::Small(set) if set.len() > LARGE_THRESHOLD => {
-                writer.write_all(&[HYBRID_KIND_LARGE])?;
-                let tree = RoaringTreemap::from_iter(set.iter().copied());
-                tree.serialize_into(writer)
-            }
             HybridBitmap::Small(set) => {
                 writer.write_all(&[HYBRID_KIND_SMALL])?;
                 let len = u8::try_from(set.len()).map_err(|_| {
