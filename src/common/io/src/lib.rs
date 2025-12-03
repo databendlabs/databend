@@ -24,6 +24,7 @@
 #![feature(buf_read_has_data_left)]
 
 pub mod constants;
+pub mod datetime;
 pub mod format_diagnostic;
 pub mod number;
 pub mod prelude;
