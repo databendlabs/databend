@@ -79,9 +79,6 @@ impl<V: Into<CacheValue<V>>> InMemoryLruCache<V> {
 mod impls {
     use std::sync::Arc;
 
-    use databend_common_base::runtime::profile::Profile;
-    use databend_common_base::runtime::profile::ProfileStatisticsName;
-    use databend_common_cache::MemSized;
     use databend_common_metrics::cache::metrics_inc_cache_access_count;
     use databend_common_metrics::cache::metrics_inc_cache_hit_count;
     use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
@@ -96,24 +93,17 @@ mod impls {
 
         fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
             metrics_inc_cache_access_count(1, self.name());
-            let (v, mem_bytes) = {
+            let v = {
                 let mut guard = self.inner.write();
-                match guard.get(k.as_ref()) {
-                    Some(cache_value) => {
-                        (Some(cache_value.get_inner()), Some(cache_value.mem_bytes()))
-                    }
-                    None => (None, None),
-                }
+                guard
+                    .get(k.as_ref())
+                    .map(|cache_value| cache_value.get_inner())
             };
 
             if v.is_none() {
                 metrics_inc_cache_miss_count(1, &self.name);
             } else {
                 metrics_inc_cache_hit_count(1, &self.name);
-                // Record bytes scanned from memory cache
-                if let Some(size) = mem_bytes {
-                    Profile::record_usize_profile(ProfileStatisticsName::ScanBytesFromMemory, size);
-                }
             }
             v
         }

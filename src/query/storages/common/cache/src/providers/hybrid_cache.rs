@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
 use log::warn;
@@ -179,15 +181,39 @@ where
     }
 
     fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
-        let Some(cached_value) = self.get(k) else {
-            // Both in-memory and on-disk cache are missed, record it
-            let in_memory_cache_name = self.memory_cache.name();
-            let on_disk_cache_name = self.disk_cache.name();
-            metrics_inc_cache_miss_bytes(len, in_memory_cache_name);
-            metrics_inc_cache_miss_bytes(len, on_disk_cache_name);
-            return None;
-        };
-        Some(cached_value)
+        // First, check in-memory cache
+        if let Some(item) = self.memory_cache.get(k.as_ref()) {
+            // Record bytes read from data cache memory
+            Profile::record_usize_profile(
+                ProfileStatisticsName::ScanBytesFromDataCache,
+                len as usize,
+            );
+            // try putting it back to on-disk cache if necessary
+            self.insert_to_disk_cache_if_necessary(k.as_ref(), item.as_ref());
+            return Some(item);
+        }
+
+        // Then, check on-disk cache (ScanBytesFromLocalDisk is recorded inside disk_cache.get)
+        if let Some(bytes) = self.disk_cache.get(k.as_ref()) {
+            let bytes = bytes.as_ref().clone();
+            match bytes.try_into() {
+                Ok(v) => return Some(self.memory_cache.insert(k.as_ref().to_owned(), v)),
+                Err(e) => {
+                    let key = k.as_ref();
+                    // Disk cache crc is correct, but failed to deserialize.
+                    // Likely the serialization format has been changed, evict it.
+                    warn!("failed to decode cache value, key {key}, {}", e);
+                    self.disk_cache.evict(key);
+                }
+            }
+        }
+
+        // Both in-memory and on-disk cache are missed, record it
+        let in_memory_cache_name = self.memory_cache.name();
+        let on_disk_cache_name = self.disk_cache.name();
+        metrics_inc_cache_miss_bytes(len, in_memory_cache_name);
+        metrics_inc_cache_miss_bytes(len, on_disk_cache_name);
+        None
     }
 
     fn insert(&self, key: String, value: Self::V) -> Arc<Self::V> {

@@ -69,6 +69,11 @@ impl BlockReader {
                 // first, check in memory table data cache
                 // column_array_cache
                 if let Some(cache_array) = column_array_cache.get_sized(&column_cache_key, len) {
+                    // Record bytes scanned from memory cache (table data only)
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::ScanBytesFromMemory,
+                        len as usize,
+                    );
                     cached_column_array.push((*column_id, cache_array));
                     continue;
                 }
