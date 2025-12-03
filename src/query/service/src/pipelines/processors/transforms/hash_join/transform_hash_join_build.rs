@@ -24,8 +24,11 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
+use databend_common_storages_fuse::TableContext;
 
 use super::runtime_filter::build_and_push_down_runtime_filter;
+use super::runtime_filter::merge_join_runtime_filter_packets;
+use super::runtime_filter::RuntimeFilterLocalBuilder;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
 
@@ -78,6 +81,7 @@ pub struct TransformHashJoinBuild {
 
     build_state: Arc<HashJoinBuildState>,
     hash_table_type: HashTableType,
+    runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
 
     // States for various steps.
     // Whether we have checked if spill happens.
@@ -124,11 +128,24 @@ impl TransformHashJoinBuild {
 
         let memory_settings = build_state.memory_settings.clone();
 
+        let runtime_filter_builder = {
+            let descs = build_state.runtime_filter_desc().to_vec();
+            let settings = build_state.ctx.get_settings();
+            RuntimeFilterLocalBuilder::try_create(
+                &build_state.func_ctx,
+                descs,
+                settings.get_inlist_runtime_filter_threshold()? as usize,
+                settings.get_bloom_runtime_filter_threshold()? as usize,
+                settings.get_min_max_runtime_filter_threshold()? as usize,
+            )?
+        };
+
         Ok(Box::new(TransformHashJoinBuild {
             input_port,
             data_blocks: vec![],
             build_state,
             hash_table_type: HashTableType::FirstRound,
+            runtime_filter_builder,
             is_spill_happen_checked: false,
             is_spill_happened: false,
             is_collect_finished: false,
@@ -241,12 +258,18 @@ impl Processor for TransformHashJoinBuild {
             Step::Sync(SyncStep::Collect) => {
                 // If spill happens, we buffer data blocks to SpillBuffer, but if the data blocks
                 // are restored from spilled partitions, we can build the hash table directly.
-                if self.is_spill_happened() && !self.is_from_restore() {
+                let spill_happened = self.is_spill_happened();
+                if spill_happened && !self.is_from_restore() {
                     let data_blocks = std::mem::take(&mut self.data_blocks);
                     self.spiller.buffer(data_blocks)?;
                 } else {
                     for data_block in self.data_blocks.iter() {
                         self.build_state.build(data_block.clone())?;
+                        if !spill_happened {
+                            if let Some(builder) = self.runtime_filter_builder.as_mut() {
+                                builder.add_block(data_block)?;
+                            }
+                        }
                     }
                 }
                 self.data_blocks.clear();
@@ -278,6 +301,15 @@ impl Processor for TransformHashJoinBuild {
                     .load(Ordering::Acquire);
             }
             Step::Async(AsyncStep::WaitCollect) => {
+                if let Some(builder) = self.runtime_filter_builder.take() {
+                    let spill = self
+                        .build_state
+                        .hash_join_state
+                        .is_spill_happened
+                        .load(Ordering::Acquire);
+                    let packet = builder.finish(spill)?;
+                    self.build_state.add_runtime_filter_packet(packet);
+                }
                 if !self.is_spilled_partitions_added {
                     let spilled_partitions = self.spiller.spilled_partitions();
                     self.build_state
@@ -294,24 +326,9 @@ impl Processor for TransformHashJoinBuild {
                     .is_runtime_filter_added
                     .swap(true, Ordering::AcqRel)
                 {
-                    let build_chunks = unsafe {
-                        (*self.build_state.hash_join_state.build_state.get())
-                            .generation_state
-                            .chunks
-                            .clone()
-                    };
-
-                    let build_num_rows = unsafe {
-                        (*self.build_state.hash_join_state.build_state.get())
-                            .generation_state
-                            .build_num_rows
-                    };
-                    build_and_push_down_runtime_filter(
-                        &build_chunks,
-                        build_num_rows,
-                        &self.build_state,
-                    )
-                    .await?;
+                    let packets = self.build_state.take_runtime_filter_packets();
+                    let packet = merge_join_runtime_filter_packets(packets)?;
+                    build_and_push_down_runtime_filter(packet, &self.build_state).await?;
                 }
                 self.build_state.barrier.wait().await;
             }
