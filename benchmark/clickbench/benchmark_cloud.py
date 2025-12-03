@@ -76,14 +76,21 @@ class BendSQLRunner:
         command = ["bendsql"] + (args or [])
         logger.debug("Running command: %s", " ".join(command))
         try:
-            return subprocess.run(
+            result = subprocess.run(
                 command,
                 input=sql,
                 text=True,
                 env=self._env,
-                capture_output=capture_output,
+                capture_output=True,  # Always capture output
                 check=True,
             )
+            # If not capturing output, print it to stdout/stderr
+            if not capture_output:
+                if result.stdout:
+                    print(result.stdout, end="", file=sys.stdout)
+                if result.stderr:
+                    print(result.stderr, end="", file=sys.stderr)
+            return result
         except subprocess.CalledProcessError as exc:  # pragma: no cover - passthrough
             stdout = exc.stdout.strip() if exc.stdout else ""
             stderr = exc.stderr.strip() if exc.stderr else ""
@@ -159,8 +166,6 @@ SIZE_MAPPING: Dict[str, Dict[str, str]] = {
     "Large": {"cluster_size": "64", "machine": "Large"},
 }
 
-_TIME_PATTERN = re.compile(r"([0-9]+(?:\\.[0-9]+)?)")
-
 
 def build_dsn(
     config: BenchmarkConfig,
@@ -213,13 +218,14 @@ def execute_sql_file(runner: BendSQLRunner, path: Path) -> None:
 
 
 def parse_time_output(raw_value: str) -> Optional[float]:
-    match = _TIME_PATTERN.search(raw_value)
-    if match:
-        try:
-            return float(match.group(1))
-        except ValueError:
-            return None
-    return None
+    # --time=server outputs only the time value (e.g., "0.014")
+    value = raw_value.strip()
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def run_timed_query(runner: BendSQLRunner, sql: str) -> Optional[float]:

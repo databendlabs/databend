@@ -139,8 +139,8 @@ jobs:
         include:
           - { dataset: hits, size: Small, database: clickbench }
           - { dataset: hits, size: Large, database: clickbench }
-          - { dataset: tpch, size: Small, database: tpch }
-          - { dataset: tpch, size: Large, database: tpch }
+          - { dataset: tpch, size: Small, database: clickbench }
+          - { dataset: tpch, size: Large, database: clickbench }
           - { dataset: tpch1000, size: Large, database: tpch_1000 }
       fail-fast: true
       max-parallel: 1
