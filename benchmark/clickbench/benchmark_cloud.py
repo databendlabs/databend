@@ -76,14 +76,21 @@ class BendSQLRunner:
         command = ["bendsql"] + (args or [])
         logger.debug("Running command: %s", " ".join(command))
         try:
-            return subprocess.run(
+            result = subprocess.run(
                 command,
                 input=sql,
                 text=True,
                 env=self._env,
-                capture_output=capture_output,
+                capture_output=True,  # Always capture output
                 check=True,
             )
+            # If not capturing output, print it to stdout/stderr
+            if not capture_output:
+                if result.stdout:
+                    print(result.stdout, end="", file=sys.stdout)
+                if result.stderr:
+                    print(result.stderr, end="", file=sys.stderr)
+            return result
         except subprocess.CalledProcessError as exc:  # pragma: no cover - passthrough
             stdout = exc.stdout.strip() if exc.stdout else ""
             stderr = exc.stderr.strip() if exc.stderr else ""
