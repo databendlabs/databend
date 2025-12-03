@@ -15,7 +15,6 @@
 use std::fmt::Debug;
 
 use super::payload_row::CompareState;
-use super::CompareItem;
 use super::PartitionedPayload;
 use super::ProbeState;
 use super::RowPtr;
@@ -164,14 +163,9 @@ impl HashIndex {
         row_count: usize,
         mut adapter: impl TableAdapter,
     ) -> usize {
-        for (i, item) in state.no_match_vector[..row_count].iter_mut().enumerate() {
-            let hash = state.group_hashes[i];
-            *item = CompareItem {
-                row: i.into(),
-                salt: Entry::hash_to_salt(hash),
-                slot: self.init_slot(hash),
-                row_ptr: RowPtr::null(),
-            };
+        for (i, row) in state.no_match_vector[..row_count].iter_mut().enumerate() {
+            *row = i.into();
+            state.slots[i] = self.init_slot(state.group_hashes[i]);
         }
 
         let mut new_group_count = 0;
@@ -183,21 +177,18 @@ impl HashIndex {
             let mut no_match_count = 0;
 
             // 1. inject new_group_count, new_entry_count, need_compare_count, no_match_count
-            for item in state.no_match_vector[..remaining_entries].iter_mut() {
-                let (slot, is_new) = self.find_or_insert(item.slot, item.salt);
-                item.slot = slot;
+            for row in state.no_match_vector[..remaining_entries].iter().copied() {
+                let slot = &mut state.slots[row];
+                let is_new;
+
+                let salt = Entry::hash_to_salt(state.group_hashes[row]);
+                (*slot, is_new) = self.find_or_insert(*slot, salt);
 
                 if is_new {
-                    state.empty_vector[new_entry_count] = item.row;
-                    state.slots[new_entry_count] = slot;
+                    state.empty_vector[new_entry_count] = row;
                     new_entry_count += 1;
                 } else {
-                    state.group_compare_vector[need_compare_count] = CompareItem {
-                        row: item.row,
-                        slot: item.slot,
-                        salt: item.salt,
-                        row_ptr: self.mut_entry(slot).get_pointer(),
-                    };
+                    state.group_compare_vector[need_compare_count] = row;
                     need_compare_count += 1;
                 }
             }
@@ -208,12 +199,8 @@ impl HashIndex {
 
                 adapter.append_rows(state, new_entry_count);
 
-                for (i, row) in state.empty_vector[..new_entry_count]
-                    .iter()
-                    .copied()
-                    .enumerate()
-                {
-                    let entry = self.mut_entry(state.slots[i]);
+                for row in state.empty_vector[..new_entry_count].iter().copied() {
+                    let entry = self.mut_entry(state.slots[row]);
                     entry.set_pointer(state.addresses[row]);
                     debug_assert_eq!(entry.get_pointer(), state.addresses[row]);
                 }
@@ -221,16 +208,15 @@ impl HashIndex {
 
             // 3. set address of compare vector
             if need_compare_count > 0 {
-                for item in &mut state.group_compare_vector[..need_compare_count] {
-                    let entry = self.mut_entry(item.slot);
+                for row in state.group_compare_vector[..need_compare_count]
+                    .iter()
+                    .copied()
+                {
+                    let entry = self.mut_entry(state.slots[row]);
 
                     debug_assert!(entry.is_occupied());
-                    debug_assert_eq!(
-                        entry.get_salt(),
-                        (state.group_hashes[item.row] >> 48) as u16
-                    );
-                    item.row_ptr = entry.get_pointer();
-                    state.addresses[item.row] = item.row_ptr;
+                    debug_assert_eq!(entry.get_salt(), (state.group_hashes[row] >> 48) as u16);
+                    state.addresses[row] = entry.get_pointer();
                 }
 
                 // 4. compare
@@ -238,10 +224,11 @@ impl HashIndex {
             }
 
             // 5. Linear probing, just increase iter_times
-            for item in &mut state.no_match_vector[..no_match_count] {
-                item.slot += 1;
-                if item.slot >= self.capacity {
-                    item.slot = 0;
+            for row in state.no_match_vector[..no_match_count].iter().copied() {
+                let slot = &mut state.slots[row];
+                *slot += 1;
+                if *slot >= self.capacity {
+                    *slot = 0;
                 }
             }
             remaining_entries = no_match_count;
@@ -269,7 +256,9 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
         need_compare_count: usize,
         no_match_count: usize,
     ) -> usize {
+        // todo: compare hash first if NECESSARY
         CompareState {
+            address: &state.addresses,
             compare: &mut state.group_compare_vector,
             matched: &mut state.match_vector,
             no_matched: &mut state.no_match_vector,
@@ -349,12 +338,11 @@ mod tests {
     impl TableAdapter for &mut TestTableAdapter {
         fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize) {
             for row in state.empty_vector[..new_entry_count].iter() {
-                let row_index = row.to_index();
-                let (key, hash) = self.incoming[row_index];
+                let (key, hash) = self.incoming[*row];
                 let value = key + 20;
 
                 self.payload.push((key, hash, value));
-                state.addresses[*row] = self.get_row_ptr(true, row_index);
+                state.addresses[*row] = self.get_row_ptr(true, row.to_usize());
             }
         }
 
@@ -364,10 +352,13 @@ mod tests {
             need_compare_count: usize,
             mut no_match_count: usize,
         ) -> usize {
-            for item in &state.group_compare_vector[..need_compare_count] {
-                let incoming = self.incoming[item.row.to_index()];
+            for row in state.group_compare_vector[..need_compare_count]
+                .iter()
+                .copied()
+            {
+                let incoming = self.incoming[row];
 
-                let (key, hash, _) = self.get_payload(item.row_ptr);
+                let (key, hash, _) = self.get_payload(state.addresses[row]);
 
                 const POINTER_MASK: u64 = 0x0000FFFFFFFFFFFF;
                 assert_eq!(incoming.1 | POINTER_MASK, hash | POINTER_MASK);
@@ -375,7 +366,7 @@ mod tests {
                     continue;
                 }
 
-                state.no_match_vector[no_match_count] = item.clone();
+                state.no_match_vector[no_match_count] = row;
                 no_match_count += 1;
             }
 

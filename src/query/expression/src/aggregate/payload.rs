@@ -250,7 +250,7 @@ impl Payload {
                     for row in select_vector {
                         unsafe {
                             address[*row]
-                                .write_u8(write_offset, bitmap.get_bit(row.to_index()) as u8);
+                                .write_u8(write_offset, bitmap.get_bit(row.to_usize()) as u8);
                         }
                     }
                 }
@@ -291,15 +291,15 @@ impl Payload {
             let (array_layout, padded_size) = layout.repeat(select_vector.len()).unwrap();
             // Bump only allocates but does not drop, so there is no use after free for any item.
             let place = self.arena.alloc_layout(array_layout);
-            for (idx, place) in select_vector
+            for (row, place) in select_vector
                 .iter()
                 .copied()
                 .enumerate()
-                .map(|(i, row)| (row.to_index(), unsafe { place.add(padded_size * i) }))
+                .map(|(i, row)| (row, unsafe { place.add(padded_size * i) }))
             {
                 let place = StateAddr::from(place);
-                address[idx].set_state_addr(&self.row_layout, &place);
-                let page = &mut self.pages[page_index[idx]];
+                address[row].set_state_addr(&self.row_layout, &place);
+                let page = &mut self.pages[page_index[row]];
                 for (aggr, loc) in self.aggrs.iter().zip(states_loc.iter()) {
                     aggr.init_state(AggrState::new(place, loc));
                     page.state_offsets += 1;

@@ -32,49 +32,25 @@ pub struct ProbeState {
 
     pub(super) empty_vector: SelectVector,
 
-    pub(super) group_compare_vector: [CompareItem; BATCH_SIZE],
-    pub(super) no_match_vector: [CompareItem; BATCH_SIZE],
-    pub(super) match_vector: [CompareItem; BATCH_SIZE],
+    pub(super) group_compare_vector: [RowID; BATCH_SIZE],
+    pub(super) no_match_vector: [RowID; BATCH_SIZE],
+    pub(super) match_vector: [RowID; BATCH_SIZE],
     pub(super) slots: [usize; BATCH_SIZE],
     pub(super) row_count: usize,
 
     pub partition_entries: Vec<(u16, SelectVector)>,
 }
 
-#[derive(Debug, Clone)]
-pub struct CompareItem {
-    pub slot: usize,
-    pub row_ptr: RowPtr,
-    pub row: RowID,
-    pub salt: u16,
-}
-
-impl Default for CompareItem {
-    fn default() -> Self {
-        Self {
-            row: Default::default(),
-            slot: 0,
-            row_ptr: RowPtr::null(),
-            salt: 0,
-        }
-    }
-}
-
 impl Default for ProbeState {
     fn default() -> Self {
-        let items: [CompareItem; BATCH_SIZE] = (0..BATCH_SIZE)
-            .map(|_| CompareItem::default())
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
         Self {
             group_hashes: [0; BATCH_SIZE],
             addresses: [RowPtr::null(); BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
             state_places: [StateAddr::null(); BATCH_SIZE],
-            group_compare_vector: items.clone(),
-            no_match_vector: items.clone(),
-            match_vector: items,
+            group_compare_vector: [RowID::default(); BATCH_SIZE],
+            no_match_vector: [RowID::default(); BATCH_SIZE],
+            match_vector: [RowID::default(); BATCH_SIZE],
             empty_vector: [RowID::default(); BATCH_SIZE],
             slots: [0; BATCH_SIZE],
 
@@ -132,7 +108,7 @@ pub struct RowID(pub u16);
 
 impl RowID {
     #[inline]
-    pub fn to_index(self) -> usize {
+    pub fn to_usize(self) -> usize {
         self.0 as usize
     }
 }
@@ -148,6 +124,14 @@ impl<T> Index<RowID> for [T] {
 impl<T> IndexMut<RowID> for [T] {
     fn index_mut(&mut self, index: RowID) -> &mut T {
         &mut self[index.0 as usize]
+    }
+}
+
+impl<T> Index<RowID> for Vec<T> {
+    type Output = T;
+
+    fn index(&self, index: RowID) -> &T {
+        &self[index.0 as usize]
     }
 }
 

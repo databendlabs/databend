@@ -17,7 +17,6 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 
-use super::CompareItem;
 use super::RowID;
 use super::RowLayout;
 use super::RowPtr;
@@ -117,19 +116,19 @@ pub(super) unsafe fn serialize_column_to_rowformat(
                 }
             } else {
                 for row in select_vector {
-                    address[*row].write_u8(offset, v.get_bit(row.to_index()) as u8);
+                    address[*row].write_u8(offset, v.get_bit(row.to_usize()) as u8);
                 }
             }
         }
         Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
             for row in select_vector {
-                let data = arena.alloc_slice_copy(v.index_unchecked(row.to_index()));
+                let data = arena.alloc_slice_copy(v.index_unchecked(row.to_usize()));
                 address[*row].write_bytes(offset, data);
             }
         }
         Column::String(v) => {
             for row in select_vector {
-                let data = arena.alloc_str(v.index_unchecked(row.to_index()));
+                let data = arena.alloc_str(v.index_unchecked(row.to_usize()));
                 address[*row].write_bytes(offset, data.as_bytes());
             }
         }
@@ -150,7 +149,7 @@ pub(super) unsafe fn serialize_column_to_rowformat(
         // for complex column
         other => {
             for row in select_vector {
-                let s = other.index_unchecked(row.to_index()).to_owned();
+                let s = other.index_unchecked(row.to_usize()).to_owned();
                 scratch.clear();
                 bincode_serialize_into_buf(scratch, &s).unwrap();
 
@@ -170,15 +169,16 @@ unsafe fn serialize_fixed_size_column_to_rowformat<T>(
     T: AccessType<Scalar: Copy>,
 {
     for row in select_vector {
-        let val = T::index_column_unchecked_scalar(column, row.to_index());
+        let val = T::index_column_unchecked_scalar(column, row.to_usize());
         address[*row].write(offset, &val);
     }
 }
 
 pub struct CompareState<'a> {
-    pub(super) compare: &'a mut [CompareItem; BATCH_SIZE],
-    pub(super) matched: &'a mut [CompareItem; BATCH_SIZE],
-    pub(super) no_matched: &'a mut [CompareItem; BATCH_SIZE],
+    pub(super) address: &'a [RowPtr; BATCH_SIZE],
+    pub(super) compare: &'a mut [RowID; BATCH_SIZE],
+    pub(super) matched: &'a mut [RowID; BATCH_SIZE],
+    pub(super) no_matched: &'a mut [RowID; BATCH_SIZE],
 }
 
 impl<'s> CompareState<'s> {
@@ -207,6 +207,7 @@ impl<'s> CompareState<'s> {
             );
 
             self = CompareState::<'s> {
+                address: self.address,
                 compare: self.matched,
                 matched: self.compare,
                 no_matched: self.no_matched,
@@ -355,32 +356,32 @@ impl<'s> CompareState<'s> {
         let mut match_count = 0;
         if let Some(validity) = validity {
             let is_all_set = validity.null_count() == 0;
-            for item in &self.compare[..count] {
-                let row = item.row.to_index();
-                let is_set2 = unsafe { item.row_ptr.read::<u8>(validity_offset) != 0 };
-                let is_set = is_all_set || unsafe { validity.get_bit_unchecked(row) };
+            for row in self.compare[..count].iter().copied() {
+                let row_index = row.to_usize();
+                let is_set2 = unsafe { self.address[row].read::<u8>(validity_offset) != 0 };
+                let is_set = is_all_set || unsafe { validity.get_bit_unchecked(row_index) };
 
                 let equal = if is_set && is_set2 {
-                    compare_fn(row, &item.row_ptr)
+                    compare_fn(row_index, &self.address[row])
                 } else {
                     is_set == is_set2
                 };
 
                 if equal {
-                    self.matched[match_count] = item.clone();
+                    self.matched[match_count] = row;
                     match_count += 1;
                 } else {
-                    self.no_matched[no_match_count] = item.clone();
+                    self.no_matched[no_match_count] = row;
                     no_match_count += 1;
                 }
             }
         } else {
-            for item in &self.compare[..count] {
-                if compare_fn(item.row.to_index(), &item.row_ptr) {
-                    self.matched[match_count] = item.clone();
+            for row in self.compare[..count].iter().copied() {
+                if compare_fn(row.to_usize(), &self.address[row]) {
+                    self.matched[match_count] = row;
                     match_count += 1;
                 } else {
-                    self.no_matched[no_match_count] = item.clone();
+                    self.no_matched[no_match_count] = row;
                     no_match_count += 1;
                 }
             }
@@ -396,16 +397,17 @@ impl<'s> CompareState<'s> {
         (count, mut no_match_count): (usize, usize),
     ) -> (usize, usize) {
         let mut match_count = 0;
-        for item in &self.compare[..count] {
-            let value = unsafe { AnyType::index_column_unchecked(col, item.row.to_index()) };
-            let scalar = unsafe { item.row_ptr.read_bytes(col_offset) };
+        for row in self.compare[..count].iter().copied() {
+            let row_index = row.to_usize();
+            let value = unsafe { AnyType::index_column_unchecked(col, row_index) };
+            let scalar = unsafe { self.address[row].read_bytes(col_offset) };
             let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
 
             if scalar.as_ref() == value {
-                self.matched[match_count] = item.clone();
+                self.matched[match_count] = row;
                 match_count += 1;
             } else {
-                self.no_matched[no_match_count] = item.clone();
+                self.no_matched[no_match_count] = row;
                 no_match_count += 1;
             }
         }
