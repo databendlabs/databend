@@ -24,7 +24,7 @@ echo "CREATE STAGE s1 FILE_FORMAT = (TYPE = CSV)" | $BENDSQL_CLIENT_CONNECT
 echo "list @s1" | $BENDSQL_CLIENT_CONNECT | awk '{print $1}'
 
 ## Insert with stage use http API
-curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' -d '{"sql": "insert into sample_table (Id, City, Score) values", "stage_attachment": {"location": "@s1/sample.csv", "copy_options": {"purge": "true"}}, "pagination": { "wait_time_secs": 3}}' | jq -r '.state, .stats.scan_progress.bytes, .error'
+curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' -d '{"sql": "insert into sample_table (Id, City, Score) values", "stage_attachment": {"location": "@s1/sample.csv", "copy_options": {"purge": "true"}}, "pagination": { "wait_time_secs": 3}}' | jq -r '.state, .stats.scan_progress.bytes, .stats.write_progress.bytes, .error'
 
 ## list stage has metacache, so we just we aws client to ensure the data are purged
 aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 ls s3://testbucket/admin/stage/internal/s1/sample.csv

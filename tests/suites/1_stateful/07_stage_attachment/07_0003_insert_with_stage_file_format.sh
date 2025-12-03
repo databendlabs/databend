@@ -11,7 +11,7 @@ stmt "create stage s1"
 
 query "copy into @s1 from (select 'Null', 'NULL', '', '') file_format = (type = csv)"
 
-curl -s -u root: -XPOST "http://localhost:8000/v1/query" --header 'Content-Type: application/json' -d '{"sql": "insert into t1 (a, b, c, d) values", "stage_attachment": {"location": "@s1/", "copy_options": {"purge": "true"},  "file_format_options":{"Type": "csv","Binary_Format":"hex", "null_display": "Null"}}, "pagination": { "wait_time_secs": 8}}' | jq -r '.state, .stats.scan_progress.bytes, .error'
+curl -s -u root: -XPOST "http://localhost:8000/v1/query" --header 'Content-Type: application/json' -d '{"sql": "insert into t1 (a, b, c, d) values", "stage_attachment": {"location": "@s1/", "copy_options": {"purge": "true"},  "file_format_options":{"Type": "csv","Binary_Format":"hex", "null_display": "Null"}}, "pagination": { "wait_time_secs": 8}}' | jq -r '.state, .stats.scan_progress.bytes, .stats.write_progress.bytes, .error'
 
 query "list @s1"
 
