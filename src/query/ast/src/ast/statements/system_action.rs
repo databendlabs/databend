@@ -32,6 +32,7 @@ impl Display for SystemStmt {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum SystemAction {
     Backtrace(bool),
+    FlushPrivileges,
 }
 
 impl Display for SystemAction {
@@ -41,6 +42,7 @@ impl Display for SystemAction {
                 true => write!(f, "ENABLE EXCEPTION_BACKTRACE"),
                 false => write!(f, "DISABLE EXCEPTION_BACKTRACE"),
             },
+            SystemAction::FlushPrivileges => write!(f, "FLUSH PRIVILEGES"),
         }
     }
 }

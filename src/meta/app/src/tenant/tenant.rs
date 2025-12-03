@@ -24,7 +24,7 @@ use crate::app_error::TenantIsEmpty;
 /// Tenant is not stored directly in meta-store.
 ///
 /// It is just a type for use on the client side.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Tenant {
     // TODO: consider using NonEmptyString?
     pub tenant: String,
