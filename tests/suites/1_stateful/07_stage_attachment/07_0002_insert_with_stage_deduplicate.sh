@@ -51,7 +51,7 @@ curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" \
     "pagination": {
       "wait_time_secs": 3
     }
-  }' | jq -r '.stats.scan_progress.bytes,  .error'
+  }' | jq -r '.stats.scan_progress.bytes, .error'
 
 
 echo "select * from sample_table" | $BENDSQL_CLIENT_CONNECT
