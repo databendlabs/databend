@@ -24,7 +24,7 @@ use crate::servers::flight::v1::actions::create_session;
 pub static SET_PRIORITY: &str = "/actions/set_priority";
 
 pub async fn set_priority(plan: SetPriorityPlan) -> Result<bool> {
-    let session = create_session()?;
+    let session = create_session(None)?;
     let version = GlobalConfig::version();
     let query_context = session.create_query_context(version).await?;
     let interpreter = SetPriorityInterpreter::from_flight(query_context, plan)?;
