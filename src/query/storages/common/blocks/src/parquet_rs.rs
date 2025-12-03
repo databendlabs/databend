@@ -70,11 +70,12 @@ pub fn blocks_to_parquet_with_stats(
         table_schema,
     );
 
+    let arrow_schema = Arc::new(table_schema.into());
     let batches = blocks
         .into_iter()
-        .map(|block| block.to_record_batch(table_schema))
+        .map(|block| block.to_record_batch_with_arrow_schema(&arrow_schema))
         .collect::<Result<Vec<_>>>()?;
-    let arrow_schema = Arc::new(table_schema.into());
+
     let mut writer = ArrowWriter::try_new(write_buffer, arrow_schema, Some(props))?;
     for batch in batches {
         writer.write(&batch)?;

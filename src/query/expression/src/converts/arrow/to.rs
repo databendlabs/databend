@@ -264,6 +264,30 @@ impl DataBlock {
         self.to_record_batch(&table_schema)
     }
 
+    pub fn to_record_batch_with_arrow_schema(
+        self,
+        arrow_schema: &Arc<arrow_schema::Schema>,
+    ) -> Result<RecordBatch> {
+        let num_fields = arrow_schema.fields.len();
+        if self.columns().len() != num_fields {
+            return Err(ErrorCode::Internal(format!(
+                "The number of columns in the data block does not match the number of fields in the table schema, block_columns: {}, table_schema_fields: {}",
+                self.columns().len(),
+                num_fields,
+            )));
+        }
+
+        if num_fields == 0 {
+            return Ok(RecordBatch::try_new_with_options(
+                Arc::new(Schema::empty()),
+                vec![],
+                &RecordBatchOptions::default().with_row_count(Some(self.num_rows())),
+            )?);
+        }
+
+        self.build_record_batch(arrow_schema.clone())
+    }
+
     pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
         if self.columns().len() != table_schema.num_fields() {
             return Err(ErrorCode::Internal(format!(
@@ -282,6 +306,10 @@ impl DataBlock {
         }
 
         let arrow_schema = Schema::from(table_schema);
+        self.build_record_batch(Arc::new(arrow_schema))
+    }
+
+    fn build_record_batch(self, arrow_schema: Arc<arrow_schema::Schema>) -> Result<RecordBatch> {
         let mut arrays = Vec::with_capacity(self.columns().len());
         for (entry, arrow_field) in self.take_columns().into_iter().zip(arrow_schema.fields()) {
             let array = entry.to_column().maybe_gc().into_arrow_rs();
@@ -289,7 +317,7 @@ impl DataBlock {
             // Adjust struct array names
             arrays.push(Self::adjust_nested_array(array, arrow_field.as_ref()));
         }
-        Ok(RecordBatch::try_new(Arc::new(arrow_schema), arrays)?)
+        Ok(RecordBatch::try_new(arrow_schema, arrays)?)
     }
 
     fn adjust_nested_array(array: Arc<dyn Array>, arrow_field: &Field) -> Arc<dyn Array> {
