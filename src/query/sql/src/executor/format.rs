@@ -614,29 +614,13 @@ fn append_profile_info(
     profs: &HashMap<u32, PlanProfile>,
     plan_id: u32,
 ) {
-    // These scan IO metrics should be displayed together when any of them is non-zero
-    // (i.e., when the scan involves Fuse table storage)
-    const SCAN_IO_METRICS: &[ProfileStatisticsName] = &[
-        ProfileStatisticsName::ScanBytesFromRemote,
-        ProfileStatisticsName::ScanBytesFromLocal,
-        ProfileStatisticsName::ScanBytesFromMemory,
-    ];
-
     if let Some(prof) = profs.get(&plan_id) {
-        // Check if any scan IO metric is non-zero (indicates Fuse table scan)
-        let has_scan_io = SCAN_IO_METRICS
-            .iter()
-            .any(|name| prof.statistics[*name as usize] != 0);
-
-        for (name, desc) in get_statistics_desc().iter() {
-            let value = prof.statistics[desc.index];
-            // Show scan IO metrics together if any of them is non-zero
-            let is_scan_io_metric = SCAN_IO_METRICS.contains(name);
-            if value != 0 || (is_scan_io_metric && has_scan_io) {
+        for (_, desc) in get_statistics_desc().iter() {
+            if prof.statistics[desc.index] != 0 {
                 children.push(FormatTreeNode::new(format!(
                     "{}: {}",
                     desc.display_name.to_lowercase(),
-                    desc.human_format(value)
+                    desc.human_format(prof.statistics[desc.index])
                 )));
             }
         }
