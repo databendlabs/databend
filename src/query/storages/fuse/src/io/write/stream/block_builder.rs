@@ -139,10 +139,10 @@ impl ArrowParquetWriter {
     }
 
     fn in_progress_size(&self) -> usize {
-        let Initialized(writer) = self else {
-            unreachable!("ArrowParquetWriter::in_progress_size called before initialization");
-        };
-        writer.inner.in_progress_size()
+        match self {
+            ArrowParquetWriter::Uninitialized(_) => 0,
+            Initialized(writer) => writer.inner.in_progress_size(),
+        }
     }
 }
 
