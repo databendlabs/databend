@@ -10,6 +10,9 @@ inputs:
   dataset:
     description: "hits/tpch"
     required: true
+  database:
+    description: "Database name for benchmark queries"
+    required: false
   source:
     description: "pr/release"
     required: true
@@ -52,7 +55,11 @@ runs:
           echo "database=load_test_${{ inputs.run_id }}" >> $GITHUB_OUTPUT
           echo "tries=1" >> $GITHUB_OUTPUT
         else
-          echo "database=clickbench" >> $GITHUB_OUTPUT
+          database="${{ inputs.database }}"
+          if [[ -z "$database" ]]; then
+            database="clickbench"
+          fi
+          echo "database=$database" >> $GITHUB_OUTPUT
           echo "tries=3" >> $GITHUB_OUTPUT
         fi
 

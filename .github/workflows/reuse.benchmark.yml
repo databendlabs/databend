@@ -119,6 +119,7 @@ jobs:
           cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
           cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
+          database: load
       - name: clean
         if: always()
         continue-on-error: true
@@ -136,10 +137,11 @@ jobs:
     strategy:
       matrix:
         include:
-          - { dataset: hits, size: Small }
-          - { dataset: hits, size: Large }
-          - { dataset: tpch, size: Small }
-          - { dataset: tpch, size: Large }
+          - { dataset: hits, size: Small, database: clickbench }
+          - { dataset: hits, size: Large, database: clickbench }
+          - { dataset: tpch, size: Small, database: tpch }
+          - { dataset: tpch, size: Large, database: tpch }
+          - { dataset: tpch1000, size: Large, database: tpch_1000 }
       fail-fast: true
       max-parallel: 1
     steps:
@@ -167,6 +169,7 @@ jobs:
           cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
           cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
+          database: ${{ matrix.database }}
       - name: clean
         if: always()
         continue-on-error: true
@@ -233,6 +236,7 @@ jobs:
           - "tpch"
           - "hits"
           - "load"
+          - "tpch1000"
           # - "internal"
     steps:
       - uses: actions/checkout@v4
