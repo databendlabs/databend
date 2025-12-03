@@ -323,13 +323,6 @@ pub fn create_udaf_script_function(
             UDAFRuntime::JavaScript(JsRuntimePool::new(builder))
         }
         UDFLanguage::WebAssembly => unimplemented!(),
-        #[cfg(not(feature = "python-udf"))]
-        UDFLanguage::Python => {
-            return Err(ErrorCode::EnterpriseFeatureNotEnable(
-                "Failed to create python script udf",
-            ));
-        }
-        #[cfg(feature = "python-udf")]
         UDFLanguage::Python => {
             let builder = python_pool::PyRuntimeBuilder {
                 name,
@@ -405,7 +398,6 @@ fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
 
 type JsRuntimePool = Pool<arrow_udf_runtime::javascript::Runtime, JsRuntimeBuilder>;
 
-#[cfg(feature = "python-udf")]
 mod python_pool {
     use super::*;
 
@@ -439,7 +431,6 @@ enum UDAFRuntime {
     JavaScript(JsRuntimePool),
     #[expect(unused)]
     WebAssembly,
-    #[cfg(feature = "python-udf")]
     Python(python_pool::PyRuntimePool),
 }
 
@@ -447,7 +438,6 @@ impl UDAFRuntime {
     fn name(&self) -> &str {
         match self {
             UDAFRuntime::JavaScript(pool) => &pool.builder.name,
-            #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(info) => &info.builder.name,
             _ => unimplemented!(),
         }
@@ -456,7 +446,6 @@ impl UDAFRuntime {
     fn return_type(&self) -> DataType {
         match self {
             UDAFRuntime::JavaScript(pool) => pool.builder.output_type.clone(),
-            #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(info) => info.builder.output_type.clone(),
             _ => unimplemented!(),
         }
@@ -469,7 +458,6 @@ impl UDAFRuntime {
                     .block_on(async move { Ok(runtime.create_state(&pool.builder.name).await?) })
                     .map_err(|err| anyhow::anyhow!(err))
             }),
-            #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
                 pool.call(|runtime| runtime.create_state(&pool.builder.name))
             }
@@ -489,7 +477,6 @@ impl UDAFRuntime {
                     })
                     .map_err(|err| anyhow::anyhow!(err))
             }),
-            #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
                 pool.call(|runtime| runtime.accumulate(&pool.builder.name, &state.0, input))
             }
@@ -505,7 +492,6 @@ impl UDAFRuntime {
                     .block_on(async move { Ok(runtime.merge(&pool.builder.name, states).await?) })
                     .map_err(|err| anyhow::anyhow!(err))
             }),
-            #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
                 pool.call(|runtime| runtime.merge(&pool.builder.name, states))
             }
@@ -523,7 +509,6 @@ impl UDAFRuntime {
                     )
                     .map_err(|err| anyhow::anyhow!(err))
             }),
-            #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
                 pool.call(|runtime| runtime.finish(&pool.builder.name, &state.0))
             }
@@ -627,7 +612,6 @@ export function finish(state) {
         Ok(())
     }
 
-    #[cfg(feature = "python-udf")]
     #[test]
     fn test_python_runtime() -> Result<()> {
         use databend_common_expression::types::Int32Type;

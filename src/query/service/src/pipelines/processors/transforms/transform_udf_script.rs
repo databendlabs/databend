@@ -36,7 +36,6 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
-#[cfg_attr(not(feature = "python-udf"), allow(unused_imports))]
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::plans::UDFLanguage;
@@ -52,7 +51,6 @@ use crate::physical_plans::UdfFunctionDesc;
 pub enum ScriptRuntime {
     JavaScript(JsRuntimePool),
     WebAssembly(arrow_udf_runtime::wasm::Runtime),
-    #[cfg(feature = "python-udf")]
     Python(python_pool::PyRuntimePool),
 }
 
@@ -89,7 +87,6 @@ impl ScriptRuntime {
                 );
                 Ok(ScriptRuntime::WebAssembly(runtime))
             }
-            #[cfg(feature = "python-udf")]
             UDFLanguage::Python => {
                 let user_code = String::from_utf8(code.to_vec())?;
                 let code = if let Some(temp_dir) = &_temp_dir {
@@ -141,10 +138,6 @@ if '{dir}' not in sys.path:
                 };
                 Ok(Self::Python(python_pool::PyRuntimePool::new(builder)))
             }
-            #[cfg(not(feature = "python-udf"))]
-            UDFLanguage::Python => Err(ErrorCode::EnterpriseFeatureNotEnable(
-                "Failed to create python script udf",
-            )),
         }
     }
 
@@ -164,7 +157,6 @@ if '{dir}' not in sys.path:
                     })
                 })
             })?,
-            #[cfg(feature = "python-udf")]
             ScriptRuntime::Python(pool) => {
                 let batch = pool
                     .call(|runtime| runtime.call(&func.name, input_batch))
@@ -213,7 +205,6 @@ if '{dir}' not in sys.path:
         Ok(result_batch)
     }
 
-    #[cfg(feature = "python-udf")]
     fn python_error_from_batch(
         func: &UdfFunctionDesc,
         batch: &RecordBatch,
@@ -243,7 +234,6 @@ if '{dir}' not in sys.path:
         Ok(None)
     }
 
-    #[cfg(feature = "python-udf")]
     fn first_non_null_error(entry: &BlockEntry) -> Option<String> {
         use databend_common_expression::ScalarRef;
 
@@ -274,7 +264,6 @@ if '{dir}' not in sys.path:
         None
     }
 
-    #[cfg(feature = "python-udf")]
     fn collect_stage_sys_paths(func: &UdfFunctionDesc, temp_dir: &TempDir) -> Vec<String> {
         match &func.udf_type {
             UDFType::Script(box UDFScriptCode {
@@ -365,7 +354,6 @@ fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
 
 type JsRuntimePool = Pool<arrow_udf_runtime::javascript::Runtime, JsRuntimeBuilder>;
 
-#[cfg(feature = "python-udf")]
 pub struct PyRuntimeBuilder {
     name: String,
     handler: String,
@@ -375,7 +363,6 @@ pub struct PyRuntimeBuilder {
     counter: AtomicUsize,
 }
 
-#[cfg(feature = "python-udf")]
 mod python_pool {
     use super::*;
 
@@ -751,41 +738,33 @@ impl TransformUdfScript {
     fn collect_stage_fingerprints(
         imports_stage_info: &[(StageInfo, String)],
     ) -> Result<Vec<venv::StageImportFingerprint>> {
-        #[cfg(feature = "python-udf")]
-        {
-            if imports_stage_info.is_empty() {
-                return Ok(Vec::new());
-            }
-
-            let mut tasks = Vec::with_capacity(imports_stage_info.len());
-            for (stage, path) in imports_stage_info.iter() {
-                let op = init_stage_operator(stage)?;
-                let stage_name = stage.stage_name.clone();
-                let path = path.clone();
-                tasks.push(async move {
-                    let meta = op.stat(&path).await.map_err(|e| {
-                        ErrorCode::StorageUnavailable(format!(
-                            "Failed to stat stage file '{path}': {e}"
-                        ))
-                    })?;
-                    Ok(venv::StageImportFingerprint {
-                        stage_name,
-                        path,
-                        content_length: meta.content_length(),
-                        etag: meta.etag().map(str::to_string),
-                    })
-                });
-            }
-
-            databend_common_base::runtime::block_on(async {
-                futures::future::try_join_all(tasks).await
-            })
+        if imports_stage_info.is_empty() {
+            return Ok(Vec::new());
         }
-        #[cfg(not(feature = "python-udf"))]
-        {
-            let _ = imports_stage_info;
-            Ok(Vec::new())
+
+        let mut tasks = Vec::with_capacity(imports_stage_info.len());
+        for (stage, path) in imports_stage_info.iter() {
+            let op = init_stage_operator(stage)?;
+            let stage_name = stage.stage_name.clone();
+            let path = path.clone();
+            tasks.push(async move {
+                let meta = op.stat(&path).await.map_err(|e| {
+                    ErrorCode::StorageUnavailable(format!(
+                        "Failed to stat stage file '{path}': {e}"
+                    ))
+                })?;
+                Ok(venv::StageImportFingerprint {
+                    stage_name,
+                    path,
+                    content_length: meta.content_length(),
+                    etag: meta.etag().map(str::to_string),
+                })
+            });
         }
+
+        databend_common_base::runtime::block_on(async {
+            futures::future::try_join_all(tasks).await
+        })
     }
 
     fn create_input_batch(

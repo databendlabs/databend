@@ -231,7 +231,7 @@ arrow-json = { version = "56" }
 arrow-ord = { version = "56" }
 arrow-schema = { version = "56", features = ["serde"] }
 arrow-select = { version = "56" }
-arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript", "wasm"] }
+arrow-udf-runtime = { version = "0.8.0", default-features = false, features = ["javascript", "wasm", "python"] }
 async-backtrace = "0.2"
 async-channel = "2.3.1"
 async-compat = { version = "0.2" }
