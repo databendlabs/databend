@@ -31,6 +31,9 @@ class BenchmarkConfig:
     password: str
     gateway: str
     warehouse: str
+    source: str
+    source_id: str
+    sha: str
 
 
 class BendSQLRunner:
@@ -74,6 +77,9 @@ def load_config() -> BenchmarkConfig:
     version = os.environ.get("BENCHMARK_VERSION", "")
     database = os.environ.get("BENCHMARK_DATABASE", "default")
     tries_raw = os.environ.get("BENCHMARK_TRIES", "3")
+    source = os.environ.get("BENCHMARK_SOURCE", "")
+    source_id = os.environ.get("BENCHMARK_SOURCE_ID", "")
+    sha = os.environ.get("BENCHMARK_SHA", "")
 
     if not version:
         logger.error("Please set BENCHMARK_VERSION to run the benchmark.")
@@ -112,6 +118,9 @@ def load_config() -> BenchmarkConfig:
         password=password,
         gateway=gateway,
         warehouse=warehouse,
+        source=source,
+        source_id=source_id,
+        sha=sha,
     )
 
 
@@ -199,21 +208,23 @@ def write_result_files(
     script_dir: Path,
     metadata: Dict[str, object],
     ndjson_record: Dict[str, object],
+    dataset_name: str,
+    size: str,
 ) -> None:
     result_path = script_dir / "result.json"
+    final_result_path = script_dir / f"result-{dataset_name}-cloud-{size}.json"
     ndjson_name = (
-        f"result-{metadata['date']}"
-        f"-{ndjson_record['dataset']}"
-        f"-{ndjson_record['version']}"
-        f"-{ndjson_record['size']}"
+        f"result-{dataset_name}-cloud-{size}"
+        f"-{metadata['date']}"
         f"-{ndjson_record['run_id']}.ndjson"
     )
     ndjson_path = script_dir / ndjson_name
 
     result_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    final_result_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     ndjson_path.write_text(json.dumps(ndjson_record) + "\n", encoding="utf-8")
 
-    logger.info("Wrote JSON results to %s", result_path)
+    logger.info("Wrote JSON results to %s and %s", result_path, final_result_path)
     logger.info("Wrote NDJSON results to %s", ndjson_path)
 
 
@@ -243,6 +254,19 @@ def main() -> None:
         "machine": SIZE_MAPPING[config.size]["machine"],
         "result": [],
     }
+    if config.source and config.source_id:
+        if config.source == "pr":
+            metadata["system"] = f"Databend(PR#{config.source_id})"
+        elif config.source == "release":
+            metadata["system"] = f"Databend(Release@{config.source_id})"
+        else:
+            logger.error("Unsupported benchmark source: %s", config.source)
+            sys.exit(1)
+    elif config.source or config.source_id:
+        logger.error("Both BENCHMARK_SOURCE and BENCHMARK_SOURCE_ID must be provided together.")
+        sys.exit(1)
+    if config.sha:
+        metadata["comment"] = f"commit: {config.sha}"
 
     runner = BendSQLRunner()
     runner.set_dsn(build_dsn(config, warehouse="default", login_disable=True))
@@ -335,7 +359,7 @@ def main() -> None:
         logger.info("Dropping warehouse %s...", config.warehouse)
         cleanup_runner.run(sql=f"DROP WAREHOUSE IF EXISTS '{warehouse_literal}';")
     finally:
-        write_result_files(script_dir, metadata, ndjson_record)
+        write_result_files(script_dir, metadata, ndjson_record, config.dataset, config.size)
 
 
 if __name__ == "__main__":

@@ -72,6 +72,9 @@ runs:
         BENCHMARK_VERSION: ${{ inputs.version }}
         BENCHMARK_DATABASE: ${{ steps.prepare.outputs.database }}
         BENCHMARK_TRIES: ${{ steps.prepare.outputs.tries }}
+        BENCHMARK_SOURCE: ${{ inputs.source }}
+        BENCHMARK_SOURCE_ID: ${{ inputs.source_id }}
+        BENCHMARK_SHA: ${{ inputs.sha }}
         CLOUD_USER: ${{ inputs.cloud_user }}
         CLOUD_PASSWORD: ${{ inputs.cloud_password }}
         CLOUD_GATEWAY: ${{ inputs.cloud_gateway }}
@@ -80,29 +83,13 @@ runs:
       run: |
         python3 benchmark_cloud.py
 
-    - name: Prepare Metadata
-      working-directory: benchmark/clickbench
-      shell: bash
-      run: |
-        case ${{ inputs.source }} in
-          pr)
-            yq -i '.system = "Databend(PR#${{ inputs.source_id }})"' result.json
-            ;;
-          release)
-            yq -i '.system = "Databend(Release@${{ inputs.source_id }})"' result.json
-            ;;
-          *)
-            echo "Unsupported benchmark source: ${{ inputs.source }}"
-            exit 1
-        esac
-        yq -i '.comment = "commit: ${{ inputs.sha }}"' result.json
-        mv result.json result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
-
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: benchmark-${{ inputs.dataset }}-${{ inputs.size }}
-        path: benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
+        path: |
+          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
+          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-*.ndjson
 
     - name: Remove warehouse
       if: always()
