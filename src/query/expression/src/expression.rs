@@ -1134,13 +1134,13 @@ mod tests {
     #[test]
     fn test_size() {
         assert_eq!(size_of::<Expr>(), 160);
-        assert_eq!(size_of::<Constant>(), 128);
+        assert_eq!(size_of::<Constant>(), 144);
         assert_eq!(size_of::<ColumnRef>(), 72);
         assert_eq!(size_of::<Cast>(), 48);
         assert_eq!(size_of::<FunctionCall>(), 104);
         assert_eq!(size_of::<LambdaFunctionCall>(), 120);
 
-        assert_eq!(size_of::<RawExpr>(), 128);
-        assert_eq!(size_of::<RemoteExpr>(), 128);
+        assert_eq!(size_of::<RawExpr>(), 144);
+        assert_eq!(size_of::<RemoteExpr>(), 144);
     }
 }
