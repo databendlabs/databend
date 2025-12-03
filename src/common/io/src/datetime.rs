@@ -114,12 +114,6 @@ pub fn parse_standard_timestamp(input: &[u8]) -> Option<Result<ParsedTimestamp>>
         if digits < 6 {
             micro *= 10_u32.pow(6 - digits);
         }
-
-        if start == idx {
-            return Some(Err(ErrorCode::BadBytes(
-                "Microsecond Parsing Error: Expecting digits after '.'".to_string(),
-            )));
-        }
     }
 
     while idx < input.len() && input[idx] == b' ' {
