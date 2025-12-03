@@ -159,8 +159,6 @@ SIZE_MAPPING: Dict[str, Dict[str, str]] = {
     "Large": {"cluster_size": "64", "machine": "Large"},
 }
 
-_TIME_PATTERN = re.compile(r"([0-9]+(?:\\.[0-9]+)?)")
-
 
 def build_dsn(
     config: BenchmarkConfig,
@@ -213,13 +211,14 @@ def execute_sql_file(runner: BendSQLRunner, path: Path) -> None:
 
 
 def parse_time_output(raw_value: str) -> Optional[float]:
-    match = _TIME_PATTERN.search(raw_value)
-    if match:
-        try:
-            return float(match.group(1))
-        except ValueError:
-            return None
-    return None
+    # --time=server outputs only the time value (e.g., "0.014")
+    value = raw_value.strip()
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def run_timed_query(runner: BendSQLRunner, sql: str) -> Optional[float]:
