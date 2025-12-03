@@ -48,6 +48,7 @@ pub mod wkb;
 
 pub use bitmap::deserialize_bitmap;
 pub use bitmap::parse_bitmap;
+pub use bitmap::HybridBitmap;
 pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;
 pub use escape::escape_string;
