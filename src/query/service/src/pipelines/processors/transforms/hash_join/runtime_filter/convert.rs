@@ -75,7 +75,10 @@ pub async fn build_runtime_filter_infos(
                 probe_expr: probe_key.clone(),
                 bloom: if enabled {
                     if let Some(ref bloom) = packet.bloom {
-                        Some(build_bloom_filter(bloom.clone(), probe_key, max_threads).await?)
+                        Some(
+                            build_bloom_filter(bloom.clone(), probe_key, max_threads, desc.id)
+                                .await?,
+                        )
                     } else {
                         None
                     }
@@ -257,6 +260,7 @@ async fn build_bloom_filter(
     bloom: Vec<u64>,
     probe_key: &Expr<String>,
     max_threads: usize,
+    filter_id: usize,
 ) -> Result<RuntimeFilterBloom> {
     let probe_key = match probe_key {
         Expr::ColumnRef(col) => col,
@@ -305,7 +309,14 @@ async fn build_bloom_filter(
     .into_iter()
     .collect::<Result<Vec<_>>>()?;
 
+    let start = std::time::Instant::now();
     let merged_filter = merge_bloom_filters_tree(filters);
+    let end = std::time::Instant::now();
+    log::info!(
+        "filter_id: {}, merge_bloom_filters_tree time: {:?}",
+        filter_id,
+        end - start
+    );
 
     Ok(RuntimeFilterBloom {
         column_name,
