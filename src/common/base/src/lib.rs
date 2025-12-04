@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(internal_features)]
 #![allow(clippy::uninlined_format_args)]
 #![allow(incomplete_features)]
 #![feature(allocator_api)]
@@ -30,7 +29,6 @@
 #![feature(slice_ptr_get)]
 #![feature(alloc_layout_extra)]
 #![feature(let_chains)]
-#![feature(core_intrinsics)]
 
 pub mod base;
 pub mod containers;

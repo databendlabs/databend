@@ -23,6 +23,6 @@ pub fn assume(condition: bool) {
 
     #[cfg(not(debug_assertions))]
     unsafe {
-        std::intrinsics::assume(condition)
+        std::hint::assert_unchecked(condition)
     };
 }
