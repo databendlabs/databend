@@ -22,9 +22,7 @@ pub fn assume(condition: bool) {
     }
 
     #[cfg(not(debug_assertions))]
-    {
-        if !condition {
-            unsafe { std::hint::unreachable_unchecked() }
-        }
-    }
+    unsafe {
+        std::intrinsics::assume(condition)
+    };
 }
