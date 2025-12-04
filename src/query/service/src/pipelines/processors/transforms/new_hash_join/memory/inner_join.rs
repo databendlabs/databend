@@ -154,7 +154,6 @@ impl Join for InnerHashJoin {
             Some(filter_executor) => Ok(InnerHashJoinFilterStream::create(
                 joined_stream,
                 filter_executor,
-                None,
             )),
         }
     }
@@ -266,19 +265,16 @@ impl<'a> JoinStream for InnerHashJoinStream<'a> {
 pub(super) struct InnerHashJoinFilterStream<'a> {
     inner: Box<dyn JoinStream + 'a>,
     filter_executor: &'a mut FilterExecutor,
-    field_reorder: Option<&'a [usize]>,
 }
 
 impl<'a> InnerHashJoinFilterStream<'a> {
     pub fn create(
         inner: Box<dyn JoinStream + 'a>,
         filter_executor: &'a mut FilterExecutor,
-        field_reorder: Option<&'a [usize]>,
     ) -> Box<dyn JoinStream + 'a> {
         Box::new(InnerHashJoinFilterStream {
             inner,
             filter_executor,
-            field_reorder,
         })
     }
 }
@@ -300,16 +296,6 @@ impl<'a> JoinStream for InnerHashJoinFilterStream<'a> {
                 continue;
             }
 
-            let data_block = if let Some(field_reorder) = self.field_reorder {
-                DataBlock::from_iter(
-                    field_reorder
-                        .iter()
-                        .map(|offset| data_block.get_by_offset(*offset).clone()),
-                    data_block.num_rows(),
-                )
-            } else {
-                data_block
-            };
             return Ok(Some(data_block));
         }
     }

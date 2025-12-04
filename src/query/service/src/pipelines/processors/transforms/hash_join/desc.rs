@@ -299,15 +299,20 @@ impl HashJoinDesc {
             return Ok(None);
         };
 
-        let field_reorder = if !projection.is_sorted() {
-            let mut mapper = projection.iter().cloned().enumerate().collect::<Vec<_>>();
-            mapper.sort_by_key(|(_, field)| *field);
-            let reorder = (0..projection.len())
-                .map(|j| mapper.iter().position(|(i, _)| *i == j).unwrap())
+        let projections = projection.iter().copied().collect::<ColumnSet>();
+        let field_reorder = {
+            let mapper = projections.iter().copied().collect::<Vec<_>>();
+            debug_assert!(mapper.is_sorted());
+            let reorder = projection
+                .iter()
+                .map(|a| mapper.iter().position(|b| a == b).unwrap())
                 .collect::<Vec<_>>();
-            Some(reorder)
-        } else {
-            None
+
+            if reorder.iter().copied().enumerate().all(|(a, b)| a == b) {
+                None
+            } else {
+                Some(reorder)
+            }
         };
 
         Ok(Some(NestedLoopDesc {
@@ -319,7 +324,7 @@ impl HashJoinDesc {
                 &BUILTIN_FUNCTIONS,
                 false,
             ),
-            projections: projection.iter().copied().collect(),
+            projections,
             field_reorder,
             nested_loop_join_threshold,
         }))
