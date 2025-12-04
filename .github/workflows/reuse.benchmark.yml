@@ -156,7 +156,7 @@ jobs:
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
         if: inputs.target == 'cloud' || inputs.target == 'all'
-        timeout-minutes: 20
+        timeout-minutes: ${{ matrix.timeout }}
         id: benchmark
         with:
           sha: ${{ inputs.sha }}
