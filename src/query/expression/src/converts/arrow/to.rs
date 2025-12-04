@@ -101,7 +101,7 @@ pub fn table_schema_arrow_leaf_paths(table_schema: &TableSchema) -> Vec<(ColumnI
 
     leaf_fields
         .into_iter()
-        .zip(arrow_paths.into_iter())
+        .zip(arrow_paths)
         .map(|(field, path)| (field.column_id(), path))
         .collect()
 }
