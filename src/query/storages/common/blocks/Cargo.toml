@@ -7,7 +7,6 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-arrow-schema = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }

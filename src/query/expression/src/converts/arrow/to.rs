@@ -41,6 +41,7 @@ use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
 use crate::infer_table_schema;
+use crate::schema::is_internal_column_id;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
@@ -50,6 +51,7 @@ use crate::types::VectorColumn;
 use crate::types::VectorDataType;
 use crate::with_number_type;
 use crate::Column;
+use crate::ColumnId;
 use crate::DataBlock;
 use crate::DataField;
 use crate::DataSchema;
@@ -79,6 +81,57 @@ impl From<&TableSchema> for Schema {
             .collect();
 
         Schema::new(fields).with_metadata(metadata)
+    }
+}
+
+pub fn table_schema_arrow_leaf_paths(table_schema: &TableSchema) -> Vec<(ColumnId, Vec<String>)> {
+    let mut arrow_paths = Vec::new();
+    for field in table_schema.fields() {
+        if is_internal_column_id(field.column_id()) {
+            continue;
+        }
+
+        let arrow_field = Field::from(field);
+        let mut current_path = vec![arrow_field.name().clone()];
+        collect_arrow_leaf_paths(&arrow_field, &mut current_path, &mut arrow_paths);
+    }
+
+    let leaf_fields = table_schema.leaf_fields();
+    debug_assert_eq!(leaf_fields.len(), arrow_paths.len());
+
+    leaf_fields
+        .into_iter()
+        .zip(arrow_paths.into_iter())
+        .map(|(field, path)| (field.column_id(), path))
+        .collect()
+}
+
+fn collect_arrow_leaf_paths(
+    arrow_field: &Field,
+    current_path: &mut Vec<String>,
+    paths: &mut Vec<Vec<String>>,
+) {
+    match arrow_field.data_type() {
+        ArrowDataType::Struct(children) => {
+            for child in children {
+                current_path.push(child.name().clone());
+                collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
+                current_path.pop();
+            }
+        }
+        ArrowDataType::Map(child, _) => {
+            current_path.push(child.name().clone());
+            collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
+            current_path.pop();
+        }
+        ArrowDataType::LargeList(child)
+        | ArrowDataType::List(child)
+        | ArrowDataType::FixedSizeList(child, _) => {
+            current_path.push(child.name().clone());
+            collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
+            current_path.pop();
+        }
+        _ => paths.push(current_path.clone()),
     }
 }
 

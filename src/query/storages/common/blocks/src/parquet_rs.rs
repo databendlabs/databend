@@ -14,10 +14,8 @@
 
 use std::sync::Arc;
 
-use arrow_schema::DataType as ArrowDataType;
-use arrow_schema::Field as ArrowField;
 use databend_common_exception::Result;
-use databend_common_expression::is_internal_column_id;
+use databend_common_expression::converts::arrow::table_schema_arrow_leaf_paths;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
@@ -112,11 +110,12 @@ pub fn build_parquet_writer_properties(
             .set_dictionary_enabled(true);
         if let Some(cols_stats) = cols_stats {
             // Disable dictionary of columns that have high cardinality
-            for (column_id, column_path) in leaf_column_paths(table_schema) {
+            for (column_id, components) in table_schema_arrow_leaf_paths(table_schema) {
                 if let Some(ndv) = cols_stats.column_ndv(&column_id) {
                     let high_cardinality = (ndv as f64 / num_rows as f64) > 0.1;
                     if high_cardinality {
-                        builder = builder.set_column_dictionary_enabled(column_path, false);
+                        builder = builder
+                            .set_column_dictionary_enabled(ColumnPath::from(components), false);
                     }
                 }
             }
@@ -124,57 +123,6 @@ pub fn build_parquet_writer_properties(
         builder.build()
     } else {
         builder.set_dictionary_enabled(false).build()
-    }
-}
-
-fn leaf_column_paths(table_schema: &TableSchema) -> Vec<(ColumnId, ColumnPath)> {
-    let mut arrow_paths = Vec::new();
-    for field in table_schema.fields() {
-        if is_internal_column_id(field.column_id()) {
-            continue;
-        }
-
-        let arrow_field = ArrowField::from(field);
-        let mut current_path = vec![arrow_field.name().clone()];
-        collect_arrow_leaf_paths(&arrow_field, &mut current_path, &mut arrow_paths);
-    }
-
-    let leaf_fields = table_schema.leaf_fields();
-    debug_assert_eq!(leaf_fields.len(), arrow_paths.len());
-
-    leaf_fields
-        .into_iter()
-        .zip(arrow_paths.into_iter())
-        .map(|(field, path)| (field.column_id(), ColumnPath::from(path)))
-        .collect()
-}
-
-fn collect_arrow_leaf_paths(
-    arrow_field: &ArrowField,
-    current_path: &mut Vec<String>,
-    paths: &mut Vec<Vec<String>>,
-) {
-    match arrow_field.data_type() {
-        ArrowDataType::Struct(children) => {
-            for child in children {
-                current_path.push(child.name().clone());
-                collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
-                current_path.pop();
-            }
-        }
-        ArrowDataType::Map(child, _) => {
-            current_path.push(child.name().clone());
-            collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
-            current_path.pop();
-        }
-        ArrowDataType::LargeList(child)
-        | ArrowDataType::List(child)
-        | ArrowDataType::FixedSizeList(child, _) => {
-            current_path.push(child.name().clone());
-            collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
-            current_path.pop();
-        }
-        _ => paths.push(current_path.clone()),
     }
 }
 
@@ -240,8 +188,10 @@ mod tests {
         ndv.insert(column_id(&schema, "nested:leaf"), 50);
         ndv.insert(column_id(&schema, "nested:arr:0"), 400);
 
-        let column_paths: HashMap<ColumnId, ColumnPath> =
-            leaf_column_paths(&schema).into_iter().collect();
+        let column_paths: HashMap<ColumnId, ColumnPath> = table_schema_arrow_leaf_paths(&schema)
+            .into_iter()
+            .map(|(id, path)| (id, ColumnPath::from(path)))
+            .collect();
 
         let props = build_parquet_writer_properties(
             TableCompression::Zstd,
@@ -274,8 +224,10 @@ mod tests {
     fn test_build_parquet_writer_properties_disabled_globally() {
         let schema = sample_schema();
 
-        let column_paths: HashMap<ColumnId, ColumnPath> =
-            leaf_column_paths(&schema).into_iter().collect();
+        let column_paths: HashMap<ColumnId, ColumnPath> = table_schema_arrow_leaf_paths(&schema)
+            .into_iter()
+            .map(|(id, path)| (id, ColumnPath::from(path)))
+            .collect();
 
         let props = build_parquet_writer_properties(
             TableCompression::Zstd,
