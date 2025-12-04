@@ -945,17 +945,6 @@ fn extract_number_params<N: Number>(params: Vec<Scalar>) -> Result<Vec<N>> {
     Ok(result)
 }
 
-pub fn aggregate_bitmap_and_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::AggregateFunctionFeatures {
-        is_decomposable: true,
-        ..Default::default()
-    };
-    AggregateFunctionDescription::creator_with_features(
-        Box::new(try_create_aggregate_bitmap_function::<BITMAP_AND, BITMAP_AGG_COUNT>),
-        features,
-    )
-}
-
 pub fn aggregate_bitmap_not_count_function_desc() -> AggregateFunctionDescription {
     let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
@@ -963,28 +952,6 @@ pub fn aggregate_bitmap_not_count_function_desc() -> AggregateFunctionDescriptio
     };
     AggregateFunctionDescription::creator_with_features(
         Box::new(try_create_aggregate_bitmap_function::<BITMAP_NOT, BITMAP_AGG_COUNT>),
-        features,
-    )
-}
-
-pub fn aggregate_bitmap_or_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::AggregateFunctionFeatures {
-        is_decomposable: true,
-        ..Default::default()
-    };
-    AggregateFunctionDescription::creator_with_features(
-        Box::new(try_create_aggregate_bitmap_function::<BITMAP_OR, BITMAP_AGG_COUNT>),
-        features,
-    )
-}
-
-pub fn aggregate_bitmap_xor_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::AggregateFunctionFeatures {
-        is_decomposable: true,
-        ..Default::default()
-    };
-    AggregateFunctionDescription::creator_with_features(
-        Box::new(try_create_aggregate_bitmap_function::<BITMAP_XOR, BITMAP_AGG_COUNT>),
         features,
     )
 }
@@ -1007,6 +974,17 @@ pub fn aggregate_bitmap_intersect_function_desc() -> AggregateFunctionDescriptio
     };
     AggregateFunctionDescription::creator_with_features(
         Box::new(try_create_aggregate_bitmap_function::<BITMAP_AND, BITMAP_AGG_RAW>),
+        features,
+    )
+}
+
+pub fn aggregate_bitmap_xor_function_desc() -> AggregateFunctionDescription {
+    let features = super::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_bitmap_function::<BITMAP_XOR, BITMAP_AGG_RAW>),
         features,
     )
 }

@@ -382,36 +382,33 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 (name, params, args_type)
             }
             DataType::Number(NumberDataType::UInt64) if by_ty => {
-                let idx = self.rng.gen_range(0..=7);
+                let idx = self.rng.gen_range(0..=4);
                 let name = match idx {
                     0 => "approx_count_distinct".to_string(),
                     1 => "count".to_string(),
-                    2 => "bitmap_and_count".to_string(),
-                    3 => "bitmap_or_count".to_string(),
-                    4 => "bitmap_xor_count".to_string(),
-                    5 => "bitmap_not_count".to_string(),
-                    6 => "intersect_count".to_string(),
-                    7 => "sum".to_string(),
+                    2 => "bitmap_not_count".to_string(),
+                    3 => "intersect_count".to_string(),
+                    4 => "sum".to_string(),
                     _ => unreachable!(),
                 };
-                let args_type = if (2..=5).contains(&idx) {
+                let args_type = if idx == 2 {
                     if self.rng.gen_bool(0.5) {
                         vec![DataType::Bitmap]
                     } else {
                         vec![DataType::Nullable(Box::new(DataType::Bitmap))]
                     }
-                } else if idx == 6 {
+                } else if idx == 3 {
                     if self.rng.gen_bool(0.5) {
                         vec![DataType::Bitmap; 2]
                     } else {
                         vec![DataType::Nullable(Box::new(DataType::Bitmap)); 2]
                     }
-                } else if idx == 7 {
+                } else if idx == 4 {
                     vec![self.gen_all_number_data_type()]
                 } else {
                     vec![self.gen_data_type()]
                 };
-                let params = if idx == 6 {
+                let params = if idx == 3 {
                     vec![
                         Literal::UInt64(self.rng.gen_range(1..=10)),
                         Literal::UInt64(self.rng.gen_range(1..=10)),

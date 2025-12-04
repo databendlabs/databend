@@ -1113,27 +1113,6 @@ fn test_agg_list_agg(file: &mut impl Write, simulator: impl AggregationSimulator
 fn test_agg_bitmap_count(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(
         file,
-        "bitmap_and_count(bm)",
-        get_example().as_slice(),
-        simulator,
-        vec![],
-    );
-    run_agg_ast(
-        file,
-        "bitmap_or_count(bm)",
-        get_example().as_slice(),
-        simulator,
-        vec![],
-    );
-    run_agg_ast(
-        file,
-        "bitmap_xor_count(bm)",
-        get_example().as_slice(),
-        simulator,
-        vec![],
-    );
-    run_agg_ast(
-        file,
         "bitmap_not_count(bm)",
         get_example().as_slice(),
         simulator,

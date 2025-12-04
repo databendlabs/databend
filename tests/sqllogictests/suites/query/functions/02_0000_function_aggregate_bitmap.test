@@ -8,12 +8,12 @@ statement ok
 INSERT INTO agg_bitmap_test(id, tag, v) VALUES(1, 'a', to_bitmap('0, 1')), (2, 'b', to_bitmap('0, 1, 2')), (3, 'c', to_bitmap('1, 3, 4'))
 
 query I
-SELECT bitmap_and_count(to_bitmap('1, 3, 5'))
+SELECT bitmap_count(bitmap_and_agg(to_bitmap('1, 3, 5')))
 ----
 3
 
 query I
-SELECT bitmap_or_count(to_bitmap('1, 3, 5'))
+SELECT bitmap_count(bitmap_or_agg(to_bitmap('1, 3, 5')))
 ----
 3
 
@@ -23,7 +23,7 @@ SELECT bitmap_not_count(to_bitmap('1, 3, 5'))
 3
 
 query I
-SELECT bitmap_xor_count(to_bitmap('1, 3, 5'))
+SELECT bitmap_count(bitmap_xor_agg(to_bitmap('1, 3, 5')))
 ----
 3
 
@@ -38,10 +38,10 @@ SELECT to_string(bitmap_intersect(to_bitmap('1, 3, 5')))
 1,3,5
 
 statement error
-SELECT bitmap_and_count('123')
+SELECT bitmap_count(bitmap_and_agg('123'))
 
 query IIIII rowsort
-SELECT id, bitmap_and_count(v), bitmap_or_count(v), bitmap_xor_count(v), bitmap_not_count(v) from agg_bitmap_test group by id
+SELECT id, bitmap_count(bitmap_and_agg(v)), bitmap_count(bitmap_or_agg(v)), bitmap_count(bitmap_xor_agg(v)), bitmap_not_count(v) from agg_bitmap_test group by id
 ----
 1 2 2 2 2
 2 3 3 3 3
@@ -76,7 +76,7 @@ SELECT id, intersect_count('b', 'c')(v, tag) from agg_bitmap_test group by id
 3 3
 
 query IIII
-SELECT bitmap_and_count(v), bitmap_or_count(v), bitmap_xor_count(v), bitmap_not_count(v) from agg_bitmap_test
+SELECT bitmap_count(bitmap_and_agg(v)), bitmap_count(bitmap_or_agg(v)), bitmap_count(bitmap_xor_agg(v)), bitmap_not_count(v) from agg_bitmap_test
 ----
 1 5 4 0
 
@@ -84,6 +84,11 @@ query II
 SELECT to_string(bitmap_intersect(v)), to_string(bitmap_union(v)) from agg_bitmap_test
 ----
 1 0,1,2,3,4
+
+query III
+SELECT to_string(bitmap_and_agg(v)), to_string(bitmap_or_agg(v)), to_string(bitmap_xor_agg(v)) from agg_bitmap_test
+----
+1 0,1,2,3,4 1,2,3,4
 
 query I
 SELECT bitmap_count(bitmap_construct_agg(id::UNSIGNED)) from agg_bitmap_test
@@ -109,7 +114,7 @@ statement ok
 INSERT INTO agg_bitmap_test(id, v) VALUES(4, build_bitmap([]))
 
 query IIII
-SELECT bitmap_and_count(v), bitmap_or_count(v), bitmap_xor_count(v), bitmap_not_count(v) from agg_bitmap_test
+SELECT bitmap_count(bitmap_and_agg(v)), bitmap_count(bitmap_or_agg(v)), bitmap_count(bitmap_xor_agg(v)), bitmap_not_count(v) from agg_bitmap_test
 ----
 0 5 4 0
 
