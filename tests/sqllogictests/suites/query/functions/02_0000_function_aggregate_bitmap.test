@@ -85,6 +85,11 @@ SELECT to_string(bitmap_intersect(v)), to_string(bitmap_union(v)) from agg_bitma
 ----
 1 0,1,2,3,4
 
+query III
+SELECT to_string(bitmap_and_agg(v)), to_string(bitmap_or_agg(v)), to_string(bitmap_xor_agg(v)) from agg_bitmap_test
+----
+1 0,1,2,3,4 1,2,3,4
+
 query I
 SELECT bitmap_count(bitmap_construct_agg(id::UNSIGNED)) from agg_bitmap_test
 ----

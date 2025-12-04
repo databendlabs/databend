@@ -989,6 +989,17 @@ pub fn aggregate_bitmap_xor_count_function_desc() -> AggregateFunctionDescriptio
     )
 }
 
+pub fn aggregate_bitmap_xor_function_desc() -> AggregateFunctionDescription {
+    let features = super::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_bitmap_function::<BITMAP_XOR, BITMAP_AGG_RAW>),
+        features,
+    )
+}
+
 pub fn aggregate_bitmap_union_function_desc() -> AggregateFunctionDescription {
     let features = super::AggregateFunctionFeatures {
         is_decomposable: true,

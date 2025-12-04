@@ -28,6 +28,7 @@ use super::aggregate_bitmap::aggregate_bitmap_not_count_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_or_count_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_union_function_desc;
 use super::aggregate_bitmap::aggregate_bitmap_xor_count_function_desc;
+use super::aggregate_bitmap::aggregate_bitmap_xor_function_desc;
 use super::aggregate_boolean::aggregate_boolean_function_desc;
 use super::aggregate_covariance::aggregate_covariance_population_desc;
 use super::aggregate_covariance::aggregate_covariance_sample_desc;
@@ -154,16 +155,24 @@ impl Aggregators {
             "bitmap_not_count",
             aggregate_bitmap_not_count_function_desc(),
         );
+        factory.register_multi_names(
+            &["bitmap_union", "bitmap_or_agg"],
+            aggregate_bitmap_union_function_desc,
+        );
         factory.register("bitmap_or_count", aggregate_bitmap_or_count_function_desc());
         factory.register(
             "bitmap_xor_count",
             aggregate_bitmap_xor_count_function_desc(),
         );
-        factory.register("bitmap_union", aggregate_bitmap_union_function_desc());
         factory.register(
             "bitmap_intersect",
             aggregate_bitmap_intersect_function_desc(),
         );
+        factory.register_multi_names(
+            &["bitmap_intersect", "bitmap_and_agg"],
+            aggregate_bitmap_intersect_function_desc,
+        );
+        factory.register("bitmap_xor_agg", aggregate_bitmap_xor_function_desc());
         factory.register(
             "intersect_count",
             aggregate_bitmap_intersect_count_function_desc(),
