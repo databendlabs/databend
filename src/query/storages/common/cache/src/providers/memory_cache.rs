@@ -97,8 +97,9 @@ mod impls {
                 let mut guard = self.inner.write();
                 guard
                     .get(k.as_ref())
-                    .map(|cache_value: &CacheValue<V>| cache_value.get_inner())
+                    .map(|cache_value| cache_value.get_inner())
             };
+
             if v.is_none() {
                 metrics_inc_cache_miss_count(1, &self.name);
             } else {
