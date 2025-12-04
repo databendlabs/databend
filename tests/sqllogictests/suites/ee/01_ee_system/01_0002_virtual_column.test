@@ -349,6 +349,8 @@ test_virtual_column tweets data['text'] 10 10 7 0 a z 16 (empty)
 test_virtual_column tweets data['user']['id'] 10 10 6 0 1 7 8 (empty)
 test_virtual_column tweets id 10 10 10 0 1 10 4 (empty)
 
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 2;
 
 statement ok
 UPDATE tweets SET data = '{"id":4, "create": "1/08", "text": "aa", "user": {"id": 1}, "replies": 10}' WHERE id = 4;
@@ -498,6 +500,9 @@ SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 
 statement ok
 set enable_experimental_virtual_column = 0;
+
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 25;
 
 statement ok
 INSERT INTO tweets FROM (SELECT * FROM tweets);
