@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterBloom;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
@@ -286,25 +287,23 @@ async fn build_bloom_filter(
         .map(|chunk| chunk.to_vec())
         .collect();
 
-    let tasks: Vec<_> = chunks
-        .into_iter()
-        .map(|chunk| {
-            databend_common_base::runtime::spawn(async move {
-                let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
-                    .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+    let tasks = chunks.into_iter().map(|chunk| async move {
+        let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
+            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
 
-                filter.insert_hash_batch(&chunk);
-                Ok::<Sbbf, ErrorCode>(filter)
-            })
-        })
-        .collect();
+        filter.insert_hash_batch(&chunk);
+        Ok::<Sbbf, ErrorCode>(filter)
+    });
 
-    let task_results = futures::future::join_all(tasks).await;
-
-    let filters: Vec<Sbbf> = task_results
-        .into_iter()
-        .map(|r| r.expect("Task panicked"))
-        .collect::<Result<Vec<_>>>()?;
+    let filters: Vec<Sbbf> = execute_futures_in_parallel(
+        tasks,
+        max_threads,
+        max_threads,
+        "runtime-filter-bloom-worker".to_owned(),
+    )
+    .await?
+    .into_iter()
+    .collect::<Result<Vec<_>>>()?;
 
     let merged_filter = merge_bloom_filters_tree(filters);
 
