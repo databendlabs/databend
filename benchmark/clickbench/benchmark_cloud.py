@@ -239,7 +239,6 @@ def write_result_files(script_dir: Path, record: ResultRecord) -> None:
     final_result_path = script_dir / f"result-{record.dataset}-cloud-{record.size}.json"
     ndjson_name = (
         f"result-{record.dataset}-cloud-{record.size}"
-        f"-{record.date}"
         f"-{record.run_id}.ndjson"
     )
     ndjson_path = script_dir / ndjson_name
