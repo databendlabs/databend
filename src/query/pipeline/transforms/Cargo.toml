@@ -21,6 +21,7 @@ databend-common-functions = { workspace = true }
 databend-common-license = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-sql = { workspace = true }
+databend-common-tracing = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 enum-as-inner = { workspace = true }
 fastrace = { workspace = true }

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[FUSE-PARTITIONS] ...".
+databend_common_tracing::register_module_tag!("[FUSE-PARTITIONS]");
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -128,7 +131,7 @@ impl FuseTable {
         let snapshot = self.read_table_snapshot().await?;
 
         info!(
-            "[FUSE-PARTITIONS] Reading partitions for table {}, push downs: {:?}, snapshot: {:?}",
+            "Reading partitions for table {}, push downs: {:?}, snapshot: {:?}",
             self.name(),
             push_downs,
             snapshot.as_ref().map(|sn| sn.snapshot_id)
@@ -244,7 +247,7 @@ impl FuseTable {
             if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
                 ctx.set_pruned_partitions_stats(plan_id, stat);
                 let sender = part_info_tx.clone();
-                info!("[FUSE-PARTITIONS] Retrieved pruning result from cache");
+                info!("Retrieved pruning result from cache");
                 source_pipeline.set_on_init(move || {
                     // We cannot use the runtime associated with the query to avoid increasing its lifetime.
                     GlobalIORuntime::instance().spawn(async move {
@@ -262,10 +265,7 @@ impl FuseTable {
                         });
 
                         if let Err(cause) = join_handler.await {
-                            log::warn!(
-                                "[FUSE-PARTITIONS] Join error in prune pipeline: {:?}",
-                                cause
-                            );
+                            log::warn!("Join error in prune pipeline: {:?}", cause);
                         }
 
                         Result::Ok(())
@@ -324,10 +324,7 @@ impl FuseTable {
                 });
 
                 if let Err(cause) = join_handler.await {
-                    log::warn!(
-                        "[FUSE-PARTITIONS] Join error in prune pipeline: {:?}",
-                        cause
-                    );
+                    log::warn!("Join error in prune pipeline: {:?}", cause);
                 }
                 Ok::<_, ErrorCode>(())
             });
@@ -350,7 +347,7 @@ impl FuseTable {
         let num_segments_to_prune = segments_location.len();
         let start = Instant::now();
         info!(
-            "[FUSE-PARTITIONS] prune snapshot block start, {} segment to be processed, at node {}",
+            "prune snapshot block start, {} segment to be processed, at node {}",
             num_segments_to_prune,
             ctx.get_cluster().local_id,
         );
@@ -371,7 +368,7 @@ impl FuseTable {
                 });
 
         if let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key) {
-            info!("[FUSE-PARTITIONS] Retrieved snapshot block pruning result from cache");
+            info!("Retrieved snapshot block pruning result from cache");
             return Ok(cached_result);
         }
 
@@ -382,7 +379,7 @@ impl FuseTable {
         let pruning_stats = pruner.pruning_stats();
 
         info!(
-            "[FUSE-PARTITIONS] prune snapshot block end, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
+            "prune snapshot block end, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
             block_metas.len(),
             num_segments_to_prune,
             start.elapsed(),
@@ -551,7 +548,7 @@ impl FuseTable {
                 let pruned_part_stats = send_part_state.get_pruned_stats();
                 ctx.set_pruned_partitions_stats(plan_id, pruned_part_stats);
                 if enable_prune_cache {
-                    info!("[FUSE-PARTITIONS] Prune cache enabled");
+                    info!("Prune cache enabled");
                     send_part_state.populating_cache();
                 }
             }

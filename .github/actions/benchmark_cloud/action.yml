@@ -10,6 +10,9 @@ inputs:
   dataset:
     description: "hits/tpch"
     required: true
+  database:
+    description: "Database name for benchmark queries"
+    required: false
   source:
     description: "pr/release"
     required: true
@@ -52,7 +55,11 @@ runs:
           echo "database=load_test_${{ inputs.run_id }}" >> $GITHUB_OUTPUT
           echo "tries=1" >> $GITHUB_OUTPUT
         else
-          echo "database=clickbench" >> $GITHUB_OUTPUT
+          database="${{ inputs.database }}"
+          if [[ -z "$database" ]]; then
+            database="clickbench"
+          fi
+          echo "database=$database" >> $GITHUB_OUTPUT
           echo "tries=3" >> $GITHUB_OUTPUT
         fi
 
@@ -65,37 +72,24 @@ runs:
         BENCHMARK_VERSION: ${{ inputs.version }}
         BENCHMARK_DATABASE: ${{ steps.prepare.outputs.database }}
         BENCHMARK_TRIES: ${{ steps.prepare.outputs.tries }}
+        BENCHMARK_SOURCE: ${{ inputs.source }}
+        BENCHMARK_SOURCE_ID: ${{ inputs.source_id }}
+        BENCHMARK_SHA: ${{ inputs.sha }}
         CLOUD_USER: ${{ inputs.cloud_user }}
         CLOUD_PASSWORD: ${{ inputs.cloud_password }}
         CLOUD_GATEWAY: ${{ inputs.cloud_gateway }}
         CLOUD_WAREHOUSE: benchmark-${{ inputs.run_id }}
       shell: bash
       run: |
-        ./benchmark_cloud.sh
-
-    - name: Prepare Metadata
-      working-directory: benchmark/clickbench
-      shell: bash
-      run: |
-        case ${{ inputs.source }} in
-          pr)
-            yq -i '.system = "Databend(PR#${{ inputs.source_id }})"' result.json
-            ;;
-          release)
-            yq -i '.system = "Databend(Release@${{ inputs.source_id }})"' result.json
-            ;;
-          *)
-            echo "Unsupported benchmark source: ${{ inputs.source }}"
-            exit 1
-        esac
-        yq -i '.comment = "commit: ${{ inputs.sha }}"' result.json
-        mv result.json result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
+        python3 benchmark_cloud.py
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: benchmark-${{ inputs.dataset }}-${{ inputs.size }}
-        path: benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
+        path: |
+          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
+          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-*.ndjson
 
     - name: Remove warehouse
       if: always()
