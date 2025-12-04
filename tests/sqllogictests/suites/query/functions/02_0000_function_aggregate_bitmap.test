@@ -55,14 +55,14 @@ SELECT id, to_string(bitmap_intersect(v)), to_string(bitmap_union(v)) from agg_b
 3 1,3,4 1,3,4
 
 query I
-SELECT group_bitmap_count(id::UNSIGNED) from agg_bitmap_test group by id
+SELECT bitmap_count(bitmap_construct_agg(id::UNSIGNED)) from agg_bitmap_test group by id
 ----
 1
 1
 1
 
 query IT rowsort
-SELECT id, to_string(group_bitmap(id::UNSIGNED)) from agg_bitmap_test group by id
+SELECT id, to_string(bitmap_construct_agg(id::UNSIGNED)) from agg_bitmap_test group by id
 ----
 1 1
 2 2
@@ -86,12 +86,12 @@ SELECT to_string(bitmap_intersect(v)), to_string(bitmap_union(v)) from agg_bitma
 1 0,1,2,3,4
 
 query I
-SELECT group_bitmap_count(id::UNSIGNED) from agg_bitmap_test
+SELECT bitmap_count(bitmap_construct_agg(id::UNSIGNED)) from agg_bitmap_test
 ----
 3
 
 query T
-SELECT to_string(group_bitmap(id::UNSIGNED)) from agg_bitmap_test
+SELECT to_string(bitmap_construct_agg(id::UNSIGNED)) from agg_bitmap_test
 ----
 1,2,3
 
@@ -119,12 +119,12 @@ SELECT to_string(bitmap_intersect(v)), to_string(bitmap_union(v)) from agg_bitma
 (empty) 0,1,2,3,4
 
 query I
-SELECT group_bitmap_count(id::UNSIGNED) from agg_bitmap_test
+SELECT bitmap_count(bitmap_construct_agg(id::UNSIGNED)) from agg_bitmap_test
 ----
 4
 
 query T
-SELECT to_string(group_bitmap(id::UNSIGNED)) from agg_bitmap_test
+SELECT to_string(bitmap_construct_agg(id::UNSIGNED)) from agg_bitmap_test
 ----
 1,2,3,4
 

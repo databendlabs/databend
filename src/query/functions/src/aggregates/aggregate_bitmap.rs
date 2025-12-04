@@ -872,7 +872,7 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
     })
 }
 
-fn try_create_group_bitmap_function_impl<AGG: BitmapAggResult>(
+fn try_create_bitmap_construct_function_impl<AGG: BitmapAggResult>(
     display_name: &str,
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
@@ -900,22 +900,17 @@ fn try_create_group_bitmap_function_impl<AGG: BitmapAggResult>(
     }
 }
 
-pub fn try_create_group_bitmap_function(
+pub fn try_create_bitmap_construct_agg_function(
     display_name: &str,
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
-    try_create_group_bitmap_function_impl::<BitmapCountResult>(display_name, params, argument_types)
-}
-
-pub fn try_create_group_bitmap_state_function(
-    display_name: &str,
-    params: Vec<Scalar>,
-    argument_types: Vec<DataType>,
-    _sort_descs: Vec<AggregateFunctionSortDesc>,
-) -> Result<Arc<dyn AggregateFunction>> {
-    try_create_group_bitmap_function_impl::<BitmapRawResult>(display_name, params, argument_types)
+    try_create_bitmap_construct_function_impl::<BitmapRawResult>(
+        display_name,
+        params,
+        argument_types,
+    )
 }
 
 fn extract_params<T: AccessType>(
@@ -1027,26 +1022,14 @@ pub fn aggregate_bitmap_intersect_count_function_desc() -> AggregateFunctionDesc
     )
 }
 
-pub fn aggregate_group_bitmap_function_desc() -> AggregateFunctionDescription {
+pub fn aggregate_bitmap_construct_agg_function_desc() -> AggregateFunctionDescription {
     let features = super::AggregateFunctionFeatures {
         returns_default_when_only_null: true,
         is_decomposable: true,
         ..Default::default()
     };
     AggregateFunctionDescription::creator_with_features(
-        Box::new(try_create_group_bitmap_function),
-        features,
-    )
-}
-
-pub fn aggregate_group_bitmap_state_function_desc() -> AggregateFunctionDescription {
-    let features = super::AggregateFunctionFeatures {
-        returns_default_when_only_null: true,
-        is_decomposable: true,
-        ..Default::default()
-    };
-    AggregateFunctionDescription::creator_with_features(
-        Box::new(try_create_group_bitmap_state_function),
+        Box::new(try_create_bitmap_construct_agg_function),
         features,
     )
 }
