@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[FUSE-PRUNER] ...".
+databend_common_tracing::register_module_tag!("[FUSE-PRUNER]");
+
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -219,9 +222,9 @@ impl VectorIndexPruner {
                 metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
             }
             if !param.has_filter && param.asc {
-                info!("[FUSE-PRUNER] Vector index hnsw topn prune elapsed: {elapsed}");
+                info!("Vector index hnsw topn prune elapsed: {elapsed}");
             } else {
-                info!("[FUSE-PRUNER] Vector index calculate score topn prune elapsed: {elapsed}");
+                info!("Vector index calculate score topn prune elapsed: {elapsed}");
             }
 
             return Ok(pruned_metas);
@@ -415,7 +418,7 @@ impl VectorIndexPruner {
         {
             metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
         }
-        info!("[FUSE-PRUNER] Vector index calculate score elapsed: {elapsed}");
+        info!("Vector index calculate score elapsed: {elapsed}");
 
         Ok(new_metas)
     }

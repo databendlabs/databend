@@ -65,6 +65,7 @@ fn expected_data_block(
             base_block_ids: None,
             inner: None,
             matched_rows: block_meta.matched_rows.clone(),
+            matched_scores: block_meta.matched_scores.clone(),
             vector_scores: block_meta.vector_scores.clone(),
         };
         for internal_column in internal_columns {

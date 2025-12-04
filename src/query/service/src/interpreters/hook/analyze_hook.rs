@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[ANALYZE-HOOK] ...".
+databend_common_tracing::register_module_tag!("[ANALYZE-HOOK]");
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -42,17 +45,17 @@ pub async fn hook_analyze(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            info!("[ANALYZE-HOOK] Pipeline execution completed successfully, starting analyze job");
+            info!("Pipeline execution completed successfully, starting analyze job");
             if !ctx.get_enable_auto_analyze() {
                 return Ok(());
             }
 
             match GlobalIORuntime::instance().block_on(do_analyze(ctx, desc)) {
                 Ok(_) => {
-                    info!("[ANALYZE-HOOK] Analyze job completed successfully");
+                    info!("Analyze job completed successfully");
                 }
                 Err(e) => {
-                    info!("[ANALYZE-HOOK] Analyze job failed: {:?}", e);
+                    info!("Analyze job failed: {:?}", e);
                 }
             }
         }

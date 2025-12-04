@@ -23,6 +23,10 @@ inputs:
     description: "Category to upload"
     required: false
     default: "default"
+  trim_debug:
+    description: "Trim debug info"
+    required: false
+    default: "true"
 runs:
   using: "composite"
   steps:
@@ -95,6 +99,7 @@ runs:
         ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
 
     - name: Spilt Binary Symbols
+      if: inputs.trim_debug == 'true'
       shell: bash
       run: |
         objcopy --only-keep-debug ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug

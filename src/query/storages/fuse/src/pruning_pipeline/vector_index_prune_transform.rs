@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[PROCESSOR-ASYNC-TASK] ...".
+databend_common_tracing::register_module_tag!("[PROCESSOR-ASYNC-TASK]");
+
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -79,7 +82,7 @@ impl VectorIndexPruneTransform {
         let start = Instant::now();
         let pruned = self.vector_index_pruner.prune(self.metas.clone()).await?;
         let elapsed = start.elapsed().as_millis() as u64;
-        info!("[PROCESSOR-ASYNC-TASK] Vector index prune transform elapsed: {elapsed}");
+        info!("Vector index prune transform elapsed: {elapsed}");
 
         if pruned.is_empty() {
             Ok(None)

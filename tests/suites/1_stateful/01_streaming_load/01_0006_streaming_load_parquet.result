@@ -5,7 +5,7 @@
 q1.parquet	637	1
 >>>> streaming load: q1.parquet error :
 + curl -sS -H x-databend-query-id:load-q1 -H 'X-Databend-SQL:insert into streaming_load_parquet(c2,c3) from @_databend_load file_format = (type='\''parquet'\'', missing_field_as=error, null_if=())' -F upload=@/tmp/streaming_load_parquet/q1.parquet -u root: -XPUT http://localhost:8000/v1/streaming_load
-{"id":"load-q1","stats":{"rows":1,"bytes":33}}
+{"id":"load-q1","stats":{"rows":1,"bytes":27}}
 <<<<
 >>>> select * from streaming_load_parquet;
 ok	1	2021-01-01
@@ -16,7 +16,7 @@ ok	1	2021-01-01
 q2.parquet	431	1
 >>>> streaming load: q2.parquet error :
 + curl -sS -H x-databend-query-id:load-q2 -H 'X-Databend-SQL:insert into streaming_load_parquet(c2,c3) from @_databend_load file_format = (type='\''parquet'\'', missing_field_as=error, null_if=())' -F upload=@/tmp/streaming_load_parquet/q2.parquet -u root: -XPUT http://localhost:8000/v1/streaming_load
-{"error":{"code":400,"message":"[HTTP-STREAMING-LOAD] Query execution failed: file q2.parquet missing column `c2`"}}
+{"error":{"code":400,"message":"Query execution failed: file q2.parquet missing column `c2`"}}
 <<<<
 >>>> select * from streaming_load_parquet;
 <<<<
@@ -26,7 +26,7 @@ q2.parquet	431	1
 q3.parquet	431	1
 >>>> streaming load: q3.parquet field_default :
 + curl -sS -H x-databend-query-id:load-q3 -H 'X-Databend-SQL:insert into streaming_load_parquet(c2,c3) from @_databend_load file_format = (type='\''parquet'\'', missing_field_as=field_default, null_if=())' -F upload=@/tmp/streaming_load_parquet/q3.parquet -u root: -XPUT http://localhost:8000/v1/streaming_load
-{"id":"load-q3","stats":{"rows":1,"bytes":29}}
+{"id":"load-q3","stats":{"rows":1,"bytes":23}}
 <<<<
 >>>> select * from streaming_load_parquet;
 ok	NULL	2021-01-01

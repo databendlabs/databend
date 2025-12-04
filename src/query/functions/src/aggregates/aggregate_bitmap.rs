@@ -39,7 +39,7 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 use databend_common_io::prelude::BinaryWrite;
-use roaring::RoaringTreemap;
+use databend_common_io::HybridBitmap;
 
 use super::assert_arguments;
 use super::assert_params;
@@ -149,7 +149,7 @@ macro_rules! with_bitmap_op_mapped_type {
 }
 
 trait BitmapOperate: Send + Sync + 'static {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap);
+    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap);
 }
 
 struct BitmapAndOp;
@@ -161,31 +161,31 @@ struct BitmapXorOp;
 struct BitmapNotOp;
 
 impl BitmapOperate for BitmapAndOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.bitand_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapOrOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.bitor_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapXorOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.bitxor_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapNotOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.sub_assign(rhs);
     }
 }
 
 struct BitmapAggState {
-    rb: Option<RoaringTreemap>,
+    rb: Option<HybridBitmap>,
 }
 
 impl BitmapAggState {
@@ -193,7 +193,7 @@ impl BitmapAggState {
         Self { rb: None }
     }
 
-    fn add<OP: BitmapOperate>(&mut self, other: RoaringTreemap) {
+    fn add<OP: BitmapOperate>(&mut self, other: HybridBitmap) {
         match &mut self.rb {
             Some(v) => {
                 OP::operate(v, other);

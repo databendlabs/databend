@@ -32,7 +32,6 @@ use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::PayloadFlushState;
 use crate::ProjectedBlock;
-use crate::SelectVector;
 use crate::StateAddr;
 use crate::StatesLayout;
 use crate::BATCH_SIZE;
@@ -119,13 +118,11 @@ impl Payload {
         }
 
         let hash_offset = tuple_size;
-
-        let hash_size = 8;
-        tuple_size += hash_size;
+        tuple_size += size_of::<u64>();
 
         let state_offset = tuple_size;
         if !aggrs.is_empty() {
-            tuple_size += 8;
+            tuple_size += size_of::<StateAddr>();
         }
 
         let row_per_page = (u16::MAX as usize).min(MAX_PAGE_SIZE / tuple_size).max(1);
@@ -195,21 +192,20 @@ impl Payload {
     }
 
     pub(super) fn data_ptr(&self, page: &Page, row: usize) -> RowPtr {
-        RowPtr::new(unsafe { page.data.as_ptr().add(row * self.tuple_size) as _ })
+        page.data_ptr(row, self.tuple_size)
     }
 
     pub(super) fn reserve_append_rows(
         &mut self,
-        select_vector: &SelectVector,
+        select_vector: &[usize],
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
-        new_group_rows: usize,
         group_columns: ProjectedBlock,
     ) {
         let tuple_size = self.tuple_size;
         let (mut page, mut page_index_value) = self.writable_page();
-        for idx in select_vector[..new_group_rows].iter().copied() {
+        for idx in select_vector.iter().copied() {
             address[idx] = page.data_ptr(page.rows, tuple_size);
             page_index[idx] = page_index_value;
             page.rows += 1;
@@ -224,18 +220,16 @@ impl Payload {
             group_hashes,
             address,
             page_index,
-            new_group_rows,
             group_columns,
         )
     }
 
     fn append_rows(
         &mut self,
-        select_vector: &SelectVector,
+        select_vector: &[usize],
         group_hashes: &[u64; BATCH_SIZE],
         address: &mut [RowPtr; BATCH_SIZE],
         page_index: &mut [usize],
-        new_group_rows: usize,
         group_columns: ProjectedBlock,
     ) {
         let mut write_offset = 0;
@@ -246,13 +240,13 @@ impl Payload {
                 if bitmap.null_count() == 0 || bitmap.null_count() == bitmap.len() {
                     let val: u8 = if bitmap.null_count() == 0 { 1 } else { 0 };
                     // faster path
-                    for idx in select_vector.iter().take(new_group_rows).copied() {
+                    for idx in select_vector.iter().copied() {
                         unsafe {
                             address[idx].write_u8(write_offset, val);
                         }
                     }
                 } else {
-                    for idx in select_vector.iter().take(new_group_rows).copied() {
+                    for idx in select_vector.iter().copied() {
                         unsafe {
                             address[idx].write_u8(write_offset, bitmap.get_bit(idx) as u8);
                         }
@@ -272,7 +266,6 @@ impl Payload {
                     &self.arena,
                     &entry.to_column(),
                     select_vector,
-                    new_group_rows,
                     address,
                     offset,
                     &mut scratch,
@@ -283,7 +276,7 @@ impl Payload {
 
         // write group hashes
         debug_assert!(write_offset == self.row_layout.hash_offset);
-        for idx in select_vector.iter().take(new_group_rows).copied() {
+        for idx in select_vector.iter().copied() {
             address[idx].set_hash(&self.row_layout, group_hashes[idx]);
         }
 
@@ -293,12 +286,11 @@ impl Payload {
         }) = &self.row_layout.states_layout
         {
             // write states
-            let (array_layout, padded_size) = layout.repeat(new_group_rows).unwrap();
+            let (array_layout, padded_size) = layout.repeat(select_vector.len()).unwrap();
             // Bump only allocates but does not drop, so there is no use after free for any item.
             let place = self.arena.alloc_layout(array_layout);
             for (idx, place) in select_vector
                 .iter()
-                .take(new_group_rows)
                 .copied()
                 .enumerate()
                 .map(|(i, idx)| (idx, unsafe { place.add(padded_size * i) }))
@@ -320,7 +312,7 @@ impl Payload {
             }
         }
 
-        self.total_rows += new_group_rows;
+        self.total_rows += select_vector.len();
 
         debug_assert_eq!(
             self.total_rows,
@@ -344,21 +336,15 @@ impl Payload {
         }
     }
 
-    pub fn copy_rows(
-        &mut self,
-        select_vector: &SelectVector,
-        row_count: usize,
-        address: &[RowPtr; BATCH_SIZE],
-    ) {
+    pub fn copy_rows(&mut self, select_vector: &[usize], address: &[RowPtr; BATCH_SIZE]) {
         let tuple_size = self.tuple_size;
         let agg_len = self.aggrs.len();
         let (mut page, _) = self.writable_page();
-        for i in 0..row_count {
-            let index = select_vector[i];
 
+        for index in select_vector {
             unsafe {
                 std::ptr::copy_nonoverlapping(
-                    address[index].as_ptr(),
+                    address[*index].as_ptr(),
                     page.data.as_mut_ptr().add(page.rows * tuple_size) as _,
                     tuple_size,
                 )
@@ -371,7 +357,7 @@ impl Payload {
             }
         }
 
-        self.total_rows += row_count;
+        self.total_rows += select_vector.len();
 
         debug_assert_eq!(
             self.total_rows,
@@ -379,40 +365,40 @@ impl Payload {
         );
     }
 
-    pub fn scatter(&self, state: &mut PayloadFlushState, partition_count: usize) -> bool {
-        if state.flush_page >= self.pages.len() {
+    pub fn scatter(&self, flush_state: &mut PayloadFlushState, partition_count: usize) -> bool {
+        if flush_state.flush_page >= self.pages.len() {
             return false;
         }
 
-        let page = &self.pages[state.flush_page];
+        let page = &self.pages[flush_state.flush_page];
 
         // ToNext
-        if state.flush_page_row >= page.rows {
-            state.flush_page += 1;
-            state.flush_page_row = 0;
-            state.row_count = 0;
-            return self.scatter(state, partition_count);
+        if flush_state.flush_page_row >= page.rows {
+            flush_state.flush_page += 1;
+            flush_state.flush_page_row = 0;
+            flush_state.row_count = 0;
+            return self.scatter(flush_state, partition_count);
         }
 
-        let end = (state.flush_page_row + BATCH_SIZE).min(page.rows);
-        let rows = end - state.flush_page_row;
-        state.row_count = rows;
+        let end = (flush_state.flush_page_row + BATCH_SIZE).min(page.rows);
+        let rows = end - flush_state.flush_page_row;
+        flush_state.row_count = rows;
 
-        state.probe_state.reset_partitions(partition_count);
+        let state = &mut *flush_state.probe_state;
+        state.reset_partitions(partition_count);
 
         let mods: StrengthReducedU64 = StrengthReducedU64::new(partition_count as u64);
-        for idx in 0..rows {
-            state.addresses[idx] = self.data_ptr(page, idx + state.flush_page_row);
 
-            let hash = state.addresses[idx].hash(&self.row_layout);
-
+        for (idx, row_ptr) in flush_state.addresses[..rows].iter_mut().enumerate() {
+            *row_ptr = self.data_ptr(page, idx + flush_state.flush_page_row);
+            let hash = row_ptr.hash(&self.row_layout);
             let partition_idx = (hash % mods) as usize;
 
-            let sel = &mut state.probe_state.partition_entries[partition_idx];
-            sel[state.probe_state.partition_count[partition_idx]] = idx;
-            state.probe_state.partition_count[partition_idx] += 1;
+            let (count, sel) = &mut state.partition_entries[partition_idx];
+            sel[*count] = idx;
+            *count += 1;
         }
-        state.flush_page_row = end;
+        flush_state.flush_page_row = end;
         true
     }
 

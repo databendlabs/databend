@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::new_sel;
 use super::row_ptr::RowPtr;
-use super::SelectVector;
 use super::StateAddr;
 use super::BATCH_SIZE;
+
+pub type SelectVector = [usize; BATCH_SIZE];
 
 /// ProbeState is the state to probe HT
 /// It could be reuse during multiple probe process
@@ -26,14 +26,15 @@ pub struct ProbeState {
     pub(super) addresses: [RowPtr; BATCH_SIZE],
     pub(super) page_index: [usize; BATCH_SIZE],
     pub(super) state_places: [StateAddr; BATCH_SIZE],
+
+    pub(super) empty_vector: SelectVector,
+
     pub(super) group_compare_vector: SelectVector,
     pub(super) no_match_vector: SelectVector,
-    pub(super) empty_vector: SelectVector,
-    pub(super) temp_vector: SelectVector,
     pub(super) row_count: usize,
 
-    pub partition_entries: Vec<SelectVector>,
-    pub partition_count: Vec<usize>,
+    pub partition_entries: Vec<(usize, SelectVector)>,
+    pool: Vec<Vec<usize>>,
 }
 
 impl Default for ProbeState {
@@ -42,14 +43,14 @@ impl Default for ProbeState {
             group_hashes: [0; BATCH_SIZE],
             addresses: [RowPtr::null(); BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
-            state_places: [StateAddr::new(0); BATCH_SIZE],
-            group_compare_vector: new_sel(),
-            no_match_vector: new_sel(),
-            empty_vector: new_sel(),
-            temp_vector: new_sel(),
-            partition_entries: vec![],
-            partition_count: vec![],
+            state_places: [StateAddr::null(); BATCH_SIZE],
+            group_compare_vector: [0; BATCH_SIZE],
+            no_match_vector: [0; BATCH_SIZE],
+            empty_vector: [0; BATCH_SIZE],
+
             row_count: 0,
+            partition_entries: vec![],
+            pool: vec![],
         }
     }
 }
@@ -58,20 +59,48 @@ unsafe impl Send for ProbeState {}
 unsafe impl Sync for ProbeState {}
 
 impl ProbeState {
-    pub fn set_incr_empty_vector(&mut self, row_count: usize) {
-        for i in 0..row_count {
-            self.empty_vector[i] = i;
+    pub fn new_boxed() -> Box<ProbeState> {
+        let mut state = Box::<ProbeState>::new_zeroed();
+        unsafe {
+            let uninit = state.assume_init_mut();
+            uninit.partition_entries = vec![];
+            uninit.pool = vec![];
+
+            for ptr in &mut uninit.addresses {
+                *ptr = RowPtr::null();
+            }
+            for addr in &mut uninit.state_places {
+                *addr = StateAddr::null()
+            }
+
+            state.assume_init()
         }
     }
 
-    pub fn reset_partitions(&mut self, partition_count: usize) {
-        if self.partition_entries.len() < partition_count {
-            self.partition_entries.resize(partition_count, new_sel());
-            self.partition_count.resize(partition_count, 0);
+    pub(super) fn reset_partitions(&mut self, partition_count: usize) {
+        if partition_count > self.partition_entries.capacity() {
+            self.partition_entries
+                .reserve(partition_count - self.partition_entries.capacity());
         }
+        unsafe {
+            self.partition_entries.set_len(partition_count);
+        }
+        for (count, _) in &mut self.partition_entries {
+            *count = 0;
+        }
+    }
 
-        for i in 0..partition_count {
-            self.partition_count[i] = 0;
+    pub(super) fn get_temp(&mut self) -> Vec<usize> {
+        match self.pool.pop() {
+            Some(mut vec) => {
+                vec.clear();
+                vec
+            }
+            None => vec![],
         }
+    }
+
+    pub(super) fn save_temp(&mut self, vec: Vec<usize>) {
+        self.pool.push(vec);
     }
 }

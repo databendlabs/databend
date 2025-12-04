@@ -76,6 +76,19 @@ select * from t where not(not(not(a)))
 ----
 0 0
 
+
+statement ok
+set max_block_size = 3;
+
+statement ok
+select * from numbers(10000) where number % 5 > 3 and number % 5 < 5;
+
+statement ok
+select * from numbers(10000) where number % 5 > 3 and number % 5 < 5;
+
+statement ok
+unset max_block_size;
+
 statement ok
 create or replace table t(a int, b varchar);
 

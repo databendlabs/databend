@@ -254,7 +254,7 @@ def test_query_lifecycle_finalized(rows):
         {
             "error": {
                 "code": 404,
-                "message": "[HTTP-QUERY] Invalid page number: requested 0, current page is 2",
+                "message": "Invalid page number: requested 0, current page is 2",
             }
         },
     )
@@ -263,7 +263,7 @@ def test_query_lifecycle_finalized(rows):
         {
             "error": {
                 "code": 404,
-                "message": f"[HTTP-QUERY] Invalid page number: requested {large_page_no}, current page is 2",
+                "message": f"Invalid page number: requested {large_page_no}, current page is 2",
             }
         },
     )
@@ -284,7 +284,7 @@ def test_query_lifecycle_finalized(rows):
         {
             "error": {
                 "code": 400,
-                "message": f"[HTTP-QUERY] Query {query_id} is closed for finalized",
+                "message": f"Query {query_id} is closed for finalized",
             }
         },
     )
@@ -331,7 +331,7 @@ def test_query_lifecycle_canceled():
         {
             "error": {
                 "code": 400,
-                "message": f"[HTTP-QUERY] Query {query_id} is closed for canceled",
+                "message": f"Query {query_id} is closed for canceled",
             }
         },
     )
@@ -397,7 +397,7 @@ def test_query_lifecycle_timeout(rows):
         {
             "error": {
                 "code": 400,
-                "message": f"[HTTP-QUERY] Query {query_id} is closed for timed out",
+                "message": f"Query {query_id} is closed for timed out",
             }
         },
     )

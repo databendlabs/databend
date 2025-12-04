@@ -106,8 +106,10 @@ pub struct InternalColumnMeta {
     pub offsets: Option<RoaringTreemap>,
     pub base_block_ids: Option<Scalar>,
     pub inner: Option<BlockMetaInfoPtr>,
-    // The search matched rows and optional scores in the block.
-    pub matched_rows: Option<Vec<(usize, Option<F32>)>>,
+    // The search matched rows in the block (aligned with `matched_scores` when present).
+    pub matched_rows: Option<Vec<usize>>,
+    // Optional scores for the matched rows.
+    pub matched_scores: Option<Vec<F32>>,
     // The vector topn rows and scores in the block.
     pub vector_scores: Option<Vec<(usize, F32)>>,
 }
@@ -280,24 +282,25 @@ impl InternalColumn {
             InternalColumnType::SearchMatched => {
                 assert!(meta.matched_rows.is_some());
                 let matched_rows = meta.matched_rows.as_ref().unwrap();
-
                 let mut bitmap = MutableBitmap::from_len_zeroed(num_rows);
-                for (idx, _) in matched_rows.iter() {
-                    debug_assert!(*idx < bitmap.len());
+                for idx in matched_rows.iter() {
+                    debug_assert!(*idx < num_rows);
                     bitmap.set(*idx, true);
                 }
                 Column::Boolean(bitmap.into()).into()
             }
             InternalColumnType::SearchScore => {
                 assert!(meta.matched_rows.is_some());
+                assert!(meta.matched_scores.is_some());
                 let matched_rows = meta.matched_rows.as_ref().unwrap();
+                let matched_scores = meta.matched_scores.as_ref().unwrap();
+                debug_assert_eq!(matched_rows.len(), matched_scores.len());
 
                 let mut scores = vec![F32::from(0_f32); num_rows];
-                for (idx, score) in matched_rows.iter() {
-                    debug_assert!(*idx < scores.len());
+                for (idx, score) in matched_rows.iter().zip(matched_scores.iter()) {
+                    debug_assert!(*idx < num_rows);
                     if let Some(val) = scores.get_mut(*idx) {
-                        debug_assert!(score.is_some());
-                        *val = F32::from(*score.unwrap());
+                        *val = *score;
                     }
                 }
                 Float32Type::from_data(scores).into()

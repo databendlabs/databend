@@ -237,16 +237,13 @@ impl TopNPruner {
 
         let mut score_stats = Vec::new();
         for (pos, (index, _)) in metas.iter().enumerate() {
-            let Some(rows) = &index.matched_rows else {
-                continue;
-            };
-            if rows.is_empty() {
-                continue;
-            }
-            let Some((min_score, max_score)) = block_score_range(rows) else {
+            let Some(scores) = &index.matched_scores else {
                 return Ok(metas);
             };
-            score_stats.push((pos, min_score, max_score, rows.len()));
+            let Some((min_score, max_score)) = block_score_range(scores) else {
+                return Ok(metas);
+            };
+            score_stats.push((pos, min_score, max_score, scores.len()));
         }
 
         if score_stats.is_empty() {
@@ -302,21 +299,15 @@ fn index_match_count(index: &BlockMetaIndex) -> usize {
     0
 }
 
-fn block_score_range(rows: &[(usize, Option<F32>)]) -> Option<(F32, F32)> {
-    let mut min_score: Option<F32> = None;
-    let mut max_score: Option<F32> = None;
-    for (_, score) in rows {
-        let score = (*score)?;
-        min_score = Some(match min_score {
-            Some(current) => current.min(score),
-            None => score,
-        });
-        max_score = Some(match max_score {
-            Some(current) => current.max(score),
-            None => score,
-        });
+fn block_score_range(scores: &[F32]) -> Option<(F32, F32)> {
+    if scores.is_empty() {
+        return None;
     }
-    min_score.zip(max_score)
+    // Scores are arranged in descending order,
+    // so we can directly get the maximum and minimum score.
+    let max_score = scores[0];
+    let min_score = scores[scores.len() - 1];
+    Some((min_score, max_score))
 }
 
 #[cfg(test)]
@@ -324,7 +315,6 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_expression::types::number::NumberDataType;
-    use databend_common_expression::types::number::F32;
     use databend_common_expression::types::DataType;
     use databend_common_expression::ColumnId;
     use databend_common_expression::Scalar;
@@ -454,7 +444,7 @@ mod tests {
         let matched = if matched_rows == 0 {
             None
         } else {
-            Some((0..matched_rows).map(|row| (row, None)).collect::<Vec<_>>())
+            Some((0..matched_rows).collect::<Vec<_>>())
         };
 
         let index = BlockMetaIndex {
@@ -467,6 +457,7 @@ mod tests {
             segment_location: "segment".to_string(),
             snapshot_location: None,
             matched_rows: matched,
+            matched_scores: None,
             vector_scores: None,
             virtual_block_meta: None,
         };
@@ -482,15 +473,8 @@ mod tests {
         scores: &[f32],
     ) -> (BlockMetaIndex, Arc<BlockMeta>) {
         let (mut index, meta) = build_block(column_id, block_id, min, max, scores.len());
-        let matched_rows = scores
-            .iter()
-            .enumerate()
-            .map(|(row, score)| {
-                let ordered: F32 = (*score).into();
-                (row, Some(ordered))
-            })
-            .collect();
-        index.matched_rows = Some(matched_rows);
+        let matched_scores = scores.iter().map(|v| (*v).into()).collect();
+        index.matched_scores = Some(matched_scores);
         (index, meta)
     }
 }

@@ -61,7 +61,7 @@ def test_stream_load():
     ]
     progress = conn.stream_load("INSERT INTO test VALUES", values)
     assert progress.write_rows == 3, f"progress.write_rows: {progress.write_rows}"
-    # assert progress.write_bytes >= 242, f"progress.write_bytes: {progress.write_bytes}"
+    # assert progress.write_bytes == 211, f"progress.write_bytes: {progress.write_bytes}"
 
     rows = conn.query_iter("SELECT * FROM test")
     ret = [row.values() for row in rows]

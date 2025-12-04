@@ -121,6 +121,18 @@ fn test_eq(file: &mut impl Write) {
     ];
     run_ast(file, "parse_json(lhs) = parse_json(rhs)", &table);
     run_ast(file, "lhs = rhs", &table);
+
+    run_ast(
+        file,
+        "build_bitmap([3, 7, 9]) = build_bitmap([3, 7, 9])",
+        &[],
+    );
+    run_ast(
+        file,
+        "build_bitmap([3, 7, 9]) = build_bitmap([3, 7, 10])",
+        &[],
+    );
+    run_ast(file, "null = build_bitmap([3, 7, 10])", &[]);
 }
 
 fn test_noteq(file: &mut impl Write) {
@@ -186,6 +198,18 @@ fn test_noteq(file: &mut impl Write) {
     ];
     run_ast(file, "parse_json(lhs) != parse_json(rhs)", &table);
     run_ast(file, "lhs != rhs", &table);
+
+    run_ast(
+        file,
+        "build_bitmap([3, 7, 9]) != build_bitmap([3, 7, 9])",
+        &[],
+    );
+    run_ast(
+        file,
+        "build_bitmap([3, 7, 9]) != build_bitmap([3, 7, 10])",
+        &[],
+    );
+    run_ast(file, "null != build_bitmap([3, 7, 10])", &[]);
 }
 
 fn test_lt(file: &mut impl Write) {

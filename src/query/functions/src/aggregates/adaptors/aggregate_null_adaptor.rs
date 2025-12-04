@@ -15,6 +15,7 @@
 use std::fmt;
 use std::sync::Arc;
 
+use databend_common_base::hints::assume;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -679,5 +680,9 @@ fn get_flag(place: AggrState) -> bool {
 }
 
 fn flag_offset(place: AggrState) -> usize {
-    *place.loc.last().unwrap().as_bool().unwrap().1
+    let n = place.loc.len();
+    assume(n > 0);
+    let loc = unsafe { place.loc.get_unchecked(n - 1) };
+    debug_assert!(loc.is_bool());
+    loc.offset()
 }

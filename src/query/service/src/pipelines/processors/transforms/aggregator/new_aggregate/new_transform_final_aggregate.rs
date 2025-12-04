@@ -132,16 +132,18 @@ impl NewFinalAggregateTransform {
             vec![arena],
         );
 
-        let mut state = PayloadFlushState::default();
-        while src_payload.scatter(&mut state, self.partition_count) {
-            for partition_id in 0..self.partition_count {
-                let count = state.probe_state.partition_count[partition_id];
-                if count == 0 {
-                    continue;
-                }
+        let mut flush_state = PayloadFlushState::default();
+        while src_payload.scatter(&mut flush_state, self.partition_count) {
+            let state = &*flush_state.probe_state;
 
-                let sel = &state.probe_state.partition_entries[partition_id];
-                repartitioned.payloads[partition_id].copy_rows(sel, count, &state.addresses);
+            for (payload, (count, sel)) in repartitioned
+                .payloads
+                .iter_mut()
+                .zip(&state.partition_entries)
+            {
+                if *count > 0 {
+                    payload.copy_rows(&sel[..*count], &flush_state.addresses);
+                }
             }
         }
         // Avoid double drop of states moved into new payloads.

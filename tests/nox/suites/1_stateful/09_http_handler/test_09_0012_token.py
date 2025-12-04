@@ -170,22 +170,20 @@ False
 ---- do_query('select 2',)
 401
 {'code': 5100,
- 'message': '[AUTH] JWT authentication failed: JWT auth is not configured on '
-            'this server'}
+ 'message': 'JWT authentication failed: JWT auth is not configured on this '
+            'server'}
 ---- do_query('select 3',)
 401
 {'code': 5100,
- 'message': '[HTTP-SESSION] Failed to decode token: base64 decode error: '
-            'Invalid padding, token: bend-v1-s-xxx'}
+ 'message': 'Failed to decode token: base64 decode error: Invalid padding, '
+            'token: bend-v1-s-xxx'}
 ---- do_query('select 4',)
 401
-{'code': 5101,
- 'message': '[HTTP-SESSION] Authentication failed: session token has expired'}
+{'code': 5101, 'message': 'Authentication failed: session token has expired'}
 ---- do_query('select 5',)
 401
 {'code': 5100,
- 'message': '[HTTP-SESSION] Authentication error: incorrect token type for '
-            'this endpoint'}
+ 'message': 'Authentication error: incorrect token type for this endpoint'}
 ---- do_refresh(1,)
 200
 ['tokens']
@@ -198,39 +196,34 @@ False
 ---- do_refresh(2,)
 401
 {'code': 5100,
- 'message': '[AUTH] JWT authentication failed: JWT auth is not configured on '
-            'this server'}
+ 'message': 'JWT authentication failed: JWT auth is not configured on this '
+            'server'}
 ---- do_refresh(3,)
 401
 {'code': 5100, 'message': "invalid token type 'x'"}
 ---- do_refresh(4,)
 401
-{'code': 5102,
- 'message': '[HTTP-SESSION] Authentication failed: refresh token has expired'}
+{'code': 5102, 'message': 'Authentication failed: refresh token has expired'}
 ---- do_refresh(5,)
 401
 {'code': 5100,
- 'message': '[HTTP-SESSION] Authentication error: incorrect token type for '
-            'this endpoint'}
+ 'message': 'Authentication error: incorrect token type for this endpoint'}
 ---- do_refresh(6,)
 200
 ---- do_logout(0,)
 401
 {'code': 5100,
- 'message': '[HTTP-SESSION] Authentication error: incorrect token type for '
-            'this endpoint'}
+ 'message': 'Authentication error: incorrect token type for this endpoint'}
 ---- do_logout(1,)
 200
 ---- do_query("select 'after logout'",)
 401
 {'code': 5103,
- 'message': '[HTTP-SESSION] Authentication failed: session token not found in '
-            'database'}
+ 'message': 'Authentication failed: session token not found in database'}
 ---- do_refresh('after_logout',)
 401
 {'code': 5104,
- 'message': '[HTTP-SESSION] Authentication failed: refresh token not found in '
-            'database'}
+ 'message': 'Authentication failed: refresh token not found in database'}
 """
 )
 def test_token():

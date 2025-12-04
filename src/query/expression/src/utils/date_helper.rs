@@ -14,6 +14,7 @@
 
 use std::sync::LazyLock;
 
+use databend_common_column::types::timestamp_tz;
 use databend_common_exception::Result;
 use databend_common_timezone::fast_components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
@@ -258,6 +259,18 @@ fn components_time_less_than(a: &DateTimeComponents, b: &DateTimeComponents) -> 
 
 fn date_from_components(c: &DateTimeComponents) -> Option<Date> {
     Date::new(c.year as i16, c.month as i8, c.day as i8).ok()
+}
+
+#[inline]
+pub fn timestamp_tz_local_micros(value: timestamp_tz) -> Option<i64> {
+    let offset = value.micros_offset()?;
+    value.timestamp().checked_add(offset)
+}
+
+#[inline]
+pub fn timestamp_tz_components_via_lut(value: timestamp_tz) -> Option<DateTimeComponents> {
+    let local = timestamp_tz_local_micros(value)?;
+    fast_components_from_timestamp(local, &TimeZone::UTC)
 }
 
 fn datetime_from_components(c: &DateTimeComponents) -> Option<DateTime> {
@@ -1025,55 +1038,39 @@ pub fn today_date(now: &Zoned, tz: &TimeZone) -> i32 {
 // The working hours of all departments of The State Council are from 8 a.m. to 12 p.m. and from 1:30 p.m. to 5:30 p.m. The winter working hours will be implemented after September 17th.
 pub fn calc_date_to_timestamp(val: i32, tz: &TimeZone) -> std::result::Result<i64, String> {
     let ts = (val as i64) * 24 * 3600 * MICROS_PER_SEC;
-    let z = ts.to_timestamp(tz);
+    let local_date = val.to_date(tz);
+    let year = i32::from(local_date.year());
+    let month = local_date.month() as u8;
+    let day = local_date.day() as u8;
 
-    let tomorrow = z.date().tomorrow();
-    let yesterday = z.date().yesterday();
-
-    // If there were no yesterday or tomorrow, it might be the limit value.
-    // e.g. 9999-12-31
-    if tomorrow.is_err() || yesterday.is_err() {
-        let tz_offset_micros = tz
-            .to_timestamp(date(1970, 1, 1).at(0, 0, 0, 0))
-            .unwrap()
-            .as_microsecond();
-        return Ok(ts + tz_offset_micros);
+    if let Some(micros) = fast_utc_from_local(tz, year, month, day, 0, 0, 0, 0) {
+        return Ok(micros);
     }
 
-    // tomorrow midnight
-    let tomorrow_date = tomorrow.map_err(|e| format!("Calc tomorrow midnight with error {}", e))?;
+    let midnight = local_date.to_datetime(Time::midnight());
+    match midnight.to_zoned(tz.clone()) {
+        Ok(zoned) => Ok(zoned.timestamp().as_microsecond()),
+        Err(_err) => {
+            for minutes in 1..=1440 {
+                let delta = SignedDuration::from_secs((minutes * 60) as i64);
+                if let Ok(adj) = midnight.checked_add(delta) {
+                    if let Ok(zoned) = adj.to_zoned(tz.clone()) {
+                        return Ok(zoned.timestamp().as_microsecond());
+                    }
+                } else {
+                    break;
+                }
+            }
 
-    let tomorrow_zoned = tomorrow_date.to_zoned(tz.clone()).unwrap_or(z.clone());
-    let tomorrow_is_dst = tz.to_offset_info(tomorrow_zoned.timestamp()).dst().is_dst();
-
-    // yesterday midnight
-    let yesterday_date =
-        yesterday.map_err(|e| format!("Calc yesterday midnight with error {}", e))?;
-    let yesterday_zoned = yesterday_date.to_zoned(tz.clone()).unwrap_or(z.clone());
-    let yesterday_is_std = tz
-        .to_offset_info(yesterday_zoned.timestamp())
-        .dst()
-        .is_std();
-
-    // today midnight
-    let today_datetime_midnight = z.date().to_datetime(Time::midnight());
-    let today_zoned = today_datetime_midnight
-        .to_zoned(tz.clone())
-        .map_err(|e| format!("Calc today midnight with error {}", e))?;
-    let today_is_dst = tz.to_offset_info(today_zoned.timestamp()).dst().is_dst();
-
-    let tz_offset_micros = tz
-        .to_timestamp(date(1970, 1, 1).at(0, 0, 0, 0))
-        .unwrap()
-        .as_microsecond();
-
-    let base_res = ts + tz_offset_micros;
-
-    // Origin：(today_is_dst && tomorrow_is_dst && !yesterday_is_std) || (today_is_dst && !tomorrow_is_dst && yesterday_is_std)
-    if today_is_dst && (tomorrow_is_dst != yesterday_is_std) {
-        Ok(base_res - 3600 * MICROS_PER_SEC)
-    } else {
-        Ok(base_res)
+            // The timezone database might not have explicit rules for extremely
+            // old/new dates, so fall back to the legacy behavior that applies the
+            // canonical offset we use for 1970-01-01.
+            let tz_offset_micros = tz
+                .to_timestamp(date(1970, 1, 1).at(0, 0, 0, 0))
+                .unwrap()
+                .as_microsecond();
+            Ok(ts + tz_offset_micros)
+        }
     }
 }
 
