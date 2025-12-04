@@ -20,7 +20,6 @@ use databend_common_exception::Result;
 use databend_common_expression::is_internal_column_id;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -129,106 +128,53 @@ pub fn build_parquet_writer_properties(
 }
 
 fn leaf_column_paths(table_schema: &TableSchema) -> Vec<(ColumnId, ColumnPath)> {
-    let mut paths = Vec::new();
+    let mut arrow_paths = Vec::new();
     for field in table_schema.fields() {
         if is_internal_column_id(field.column_id()) {
             continue;
         }
 
         let arrow_field = ArrowField::from(field);
-        let mut next_column_id = field.column_id();
         let mut current_path = vec![arrow_field.name().clone()];
-        collect_leaf_column_paths(
-            field.data_type(),
-            &arrow_field,
-            &mut current_path,
-            &mut next_column_id,
-            &mut paths,
-        );
+        collect_arrow_leaf_paths(&arrow_field, &mut current_path, &mut arrow_paths);
     }
-    paths
+
+    let leaf_fields = table_schema.leaf_fields();
+    debug_assert_eq!(leaf_fields.len(), arrow_paths.len());
+
+    leaf_fields
+        .into_iter()
+        .zip(arrow_paths.into_iter())
+        .map(|(field, path)| (field.column_id(), ColumnPath::from(path)))
+        .collect()
 }
 
-fn collect_leaf_column_paths(
-    data_type: &TableDataType,
+fn collect_arrow_leaf_paths(
     arrow_field: &ArrowField,
     current_path: &mut Vec<String>,
-    next_column_id: &mut ColumnId,
-    paths: &mut Vec<(ColumnId, ColumnPath)>,
+    paths: &mut Vec<Vec<String>>,
 ) {
-    match data_type {
-        TableDataType::Nullable(inner) => {
-            collect_leaf_column_paths(
-                inner.as_ref(),
-                arrow_field,
-                current_path,
-                next_column_id,
-                paths,
-            );
-        }
-        TableDataType::Tuple { fields_type, .. } => {
-            let children = match arrow_field.data_type() {
-                ArrowDataType::Struct(fields) => fields,
-                other => {
-                    debug_assert!(false, "unexpected Arrow type for tuple: {:?}", other);
-                    return;
-                }
-            };
-            debug_assert_eq!(children.len(), fields_type.len());
-            for (child_field, ty) in children.iter().zip(fields_type) {
-                current_path.push(child_field.name().clone());
-                collect_leaf_column_paths(
-                    ty,
-                    child_field.as_ref(),
-                    current_path,
-                    next_column_id,
-                    paths,
-                );
+    match arrow_field.data_type() {
+        ArrowDataType::Struct(children) => {
+            for child in children {
+                current_path.push(child.name().clone());
+                collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
                 current_path.pop();
             }
         }
-        TableDataType::Array(inner) => {
-            let child_field = match arrow_field.data_type() {
-                ArrowDataType::LargeList(child)
-                | ArrowDataType::List(child)
-                | ArrowDataType::FixedSizeList(child, _) => child,
-                other => {
-                    debug_assert!(false, "unexpected Arrow type for array: {:?}", other);
-                    return;
-                }
-            };
-            current_path.push(child_field.name().clone());
-            collect_leaf_column_paths(
-                inner.as_ref(),
-                child_field.as_ref(),
-                current_path,
-                next_column_id,
-                paths,
-            );
+        ArrowDataType::Map(child, _) => {
+            current_path.push(child.name().clone());
+            collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
             current_path.pop();
         }
-        TableDataType::Map(inner) => {
-            let entry_field = match arrow_field.data_type() {
-                ArrowDataType::Map(child, _) => child,
-                other => {
-                    debug_assert!(false, "unexpected Arrow type for map: {:?}", other);
-                    return;
-                }
-            };
-            current_path.push(entry_field.name().clone());
-            collect_leaf_column_paths(
-                inner.as_ref(),
-                entry_field.as_ref(),
-                current_path,
-                next_column_id,
-                paths,
-            );
+        ArrowDataType::LargeList(child)
+        | ArrowDataType::List(child)
+        | ArrowDataType::FixedSizeList(child, _) => {
+            current_path.push(child.name().clone());
+            collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
             current_path.pop();
         }
-        _ => {
-            paths.push((*next_column_id, ColumnPath::from(current_path.clone())));
-            *next_column_id += 1;
-        }
+        _ => paths.push(current_path.clone()),
     }
 }
 
