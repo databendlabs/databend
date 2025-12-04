@@ -580,12 +580,8 @@ merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1
 ----
 5
 
-# By default setting, all rows merged from  `cluster_source` will be resident in a single block of `cluster_target`,
-# as table `cluster_target` is clustered by `(a,b)`,  the rows inside the one block are assumed to be sorted
-# by `(a, b)`,  consequently, the result of the following query should be ordered by `(a,b)` without an explicit
-# `order by` clause.
 query TTT
-select * from cluster_target;
+select * from cluster_target order by a, b;
 ----
 1 a 2
 2 a 4
