@@ -273,17 +273,6 @@ impl StreamBlockBuilder {
         let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let block_writer = match properties.write_settings.storage_format {
             FuseStorageFormat::Parquet => {
-                //                let write_settings = &properties.write_settings;
-                //                // TODO NDV for heuristic rule
-                //                let props = parquet_writer_properties_builder(
-                //                    write_settings.table_compression,
-                //                    write_settings.enable_parquet_dictionary,
-                //                    None,
-                //                )
-                //                .build();
-                //
-                //                let arrow_schema = Arc::new(properties.source_schema.as_ref().into());
-                //                let writer = ArrowWriter::try_new(buffer, arrow_schema, Some(props))?;
                 BlockWriterImpl::Parquet(ArrowParquetWriter::new_uninitialized(
                     properties.write_settings.clone(),
                     properties.source_schema.clone(),

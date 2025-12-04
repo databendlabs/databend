@@ -25,7 +25,6 @@ use parquet::basic::Encoding;
 use parquet::file::metadata::KeyValue;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
-use parquet::file::properties::WriterPropertiesBuilder;
 use parquet::file::properties::WriterVersion;
 use parquet::format::FileMetaData;
 use parquet::schema::types::ColumnPath;
@@ -60,7 +59,10 @@ pub fn blocks_to_parquet_with_stats(
     column_stats: Option<&StatisticsOfColumns>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
+
     let num_rows = blocks[0].num_rows();
+    let arrow_schema = Arc::new(table_schema.into());
+
     let props = build_parquet_writer_properties(
         compression,
         enable_dictionary,
@@ -70,7 +72,6 @@ pub fn blocks_to_parquet_with_stats(
         table_schema,
     );
 
-    let arrow_schema = Arc::new(table_schema.into());
     let batches = blocks
         .into_iter()
         .map(|block| block.to_record_batch_with_arrow_schema(&arrow_schema))
@@ -84,28 +85,6 @@ pub fn blocks_to_parquet_with_stats(
     Ok(file_meta)
 }
 
-pub fn parquet_writer_properties_builder(
-    compression: TableCompression,
-    enable_dictionary: bool,
-    metadata: Option<Vec<KeyValue>>,
-) -> WriterPropertiesBuilder {
-    let builder = WriterProperties::builder()
-        .set_compression(compression.into())
-        // use `usize::MAX` to effectively limit the number of row groups to 1
-        .set_max_row_group_size(usize::MAX)
-        .set_encoding(Encoding::PLAIN)
-        .set_statistics_enabled(EnabledStatistics::None)
-        .set_bloom_filter_enabled(false)
-        .set_key_value_metadata(metadata);
-
-    if enable_dictionary {
-        builder
-            .set_writer_version(WriterVersion::PARQUET_2_0)
-            .set_dictionary_enabled(true)
-    } else {
-        builder.set_dictionary_enabled(false)
-    }
-}
 pub fn build_parquet_writer_properties(
     compression: TableCompression,
     enable_dictionary: bool,

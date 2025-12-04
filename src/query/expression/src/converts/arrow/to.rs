@@ -93,7 +93,6 @@ impl From<&DataType> for ArrowDataType {
 impl From<&TableField> for Field {
     fn from(f: &TableField) -> Self {
         let mut metadata = HashMap::new();
-
         let ty = match &f.data_type {
             TableDataType::Null => ArrowDataType::Null,
             TableDataType::EmptyArray => {
