@@ -17,7 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_common_expression::is_internal_column_id;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
@@ -109,15 +111,11 @@ pub fn build_parquet_writer_properties(
             .set_dictionary_enabled(true);
         if let Some(cols_stats) = cols_stats {
             // Disable dictionary of columns that have high cardinality
-            for field in table_schema.leaf_fields() {
-                let col_id = field.column_id();
-                if let Some(ndv) = cols_stats.column_ndv(&col_id) {
+            for (column_id, column_path) in leaf_column_paths(table_schema) {
+                if let Some(ndv) = cols_stats.column_ndv(&column_id) {
                     let high_cardinality = (ndv as f64 / num_rows as f64) > 0.1;
                     if high_cardinality {
-                        builder = builder.set_column_dictionary_enabled(
-                            ColumnPath::from(field.name().as_str()),
-                            false,
-                        );
+                        builder = builder.set_column_dictionary_enabled(column_path, false);
                     }
                 }
             }
@@ -125,6 +123,57 @@ pub fn build_parquet_writer_properties(
         builder.build()
     } else {
         builder.set_dictionary_enabled(false).build()
+    }
+}
+
+fn leaf_column_paths(table_schema: &TableSchema) -> Vec<(ColumnId, ColumnPath)> {
+    let mut paths = Vec::new();
+    for field in table_schema.fields() {
+        if is_internal_column_id(field.column_id()) {
+            continue;
+        }
+
+        let mut next_column_id = field.column_id();
+        let mut current_path = vec![field.name().clone()];
+        collect_leaf_column_paths(field.data_type(), &mut current_path, &mut next_column_id, &mut paths);
+    }
+    paths
+}
+
+fn collect_leaf_column_paths(
+    data_type: &TableDataType,
+    current_path: &mut Vec<String>,
+    next_column_id: &mut ColumnId,
+    paths: &mut Vec<(ColumnId, ColumnPath)>,
+) {
+    match data_type {
+        TableDataType::Nullable(inner) => {
+            collect_leaf_column_paths(inner.as_ref(), current_path, next_column_id, paths);
+        }
+        TableDataType::Tuple {
+            fields_name,
+            fields_type,
+        } => {
+            for (name, ty) in fields_name.iter().zip(fields_type) {
+                current_path.push(name.clone());
+                collect_leaf_column_paths(ty, current_path, next_column_id, paths);
+                current_path.pop();
+            }
+        }
+        TableDataType::Array(inner) => {
+            current_path.push("_array".to_string());
+            collect_leaf_column_paths(inner.as_ref(), current_path, next_column_id, paths);
+            current_path.pop();
+        }
+        TableDataType::Map(inner) => {
+            current_path.push("entries".to_string());
+            collect_leaf_column_paths(inner.as_ref(), current_path, next_column_id, paths);
+            current_path.pop();
+        }
+        _ => {
+            paths.push((*next_column_id, ColumnPath::from(current_path.clone())));
+            *next_column_id += 1;
+        }
     }
 }
 
@@ -190,6 +239,9 @@ mod tests {
         ndv.insert(column_id(&schema, "nested:leaf"), 50);
         ndv.insert(column_id(&schema, "nested:arr:0"), 400);
 
+        let column_paths: HashMap<ColumnId, ColumnPath> =
+            leaf_column_paths(&schema).into_iter().collect();
+
         let props = build_parquet_writer_properties(
             TableCompression::Zstd,
             true,
@@ -200,19 +252,19 @@ mod tests {
         );
 
         assert!(
-            !props.dictionary_enabled(&ColumnPath::from("simple")),
+            !props.dictionary_enabled(&column_paths[&column_id(&schema, "simple")]),
             "high cardinality top-level column should disable dictionary"
         );
         assert!(
-            props.dictionary_enabled(&ColumnPath::from("nested:leaf")),
+            props.dictionary_enabled(&column_paths[&column_id(&schema, "nested:leaf")]),
             "low cardinality nested column should keep dictionary"
         );
         assert!(
-            !props.dictionary_enabled(&ColumnPath::from("nested:arr:0")),
+            !props.dictionary_enabled(&column_paths[&column_id(&schema, "nested:arr:0")]),
             "high cardinality nested array element should disable dictionary"
         );
         assert!(
-            props.dictionary_enabled(&ColumnPath::from("no_stats")),
+            props.dictionary_enabled(&column_paths[&column_id(&schema, "no_stats")]),
             "columns without NDV stats keep the default dictionary behavior"
         );
     }
@@ -220,6 +272,9 @@ mod tests {
     #[test]
     fn test_build_parquet_writer_properties_disabled_globally() {
         let schema = sample_schema();
+
+        let column_paths: HashMap<ColumnId, ColumnPath> =
+            leaf_column_paths(&schema).into_iter().collect();
 
         let props = build_parquet_writer_properties(
             TableCompression::Zstd,
@@ -232,7 +287,7 @@ mod tests {
 
         for field in schema.leaf_fields() {
             assert!(
-                !props.dictionary_enabled(&ColumnPath::from(field.name().as_str())),
+                !props.dictionary_enabled(&column_paths[&field.column_id()]),
                 "dictionary must remain disabled when enable_dictionary is false",
             );
         }
