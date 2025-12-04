@@ -375,11 +375,11 @@ where S: DataBlockSpill
                 match tokio::time::timeout_at((*t).into(), self.chan.recv()).await {
                     Ok(true) => self.try_take_page().await?,
                     Ok(false) => {
-                        info!("[HTTP-QUERY] Reached end of data blocks");
+                        info!("Reached end of data blocks");
                         return Ok((BlocksSerializer::empty(), true));
                     }
                     Err(_) => {
-                        debug!("[HTTP-QUERY] Long polling timeout reached");
+                        debug!("Long polling timeout reached");
                         return Ok((BlocksSerializer::empty(), self.chan.is_close()));
                     }
                 }

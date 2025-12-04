@@ -19,6 +19,7 @@ databend-common-meta-app-storage = { workspace = true }
 defer = { workspace = true }
 fastrace = { workspace = true }
 fastrace-opentelemetry = { workspace = true }
+inventory = { workspace = true }
 itertools = { workspace = true }
 jiff = { workspace = true }
 libc = { workspace = true }

@@ -106,7 +106,7 @@ impl HttpQueryContext {
                 let start_time = manager.server_info.start_time.clone();
                 let uptime = (Instant::now() - manager.start_instant).as_secs_f32();
                 let msg = format!(
-                    "[HTTP-QUERY] Routing error: query {query_id} should be on server {expected_node_id}, but current server is {}, which started at {start_time} ({uptime} secs ago)",
+                    "Routing error: query {query_id} should be on server {expected_node_id}, but current server is {}, which started at {start_time} ({uptime} secs ago)",
                     self.node_id
                 );
                 warn!("{}", msg);
@@ -171,9 +171,9 @@ impl HttpQueryContext {
         http_session_conf: &Option<HttpSessionConf>,
         session_type: SessionType,
     ) -> databend_common_exception::Result<(Arc<Session>, Arc<QueryContext>)> {
-        let session = self.upgrade_session(session_type).map_err(|err| {
-            ErrorCode::Internal(format!("[HTTP-QUERY] Failed to upgrade session: {err}"))
-        })?;
+        let session = self
+            .upgrade_session(session_type)
+            .map_err(|err| ErrorCode::Internal(format!("Failed to upgrade session: {err}")))?;
 
         if let Some(cid) = session.get_client_session_id() {
             ClientSessionManager::instance().on_query_start(&cid, &self.user_name, &session);
