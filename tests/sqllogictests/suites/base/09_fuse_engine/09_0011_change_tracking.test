@@ -115,16 +115,10 @@ statement ok
 set auto_compaction_imperfect_blocks_threshold = 2;
 
 statement ok
-create table t1(a int) change_tracking = true
+create table t1(a int)
 
 statement ok
-insert into t1 values(0),(2)
-
-statement ok
-insert into t1 values(3)
-
-statement ok
-optimize table t1 compact
+insert into t1 values(0),(2),(3)
 
 query T
 merge into t using t1 on t.a = t1.a when matched and t1.a = 0 then update set t.a = 1 when matched and t1.a = 3 then update set t.a = 2
