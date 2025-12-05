@@ -1555,6 +1555,7 @@ fn test_script() {
         r#"RETURN profit"#,
         r#"RETURN TABLE(t1)"#,
         r#"RETURN TABLE(select count(*) from t1)"#,
+        r#"THROW 'Email already exists.'"#,
         r#"
             FOR i IN REVERSE 1 TO maximum_count DO
                 counter := counter + 1;
