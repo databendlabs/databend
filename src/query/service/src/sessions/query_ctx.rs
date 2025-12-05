@@ -560,6 +560,7 @@ impl QueryContext {
             stats: RuntimeFilterStatsSnapshot,
             build_rows: usize,
             build_table_rows: Option<u64>,
+            probe_table_rows: Option<u64>,
             enabled: bool,
         }
 
@@ -582,6 +583,7 @@ impl QueryContext {
                     stats: entry.stats.snapshot(),
                     build_rows: entry.build_rows,
                     build_table_rows: entry.build_table_rows,
+                    probe_table_rows: entry.probe_table_rows,
                     enabled: entry.enabled,
                 });
             }
@@ -615,6 +617,7 @@ impl QueryContext {
                     stats,
                     build_rows,
                     build_table_rows,
+                    probe_table_rows,
                     enabled,
                 } = filter;
 
@@ -642,6 +645,12 @@ impl QueryContext {
                     FormatTreeNode::new(format!(
                         "build table rows: {}",
                         build_table_rows
+                            .map(|v| v.to_string())
+                            .unwrap_or_else(|| "unknown".to_string())
+                    )),
+                    FormatTreeNode::new(format!(
+                        "probe table rows: {}",
+                        probe_table_rows
                             .map(|v| v.to_string())
                             .unwrap_or_else(|| "unknown".to_string())
                     )),

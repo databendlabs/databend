@@ -66,6 +66,7 @@ pub struct RuntimeFilterEntry {
     pub stats: Arc<RuntimeFilterStats>,
     pub build_rows: usize,
     pub build_table_rows: Option<u64>,
+    pub probe_table_rows: Option<u64>,
     pub enabled: bool,
 }
 

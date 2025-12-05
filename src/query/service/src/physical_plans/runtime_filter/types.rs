@@ -43,6 +43,7 @@ pub struct PhysicalRuntimeFilter {
     pub probe_targets: Vec<(RemoteExpr<String>, usize)>,
 
     pub build_table_rows: Option<u64>,
+    pub probe_table_rows: Option<u64>,
 
     /// Enable bloom filter for this runtime filter
     pub enable_bloom_runtime_filter: bool,
