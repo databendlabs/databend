@@ -29,7 +29,6 @@ use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
-use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
@@ -58,9 +57,6 @@ pub async fn dml_build_update_stream_req(
         let table_version = inner_fuse.get_table_info().ident.seq;
         let mut options = stream.options().clone();
         options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
-        if let Some(snapshot_loc) = inner_fuse.snapshot_loc() {
-            options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
-        }
 
         // To be compatible with older versions, set source database id.
         if !options.contains_key(OPT_KEY_SOURCE_DATABASE_ID) {
@@ -118,9 +114,6 @@ pub async fn query_build_update_stream_req(
         let table_version = inner_fuse.get_table_info().ident.seq;
         let mut options = stream.options().clone();
         options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
-        if let Some(snapshot_loc) = inner_fuse.snapshot_loc() {
-            options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
-        }
         let mut new_table_meta = stream_info.meta.clone();
         new_table_meta.options = options;
         new_table_meta.updated_on = Utc::now();
