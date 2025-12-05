@@ -30,7 +30,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -175,13 +174,12 @@ impl DeserializeDataTransform {
 
         let mut bitmaps = vec![];
         for runtime_filter in self.cached_runtime_filter.as_ref().unwrap().iter() {
-            let mut bitmap = MutableBitmap::from_len_zeroed(data_block.num_rows());
             let probe_block_entry = data_block.get_by_offset(runtime_filter.column_index);
             let probe_column = probe_block_entry.to_column();
 
             // Apply bloom filter
             let start = Instant::now();
-            ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column, &mut bitmap)?;
+            let bitmap = ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column)?;
             let elapsed = start.elapsed();
             let unset_bits = bitmap.null_count();
             runtime_filter

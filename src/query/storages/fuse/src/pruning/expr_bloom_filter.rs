@@ -28,8 +28,8 @@ impl<'a> ExprBloomFilter<'a> {
         Self { filter }
     }
 
-    /// Apply the bloom filter to a column, updating the bitmap.
-    pub fn apply(&self, column: Column, bitmap: &mut MutableBitmap) -> Result<()> {
+    /// Apply the bloom filter to a column and return the resulting bitmap.
+    pub fn apply(&self, column: Column) -> Result<MutableBitmap> {
         let data_type = column.data_type();
         let num_rows = column.len();
         let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
@@ -38,12 +38,8 @@ impl<'a> ExprBloomFilter<'a> {
         let mut hashes = Vec::with_capacity(num_rows);
         hash_by_method_for_bloom(&method, group_columns, num_rows, &mut hashes)?;
         debug_assert_eq!(hashes.len(), num_rows);
-        let bitmap_len = bitmap.len();
-        self.filter.check_hash_batch(&hashes, |index| {
-            debug_assert!(index < bitmap_len);
-            unsafe { bitmap.set_unchecked(index, true) };
-        });
-
-        Ok(())
+        let results = self.filter.check_hash_batch(&hashes);
+        debug_assert_eq!(results.len(), num_rows);
+        Ok(MutableBitmap::from_trusted_len_iter(results.into_iter()))
     }
 }
