@@ -269,6 +269,15 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
             value: None,
         },
     );
+    let throw_stmt = map(
+        consumed(rule! {
+            THROW ~ #expr?
+        }),
+        |(span, (_, message))| ScriptStatement::Throw {
+            span: transform_span(span.tokens),
+            message,
+        },
+    );
     let for_loop_stmt = map(
         consumed(rule! {
             FOR ~ ^#ident ~ ^IN ~ REVERSE?
@@ -439,6 +448,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
         | #return_stmt_stmt
         | #return_var_stmt
         | #return_stmt
+        | #throw_stmt
         | #break_stmt
         | #continue_stmt
     );
