@@ -152,5 +152,5 @@ mod v157_type_timestamp_tz;
 mod v158_udtf_server;
 mod v159_grant_object_masking_policy;
 mod v160_udf_update_on;
-mod v162_snapshot_ref;
 mod v161_grant_object_row_access_policy;
+mod v162_snapshot_ref;
