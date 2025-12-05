@@ -30,6 +30,7 @@ use tokio::sync::Barrier;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::runtime_filter::RuntimeFiltersDesc;
+use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
 
 pub struct TransformHashJoin {
     build_port: Arc<InputPort>,
@@ -42,6 +43,7 @@ pub struct TransformHashJoin {
     stage_sync_barrier: Arc<Barrier>,
     projection: ColumnSet,
     rf_desc: Arc<RuntimeFiltersDesc>,
+    runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
 }
 
 impl TransformHashJoin {
@@ -53,8 +55,16 @@ impl TransformHashJoin {
         stage_sync_barrier: Arc<Barrier>,
         projection: ColumnSet,
         rf_desc: Arc<RuntimeFiltersDesc>,
-    ) -> ProcessorPtr {
-        ProcessorPtr::create(Box::new(TransformHashJoin {
+    ) -> Result<ProcessorPtr> {
+        let runtime_filter_builder = RuntimeFilterLocalBuilder::try_create(
+            &rf_desc.func_ctx,
+            rf_desc.filters_desc.clone(),
+            rf_desc.inlist_threshold,
+            rf_desc.bloom_threshold,
+            rf_desc.min_max_threshold,
+        )?;
+
+        Ok(ProcessorPtr::create(Box::new(TransformHashJoin {
             build_port,
             probe_port,
             joined_port,
@@ -63,11 +73,12 @@ impl TransformHashJoin {
             projection,
             stage_sync_barrier,
             joined_data: None,
+            runtime_filter_builder,
             stage: Stage::Build(BuildState {
                 finished: false,
                 build_data: None,
             }),
-        }))
+        })))
     }
 }
 
@@ -131,6 +142,9 @@ impl Processor for TransformHashJoin {
                 };
 
                 if !data_block.is_empty() {
+                    if let Some(builder) = self.runtime_filter_builder.as_mut() {
+                        builder.add_block(&data_block)?;
+                    }
                     self.join.add_block(Some(data_block))?;
                 }
 
@@ -186,9 +200,15 @@ impl Processor for TransformHashJoin {
 
         self.stage = match &mut self.stage {
             Stage::Build(_) => {
-                if wait_res.is_leader() {
-                    let packet = self.join.build_runtime_filter(&self.rf_desc)?;
+                if let Some(builder) = self.runtime_filter_builder.take() {
+                    let packet = builder.finish(false)?;
+                    self.join.add_runtime_filter_packet(packet);
+                }
 
+                let _wait_res = self.stage_sync_barrier.wait().await;
+
+                if wait_res.is_leader() {
+                    let packet = self.join.build_runtime_filter()?;
                     self.rf_desc.globalization(packet).await?;
                 }
 

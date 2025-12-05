@@ -459,7 +459,7 @@ impl HashJoin {
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
-            );
+            )?;
 
             join_pipe_items.push(PipeItem::create(
                 hash_join,
