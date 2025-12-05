@@ -128,6 +128,7 @@ Exchange
     ├── output rows: 6
     ├── output bytes: 120.00 B
     ├── bytes scanned: 120.00 B
+    ├── read from remote: <slt:ignore>
     ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
     ├── scan id: 0
@@ -159,6 +160,7 @@ Exchange
         ├── output rows: 4
         ├── output bytes: 80.00 B
         ├── bytes scanned: 80.00 B
+        ├── read from remote: <slt:ignore>
         ├── runtime filter inlist/min-max time: <slt:ignore>
         ├── table: default.default.article
         ├── scan id: 0
@@ -208,6 +210,7 @@ Exchange
     │           ├── output rows: 1
     │           ├── output bytes: <slt:ignore>
     │           ├── bytes scanned: <slt:ignore>
+    │           ├── read from remote: <slt:ignore>
     │           ├── runtime filter inlist/min-max time: <slt:ignore>
     │           ├── table: default.default.author
     │           ├── scan id: 1
@@ -225,6 +228,7 @@ Exchange
         ├── output rows: 6
         ├── output bytes: 120.00 B
         ├── bytes scanned: 120.00 B
+        ├── read from remote: <slt:ignore>
         ├── runtime filter inlist/min-max time: <slt:ignore>
         ├── table: default.default.article
         ├── scan id: 0

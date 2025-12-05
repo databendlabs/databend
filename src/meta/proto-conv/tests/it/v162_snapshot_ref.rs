@@ -37,8 +37,8 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v161_snapshot_ref() -> anyhow::Result<()> {
-    let table_meta_v161 = vec![
+fn test_decode_v162_snapshot_ref() -> anyhow::Result<()> {
+    let table_meta_v162 = vec![
         10, 7, 160, 6, 161, 1, 168, 6, 24, 64, 0, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
         56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49,
         49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 161,
@@ -88,7 +88,7 @@ fn test_decode_v161_snapshot_ref() -> anyhow::Result<()> {
     };
     common::test_pb_from_to(func_name!(), want())?;
 
-    common::test_load_old(func_name!(), table_meta_v161.as_slice(), 161, want())?;
+    common::test_load_old(func_name!(), table_meta_v162.as_slice(), 162, want())?;
 
     Ok(())
 }

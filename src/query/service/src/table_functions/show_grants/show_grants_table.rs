@@ -40,6 +40,7 @@ use databend_common_management::RoleApi;
 use databend_common_management::UserApi;
 use databend_common_management::WarehouseInfo;
 use databend_common_meta_api::DatamaskApi;
+use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_app::principal::GrantEntry;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -248,7 +249,7 @@ impl AsyncSource for ShowGrantsSource {
                 show_account_grants(self.ctx.clone(), &self.grant_type, &self.name).await?
             }
             "table" | "database" | "udf" | "stage" | "warehouse" | "connection" | "sequence"
-            | "procedure" | "masking_policy" => {
+            | "procedure" | "masking_policy" | "row_access_policy" => {
                 show_object_grant(
                     self.ctx.clone(),
                     &self.grant_type,
@@ -261,7 +262,7 @@ impl AsyncSource for ShowGrantsSource {
             "role_grantee" => show_role_grantees(self.ctx.clone(), &self.name).await?,
             _ => {
                 return Err(ErrorCode::InvalidArgument(format!(
-                    "Expected 'user|role|table|database|udf|stage|warehouse|connection|sequence|procedure|masking_policy|role_grantee', but got {:?}",
+                    "Expected 'user|role|table|database|udf|stage|warehouse|connection|sequence|procedure|masking_policy|row_access_policy|role_grantee', but got {:?}",
                     self.grant_type
                 )));
             }
@@ -577,6 +578,18 @@ async fn show_account_grants(
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
                 }
+                GrantObject::RowAccessPolicy(policy_id) => {
+                    let meta_api = UserApiProvider::instance().get_meta_store_client();
+                    if let Some(policy_name) = meta_api
+                        .get_row_access_policy_name_by_id(&ctx.get_tenant(), *policy_id)
+                        .await?
+                    {
+                        object_name.push(policy_name);
+                        object_id.push(Some(policy_id.to_string()));
+                        privileges.push(get_priv_str(&grant_entry));
+                        grant_list.push(format!("{} TO {}", grant_entry, identity));
+                    }
+                }
                 GrantObject::Global => {
                     // grant all on *.* to a
                     object_name.push("*.*".to_string());
@@ -712,6 +725,21 @@ async fn show_account_grants(
                                 privileges.push("OWNERSHIP".to_string());
                                 grant_list.push(format!(
                                     "GRANT OWNERSHIP ON MASKING POLICY {} TO {}",
+                                    policy_name, identity
+                                ));
+                            }
+                        }
+                        OwnershipObject::RowAccessPolicy { policy_id } => {
+                            let meta_api = UserApiProvider::instance().get_meta_store_client();
+                            if let Some(policy_name) = meta_api
+                                .get_row_access_policy_name_by_id(&ctx.get_tenant(), policy_id)
+                                .await?
+                            {
+                                object_name.push(policy_name.clone());
+                                object_id.push(Some(policy_id.to_string()));
+                                privileges.push("OWNERSHIP".to_string());
+                                grant_list.push(format!(
+                                    "GRANT OWNERSHIP ON ROW ACCESS POLICY {} TO {}",
                                     policy_name, identity
                                 ));
                             }
@@ -1030,9 +1058,37 @@ async fn show_object_grant(
                 )
             }
         }
+        "row_access_policy" => {
+            let policy_id = name.parse::<u64>()?;
+            if !visibility_checker.check_row_access_policy_visibility(&policy_id) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege APPLY ROW ACCESS POLICY or OWNERSHIP is required on row access policy {} for user {}",
+                    name, current_user
+                )));
+            }
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            if let Some(policy_name) = meta_api
+                .get_row_access_policy_name_by_id(&ctx.get_tenant(), policy_id)
+                .await?
+            {
+                (
+                    GrantObject::RowAccessPolicy(policy_id),
+                    OwnershipObject::RowAccessPolicy { policy_id },
+                    Some(policy_id.to_string()),
+                    policy_name,
+                )
+            } else {
+                (
+                    GrantObject::RowAccessPolicy(policy_id),
+                    OwnershipObject::RowAccessPolicy { policy_id },
+                    Some(policy_id.to_string()),
+                    policy_id.to_string(),
+                )
+            }
+        }
         _ => {
             return Err(ErrorCode::InvalidArgument(format!(
-                "Expected 'table|database|udf|stage|warehouse|connection|sequence|procedure|masking_policy', but got {:?}",
+                "Expected 'table|database|udf|stage|warehouse|connection|sequence|procedure|masking_policy|row_access_policy', but got {:?}",
                 grant_type
             )));
         }

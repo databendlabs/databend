@@ -144,6 +144,10 @@ pub enum UserPrivilegeType {
     CreateMaskingPolicy,
     // Privilege to Apply Masking Policy.
     ApplyMaskingPolicy,
+    // Privilege to Create Row Access Policy.
+    CreateRowAccessPolicy,
+    // Privilege to Apply Row Access Policy.
+    ApplyRowAccessPolicy,
     // Privilege to Own a databend object such as database/table.
     Ownership,
     // Privilege to Read stage
@@ -191,6 +195,8 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::Set => "SET",
             UserPrivilegeType::CreateMaskingPolicy => "CREATE MASKING POLICY",
             UserPrivilegeType::ApplyMaskingPolicy => "APPLY MASKING POLICY",
+            UserPrivilegeType::CreateRowAccessPolicy => "CREATE ROW ACCESS POLICY",
+            UserPrivilegeType::ApplyRowAccessPolicy => "APPLY ROW ACCESS POLICY",
             UserPrivilegeType::Ownership => "OWNERSHIP",
             UserPrivilegeType::Read => "Read",
             UserPrivilegeType::Write => "Write",

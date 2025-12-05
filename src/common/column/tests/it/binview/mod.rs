@@ -43,8 +43,8 @@ fn basics_string_view() {
     let array2 = Utf8ViewColumn::new_unchecked(
         array.views().clone(),
         array.data_buffers().clone(),
-        array.total_bytes_len(),
-        array.total_buffer_len(),
+        Some(array.total_bytes_len()),
+        Some(array.total_buffer_len()),
     );
 
     assert_eq!(array, array2);
@@ -83,8 +83,8 @@ fn basics_binary_view() {
     let array2 = BinaryViewColumn::new_unchecked(
         array.views().clone(),
         array.data_buffers().clone(),
-        array.total_bytes_len(),
-        array.total_buffer_len(),
+        Some(array.total_bytes_len()),
+        Some(array.total_buffer_len()),
     );
 
     assert_eq!(array, array2);

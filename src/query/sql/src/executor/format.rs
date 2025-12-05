@@ -138,7 +138,10 @@ impl PhysicalPlan {
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("HashJoin: {} estimated_rows: {}", plan.join_type, estimated_rows),
+                    format!(
+                        "HashJoin: {} estimated_rows: {}",
+                        plan.join_type, estimated_rows
+                    ),
                     children,
                 ))
             }

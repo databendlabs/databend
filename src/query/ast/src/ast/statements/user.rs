@@ -170,6 +170,7 @@ pub enum GrantObjectName {
     Sequence(String),
     Procedure(ProcedureIdentity),
     MaskingPolicy(String),
+    RowAccessPolicy(String),
 }
 
 impl Display for GrantObjectName {
@@ -192,6 +193,7 @@ impl Display for GrantObjectName {
             GrantObjectName::Sequence(s) => write!(f, "SEQUENCE {s}"),
             GrantObjectName::Procedure(p) => write!(f, "PROCEDURE {p}"),
             GrantObjectName::MaskingPolicy(policy) => write!(f, "MASKING POLICY {policy}"),
+            GrantObjectName::RowAccessPolicy(policy) => write!(f, "ROW ACCESS POLICY {policy}"),
         }
     }
 }
@@ -235,6 +237,15 @@ impl Display for AccountMgrSource {
                         return Ok(());
                     }
                 }
+                if privileges.len() == 1
+                    && privileges[0] == UserPrivilegeType::ApplyRowAccessPolicy
+                    && matches!(level, AccountMgrLevel::RowAccessPolicy(_))
+                {
+                    if let AccountMgrLevel::RowAccessPolicy(policy) = level {
+                        write!(f, " APPLY ON ROW ACCESS POLICY {policy}")?;
+                        return Ok(());
+                    }
+                }
                 write!(f, " ")?;
                 write_comma_separated_list(f, privileges.iter().map(|p| p.to_string()))?;
                 write!(f, " ON")?;
@@ -262,6 +273,7 @@ pub enum AccountMgrLevel {
     Sequence(String),
     Procedure(ProcedureIdentity),
     MaskingPolicy(String),
+    RowAccessPolicy(String),
 }
 
 impl Display for AccountMgrLevel {
@@ -289,6 +301,9 @@ impl Display for AccountMgrLevel {
             AccountMgrLevel::Sequence(s) => write!(f, " SEQUENCE {s}"),
             AccountMgrLevel::Procedure(p) => write!(f, " PROCEDURE {p}"),
             AccountMgrLevel::MaskingPolicy(policy) => write!(f, " MASKING POLICY {policy}"),
+            AccountMgrLevel::RowAccessPolicy(policy) => {
+                write!(f, " ROW ACCESS POLICY {policy}")
+            }
         }
     }
 }
