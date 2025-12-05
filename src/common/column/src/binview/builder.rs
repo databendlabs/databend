@@ -73,8 +73,8 @@ impl<T: ViewType + ?Sized> From<BinaryViewColumnBuilder<T>> for BinaryViewColumn
         Self::new_unchecked(
             value.views.into(),
             Arc::from(value.completed_buffers),
-            value.total_bytes_len,
-            value.total_buffer_len,
+            Some(value.total_bytes_len),
+            Some(value.total_buffer_len),
         )
     }
 }
