@@ -216,3 +216,30 @@ call procedure p3('x');
 
 statement ok
 drop procedure p3(string);
+
+statement ok
+CREATE OR REPLACE PROCEDURE p_throw_expr(email STRING) RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='throw expr test' AS $$
+BEGIN
+    IF email = 'dup' THEN
+        THROW 'Duplicate email: dup';
+    ELSEIF email='deny_user' THEN
+        THROW concat('Denied prefix: ', email);
+    ELSE
+        RETURN email;
+    END IF;
+END;
+$$;
+
+statement error 3129
+call procedure p_throw_expr('dup');
+
+statement error 3129
+call procedure p_throw_expr('deny_user');
+
+query T
+call procedure p_throw_expr('new_user');
+----
+new_user
+
+statement ok
+drop procedure p_throw_expr(string);
