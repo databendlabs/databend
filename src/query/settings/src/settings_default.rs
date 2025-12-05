@@ -306,9 +306,17 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                // outdated
                 ("enable_new_copy_for_text_formats", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Use new implementation for loading CSV files.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_split_file_loading", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Split file when loading CSV files.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

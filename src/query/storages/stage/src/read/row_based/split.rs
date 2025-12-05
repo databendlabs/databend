@@ -21,38 +21,42 @@ use databend_common_catalog::plan::PartInfo;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_stage::SingleFilePartition;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq)]
-pub struct SingleFilePartition {
-    pub path: String,
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
+pub struct SplitRowBase {
+    pub file: SingleFilePartition,
+    pub seq_in_file: usize,
+    pub num_file_splits: usize,
+    pub offset: usize,
     pub size: usize,
 }
 
-#[typetag::serde(name = "single_file_part")]
-impl PartInfo for SingleFilePartition {
+#[typetag::serde(name = "split_row_base")]
+impl PartInfo for SplitRowBase {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
         info.as_any()
-            .downcast_ref::<SingleFilePartition>()
+            .downcast_ref::<SplitRowBase>()
             .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
-        self.path.hash(&mut s);
+        self.file.path.hash(&mut s);
+        self.offset.hash(&mut s);
+        self.size.hash(&mut s);
         s.finish()
     }
 }
 
-impl SingleFilePartition {
-    pub fn from_part(info: &PartInfoPtr) -> Result<&SingleFilePartition> {
+impl SplitRowBase {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&Self> {
         info.as_any()
-            .downcast_ref::<SingleFilePartition>()
-            .ok_or_else(|| {
-                ErrorCode::Internal("Cannot downcast from PartInfo to SingleFilePartition.")
-            })
+            .downcast_ref::<Self>()
+            .ok_or_else(|| ErrorCode::Internal("Cannot downcast from PartInfo to SplitRowBase."))
     }
 }
