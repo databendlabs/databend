@@ -30,6 +30,9 @@ use parquet::file::properties::WriterVersion;
 use parquet::format::FileMetaData;
 use parquet::schema::types::ColumnPath;
 
+/// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
+const HIGH_CARDINALITY_RATIO_THRESHOLD: f64 = 0.1;
+
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
     table_schema: &TableSchema,
@@ -50,6 +53,16 @@ pub fn blocks_to_parquet(
     )
 }
 
+/// Serialize blocks while optionally tuning dictionary behavior via NDV statistics.
+///
+/// * `table_schema` - Logical schema used to build Arrow batches.
+/// * `blocks` - In-memory blocks that will be serialized into a single Parquet file.
+/// * `write_buffer` - Destination buffer that receives the serialized Parquet bytes.
+/// * `compression` - Compression algorithm specified by table-level settings.
+/// * `enable_dictionary` - Enables dictionary encoding globally before per-column overrides.
+/// * `metadata` - Additional user metadata embedded into the Parquet footer.
+/// * `column_stats` - Optional NDV stats from the first block, used to configure writer properties
+///   before ArrowWriter instantiation disables further changes.
 pub fn blocks_to_parquet_with_stats(
     table_schema: &TableSchema,
     blocks: Vec<DataBlock>,
@@ -61,6 +74,8 @@ pub fn blocks_to_parquet_with_stats(
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
 
+    // Writer properties cannot be tweaked after ArrowWriter creation, so we mirror the behavior of
+    // the streaming writer and only rely on the first block's NDV (and row count) snapshot.
     let num_rows = blocks[0].num_rows();
     let arrow_schema = Arc::new(table_schema.into());
 
@@ -86,6 +101,7 @@ pub fn blocks_to_parquet_with_stats(
     Ok(file_meta)
 }
 
+/// Create writer properties, optionally disabling dictionaries for high-cardinality columns.
 pub fn build_parquet_writer_properties(
     compression: TableCompression,
     enable_dictionary: bool,
@@ -112,8 +128,9 @@ pub fn build_parquet_writer_properties(
             // Disable dictionary of columns that have high cardinality
             for (column_id, components) in table_schema_arrow_leaf_paths(table_schema) {
                 if let Some(ndv) = cols_stats.column_ndv(&column_id) {
-                    let high_cardinality = (ndv as f64 / num_rows as f64) > 0.1;
-                    if high_cardinality {
+                    if num_rows > 0
+                        && (ndv as f64 / num_rows as f64) > HIGH_CARDINALITY_RATIO_THRESHOLD
+                    {
                         builder = builder
                             .set_column_dictionary_enabled(ColumnPath::from(components), false);
                     }
@@ -126,6 +143,7 @@ pub fn build_parquet_writer_properties(
     }
 }
 
+/// Provides per column NDV statistics
 pub trait NdvProvider {
     fn column_ndv(&self, column_id: &ColumnId) -> Option<u64>;
 }

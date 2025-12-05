@@ -379,7 +379,8 @@ impl StreamBlockBuilder {
         self.block_size += block.estimate_block_size();
 
         if !had_existing_rows {
-            // Initialize the writer with columns ndv
+            // Writer properties must be fixed before the ArrowWriter starts, so we rely on the first
+            // block's NDV stats to heuristically configure the parquet writer.
             let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
             cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
             self.block_writer
