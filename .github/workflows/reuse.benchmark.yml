@@ -242,9 +242,9 @@ jobs:
     strategy:
       matrix:
         dataset:
-          - "tpch"
-          - "hits"
           - "load"
+          - "hits"
+          - "tpch100"
           - "tpch1000"
           # - "internal"
     steps:
