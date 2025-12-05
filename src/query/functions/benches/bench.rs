@@ -88,8 +88,8 @@ mod bitmap {
             for n in 0..count {
                 let mut inserted = [false; 5];
                 inserted[1] = true;
-                inserted[(n % 3) as usize] = true;
-                let v5 = (n % 5) as usize;
+                inserted[n % 3] = true;
+                let v5 = n % 5;
                 inserted[v5] = true;
                 for (idx, flag) in inserted.iter().enumerate() {
                     if *flag {
@@ -155,9 +155,9 @@ mod bitmap {
         BitmapType::from_data(bitmaps)
     }
 
-    fn build_uint64_column<F>(rows: usize, mut generator: F) -> Column
+    fn build_uint64_column<F>(rows: usize, generator: F) -> Column
     where F: FnMut(u64) -> u64 {
-        let data: Vec<u64> = (0..rows as u64).map(|value| generator(value)).collect();
+        let data: Vec<u64> = (0..rows as u64).map(generator).collect();
         UInt64Type::from_data(data)
     }
 
