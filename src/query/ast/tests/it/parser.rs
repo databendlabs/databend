@@ -994,6 +994,11 @@ SELECT * from s;"#,
         )"#,
         r#"DROP row access policy IF EXISTS r1"#,
         r#"desc row access policy r1"#,
+        r#"GRANT CREATE ROW ACCESS POLICY ON *.* TO USER a;"#,
+        r#"GRANT APPLY ROW ACCESS POLICY ON *.* TO USER a;"#,
+        r#"GRANT APPLY ON ROW ACCESS POLICY ssn_mask TO ROLE 'human_resources'"#,
+        r#"GRANT OWNERSHIP ON  ROW ACCESS POLICY mask_phone TO ROLE 'role_mask_apply'"#,
+        r#"SHOW GRANTS ON ROW ACCESS POLICY ssn_mask"#,
     ];
 
     for case in cases {

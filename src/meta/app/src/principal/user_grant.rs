@@ -64,6 +64,7 @@ pub enum GrantObject {
     Sequence(String),
     Procedure(u64),
     MaskingPolicy(u64),
+    RowAccessPolicy(u64),
 }
 
 impl GrantObject {
@@ -101,6 +102,7 @@ impl GrantObject {
             (GrantObject::Sequence(s), GrantObject::Sequence(rs)) => s == rs,
             (GrantObject::Procedure(p), GrantObject::Procedure(rp)) => p == rp,
             (GrantObject::MaskingPolicy(lp), GrantObject::MaskingPolicy(rp)) => lp == rp,
+            (GrantObject::RowAccessPolicy(lp), GrantObject::RowAccessPolicy(rp)) => lp == rp,
             _ => false,
         }
     }
@@ -136,6 +138,9 @@ impl GrantObject {
             GrantObject::MaskingPolicy(_) => {
                 UserPrivilegeSet::available_privileges_on_masking_policy(available_ownership)
             }
+            GrantObject::RowAccessPolicy(_) => {
+                UserPrivilegeSet::available_privileges_on_row_access_policy(available_ownership)
+            }
         }
     }
 
@@ -148,6 +153,7 @@ impl GrantObject {
             | GrantObject::Sequence(_)
             | GrantObject::Procedure(_)
             | GrantObject::MaskingPolicy(_)
+            | GrantObject::RowAccessPolicy(_)
             | GrantObject::Connection(_) => None,
             GrantObject::Database(cat, _) | GrantObject::DatabaseById(cat, _) => Some(cat.clone()),
             GrantObject::Table(cat, _, _) | GrantObject::TableById(cat, _, _) => Some(cat.clone()),
@@ -174,6 +180,9 @@ impl fmt::Display for GrantObject {
             GrantObject::Sequence(s) => write!(f, "SEQUENCE {s}"),
             GrantObject::Procedure(p) => write!(f, "PROCEDURE {p}"),
             GrantObject::MaskingPolicy(policy_id) => write!(f, "MASKING POLICY {policy_id}"),
+            GrantObject::RowAccessPolicy(policy_id) => {
+                write!(f, "ROW ACCESS POLICY {policy_id}")
+            }
         }
     }
 }
