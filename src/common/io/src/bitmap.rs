@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt, ptr};
+use std::fmt;
 use std::io;
 use std::iter::FromIterator;
 use std::mem;
@@ -20,6 +20,7 @@ use std::ops::BitAndAssign;
 use std::ops::BitOrAssign;
 use std::ops::BitXorAssign;
 use std::ops::SubAssign;
+use std::ptr;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
