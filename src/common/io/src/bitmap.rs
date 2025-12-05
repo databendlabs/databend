@@ -20,6 +20,7 @@ use std::ops::BitAndAssign;
 use std::ops::BitOrAssign;
 use std::ops::BitXorAssign;
 use std::ops::SubAssign;
+use std::ptr;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -37,6 +38,10 @@ const HYBRID_HEADER_LEN: usize = 4;
 
 type SmallBitmap = SmallVec<[u64; LARGE_THRESHOLD]>;
 
+/// Perf Tips:
+/// - The deserialization performance of HybridBitmap significantly impacts the performance of Bitmap-related calculations.
+/// - Calculations may frequently create new Bitmaps; reusing them as much as possible can effectively improve performance.
+///  - do not use Box to construct HybridBitmap
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone)]
 pub enum HybridBitmap {
@@ -241,8 +246,7 @@ impl std::ops::BitOrAssign for HybridBitmap {
                     }
                 }
                 HybridBitmap::Small(lhs_set) => {
-                    let left = mem::take(lhs_set);
-                    *lhs_set = small_union(left, rhs_set.as_slice());
+                    small_union(lhs_set, rhs_set.as_slice());
                     if self.len() >= LARGE_THRESHOLD as u64 {
                         let _ = self.promote_to_tree();
                     }
@@ -303,14 +307,14 @@ impl std::ops::BitXorAssign for HybridBitmap {
                 self.try_demote();
             }
             HybridBitmap::Small(rhs_set) => match self {
+                // Disjoint data in the bitmap can cause lhs_tree expansion during XOR, making this path a significant performance bottleneck.
                 HybridBitmap::Large(lhs_tree) => {
                     let rhs_tree = RoaringTreemap::from_iter(rhs_set.iter().copied());
                     lhs_tree.bitxor_assign(rhs_tree);
                     self.try_demote();
                 }
                 HybridBitmap::Small(lhs_set) => {
-                    let result = small_symmetric_difference(lhs_set.as_slice(), rhs_set.as_slice());
-                    *lhs_set = result;
+                    small_symmetric_difference(lhs_set, rhs_set.as_slice());
                     if self.len() >= LARGE_THRESHOLD as u64 {
                         let _ = self.promote_to_tree();
                     }
@@ -541,12 +545,11 @@ fn decode_small_bitmap(payload: &[u8]) -> Result<HybridBitmap> {
         )));
     }
 
-    let mut data = [0u8; std::mem::size_of::<u64>()];
     let set: SmallBitmap = bytes
-        .chunks_exact(data.len())
-        .map(move |chunk| {
-            data.copy_from_slice(chunk);
-            u64::from_le_bytes(data)
+        .chunks_exact(std::mem::size_of::<u64>())
+        .map(|chunk| {
+            let raw = unsafe { ptr::read_unaligned(chunk.as_ptr() as *const u64) };
+            u64::from_le(raw)
         })
         .collect();
     Ok(HybridBitmap::Small(set))
@@ -562,37 +565,62 @@ fn small_insert(set: &mut SmallBitmap, value: u64) -> bool {
     }
 }
 
-fn small_union(left: SmallBitmap, right: &[u64]) -> SmallBitmap {
-    if right.is_empty() {
-        return left;
+fn small_union(target: &mut SmallBitmap, other: &[u64]) {
+    if other.is_empty() {
+        return;
     }
-    if left.is_empty() {
-        return SmallBitmap::from_slice(right);
+    if target.is_empty() {
+        target.extend_from_slice(other);
+        return;
     }
 
-    let left_slice = left.as_slice();
-    let mut result = SmallBitmap::with_capacity(left_slice.len() + right.len());
-    let mut i = 0;
-    let mut j = 0;
+    let lhs_len = target.len();
+    let rhs_len = other.len();
+    target.reserve(rhs_len);
+    let mut write = lhs_len + rhs_len;
+    target.resize(write, 0);
 
-    while i < left_slice.len() && j < right.len() {
-        let lv = left_slice[i];
-        let rv = right[j];
-        if lv < rv {
-            result.push(lv);
-            i += 1;
-        } else if rv < lv {
-            result.push(rv);
-            j += 1;
-        } else {
-            result.push(lv);
-            i += 1;
-            j += 1;
+    let mut i = lhs_len;
+    let mut j = rhs_len;
+
+    while i > 0 && j > 0 {
+        let lv = target[i - 1];
+        let rv = other[j - 1];
+        write -= 1;
+        match lv.cmp(&rv) {
+            std::cmp::Ordering::Greater => {
+                target[write] = lv;
+                i -= 1;
+            }
+            std::cmp::Ordering::Less => {
+                target[write] = rv;
+                j -= 1;
+            }
+            std::cmp::Ordering::Equal => {
+                target[write] = lv;
+                i -= 1;
+                j -= 1;
+            }
         }
     }
-    result.extend_from_slice(&left_slice[i..]);
-    result.extend_from_slice(&right[j..]);
-    result
+
+    while i > 0 {
+        write -= 1;
+        target[write] = target[i - 1];
+        i -= 1;
+    }
+
+    while j > 0 {
+        write -= 1;
+        target[write] = other[j - 1];
+        j -= 1;
+    }
+
+    if write > 0 {
+        let len = target.len();
+        target.copy_within(write..len, 0);
+        target.truncate(len - write);
+    }
 }
 
 fn small_intersection(lhs: &mut SmallBitmap, rhs: &mut SmallBitmap) {
@@ -673,28 +701,62 @@ fn small_difference(lhs: &[u64], rhs: &[u64]) -> SmallBitmap {
     result
 }
 
-fn small_symmetric_difference(lhs: &[u64], rhs: &[u64]) -> SmallBitmap {
-    let mut result = SmallBitmap::with_capacity(lhs.len() + rhs.len());
-    let mut i = 0;
-    let mut j = 0;
+fn small_symmetric_difference(target: &mut SmallBitmap, other: &[u64]) {
+    if other.is_empty() {
+        return;
+    }
+    if target.is_empty() {
+        target.extend_from_slice(other);
+        return;
+    }
 
-    while i < lhs.len() && j < rhs.len() {
-        let lv = lhs[i];
-        let rv = rhs[j];
-        if lv < rv {
-            result.push(lv);
-            i += 1;
-        } else if rv < lv {
-            result.push(rv);
-            j += 1;
-        } else {
-            i += 1;
-            j += 1;
+    let lhs_len = target.len();
+    let rhs_len = other.len();
+    target.reserve(rhs_len);
+    let mut write = lhs_len + rhs_len;
+    target.resize(write, 0);
+
+    let mut i = lhs_len;
+    let mut j = rhs_len;
+
+    while i > 0 && j > 0 {
+        let lv = target[i - 1];
+        let rv = other[j - 1];
+        match lv.cmp(&rv) {
+            std::cmp::Ordering::Greater => {
+                write -= 1;
+                target[write] = lv;
+                i -= 1;
+            }
+            std::cmp::Ordering::Less => {
+                write -= 1;
+                target[write] = rv;
+                j -= 1;
+            }
+            std::cmp::Ordering::Equal => {
+                i -= 1;
+                j -= 1;
+            }
         }
     }
-    result.extend_from_slice(&lhs[i..]);
-    result.extend_from_slice(&rhs[j..]);
-    result
+
+    while i > 0 {
+        write -= 1;
+        target[write] = target[i - 1];
+        i -= 1;
+    }
+
+    while j > 0 {
+        write -= 1;
+        target[write] = other[j - 1];
+        j -= 1;
+    }
+
+    if write > 0 {
+        let len = target.len();
+        target.copy_within(write..len, 0);
+        target.truncate(len - write);
+    }
 }
 
 fn small_is_superset(lhs: &SmallBitmap, rhs: &SmallBitmap) -> bool {
@@ -759,10 +821,10 @@ mod tests {
 
     #[test]
     fn small_union_merges_and_deduplicates() {
-        let left: SmallBitmap = smallvec![1_u64, 3, 5];
+        let mut left: SmallBitmap = smallvec![1_u64, 3, 5];
         let right = [0_u64, 3, 4, 7];
-        let result = small_union(left, &right);
-        assert_eq!(result.as_slice(), &[0, 1, 3, 4, 5, 7]);
+        small_union(&mut left, &right);
+        assert_eq!(left.as_slice(), &[0, 1, 3, 4, 5, 7]);
     }
 
     #[test]
@@ -798,10 +860,10 @@ mod tests {
 
     #[test]
     fn small_symmetric_difference_handles_overlap() {
-        let lhs = [1_u64, 2, 4];
+        let mut lhs: SmallBitmap = smallvec![1_u64, 2, 4];
         let rhs = [2_u64, 3, 5];
-        let result = small_symmetric_difference(&lhs, &rhs);
-        assert_eq!(result.as_slice(), &[1, 3, 4, 5]);
+        small_symmetric_difference(&mut lhs, &rhs);
+        assert_eq!(lhs.as_slice(), &[1, 3, 4, 5]);
     }
 
     #[test]
