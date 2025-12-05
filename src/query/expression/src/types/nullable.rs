@@ -119,8 +119,8 @@ impl<T: AccessType> AccessType for NullableType<T> {
         }
     }
 
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
+    fn column_memory_size(col: &Self::Column, gc: bool) -> usize {
+        col.memory_size(gc)
     }
 
     // Null default lastly
@@ -350,8 +350,8 @@ impl<T: AccessType> NullableColumn<T> {
         }
     }
 
-    pub fn memory_size(&self) -> usize {
-        T::column_memory_size(&self.column) + self.validity.as_slice().0.len()
+    pub fn memory_size(&self, gc: bool) -> usize {
+        T::column_memory_size(&self.column, gc) + self.validity.as_slice().0.len()
     }
 
     pub fn destructure(self) -> (T::Column, Bitmap) {

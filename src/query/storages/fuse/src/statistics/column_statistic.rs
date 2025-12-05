@@ -129,7 +129,7 @@ pub fn gen_columns_statistics(
                     calc_column_distinct_of_values(&col, rows)?
                 };
 
-                let in_memory_size = col.memory_size() as u64;
+                let in_memory_size = col.memory_size(false) as u64;
                 let col_stats = ColumnStatistics::new(
                     min,
                     max,

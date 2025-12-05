@@ -147,7 +147,7 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
         std::mem::size_of::<Self::Scalar>()
     }
 
-    fn column_memory_size(buffer: &Buffer<Self::Scalar>) -> usize {
+    fn column_memory_size(buffer: &Buffer<Self::Scalar>, _gc: bool) -> usize {
         buffer.len() * std::mem::size_of::<Self::Scalar>()
     }
 

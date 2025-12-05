@@ -111,7 +111,7 @@ where
         std::mem::size_of::<F>()
     }
 
-    fn column_memory_size(col: &Self::Column) -> usize {
+    fn column_memory_size(col: &Self::Column, _gc: bool) -> usize {
         F::column_len(col) * std::mem::size_of::<F>()
     }
 

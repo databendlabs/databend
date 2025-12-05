@@ -264,7 +264,7 @@ pub(crate) async fn load_inverted_index_files<'a>(
                 inverted_binary,
                 &databend_common_expression::types::DataType::Binary,
             )?;
-            inverted_bytes_len += column.memory_size();
+            inverted_bytes_len += column.memory_size(false);
             let value = unsafe { column.index_unchecked(0) };
             let bytes = value.as_binary().unwrap();
             let file = InvertedIndexFile::create(name.clone(), bytes.to_vec());

@@ -276,7 +276,7 @@ where
     }
 
     fn update_column(&mut self, column: &Column) {
-        self.in_memory_size += column.memory_size();
+        self.in_memory_size += column.memory_size(false);
         if column.len() == 0 {
             return;
         }

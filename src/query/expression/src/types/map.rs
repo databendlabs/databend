@@ -111,8 +111,8 @@ impl<K: AccessType, V: AccessType> AccessType for KvPair<K, V> {
         K::scalar_memory_size(k) + V::scalar_memory_size(v)
     }
 
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
+    fn column_memory_size(col: &Self::Column, gc: bool) -> usize {
+        col.memory_size(gc)
     }
 
     #[inline(always)]
@@ -289,8 +289,8 @@ impl<K: AccessType, V: AccessType> KvColumn<K, V> {
         }
     }
 
-    pub fn memory_size(&self) -> usize {
-        K::column_memory_size(&self.keys) + V::column_memory_size(&self.values)
+    pub fn memory_size(&self, gc: bool) -> usize {
+        K::column_memory_size(&self.keys, gc) + V::column_memory_size(&self.values, gc)
     }
 }
 
@@ -501,8 +501,8 @@ impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
         MapInternal::<K, V>::scalar_memory_size(scalar)
     }
 
-    fn column_memory_size(col: &Self::Column) -> usize {
-        MapInternal::<K, V>::column_memory_size(col)
+    fn column_memory_size(col: &Self::Column, gc: bool) -> usize {
+        MapInternal::<K, V>::column_memory_size(col, gc)
     }
 
     #[inline(always)]

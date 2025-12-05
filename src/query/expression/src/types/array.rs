@@ -101,11 +101,11 @@ impl<T: AccessType> AccessType for ArrayType<T> {
     }
 
     fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
-        <T as AccessType>::column_memory_size(scalar)
+        <T as AccessType>::column_memory_size(scalar, false)
     }
 
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
+    fn column_memory_size(col: &Self::Column, gc: bool) -> usize {
+        col.memory_size(gc)
     }
 
     fn compare(a: T::Column, b: T::Column) -> Ordering {
@@ -269,8 +269,8 @@ impl<T: AccessType> ArrayColumn<T> {
         }
     }
 
-    pub fn memory_size(&self) -> usize {
-        T::column_memory_size(&self.underlying_column()) + self.offsets.len() * 8
+    pub fn memory_size(&self, gc: bool) -> usize {
+        T::column_memory_size(&self.underlying_column(), gc) + self.offsets.len() * 8
     }
 
     // Note: if the array column has been sliced, the number of values may not match the offsets.

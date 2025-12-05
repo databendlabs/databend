@@ -103,7 +103,7 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
         0
     }
 
-    fn column_memory_size(_: &usize) -> usize {
+    fn column_memory_size(_: &usize, _: bool) -> usize {
         std::mem::size_of::<usize>()
     }
 
