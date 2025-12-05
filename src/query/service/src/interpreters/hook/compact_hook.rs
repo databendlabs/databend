@@ -26,7 +26,6 @@ use databend_common_exception::Result;
 use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::ReclusterPlan;
@@ -50,7 +49,6 @@ pub struct CompactTargetTableDescription {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub mutation_kind: MutationKind,
 }
 
 pub struct CompactHookTraceCtx {
@@ -95,30 +93,18 @@ async fn do_hook_compact(
             info!("Operation {op_name} completed successfully, starting table optimization job.");
 
             let compact_start_at = Instant::now();
-            let compaction_limits = match compact_target.mutation_kind {
-                MutationKind::Insert => {
-                    let compaction_num_block_hint =
-                        ctx.get_compaction_num_block_hint(&compact_target.table);
-                    info!(
-                        "Table {} requires compaction of {} blocks",
-                        compact_target.table, compaction_num_block_hint
-                    );
-                    if compaction_num_block_hint == 0 {
-                        return Ok(());
-                    }
-                    CompactionLimits {
-                        segment_limit: None,
-                        block_limit: Some(compaction_num_block_hint as usize),
-                    }
-                }
-                _ => {
-                    let auto_compaction_segments_limit =
-                        ctx.get_settings().get_auto_compaction_segments_limit()?;
-                    CompactionLimits {
-                        segment_limit: Some(auto_compaction_segments_limit as usize),
-                        block_limit: None,
-                    }
-                }
+            let compaction_num_block_hint =
+                ctx.get_compaction_num_block_hint(&compact_target.table);
+            info!(
+                "Table {} requires compaction of {} blocks",
+                compact_target.table, compaction_num_block_hint
+            );
+            if compaction_num_block_hint == 0 {
+                return Ok(());
+            }
+            let compaction_limits = CompactionLimits {
+                segment_limit: None,
+                block_limit: Some(compaction_num_block_hint as usize),
             };
 
             // keep the original progress value

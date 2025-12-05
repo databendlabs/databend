@@ -10,7 +10,7 @@ merge into test_merge as tba using (select * from (values('1','add','11'),('4','
 1
 
 query ITI
-select * from test_merge;
+select * from test_merge order by col1;
 ----
 2 abc 2
 3 abc 3

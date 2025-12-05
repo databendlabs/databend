@@ -155,6 +155,8 @@ query IRT
 SELECT id, score(), content FROM t WHERE match(content, '()', 'lenient=true')
 ----
 
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 3;
 
 statement ok
 UPDATE t SET content = '科技创新是推动社会进步的重要动力，我们应该积极支持和推动科技创新。' WHERE id=24

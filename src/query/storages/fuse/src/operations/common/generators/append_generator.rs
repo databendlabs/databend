@@ -30,7 +30,6 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use log::info;
 use log::warn;
 
 use crate::operations::common::ConflictResolveContext;
@@ -41,7 +40,8 @@ use crate::statistics::TableStatsGenerator;
 
 #[derive(Clone)]
 pub struct AppendGenerator {
-    ctx: Arc<dyn TableContext>,
+    pub(crate) ctx: Arc<dyn TableContext>,
+
     leaf_default_values: HashMap<ColumnId, Scalar>,
     overwrite: bool,
     conflict_resolve_ctx: ConflictResolveContext,
@@ -192,28 +192,6 @@ impl SnapshotGenerator for AppendGenerator {
 
                 merge_statistics_mut(&mut new_summary, &summary, cluster_key_id);
             }
-        }
-
-        // check if need to auto compact
-        // the algorithm is: if the number of imperfect blocks is greater than the threshold, then auto compact.
-        // the threshold is set by the setting `auto_compaction_imperfect_blocks_threshold`, default is 25.
-        let imperfect_count = new_summary.block_count - new_summary.perfect_block_count;
-        let auto_compaction_imperfect_blocks_threshold = self
-            .ctx
-            .get_settings()
-            .get_auto_compaction_imperfect_blocks_threshold()?;
-
-        if imperfect_count >= auto_compaction_imperfect_blocks_threshold {
-            // If imperfect_count is larger, SLIGHTLY increase the number of blocks
-            // eligible for auto-compaction, this adjustment is intended to help reduce
-            // fragmentation over time.
-            let compact_num_block_hint = std::cmp::min(
-                imperfect_count,
-                (auto_compaction_imperfect_blocks_threshold as f64 * 1.5).ceil() as u64,
-            );
-            info!("set compact_num_block_hint to {compact_num_block_hint }");
-            self.ctx
-                .set_compaction_num_block_hint(table_info.name.as_str(), compact_num_block_hint);
         }
 
         // merge statistics will set the additional_stats_meta to none,

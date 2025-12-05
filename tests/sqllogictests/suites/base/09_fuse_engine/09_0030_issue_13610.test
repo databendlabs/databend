@@ -8,6 +8,9 @@ statement ok
 USE issue_13610
 
 statement ok
+set auto_compaction_imperfect_blocks_threshold = 2;
+
+statement ok
 create table t(a int);
 
 statement ok
