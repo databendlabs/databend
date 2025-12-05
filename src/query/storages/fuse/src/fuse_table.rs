@@ -158,7 +158,7 @@ pub struct FuseTable {
 
     // If this is set, reading from fuse_table should only return the increment blocks
     pub(crate) changes_desc: Option<ChangesDesc>,
-    pub(crate) table_branch: Option<(String, SnapshotRef)>,
+    pub(crate) table_branch: Option<SnapshotRef>,
 
     pub pruned_result_receiver: Arc<Mutex<PartInfoReceiver>>,
 }
@@ -435,7 +435,7 @@ impl FuseTable {
     }
 
     pub fn snapshot_loc(&self) -> Option<String> {
-        if let Some((_, snapshot_ref)) = self.table_branch.as_ref() {
+        if let Some(snapshot_ref) = self.table_branch.as_ref() {
             return Some(snapshot_ref.loc.clone());
         }
 
@@ -455,8 +455,8 @@ impl FuseTable {
         &self.operator
     }
 
-    pub fn get_table_branch_name(&self) -> Option<String> {
-        self.table_branch.as_ref().map(|(name, _)| name.clone())
+    pub fn get_branch_id(&self) -> Option<u64> {
+        self.table_branch.as_ref().map(|v| v.id)
     }
 
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
@@ -1209,7 +1209,7 @@ impl Table for FuseTable {
     fn with_branch(&self, branch_name: &str) -> Result<Arc<dyn Table>> {
         let snapshot_ref = self.table_info.get_table_ref(None, branch_name)?;
         let mut new_table = self.clone();
-        new_table.table_branch = Some((branch_name.to_string(), snapshot_ref.clone()));
+        new_table.table_branch = Some(snapshot_ref.clone());
         Ok(Arc::new(new_table))
     }
 

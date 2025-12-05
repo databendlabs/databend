@@ -189,7 +189,7 @@ impl StreamTable {
             location,
             snapshot_version,
             fuse_table.meta_location_generator().clone(),
-            fuse_table.get_table_branch_name(),
+            fuse_table.get_branch_id(),
         );
 
         let mut instant = None;

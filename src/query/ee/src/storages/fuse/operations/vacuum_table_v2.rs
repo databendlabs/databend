@@ -641,9 +641,10 @@ async fn process_snapshot_refs(
                 ref_gc_roots.push(tag_snapshot);
             }
             SnapshotRefType::Branch => {
+                let branch_id = snapshot_ref.id;
                 let snapshots_before_retention = fuse_table
                     .list_branch_snapshots_with_fallback(
-                        ref_name,
+                        branch_id,
                         &snapshot_ref.loc,
                         retention_time,
                         num_snapshots_to_keep,
@@ -652,7 +653,7 @@ async fn process_snapshot_refs(
 
                 let (gc_root_location, gc_root_snap) = match process_branch_gc_root(
                     fuse_table,
-                    ref_name,
+                    branch_id,
                     &snapshot_ref.loc,
                     &snapshots_before_retention,
                     &mut ref_snapshots_to_gc,
@@ -663,7 +664,7 @@ async fn process_snapshot_refs(
                     None => {
                         // No gc_root found, use snapshot history to find earliest
                         let earliest_snap = fuse_table
-                            .find_earliest_snapshot_via_history(ref_name, &snapshot_ref.loc)
+                            .find_earliest_snapshot_via_history(ref_name, snapshot_ref)
                             .await?;
                         (snapshot_ref.loc.clone(), earliest_snap)
                     }
@@ -739,7 +740,7 @@ async fn process_snapshot_refs(
 #[async_backtrace::framed]
 async fn process_branch_gc_root(
     fuse_table: &FuseTable,
-    ref_name: &str,
+    branch_id: u64,
     head: &str,
     snapshots_before_retention: &[Entry],
     ref_snapshots_to_gc: &mut Vec<String>,
@@ -769,7 +770,7 @@ async fn process_branch_gc_root(
     };
     let gc_root_path = fuse_table
         .meta_location_generator()
-        .ref_snapshot_location_from_uuid(ref_name, &gc_root_id, gc_root_ver)?;
+        .ref_snapshot_location_from_uuid(branch_id, &gc_root_id, gc_root_ver)?;
 
     // Try to read gc_root snapshot
     match SnapshotsIO::read_snapshot(gc_root_path.clone(), op, false).await {

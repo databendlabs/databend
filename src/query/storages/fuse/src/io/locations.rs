@@ -205,12 +205,12 @@ impl TableMetaLocationGenerator {
 
     pub fn ref_snapshot_location_from_uuid(
         &self,
-        name: &str,
+        table_ref: u64,
         id: &Uuid,
         version: u64,
     ) -> Result<String> {
         let snapshot_version = SnapshotVersion::try_from(version)?;
-        Ok(snapshot_version.create_ref(name, id, &self.prefix))
+        Ok(snapshot_version.create_ref(table_ref, id, &self.prefix))
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
@@ -356,7 +356,7 @@ impl TableMetaLocationGenerator {
 
 trait SnapshotLocationCreator {
     fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String;
-    fn create_ref(&self, name: &str, id: &Uuid, prefix: impl AsRef<str>) -> String;
+    fn create_ref(&self, table_ref: u64, id: &Uuid, prefix: impl AsRef<str>) -> String;
     fn suffix(&self) -> String;
 }
 
@@ -380,12 +380,12 @@ impl SnapshotLocationCreator for SnapshotVersion {
         )
     }
 
-    fn create_ref(&self, name: &str, id: &Uuid, prefix: impl AsRef<str>) -> String {
+    fn create_ref(&self, table_ref: u64, id: &Uuid, prefix: impl AsRef<str>) -> String {
         format!(
             "{}/{}/{}/{}{}{}",
             prefix.as_ref(),
             FUSE_TBL_REF_PREFIX,
-            name,
+            table_ref,
             VACUUM2_OBJECT_KEY_PREFIX,
             id.simple(),
             self.suffix(),
@@ -414,7 +414,7 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
         )
     }
 
-    fn create_ref(&self, _name: &str, _id: &Uuid, _prefix: impl AsRef<str>) -> String {
+    fn create_ref(&self, _table_ref: u64, _id: &Uuid, _prefix: impl AsRef<str>) -> String {
         unimplemented!()
     }
 

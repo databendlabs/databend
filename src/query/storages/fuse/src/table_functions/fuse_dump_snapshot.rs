@@ -109,7 +109,7 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
                 snapshot_location,
                 format_version,
                 meta_location_generator.clone(),
-                table.get_table_branch_name(),
+                table.get_branch_id(),
             );
 
             let mut snapshot_ids: Vec<String> = Vec::with_capacity(limit);

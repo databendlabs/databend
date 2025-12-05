@@ -189,7 +189,7 @@ impl FuseTable {
             location,
             snapshot_version,
             self.meta_location_generator().clone(),
-            self.get_table_branch_name(),
+            self.get_branch_id(),
         );
 
         // Find the instant which matches the given `time_point`.
@@ -237,13 +237,9 @@ impl FuseTable {
         table_info.meta.schema = Arc::new(snapshot.schema.clone());
 
         // 2. the table option `snapshot_location`
-        let loc = if let Some(branch_name) = self.get_table_branch_name() {
+        let loc = if let Some(id) = self.get_branch_id() {
             self.meta_location_generator
-                .ref_snapshot_location_from_uuid(
-                    &branch_name,
-                    &snapshot.snapshot_id,
-                    format_version,
-                )?
+                .ref_snapshot_location_from_uuid(id, &snapshot.snapshot_id, format_version)?
         } else {
             self.meta_location_generator
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?
@@ -566,7 +562,7 @@ impl FuseTable {
             location,
             snapshot_version,
             self.meta_location_generator().clone(),
-            self.get_table_branch_name(),
+            self.get_branch_id(),
         );
 
         // Find the snapshot which matches the given `time_point`.

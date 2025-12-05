@@ -500,6 +500,7 @@ impl FromToProto for mt::SnapshotRef {
     fn from_pb(p: pb::SnapshotRef) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let v = Self {
+            id: p.id,
             expire_at: p.expire_at.map(DateTime::<Utc>::from_pb).transpose()?,
             typ: FromPrimitive::from_i32(p.typ)
                 .ok_or_else(|| Incompatible::new(format!("invalid RefType: {}", p.typ)))?,
@@ -512,6 +513,7 @@ impl FromToProto for mt::SnapshotRef {
         let p = pb::SnapshotRef {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
+            id: self.id,
             expire_at: self.expire_at.map(|x| x.to_pb()).transpose()?,
             typ: self.typ.clone() as i32,
             loc: self.loc.clone(),

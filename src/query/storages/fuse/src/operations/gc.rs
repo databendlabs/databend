@@ -25,6 +25,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ScalarRef;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::SnapshotRef;
 use databend_common_meta_app::schema::SnapshotRefType;
 use databend_common_meta_app::schema::TableIndex;
 use databend_storages_common_cache::CacheAccessor;
@@ -769,7 +770,7 @@ impl FuseTable {
     #[async_backtrace::framed]
     pub async fn list_branch_snapshots_with_fallback(
         &self,
-        ref_name: &str,
+        branch_id: u64,
         head: &str,
         retention_time: DateTime<Utc>,
         num_snapshots_to_keep: usize,
@@ -777,7 +778,7 @@ impl FuseTable {
         let ref_snapshot_location_prefix = self
             .meta_location_generator()
             .ref_snapshot_location_prefix();
-        let ref_prefix = format!("{}{}/", ref_snapshot_location_prefix, ref_name);
+        let ref_prefix = format!("{}{}/", ref_snapshot_location_prefix, branch_id);
         // First attempt: list by timestamp
         let mut snapshots = self
             .list_files_until_timestamp(&ref_prefix, retention_time, true, None)
@@ -804,15 +805,16 @@ impl FuseTable {
     pub async fn find_earliest_snapshot_via_history(
         &self,
         ref_name: &str,
-        head_location: &str,
+        snapshot_ref: &SnapshotRef,
     ) -> Result<Arc<TableSnapshot>> {
+        let head_location = &snapshot_ref.loc;
         let snapshot_version = TableMetaLocationGenerator::snapshot_version(head_location);
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         let mut snapshot_stream = reader.snapshot_history(
             head_location.to_string(),
             snapshot_version,
             self.meta_location_generator().clone(),
-            Some(ref_name.to_string()),
+            Some(snapshot_ref.id),
         );
 
         let mut last_snapshot = None;
@@ -833,7 +835,7 @@ impl FuseTable {
     /// Returns gc_root snapshot if found
     async fn select_branch_gc_root(
         &self,
-        ref_name: &str,
+        branch_id: u64,
         snapshots_before_retention: &[Entry],
         ref_snapshots_to_purge: &mut Vec<String>,
     ) -> Result<Option<Arc<TableSnapshot>>> {
@@ -852,7 +854,7 @@ impl FuseTable {
         };
         let gc_root_path = self
             .meta_location_generator()
-            .ref_snapshot_location_from_uuid(ref_name, &gc_root_id, gc_root_ver)?;
+            .ref_snapshot_location_from_uuid(branch_id, &gc_root_id, gc_root_ver)?;
         // Try to read gc_root snapshot
         match SnapshotsIO::read_snapshot(gc_root_path.clone(), op.clone(), false).await {
             Ok((gc_root_snap, _)) => {
@@ -924,9 +926,10 @@ impl FuseTable {
                     }
                 }
                 SnapshotRefType::Branch => {
+                    let branch_id = snapshot_ref.id;
                     let snapshots_before_lvt = self
                         .list_branch_snapshots_with_fallback(
-                            ref_name,
+                            branch_id,
                             &snapshot_ref.loc,
                             retention_time,
                             num_snapshots_to_keep,
@@ -935,7 +938,7 @@ impl FuseTable {
 
                     let gc_root_snap = if let Some(gc_root_snap) = self
                         .select_branch_gc_root(
-                            ref_name,
+                            branch_id,
                             &snapshots_before_lvt,
                             &mut ref_snapshots_to_purge,
                         )
@@ -943,7 +946,7 @@ impl FuseTable {
                     {
                         gc_root_snap
                     } else {
-                        self.find_earliest_snapshot_via_history(ref_name, &snapshot_ref.loc)
+                        self.find_earliest_snapshot_via_history(ref_name, snapshot_ref)
                             .await?
                     };
                     // Collect segments from gc_root

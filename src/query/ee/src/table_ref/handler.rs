@@ -115,7 +115,7 @@ impl TableRefHandler for RealTableRefHandler {
         let new_snapshot_location = fuse_table
             .meta_location_generator()
             .ref_snapshot_location_from_uuid(
-                &plan.ref_name,
+                seq,
                 &new_snapshot.snapshot_id,
                 new_snapshot.format_version,
             )?;
@@ -130,6 +130,7 @@ impl TableRefHandler for RealTableRefHandler {
         new_table_meta
             .refs
             .insert(plan.ref_name.clone(), SnapshotRef {
+                id: seq,
                 expire_at,
                 typ: plan.ref_type.clone(),
                 loc: new_snapshot_location,

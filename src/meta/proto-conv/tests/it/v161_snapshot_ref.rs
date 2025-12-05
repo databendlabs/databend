@@ -73,11 +73,13 @@ fn test_decode_v161_snapshot_ref() -> anyhow::Result<()> {
         constraints: btreemap! {},
         refs: btreemap! {
             "branch_1".to_string() => SnapshotRef {
+                id: 1,
                 expire_at: Some(Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap()),
                 typ: SnapshotRefType::Branch,
                 loc: "a".to_string(),
             },
             "tag_1".to_string() => SnapshotRef {
+                id: 2,
                 expire_at: None,
                 typ: SnapshotRefType::Tag,
                 loc: "c".to_string(),

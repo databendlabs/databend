@@ -192,6 +192,8 @@ pub struct TableMeta {
 // Inspired by iceberg(https://github.com/apache/iceberg-rust/blob/main/crates/iceberg/src/spec/snapshot.rs#L443-L449)
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct SnapshotRef {
+    /// The unique id of the reference.
+    pub id: u64,
     /// After this timestamp, the reference becomes inactive.
     pub expire_at: Option<DateTime<Utc>>,
     /// The type of the reference.

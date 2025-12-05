@@ -154,9 +154,10 @@ message SnapshotRef {
     Tag = 1;
   }
 
-  optional string expire_at = 1;
-  RefType typ = 2;
-  string loc = 3;
+  uint64 id = 1;
+  optional string expire_at = 2;
+  RefType typ = 3;
+  string loc = 4;
 }
 
 message RowAccessPolicyColumnMap {
