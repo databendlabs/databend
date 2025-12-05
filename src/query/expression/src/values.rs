@@ -1755,6 +1755,9 @@ impl Column {
     }
 
     pub fn memory_size(&self) -> usize {
+        self.memory_size_with_options(false)
+    }
+    pub fn memory_size_with_options(&self, gc: bool) -> usize {
         match self {
             Column::Null { .. } => std::mem::size_of::<usize>(),
             Column::EmptyArray { .. } => std::mem::size_of::<usize>(),
@@ -1774,7 +1777,7 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Boolean(c) => c.as_slice().0.len(),
             Column::Binary(col) => col.memory_size(),
-            Column::String(col) => col.memory_size(),
+            Column::String(col) => col.memory_size_with_options(gc),
             Column::Timestamp(col) => col.len() * 8,
             Column::TimestampTz(col) => col.len() * 16,
             Column::Date(col) => col.len() * 4,

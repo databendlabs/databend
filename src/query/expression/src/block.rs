@@ -102,6 +102,13 @@ impl BlockEntry {
         }
     }
 
+    pub fn memory_size_with_options(&self, gc: bool) -> usize {
+        match self {
+            BlockEntry::Const(scalar, _, _) => scalar.as_ref().memory_size(),
+            BlockEntry::Column(column) => column.memory_size_with_options(gc),
+        }
+    }
+
     pub fn to_column(&self) -> Column {
         match self {
             BlockEntry::Const(scalar, data_type, num_rows) => {

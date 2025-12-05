@@ -315,7 +315,15 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     }
 
     pub fn memory_size(&self) -> usize {
-        self.total_buffer_len() + self.len() * 16
+        self.memory_size_with_options(false)
+    }
+
+    pub fn memory_size_with_options(&self, gc: bool) -> usize {
+        if gc {
+            self.total_bytes_len() + self.len() * 16
+        } else {
+            self.total_buffer_len() + self.len() * 16
+        }
     }
 
     fn total_unshared_buffer_len(&self) -> usize {
