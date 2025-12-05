@@ -92,6 +92,7 @@ impl AggregateHashTable {
         arena: Arc<Bump>,
         need_init_entry: bool,
     ) -> Self {
+        debug_assert!(capacity.is_power_of_two());
         let entries = if need_init_entry {
             vec![Entry::default(); capacity]
         } else {
@@ -110,6 +111,7 @@ impl AggregateHashTable {
                 entries,
                 count: 0,
                 capacity,
+                capacity_mask: capacity - 1,
             },
             config,
         }
