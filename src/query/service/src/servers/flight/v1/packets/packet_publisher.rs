@@ -44,7 +44,7 @@ use crate::sessions::SessionManager;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {
     Statistics,
-    Fragment(usize),
+    Fragment(String),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -88,7 +88,7 @@ impl DataflowDiagramBuilder {
         }
     }
 
-    pub fn add_data_edge(&mut self, source: &str, destination: &str, v: usize) -> Result<()> {
+    pub fn add_data_edge(&mut self, source: &str, destination: &str, channel: &str) -> Result<()> {
         if source != destination {
             // avoid local to local
             let source = self
@@ -100,7 +100,7 @@ impl DataflowDiagramBuilder {
             })?;
 
             self.graph
-                .add_edge(*source, *destination, Edge::Fragment(v));
+                .add_edge(*source, *destination, Edge::Fragment(channel.to_string()));
         }
 
         Ok(())
