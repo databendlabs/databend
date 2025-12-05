@@ -314,11 +314,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
             .get_or_init(|| self.views.iter().map(|v| v.length as usize).sum::<usize>())
     }
 
-    pub fn memory_size(&self) -> usize {
-        self.memory_size_with_options(false)
-    }
-
-    pub fn memory_size_with_options(&self, gc: bool) -> usize {
+    pub fn memory_size(&self, gc: bool) -> usize {
         if gc {
             self.total_bytes_len() + self.len() * 16
         } else {

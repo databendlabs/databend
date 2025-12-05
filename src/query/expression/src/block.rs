@@ -98,14 +98,14 @@ impl BlockEntry {
     pub fn memory_size(&self) -> usize {
         match self {
             BlockEntry::Const(scalar, _, _) => scalar.as_ref().memory_size(),
-            BlockEntry::Column(column) => column.memory_size(),
+            BlockEntry::Column(column) => column.memory_size(false),
         }
     }
 
     pub fn memory_size_with_options(&self, gc: bool) -> usize {
         match self {
             BlockEntry::Const(scalar, _, _) => scalar.as_ref().memory_size(),
-            BlockEntry::Column(column) => column.memory_size_with_options(gc),
+            BlockEntry::Column(column) => column.memory_size(gc),
         }
     }
 

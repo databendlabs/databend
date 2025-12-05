@@ -297,10 +297,10 @@ impl<T: AccessType> Value<T> {
         }
     }
 
-    pub fn memory_size(&self) -> usize {
+    pub fn memory_size(&self, gc: bool) -> usize {
         match self {
             Value::Scalar(scalar) => T::scalar_memory_size(&T::to_scalar_ref(scalar)),
-            Value::Column(c) => T::column_memory_size(c),
+            Value::Column(c) => T::column_memory_size(c, gc),
         }
     }
 
@@ -707,8 +707,8 @@ impl ScalarRef<'_> {
             ScalarRef::TimestampTz(_) => 16,
             ScalarRef::Date(_) => 4,
             ScalarRef::Interval(_) => 16,
-            ScalarRef::Array(col) => col.memory_size(),
-            ScalarRef::Map(col) => col.memory_size(),
+            ScalarRef::Array(col) => col.memory_size(false),
+            ScalarRef::Map(col) => col.memory_size(false),
             ScalarRef::Bitmap(b) => b.len(),
             ScalarRef::Tuple(scalars) => scalars.iter().map(|s| s.memory_size()).sum(),
             ScalarRef::Variant(buf) => buf.len(),
@@ -897,8 +897,8 @@ impl ScalarRef<'_> {
             ScalarRef::TimestampTz(_) => n * 16,
             ScalarRef::Date(_) => n * 4,
             ScalarRef::Interval(_) => n * 16,
-            ScalarRef::Array(col) => col.memory_size() * n + (n + 1) * 8,
-            ScalarRef::Map(col) => col.memory_size() * n + (n + 1) * 8,
+            ScalarRef::Array(col) => col.memory_size(false) * n + (n + 1) * 8,
+            ScalarRef::Map(col) => col.memory_size(false) * n + (n + 1) * 8,
             ScalarRef::Bitmap(b) => b.len() * n + (n + 1) * 8,
             ScalarRef::Tuple(fields) => {
                 let DataType::Tuple(fields_ty) = data_type else {
@@ -1754,10 +1754,7 @@ impl Column {
         }
     }
 
-    pub fn memory_size(&self) -> usize {
-        self.memory_size_with_options(false)
-    }
-    pub fn memory_size_with_options(&self, gc: bool) -> usize {
+    pub fn memory_size(&self, gc: bool) -> usize {
         match self {
             Column::Null { .. } => std::mem::size_of::<usize>(),
             Column::EmptyArray { .. } => std::mem::size_of::<usize>(),
@@ -1777,19 +1774,19 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Boolean(c) => c.as_slice().0.len(),
             Column::Binary(col) => col.memory_size(),
-            Column::String(col) => col.memory_size_with_options(gc),
+            Column::String(col) => col.memory_size(gc),
             Column::Timestamp(col) => col.len() * 8,
             Column::TimestampTz(col) => col.len() * 16,
             Column::Date(col) => col.len() * 4,
             Column::Interval(col) => col.len() * 16,
-            Column::Array(col) => col.memory_size(),
-            Column::Map(col) => col.memory_size(),
+            Column::Array(col) => col.memory_size(gc),
+            Column::Map(col) => col.memory_size(gc),
             Column::Bitmap(col) => col.memory_size(),
-            Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
-            Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
+            Column::Nullable(c) => c.column.memory_size(gc) + c.validity.as_slice().0.len(),
+            Column::Tuple(fields) => fields.iter().map(|f| f.memory_size(gc)).sum(),
             Column::Variant(col) => col.memory_size(),
             Column::Geometry(col) => col.memory_size(),
-            Column::Geography(col) => GeographyType::column_memory_size(col),
+            Column::Geography(col) => GeographyType::column_memory_size(col, gc),
             Column::Vector(col) => col.memory_size(),
             Column::Opaque(col) => col.memory_size(),
         }
@@ -1813,7 +1810,7 @@ impl Column {
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
             Column::Interval(col) => col.len() * 16,
-            Column::Geography(col) => GeographyType::column_memory_size(col),
+            Column::Geography(col) => GeographyType::column_memory_size(col, false),
             Column::Boolean(c) => c.len(),
             // 8 * len + size of bytes
             Column::Binary(col)
