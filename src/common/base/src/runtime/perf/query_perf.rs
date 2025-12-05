@@ -55,7 +55,7 @@ impl QueryPerf {
             .blocklist(&["libc", "libgcc", "pthread", "vdso"])
             .set_filter_func(filter_closure)
             .build()
-            .map_err(|_e| ErrorCode::Internal("Failed to create profiler"))?;
+            .map_err(|e| ErrorCode::Internal(format!("Failed to create profiler, {e}")))?;
         debug!("starting perf with frequency: {}", frequency);
         let mut payload = ThreadTracker::new_tracking_payload();
         payload.perf_enabled = true;

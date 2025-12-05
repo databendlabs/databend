@@ -222,7 +222,11 @@ impl JoinEquiCondition {
         left.into_iter()
             .zip(right)
             .enumerate()
-            .map(|(index, (l, r))| JoinEquiCondition::new(l, r, is_null_equal.contains(&index)))
+            .map(|(index, (left, right))| Self {
+                left,
+                right,
+                is_null_equal: is_null_equal.contains(&index),
+            })
             .collect()
     }
 }

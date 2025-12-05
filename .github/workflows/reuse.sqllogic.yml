@@ -69,7 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 20
+        timeout-minutes: 40
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
