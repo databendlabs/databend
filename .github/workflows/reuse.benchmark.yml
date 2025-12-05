@@ -137,10 +137,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - { dataset: hits, size: Small, database: clickbench, timeout: 10 }
-          - { dataset: hits, size: Large, database: clickbench, timeout: 10 }
-          - { dataset: tpch, size: Small, database: clickbench, timeout: 20 }
-          - { dataset: tpch, size: Large, database: clickbench, timeout: 20 }
+          - { dataset: hits, size: Small, database: hits, timeout: 10 }
+          - { dataset: hits, size: Large, database: hits, timeout: 10 }
+          - { dataset: tpch100, size: Small, database: tpch_100, timeout: 20 }
+          - { dataset: tpch100, size: Large, database: tpch_100, timeout: 20 }
           - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60 }
       fail-fast: true
       max-parallel: 1
