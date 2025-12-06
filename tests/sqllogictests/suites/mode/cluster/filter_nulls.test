@@ -240,7 +240,7 @@ Exchange
     │           ├── scan id: 1
     │           ├── output columns: [value (#1)]
     │           ├── read rows: 1000
-    │           ├── read size: 2.30 KiB
+    │           ├── read size: 2.31 KiB
     │           ├── partitions total: 6
     │           ├── partitions scanned: 3
     │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
@@ -258,7 +258,7 @@ Exchange
                 ├── scan id: 0
                 ├── output columns: [value (#0)]
                 ├── read rows: 2000
-                ├── read size: 3.94 KiB
+                ├── read size: 3.95 KiB
                 ├── partitions total: 6
                 ├── partitions scanned: 3
                 ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
