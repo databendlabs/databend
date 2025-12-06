@@ -57,10 +57,7 @@ def create_user():
         "CREATE USER databend IDENTIFIED BY 'databend' with default_role='account_admin'"
     )
     exec("GRANT ROLE account_admin TO USER databend")
-    # need for cluster to sync the GRANT op
-    time.sleep(16)
-    for p in [8001, 8002, 8003]:
-        exec("SHOW GRANTS FOR USER databend", port=p)
+    exec("SYSTEM FLUSH PRIVILEGES")
 
 
 def download_testng():

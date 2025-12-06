@@ -12,15 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::tenant::Tenant;
 use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SystemPlan {
     pub action: SystemAction,
+    pub tenant: Tenant,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SystemAction {
     Backtrace(bool),
+    FlushPrivileges,
 }
