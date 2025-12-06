@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use bumpalo::Bump;
+use databend_common_base::hints::assume;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
@@ -20,6 +21,7 @@ use databend_common_io::prelude::bincode_serialize_into_buf;
 use super::RowID;
 use super::RowLayout;
 use super::RowPtr;
+use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::i256;
 use crate::types::AccessType;
@@ -29,13 +31,15 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalDataKind;
+use crate::types::DecimalScalar;
 use crate::types::DecimalView;
 use crate::types::NumberColumn;
+use crate::types::NumberScalar;
 use crate::types::NumberType;
-use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ProjectedBlock;
 use crate::Scalar;
@@ -177,18 +181,17 @@ unsafe fn serialize_fixed_size_column_to_rowformat<T>(
 pub struct CompareState<'a> {
     pub(super) address: &'a [RowPtr; BATCH_SIZE],
     pub(super) compare: &'a mut [RowID; BATCH_SIZE],
-    pub(super) matched: &'a mut [RowID; BATCH_SIZE],
     pub(super) no_matched: &'a mut [RowID; BATCH_SIZE],
 }
 
 impl<'s> CompareState<'s> {
-    pub(super) fn row_match_columns(
+    pub(super) fn row_match_entries(
         mut self,
-        cols: ProjectedBlock,
+        entries: ProjectedBlock,
         row_layout: &RowLayout,
         (mut count, mut no_match_count): (usize, usize),
     ) -> usize {
-        for ((entry, col_offset), validity_offset) in cols
+        for ((entry, col_offset), validity_offset) in entries
             .iter()
             .zip(row_layout.group_offsets.iter())
             .zip(row_layout.validity_offsets.iter())
@@ -199,19 +202,13 @@ impl<'s> CompareState<'s> {
             ) {
                 continue;
             }
-            (count, no_match_count) = self.row_match_column(
-                &entry.to_column(),
-                *validity_offset,
+
+            (count, no_match_count) = self.match_entry(
+                entry,
                 *col_offset,
+                *validity_offset,
                 (count, no_match_count),
             );
-
-            self = CompareState::<'s> {
-                address: self.address,
-                compare: self.matched,
-                matched: self.compare,
-                no_matched: self.no_matched,
-            };
 
             // no row matches
             if count == 0 {
@@ -221,197 +218,245 @@ impl<'s> CompareState<'s> {
         no_match_count
     }
 
-    fn row_match_column(
+    fn match_entry(
+        &mut self,
+        entry: &BlockEntry,
+        col_offset: usize,
+        validity_offset: usize,
+        counts: (usize, usize),
+    ) -> (usize, usize) {
+        match entry {
+            BlockEntry::Const(scalar, DataType::Nullable(_), _) => {
+                if scalar.is_null() {
+                    self.match_with(counts, |_, row_ptr| unsafe {
+                        !row_ptr.read_bool(validity_offset)
+                    })
+                } else {
+                    let counts = self.match_with(counts, |_, row_ptr| unsafe {
+                        row_ptr.read_bool(validity_offset)
+                    });
+                    self.match_const_column(scalar, col_offset, counts)
+                }
+            }
+            BlockEntry::Const(scalar, _, _) => self.match_const_column(scalar, col_offset, counts),
+            BlockEntry::Column(column) => match column {
+                Column::Nullable(c) => {
+                    if c.validity.null_count() == 0 {
+                        let counts = self.match_with(counts, |_, row_ptr| unsafe {
+                            row_ptr.read_bool(validity_offset)
+                        });
+                        self.match_column(&c.column, col_offset, None, counts)
+                    } else if c.validity.true_count() == 0 {
+                        self.match_with(counts, |_, row_ptr| unsafe {
+                            !row_ptr.read_bool(validity_offset)
+                        })
+                    } else {
+                        self.match_column(
+                            &c.column,
+                            col_offset,
+                            Some((&c.validity, validity_offset)),
+                            counts,
+                        )
+                    }
+                }
+                column => self.match_column(column, col_offset, None, counts),
+            },
+        }
+    }
+
+    fn match_column(
         &mut self,
         col: &Column,
-        validity_offset: usize,
         col_offset: usize,
-        (count, no_match_count): (usize, usize),
+        validity: Option<(&Bitmap, usize)>,
+        counts: (usize, usize),
     ) -> (usize, usize) {
-        let (validity, col) = if let Column::Nullable(c) = col {
-            (Some(&c.validity), &c.column)
-        } else {
-            (None, col)
-        };
-
         match col {
-            Column::EmptyArray { .. } | Column::EmptyMap { .. } => self.row_match_column_generic(
-                validity,
-                validity_offset,
-                (count, no_match_count),
-                |_, _| true,
-            ),
-
+            Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
+                self.match_validity_with(counts, validity, |_, _| true)
+            }
             Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
-                NumberColumn::NUM_TYPE(_) => {
-                    self.row_match_column_type::<NumberType<NUM_TYPE>>(
-                        col,
-                        validity,
-                        validity_offset,
-                        col_offset,
-                        (count, no_match_count),
+                NumberColumn::NUM_TYPE(buffer) => {
+                    self.match_column_type::<NumberType<NUM_TYPE>>(
+                        buffer, col_offset, validity, counts,
                     )
                 }
             }),
             Column::Decimal(decimal_column) => {
                 with_decimal_mapped_type!(|F| match decimal_column {
-                    DecimalColumn::F(_, size) => {
+                    DecimalColumn::F(buffer, size) => {
                         with_decimal_mapped_type!(|T| match size.data_kind() {
                             DecimalDataKind::T => {
-                                self.row_match_column_type::<DecimalView<F, T>>(
-                                    col,
-                                    validity,
-                                    validity_offset,
-                                    col_offset,
-                                    (count, no_match_count),
+                                self.match_column_type::<DecimalView<F, T>>(
+                                    buffer, col_offset, validity, counts,
                                 )
                             }
                         })
                     }
                 })
             }
-            Column::Boolean(_) => self.row_match_column_type::<BooleanType>(
-                col,
-                validity,
-                validity_offset,
-                col_offset,
-                (count, no_match_count),
-            ),
-            Column::Timestamp(_) => self.row_match_column_type::<TimestampType>(
-                col,
-                validity,
-                validity_offset,
-                col_offset,
-                (count, no_match_count),
-            ),
-            Column::Date(_) => self.row_match_column_type::<DateType>(
-                col,
-                validity,
-                validity_offset,
-                col_offset,
-                (count, no_match_count),
-            ),
-            Column::String(v) => self.row_match_column_generic(
-                validity,
-                validity_offset,
-                (count, no_match_count),
-                |idx, row_ptr| unsafe {
-                    let value = StringType::index_column_unchecked(v, idx);
-                    row_ptr.is_bytes_eq(col_offset, value.as_bytes())
-                },
-            ),
+            Column::Boolean(v) => {
+                self.match_column_type::<BooleanType>(v, col_offset, validity, counts)
+            }
+            Column::Timestamp(buffer) => {
+                self.match_column_type::<TimestampType>(buffer, col_offset, validity, counts)
+            }
+            Column::Date(buffer) => {
+                self.match_column_type::<DateType>(buffer, col_offset, validity, counts)
+            }
+            Column::String(str_view) => {
+                self.match_validity_with(counts, validity, |row, row_ptr| unsafe {
+                    row_ptr.eq_string_view(col_offset, str_view, *row)
+                })
+            }
             Column::Bitmap(v) | Column::Binary(v) | Column::Variant(v) | Column::Geometry(v) => {
-                self.row_match_column_generic(
-                    validity,
-                    validity_offset,
-                    (count, no_match_count),
-                    |idx, row_ptr| unsafe {
-                        let value = BinaryType::index_column_unchecked(v, idx);
-                        row_ptr.is_bytes_eq(col_offset, value)
-                    },
-                )
+                self.match_validity_with(counts, validity, |row, row_ptr| unsafe {
+                    let value = BinaryType::index_column_unchecked(v, row.to_usize());
+                    row_ptr.is_bytes_eq(col_offset, value)
+                })
             }
             Column::Nullable(_) | Column::Null { .. } => unreachable!(),
-            other => self.row_match_generic_column(other, col_offset, (count, no_match_count)),
+            column => self.match_validity_with(counts, validity, |row, row_ptr| {
+                let value = unsafe { AnyType::index_column_unchecked(column, row.to_usize()) };
+                let scalar = unsafe { row_ptr.read_bytes(col_offset) };
+                let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
+
+                scalar.as_ref() == value
+            }),
         }
     }
 
-    fn row_match_column_type<T>(
+    fn match_const_column(
         &mut self,
-        col: &Column,
-        validity: Option<&Bitmap>,
-        validity_offset: usize,
+        scalar: &Scalar,
         col_offset: usize,
-        (count, no_match_count): (usize, usize),
+        counts: (usize, usize),
+    ) -> (usize, usize) {
+        match scalar {
+            Scalar::Null => unreachable!(),
+            Scalar::Number(scalar) => with_number_mapped_type!(|NUM_TYPE| match scalar {
+                NumberScalar::NUM_TYPE(scalar) => {
+                    self.match_scalar_type::<NumberType<NUM_TYPE>>(scalar, col_offset, counts)
+                }
+            }),
+            Scalar::Decimal(scalar) => {
+                with_decimal_mapped_type!(|F| match scalar {
+                    DecimalScalar::F(scalar, size) => {
+                        with_decimal_mapped_type!(|T| match size.data_kind() {
+                            DecimalDataKind::T => {
+                                self.match_scalar_type::<DecimalView<F, T>>(
+                                    &scalar.as_decimal(),
+                                    col_offset,
+                                    counts,
+                                )
+                            }
+                        })
+                    }
+                })
+            }
+            Scalar::Boolean(value) => {
+                self.match_scalar_type::<BooleanType>(value, col_offset, counts)
+            }
+            Scalar::Timestamp(value) => {
+                self.match_scalar_type::<TimestampType>(value, col_offset, counts)
+            }
+            Scalar::Date(value) => self.match_scalar_type::<DateType>(value, col_offset, counts),
+            Scalar::String(value) => self.match_with(counts, |_, row_ptr| unsafe {
+                row_ptr.is_bytes_eq(col_offset, value.as_bytes())
+            }),
+            Scalar::Bitmap(v) | Scalar::Binary(v) | Scalar::Variant(v) | Scalar::Geometry(v) => {
+                self.match_with(counts, |_, row_ptr| unsafe {
+                    row_ptr.is_bytes_eq(col_offset, v)
+                })
+            }
+            _ => self.match_with(counts, |_, row_ptr| {
+                let row_data = unsafe { row_ptr.read_bytes(col_offset) };
+                let stored: Scalar = bincode_deserialize_from_slice(row_data).unwrap();
+                &stored == scalar
+            }),
+        }
+    }
+
+    fn match_scalar_type<T>(
+        &mut self,
+        value: &T::Scalar,
+        col_offset: usize,
+        counts: (usize, usize),
+    ) -> (usize, usize)
+    where
+        T: AccessType,
+    {
+        self.match_with(counts, |_, row_ptr| unsafe {
+            let scalar = row_ptr.read::<T::Scalar>(col_offset);
+            scalar == *value
+        })
+    }
+
+    fn match_column_type<T>(
+        &mut self,
+        col: &T::Column,
+        col_offset: usize,
+        validity: Option<(&Bitmap, usize)>,
+        counts: (usize, usize),
     ) -> (usize, usize)
     where
         T: AccessType,
         for<'a, 'b> T::ScalarRef<'a>: PartialEq<T::ScalarRef<'b>>,
     {
-        let col = T::try_downcast_column(col).unwrap();
-
-        self.row_match_column_generic(
-            validity,
-            validity_offset,
-            (count, no_match_count),
-            |idx, row_ptr| unsafe {
-                let value = T::index_column_unchecked(&col, idx);
-                let scalar = row_ptr.read::<T::Scalar>(col_offset);
-                let scalar = T::to_scalar_ref(&scalar);
-                scalar == value
-            },
-        )
+        self.match_validity_with(counts, validity, |row, row_ptr| unsafe {
+            let value = T::index_column_unchecked(col, row.to_usize());
+            let scalar = row_ptr.read::<T::Scalar>(col_offset);
+            let scalar = T::to_scalar_ref(&scalar);
+            scalar == value
+        })
     }
 
-    fn row_match_column_generic<F>(
+    fn match_with<F>(
         &mut self,
-        validity: Option<&Bitmap>,
-        validity_offset: usize,
         (count, mut no_match_count): (usize, usize),
         compare_fn: F,
     ) -> (usize, usize)
     where
-        F: Fn(usize, &RowPtr) -> bool,
+        F: Fn(&RowID, &RowPtr) -> bool,
     {
-        let mut match_count = 0;
-        if let Some(validity) = validity {
-            let is_all_set = validity.null_count() == 0;
-            for row in self.compare[..count].iter().copied() {
-                let row_index = row.to_usize();
-                let is_set2 = unsafe { self.address[row].read::<u8>(validity_offset) != 0 };
-                let is_set = is_all_set || unsafe { validity.get_bit_unchecked(row_index) };
-
-                let equal = if is_set && is_set2 {
-                    compare_fn(row_index, &self.address[row])
-                } else {
-                    is_set == is_set2
-                };
-
-                if equal {
-                    self.matched[match_count] = row;
-                    match_count += 1;
-                } else {
-                    self.no_matched[no_match_count] = row;
-                    no_match_count += 1;
+        assume(count <= self.compare.len());
+        let mut matched = 0;
+        for i in 0..count {
+            let row = &self.compare[i];
+            if compare_fn(row, &self.address[*row]) {
+                if i != matched {
+                    self.compare[matched] = *row;
                 }
-            }
-        } else {
-            for row in self.compare[..count].iter().copied() {
-                if compare_fn(row.to_usize(), &self.address[row]) {
-                    self.matched[match_count] = row;
-                    match_count += 1;
-                } else {
-                    self.no_matched[no_match_count] = row;
-                    no_match_count += 1;
-                }
-            }
-        }
-
-        (match_count, no_match_count)
-    }
-
-    fn row_match_generic_column(
-        &mut self,
-        col: &Column,
-        col_offset: usize,
-        (count, mut no_match_count): (usize, usize),
-    ) -> (usize, usize) {
-        let mut match_count = 0;
-        for row in self.compare[..count].iter().copied() {
-            let row_index = row.to_usize();
-            let value = unsafe { AnyType::index_column_unchecked(col, row_index) };
-            let scalar = unsafe { self.address[row].read_bytes(col_offset) };
-            let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
-
-            if scalar.as_ref() == value {
-                self.matched[match_count] = row;
-                match_count += 1;
+                matched += 1;
             } else {
-                self.no_matched[no_match_count] = row;
+                self.no_matched[no_match_count] = *row;
                 no_match_count += 1;
             }
         }
+        (matched, no_match_count)
+    }
 
-        (match_count, no_match_count)
+    fn match_validity_with<F>(
+        &mut self,
+        counts: (usize, usize),
+        validity: Option<(&Bitmap, usize)>,
+        compare_fn: F,
+    ) -> (usize, usize)
+    where
+        F: Fn(&RowID, &RowPtr) -> bool,
+    {
+        if let Some((validity, offset)) = validity {
+            self.match_with(counts, |row, row_ptr| {
+                let a = unsafe { validity.get_bit_unchecked(row.to_usize()) };
+                let b = unsafe { row_ptr.read_bool(offset) };
+                match (a, b) {
+                    (true, true) => compare_fn(row, row_ptr),
+                    (false, false) => true,
+                    _ => false,
+                }
+            })
+        } else {
+            self.match_with(counts, compare_fn)
+        }
     }
 }

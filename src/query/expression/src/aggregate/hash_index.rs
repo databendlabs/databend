@@ -260,10 +260,9 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
         CompareState {
             address: &state.addresses,
             compare: &mut state.group_compare_vector,
-            matched: &mut state.match_vector,
             no_matched: &mut state.no_match_vector,
         }
-        .row_match_columns(
+        .row_match_entries(
             self.group_columns,
             &self.payload.row_layout,
             (need_compare_count, no_match_count),

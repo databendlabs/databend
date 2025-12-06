@@ -34,7 +34,6 @@ pub struct ProbeState {
 
     pub(super) group_compare_vector: [RowID; BATCH_SIZE],
     pub(super) no_match_vector: [RowID; BATCH_SIZE],
-    pub(super) match_vector: [RowID; BATCH_SIZE],
     pub(super) slots: [usize; BATCH_SIZE],
     pub(super) row_count: usize,
 
@@ -50,7 +49,6 @@ impl Default for ProbeState {
             state_places: [StateAddr::null(); BATCH_SIZE],
             group_compare_vector: [RowID::default(); BATCH_SIZE],
             no_match_vector: [RowID::default(); BATCH_SIZE],
-            match_vector: [RowID::default(); BATCH_SIZE],
             empty_vector: [RowID::default(); BATCH_SIZE],
             slots: [0; BATCH_SIZE],
 
@@ -80,9 +78,6 @@ impl ProbeState {
                 *item = Default::default()
             }
             for item in &mut uninit.no_match_vector {
-                *item = Default::default()
-            }
-            for item in &mut uninit.match_vector {
                 *item = Default::default()
             }
             state.assume_init()
