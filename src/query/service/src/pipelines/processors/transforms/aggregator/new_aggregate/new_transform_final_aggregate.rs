@@ -142,7 +142,7 @@ impl NewFinalAggregateTransform {
                 .zip(&state.partition_entries)
             {
                 if *count > 0 {
-                    payload.copy_rows(&sel[..*count], &flush_state.addresses);
+                    payload.copy_rows(&sel[..*count as usize], &flush_state.addresses);
                 }
             }
         }
