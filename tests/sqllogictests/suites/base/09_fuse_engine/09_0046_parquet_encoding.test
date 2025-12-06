@@ -8,11 +8,13 @@ use test_tbl_opt_parquet_encoding;
 # Create table with parquet encoding option #
 #############################################
 
+
+# by default, enable_parquet_dictionary = 'true'
 statement ok
-create or replace table t_encoded (c int, s string) enable_parquet_dictionary = 'true' storage_format = 'parquet';
+create or replace table t_encoded (c int, s string) storage_format = 'parquet';
 
 statement ok
-create or replace table t(c int, s string) storage_format = 'parquet';
+create or replace table t(c int, s string) enable_parquet_dictionary = 'false' storage_format = 'parquet';
 
 statement ok
 insert into t_encoded(c, s) select 1 as c, to_string(1) as s from numbers(1000000);
@@ -43,7 +45,7 @@ with
 
 # 1. prepare plain encoded data and keep the file size
 statement ok
-create or replace table tbl (c int, s string) storage_format = 'parquet';
+create or replace table tbl (c int, s string) storage_format = 'parquet' enable_parquet_dictionary = 'false';
 
 statement ok
 insert into tbl(c, s) select 1 as c, to_string(1) as s from numbers(1000000);

@@ -14,6 +14,7 @@
 
 mod from;
 mod to;
+pub use self::to::table_schema_arrow_leaf_paths;
 
 pub const EXTENSION_KEY: &str = "Extension";
 pub const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";

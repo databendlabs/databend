@@ -50,7 +50,7 @@ use databend_common_hashtable::StackHashMap;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -506,13 +506,14 @@ impl VirtualColumnBuilder {
             gen_columns_statistics(&virtual_block, None, &virtual_block_schema)?;
 
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let file_meta = blocks_to_parquet(
+        let file_meta = blocks_to_parquet_with_stats(
             virtual_block_schema.as_ref(),
             vec![virtual_block],
             &mut data,
             write_settings.table_compression,
             write_settings.enable_parquet_dictionary,
             None,
+            Some(&columns_statistics),
         )?;
 
         let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(

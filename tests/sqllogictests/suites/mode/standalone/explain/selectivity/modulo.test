@@ -23,7 +23,7 @@ AggregateFinal
             ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 1000
-            ├── read size: 1.40 KiB
+            ├── read size: 1.41 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
@@ -52,7 +52,7 @@ AggregateFinal
             ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 1000
-            ├── read size: 1.40 KiB
+            ├── read size: 1.41 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
