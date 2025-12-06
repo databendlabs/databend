@@ -193,6 +193,22 @@ impl Compiler {
                     output.append(&mut self.compile_sql_statement(*span, stmt, to_set.clone())?);
                     output.push(ScriptIR::ReturnSet { set: to_set });
                 }
+                ScriptStatement::Throw { span, message } => {
+                    let mut throw_value = None;
+                    if let Some(expr) = message {
+                        let to_var = VarRef::new_internal(
+                            expr.span(),
+                            "throw_value",
+                            &mut self.ref_allocator,
+                        );
+                        output.append(&mut self.compile_expr(expr, to_var.clone())?);
+                        throw_value = Some(to_var);
+                    }
+                    output.push(ScriptIR::Throw {
+                        span: *span,
+                        message: throw_value,
+                    });
+                }
                 ScriptStatement::ForLoop {
                     span,
                     variable,

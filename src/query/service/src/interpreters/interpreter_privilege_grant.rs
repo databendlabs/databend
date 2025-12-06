@@ -139,6 +139,9 @@ impl GrantPrivilegeInterpreter {
             GrantObject::MaskingPolicy(policy_id) => Ok(OwnershipObject::MaskingPolicy {
                 policy_id: *policy_id,
             }),
+            GrantObject::RowAccessPolicy(policy_id) => Ok(OwnershipObject::RowAccessPolicy {
+                policy_id: *policy_id,
+            }),
             GrantObject::Global => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
             )),
@@ -309,5 +312,6 @@ fn is_create_ownership_object_privilege(privilege: UserPrivilegeType) -> bool {
             | UserPrivilegeType::CreateSequence
             | UserPrivilegeType::CreateProcedure
             | UserPrivilegeType::CreateMaskingPolicy
+            | UserPrivilegeType::CreateRowAccessPolicy
     )
 }

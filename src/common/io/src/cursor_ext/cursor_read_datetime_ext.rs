@@ -28,12 +28,14 @@ use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_timezone::fast_utc_from_local;
 use jiff::civil::Date;
+use jiff::civil::Time;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone;
 use jiff::Timestamp;
 use jiff::Zoned;
 
 use crate::cursor_ext::cursor_read_bytes_ext::ReadBytesExt;
+use crate::datetime::parse_standard_timestamp as parse_iso_timestamp;
 
 pub enum DateTimeResType {
     Datetime(Zoned),
@@ -66,6 +68,71 @@ fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
         );
         Err(ErrorCode::BadBytes(msg))
     }
+}
+
+fn try_read_standard_timestamp<T: AsRef<[u8]>>(
+    cursor: &mut Cursor<T>,
+    tz: &TimeZone,
+    need_date: bool,
+) -> Result<Option<DateTimeResType>> {
+    let pos = cursor.position() as usize;
+    let data = cursor.get_ref().as_ref();
+    if pos >= data.len() {
+        return Ok(None);
+    }
+
+    match parse_standard_timestamp(&data[pos..], tz, need_date) {
+        Some(Ok((consumed, value))) => {
+            cursor.set_position((pos + consumed) as u64);
+            Ok(Some(value))
+        }
+        Some(Err(err)) => Err(err),
+        None => Ok(None),
+    }
+}
+
+fn parse_standard_timestamp(
+    input: &[u8],
+    tz: &TimeZone,
+    need_date: bool,
+) -> Option<Result<(usize, DateTimeResType)>> {
+    parse_iso_timestamp(input).map(|parsed_result| {
+        parsed_result.and_then(|parsed| {
+            let value = build_best_effort_result(
+                tz,
+                parsed.year,
+                parsed.month,
+                parsed.day,
+                parsed.hour,
+                parsed.minute,
+                parsed.second,
+                parsed.micro,
+                need_date,
+            )?;
+
+            let value = match (parsed.provided_offset, value) {
+                (Some(offset), DateTimeResType::Datetime(dt)) => {
+                    DateTimeResType::Datetime(adjust_datetime_for_offset(&dt, tz, offset)?)
+                }
+                (_, other) => other,
+            };
+
+            Ok((parsed.consumed, value))
+        })
+    })
+}
+
+fn adjust_datetime_for_offset(dt: &Zoned, tz: &TimeZone, provided_offset: i32) -> Result<Zoned> {
+    let current_tz_sec = dt.offset().seconds();
+    let offset = i64::from(current_tz_sec - provided_offset) * 1_000_000;
+    let ts = dt.timestamp().as_microsecond() + offset;
+    let secs = ts.div_euclid(1_000_000);
+    let micros = ts.rem_euclid(1_000_000);
+    let timestamp = Timestamp::new(secs, (micros as i32) * 1000)
+        .map_err_to_code(ErrorCode::BadBytes, || {
+            "Datetime offset adjustment failed".to_string()
+        })?;
+    Ok(timestamp.to_zoned(tz.clone()))
 }
 
 impl<T> BufferReadDateTimeExt for Cursor<T>
@@ -169,6 +236,10 @@ where T: AsRef<[u8]>
     }
 
     fn read_text_to_datetime(&mut self, tz: &TimeZone, need_date: bool) -> Result<DateTimeResType> {
+        if let Some(value) = try_read_standard_timestamp(self, tz, need_date)? {
+            return Ok(value);
+        }
+
         // Date Part YYYY-MM-DD
         let mut buf = vec![0; DATE_LEN];
         self.read_exact(buf.as_mut_slice())?;
@@ -217,6 +288,9 @@ where T: AsRef<[u8]>
             if times.len() < 3 {
                 times.resize(3, 0);
                 let dt = get_local_time(tz, &d, &mut times)?;
+                if need_date {
+                    return Ok(DateTimeResType::Date(d));
+                }
                 return Ok(DateTimeResType::Datetime(dt));
             }
 
@@ -261,6 +335,19 @@ where T: AsRef<[u8]>
                     })?
                     .to_zoned(tz.clone()))
             };
+            if need_date {
+                if self.ignore(|b| b == b'z' || b == b'Z') {
+                    return Ok(DateTimeResType::Date(d));
+                } else if self.ignore_byte(b'+') {
+                    let _ = self.parse_time_offset(&mut buf, &dt, false, calc_offset)?;
+                    return Ok(DateTimeResType::Date(d));
+                } else if self.ignore_byte(b'-') {
+                    let _ = self.parse_time_offset(&mut buf, &dt, true, calc_offset)?;
+                    return Ok(DateTimeResType::Date(d));
+                } else {
+                    return Ok(DateTimeResType::Date(d));
+                }
+            }
             if self.ignore(|b| b == b'z' || b == b'Z') {
                 // ISO 8601 The Z on the end means UTC (that is, an offset-from-UTC of zero hours-minutes-seconds).
                 let current_tz = dt.offset().seconds();
@@ -294,12 +381,12 @@ where T: AsRef<[u8]>
             } else if let Some(zoned) = fast_local_to_zoned(tz, &d, 0, 0, 0, 0) {
                 Ok(DateTimeResType::Datetime(zoned))
             } else {
-                Ok(DateTimeResType::Datetime(
-                    d.to_zoned(tz.clone())
-                        .map_err_to_code(ErrorCode::BadBytes, || {
-                            format!("Failed to parse date {} as timestamp.", d)
-                        })?,
-                ))
+                let zoned = tz
+                    .to_zoned(d.to_datetime(Time::midnight()))
+                    .map_err_to_code(ErrorCode::BadBytes, || {
+                        format!("Failed to parse date {} as timestamp.", d)
+                    })?;
+                Ok(DateTimeResType::Datetime(zoned))
             }
         }
     }
@@ -339,8 +426,7 @@ fn get_local_time(tz: &TimeZone, d: &Date, times: &mut Vec<u32>) -> Result<Zoned
     if let Some(zoned) = fast_local_to_zoned(tz, d, hour, minute, second, 0) {
         return Ok(zoned);
     }
-    d.at(hour as i8, minute as i8, second as i8, 0)
-        .to_zoned(tz.clone())
+    tz.to_zoned(d.at(hour as i8, minute as i8, second as i8, 0))
         .map_err_to_code(ErrorCode::BadBytes, || {
             format!("Invalid time provided in times: {:?}", times)
         })
@@ -386,4 +472,75 @@ pub fn unwrap_local_time(
             )))
         }
     }
+}
+
+fn build_best_effort_result(
+    tz: &TimeZone,
+    year: i32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    micro: u32,
+    need_date: bool,
+) -> Result<DateTimeResType> {
+    let (year, month, day) = if year == 0 && month == 0 && day == 0 {
+        (1970, 1, 1)
+    } else {
+        (year, month, day)
+    };
+    let year_i16 =
+        i16::try_from(year).map_err(|_| ErrorCode::BadBytes(format!("Invalid year {}", year)))?;
+    let month_i8 =
+        i8::try_from(month).map_err(|_| ErrorCode::BadBytes(format!("Invalid month {}", month)))?;
+    let day_i8 =
+        i8::try_from(day).map_err(|_| ErrorCode::BadBytes(format!("Invalid day {}", day)))?;
+
+    let date = Date::new(year_i16, month_i8, day_i8)
+        .map_err_to_code(ErrorCode::BadBytes, || {
+            format!("Invalid date value {:04}-{:02}-{:02}", year, month, day)
+        })?;
+
+    if need_date {
+        return Ok(DateTimeResType::Date(date));
+    }
+
+    let zoned = build_zoned_from_components(tz, &date, hour, minute, second, micro)?;
+    Ok(DateTimeResType::Datetime(zoned))
+}
+
+fn build_zoned_from_components(
+    tz: &TimeZone,
+    date: &Date,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    micro: u32,
+) -> Result<Zoned> {
+    if let Some(zoned) = fast_local_to_zoned(tz, date, hour, minute, second, micro) {
+        return Ok(zoned);
+    }
+
+    let base = tz
+        .to_zoned(date.at(hour as i8, minute as i8, second as i8, 0))
+        .map_err_to_code(ErrorCode::BadBytes, || {
+            format!(
+                "Invalid local time {:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                i32::from(date.year()),
+                date.month(),
+                date.day(),
+                hour,
+                minute,
+                second
+            )
+        })?;
+    if micro == 0 {
+        return Ok(base);
+    }
+
+    base.checked_add(SysDuration::from_micros(u64::from(micro)))
+        .map_err_to_code(ErrorCode::BadBytes, || {
+            format!("Datetime {} add microseconds {} with error", base, micro)
+        })
 }

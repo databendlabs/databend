@@ -121,9 +121,7 @@ impl PageManager {
             Ok(self
                 .last_page
                 .as_ref()
-                .ok_or_else(|| {
-                    ErrorCode::Internal("[HTTP-QUERY] Failed to retrieve last page: page is None")
-                })?
+                .ok_or_else(|| ErrorCode::Internal("Failed to retrieve last page: page is None"))?
                 .clone())
         } else {
             let message = format!(

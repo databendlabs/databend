@@ -26,11 +26,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::DecimalType;
 use databend_common_expression::types::i256;
+use databend_common_expression::types::number::Number;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -39,7 +41,8 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 use databend_common_io::prelude::BinaryWrite;
-use roaring::RoaringTreemap;
+use databend_common_io::HybridBitmap;
+use num_traits::AsPrimitive;
 
 use super::assert_arguments;
 use super::assert_params;
@@ -149,7 +152,7 @@ macro_rules! with_bitmap_op_mapped_type {
 }
 
 trait BitmapOperate: Send + Sync + 'static {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap);
+    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap);
 }
 
 struct BitmapAndOp;
@@ -161,31 +164,31 @@ struct BitmapXorOp;
 struct BitmapNotOp;
 
 impl BitmapOperate for BitmapAndOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.bitand_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapOrOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.bitor_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapXorOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.bitxor_assign(rhs);
     }
 }
 
 impl BitmapOperate for BitmapNotOp {
-    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+    fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap) {
         lhs.sub_assign(rhs);
     }
 }
 
 struct BitmapAggState {
-    rb: Option<RoaringTreemap>,
+    rb: Option<HybridBitmap>,
 }
 
 impl BitmapAggState {
@@ -193,7 +196,20 @@ impl BitmapAggState {
         Self { rb: None }
     }
 
-    fn add<OP: BitmapOperate>(&mut self, other: RoaringTreemap) {
+    fn insert(&mut self, value: u64) {
+        match &mut self.rb {
+            Some(rb) => {
+                rb.insert(value);
+            }
+            None => {
+                let mut rb = HybridBitmap::new();
+                rb.insert(value);
+                self.rb = Some(rb);
+            }
+        }
+    }
+
+    fn add<OP: BitmapOperate>(&mut self, other: HybridBitmap) {
         match &mut self.rb {
             Some(v) => {
                 OP::operate(v, other);
@@ -377,6 +393,197 @@ where
 }
 
 impl<OP, AGG> fmt::Display for AggregateBitmapFunction<OP, AGG> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.display_name)
+    }
+}
+
+#[derive(Clone)]
+struct AggregateGroupBitmapFunction<NUM, AGG> {
+    display_name: String,
+    _p: PhantomData<(NUM, AGG)>,
+}
+
+impl<NUM, AGG> AggregateGroupBitmapFunction<NUM, AGG>
+where
+    NUM: Number + AsPrimitive<u64>,
+    AGG: BitmapAggResult,
+{
+    fn try_create(display_name: &str) -> Result<Arc<dyn AggregateFunction>> {
+        let func = AggregateGroupBitmapFunction::<NUM, AGG> {
+            display_name: display_name.to_string(),
+            _p: PhantomData,
+        };
+        Ok(Arc::new(func))
+    }
+}
+
+impl<NUM, AGG> AggregateFunction for AggregateGroupBitmapFunction<NUM, AGG>
+where
+    NUM: Number + AsPrimitive<u64>,
+    AGG: BitmapAggResult,
+{
+    fn name(&self) -> &str {
+        "AggregateGroupBitmapFunction"
+    }
+
+    fn return_type(&self) -> Result<DataType> {
+        AGG::return_type()
+    }
+
+    fn init_state(&self, place: AggrState) {
+        place.write(BitmapAggState::new);
+    }
+
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<BitmapAggState>()));
+    }
+
+    fn accumulate(
+        &self,
+        place: AggrState,
+        entries: ProjectedBlock,
+        validity: Option<&Bitmap>,
+        _input_rows: usize,
+    ) -> Result<()> {
+        let view = entries[0].downcast::<NumberType<NUM>>().unwrap();
+        if view.len() == 0 {
+            return Ok(());
+        }
+        let state = place.get::<BitmapAggState>();
+
+        if let Some(validity) = validity {
+            if validity.null_count() == view.len() {
+                return Ok(());
+            }
+            for (value, valid) in view.iter().zip(validity.iter()) {
+                if valid {
+                    state.insert(value.as_());
+                }
+            }
+        } else {
+            for value in view.iter() {
+                state.insert(value.as_());
+            }
+        }
+        Ok(())
+    }
+
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        entries: ProjectedBlock,
+        _input_rows: usize,
+    ) -> Result<()> {
+        let view = entries[0].downcast::<NumberType<NUM>>().unwrap();
+        for (value, addr) in view.iter().zip(places.iter().cloned()) {
+            let state = AggrState::new(addr, loc).get::<BitmapAggState>();
+            state.insert(value.as_());
+        }
+        Ok(())
+    }
+
+    fn accumulate_row(&self, place: AggrState, entries: ProjectedBlock, row: usize) -> Result<()> {
+        let view = entries[0].downcast::<NumberType<NUM>>().unwrap();
+        if let Some(value) = view.index(row) {
+            let state = place.get::<BitmapAggState>();
+            state.insert(value.as_());
+        }
+        Ok(())
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+            let flag: u8 = if state.rb.is_some() { 1 } else { 0 };
+            binary_builder.data.write_scalar(&flag)?;
+            if let Some(rb) = &state.rb {
+                rb.serialize_into(&mut binary_builder.data)?;
+            }
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+                let flag = data[0];
+                data.consume(1);
+                if flag == 1 {
+                    let rb = deserialize_bitmap(data)?;
+                    state.add::<BitmapOrOp>(rb);
+                }
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+                let flag = data[0];
+                data.consume(1);
+                if flag == 1 {
+                    let rb = deserialize_bitmap(data)?;
+                    state.add::<BitmapOrOp>(rb);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
+        let state = place.get::<BitmapAggState>();
+        let other = rhs.get::<BitmapAggState>();
+
+        if let Some(rb) = other.rb.take() {
+            state.add::<BitmapOrOp>(rb);
+        }
+        Ok(())
+    }
+
+    fn merge_result(
+        &self,
+        place: AggrState,
+        _read_only: bool,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        AGG::merge_result(place, builder)
+    }
+
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: AggrState) {
+        let state = place.get::<BitmapAggState>();
+        std::ptr::drop_in_place(state);
+    }
+}
+
+impl<NUM, AGG> fmt::Display for AggregateGroupBitmapFunction<NUM, AGG>
+where
+    NUM: Number + AsPrimitive<u64>,
+    AGG: BitmapAggResult,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
@@ -665,6 +872,47 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
     })
 }
 
+fn try_create_bitmap_construct_function_impl<AGG: BitmapAggResult>(
+    display_name: &str,
+    params: Vec<Scalar>,
+    argument_types: Vec<DataType>,
+) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
+    assert_unary_arguments(display_name, argument_types.len())?;
+    let arg_type = argument_types[0].remove_nullable();
+    match &arg_type {
+        DataType::Number(num_type) => {
+            let num_type = *num_type;
+            with_unsigned_integer_mapped_type!(|NUM_TYPE| match num_type {
+                NumberDataType::NUM_TYPE => {
+                    AggregateGroupBitmapFunction::<NUM_TYPE, AGG>::try_create(display_name)
+                }
+                _ => Err(ErrorCode::BadDataValueType(format!(
+                    "{} does not support type '{:?}', expect unsigned integer",
+                    display_name, arg_type
+                ))),
+            })
+        }
+        _ => Err(ErrorCode::BadDataValueType(format!(
+            "{} does not support type '{:?}', expect unsigned integer",
+            display_name, arg_type
+        ))),
+    }
+}
+
+pub fn try_create_bitmap_construct_agg_function(
+    display_name: &str,
+    params: Vec<Scalar>,
+    argument_types: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
+) -> Result<Arc<dyn AggregateFunction>> {
+    try_create_bitmap_construct_function_impl::<BitmapRawResult>(
+        display_name,
+        params,
+        argument_types,
+    )
+}
+
 fn extract_params<T: AccessType>(
     display_name: &str,
     val_type: DataType,
@@ -741,6 +989,17 @@ pub fn aggregate_bitmap_xor_count_function_desc() -> AggregateFunctionDescriptio
     )
 }
 
+pub fn aggregate_bitmap_xor_function_desc() -> AggregateFunctionDescription {
+    let features = super::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_bitmap_function::<BITMAP_XOR, BITMAP_AGG_RAW>),
+        features,
+    )
+}
+
 pub fn aggregate_bitmap_union_function_desc() -> AggregateFunctionDescription {
     let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
@@ -770,6 +1029,18 @@ pub fn aggregate_bitmap_intersect_count_function_desc() -> AggregateFunctionDesc
     };
     AggregateFunctionDescription::creator_with_features(
         Box::new(try_create_aggregate_bitmap_intersect_count_function),
+        features,
+    )
+}
+
+pub fn aggregate_bitmap_construct_agg_function_desc() -> AggregateFunctionDescription {
+    let features = super::AggregateFunctionFeatures {
+        returns_default_when_only_null: true,
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_bitmap_construct_agg_function),
         features,
     )
 }

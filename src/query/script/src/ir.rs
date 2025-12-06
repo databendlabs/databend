@@ -93,6 +93,8 @@ pub enum ScriptIR {
     ReturnVar { var: VarRef },
     /// Returns a result set from the script.
     ReturnSet { set: SetRef },
+    /// Throws an error from the script.
+    Throw { span: Span, message: Option<VarRef> },
 }
 
 impl Display for ScriptIR {
@@ -123,6 +125,13 @@ impl Display for ScriptIR {
             ScriptIR::Return => write!(f, "RETURN")?,
             ScriptIR::ReturnVar { var } => write!(f, "RETURN {var}")?,
             ScriptIR::ReturnSet { set } => write!(f, "RETURN {set}")?,
+            ScriptIR::Throw { message, .. } => {
+                if let Some(message) = message {
+                    write!(f, "THROW {message}")?;
+                } else {
+                    write!(f, "THROW")?;
+                }
+            }
         };
         Ok(())
     }

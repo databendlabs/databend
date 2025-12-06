@@ -3720,6 +3720,26 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let row_access_policy_privs = map(
+        rule! {
+            APPLY ~ ON ~ ROW ~ ACCESS ~ POLICY ~ #ident
+        },
+        |(_, _, _, _, _, name)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::ApplyRowAccessPolicy],
+            level: AccountMgrLevel::RowAccessPolicy(name.to_string()),
+        },
+    );
+
+    let row_access_policy_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ ROW ~ ACCESS ~ POLICY ~ #ident
+        },
+        |(_, _, _, _, _, _, name)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::ApplyRowAccessPolicy],
+            level: AccountMgrLevel::RowAccessPolicy(name.to_string()),
+        },
+    );
+
     rule!(
         #role : "ROLE <role_name>"
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
@@ -3731,6 +3751,8 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         | #seq_privs: "ACCESS SEQUENCE ON CONNECTION <seq_name>"
         | #masking_policy_privs: "APPLY ON MASKING POLICY <policy_name>"
         | #masking_policy_all_privs: "ALL [ PRIVILEGES ] ON MASKING POLICY <policy_name>"
+        | #row_access_policy_privs: "APPLY ON ROW ACCESS POLICY <policy_name>"
+        | #row_access_policy_all_privs: "ALL [ PRIVILEGES ] ON ROW ACCESS POLICY <policy_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -3798,6 +3820,14 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         UserPrivilegeType::ApplyMaskingPolicy,
         rule! { APPLY ~ MASKING ~ POLICY },
     );
+    let create_row_access_policy = value(
+        UserPrivilegeType::CreateRowAccessPolicy,
+        rule! { CREATE ~ ROW ~ ACCESS ~ POLICY },
+    );
+    let apply_row_access_policy = value(
+        UserPrivilegeType::ApplyRowAccessPolicy,
+        rule! { APPLY ~ ROW ~ ACCESS ~ POLICY },
+    );
 
     alt((
         rule!(
@@ -3828,6 +3858,8 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             | #drop
             | #create_masking_policy
             | #apply_masking_policy
+            | #create_row_access_policy
+            | #apply_row_access_policy
             | #create
         ),
     ))
@@ -3910,6 +3942,11 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         GrantObjectName::MaskingPolicy(name.to_string())
     });
 
+    let row_access_policy = map(
+        rule! { ROW ~ ACCESS ~ POLICY ~ #ident },
+        |(_, _, _, name)| GrantObjectName::RowAccessPolicy(name.to_string()),
+    );
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
@@ -3920,6 +3957,7 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         | #seq : "SEQUENCE <seq_name>"
         | #procedure : "PROCEDURE <procedure_identity>"
         | #masking_policy : "MASKING POLICY <policy_name>"
+        | #row_access_policy : "ROW ACCESS POLICY <policy_name>"
     )
     .parse(i)
 }
@@ -3950,11 +3988,17 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
         AccountMgrLevel::MaskingPolicy(name.to_string())
     });
 
+    let row_access_policy = map(
+        rule! { ROW ~ ACCESS ~ POLICY ~ #ident },
+        |(_, _, _, name)| AccountMgrLevel::RowAccessPolicy(name.to_string()),
+    );
+
     rule!(
         #global : "*.*"
         | #db : "<database>.*"
         | #table : "<database>.<table>"
         | #masking_policy : "MASKING POLICY <policy_name>"
+        | #row_access_policy : "ROW ACCESS POLICY <policy_name>"
     )
     .parse(i)
 }
@@ -4026,6 +4070,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         Connection,
         Sequence,
         MaskingPolicy,
+        RowAccessPolicy,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
@@ -4034,6 +4079,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         value(Object::Connection, rule! { CONNECTION }),
         value(Object::Sequence, rule! { SEQUENCE }),
         value(Object::MaskingPolicy, rule! { MASKING ~ POLICY }),
+        value(Object::RowAccessPolicy, rule! { ROW ~ ACCESS ~ POLICY }),
     ));
 
     // Object object_name
@@ -4046,6 +4092,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
             Object::Connection => AccountMgrLevel::Connection(object_name.to_string()),
             Object::Sequence => AccountMgrLevel::Sequence(object_name.to_string()),
             Object::MaskingPolicy => AccountMgrLevel::MaskingPolicy(object_name.to_string()),
+            Object::RowAccessPolicy => AccountMgrLevel::RowAccessPolicy(object_name.to_string()),
         },
     );
 
@@ -4094,7 +4141,7 @@ pub fn show_grant_option(i: Input) -> IResult<ShowGrantOption> {
 
     rule!(
         #grant_role: "FOR  { ROLE <role_name> | [USER] <user> }"
-        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> | CONNECTION <connection_name> | SEQUENCE <seq_name> | MASKING POLICY <policy_name> }"
+        | #share_object_name: "ON {DATABASE <db_name> | TABLE <db_name>.<table_name> | UDF <udf_name> | STAGE <stage_name> | CONNECTION <connection_name> | SEQUENCE <seq_name> | MASKING POLICY <policy_name> | ROW ACCESS POLICY <policy_name> }"
         | #role_granted: "OF ROLE <role_name>"
     ).parse(i)
 }

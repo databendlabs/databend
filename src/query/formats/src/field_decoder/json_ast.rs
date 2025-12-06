@@ -45,13 +45,13 @@ use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::geography::geography_from_ewkt;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::parse_bitmap;
+use databend_common_io::HybridBitmap;
 use databend_common_io::Interval;
 use databend_functions_scalar_datetime::datetime::int64_to_timestamp;
 use jiff::tz::TimeZone;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
 use num_traits::NumCast;
-use roaring::RoaringTreemap;
 use serde_json::Value;
 
 use crate::FieldDecoder;
@@ -371,7 +371,7 @@ impl FieldJsonAstDecoder {
             }
             Value::Number(number) => match number.as_u64() {
                 Some(n) => {
-                    let mut rb = RoaringTreemap::new();
+                    let mut rb = HybridBitmap::new();
                     rb.insert(n);
                     rb.serialize_into(&mut column.data).unwrap();
                     column.commit_row();

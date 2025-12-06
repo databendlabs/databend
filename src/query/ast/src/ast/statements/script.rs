@@ -207,6 +207,10 @@ pub enum ScriptStatement {
         span: Span,
         value: Option<ReturnItem>,
     },
+    Throw {
+        span: Span,
+        message: Option<Expr>,
+    },
     ForLoop {
         span: Span,
         variable: Identifier,
@@ -288,6 +292,13 @@ impl Display for ScriptStatement {
                     write!(f, "RETURN {value}")
                 } else {
                     write!(f, "RETURN")
+                }
+            }
+            ScriptStatement::Throw { message, .. } => {
+                if let Some(message) = message {
+                    write!(f, "THROW {message}")
+                } else {
+                    write!(f, "THROW")
                 }
             }
             ScriptStatement::ForLoop {

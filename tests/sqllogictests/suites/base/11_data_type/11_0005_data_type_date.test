@@ -4,6 +4,11 @@ set timezone = 'UTC'
 query B
 SELECT '2022-02-03T00:00:00+09:00'::DATE = '2022-02-02'::DATE
 ----
+0
+
+query B
+SELECT '2022-02-03T00:00:00+09:00'::DATE = '2022-02-03'::DATE
+----
 1
 
 query T
@@ -54,7 +59,7 @@ select * from db1.t1 order by id
 1  2022-01-01
 2  2022-01-02
 3  2022-02-02
-4  2022-03-01
+4  2022-03-02
 
 query I
 select id from db1.t1 where a = '2022-03-02T01:12:00+07:00'
@@ -62,12 +67,12 @@ select id from db1.t1 where a = '2022-03-02T01:12:00+07:00'
 4
 
 query I
-select id from db1.t1 where a = '2022-03-01T00:00:00+00:00'
+select id from db1.t1 where a = '2022-03-02T00:00:00+00:00'
 ----
 4
 
 query I
-select id from db1.t1 where a = '2022-03-01T00:00:00.000001+00:00'
+select id from db1.t1 where a = '2022-03-02T00:00:00.000001+00:00'
 ----
 4
 
@@ -75,8 +80,9 @@ statement ok
 insert into db1.t1 values(5, '2022-03-02')
 
 query I
-select id from db1.t1 where a > '2022-03-02T01:12:00+07:00'
+select id from db1.t1 where a = '2022-03-02T01:12:00+07:00' order by id;
 ----
+4
 5
 
 query I
@@ -85,7 +91,21 @@ select id from db1.t1 where a <> '2022-03-02' order by id
 1
 2
 3
-4
 
 statement ok
 drop database db1
+
+query B
+SELECT '2022-02-03 03:00:00+09:00'::DATE = '2022-02-03 3:00:00+09:00'::DATE;
+----
+1
+
+query T
+SELECT '2022-02-03 03:00:00+09:00'::DATE;
+----
+2022-02-03
+
+query T
+SELECT '2022-02-03 3:00:00+09:00'::DATE;
+----
+2022-02-03

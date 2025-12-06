@@ -29,9 +29,9 @@ use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_functions::aggregates::eval_aggr_for_test;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
+use databend_common_io::HybridBitmap;
 use goldenfile::Mint;
 use itertools::Itertools;
-use roaring::RoaringTreemap;
 
 use super::run_agg_ast;
 use super::simulate_two_groups_group_by;
@@ -147,8 +147,10 @@ fn gen_bitmap_data() -> Column {
     // 0..5, 1..6, 2..7, 3..8
     const N: u64 = 4;
     let rbs_iter = (0..N).map(|i| {
-        let mut rb = RoaringTreemap::new();
-        rb.insert_range(i..(i + 5));
+        let mut rb = HybridBitmap::new();
+        for value in i..(i + 5) {
+            rb.insert(value);
+        }
         rb
     });
 

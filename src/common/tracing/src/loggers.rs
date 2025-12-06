@@ -36,6 +36,8 @@ use logforth::Layout;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
 
+use crate::module_tag::label_for_module;
+
 const PRINTER: DateTimePrinter = DateTimePrinter::new().precision(Some(6));
 
 pub fn format_timestamp(zdt: &Zoned) -> String {
@@ -123,18 +125,15 @@ impl<const FIXED_TIME: bool> Layout for TextLayout<FIXED_TIME> {
             PRINTER.print_timestamp_with_offset(&timestamp, offset, &mut buf)?;
         }
 
-        write!(
-            buf,
-            " {:>5} {}: {}:{} {}",
-            record.level(),
-            record.module_path().unwrap_or(""),
-            Path::new(record.file().unwrap_or_default())
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or_default(),
-            record.line().unwrap_or(0),
-            record.args(),
-        )?;
+        let level = record.level();
+        let module = record.module_path().map(label_for_module).unwrap_or("");
+        let log_file = Path::new(record.file().unwrap_or_default())
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        let line = record.line().unwrap_or(0);
+        let msg = record.args();
+        write!(buf, " {level:>5} {module}: {log_file}:{line} {msg}")?;
         record.key_values().visit(&mut KvWriter(&mut buf))?;
 
         Ok(buf)

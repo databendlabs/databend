@@ -696,6 +696,13 @@ impl Client for MockClient {
     fn is_true(&self, scalar: &Self::Var) -> Result<bool> {
         Ok(*scalar == Literal::Boolean(true))
     }
+
+    fn format_error(&self, value: &Self::Var) -> Result<String> {
+        Ok(match value {
+            Literal::String(s) => s.clone(),
+            _ => value.to_string(),
+        })
+    }
 }
 
 #[derive(Debug, Clone)]

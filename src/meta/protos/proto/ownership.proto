@@ -66,6 +66,10 @@ message OwnershipObject {
     uint64 policy_id = 1;
   }
 
+  message OwnershipRowAccessPolicyObject {
+    uint64 policy_id = 1;
+  }
+
   oneof object {
     OwnershipDatabaseObject database = 1;
     OwnershipTableObject table = 2;
@@ -76,5 +80,6 @@ message OwnershipObject {
     OwnershipSequenceObject sequence = 7;
     OwnershipProcedureObject procedure = 8;
     OwnershipMaskingPolicyObject masking_policy = 9;
+    OwnershipRowAccessPolicyObject row_access_policy = 10;
   }
 }

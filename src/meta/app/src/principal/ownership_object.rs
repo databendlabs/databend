@@ -74,6 +74,10 @@ pub enum OwnershipObject {
     MaskingPolicy {
         policy_id: u64,
     },
+
+    RowAccessPolicy {
+        policy_id: u64,
+    },
 }
 
 impl OwnershipObject {
@@ -108,6 +112,9 @@ impl fmt::Display for OwnershipObject {
             OwnershipObject::Procedure { procedure_id } => write!(f, "PROCEDURE {procedure_id}"),
             OwnershipObject::MaskingPolicy { policy_id } => {
                 write!(f, "MASKING POLICY {policy_id}")
+            }
+            OwnershipObject::RowAccessPolicy { policy_id } => {
+                write!(f, "ROW ACCESS POLICY {policy_id}")
             }
         }
     }
@@ -156,6 +163,9 @@ impl KeyCodec for OwnershipObject {
             }
             OwnershipObject::MaskingPolicy { policy_id } => {
                 b.push_raw("masking-policy-by-id").push_u64(*policy_id)
+            }
+            OwnershipObject::RowAccessPolicy { policy_id } => {
+                b.push_raw("row-access-policy-by-id").push_u64(*policy_id)
             }
         }
     }
@@ -223,9 +233,13 @@ impl KeyCodec for OwnershipObject {
                 let policy_id = p.next_u64()?;
                 Ok(OwnershipObject::MaskingPolicy { policy_id })
             }
+            "row-access-policy-by-id" => {
+                let policy_id = p.next_u64()?;
+                Ok(OwnershipObject::RowAccessPolicy { policy_id })
+            }
             _ => Err(kvapi::KeyError::InvalidSegment {
                 i: p.index(),
-                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|warehouse-by-id|connection-by-name|masking-policy-by-id"
+                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|warehouse-by-id|connection-by-name|masking-policy-by-id|row-access-policy-by-id"
                     .to_string(),
                 got: q.to_string(),
             }),

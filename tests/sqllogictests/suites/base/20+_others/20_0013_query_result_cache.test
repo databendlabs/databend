@@ -89,7 +89,7 @@ EXPLAIN SELECT * FROM t1, t2 ORDER BY a, b;
 ReadQueryResultCache
 ├── SQL: SELECT * FROM t1, t2 ORDER BY a, b
 ├── Number of rows: 9
-└── Result size: 225
+└── Result size: 180
 
 
 

@@ -144,12 +144,15 @@ pub fn string_to_date(
     date_str: impl AsRef<[u8]>,
     tz: &TimeZone,
 ) -> databend_common_exception::Result<Date> {
-    let mut reader = Cursor::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
+    let raw = std::str::from_utf8(date_str.as_ref()).unwrap();
+    let mut reader = Cursor::new(raw.as_bytes());
     match reader.read_date_text(tz) {
-        Ok(d) => match reader.must_eof() {
-            Ok(..) => Ok(d),
-            Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),
-        },
+        Ok(d) => {
+            if reader.must_eof().is_err() {
+                return Err(ErrorCode::BadArguments("unexpected argument"));
+            }
+            Ok(d)
+        }
         Err(e) => match e.code() {
             ErrorCode::BAD_BYTES => Err(e),
             _ => Err(ErrorCode::BadArguments("unexpected argument")),
