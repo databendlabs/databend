@@ -280,6 +280,7 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::collections::HashSet;
 
     use super::*;
     use crate::ProbeState;
@@ -420,6 +421,38 @@ mod tests {
                 .collect::<HashMap<_, _>>();
 
             assert_eq!(want, got);
+        }
+    }
+
+    #[test]
+    fn test_probe_walk_covers_full_capacity() {
+        // This test make sure that we can always cover all slots in the table
+        let capacity = 16;
+        let capacity_mask = capacity - 1;
+
+        for high_bits in 0u64..(1 << INCREMENT_BITS) {
+            let hash = high_bits << (64 - INCREMENT_BITS);
+            let mut slot = init_slot(hash, capacity_mask);
+            let mut visited = HashSet::with_capacity(capacity);
+
+            for _ in 0..capacity {
+                assert!(
+                    visited.insert(slot),
+                    "hash {hash:#x} revisited slot {slot} before covering the table"
+                );
+                slot = next_slot(slot, hash, capacity_mask);
+            }
+
+            assert_eq!(
+                capacity,
+                visited.len(),
+                "hash {hash:#x} failed to cover every slot for capacity {capacity}"
+            );
+            assert_eq!(
+                init_slot(hash, capacity_mask),
+                slot,
+                "hash {hash:#x} walk did not return to its start after {capacity} steps"
+            );
         }
     }
 
