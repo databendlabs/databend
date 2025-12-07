@@ -39,32 +39,32 @@ alter table t set options(change_tracking=true)
 statement ok
 create stream if not exists s on table t
 
-query I
+query B
 select * from stream_status('s')
 ----
 0
 
-query I
+query B
 select * from stream_status('test_stream_status.s')
 ----
 0
 
-query I
+query B
 select * from stream_status('default.test_stream_status.s')
 ----
 0
 
-query I
+query B
 call system$stream_status('s')
 ----
 0
 
-query I
+query B
 call system$stream_status('test_stream_status.s')
 ----
 0
 
-query I
+query B
 call system$stream_status('default.test_stream_status.s')
 ----
 0
@@ -72,12 +72,12 @@ call system$stream_status('default.test_stream_status.s')
 statement ok
 insert into t values(2)
 
-query I
+query B
 select * from stream_status('s')
 ----
 1
 
-query I
+query B
 call system$stream_status('s')
 ----
 1

@@ -1440,8 +1440,7 @@ impl TableContext for QueryContext {
             }
         }
 
-        let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
-        self.get_table_from_shared(catalog, database, table, batch_size)
+        self.get_table_from_shared(catalog, database, table, None)
             .await
     }
 
@@ -1457,34 +1456,32 @@ impl TableContext for QueryContext {
         table: &str,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        let max_batch_size = {
-            match max_batch_size {
-                Some(v) => {
-                    // use the batch size specified in the statement
+        let final_batch_size = match max_batch_size {
+            Some(v) => {
+                // use the batch size specified in the statement
+                Some(v)
+            }
+            None => {
+                if let Some(v) = self.get_settings().get_stream_consume_batch_size_hint()? {
+                    info!("Overriding stream max_batch_size with setting value: {}", v);
                     Some(v)
-                }
-                None => {
-                    if let Some(v) = self.get_settings().get_stream_consume_batch_size_hint()? {
-                        info!("Overriding stream max_batch_size with setting value: {}", v);
-                        Some(v)
-                    } else {
-                        None
-                    }
+                } else {
+                    None
                 }
             }
         };
 
         let table = self
-            .get_table_from_shared(catalog, database, table, max_batch_size)
+            .get_table_from_shared(catalog, database, table, final_batch_size)
             .await?;
         if table.is_stream() {
             let stream = StreamTable::try_from_table(table.as_ref())?;
             let actual_batch_limit = stream.max_batch_size();
-            if actual_batch_limit != max_batch_size {
+            if actual_batch_limit != final_batch_size {
                 return Err(ErrorCode::StorageUnsupported(
                     format!(
                         "Stream batch size must be consistent within transaction: actual={:?}, requested={:?}",
-                        actual_batch_limit, max_batch_size
+                        actual_batch_limit, final_batch_size
                     )
                 ));
             }
