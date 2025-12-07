@@ -60,7 +60,8 @@ impl HashIndex {
         }
     }
 
-    fn find_or_insert(&mut self, mut slot: usize, hash: u64, salt: u16) -> (usize, bool) {
+    fn find_or_insert(&mut self, mut slot: usize, hash: u64) -> (usize, bool) {
+        let salt = Entry::hash_to_salt(hash);
         let entries = self.entries.as_mut_slice();
         loop {
             debug_assert!(entries.get(slot).is_some());
@@ -196,7 +197,7 @@ impl HashIndex {
                 let hash = state.group_hashes[row];
 
                 let is_new;
-                (*slot, is_new) = self.find_or_insert(*slot, hash, Entry::hash_to_salt(hash));
+                (*slot, is_new) = self.find_or_insert(*slot, hash);
 
                 if is_new {
                     state.empty_vector[new_entry_count] = row;
