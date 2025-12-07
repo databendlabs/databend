@@ -137,10 +137,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - { dataset: hits, size: Small, database: clickbench, timeout: 10 }
-          - { dataset: hits, size: Large, database: clickbench, timeout: 10 }
-          - { dataset: tpch, size: Small, database: clickbench, timeout: 20 }
-          - { dataset: tpch, size: Large, database: clickbench, timeout: 20 }
+          - { dataset: hits, size: Small, database: hits, timeout: 10 }
+          - { dataset: hits, size: Large, database: hits, timeout: 10 }
+          - { dataset: tpch100, size: Small, database: tpch_100, timeout: 20 }
+          - { dataset: tpch100, size: Large, database: tpch_100, timeout: 20 }
           - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60 }
       fail-fast: true
       max-parallel: 1
@@ -242,9 +242,9 @@ jobs:
     strategy:
       matrix:
         dataset:
-          - "tpch"
-          - "hits"
           - "load"
+          - "hits"
+          - "tpch100"
           - "tpch1000"
           # - "internal"
     steps:
@@ -267,10 +267,11 @@ jobs:
             mkdir -p results/${dataset}/
             mv $result results/${dataset}/$(basename $result)
           done
+          mkdir -p ndjsons/
           for ndjson in results/*.ndjson; do
             dataset=$(echo $ndjson | sed -E 's/.*result-(\w+)-.*\.ndjson/\1/')
-            mkdir -p results/${dataset}/
-            mv $ndjson results/${dataset}/$(basename $ndjson)
+            mkdir -p ndjsons/${dataset}/
+            mv $ndjson ndjsons/${dataset}/$(basename $ndjson)
           done
       - name: Generate report and upload to R2
         working-directory: benchmark/clickbench
@@ -305,7 +306,7 @@ jobs:
           MONTH=$(date -u +%Y-%m)
           ARCHIVE_PREFIX="s3://benchmark/results/${DATASET}/${MONTH}/"
           IMPORT_PREFIX="s3://benchmark/results/import/"
-          for file in ./results/${DATASET}/*.ndjson; do
+          for file in ./ndjsons/${DATASET}/*.ndjson; do
             aws s3 cp $file "${ARCHIVE_PREFIX}$(basename $file)" --no-progress --checksum-algorithm=CRC32
             aws s3 cp $file "${IMPORT_PREFIX}$(basename $file)" --no-progress --checksum-algorithm=CRC32
           done

@@ -103,6 +103,9 @@ impl FromToProto for mt::principal::OwnershipObject {
             pb::ownership_object::Object::MaskingPolicy(
                 pb::ownership_object::OwnershipMaskingPolicyObject { policy_id },
             ) => Ok(mt::principal::OwnershipObject::MaskingPolicy { policy_id }),
+            pb::ownership_object::Object::RowAccessPolicy(
+                pb::ownership_object::OwnershipRowAccessPolicyObject { policy_id },
+            ) => Ok(mt::principal::OwnershipObject::RowAccessPolicy { policy_id }),
         }
     }
 
@@ -167,6 +170,13 @@ impl FromToProto for mt::principal::OwnershipObject {
             mt::principal::OwnershipObject::MaskingPolicy { policy_id } => {
                 Some(pb::ownership_object::Object::MaskingPolicy(
                     pb::ownership_object::OwnershipMaskingPolicyObject {
+                        policy_id: *policy_id,
+                    },
+                ))
+            }
+            mt::principal::OwnershipObject::RowAccessPolicy { policy_id } => {
+                Some(pb::ownership_object::Object::RowAccessPolicy(
+                    pb::ownership_object::OwnershipRowAccessPolicyObject {
                         policy_id: *policy_id,
                     },
                 ))

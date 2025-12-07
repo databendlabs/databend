@@ -81,9 +81,6 @@ select * from rap_multi_test order by id;
 3 charlie Engineering
 
 statement ok
-drop row access policy if exists rap1;
-
-statement ok
 drop row access policy if exists p1;
 
 statement error 1005
@@ -96,15 +93,15 @@ create row access policy rap_it as (empl_id string null) returns boolean ->
       else true
   end;
 
+statement ok
+desc row access policy rap_it;
+
 statement error 1005
 CREATE OR REPLACE row access policy IF NOT EXISTS rap2 AS (val STRING) RETURNS STRING ->
   case
       when 'it_admin' = current_role() then true
       else false
   end;
-
-statement ok
-desc row access policy rap1;
 
 statement ok
 create or replace table t(id int, empl_id string);
@@ -227,9 +224,6 @@ select id from (select id from t1 union select id from t) order by id;
 ----
 1
 100
-
-statement ok
-drop row access policy if exists rap1;
 
 statement ok
 drop row access policy if exists rap3;
