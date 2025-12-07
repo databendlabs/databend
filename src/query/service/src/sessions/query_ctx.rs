@@ -512,6 +512,21 @@ impl QueryContext {
         table: &str,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
+        let max_batch_size = match max_batch_size {
+            Some(v) => {
+                // use the batch size specified in the statement
+                Some(v)
+            }
+            None => {
+                if let Some(v) = self.get_settings().get_stream_consume_batch_size_hint()? {
+                    info!("Overriding stream max_batch_size with setting value: {}", v);
+                    Some(v)
+                } else {
+                    None
+                }
+            }
+        };
+
         let table = self
             .shared
             .get_table(catalog, database, table, max_batch_size)
@@ -1425,23 +1440,7 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
-        // Queries to non-internal system_history databases require license checks to be enabled.
-        if database.eq_ignore_ascii_case("system_history")
-            && ThreadTracker::capture_log_settings().is_none()
-        {
-            LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.get_license_key(), Feature::SystemHistory)?;
-
-            if GlobalConfig::instance().log.history.is_invisible(table) {
-                return Err(ErrorCode::InvalidArgument(format!(
-                    "history table `{}` is configured as invisible",
-                    table
-                )));
-            }
-        }
-
-        let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
-        self.get_table_from_shared(catalog, database, table, batch_size)
+        self.get_table_with_batch(catalog, database, table, None)
             .await
     }
 
@@ -1457,41 +1456,41 @@ impl TableContext for QueryContext {
         table: &str,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
-        let max_batch_size = {
-            match max_batch_size {
-                Some(v) => {
-                    // use the batch size specified in the statement
-                    Some(v)
-                }
-                None => {
-                    if let Some(v) = self.get_settings().get_stream_consume_batch_size_hint()? {
-                        info!("Overriding stream max_batch_size with setting value: {}", v);
-                        Some(v)
-                    } else {
-                        None
-                    }
-                }
+        // Queries to non-internal system_history databases require license checks to be enabled.
+        if database.eq_ignore_ascii_case("system_history")
+            && ThreadTracker::capture_log_settings().is_none()
+        {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.get_license_key(), Feature::SystemHistory)?;
+
+            if GlobalConfig::instance().log.history.is_invisible(table) {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "history table `{}` is configured as invisible",
+                    table
+                )));
             }
-        };
+        }
 
         let table = self
             .get_table_from_shared(catalog, database, table, max_batch_size)
             .await?;
-        if table.is_stream() {
-            let stream = StreamTable::try_from_table(table.as_ref())?;
-            let actual_batch_limit = stream.max_batch_size();
-            if actual_batch_limit != max_batch_size {
+        if max_batch_size.is_some() {
+            if table.is_stream() {
+                let stream = StreamTable::try_from_table(table.as_ref())?;
+                let actual_batch_limit = stream.max_batch_size();
+                if actual_batch_limit != max_batch_size {
+                    return Err(ErrorCode::StorageUnsupported(
+                        format!(
+                            "Stream batch size must be consistent within transaction: actual={:?}, requested={:?}",
+                            actual_batch_limit, max_batch_size
+                        )
+                    ));
+                }
+            } else {
                 return Err(ErrorCode::StorageUnsupported(
-                    format!(
-                        "Stream batch size must be consistent within transaction: actual={:?}, requested={:?}",
-                        actual_batch_limit, max_batch_size
-                    )
+                    "MAX_BATCH_SIZE parameter only supported for STREAM tables",
                 ));
             }
-        } else if max_batch_size.is_some() {
-            return Err(ErrorCode::StorageUnsupported(
-                "MAX_BATCH_SIZE parameter only supported for STREAM tables",
-            ));
         }
         Ok(table)
     }

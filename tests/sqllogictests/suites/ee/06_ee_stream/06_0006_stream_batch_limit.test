@@ -325,6 +325,13 @@ select c from s_t_settings order by c;
 1
 2
 
+query I
+select c from t_settings order by c;
+----
+1
+2
+3
+
 #######################################################
 # max_batch_size specified in query has high priority #
 #######################################################
