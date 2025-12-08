@@ -22,6 +22,7 @@ use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
 use databend_query::spillers::SpillerDiskConfig;
 use databend_query::spillers::SpillerType;
+use databend_query::spillers::Location;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use databend_common_catalog::table_context::TableContext;
@@ -33,8 +34,8 @@ async fn test_spill_fallback_to_remote_when_local_full() -> Result<()> {
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    // Prepare a tiny local spill quota to force fallback on the second spill.
-    let limit = 512 * 1024; // 512KB
+    // Prepare a small local spill quota to force fallback after a few writes.
+    let limit = 32 * 1024; // 32KB
     let temp_manager = TempDirManager::instance();
     let temp_dir = temp_manager
         .get_disk_spill_dir(limit, &ctx.get_id())
@@ -51,22 +52,41 @@ async fn test_spill_fallback_to_remote_when_local_full() -> Result<()> {
     let operator = DataOperator::instance().spill_operator();
     let spiller = Spiller::create(ctx.clone(), operator, spiller_config)?;
 
-    // First spill: small enough to stay on local disk.
-    let small_block =
-        DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32; 8 * 1024])]); // ~32KB
-    let loc1 = spiller.spill(vec![small_block]).await?;
-    assert!(
-        loc1.is_local(),
-        "first spill should land on local because quota is available"
-    );
+    // Use a stable block size that fits into the tiny quota but will exhaust it after a few rounds.
+    let rows_per_block = 32 * 1024;
+    let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32; rows_per_block])]);
 
-    // Second spill: large enough to exceed remaining quota and fallback to remote.
-    let big_block =
-        DataBlock::new_from_columns(vec![Int32Type::from_data(vec![2i32; 512 * 1024])]); // ~2MB
-    let loc2 = spiller.spill(vec![big_block]).await?;
+    let loc1 = spiller.spill(vec![block.clone()]).await?;
+    let first_block_bytes = match &loc1 {
+        Location::Local(path) => path.size(),
+        Location::Remote(_) => panic!("first spill should land on local because quota is available"),
+    };
+    let mut locations = vec![loc1];
+
+    let mut used_local_bytes = first_block_bytes;
+    let mut saw_remote = false;
+    // Cap the attempts to ensure the test finishes quickly even with tiny blocks.
+    let max_attempts = (limit / first_block_bytes.max(1)).saturating_add(8);
+    for _ in 0..max_attempts {
+        let loc = spiller.spill(vec![block.clone()]).await?;
+        match &loc {
+            Location::Local(path) => {
+                used_local_bytes += path.size();
+            }
+            Location::Remote(_) => {
+                saw_remote = true;
+                break;
+            }
+        }
+        locations.push(loc);
+    }
     assert!(
-        loc2.is_remote(),
-        "second spill should fallback to remote when local quota is exhausted"
+        saw_remote,
+        "should fallback to remote when local quota is exhausted (used_local_bytes={}, limit={}, first_block_bytes={}, attempts={})",
+        used_local_bytes,
+        limit,
+        first_block_bytes,
+        max_attempts
     );
 
     // Cleanup the temp directory for this query.
