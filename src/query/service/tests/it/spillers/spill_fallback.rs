@@ -28,6 +28,25 @@ use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_cache::TempDirManager;
 
+/// ASCII flow of the test (data view):
+///
+///   Int32 rows
+///       |
+///       v
+///   DataBlock (rows_per_block = 32 * 1024)
+///       |
+///       v
+///   Spiller::spill(vec![block.clone()])  -- repeated writes
+///       |
+///       v
+///   Local spill files on disk (quota: 32 * 1024 bytes)
+///       |
+///       |  accumulate used_local_bytes from each Local(path)
+///       v
+///   when used_local_bytes > quota
+///       |
+///       v
+///   next spill -> Location::Remote(...)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_spill_fallback_to_remote_when_local_full() -> Result<()> {
     let config = ConfigBuilder::create().build();
