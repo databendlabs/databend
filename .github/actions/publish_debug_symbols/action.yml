@@ -39,10 +39,3 @@ runs:
       shell: bash
       run: |
         gh release upload ${{ inputs.version }} ${{ steps.prepare.outputs.name }} --clobber
-
-    - name: Sync debug symbols to R2
-      shell: bash
-      continue-on-error: true
-      if: inputs.category == 'default'
-      run: |
-        aws s3 cp ${{ steps.prepare.outputs.name }} s3://repo/databend/${{ inputs.version }}/${{ steps.prepare.outputs.name }} --no-progress --checksum-algorithm=CRC32
