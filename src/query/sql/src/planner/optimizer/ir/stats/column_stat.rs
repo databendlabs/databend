@@ -36,6 +36,9 @@ pub struct ColumnStat {
     /// Count of null values
     pub null_count: u64,
 
+    pub num_rows: u64,
+    pub origin_ndv: f64,
+
     /// Histogram of column
     pub histogram: Option<Histogram>,
 }

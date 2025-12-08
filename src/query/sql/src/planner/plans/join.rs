@@ -493,10 +493,48 @@ impl Join {
                     + f64::max(right_cardinality, inner_join_cardinality)
                     - inner_join_cardinality
             }
-            JoinType::LeftSemi => f64::min(left_cardinality, inner_join_cardinality),
-            JoinType::RightSemi => f64::min(right_cardinality, inner_join_cardinality),
-            JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti => left_cardinality,
-            JoinType::RightSingle | JoinType::LeftMark | JoinType::RightAnti => right_cardinality,
+            JoinType::LeftSemi => {
+                let left_exprs = self
+                    .equi_conditions
+                    .iter()
+                    .map(|x| &x.left)
+                    .collect::<Vec<_>>();
+
+                self.semi_cardinality(left_cardinality, &left_statistics, &left_exprs)
+            }
+            JoinType::RightSemi => {
+                let right_exprs = self
+                    .equi_conditions
+                    .iter()
+                    .map(|x| &x.right)
+                    .collect::<Vec<_>>();
+
+                self.semi_cardinality(right_cardinality, &right_statistics, &right_exprs)
+            }
+            JoinType::LeftAnti => {
+                let left_exprs = self
+                    .equi_conditions
+                    .iter()
+                    .map(|x| &x.left)
+                    .collect::<Vec<_>>();
+                self.anti_cardinality(left_cardinality, &left_statistics, &left_exprs)
+                // left_cardinality
+                // left_cardinality
+                //     * self.compute_selectivity_for_build_side(right_cardinality, &right_statistics)
+            }
+            JoinType::RightAnti => {
+                let right_exprs = self
+                    .equi_conditions
+                    .iter()
+                    .map(|x| &x.right)
+                    .collect::<Vec<_>>();
+
+                self.anti_cardinality(right_cardinality, &right_statistics, &right_exprs)
+                // right_cardinality
+                // * self.compute_selectivity_for_build_side(right_cardinality, &right_statistics)
+            }
+            JoinType::LeftSingle | JoinType::RightMark => left_cardinality,
+            JoinType::RightSingle | JoinType::LeftMark => right_cardinality,
         };
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
@@ -544,6 +582,84 @@ impl Join {
                 .iter()
                 .any(|expr| expr.has_subquery())
     }
+
+    fn anti_cardinality(
+        &self,
+        cardinality: f64,
+        statistics: &Statistics,
+        exprs: &[&ScalarExpr],
+    ) -> f64 {
+        let mut anti_cardinality = cardinality;
+        for expr in exprs {
+            let mut used_columns = expr.used_columns();
+
+            let (Some(column), None) = (used_columns.pop_first(), used_columns.pop_first()) else {
+                continue;
+            };
+
+            if let Some(column_stat) = statistics.column_stats.get(&column) {
+                let semi_cardinality = cardinality * column_stat.ndv / column_stat.origin_ndv;
+                let column_cardinality = (cardinality - semi_cardinality).max(cardinality * 0.3);
+                anti_cardinality = 1_f64.max(column_cardinality.min(anti_cardinality));
+            }
+        }
+
+        anti_cardinality
+    }
+
+    fn semi_cardinality(
+        &self,
+        cardinality: f64,
+        statistics: &Statistics,
+        exprs: &[&ScalarExpr],
+    ) -> f64 {
+        let mut semi_cardinality = cardinality;
+        for expr in exprs {
+            let mut used_columns = expr.used_columns();
+
+            let (Some(column), None) = (used_columns.pop_first(), used_columns.pop_first()) else {
+                continue;
+            };
+
+            if let Some(column_stat) = statistics.column_stats.get(&column) {
+                let column_cardinality = cardinality * column_stat.ndv / column_stat.origin_ndv;
+                semi_cardinality = 1_f64.max(column_cardinality.min(semi_cardinality));
+            }
+        }
+
+        semi_cardinality
+    }
+
+    // fn compute_selectivity_for_build_side(
+    //     &self,
+    //     build_cardinality: f64,
+    //     build_statistics: &Statistics,
+    // ) -> f64 {
+    //     let mut selectivity = 1.0_f64;
+    //     for equi_condition in &self.equi_conditions {
+    //         let expr = &equi_condition.right;
+    //
+    //         if expr.used_columns().len() != 1 {
+    //             continue;
+    //         }
+    //
+    //         let Some(right_col_stat) = build_statistics
+    //             .column_stats
+    //             .get(expr.used_columns().iter().next().unwrap())
+    //         else {
+    //             continue;
+    //         };
+    //
+    //         if right_col_stat.num_rows == 0 {
+    //             continue;
+    //         }
+    //
+    //         let num_rows = right_col_stat.num_rows as f64;
+    //         selectivity = selectivity.min(0.5_f64.max(1.0_f64.min(build_cardinality / num_rows)));
+    //     }
+    //
+    //     selectivity
+    // }
 }
 
 impl Operator for Join {
