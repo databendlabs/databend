@@ -15,6 +15,7 @@
 use databend_common_base::base::GlobalUniqName;
 use databend_common_config::BuiltInConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::SpillConfig;
 use databend_common_config::UDFConfig;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
@@ -66,8 +67,7 @@ ADDRESS = 'https://databend.com';"
         conf.storage.allow_insecure = true;
 
         // enable local spill using the same temp root
-        conf.spill.path = root.clone();
-        conf.spill.global_bytes_limit = 1024 * 1024 * 1024; // 1GB for tests
+        conf.spill = SpillConfig::new_for_test(root.clone(), 0.0, 1024 * 1024 * 1024);
 
         ConfigBuilder { conf }
     }
