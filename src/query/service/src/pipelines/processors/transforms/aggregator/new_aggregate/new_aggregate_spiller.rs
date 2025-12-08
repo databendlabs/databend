@@ -36,7 +36,7 @@ use log::info;
 use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;
 
-use crate::spillers::async_buffer::SpillTarget;
+use crate::spillers::SpillTarget;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;

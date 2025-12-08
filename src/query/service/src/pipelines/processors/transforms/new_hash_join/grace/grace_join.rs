@@ -40,7 +40,7 @@ use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 use crate::spillers::Layout;
-use crate::spillers::async_buffer::SpillTarget;
+use crate::spillers::SpillTarget;
 use crate::spillers::SpillAdapter;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataReader;

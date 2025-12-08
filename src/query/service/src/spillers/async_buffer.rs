@@ -58,7 +58,6 @@ use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use super::record_read_profile_with_flag;
 use super::record_write_profile_with_flag;
-use super::SpillsBufferPool;
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Copy)]
@@ -375,6 +374,7 @@ impl BufferWriter {
             buffer_pool: self.buffer_pool.clone(),
             pending_buffers: Default::default(),
             pending_response: None,
+            target: self.target,
         })
         .close()
     }

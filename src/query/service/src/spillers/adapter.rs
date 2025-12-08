@@ -232,7 +232,7 @@ impl Spiller {
         let instant = Instant::now();
         let location = self.write_encodes(write_bytes, buf).await?;
         // Record statistics.
-        record_write_profile(location, &instant, write_bytes);
+        record_write_profile(&location, &instant, write_bytes);
 
         self.adapter
             .add_spill_file(location.clone(), layout, write_bytes);
@@ -489,14 +489,14 @@ impl SpillWriter {
                 let row_group_meta = file_writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
-                record_write_profile(location, &start, size);
+                record_write_profile(&location, &start, size);
                 Ok(row_group_meta)
             }
             AnyFileWriter::Remote(_, file_writer) => {
                 let row_group_meta = file_writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
-                record_write_profile(location, &start, size);
+                record_write_profile(&location, &start, size);
                 Ok(row_group_meta)
             }
         }
