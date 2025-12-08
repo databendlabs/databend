@@ -1440,7 +1440,8 @@ impl TableContext for QueryContext {
             }
         }
 
-        self.get_table_from_shared(catalog, database, table, None)
+        let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
+        self.get_table_from_shared(catalog, database, table, batch_size)
             .await
     }
 

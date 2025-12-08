@@ -205,7 +205,7 @@ impl TableRefVisitor {
             databend_common_base::runtime::block_on(async move {
                 if let Ok(table_meta) = self
                     .ctx
-                    .get_table_with_batch(&catalog_name, &database_name, &table_name, None)
+                    .get_table(&catalog_name, &database_name, &table_name)
                     .await
                 {
                     if !table_meta.is_temp()
