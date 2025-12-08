@@ -24,7 +24,7 @@ use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
 use databend_query::spillers::SpillerDiskConfig;
 use databend_query::spillers::SpillerType;
-use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::config_with_spill;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_cache::TempDirManager;
 
@@ -49,7 +49,7 @@ use databend_storages_common_cache::TempDirManager;
 ///   next spill -> Location::Remote(...)
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_spill_fallback_to_remote_when_local_full() -> Result<()> {
-    let config = ConfigBuilder::create().build();
+    let config = config_with_spill();
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
