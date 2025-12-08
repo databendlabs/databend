@@ -15,12 +15,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterBloom;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::sbbf::Sbbf;
+use databend_common_catalog::sbbf::SbbfAtomic;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
@@ -274,7 +274,7 @@ async fn build_bloom_filter(
     let column_name = probe_key.id.to_string();
     let total_items = bloom.len();
 
-    if total_items < 50000 {
+    if total_items < 3_000_000 {
         let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
         filter.insert_hash_batch(&bloom);
@@ -284,68 +284,21 @@ async fn build_bloom_filter(
         });
     }
 
-    let chunk_size = total_items.div_ceil(max_threads);
-
-    let chunks: Vec<Vec<u64>> = bloom
-        .chunks(chunk_size)
-        .map(|chunk| chunk.to_vec())
-        .collect();
-
-    let tasks = chunks.into_iter().map(|chunk| async move {
-        let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
-            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
-
-        filter.insert_hash_batch(&chunk);
-        Ok::<Sbbf, ErrorCode>(filter)
-    });
-
-    let filters: Vec<Sbbf> = execute_futures_in_parallel(
-        tasks,
-        max_threads,
-        max_threads,
-        "runtime-filter-bloom-worker".to_owned(),
-    )
-    .await?
-    .into_iter()
-    .collect::<Result<Vec<_>>>()?;
-
     let start = std::time::Instant::now();
-    let merged_filter = merge_bloom_filters_tree(filters);
-    let end = std::time::Instant::now();
+    let builder = SbbfAtomic::new_with_ndv_fpp(total_items as u64, 0.01)
+        .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+    builder.insert_hash_batch_parallel(&bloom, max_threads);
+    let filter = builder.finish();
     log::info!(
-        "filter_id: {}, merge_bloom_filters_tree time: {:?}",
+        "filter_id: {}, build_time: {:?}",
         filter_id,
-        end - start
+        start.elapsed()
     );
 
     Ok(RuntimeFilterBloom {
         column_name,
-        filter: merged_filter,
+        filter,
     })
-}
-
-fn merge_bloom_filters_tree(mut filters: Vec<Sbbf>) -> Sbbf {
-    if filters.is_empty() {
-        return Sbbf::new_with_ndv_fpp(1, 0.01).unwrap();
-    }
-
-    while filters.len() > 1 {
-        let mut next_level = Vec::new();
-        let mut iter = filters.into_iter();
-
-        while let Some(mut left) = iter.next() {
-            if let Some(right) = iter.next() {
-                left.union(&right);
-                next_level.push(left);
-            } else {
-                next_level.push(left);
-            }
-        }
-
-        filters = next_level;
-    }
-
-    filters.pop().unwrap()
 }
 
 #[cfg(test)]
