@@ -18,13 +18,13 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_storage::DataOperator;
-use databend_query::spillers::SpillAdapter;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
 use databend_query::spillers::SpillerDiskConfig;
 use databend_query::spillers::SpillerType;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
+use databend_common_catalog::table_context::TableContext;
 use databend_storages_common_cache::TempDirManager;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

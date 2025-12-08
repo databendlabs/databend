@@ -14,5 +14,4 @@
 
 mod spill_config_behavior;
 mod spill_fallback;
-mod spill_profile;
 mod spiller;
