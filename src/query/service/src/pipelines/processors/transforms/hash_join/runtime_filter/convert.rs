@@ -286,8 +286,8 @@ async fn build_bloom_filter(
 
     let start = std::time::Instant::now();
     let builder = SbbfAtomic::new_with_ndv_fpp(total_items as u64, 0.01)
-        .map_err(|e| ErrorCode::Internal(e.to_string()))?;
-    builder.insert_hash_batch_parallel(&bloom, max_threads);
+        .map_err(|e| ErrorCode::Internal(e.to_string()))?
+        .insert_hash_batch_parallel(bloom, max_threads);
     let filter = builder.finish();
     log::info!(
         "filter_id: {}, build_time: {:?}",

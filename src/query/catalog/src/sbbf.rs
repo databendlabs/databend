@@ -78,8 +78,10 @@ use core::simd::Simd;
 use std::mem::size_of;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
-use rayon::prelude::*;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
 
 /// Salt values as defined in the [spec](https://github.com/apache/parquet-format/blob/master/BloomFilter.md#technical-approach).
 const SALT: [u32; 8] = [
@@ -343,26 +345,51 @@ impl SbbfAtomic {
         }
     }
 
-    pub fn insert_hash_batch_parallel(&self, hashes: &[u64], max_threads: usize) {
+    pub fn insert_hash_batch_parallel(self, hashes: Vec<u64>, max_threads: usize) -> Self {
         if hashes.is_empty() || max_threads <= 1 || self.0.len() < 2 {
-            self.insert_hash_batch(hashes);
-            return;
+            self.insert_hash_batch(&hashes);
+            return self;
         }
 
-        let worker_nums = max_threads.max(1);
+        let worker_nums = max_threads.min(hashes.len()).max(1);
         let chunk_size = hashes.len().div_ceil(worker_nums).max(1);
+        let runtime = Runtime::with_worker_threads(worker_nums, Some("sbbf-insert".to_string()))
+            .expect("failed to create runtime for inserting bloom filter hashes");
 
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(worker_nums)
-            .build()
-            .unwrap()
-            .install(|| {
-                hashes.par_chunks(chunk_size).for_each(|chunk| {
-                    for &hash in chunk {
-                        self.insert_hash(hash);
-                    }
-                });
-            });
+        let hashes = Arc::new(hashes);
+        let builder = Arc::new(self);
+        let total = hashes.len();
+        let mut join_handlers = Vec::with_capacity(total.div_ceil(chunk_size));
+
+        for start in (0..total).step_by(chunk_size) {
+            let end = (start + chunk_size).min(total);
+            let hashes = hashes.clone();
+            let builder = builder.clone();
+
+            let handler = runtime
+                .try_spawn(
+                    async move {
+                        for hash in &hashes[start..end] {
+                            builder.insert_hash(*hash);
+                        }
+                    },
+                    None,
+                )
+                .expect("failed to spawn runtime task for inserting bloom filter hashes");
+            join_handlers.push(handler);
+        }
+
+        runtime
+            .block_on(async move {
+                for handler in join_handlers {
+                    handler.await?;
+                }
+                Ok(())
+            })
+            .expect("runtime bloom filter insert tasks failed");
+
+        Arc::try_unwrap(builder)
+            .expect("unexpected extra references when finishing bloom filter insert")
     }
 
     pub fn finish(self) -> Sbbf {
@@ -458,7 +485,7 @@ mod tests {
         serial.insert_hash_batch(&hashes);
 
         let builder = SbbfAtomic::new_with_ndv_fpp(hashes.len() as u64, 0.01).unwrap();
-        builder.insert_hash_batch_parallel(&hashes, 8);
+        let builder = builder.insert_hash_batch_parallel(hashes.clone(), 8);
         let atomic = builder.finish();
 
         for hash in &hashes {
