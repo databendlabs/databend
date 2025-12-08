@@ -25,6 +25,7 @@ use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
@@ -39,6 +40,7 @@ use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 use crate::spillers::Layout;
+use crate::spillers::async_buffer::SpillTarget;
 use crate::spillers::SpillAdapter;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataReader;
@@ -255,11 +257,18 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
     }
 
     fn restore_build_data(&mut self) -> Result<()> {
-        let operator = DataOperator::instance().spill_operator();
+        let data_operator = DataOperator::instance();
+        let target = if matches!(data_operator.spill_params(), Some(StorageParams::Fs(_))) {
+            SpillTarget::Local
+        } else {
+            SpillTarget::Remote
+        };
+        let operator = data_operator.spill_operator();
 
         while let Some(data) = self.steal_restore_build_task() {
             let buffer_pool = SpillsBufferPool::instance();
-            let mut reader = buffer_pool.reader(operator.clone(), data.path, data.row_groups)?;
+            let mut reader =
+                buffer_pool.reader(operator.clone(), data.path, data.row_groups, target)?;
 
             while let Some(data_block) = reader.read(self.read_settings)? {
                 self.memory_hash_join.add_block(Some(data_block))?;
@@ -384,11 +393,16 @@ pub struct GraceJoinPartition {
 impl GraceJoinPartition {
     pub fn create(prefix: &str) -> Result<GraceJoinPartition> {
         let data_operator = DataOperator::instance();
+        let target = if matches!(data_operator.spill_params(), Some(StorageParams::Fs(_))) {
+            SpillTarget::Local
+        } else {
+            SpillTarget::Remote
+        };
 
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniqName::unique());
-        let spills_data_writer = buffer_pool.writer(operator, file_path.clone())?;
+        let spills_data_writer = buffer_pool.writer(operator, file_path.clone(), target)?;
 
         Ok(GraceJoinPartition {
             path: file_path,
@@ -456,9 +470,17 @@ impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
                         continue;
                     }
 
-                    let operator = DataOperator::instance().spill_operator();
+                    let data_operator = DataOperator::instance();
+                    let target =
+                        if matches!(data_operator.spill_params(), Some(StorageParams::Fs(_))) {
+                            SpillTarget::Local
+                        } else {
+                            SpillTarget::Remote
+                        };
+                    let operator = data_operator.spill_operator();
                     let buffer_pool = SpillsBufferPool::instance();
-                    let reader = buffer_pool.reader(operator, data.path, data.row_groups)?;
+                    let reader =
+                        buffer_pool.reader(operator, data.path, data.row_groups, target)?;
                     self.spills_reader = Some(reader);
                     break;
                 }

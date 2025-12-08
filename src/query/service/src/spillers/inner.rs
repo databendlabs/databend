@@ -159,7 +159,7 @@ impl<A> SpillerInner<A> {
         let location = self.write_encodes(data_size, buf).await?;
 
         // Record statistics.
-        record_write_profile(location.is_local(), &instant, data_size);
+        record_write_profile(&location, &instant, data_size);
         let layout = columns_layout.pop().unwrap();
         Ok((location, layout, data_size))
     }
@@ -201,7 +201,7 @@ impl<A> SpillerInner<A> {
             Location::Remote(loc) => self.operator.read(loc).await?,
         };
 
-        record_read_profile(location.is_local(), &instant, data.len());
+        record_read_profile(&location, &instant, data.len());
 
         deserialize_block(columns_layout, data)
     }
@@ -275,7 +275,11 @@ impl<A: SpillAdapter> SpillerInner<A> {
     }
 }
 
-pub(super) fn record_write_profile(is_local: bool, start: &Instant, write_bytes: usize) {
+pub(super) fn record_write_profile_with_flag(
+    is_local: bool,
+    start: &Instant,
+    write_bytes: usize,
+) {
     if !is_local {
         Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
         Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, write_bytes);
@@ -293,7 +297,15 @@ pub(super) fn record_write_profile(is_local: bool, start: &Instant, write_bytes:
     }
 }
 
-pub(super) fn record_read_profile(is_local: bool, start: &Instant, read_bytes: usize) {
+pub(super) fn record_write_profile(location: &Location, start: &Instant, write_bytes: usize) {
+    record_write_profile_with_flag(location.is_local(), start, write_bytes)
+}
+
+pub(super) fn record_read_profile_with_flag(
+    is_local: bool,
+    start: &Instant,
+    read_bytes: usize,
+) {
     if is_local {
         Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadCount, 1);
         Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadBytes, read_bytes);
@@ -309,4 +321,8 @@ pub(super) fn record_read_profile(is_local: bool, start: &Instant, read_bytes: u
             start.elapsed().as_millis() as usize,
         );
     }
+}
+
+pub(super) fn record_read_profile(location: &Location, start: &Instant, read_bytes: usize) {
+    record_read_profile_with_flag(location.is_local(), start, read_bytes)
 }

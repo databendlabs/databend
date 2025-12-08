@@ -54,6 +54,7 @@ use parquet::file::writer::SerializedRowGroupWriter;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::async_buffer::BufferWriter;
+use super::async_buffer::SpillTarget;
 use super::Location;
 use super::SpillerInner;
 use super::SpillsBufferPool;
@@ -452,7 +453,7 @@ impl<A> SpillerInner<A> {
         };
 
         let remote_location = self.create_unique_location();
-        let remote = pool.buffer_writer(op.clone(), remote_location.clone())?;
+        let remote = pool.buffer_writer(op.clone(), remote_location.clone(), SpillTarget::Remote)?;
 
         Ok(AnyFileWriter::Remote(
             remote_location,
