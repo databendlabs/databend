@@ -90,16 +90,16 @@ fn test_block_entry_memory_size() {
     assert_eq!(3, entry.memory_size());
 
     let col = StringType::from_data((0..10).map(|x| x.to_string()).collect::<Vec<_>>());
-    assert_eq!(col.memory_size(), 10 * 16);
+    assert_eq!(col.memory_size(false), 10 * 16);
 
     let array = ArrayColumn::<Int64Type>::new(
         Buffer::from_iter(0..10i64),
         Buffer::from(vec![0u64, 1, 3, 6, 10]),
     );
-    let total_memory_size = array.memory_size(); // 10 * 8 + 5 * 8 = 80 + 40 = 120
+    let total_memory_size = array.memory_size(false); // 10 * 8 + 5 * 8 = 80 + 40 = 120
     let expected = array
         .iter()
-        .map(|x| Int64Type::column_memory_size(&x))
+        .map(|x| Int64Type::column_memory_size(&x, false))
         .sum::<usize>()
         + (array.len() + 1) * 8;
     assert_eq!(total_memory_size, expected);
@@ -108,6 +108,6 @@ fn test_block_entry_memory_size() {
     let array3 = array.slice(2..4);
     assert_eq!(
         total_memory_size,
-        array2.memory_size() + array3.memory_size() - 8
+        array2.memory_size(false) + array3.memory_size(false) - 8
     );
 }

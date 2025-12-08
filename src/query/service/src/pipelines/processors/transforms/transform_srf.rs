@@ -150,7 +150,7 @@ impl BlockingTransform for TransformSRF {
                 .map(|srf_result| {
                     let (result, rows) = srf_result.get(i).unwrap();
                     if *rows > 0 {
-                        result.memory_size()
+                        result.memory_size(false)
                     } else {
                         0
                     }

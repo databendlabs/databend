@@ -607,7 +607,8 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
         std::mem::size_of::<Self::Scalar>()
     }
 
-    fn column_memory_size(col: &Self::Column) -> usize {
+    fn column_memory_size(col: &Self::Column, gc: bool) -> usize {
+        let _ = gc;
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
     }
 
