@@ -62,8 +62,12 @@ ADDRESS = 'https://databend.com';"
         // set storage to fs
         let tmp_dir = TempDir::new().expect("create tmp dir failed");
         let root = tmp_dir.path().to_str().unwrap().to_string();
-        conf.storage.params = StorageParams::Fs(StorageFsConfig { root });
+        conf.storage.params = StorageParams::Fs(StorageFsConfig { root: root.clone() });
         conf.storage.allow_insecure = true;
+
+        // enable local spill using the same temp root
+        conf.spill.path = root.clone();
+        conf.spill.global_bytes_limit = 1024 * 1024 * 1024; // 1GB for tests
 
         ConfigBuilder { conf }
     }
