@@ -412,14 +412,14 @@ impl RangeFetchPlan {
 }
 
 pub enum AnyFileWriter {
-    Local(FileWriter<LocalWriter>),
+    Local(TempPath, FileWriter<LocalWriter>),
     Remote(String, FileWriter<BufferWriter>),
 }
 
 impl AnyFileWriter {
     pub(super) fn new_row_group(&self) -> RowGroupEncoder {
         match self {
-            AnyFileWriter::Local(file_writer) => file_writer.new_row_group(),
+            AnyFileWriter::Local(_, file_writer) => file_writer.new_row_group(),
             AnyFileWriter::Remote(_, file_writer) => file_writer.new_row_group(),
         }
     }
@@ -448,7 +448,9 @@ impl<A> SpillerInner<A> {
                     file,
                     buf,
                 };
-                return Ok(AnyFileWriter::Local(FileWriter::new(props, w)?));
+                let writer = FileWriter::new(props, w)?;
+                let path = writer.writer.inner().path.clone();
+                return Ok(AnyFileWriter::Local(path, writer));
             }
         };
 
@@ -456,7 +458,7 @@ impl<A> SpillerInner<A> {
         let remote = pool.buffer_writer(op.clone(), remote_location.clone(), SpillTarget::Remote)?;
 
         Ok(AnyFileWriter::Remote(
-            remote_location,
+            remote_location.clone(),
             FileWriter::new(props, remote)?,
         ))
     }
