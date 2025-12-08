@@ -485,15 +485,15 @@ impl SpillWriter {
         let start = std::time::Instant::now();
 
         match &mut self.file_writer {
-            AnyFileWriter::Local(path, file_writer) => {
-                let row_group_meta = file_writer.flush_row_group(row_group)?;
+            AnyFileWriter::Local { path, writer } => {
+                let row_group_meta = writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
                 record_write_profile(&Location::Local(path.clone()), &start, size);
                 Ok(row_group_meta)
             }
-            AnyFileWriter::Remote(path, file_writer) => {
-                let row_group_meta = file_writer.flush_row_group(row_group)?;
+            AnyFileWriter::Remote { path, writer } => {
+                let row_group_meta = writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
                 record_write_profile(&Location::Remote(path.clone()), &start, size);
@@ -508,15 +508,15 @@ impl SpillWriter {
 
     pub fn close(self) -> Result<SpillReader> {
         let (metadata, location) = match self.file_writer {
-            AnyFileWriter::Local(_, file_writer) => {
-                let (metadata, path) = file_writer.finish()?;
+            AnyFileWriter::Local { writer, .. } => {
+                let (metadata, path) = writer.finish()?;
                 self.spiller
                     .adapter
                     .add_spill_file(Location::Local(path.clone()), Layout::Parquet);
                 (metadata, Location::Local(path))
             }
-            AnyFileWriter::Remote(path, file_writer) => {
-                let (metadata, _) = file_writer.finish()?;
+            AnyFileWriter::Remote { path, writer } => {
+                let (metadata, _) = writer.finish()?;
                 let location = Location::Remote(path);
 
                 self.spiller
