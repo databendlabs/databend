@@ -204,7 +204,7 @@ pub(crate) const BITSET_MAX_LENGTH: usize = 128 * 1024 * 1024;
 
 #[inline]
 fn hash_to_block_index_for_blocks(hash: u64, num_blocks: usize) -> usize {
-    (((hash >> 32).unchecked_mul(num_blocks as u64)) >> 32) as usize
+    unsafe { (((hash >> 32).unchecked_mul(num_blocks as u64)) >> 32) as usize }
 }
 
 #[inline]
