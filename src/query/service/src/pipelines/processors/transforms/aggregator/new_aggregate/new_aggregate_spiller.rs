@@ -19,16 +19,13 @@ use std::time::Instant;
 
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_transforms::traits::Location;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
 use log::debug;
@@ -36,7 +33,6 @@ use log::info;
 use parking_lot::Mutex;
 use parquet::file::metadata::RowGroupMetaData;
 
-use crate::spillers::SpillTarget;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
@@ -44,9 +40,9 @@ use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::sessions::QueryContext;
 use crate::spillers::Layout;
 use crate::spillers::SpillAdapter;
+use crate::spillers::SpillTarget;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataWriter;
-use crate::spillers::record_read_profile_with_flag;
 
 struct PayloadWriter {
     path: String,
@@ -56,11 +52,7 @@ struct PayloadWriter {
 impl PayloadWriter {
     fn try_create(prefix: &str) -> Result<Self> {
         let data_operator = DataOperator::instance();
-        let target = if matches!(data_operator.spill_params(), Some(StorageParams::Fs(_))) {
-            SpillTarget::Local
-        } else {
-            SpillTarget::Remote
-        };
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniqName::unique());
@@ -366,23 +358,22 @@ impl NewAggregateSpiller {
         } = payload;
 
         let data_operator = DataOperator::instance();
-        let target = if matches!(data_operator.spill_params(), Some(StorageParams::Fs(_))) {
-            SpillTarget::Local
-        } else {
-            SpillTarget::Remote
-        };
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
 
-        let mut reader =
-            buffer_pool.reader(operator.clone(), location.clone(), vec![row_group.clone()], target)?;
+        let mut reader = buffer_pool.reader(
+            operator.clone(),
+            location.clone(),
+            vec![row_group.clone()],
+            target,
+        )?;
 
         let instant = Instant::now();
         let data_block = reader.read(self.read_setting)?;
         let elapsed = instant.elapsed();
 
         let read_size = reader.read_bytes();
-        record_read_profile_with_flag(target.is_local(), &instant, read_size);
 
         info!(
             "Read aggregate spill finished: (bucket: {}, location: {}, bytes: {}, rows: {}, elapsed: {:?})",
@@ -415,39 +406,9 @@ impl NewAggregateSpiller {
     }
 }
 
-fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats, is_local: bool) {
+fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats, _is_local: bool) {
     if stats.count == 0 && stats.bytes == 0 && stats.rows == 0 {
         return;
-    }
-
-    if stats.count > 0 {
-        if is_local {
-            Profile::record_usize_profile(
-                ProfileStatisticsName::LocalSpillWriteCount,
-                stats.count,
-            );
-            Profile::record_usize_profile(
-                ProfileStatisticsName::LocalSpillWriteTime,
-                stats.elapsed.as_millis() as usize,
-            );
-            Profile::record_usize_profile(
-                ProfileStatisticsName::LocalSpillWriteBytes,
-                stats.bytes,
-            );
-        } else {
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteCount,
-                stats.count,
-            );
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteTime,
-                stats.elapsed.as_millis() as usize,
-            );
-            Profile::record_usize_profile(
-                ProfileStatisticsName::RemoteSpillWriteBytes,
-                stats.bytes,
-            );
-        }
     }
 
     if stats.rows > 0 || stats.bytes > 0 {

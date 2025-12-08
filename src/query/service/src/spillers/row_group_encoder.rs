@@ -412,8 +412,14 @@ impl RangeFetchPlan {
 }
 
 pub enum AnyFileWriter {
-    Local { path: TempPath, writer: FileWriter<LocalWriter> },
-    Remote { path: String, writer: FileWriter<BufferWriter> },
+    Local {
+        path: TempPath,
+        writer: FileWriter<LocalWriter>,
+    },
+    Remote {
+        path: String,
+        writer: FileWriter<BufferWriter>,
+    },
 }
 
 impl AnyFileWriter {
@@ -455,7 +461,8 @@ impl<A> SpillerInner<A> {
         };
 
         let remote_location = self.create_unique_location();
-        let remote = pool.buffer_writer(op.clone(), remote_location.clone(), SpillTarget::Remote)?;
+        let remote =
+            pool.buffer_writer(op.clone(), remote_location.clone(), SpillTarget::Remote)?;
 
         Ok(AnyFileWriter::Remote {
             path: remote_location.clone(),

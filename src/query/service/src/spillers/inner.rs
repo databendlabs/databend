@@ -275,11 +275,7 @@ impl<A: SpillAdapter> SpillerInner<A> {
     }
 }
 
-pub fn record_write_profile_with_flag(
-    is_local: bool,
-    start: &Instant,
-    write_bytes: usize,
-) {
+pub fn record_write_profile_with_flag(is_local: bool, start: &Instant, write_bytes: usize) {
     if !is_local {
         Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
         Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, write_bytes);
@@ -301,11 +297,7 @@ pub fn record_write_profile(location: &Location, start: &Instant, write_bytes: u
     record_write_profile_with_flag(location.is_local(), start, write_bytes)
 }
 
-pub fn record_read_profile_with_flag(
-    is_local: bool,
-    start: &Instant,
-    read_bytes: usize,
-) {
+pub fn record_read_profile_with_flag(is_local: bool, start: &Instant, read_bytes: usize) {
     if is_local {
         Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadCount, 1);
         Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadBytes, read_bytes);

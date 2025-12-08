@@ -25,7 +25,6 @@ use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_transforms::traits::Location;
 use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ReadSettings;
@@ -40,8 +39,8 @@ use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 use crate::spillers::Layout;
-use crate::spillers::SpillTarget;
 use crate::spillers::SpillAdapter;
+use crate::spillers::SpillTarget;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataReader;
 use crate::spillers::SpillsDataWriter;
@@ -258,11 +257,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
 
     fn restore_build_data(&mut self) -> Result<()> {
         let data_operator = DataOperator::instance();
-        let target = if matches!(data_operator.spill_params(), Some(StorageParams::Fs(_))) {
-            SpillTarget::Local
-        } else {
-            SpillTarget::Remote
-        };
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
 
         while let Some(data) = self.steal_restore_build_task() {
@@ -393,11 +388,7 @@ pub struct GraceJoinPartition {
 impl GraceJoinPartition {
     pub fn create(prefix: &str) -> Result<GraceJoinPartition> {
         let data_operator = DataOperator::instance();
-        let target = if matches!(data_operator.spill_params(), Some(StorageParams::Fs(_))) {
-            SpillTarget::Local
-        } else {
-            SpillTarget::Remote
-        };
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
 
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
@@ -471,12 +462,7 @@ impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
                     }
 
                     let data_operator = DataOperator::instance();
-                    let target =
-                        if matches!(data_operator.spill_params(), Some(StorageParams::Fs(_))) {
-                            SpillTarget::Local
-                        } else {
-                            SpillTarget::Remote
-                        };
+                    let target = SpillTarget::from_storage_params(data_operator.spill_params());
                     let operator = data_operator.spill_operator();
                     let buffer_pool = SpillsBufferPool::instance();
                     let reader =

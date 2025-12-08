@@ -37,6 +37,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_storages_parquet::parquet_reader::row_group::get_ranges;
 use databend_common_storages_parquet::parquet_reader::RowGroupCore;
 use databend_common_storages_parquet::ReadSettings;
@@ -56,6 +57,7 @@ use parquet::basic::Compression;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
+
 use super::record_read_profile_with_flag;
 use super::record_write_profile_with_flag;
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
@@ -69,6 +71,19 @@ pub enum SpillTarget {
 impl SpillTarget {
     pub fn is_local(&self) -> bool {
         matches!(self, SpillTarget::Local)
+    }
+
+    /// Derive spill target (local vs remote) from storage params.
+    ///
+    /// Today we only treat `StorageParams::Fs` as local, everything
+    /// else (S3, Azure, memory, etc.) is considered remote. Centralizing
+    /// this decision here keeps higher-level operators simpler and avoids
+    /// duplicating the matching logic at each call site.
+    pub fn from_storage_params(params: Option<&StorageParams>) -> Self {
+        match params {
+            Some(StorageParams::Fs(_)) => SpillTarget::Local,
+            _ => SpillTarget::Remote,
+        }
     }
 }
 
@@ -286,7 +301,11 @@ pub struct BufferWriter {
 }
 
 impl BufferWriter {
-    pub fn new(writer: Writer, buffer_pool: Arc<SpillsBufferPool>, target: SpillTarget) -> BufferWriter {
+    pub fn new(
+        writer: Writer,
+        buffer_pool: Arc<SpillsBufferPool>,
+        target: SpillTarget,
+    ) -> BufferWriter {
         BufferWriter {
             buffer_pool,
             writer: Some(writer),
@@ -1053,5 +1072,21 @@ mod tests {
         let writer3 = operator.writer("error_test3").await.unwrap();
         let buffer_writer3 = pool.buffer_write(writer3, SpillTarget::Remote);
         let _metadata = buffer_writer3.close().unwrap();
+    }
+
+    #[test]
+    fn test_spill_target_from_storage_params() {
+        use databend_common_meta_app::storage::StorageFsConfig;
+
+        // Fs backend should be treated as local spill.
+        let fs_params = StorageParams::Fs(StorageFsConfig {
+            root: "/tmp/test-root".to_string(),
+        });
+        let target = SpillTarget::from_storage_params(Some(&fs_params));
+        assert!(target.is_local());
+
+        // None (or any non-Fs backend) should be treated as remote spill.
+        let target_none = SpillTarget::from_storage_params(None);
+        assert!(!target_none.is_local());
     }
 }
