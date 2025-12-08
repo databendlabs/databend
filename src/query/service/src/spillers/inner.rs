@@ -295,17 +295,17 @@ pub(super) fn record_write_profile(is_local: bool, start: &Instant, write_bytes:
 
 pub(super) fn record_read_profile(is_local: bool, start: &Instant, read_bytes: usize) {
     if is_local {
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::RemoteSpillReadTime,
-            start.elapsed().as_millis() as usize,
-        );
-    } else {
         Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadCount, 1);
         Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadBytes, read_bytes);
         Profile::record_usize_profile(
             ProfileStatisticsName::LocalSpillReadTime,
+            start.elapsed().as_millis() as usize,
+        );
+    } else {
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
+        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RemoteSpillReadTime,
             start.elapsed().as_millis() as usize,
         );
     }
