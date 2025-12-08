@@ -70,6 +70,7 @@ pub use stage::STDIN_FD;
 
 mod copy;
 mod histogram;
+mod logging_layer;
 mod merge;
 mod meta_hll;
 mod metrics_layer;
