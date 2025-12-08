@@ -51,7 +51,6 @@ use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::FastraceLayer;
 use opendal::layers::HttpClientLayer;
 use opendal::layers::ImmutableIndexLayer;
-use opendal::layers::LoggingLayer;
 use opendal::layers::RetryInterceptor;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
@@ -61,6 +60,7 @@ use opendal::Builder;
 use opendal::Operator;
 
 use crate::http_client::get_storage_http_client;
+use crate::logging_layer::LoggingLayer;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
 use crate::runtime_layer::RuntimeLayer;
@@ -214,7 +214,7 @@ fn build_operator<B: Builder>(builder: B, cfg: Option<&StorageNetworkParams>) ->
         // Add async backtrace
         .layer(AsyncBacktraceLayer)
         // Add logging
-        .layer(LoggingLayer::default())
+        .layer(LoggingLayer::new())
         // Add tracing
         .layer(FastraceLayer)
         // Add PrometheusClientLayer
