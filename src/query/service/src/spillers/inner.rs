@@ -201,7 +201,7 @@ impl<A> SpillerInner<A> {
             Location::Remote(loc) => self.operator.read(loc).await?,
         };
 
-        record_read_profile(&location, &instant, data.len());
+        record_read_profile(location, &instant, data.len());
 
         deserialize_block(columns_layout, data)
     }
