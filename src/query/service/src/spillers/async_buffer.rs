@@ -67,7 +67,7 @@ pub enum SpillTarget {
 }
 
 impl SpillTarget {
-    fn is_local(&self) -> bool {
+    pub fn is_local(&self) -> bool {
         matches!(self, SpillTarget::Local)
     }
 }

@@ -489,14 +489,14 @@ impl SpillWriter {
                 let row_group_meta = file_writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
-                record_write_profile(&location, &start, size);
+                record_write_profile(&Location::Local(file_writer.path().clone()), &start, size);
                 Ok(row_group_meta)
             }
-            AnyFileWriter::Remote(_, file_writer) => {
+            AnyFileWriter::Remote(path, file_writer) => {
                 let row_group_meta = file_writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
-                record_write_profile(&location, &start, size);
+                record_write_profile(&Location::Remote(path.clone()), &start, size);
                 Ok(row_group_meta)
             }
         }

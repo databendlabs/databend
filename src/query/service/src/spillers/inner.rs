@@ -275,7 +275,7 @@ impl<A: SpillAdapter> SpillerInner<A> {
     }
 }
 
-pub(super) fn record_write_profile_with_flag(
+pub fn record_write_profile_with_flag(
     is_local: bool,
     start: &Instant,
     write_bytes: usize,
@@ -297,11 +297,11 @@ pub(super) fn record_write_profile_with_flag(
     }
 }
 
-pub(super) fn record_write_profile(location: &Location, start: &Instant, write_bytes: usize) {
+pub fn record_write_profile(location: &Location, start: &Instant, write_bytes: usize) {
     record_write_profile_with_flag(location.is_local(), start, write_bytes)
 }
 
-pub(super) fn record_read_profile_with_flag(
+pub fn record_read_profile_with_flag(
     is_local: bool,
     start: &Instant,
     read_bytes: usize,
@@ -323,6 +323,6 @@ pub(super) fn record_read_profile_with_flag(
     }
 }
 
-pub(super) fn record_read_profile(location: &Location, start: &Instant, read_bytes: usize) {
+pub fn record_read_profile(location: &Location, start: &Instant, read_bytes: usize) {
     record_read_profile_with_flag(location.is_local(), start, read_bytes)
 }
