@@ -200,7 +200,7 @@ pub struct Sbbf(Vec<Block>);
 pub struct SbbfAtomic(Vec<BlockAtomic>);
 
 pub(crate) const BITSET_MIN_LENGTH: usize = 32;
-pub(crate) const BITSET_MAX_LENGTH: usize = 128 * 1024 * 1024;
+pub(crate) const BITSET_MAX_LENGTH: usize = 512 * 1024 * 1024;
 
 #[inline]
 fn hash_to_block_index_for_blocks(hash: u64, num_blocks: usize) -> usize {
