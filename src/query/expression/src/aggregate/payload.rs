@@ -246,6 +246,7 @@ impl Payload {
                             address[*row].write_u8(write_offset, val);
                         }
                     }
+                    write_offset += 1;
                 }
                 BlockEntry::Column(Column::Nullable(box c)) => {
                     let bitmap = c.validity();
