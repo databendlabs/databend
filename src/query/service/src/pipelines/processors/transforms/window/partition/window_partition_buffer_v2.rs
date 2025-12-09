@@ -59,7 +59,7 @@ impl Writer for SpillWriter {
 
     fn need_new_file(&mut self, incoming_size: usize) -> Result<bool> {
         Ok(match self.file_writer() {
-            AnyFileWriter::Local { writer, .. } => !writer.check_grow(incoming_size, true)?,
+            AnyFileWriter::Local { writer } => !writer.check_grow(incoming_size, true)?,
             _ => false,
         })
     }

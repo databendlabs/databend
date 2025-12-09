@@ -413,7 +413,6 @@ impl RangeFetchPlan {
 
 pub enum AnyFileWriter {
     Local {
-        path: TempPath,
         writer: FileWriter<LocalWriter>,
     },
     Remote {
@@ -425,7 +424,7 @@ pub enum AnyFileWriter {
 impl AnyFileWriter {
     pub(super) fn new_row_group(&self) -> RowGroupEncoder {
         match self {
-            AnyFileWriter::Local { writer, .. } => writer.new_row_group(),
+            AnyFileWriter::Local { writer } => writer.new_row_group(),
             AnyFileWriter::Remote { writer, .. } => writer.new_row_group(),
         }
     }
@@ -455,8 +454,7 @@ impl<A> SpillerInner<A> {
                     buf,
                 };
                 let writer = FileWriter::new(props, w)?;
-                let path = writer.writer.inner().path.clone();
-                return Ok(AnyFileWriter::Local { path, writer });
+                return Ok(AnyFileWriter::Local { writer });
             }
         };
 

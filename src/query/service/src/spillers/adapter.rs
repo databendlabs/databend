@@ -36,6 +36,7 @@ use opendal::Buffer;
 use opendal::Operator;
 use parquet::file::metadata::RowGroupMetaDataPtr;
 
+use super::async_buffer::SpillTarget;
 use super::block_reader::BlocksReader;
 use super::block_writer::BlocksWriter;
 use super::inner::*;
@@ -485,18 +486,18 @@ impl SpillWriter {
         let start = std::time::Instant::now();
 
         match &mut self.file_writer {
-            AnyFileWriter::Local { path, writer } => {
+            AnyFileWriter::Local { writer } => {
                 let row_group_meta = writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
-                record_write_profile(&Location::Local(path.clone()), &start, size);
+                record_write_profile(SpillTarget::Local, &start, size);
                 Ok(row_group_meta)
             }
-            AnyFileWriter::Remote { path, writer } => {
+            AnyFileWriter::Remote { path: _path, writer } => {
                 let row_group_meta = writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
-                record_write_profile(&Location::Remote(path.clone()), &start, size);
+                record_write_profile(SpillTarget::Remote, &start, size);
                 Ok(row_group_meta)
             }
         }
@@ -508,12 +509,13 @@ impl SpillWriter {
 
     pub fn close(self) -> Result<SpillReader> {
         let (metadata, location) = match self.file_writer {
-            AnyFileWriter::Local { writer, .. } => {
+            AnyFileWriter::Local { writer } => {
                 let (metadata, path) = writer.finish()?;
+                let location = Location::Local(path);
                 self.spiller
                     .adapter
-                    .add_spill_file(Location::Local(path.clone()), Layout::Parquet);
-                (metadata, Location::Local(path))
+                    .add_spill_file(location.clone(), Layout::Parquet);
+                (metadata, location)
             }
             AnyFileWriter::Remote { path, writer } => {
                 let (metadata, _) = writer.finish()?;

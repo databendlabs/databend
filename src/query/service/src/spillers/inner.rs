@@ -31,6 +31,7 @@ use opendal::services::Fs;
 use opendal::Buffer;
 use opendal::Operator;
 
+use super::async_buffer::SpillTarget;
 use super::serialize::*;
 use super::Location;
 
@@ -275,46 +276,94 @@ impl<A: SpillAdapter> SpillerInner<A> {
     }
 }
 
-pub fn record_write_profile_with_flag(is_local: bool, start: &Instant, write_bytes: usize) {
-    if !is_local {
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, write_bytes);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::RemoteSpillWriteTime,
-            start.elapsed().as_millis() as usize,
-        );
-    } else {
-        Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::LocalSpillWriteBytes, write_bytes);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::LocalSpillWriteTime,
-            start.elapsed().as_millis() as usize,
-        );
+#[derive(Clone, Copy)]
+pub enum SpillLocality {
+    Local,
+    Remote,
+}
+
+impl From<&Location> for SpillLocality {
+    fn from(value: &Location) -> Self {
+        if value.is_local() {
+            SpillLocality::Local
+        } else {
+            SpillLocality::Remote
+        }
     }
 }
 
-pub fn record_write_profile(location: &Location, start: &Instant, write_bytes: usize) {
-    record_write_profile_with_flag(location.is_local(), start, write_bytes)
-}
-
-pub fn record_read_profile_with_flag(is_local: bool, start: &Instant, read_bytes: usize) {
-    if is_local {
-        Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::LocalSpillReadBytes, read_bytes);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::LocalSpillReadTime,
-            start.elapsed().as_millis() as usize,
-        );
-    } else {
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::RemoteSpillReadTime,
-            start.elapsed().as_millis() as usize,
-        );
+impl From<SpillTarget> for SpillLocality {
+    fn from(target: SpillTarget) -> Self {
+        match target {
+            SpillTarget::Local => SpillLocality::Local,
+            SpillTarget::Remote => SpillLocality::Remote,
+        }
     }
 }
 
-pub fn record_read_profile(location: &Location, start: &Instant, read_bytes: usize) {
-    record_read_profile_with_flag(location.is_local(), start, read_bytes)
+impl From<&SpillTarget> for SpillLocality {
+    fn from(target: &SpillTarget) -> Self {
+        (*target).into()
+    }
+}
+
+fn record_spill_profile(
+    locality: SpillLocality,
+    start: &Instant,
+    bytes: usize,
+    local_count: ProfileStatisticsName,
+    local_bytes: ProfileStatisticsName,
+    local_time: ProfileStatisticsName,
+    remote_count: ProfileStatisticsName,
+    remote_bytes: ProfileStatisticsName,
+    remote_time: ProfileStatisticsName,
+) {
+    match locality {
+        SpillLocality::Local => {
+            Profile::record_usize_profile(local_count, 1);
+            Profile::record_usize_profile(local_bytes, bytes);
+            Profile::record_usize_profile(local_time, start.elapsed().as_millis() as usize);
+        }
+        SpillLocality::Remote => {
+            Profile::record_usize_profile(remote_count, 1);
+            Profile::record_usize_profile(remote_bytes, bytes);
+            Profile::record_usize_profile(remote_time, start.elapsed().as_millis() as usize);
+        }
+    }
+}
+
+pub fn record_write_profile<T: Into<SpillLocality>>(
+    locality: T,
+    start: &Instant,
+    write_bytes: usize,
+) {
+    record_spill_profile(
+        locality.into(),
+        start,
+        write_bytes,
+        ProfileStatisticsName::LocalSpillWriteCount,
+        ProfileStatisticsName::LocalSpillWriteBytes,
+        ProfileStatisticsName::LocalSpillWriteTime,
+        ProfileStatisticsName::RemoteSpillWriteCount,
+        ProfileStatisticsName::RemoteSpillWriteBytes,
+        ProfileStatisticsName::RemoteSpillWriteTime,
+    );
+}
+
+pub fn record_read_profile<T: Into<SpillLocality>>(
+    locality: T,
+    start: &Instant,
+    read_bytes: usize,
+) {
+    record_spill_profile(
+        locality.into(),
+        start,
+        read_bytes,
+        ProfileStatisticsName::LocalSpillReadCount,
+        ProfileStatisticsName::LocalSpillReadBytes,
+        ProfileStatisticsName::LocalSpillReadTime,
+        ProfileStatisticsName::RemoteSpillReadCount,
+        ProfileStatisticsName::RemoteSpillReadBytes,
+        ProfileStatisticsName::RemoteSpillReadTime,
+    );
 }

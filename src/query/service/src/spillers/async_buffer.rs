@@ -58,8 +58,8 @@ use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 
-use super::record_read_profile_with_flag;
-use super::record_write_profile_with_flag;
+use super::record_read_profile;
+use super::record_write_profile;
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Copy)]
@@ -660,7 +660,7 @@ impl SpillsDataReader {
         )?;
         let batch = reader.next().transpose()?.unwrap();
         debug_assert!(reader.next().is_none());
-        record_read_profile_with_flag(self.target.is_local(), &start, read_bytes.get());
+        record_read_profile(self.target, &start, read_bytes.get());
         Ok(Some(DataBlock::from_record_batch(
             &self.data_schema,
             &batch,
@@ -805,7 +805,7 @@ impl Background {
                     writer: op.writer,
                 });
 
-                record_write_profile_with_flag(op.target.is_local(), &start, bytes_len);
+                record_write_profile(op.target, &start, bytes_len);
             }
             BufferOperator::Close(mut op) => {
                 let res = op.writer.close().await;
