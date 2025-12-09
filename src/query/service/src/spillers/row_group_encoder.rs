@@ -413,6 +413,9 @@ impl RangeFetchPlan {
 
 pub enum AnyFileWriter {
     Local {
+        /// Absolute path string for symmetry with remote; TempPath is kept
+        /// inside the writer to avoid sharing/cloning while writing.
+        path: String,
         writer: FileWriter<LocalWriter>,
     },
     Remote {
@@ -424,7 +427,7 @@ pub enum AnyFileWriter {
 impl AnyFileWriter {
     pub(super) fn new_row_group(&self) -> RowGroupEncoder {
         match self {
-            AnyFileWriter::Local { writer } => writer.new_row_group(),
+            AnyFileWriter::Local { writer, .. } => writer.new_row_group(),
             AnyFileWriter::Remote { writer, .. } => writer.new_row_group(),
         }
     }
@@ -447,6 +450,8 @@ impl<A> SpillerInner<A> {
                 let align = dir.block_alignment();
                 let buf = DmaWriteBuf::new(align, chunk);
 
+                let path_str = path.as_ref().display().to_string();
+
                 let w = LocalWriter {
                     dir: dir.clone(),
                     path,
@@ -454,7 +459,10 @@ impl<A> SpillerInner<A> {
                     buf,
                 };
                 let writer = FileWriter::new(props, w)?;
-                return Ok(AnyFileWriter::Local { writer });
+                return Ok(AnyFileWriter::Local {
+                    path: path_str,
+                    writer,
+                });
             }
         };
 

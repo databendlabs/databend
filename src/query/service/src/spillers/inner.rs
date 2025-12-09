@@ -276,39 +276,24 @@ impl<A: SpillAdapter> SpillerInner<A> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub enum SpillLocality {
-    Local,
-    Remote,
-}
-
-impl From<&Location> for SpillLocality {
+impl From<&Location> for SpillTarget {
     fn from(value: &Location) -> Self {
         if value.is_local() {
-            SpillLocality::Local
+            SpillTarget::Local
         } else {
-            SpillLocality::Remote
+            SpillTarget::Remote
         }
     }
 }
 
-impl From<SpillTarget> for SpillLocality {
-    fn from(target: SpillTarget) -> Self {
-        match target {
-            SpillTarget::Local => SpillLocality::Local,
-            SpillTarget::Remote => SpillLocality::Remote,
-        }
-    }
-}
-
-impl From<&SpillTarget> for SpillLocality {
-    fn from(target: &SpillTarget) -> Self {
-        (*target).into()
+impl From<Location> for SpillTarget {
+    fn from(value: Location) -> Self {
+        (&value).into()
     }
 }
 
 fn record_spill_profile(
-    locality: SpillLocality,
+    locality: SpillTarget,
     start: &Instant,
     bytes: usize,
     local_count: ProfileStatisticsName,
@@ -319,12 +304,12 @@ fn record_spill_profile(
     remote_time: ProfileStatisticsName,
 ) {
     match locality {
-        SpillLocality::Local => {
+        SpillTarget::Local => {
             Profile::record_usize_profile(local_count, 1);
             Profile::record_usize_profile(local_bytes, bytes);
             Profile::record_usize_profile(local_time, start.elapsed().as_millis() as usize);
         }
-        SpillLocality::Remote => {
+        SpillTarget::Remote => {
             Profile::record_usize_profile(remote_count, 1);
             Profile::record_usize_profile(remote_bytes, bytes);
             Profile::record_usize_profile(remote_time, start.elapsed().as_millis() as usize);
@@ -332,7 +317,7 @@ fn record_spill_profile(
     }
 }
 
-pub fn record_write_profile<T: Into<SpillLocality>>(
+pub fn record_write_profile<T: Into<SpillTarget>>(
     locality: T,
     start: &Instant,
     write_bytes: usize,
@@ -350,11 +335,7 @@ pub fn record_write_profile<T: Into<SpillLocality>>(
     );
 }
 
-pub fn record_read_profile<T: Into<SpillLocality>>(
-    locality: T,
-    start: &Instant,
-    read_bytes: usize,
-) {
+pub fn record_read_profile<T: Into<SpillTarget>>(locality: T, start: &Instant, read_bytes: usize) {
     record_spill_profile(
         locality.into(),
         start,

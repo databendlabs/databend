@@ -486,14 +486,17 @@ impl SpillWriter {
         let start = std::time::Instant::now();
 
         match &mut self.file_writer {
-            AnyFileWriter::Local { writer } => {
+            AnyFileWriter::Local { writer, .. } => {
                 let row_group_meta = writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
                 record_write_profile(SpillTarget::Local, &start, size);
                 Ok(row_group_meta)
             }
-            AnyFileWriter::Remote { path: _path, writer } => {
+            AnyFileWriter::Remote {
+                path: _path,
+                writer,
+            } => {
                 let row_group_meta = writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
@@ -509,7 +512,7 @@ impl SpillWriter {
 
     pub fn close(self) -> Result<SpillReader> {
         let (metadata, location) = match self.file_writer {
-            AnyFileWriter::Local { writer } => {
+            AnyFileWriter::Local { writer, .. } => {
                 let (metadata, path) = writer.finish()?;
                 let location = Location::Local(path);
                 self.spiller

@@ -22,7 +22,7 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ThreadTracker;
 use databend_query::spillers::record_read_profile;
 use databend_query::spillers::record_write_profile;
-use databend_query::spillers::SpillLocality;
+use databend_query::spillers::SpillTarget;
 
 fn create_test_profile() -> Arc<Profile> {
     Arc::new(Profile::create(
@@ -49,7 +49,7 @@ fn test_spill_profile_write_local_and_remote() {
     {
         let _guard = ThreadTracker::tracking(payload_local);
         let start = Instant::now();
-        record_write_profile(SpillLocality::Local, &start, 128);
+        record_write_profile(SpillTarget::Local, &start, 128);
     }
 
     assert_eq!(
@@ -69,7 +69,7 @@ fn test_spill_profile_write_local_and_remote() {
     {
         let _guard = ThreadTracker::tracking(payload_remote);
         let start = Instant::now();
-        record_write_profile(SpillLocality::Remote, &start, 256);
+        record_write_profile(SpillTarget::Remote, &start, 256);
     }
 
     assert_eq!(
@@ -94,7 +94,7 @@ fn test_spill_profile_read_local_and_remote() {
     {
         let _guard = ThreadTracker::tracking(payload_local);
         let start = Instant::now();
-        record_read_profile(SpillLocality::Local, &start, 64);
+        record_read_profile(SpillTarget::Local, &start, 64);
     }
 
     assert_eq!(
@@ -114,7 +114,7 @@ fn test_spill_profile_read_local_and_remote() {
     {
         let _guard = ThreadTracker::tracking(payload_remote);
         let start = Instant::now();
-        record_read_profile(SpillLocality::Remote, &start, 512);
+        record_read_profile(SpillTarget::Remote, &start, 512);
     }
 
     assert_eq!(
