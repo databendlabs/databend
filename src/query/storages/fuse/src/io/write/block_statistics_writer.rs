@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
@@ -42,7 +43,7 @@ pub struct BlockStatsBuilder {
 pub struct ColumnNDVBuilder {
     index: FieldIndex,
     field: TableField,
-    builder: ColumnNDVEstimator,
+    pub builder: ColumnNDVEstimator,
 }
 
 impl BlockStatsBuilder {
@@ -83,6 +84,13 @@ impl BlockStatsBuilder {
             self.builders.remove(k);
         }
         Ok(())
+    }
+
+    pub fn peek_cols_ndv(&self) -> HashMap<ColumnId, usize> {
+        self.builders
+            .iter()
+            .map(|item| (item.field.column_id(), item.builder.peek()))
+            .collect()
     }
 
     pub fn finalize(self) -> Result<Option<BlockHLL>> {

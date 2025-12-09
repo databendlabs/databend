@@ -59,6 +59,7 @@ use parking_lot::RwLock;
 
 use super::concat_buffer::ConcatBuffer;
 use super::desc::RuntimeFilterDesc;
+use super::runtime_filter::JoinRuntimeFilterPacket;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
@@ -104,6 +105,7 @@ pub struct HashJoinBuildState {
     pub(crate) concat_buffer: Mutex<ConcatBuffer>,
     pub(crate) broadcast_id: Option<u32>,
     pub(crate) is_runtime_filter_added: AtomicBool,
+    runtime_filter_packets: Mutex<Vec<JoinRuntimeFilterPacket>>,
 }
 
 impl HashJoinBuildState {
@@ -154,6 +156,7 @@ impl HashJoinBuildState {
             concat_buffer: Mutex::new(ConcatBuffer::new(concat_threshold)),
             broadcast_id,
             is_runtime_filter_added: AtomicBool::new(false),
+            runtime_filter_packets: Mutex::new(Vec::new()),
         }))
     }
 
@@ -873,6 +876,15 @@ impl HashJoinBuildState {
 
     pub fn runtime_filter_desc(&self) -> &[RuntimeFilterDesc] {
         &self.hash_join_state.hash_join_desc.runtime_filter.filters
+    }
+
+    pub fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
+        self.runtime_filter_packets.lock().push(packet);
+    }
+
+    pub fn take_runtime_filter_packets(&self) -> Vec<JoinRuntimeFilterPacket> {
+        let mut guard = self.runtime_filter_packets.lock();
+        guard.drain(..).collect()
     }
 
     /// only used for test

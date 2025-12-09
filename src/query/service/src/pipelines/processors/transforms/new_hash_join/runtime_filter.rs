@@ -18,6 +18,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 
 use crate::physical_plans::HashJoin;
 use crate::pipelines::processors::transforms::build_runtime_filter_infos;
@@ -28,12 +29,12 @@ use crate::sessions::QueryContext;
 
 pub struct RuntimeFiltersDesc {
     ctx: Arc<QueryContext>,
+    pub func_ctx: FunctionContext,
 
     pub bloom_threshold: usize,
     pub inlist_threshold: usize,
     pub min_max_threshold: usize,
     pub selectivity_threshold: u64,
-    pub probe_ratio_threshold: f64,
 
     broadcast_id: Option<u32>,
     pub filters_desc: Vec<RuntimeFilterDesc>,
@@ -47,8 +48,7 @@ impl RuntimeFiltersDesc {
         let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
         let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
         let selectivity_threshold = settings.get_join_runtime_filter_selectivity_threshold()?;
-        let probe_ratio_threshold =
-            settings.get_join_runtime_filter_probe_ratio_threshold()? as f64;
+        let func_ctx = ctx.get_function_context()?;
 
         let mut filters_desc = Vec::with_capacity(join.runtime_filter.filters.len());
         let mut runtime_filters_ready = Vec::with_capacity(join.runtime_filter.filters.len());
@@ -57,7 +57,6 @@ impl RuntimeFiltersDesc {
             let filter_desc = RuntimeFilterDesc::from(filter_desc);
 
             if !ctx.get_cluster().is_empty() {
-                // Set runtime filter ready for all probe targets
                 for (_probe_key, scan_id) in &filter_desc.probe_targets {
                     let ready = Arc::new(RuntimeFilterReady::default());
                     runtime_filters_ready.push(ready.clone());
@@ -69,6 +68,7 @@ impl RuntimeFiltersDesc {
         }
 
         Ok(Arc::new(RuntimeFiltersDesc {
+            func_ctx,
             filters_desc,
             bloom_threshold,
             inlist_threshold,
@@ -77,7 +77,6 @@ impl RuntimeFiltersDesc {
             runtime_filters_ready,
             ctx: ctx.clone(),
             broadcast_id: join.broadcast_id,
-            probe_ratio_threshold,
         }))
     }
 
@@ -91,7 +90,6 @@ impl RuntimeFiltersDesc {
             packet,
             runtime_filter_descs,
             self.selectivity_threshold,
-            self.probe_ratio_threshold,
             self.ctx.get_settings().get_max_threads()? as usize,
         )
         .await?;
