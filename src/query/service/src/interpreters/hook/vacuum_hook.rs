@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -88,6 +89,15 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
 }
 
 pub fn hook_disk_temp_dir(query_ctx: &Arc<QueryContext>) -> Result<()> {
+    if matches!(
+        query_ctx.get_current_session().get_type(),
+        SessionType::HTTPQuery
+    ) {
+        // HTTP queries may still stream spilled result pages after execution finishes.
+        // Cleanup is deferred to the HTTP query lifecycle.
+        return Ok(());
+    }
+
     let mgr = TempDirManager::instance();
 
     if mgr.drop_disk_spill_dir(&query_ctx.get_id())? && rand::thread_rng().gen_ratio(1, 10) {

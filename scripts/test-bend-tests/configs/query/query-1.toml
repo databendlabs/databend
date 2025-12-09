@@ -64,6 +64,3 @@ max_bytes = 1073741824  # 1GB
 
 [spill]
 spill_local_disk_path = "_databend_data/spill/query1"
-sort_spilling_disk_quota_ratio = 60
-window_partition_spilling_disk_quota_ratio = 20
-result_set_spilling_disk_quota_ratio = 10

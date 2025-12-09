@@ -163,5 +163,5 @@ max_bytes = 21474836480
 [spill]
 spill_local_disk_path = "./.databend/temp/_query_spill"
 # Cap local spill to 5GB so window spills keep ~1GB quota with default 20% ratio.
-spill_local_disk_max_bytes = 5368709120
+spill_local_disk_max_bytes = 1073741824
 window_partition_spilling_disk_quota_ratio = 20

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_storages_common_cache::TempDirManager;
 
 use super::blocks_serializer::BlocksSerializer;
 use super::http_query::PaginationConf;
@@ -40,11 +41,15 @@ pub struct PageManager {
     total_pages: usize,
     end: bool,
     last_page: Option<Page>,
+    query_id: String,
     receiver: SizedChannelReceiver<LiteSpiller>,
 }
 
 impl PageManager {
-    pub fn create(conf: &PaginationConf) -> (PageManager, SizedChannelSender<LiteSpiller>) {
+    pub fn create(
+        conf: &PaginationConf,
+        query_id: String,
+    ) -> (PageManager, SizedChannelSender<LiteSpiller>) {
         let (sender, receiver) =
             sized_spsc::<LiteSpiller>(conf.max_rows_in_buffer, conf.max_rows_per_page);
 
@@ -54,6 +59,7 @@ impl PageManager {
                 last_page: None,
                 total_pages: 0,
                 end: false,
+                query_id,
                 receiver,
             },
             sender,
@@ -158,6 +164,12 @@ impl PageManager {
                 }
             }
         };
+        if let Err(error) = TempDirManager::instance().drop_disk_spill_dir(&self.query_id) {
+            log::warn!(
+                target: "result-set-spill",
+                error:?; "[RESULT-SET-SPILL] Failed to remove spill temp dir on close"
+            );
+        }
         self.last_page = None;
     }
 }

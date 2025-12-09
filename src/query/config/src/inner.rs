@@ -870,8 +870,9 @@ impl SpillConfig {
             storage_params: None,
             // Use the same defaults as the external config.
             sort_spilling_disk_quota_ratio: 60,
-            window_partition_spilling_disk_quota_ratio: 20,
-            result_set_spilling_disk_quota_ratio: 10,
+            window_partition_spilling_disk_quota_ratio: 40,
+            // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+            result_set_spilling_disk_quota_ratio: 0,
         }
     }
 }
@@ -885,8 +886,9 @@ impl Default for SpillConfig {
             global_bytes_limit: u64::MAX,
             storage_params: None,
             sort_spilling_disk_quota_ratio: 60,
-            window_partition_spilling_disk_quota_ratio: 20,
-            result_set_spilling_disk_quota_ratio: 10,
+            window_partition_spilling_disk_quota_ratio: 40,
+            // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+            result_set_spilling_disk_quota_ratio: 0,
         }
     }
 }

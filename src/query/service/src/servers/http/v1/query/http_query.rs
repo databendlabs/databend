@@ -651,7 +651,7 @@ impl HttpQuery {
             })
         };
 
-        let (page_manager, sender) = PageManager::create(&req.pagination);
+        let (page_manager, sender) = PageManager::create(&req.pagination, query_id.clone());
         let executor = Arc::new(Mutex::new(Executor {
             query_id: query_id.clone(),
             state: ExecuteState::Starting(ExecuteStarting {

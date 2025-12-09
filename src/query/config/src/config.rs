@@ -3603,12 +3603,13 @@ pub struct SpillConfig {
 
     /// Maximum percentage of the global local spill quota that window
     /// partitioners may use for one query.
-    #[clap(long, value_name = "PERCENT", default_value = "20")]
+    #[clap(long, value_name = "PERCENT", default_value = "40")]
     pub window_partition_spilling_disk_quota_ratio: u64,
 
     /// Maximum percentage of the global local spill quota that HTTP
     /// result-set spilling may use for one query.
-    #[clap(long, value_name = "PERCENT", default_value = "10")]
+    /// TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+    #[clap(long, value_name = "PERCENT", default_value = "0")]
     pub result_set_spilling_disk_quota_ratio: u64,
 }
 
@@ -3652,7 +3653,8 @@ impl Default for SpillConfig {
             spill_local_disk_max_bytes: u64::MAX,
             sort_spilling_disk_quota_ratio: 60,
             window_partition_spilling_disk_quota_ratio: 20,
-            result_set_spilling_disk_quota_ratio: 10,
+            // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+            result_set_spilling_disk_quota_ratio: 0,
         }
     }
 }

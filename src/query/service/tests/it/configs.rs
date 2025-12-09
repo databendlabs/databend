@@ -1065,7 +1065,7 @@ secret_access_key = "test-secret"
             r#"[spill]
 spill_local_disk_path = "/legacy/spill/path"
 spill_local_disk_reserved_space_percentage = 25.0
-spill_local_disk_max_bytes = 53687091200
+spill_local_disk_max_bytes = 1073741824
 "#
             .as_bytes(),
         )?;
