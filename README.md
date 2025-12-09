@@ -82,7 +82,7 @@ docker run -p 8000:8000 datafuselabs/databend
 ---
 
 <div align="center">
-<strong>Built by engineers who redefine what's possible with data</strong><br>
+<strong>Redefining what's possible with data</strong><br>
 <a href="https://databend.com">🌐 Website</a> •
 <a href="https://x.com/DatabendLabs">🐦 Twitter</a>
 </div>

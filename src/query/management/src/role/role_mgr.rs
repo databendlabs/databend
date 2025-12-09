@@ -670,6 +670,7 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
         OwnershipObject::Sequence { name } => GrantObject::Sequence(name.to_string()),
         OwnershipObject::Procedure { procedure_id } => GrantObject::Procedure(*procedure_id),
         OwnershipObject::MaskingPolicy { policy_id } => GrantObject::MaskingPolicy(*policy_id),
+        OwnershipObject::RowAccessPolicy { policy_id } => GrantObject::RowAccessPolicy(*policy_id),
     }
 }
 

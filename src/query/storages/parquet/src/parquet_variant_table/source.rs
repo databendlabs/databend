@@ -107,7 +107,7 @@ impl ParquetVariantSource {
         let settings = ctx.get_settings();
         let tz_string = settings.get_timezone()?;
         let tz = TimeZone::get(&tz_string).map_err(|e| {
-            ErrorCode::InvalidTimezone(format!("[QUERY-CTX] Timezone validation failed: {}", e))
+            ErrorCode::InvalidTimezone(format!("Timezone validation failed: {}", e))
         })?;
 
         Ok(ProcessorPtr::create(Box::new(Self {

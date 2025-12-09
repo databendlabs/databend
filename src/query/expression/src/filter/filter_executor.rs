@@ -82,6 +82,9 @@ impl FilterExecutor {
     pub fn filter(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         if self.func_ctx.enable_selector_executor {
             let origin_count = data_block.num_rows();
+            if self.max_block_size < origin_count {
+                self.incr_max_block_size(origin_count);
+            }
             let result_count = self.select(&data_block)?;
             self.take(data_block, origin_count, result_count)
         } else {
@@ -207,5 +210,17 @@ impl FilterExecutor {
 
     pub fn mutable_true_selection(&mut self) -> &mut [u32] {
         &mut self.true_selection
+    }
+
+    fn incr_max_block_size(&mut self, new_max_block_size: usize) {
+        self.max_block_size = new_max_block_size;
+        self.true_selection = vec![0; self.max_block_size];
+
+        if !self.selection_range.is_empty() {
+            self.selection_range = vec![0..0; self.max_block_size];
+        }
+        if self.has_or {
+            self.false_selection = vec![0; self.max_block_size];
+        }
     }
 }

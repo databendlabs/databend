@@ -44,7 +44,7 @@ pub async fn refresh_handler(
     let client_session_id = ctx
         .client_session_id
         .as_ref()
-        .expect("[HTTP-SESSION] Refresh handler requires session ID in context")
+        .expect("Refresh handler requires session ID in context")
         .clone();
     let mgr = ClientSessionManager::instance();
     match &ctx.credential {
@@ -69,7 +69,9 @@ pub async fn refresh_handler(
             }))
         }
         _ => {
-            unreachable!("[HTTP-SESSION] /v1/session/refresh endpoint requires authentication with databend refresh token")
+            unreachable!(
+                "/v1/session/refresh endpoint requires authentication with databend refresh token"
+            )
         }
     }
 }

@@ -22,6 +22,7 @@ mod crash_hook;
 mod filter;
 mod init;
 mod loggers;
+pub mod module_tag;
 mod panic_hook;
 mod remote_log;
 mod structlog;
