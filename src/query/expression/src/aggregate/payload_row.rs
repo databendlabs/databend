@@ -42,6 +42,7 @@ use crate::types::TimestampType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::i256;
+use crate::utils::bitmap::normalize_bitmap_column;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 
@@ -128,12 +129,19 @@ pub(super) unsafe fn serialize_column_to_rowformat(
                 }
             }
         }
-        Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
-            for row in select_vector {
-                let data = arena.alloc_slice_copy(unsafe { v.index_unchecked(row.to_usize()) });
-                unsafe {
-                    address[*row].write_bytes(offset, data);
-                }
+        Column::Bitmap(v) => {
+            let normalized = normalize_bitmap_column(v);
+            let col = normalized.as_ref();
+            for &index in select_vector {
+                let data =
+                    arena.alloc_slice_copy(unsafe { col.index_unchecked(index.to_usize()) });
+                address[index].write_bytes(offset, data);
+            }
+        }
+        Column::Binary(v) | Column::Variant(v) | Column::Geometry(v) => {
+            for &index in select_vector {
+                let data = arena.alloc_slice_copy(unsafe { v.index_unchecked(index.to_usize()) });
+                address[index].write_bytes(offset, data);
             }
         }
         Column::String(v) => {
@@ -568,5 +576,73 @@ impl<'s> CompareState<'s> {
         } else {
             self.match_with(counts, compare_fn)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_column::binary::BinaryColumnBuilder;
+    use databend_common_io::deserialize_bitmap;
+    use databend_common_io::HybridBitmap;
+    use roaring::RoaringTreemap;
+
+    use super::*;
+
+    #[test]
+    fn serialize_bitmap_rowformat_normalizes_legacy_bytes() {
+        let values = [1_u64, 5, 42];
+
+        let mut hybrid = HybridBitmap::new();
+        for v in values {
+            hybrid.insert(v);
+        }
+        let mut hybrid_bytes = Vec::new();
+        hybrid.serialize_into(&mut hybrid_bytes).unwrap();
+
+        let mut tree = RoaringTreemap::new();
+        for v in values {
+            tree.insert(v);
+        }
+        let mut legacy_bytes = Vec::new();
+        tree.serialize_into(&mut legacy_bytes).unwrap();
+
+        let mut builder =
+            BinaryColumnBuilder::with_capacity(2, hybrid_bytes.len() + legacy_bytes.len());
+        builder.put_slice(&hybrid_bytes);
+        builder.commit_row();
+        builder.put_slice(&legacy_bytes);
+        builder.commit_row();
+        let column = Column::Bitmap(builder.build());
+
+        let arena = Bump::new();
+        let row_size = rowformat_size(&DataType::Bitmap);
+
+        let mut row0 = vec![0u8; row_size];
+        let mut row1 = vec![0u8; row_size];
+        let mut addresses = [RowPtr::null(); BATCH_SIZE];
+        addresses[0] = RowPtr::new(row0.as_mut_ptr());
+        addresses[1] = RowPtr::new(row1.as_mut_ptr());
+
+        let select_vector = [RowID::from(0), RowID::from(1)];
+        let mut scratch = Vec::new();
+        unsafe {
+            serialize_column_to_rowformat(
+                &arena,
+                &column,
+                &select_vector,
+                &mut addresses,
+                0,
+                &mut scratch,
+            );
+        }
+
+        let bytes0 = unsafe { addresses[0].read_bytes(0) };
+        let bytes1 = unsafe { addresses[1].read_bytes(0) };
+
+        assert_eq!(bytes0, bytes1);
+        assert!(bytes0.starts_with(b"HB"));
+
+        let decoded = deserialize_bitmap(bytes0).unwrap();
+        assert_eq!(decoded.iter().collect::<Vec<_>>(), values);
     }
 }
