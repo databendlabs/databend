@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use arrow_data::ArrayData;
 use arrow_data::ArrayDataBuilder;
@@ -115,20 +116,24 @@ pub struct BinaryViewColumnGeneric<T: ViewType + ?Sized> {
     buffers: Arc<[Buffer<u8>]>,
     phantom: PhantomData<T>,
     /// Total bytes length if we would concat them all
-    total_bytes_len: usize,
+    /// Initialized lazily when needed.
+    total_bytes_len: OnceLock<usize>,
     /// Total bytes in the buffer (exclude remaining capacity)
-    total_buffer_len: usize,
+    /// Initialized lazily when needed.
+    total_buffer_len: OnceLock<usize>,
 }
 
 impl<T: ViewType + ?Sized> Clone for BinaryViewColumnGeneric<T> {
     fn clone(&self) -> Self {
+        let total_bytes_len = self.total_bytes_len.get().copied();
+        let total_buffer_len = self.total_buffer_len.get().copied();
         Self {
             views: self.views.clone(),
             buffers: self.buffers.clone(),
 
             phantom: Default::default(),
-            total_bytes_len: self.total_bytes_len,
-            total_buffer_len: self.total_buffer_len,
+            total_bytes_len: Self::init_cache(total_bytes_len),
+            total_buffer_len: Self::init_cache(total_buffer_len),
         }
     }
 }
@@ -138,20 +143,32 @@ unsafe impl<T: ViewType + ?Sized> Send for BinaryViewColumnGeneric<T> {}
 unsafe impl<T: ViewType + ?Sized> Sync for BinaryViewColumnGeneric<T> {}
 
 impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
+    fn init_cache(value: Option<usize>) -> OnceLock<usize> {
+        let cache = OnceLock::new();
+        if let Some(v) = value {
+            let _ = cache.set(v);
+        }
+        cache
+    }
+
     pub fn new_unchecked(
         views: Buffer<View>,
         buffers: Arc<[Buffer<u8>]>,
 
-        total_bytes_len: usize,
-        total_buffer_len: usize,
+        total_bytes_len: Option<usize>,
+        total_buffer_len: Option<usize>,
     ) -> Self {
         #[cfg(debug_assertions)]
         {
-            let total = views.iter().map(|v| v.length as usize).sum::<usize>();
-            assert_eq!(total, total_bytes_len);
+            if let Some(total_bytes_len) = total_bytes_len {
+                let total = views.iter().map(|v| v.length as usize).sum::<usize>();
+                assert_eq!(total, total_bytes_len);
+            }
 
-            let total = buffers.iter().map(|v| v.len()).sum::<usize>();
-            assert_eq!(total, total_buffer_len);
+            if let Some(total_buffer_len) = total_buffer_len {
+                let total = buffers.iter().map(|v| v.len()).sum::<usize>();
+                assert_eq!(total, total_buffer_len);
+            }
         }
 
         Self {
@@ -159,8 +176,8 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
             buffers,
 
             phantom: Default::default(),
-            total_bytes_len,
-            total_buffer_len,
+            total_bytes_len: Self::init_cache(total_bytes_len),
+            total_buffer_len: Self::init_cache(total_buffer_len),
         }
     }
 
@@ -173,9 +190,8 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         total_buffer_len: Option<usize>,
     ) -> Self {
         let total_buffer_len =
-            total_buffer_len.unwrap_or(buffers.iter().map(|v| v.len()).sum::<usize>());
-        let total_bytes_len = views.iter().map(|v| v.length as usize).sum::<usize>();
-        Self::new_unchecked(views, buffers, total_bytes_len, total_buffer_len)
+            total_buffer_len.unwrap_or_else(|| buffers.iter().map(|v| v.len()).sum::<usize>());
+        Self::new_unchecked(views, buffers, None, Some(total_buffer_len))
     }
 
     pub fn data_buffers(&self) -> &Arc<[Buffer<u8>]> {
@@ -212,7 +228,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     /// Creates an empty [`BinaryViewColumnGeneric`], i.e. whose `.len` is zero.
     #[inline]
     pub fn new_empty() -> Self {
-        Self::new_unchecked(Buffer::new(), Arc::from([]), 0, 0)
+        Self::new_unchecked(Buffer::new(), Arc::from([]), Some(0), Some(0))
     }
 
     /// Returns the element at index `i`
@@ -293,12 +309,17 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
 
     /// Get the total length of bytes that it would take to concatenate all binary/str values in this array.
     pub fn total_bytes_len(&self) -> usize {
-        self.total_bytes_len
+        *self
+            .total_bytes_len
+            .get_or_init(|| self.views.iter().map(|v| v.length as usize).sum::<usize>())
     }
 
-    pub fn memory_size(&self) -> usize {
-        // when read back from parquet, the buffer is a bytes array without views
-        self.total_bytes_len + self.len() * 20
+    pub fn memory_size(&self, gc: bool) -> usize {
+        if gc {
+            self.total_bytes_len() + self.len() * 16
+        } else {
+            self.total_buffer_len() + self.len() * 16
+        }
     }
 
     fn total_unshared_buffer_len(&self) -> usize {
@@ -318,7 +339,9 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
 
     /// Get the length of bytes that are stored in the variadic buffers.
     pub fn total_buffer_len(&self) -> usize {
-        self.total_buffer_len
+        *self
+            .total_buffer_len
+            .get_or_init(|| self.buffers.iter().map(|v| v.len()).sum::<usize>())
     }
 
     #[inline(always)]
@@ -398,7 +421,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     unsafe fn slice_unchecked(&mut self, offset: usize, length: usize) {
         debug_assert!(offset + length <= self.len());
         self.views.slice_unchecked(offset, length);
-        self.total_bytes_len = self.views.iter().map(|v| v.length as usize).sum::<usize>();
+        self.total_bytes_len = OnceLock::new();
     }
 
     impl_sliced!();
@@ -406,7 +429,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     pub fn maybe_gc(self) -> Self {
         const GC_MINIMUM_SAVINGS: usize = 16 * 1024; // At least 16 KiB.
 
-        if self.total_buffer_len <= GC_MINIMUM_SAVINGS {
+        if self.total_buffer_len() <= GC_MINIMUM_SAVINGS {
             return self;
         }
 
@@ -436,6 +459,8 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     }
 
     pub fn make_mut(self) -> BinaryViewColumnBuilder<T> {
+        let total_bytes_len = self.total_bytes_len();
+        let total_buffer_len = self.total_buffer_len();
         let views = self.views.make_mut();
         let completed_buffers = self.buffers.to_vec();
 
@@ -445,8 +470,8 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
             in_progress_buffer: vec![],
 
             phantom: Default::default(),
-            total_bytes_len: self.total_bytes_len,
-            total_buffer_len: self.total_buffer_len,
+            total_bytes_len,
+            total_buffer_len,
         }
     }
 
@@ -455,26 +480,29 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         use Either::*;
         let is_unique = (Arc::strong_count(&self.buffers) + Arc::weak_count(&self.buffers)) == 1;
 
+        let total_bytes_len = self.total_bytes_len();
+        let total_buffer_len = self.total_buffer_len();
+
         match (self.views.into_mut(), is_unique) {
             (Right(views), true) => Right(BinaryViewColumnBuilder {
                 views,
                 completed_buffers: self.buffers.to_vec(),
                 in_progress_buffer: vec![],
                 phantom: Default::default(),
-                total_bytes_len: self.total_bytes_len,
-                total_buffer_len: self.total_buffer_len,
+                total_bytes_len,
+                total_buffer_len,
             }),
             (Right(views), false) => Left(Self::new_unchecked(
                 views.into(),
                 self.buffers,
-                self.total_bytes_len,
-                self.total_buffer_len,
+                Some(total_bytes_len),
+                Some(total_buffer_len),
             )),
             (Left(views), _) => Left(Self::new_unchecked(
                 views,
                 self.buffers,
-                self.total_bytes_len,
-                self.total_buffer_len,
+                Some(total_bytes_len),
+                Some(total_buffer_len),
             )),
         }
     }
@@ -539,8 +567,8 @@ impl BinaryViewColumn {
         Utf8ViewColumn::new_unchecked(
             self.views.clone(),
             self.buffers.clone(),
-            self.total_bytes_len,
-            self.total_buffer_len,
+            Some(self.total_bytes_len()),
+            Some(self.total_buffer_len()),
         )
     }
 }
@@ -550,8 +578,8 @@ impl Utf8ViewColumn {
         BinaryViewColumn::new_unchecked(
             self.views.clone(),
             self.buffers.clone(),
-            self.total_bytes_len,
-            self.total_buffer_len,
+            Some(self.total_bytes_len()),
+            Some(self.total_buffer_len()),
         )
     }
 

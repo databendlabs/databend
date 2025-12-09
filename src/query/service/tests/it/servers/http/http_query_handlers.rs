@@ -377,7 +377,7 @@ async fn test_simple_sql() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":404,"message":"[HTTP-QUERY] Invalid page number: requested 2, current page is 1"}}"#
+        r#"{"error":{"code":404,"message":"Invalid page number: requested 2, current page is 1"}}"#
     );
 
     // final
@@ -554,7 +554,7 @@ async fn test_active_sessions() -> Result<()> {
         .map(|(_status, resp)| (resp.error.map(|e| e.message).unwrap_or_default()))
         .collect::<Vec<_>>();
     results.sort();
-    let msg = "[HTTP-QUERY] Failed to upgrade session: Current active sessions (2) has exceeded the max_active_sessions limit (2)";
+    let msg = "Failed to upgrade session: Current active sessions (2) has exceeded the max_active_sessions limit (2)";
     let expect = vec!["", "", msg];
     assert_eq!(results, expect);
     Ok(())
@@ -658,7 +658,7 @@ async fn test_pagination() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":404,"message":"[HTTP-QUERY] Invalid page number: requested 6, current page is 1"}}"#
+        r#"{"error":{"code":404,"message":"Invalid page number: requested 6, current page is 1"}}"#
     );
 
     let mut next_uri = result.next_uri.clone().unwrap();
@@ -1723,7 +1723,7 @@ async fn test_txn_timeout() -> Result<()> {
     assert_eq!(
         reply.last().1.error.unwrap().message,
         format!(
-            "[HTTP-QUERY] Transaction timeout: last_query_id {} not found on this server",
+            "Transaction timeout: last_query_id {} not found on this server",
             last_query_id
         )
     );

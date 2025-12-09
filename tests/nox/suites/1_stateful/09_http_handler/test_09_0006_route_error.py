@@ -49,11 +49,11 @@ def get_query_final(query_id, node_id=None):
 @comparison_output(
     """# error
 ## page
-{"error":{"code":404,"message":"[HTTP-QUERY] Routing error: query QID should be on server XXX, but current server is NODE, which started ... ago)"}}
+{"error":{"code":404,"message":"Routing error: query QID should be on server XXX, but current server is NODE, which started ... ago)"}}
 ## kill
-{"error":{"code":404,"message":"[HTTP-QUERY] Routing error: query QID should be on server XXX, but current server is NODE, which started ... ago)"}}
+{"error":{"code":404,"message":"Routing error: query QID should be on server XXX, but current server is NODE, which started ... ago)"}}
 ## final
-{"error":{"code":404,"message":"[HTTP-QUERY] Routing error: query QID should be on server XXX, but current server is NODE, which started ... ago)"}}
+{"error":{"code":404,"message":"Routing error: query QID should be on server XXX, but current server is NODE, which started ... ago)"}}
 
 # ok
 ## page

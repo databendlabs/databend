@@ -537,6 +537,28 @@ Return {
 
 
 ---------- Input ----------
+THROW 'Email already exists.'
+---------- Output ---------
+THROW 'Email already exists.'
+---------- AST ------------
+Throw {
+    span: Some(
+        0..29,
+    ),
+    message: Some(
+        Literal {
+            span: Some(
+                6..29,
+            ),
+            value: String(
+                "Email already exists.",
+            ),
+        },
+    ),
+}
+
+
+---------- Input ----------
 FOR i IN REVERSE 1 TO maximum_count DO
     counter := counter + 1;
 END FOR label1

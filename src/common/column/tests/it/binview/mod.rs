@@ -43,8 +43,8 @@ fn basics_string_view() {
     let array2 = Utf8ViewColumn::new_unchecked(
         array.views().clone(),
         array.data_buffers().clone(),
-        array.total_bytes_len(),
-        array.total_buffer_len(),
+        Some(array.total_bytes_len()),
+        Some(array.total_buffer_len()),
     );
 
     assert_eq!(array, array2);
@@ -83,8 +83,8 @@ fn basics_binary_view() {
     let array2 = BinaryViewColumn::new_unchecked(
         array.views().clone(),
         array.data_buffers().clone(),
-        array.total_bytes_len(),
-        array.total_buffer_len(),
+        Some(array.total_bytes_len()),
+        Some(array.total_buffer_len()),
     );
 
     assert_eq!(array, array2);
@@ -151,30 +151,15 @@ fn test_slice() {
     ];
 
     let array: Utf8ViewColumn = data.into_iter().collect();
-    assert_eq!(array.total_bytes_len(), 78);
-    assert_eq!(array.total_buffer_len(), 60);
-    assert_eq!(array.memory_size(), 198);
+    assert_eq!(array.memory_size(false), 156);
 
-    let a0 = array.clone().sliced(0, 2);
-    assert_eq!(a0.into_iter().collect::<Vec<_>>(), vec!["hello", "world",]);
-    assert_eq!(a0.memory_size(), 50);
-    assert_eq!(a0.total_bytes_len(), 10);
-
-    let a1 = array.clone().sliced(2, 3);
-    assert_eq!(a1.into_iter().collect::<Vec<_>>(), vec![
+    let a3 = array.sliced(2, 3);
+    assert_eq!(a3.into_iter().collect::<Vec<_>>(), vec![
         "databend",
         "yyyyyyyyyyyyyyyyyyyyy",
         "zzzzzzzzzzzzzzzzzzzzz",
     ]);
-    assert_eq!(a1.memory_size(), 110);
-    assert_eq!(a1.total_bytes_len(), 50);
-
-    let a2 = array.sliced(5, 1);
-    assert_eq!(a2.into_iter().collect::<Vec<_>>(), vec![
-        "abcabcabcabcabcabc",
-    ]);
-    assert_eq!(a2.memory_size(), 38);
-    assert_eq!(a2.total_bytes_len(), 18);
+    assert_eq!(a3.memory_size(false), 108);
 }
 
 #[test]

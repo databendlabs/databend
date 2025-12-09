@@ -115,9 +115,7 @@ impl GlobalHistoryLog {
         });
         GlobalInstance::set(instance);
         if cfg.log.history.log_only {
-            info!(
-                "[HISTORY-TABLES] History tables transform is disabled, only logging is enabled."
-            );
+            info!("History tables transform is disabled, only logging is enabled.");
             return Ok(());
         }
         runtime.spawn(async move {
@@ -152,7 +150,7 @@ impl GlobalHistoryLog {
         self.wait_for_initialization().await;
         self.prepare().await?;
         self.update_operator(true).await?;
-        info!("[HISTORY-TABLES] System history prepared successfully");
+        info!("System history prepared successfully");
 
         let mut handles = vec![];
 
@@ -255,7 +253,7 @@ impl GlobalHistoryLog {
                 get_alter_table_sql(self.create_context().await?, &create_table, &table.name)
                     .await?;
             for alter_sql in get_alter_sql {
-                info!("[HISTORY-TABLES] executing alter table: {}", alter_sql);
+                info!("executing alter table: {}", alter_sql);
                 self.execute_sql(&alter_sql).await?;
             }
         }
@@ -263,7 +261,7 @@ impl GlobalHistoryLog {
     }
 
     pub async fn reset(&self) -> Result<()> {
-        info!("[HISTORY-TABLES] Resetting system history tables");
+        info!("Resetting system history tables");
         let drop_stage = format!("DROP STAGE IF EXISTS {}", self.stage_name);
         self.execute_sql(&drop_stage).await?;
 
@@ -330,9 +328,7 @@ impl GlobalHistoryLog {
             {
                 let mut params = self.current_params.lock();
                 if params.as_ref() != params_from_meta.as_ref() || force {
-                    info!(
-                            "[HISTORY-TABLES] log_history table storage params changed, update log operator"
-                        );
+                    info!("log_history table storage params changed, update log operator");
                     *params = params_from_meta.clone();
                 } else {
                     return Ok(());
@@ -362,7 +358,7 @@ impl GlobalHistoryLog {
                 let vacuum = format!("VACUUM TABLE system_history.{}", table.name);
                 self.execute_sql(&vacuum).await?;
                 info!(
-                    "[HISTORY-TABLES] periodic VACUUM operation on history log table '{}' completed successfully.",
+                    "periodic VACUUM operation on history log table '{}' completed successfully.",
                     table.name
                 );
             }
@@ -391,19 +387,13 @@ impl GlobalHistoryLog {
                     continue;
                 }
                 Err(e) => {
-                    error!(
-                        "[HISTORY-TABLES] {} failed to create heartbeat, retry: {}",
-                        table.name, e
-                    );
+                    error!("{} failed to create heartbeat, retry: {}", table.name, e);
                     sleep(self.transform_sleep_duration()).await;
                     continue;
                 }
             };
 
-            debug!(
-                "[HISTORY-TABLES] {} acquired heartbeat, starting work loop",
-                table.name
-            );
+            debug!("{} acquired heartbeat, starting work loop", table.name);
 
             // 2. Start to work on the task, hold the heartbeat guard during the work
             let mut transform_cnt = 0;
@@ -411,10 +401,7 @@ impl GlobalHistoryLog {
                 // Check if heartbeat is lost or cancelled, indicating another instance took over
                 // or the task should be terminated
                 if heartbeat_guard.exited() {
-                    info!(
-                        "[HISTORY-TABLES] {} lost heartbeat, releasing and retrying",
-                        table.name
-                    );
+                    info!("{} lost heartbeat, releasing and retrying", table.name);
                     break;
                 }
                 match self.transform(&table, &meta_key).await {
@@ -428,19 +415,19 @@ impl GlobalHistoryLog {
                             let temp_count = error_counters.increment_temporary();
                             let backoff_second = error_counters.calculate_temp_backoff();
                             warn!(
-                                "[HISTORY-TABLES] {} log transform failed with temporary error {}, count {}, next retry in {} seconds",
+                                "{} log transform failed with temporary error {}, count {}, next retry in {} seconds",
                                 table.name, e, temp_count, backoff_second
                             );
                             sleep(Duration::from_secs(backoff_second)).await;
                         } else {
                             let persistent_count = error_counters.increment_persistent();
                             error!(
-                                "[HISTORY-TABLES] {} log transform failed with persistent error {}, retry count {}",
+                                "{} log transform failed with persistent error {}, retry count {}",
                                 table.name, e, persistent_count
                             );
                             if error_counters.persistent_exceeded_limit() {
                                 error!(
-                                    "[HISTORY-TABLES] {} log transform failed too many times, giving up",
+                                    "{} log transform failed too many times, giving up",
                                     table.name
                                 );
                                 break;
@@ -461,10 +448,7 @@ impl GlobalHistoryLog {
                                 self.meta_handle.is_heartbeat_valid(&heartbeat_key).await
                             {
                                 if !valid {
-                                    info!(
-                                        "[HISTORY-TABLES] {} heartbeat lost during transform",
-                                        table.name
-                                    );
+                                    info!("{} heartbeat lost during transform", table.name);
                                     break;
                                 }
                             }
@@ -477,7 +461,7 @@ impl GlobalHistoryLog {
                     break;
                 }
             }
-            debug!("[HISTORY-TABLES] {} released heartbeat", table.name);
+            debug!("{} released heartbeat", table.name);
 
             if error_counters.persistent_exceeded_limit() {
                 return;
@@ -493,7 +477,7 @@ impl GlobalHistoryLog {
     ) {
         loop {
             if let Err(e) = self.clean(&table, &meta_key).await {
-                error!("[HISTORY-TABLES] {} log clean failed {}", table.name, e);
+                error!("{} log clean failed {}", table.name, e);
             }
             sleep(sleep_time).await;
         }

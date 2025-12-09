@@ -683,6 +683,8 @@ pub enum TokenKind {
     FORMAT_NAME,
     #[token("FORMATS", ignore(ascii_case))]
     FORMATS,
+    #[token("FLUSH", ignore(ascii_case))]
+    FLUSH,
     #[token("FRAGMENTS", ignore(ascii_case))]
     FRAGMENTS,
     #[token("FRIDAY", ignore(ascii_case))]
@@ -1240,6 +1242,8 @@ pub enum TokenKind {
     TENANT,
     #[token("THEN", ignore(ascii_case))]
     THEN,
+    #[token("THROW", ignore(ascii_case))]
+    THROW,
     #[token("THURSDAY", ignore(ascii_case))]
     THURSDAY,
     #[token("TIME", ignore(ascii_case))]

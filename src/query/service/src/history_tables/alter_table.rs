@@ -125,7 +125,7 @@ pub async fn should_reset(
     // Internal -> External
     if current_storage_params.is_none() && connection.is_some() {
         info!(
-            "[HISTORY-TABLES] Converting internal table to external table, current None vs new {:?}",
+            "Converting internal table to external table, current None vs new {:?}",
             connection
         );
         return Ok(true);
@@ -134,7 +134,7 @@ pub async fn should_reset(
     // External -> Internal
     if current_storage_params.is_some() && connection.is_none() {
         info!(
-            "[HISTORY-TABLES] Converting external table to internal table, current {:?} vs new None",
+            "Converting external table to internal table, current {:?} vs new None",
             current_storage_params
         );
         return Ok(false);
@@ -156,11 +156,11 @@ pub async fn should_reset(
         // return error to prevent cyclic conversion
         if current_storage_params != Some(&new_storage_params) {
             info!(
-                "[HISTORY-TABLES] Storage parameters have changed, current {:?} vs new {:?}",
+                "Storage parameters have changed, current {:?} vs new {:?}",
                 current_storage_params, new_storage_params
             );
             return Err(ErrorCode::InvalidConfig(
-                "[HISTORY-TABLES] Cannot change storage parameters of external history table, please drop the tables and stage first."
+                "Cannot change storage parameters of external history table, please drop the tables and stage first."
             ));
         }
     }

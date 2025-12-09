@@ -122,7 +122,7 @@ impl HeartbeatTask {
             return Ok(None);
         }
 
-        debug!("[HISTORY-TABLES] Heartbeat key created: {}", &heartbeat_key);
+        debug!("Heartbeat key created: {}", &heartbeat_key);
 
         let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
         let loop_fut = HeartbeatTask::heartbeat_loop(
@@ -142,10 +142,7 @@ impl HeartbeatTask {
             async move {
                 let result = loop_fut.await;
                 if let Err(e) = result {
-                    warn!(
-                        "[HISTORY-TABLES] {} loop exited with error: {}",
-                        meta_key, e
-                    );
+                    warn!("{} loop exited with error: {}", meta_key, e);
                 }
                 exited_clone.store(true, std::sync::atomic::Ordering::SeqCst);
             },
@@ -212,7 +209,7 @@ impl HeartbeatTask {
                     };
                     let _resp = meta_client.transaction(txn_req).await?;
 
-                    debug!("[HISTORY-TABLES] Heartbeat key delete: {}", &heartbeat_key);
+                    debug!("Heartbeat key delete: {}", &heartbeat_key);
 
                     return Ok(())
                 }

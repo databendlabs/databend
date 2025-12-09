@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[QUERY-QUEUE] ...".
+databend_common_tracing::register_module_tag!("[QUERY-QUEUE]");
+
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::future::Future;
@@ -118,17 +121,11 @@ impl<Data: QueueData> QueueManager<Data> {
             ));
 
             provider.create_meta_store().await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!(
-                    "[QUERY-QUEUE] Failed to create meta store: {}",
-                    e
-                ))
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
             })?
         };
 
-        info!(
-            "[QUERY-QUEUE] Queue manager initialized with permits: {:?}",
-            permits
-        );
+        info!("Queue manager initialized with permits: {:?}", permits);
         GlobalInstance::set(Self::create(
             permits,
             metastore,
@@ -195,20 +192,18 @@ impl<Data: QueueData> QueueManager<Data> {
         let acquire = Box::pin(self.acquire_inner(data));
         match futures::future::select(acquire, watch_abort_notify).await {
             Either::Left((left, _)) => left,
-            Either::Right((_, _)) => Err(ErrorCode::AbortedQuery(
-                "[QUERY-QUEUE] recv query abort notify.",
-            )),
+            Either::Right((_, _)) => Err(ErrorCode::AbortedQuery("recv query abort notify.")),
         }
     }
 
     async fn acquire_inner(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
         if !data.need_acquire_to_queue() {
-            info!("[QUERY-QUEUE] Non-heavy queries skip the query queue and execute directly.");
+            info!("Non-heavy queries skip the query queue and execute directly.");
             return Ok(AcquireQueueGuard::create(vec![]));
         }
 
         info!(
-            "[QUERY-QUEUE] Preparing to acquire from query queue, current length: {}",
+            "Preparing to acquire from query queue, current length: {}",
             self.length()
         );
 
@@ -274,7 +269,7 @@ impl<Data: QueueData> QueueManager<Data> {
                     .await?;
 
                 info!(
-                    "[QUERY-QUEUE] Successfully acquired from global workload semaphore. elapsed: {:?}",
+                    "Successfully acquired from global workload semaphore. elapsed: {:?}",
                     instant.elapsed()
                 );
                 timeout -= instant.elapsed();
@@ -522,12 +517,10 @@ macro_rules! impl_acquire_queue_future {
 
                         Poll::Ready(match res {
                             Ok(Ok(v)) => Ok(AcquireQueueGuardInner::$fn_name(Some(v))),
-                            Ok(Err(_)) => Err(ErrorCode::TokioError(
-                                "[QUERY-QUEUE] Queue acquisition failed",
-                            )),
-                            Err(_elapsed) => Err(ErrorCode::Timeout(
-                                "[QUERY-QUEUE] Query queuing timeout exceeded",
-                            )),
+                            Ok(Err(_)) => Err(ErrorCode::TokioError("Queue acquisition failed")),
+                            Err(_elapsed) => {
+                                Err(ErrorCode::Timeout("Query queuing timeout exceeded"))
+                            }
                         })
                     }
                     Poll::Pending => {
@@ -717,11 +710,10 @@ impl QueueData for QueryEntry {
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
         match key {
-            None => ErrorCode::AbortedQuery("[QUERY-QUEUE] Query was killed while in queue"),
-            Some(key) => ErrorCode::AbortedQuery(format!(
-                "[QUERY-QUEUE] Query {} was killed while in queue",
-                key
-            )),
+            None => ErrorCode::AbortedQuery("Query was killed while in queue"),
+            Some(key) => {
+                ErrorCode::AbortedQuery(format!("Query {} was killed while in queue", key))
+            }
         }
     }
 
@@ -747,11 +739,7 @@ impl QueueData for QueryEntry {
 
     fn exit_wait_pending(&self, wait_time: Duration) {
         self.ctx.set_status_info(
-            format!(
-                "[QUERY-QUEUE] Resource scheduling completed, elapsed: {:?}",
-                wait_time
-            )
-            .as_str(),
+            format!("Resource scheduling completed, elapsed: {:?}", wait_time).as_str(),
         );
         self.ctx.set_query_queued_duration(wait_time)
     }

@@ -199,7 +199,7 @@ impl PageBuilder {
             .iter()
             .map(|entry| match entry {
                 BlockEntry::Const(scalar, _, n) => *n * scalar.as_ref().memory_size(),
-                BlockEntry::Column(column) => column.memory_size(),
+                BlockEntry::Column(column) => column.memory_size(true),
             })
             .sum::<usize>();
 
@@ -375,11 +375,11 @@ where S: DataBlockSpill
                 match tokio::time::timeout_at((*t).into(), self.chan.recv()).await {
                     Ok(true) => self.try_take_page().await?,
                     Ok(false) => {
-                        info!("[HTTP-QUERY] Reached end of data blocks");
+                        info!("Reached end of data blocks");
                         return Ok((BlocksSerializer::empty(), true));
                     }
                     Err(_) => {
-                        debug!("[HTTP-QUERY] Long polling timeout reached");
+                        debug!("Long polling timeout reached");
                         return Ok((BlocksSerializer::empty(), self.chan.is_close()));
                     }
                 }

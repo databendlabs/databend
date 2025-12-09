@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[INTERPRETER] ...".
+databend_common_tracing::register_module_tag!("[INTERPRETER]");
+
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -112,7 +115,7 @@ pub trait Interpreter: Sync + Send {
 
         let make_error = || "failed to execute interpreter";
 
-        ctx.set_status_info("[INTERPRETER] Building execution pipeline");
+        ctx.set_status_info("Building execution pipeline");
         ctx.check_aborting().with_context(make_error)?;
 
         let allow_disk_cache = {
@@ -121,7 +124,7 @@ pub trait Interpreter: Sync + Send {
                 Ok(_) => true,
                 Err(e) if !license_key.is_empty() => {
                     let msg =
-                            format!("[INTERPRETER] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
+                            format!("CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
                                     e);
                     log::error!("{msg}");
 
@@ -155,7 +158,7 @@ pub trait Interpreter: Sync + Send {
                 on_execution_finished(info, query_ctx)
             }));
 
-        ctx.set_status_info("[INTERPRETER] Executing pipeline");
+        ctx.set_status_info("Executing pipeline");
 
         let settings = ctx.get_settings();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
@@ -208,7 +211,7 @@ fn log_query_start(ctx: &QueryContext) {
     }
 
     if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
-        error!("[INTERPRETER] Failed to log query start: {:?}", error)
+        error!("Failed to log query start: {:?}", error)
     }
 }
 
@@ -237,7 +240,7 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     log::info!(memory:? = ctx.get_node_peek_memory_usage(); "total memory usage");
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
-        error!("[INTERPRETER] Failed to log query finish: {:?}", error)
+        error!("Failed to log query finish: {:?}", error)
     }
 }
 
@@ -280,7 +283,7 @@ pub async fn auto_commit_if_not_allowed_in_transaction(
     }
     if !stmt.is_transaction_command() && ctx.txn_mgr().lock().is_fail() {
         let err = ErrorCode::CurrentTransactionIsAborted(
-            "[INTERPRETER] Current transaction is aborted, commands ignored until end of transaction block",
+            "Current transaction is aborted, commands ignored until end of transaction block",
         );
         return Err(err);
     }

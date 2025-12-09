@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[REFRESH-HOOK] ...".
+databend_common_tracing::register_module_tag!("[REFRESH-HOOK]");
+
 use std::sync::Arc;
 
 use databend_common_ast::ast;
@@ -63,13 +66,13 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            info!("[REFRESH-HOOK] Pipeline execution completed successfully, starting refresh job");
+            info!("Pipeline execution completed successfully, starting refresh job");
             match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc)) {
                 Ok(_) => {
-                    info!("[REFRESH-HOOK] Refresh job completed successfully");
+                    info!("Refresh job completed successfully");
                 }
                 Err(e) => {
-                    info!("[REFRESH-HOOK] Refresh job failed: {:?}", e);
+                    info!("Refresh job failed: {:?}", e);
                 }
             }
         }

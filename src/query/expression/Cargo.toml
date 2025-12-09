@@ -53,7 +53,6 @@ num-traits = { workspace = true }
 rand = { workspace = true }
 rand_distr = { workspace = true }
 recursive = { workspace = true }
-roaring = { workspace = true }
 rust_decimal = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }

@@ -13,9 +13,14 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::time::Duration as SysDuration;
 
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::timestamp_tz;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_io::datetime::parse_standard_timestamp as parse_iso_timestamp;
+use jiff::civil::Date;
 use jiff::fmt;
 use jiff::tz;
 use jiff::tz::TimeZone;
@@ -136,11 +141,89 @@ impl ArgType for TimestampTzType {
     }
 }
 
+fn try_parse_standard_timestamp_with_offset(ts_str: &[u8]) -> Option<Result<timestamp_tz>> {
+    let mut start = 0;
+    let mut end = ts_str.len();
+    while start < end && ts_str[start].is_ascii_whitespace() {
+        start += 1;
+    }
+    while end > start && ts_str[end - 1].is_ascii_whitespace() {
+        end -= 1;
+    }
+    let bytes = &ts_str[start..end];
+    let parsed = match parse_iso_timestamp(bytes)? {
+        Ok(parsed) => parsed,
+        Err(err) => return Some(Err(err)),
+    };
+    let offset_seconds = parsed.provided_offset?;
+
+    Some(build_timestamp_tz_from_components(
+        parsed.year,
+        parsed.month,
+        parsed.day,
+        parsed.hour,
+        parsed.minute,
+        parsed.second,
+        parsed.micro,
+        offset_seconds,
+    ))
+}
+
+fn build_timestamp_tz_from_components(
+    year: i32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    micro: u32,
+    offset_seconds: i32,
+) -> Result<timestamp_tz> {
+    let (year, month, day) = if year == 0 && month == 0 && day == 0 {
+        (1970, 1, 1)
+    } else {
+        (year, month, day)
+    };
+    let year_i16 =
+        i16::try_from(year).map_err(|_| ErrorCode::BadBytes(format!("Invalid year {}", year)))?;
+    let month_i8 =
+        i8::try_from(month).map_err(|_| ErrorCode::BadBytes(format!("Invalid month {}", month)))?;
+    let day_i8 =
+        i8::try_from(day).map_err(|_| ErrorCode::BadBytes(format!("Invalid day {}", day)))?;
+    let date = Date::new(year_i16, month_i8, day_i8).map_err(|_| {
+        ErrorCode::BadBytes(format!(
+            "Invalid date value {:04}-{:02}-{:02}",
+            year, month, day
+        ))
+    })?;
+    let mut zoned = date
+        .at(hour as i8, minute as i8, second as i8, 0)
+        .to_zoned(TimeZone::UTC)
+        .map_err(|err| ErrorCode::BadBytes(format!("Invalid time value: {}", err)))?;
+    if micro > 0 {
+        zoned = zoned
+            .checked_add(SysDuration::from_micros(u64::from(micro)))
+            .map_err(|err| ErrorCode::BadBytes(format!("Time overflow: {}", err)))?;
+    }
+    let base_micros = zoned.timestamp().as_microsecond();
+    let adjusted = i128::from(base_micros) - i128::from(offset_seconds) * 1_000_000;
+    if adjusted < i128::from(TIMESTAMP_MIN) || adjusted > i128::from(TIMESTAMP_MAX) {
+        return Err(ErrorCode::BadBytes(
+            "Timestamp is out of range after applying timezone offset".to_string(),
+        ));
+    }
+    Ok(timestamp_tz::new(adjusted as i64, offset_seconds))
+}
+
 #[inline]
 pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a TimeZone>(
     ts_str: &[u8],
     fn_tz: F,
 ) -> databend_common_exception::Result<timestamp_tz> {
+    if let Some(parsed) = try_parse_standard_timestamp_with_offset(ts_str) {
+        return parsed;
+    }
+
     let time = fmt::strtime::parse("%Y-%m-%d", ts_str)
         .or_else(|_| fmt::strtime::parse("%Y-%m-%dT%H:%M:%S%.f %z", ts_str))
         .or_else(|_| fmt::strtime::parse("%Y-%m-%dT%H:%M:%S%.f %:z", ts_str))
