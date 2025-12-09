@@ -38,7 +38,7 @@ pub const HYBRID_HEADER_LEN: usize = 4;
 type SmallBitmap = SmallVec<[u64; LARGE_THRESHOLD]>;
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum HybridBitmap {
     Small(SmallBitmap),
     Large(RoaringTreemap),
