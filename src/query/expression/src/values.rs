@@ -50,6 +50,7 @@ use serde::Serialize;
 use serde::Serializer;
 use string::StringColumnBuilder;
 
+use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
@@ -936,7 +937,19 @@ impl PartialOrd for Scalar {
             (Scalar::Interval(i1), Scalar::Interval(i2)) => i1.partial_cmp(i2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
-            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => b1.partial_cmp(b2),
+            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => {
+                // Bitmap only allows PartialEq
+                if is_hybrid_encoding(b1) == is_hybrid_encoding(b2) && b1 == b2 {
+                    return Some(Ordering::Equal);
+                }
+                let Ok(map_1) = deserialize_bitmap(b1) else {
+                    return None;
+                };
+                let Ok(map_2) = deserialize_bitmap(b2) else {
+                    return None;
+                };
+                map_1.eq(&map_2).then(|| Ordering::Equal)
+            }
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
                 let left_jsonb = RawJsonb::new(v1);
