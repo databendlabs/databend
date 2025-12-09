@@ -3592,6 +3592,24 @@ pub struct SpillConfig {
     #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
+
+    /// Maximum percentage of the global local spill quota that a single sort
+    /// operator may use for one query.
+    ///
+    /// Value range: 0-100. Effective only when local spill is enabled (there is
+    /// a valid local spill path and non-zero `spill_local_disk_max_bytes`).
+    #[clap(long, value_name = "PERCENT", default_value = "60")]
+    pub sort_spilling_disk_quota_ratio: u64,
+
+    /// Maximum percentage of the global local spill quota that window
+    /// partitioners may use for one query.
+    #[clap(long, value_name = "PERCENT", default_value = "20")]
+    pub window_partition_spilling_disk_quota_ratio: u64,
+
+    /// Maximum percentage of the global local spill quota that HTTP
+    /// result-set spilling may use for one query.
+    #[clap(long, value_name = "PERCENT", default_value = "10")]
+    pub result_set_spilling_disk_quota_ratio: u64,
 }
 
 impl SpillConfig {
@@ -3632,6 +3650,9 @@ impl Default for SpillConfig {
             spill_local_disk_path: String::new(),
             spill_local_disk_reserved_space_percentage: OrderedFloat(30.0),
             spill_local_disk_max_bytes: u64::MAX,
+            sort_spilling_disk_quota_ratio: 60,
+            window_partition_spilling_disk_quota_ratio: 20,
+            result_set_spilling_disk_quota_ratio: 10,
         }
     }
 }
@@ -3898,6 +3919,10 @@ mod cache_config_converters {
             reserved_disk_ratio,
             global_bytes_limit,
             storage_params,
+            sort_spilling_disk_quota_ratio: spill.sort_spilling_disk_quota_ratio,
+            window_partition_spilling_disk_quota_ratio: spill
+                .window_partition_spilling_disk_quota_ratio,
+            result_set_spilling_disk_quota_ratio: spill.result_set_spilling_disk_quota_ratio,
         })
     }
 
@@ -3916,6 +3941,10 @@ mod cache_config_converters {
                 spill_local_disk_path: value.path,
                 spill_local_disk_reserved_space_percentage: value.reserved_disk_ratio * 100.0,
                 spill_local_disk_max_bytes: value.global_bytes_limit,
+                sort_spilling_disk_quota_ratio: value.sort_spilling_disk_quota_ratio,
+                window_partition_spilling_disk_quota_ratio: value
+                    .window_partition_spilling_disk_quota_ratio,
+                result_set_spilling_disk_quota_ratio: value.result_set_spilling_disk_quota_ratio,
             }
         }
     }

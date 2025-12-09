@@ -8,9 +8,6 @@ statement ok
 SET force_window_data_spill = 1;
 
 statement ok
-set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
-
-statement ok
 set enable_dio = 1;
 
 query T
@@ -39,6 +36,9 @@ FROM (
 14999849576
 
 statement ok
+unset enable_dio;
+
+statement ok
 set enable_dio = 0;
 
 query T
@@ -65,9 +65,6 @@ FROM (
 );
 ----
 14999849576
-
-statement ok
-unset enable_dio;
 
 statement ok
 DROP TABLE IF EXISTS customers;

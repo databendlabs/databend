@@ -671,13 +671,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
-                ("window_partition_spilling_to_disk_bytes_limit", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of local disk in bytes that each window partitioner can use before spilling data to storage during query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
                 ("window_num_partitions", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256),
                     desc: "Sets the number of partitions for window operator.",
@@ -705,20 +698,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
-                }),
-                ("sort_spilling_to_disk_bytes_limit", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of local disk in bytes that sorter can use before spilling data to storage during one query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
-                ("result_set_spilling_to_disk_bytes_limit", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of local disk in bytes that result set can use before spilling data to storage during one query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_result_set_spilling", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
