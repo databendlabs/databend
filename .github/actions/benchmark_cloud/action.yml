@@ -26,6 +26,10 @@ inputs:
     description: "Warehouse cache size"
     required: false
     default: "0"
+  tries:
+    description: "Number of attempts per query (1-3)"
+    required: false
+    default: ""
   version:
     description: "Databend version"
     required: true
@@ -57,15 +61,22 @@ runs:
       run: |
         if [[ "${{ inputs.dataset }}" == "load" ]]; then
           echo "database=load_test_${{ inputs.run_id }}" >> $GITHUB_OUTPUT
-          echo "tries=1" >> $GITHUB_OUTPUT
         else
           database="${{ inputs.database }}"
           if [[ -z "$database" ]]; then
             database="clickbench"
           fi
           echo "database=$database" >> $GITHUB_OUTPUT
-          echo "tries=3" >> $GITHUB_OUTPUT
         fi
+        tries="${{ inputs.tries }}"
+        if [[ -z "$tries" ]]; then
+          if [[ "${{ inputs.dataset }}" == "load" ]]; then
+            tries=1
+          else
+            tries=3
+          fi
+        fi
+        echo "tries=$tries" >> $GITHUB_OUTPUT
 
     - name: Run Benchmark
       working-directory: benchmark/clickbench

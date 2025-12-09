@@ -121,8 +121,8 @@ def load_config() -> BenchmarkConfig:
         logger.error("BENCHMARK_TRIES must be an integer, got %s", tries_raw)
         sys.exit(1)
 
-    if tries < 1:
-        logger.error("BENCHMARK_TRIES must be positive, got %s", tries)
+    if not 1 <= tries <= 3:
+        logger.error("BENCHMARK_TRIES must be between 1 and 3, got %s", tries)
         sys.exit(1)
 
     user = os.environ.get("CLOUD_USER", "")
@@ -233,6 +233,13 @@ def run_timed_query(runner: BendSQLRunner, sql: str) -> Optional[float]:
     completed = runner.run(["--time=server"], sql=sql, capture_output=True)
     output = completed.stdout.strip()
     return parse_time_output(output)
+
+
+def pad_attempts(values: List[float], target_size: int) -> None:
+    if not values:
+        return
+    while len(values) < target_size:
+        values.append(values[-1])
 
 
 def write_result_files(script_dir: Path, record: ResultRecord) -> None:
@@ -372,6 +379,9 @@ def main() -> None:
             logger.info("Q%s[%s] succeeded in %.3f seconds", query_num, attempt, q_time)
             record.result[query_num].append(round(q_time, 3))
             record.values[f"Q{query_num}"].append(round(q_time, 3))
+        if config.tries < 3:
+            pad_attempts(record.result[query_num], 3)
+            pad_attempts(record.values[f"Q{query_num}"], 3)
 
     cleanup_runner = BendSQLRunner()
     cleanup_runner.set_dsn(build_dsn(config, warehouse="default", login_disable=True))
