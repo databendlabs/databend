@@ -13,29 +13,27 @@
 ## limitations under the License.
 
 statement ok
-create or replace database issue_19037;
+create or replace database issue_19073;
 
 statement ok
-use issue_19037;
+use issue_19073;
 
 statement ok
-create or replace table t( a int, b BITMAP);
+create table t(a int)
 
 statement ok
-create or replace stream s on table t APPEND_ONLY = false;
+set stream_consume_batch_size_hint =2;
 
 statement ok
-insert into t values(1,  BUILD_BITMAP([3, 7, 9]));
+insert into t values(1);
+
+statement ok
+insert into t values(2),(3);
+
 
 query I
-select  count() from s  with consume;
+select * from t order by a
 ----
 1
-
-statement ok
-update t set b = BUILD_BITMAP([3, 7, 10]) where a = 1;
-
-query I
-select count() from s  with consume;
-----
 2
+3
