@@ -54,21 +54,25 @@ pub trait AggregationSimulator = Fn(
 pub fn run_agg_ast(
     file: &mut impl Write,
     text: &str,
-    columns: &[(&str, Column)],
+    entries: &[(&str, BlockEntry)],
     simulator: impl AggregationSimulator,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) {
     let raw_expr = parser::parse_raw_expr(
         text,
-        &columns
+        &entries
             .iter()
-            .map(|(name, col)| (*name, col.data_type()))
+            .map(|(name, entry)| (*name, entry.data_type()))
             .collect::<Vec<_>>(),
     );
 
-    let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(0);
+    let num_rows = entries
+        .iter()
+        .map(|(_, entry)| entry.len())
+        .max()
+        .unwrap_or(0);
     let block = DataBlock::new(
-        columns.iter().map(|(_, col)| col.clone().into()).collect(),
+        entries.iter().map(|(_, entry)| entry.clone()).collect(),
         num_rows,
     );
 
@@ -140,7 +144,7 @@ pub fn run_agg_ast(
 
                 let ids = match used_columns.is_empty() {
                     true => {
-                        if columns.is_empty() {
+                        if entries.is_empty() {
                             vec![]
                         } else {
                             vec![0]
@@ -150,8 +154,8 @@ pub fn run_agg_ast(
                 };
 
                 for id in ids.iter() {
-                    let (name, col) = &columns[*id];
-                    table.add_row(&[name.to_string(), format!("{col:?}")]);
+                    let (name, entry) = &entries[*id];
+                    table.add_row(&[name.to_string(), format!("{entry:?}")]);
                 }
                 table.add_row(["Output".to_string(), format!("{column:?}")]);
                 writeln!(file, "evaluation (internal):\n{table}").unwrap();

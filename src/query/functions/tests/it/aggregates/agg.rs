@@ -22,6 +22,8 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::BlockEntry;
@@ -165,8 +167,8 @@ fn gen_bitmap_data() -> Column {
     BitmapType::from_data(rbs)
 }
 
-fn get_example() -> Vec<(&'static str, Column)> {
-    vec![
+fn get_example() -> Vec<(&'static str, BlockEntry)> {
+    [
         ("a", Int64Type::from_data(vec![4i64, 3, 2, 1])),
         ("b", UInt64Type::from_data(vec![1u64, 2, 3, 4])),
         ("c", UInt64Type::from_data(vec![1u64, 2, 1, 3])),
@@ -227,10 +229,23 @@ fn get_example() -> Vec<(&'static str, Column)> {
             ]),
         ),
     ]
+    .into_iter()
+    .map(|(name, column)| (name, column.into()))
+    .chain([
+        (
+            "const_int",
+            BlockEntry::new_const_column_arg::<Int32Type>(5, 4),
+        ),
+        (
+            "const_int_null",
+            BlockEntry::new_const_column_arg::<NullableType<Int32Type>>(None, 4),
+        ),
+    ])
+    .collect()
 }
 
-fn get_geometry_example() -> Vec<(&'static str, Column)> {
-    vec![
+fn get_geometry_example() -> Vec<(&'static str, BlockEntry)> {
+    [
         (
             "point",
             StringType::from_data(vec!["POINT(1 1)", "POINT(2 2)", "POINT(3 3)", "POINT(4 4)"]),
@@ -351,12 +366,29 @@ fn get_geometry_example() -> Vec<(&'static str, Column)> {
             ),
         ),
     ]
+    .into_iter()
+    .map(|(name, column)| (name, column.into()))
+    .collect()
 }
 
 fn test_count(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(
         file,
         "count(1)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "count(const_int)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "count(const_int_null)",
         get_example().as_slice(),
         simulator,
         vec![],
