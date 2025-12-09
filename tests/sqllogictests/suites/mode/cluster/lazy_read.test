@@ -119,7 +119,7 @@ Limit
                 ├── scan id: 0
                 ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
                 ├── read rows: 200
-                ├── read size: 1.12 KiB
+                ├── read size: 1.26 KiB
                 ├── partitions total: 3
                 ├── partitions scanned: 2
                 ├── pruning stats: [segments: <range pruning: 3 to 3 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>, topn pruning: 3 to 2 cost: <slt:ignore>>]
