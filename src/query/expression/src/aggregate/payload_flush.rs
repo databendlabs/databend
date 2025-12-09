@@ -293,12 +293,7 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len = state.addresses[idx].read::<u32>(col_offset) as usize;
-                let data_address =
-                    state.addresses[idx].read::<u64>(col_offset + 4) as usize as *const u8;
-
-                let scalar = std::slice::from_raw_parts(data_address, str_len);
-
+                let scalar = state.addresses[idx].read_bytes(col_offset);
                 binary_builder.put_slice(scalar);
                 binary_builder.commit_row();
             }
@@ -316,12 +311,7 @@ impl Payload {
 
         unsafe {
             for idx in 0..len {
-                let str_len = state.addresses[idx].read::<u32>(col_offset) as usize;
-                let data_address =
-                    state.addresses[idx].read::<u64>(col_offset + 4) as usize as *const u8;
-
-                let scalar = std::slice::from_raw_parts(data_address, str_len);
-
+                let scalar = state.addresses[idx].read_bytes(col_offset);
                 binary_builder.put_and_commit(std::str::from_utf8(scalar).unwrap());
             }
         }

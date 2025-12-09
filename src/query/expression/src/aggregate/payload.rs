@@ -278,10 +278,11 @@ impl Payload {
             assert!(write_offset == offset);
 
             match entry {
-                BlockEntry::Const(scalar, _, _) => unsafe {
+                BlockEntry::Const(scalar, data_type, _) => unsafe {
                     serialize_const_column_to_rowformat(
                         &self.arena,
                         scalar,
+                        data_type,
                         select_vector,
                         address,
                         offset,

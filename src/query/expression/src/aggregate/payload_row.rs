@@ -167,13 +167,27 @@ pub(super) unsafe fn serialize_column_to_rowformat(
 pub(super) unsafe fn serialize_const_column_to_rowformat(
     arena: &Bump,
     scalar: &Scalar,
+    data_type: &DataType,
     select_vector: &[RowID],
     address: &mut [RowPtr; BATCH_SIZE],
     offset: usize,
     scratch: &mut Vec<u8>,
 ) {
     match scalar {
-        Scalar::Null | Scalar::EmptyArray | Scalar::EmptyMap => (),
+        Scalar::Null => {
+            if let Some(box data_type) = data_type.as_nullable() {
+                serialize_const_column_to_rowformat(
+                    arena,
+                    &Scalar::default_value(data_type),
+                    data_type,
+                    select_vector,
+                    address,
+                    offset,
+                    scratch,
+                )
+            }
+        }
+        Scalar::EmptyArray | Scalar::EmptyMap => (),
         Scalar::Number(number_scalar) => with_number_mapped_type!(|NUM_TYPE| match number_scalar {
             NumberScalar::NUM_TYPE(value) => {
                 for row in select_vector {
