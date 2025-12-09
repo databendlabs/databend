@@ -32,8 +32,11 @@ runs:
       shell: bash
       run: |
         publish_name="databend-debug-${{ inputs.category }}-${{ inputs.version }}-${{ inputs.target }}.tar.gz"
-        tar -C distro/bin -czvf ${publish_name} databend-query.debug
-        echo "name=$publish_name" >> $GITHUB_OUTPUT
+        symbol_name="databend-query-${{ inputs.category }}-${{ inputs.version }}-${{ inputs.target }}.debug"
+        mv "distro/bin/databend-query.debug" "distro/bin/${symbol_name}"
+        tar -C distro/bin -czvf "${publish_name}" "${symbol_name}"
+        rm "distro/bin/${symbol_name}"
+        echo "name=${publish_name}" >> $GITHUB_OUTPUT
 
     - name: Update debug symbols to github
       shell: bash
