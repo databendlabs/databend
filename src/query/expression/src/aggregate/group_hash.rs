@@ -19,38 +19,13 @@ use databend_common_column::types::Index;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::types::i256;
-use crate::types::number::Number;
-use crate::types::AccessType;
-use crate::types::AnyType;
-use crate::types::BinaryColumn;
-use crate::types::BinaryType;
-use crate::types::BitmapType;
-use crate::types::BooleanType;
-use crate::types::DataType;
-use crate::types::DateType;
-use crate::types::DecimalColumn;
-use crate::types::DecimalDataKind;
-use crate::types::DecimalScalar;
-use crate::types::DecimalView;
-use crate::types::GeographyColumn;
-use crate::types::GeographyType;
-use crate::types::GeometryType;
-use crate::types::NullableColumn;
-use crate::types::NumberColumn;
-use crate::types::NumberDataType;
-use crate::types::NumberScalar;
-use crate::types::NumberType;
-use crate::types::OpaqueScalarRef;
-use crate::types::StringColumn;
-use crate::types::StringType;
-use crate::types::TimestampType;
-use crate::types::ValueType;
-use crate::types::VariantType;
+use crate::types::decimal::Decimal;
+use crate::types::*;
 use crate::visitor::ValueVisitor;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ProjectedBlock;
 use crate::Scalar;
@@ -59,21 +34,99 @@ use crate::Value;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
-pub fn group_hash_columns(cols: ProjectedBlock, values: &mut [u64]) {
-    debug_assert!(!cols.is_empty());
-    for (i, entry) in cols.iter().enumerate() {
-        if i == 0 {
-            combine_group_hash_column::<true>(&entry.to_column(), values);
-        } else {
-            combine_group_hash_column::<false>(&entry.to_column(), values);
+pub fn group_hash_entries(entries: ProjectedBlock, values: &mut [u64]) {
+    debug_assert!(!entries.is_empty());
+    for (i, entry) in entries.iter().enumerate() {
+        debug_assert_eq!(entry.len(), values.len());
+        match entry {
+            BlockEntry::Const(scalar, data_type, _) => {
+                if i == 0 {
+                    combine_group_hash_const::<true>(scalar, data_type, values);
+                } else {
+                    combine_group_hash_const::<false>(scalar, data_type, values);
+                }
+            }
+            BlockEntry::Column(column) => {
+                if i == 0 {
+                    combine_group_hash_column::<true>(column, values);
+                } else {
+                    combine_group_hash_column::<false>(column, values);
+                }
+            }
         }
     }
 }
 
-pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut [u64]) {
+fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut [u64]) {
     HashVisitor::<IS_FIRST> { values }
         .visit_column(c.clone())
         .unwrap()
+}
+
+fn combine_group_hash_const<const IS_FIRST: bool>(
+    scalar: &Scalar,
+    data_type: &DataType,
+    values: &mut [u64],
+) {
+    match data_type {
+        DataType::Null | DataType::EmptyArray | DataType::EmptyMap => {}
+        DataType::Nullable(inner) => {
+            if scalar.is_null() {
+                apply_const_hash::<IS_FIRST>(values, NULL_HASH_VAL);
+            } else {
+                combine_group_hash_const_nonnull::<IS_FIRST>(scalar, inner, values);
+            }
+        }
+        _ => combine_group_hash_const_nonnull::<IS_FIRST>(scalar, data_type, values),
+    }
+}
+
+fn combine_group_hash_const_nonnull<const IS_FIRST: bool>(
+    scalar: &Scalar,
+    _data_type: &DataType,
+    values: &mut [u64],
+) {
+    let hash = match scalar {
+        Scalar::Null => unreachable!(),
+        Scalar::EmptyArray | Scalar::EmptyMap => return,
+        Scalar::Number(v) => with_number_type!(|NUM_TYPE| match v {
+            NumberScalar::NUM_TYPE(value) => value.agg_hash(),
+        }),
+        Scalar::Decimal(v) => {
+            with_decimal_mapped_type!(|F| match v {
+                DecimalScalar::F(v, size) => {
+                    with_decimal_mapped_type!(|T| match size.data_kind() {
+                        DecimalDataKind::T => {
+                            v.as_decimal::<T>().agg_hash()
+                        }
+                    })
+                }
+            })
+        }
+        Scalar::Timestamp(value) => value.agg_hash(),
+        Scalar::Date(value) => value.agg_hash(),
+        Scalar::Boolean(value) => value.agg_hash(),
+        Scalar::String(value) => value.as_bytes().agg_hash(),
+        Scalar::Binary(value)
+        | Scalar::Bitmap(value)
+        | Scalar::Variant(value)
+        | Scalar::Geometry(value) => value.agg_hash(),
+        Scalar::Geography(value) => value.0.agg_hash(),
+        _ => scalar.as_ref().agg_hash(),
+    };
+    apply_const_hash::<IS_FIRST>(values, hash);
+}
+
+fn apply_const_hash<const IS_FIRST: bool>(values: &mut [u64], hash: u64) {
+    if IS_FIRST {
+        for val in values.iter_mut() {
+            *val = hash;
+        }
+    } else {
+        for val in values.iter_mut() {
+            *val = merge_hash(*val, hash);
+        }
+    }
 }
 
 struct HashVisitor<'a, const IS_FIRST: bool> {
@@ -101,7 +154,7 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     fn visit_any_number(&mut self, column: NumberColumn) -> Result<()> {
         with_number_mapped_type!(|NUM_TYPE| match column.data_type() {
             NumberDataType::NUM_TYPE => {
-                let c = NUM_TYPE::try_downcast_column(&column).unwrap();
+                let c = <NUM_TYPE as Number>::try_downcast_column(&column).unwrap();
                 self.combine_group_hash_type_column::<NumberType<NUM_TYPE>>(&c)
             }
         });

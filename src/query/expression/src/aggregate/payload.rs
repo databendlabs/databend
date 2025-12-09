@@ -22,12 +22,14 @@ use strength_reduce::StrengthReducedU64;
 
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
+use super::payload_row::serialize_const_column_to_rowformat;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowPtr;
 use super::RowID;
 use crate::types::DataType;
 use crate::AggrState;
 use crate::AggregateFunctionRef;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
@@ -236,25 +238,36 @@ impl Payload {
         let mut write_offset = 0;
         // write validity
         for entry in group_columns.iter() {
-            if let Column::Nullable(c) = entry.to_column() {
-                let bitmap = c.validity();
-                if bitmap.null_count() == 0 || bitmap.null_count() == bitmap.len() {
-                    let val: u8 = if bitmap.null_count() == 0 { 1 } else { 0 };
-                    // faster path
+            match entry {
+                BlockEntry::Const(scalar, DataType::Nullable(_), _) => {
+                    let val = if scalar.is_null() { 0 } else { 1 };
                     for row in select_vector {
                         unsafe {
                             address[*row].write_u8(write_offset, val);
                         }
                     }
-                } else {
-                    for row in select_vector {
-                        unsafe {
-                            address[*row]
-                                .write_u8(write_offset, bitmap.get_bit(row.to_usize()) as u8);
+                }
+                BlockEntry::Column(Column::Nullable(box c)) => {
+                    let bitmap = c.validity();
+                    if bitmap.null_count() == 0 || bitmap.null_count() == bitmap.len() {
+                        let val: u8 = if bitmap.null_count() == 0 { 1 } else { 0 };
+                        // faster path
+                        for row in select_vector {
+                            unsafe {
+                                address[*row].write_u8(write_offset, val);
+                            }
+                        }
+                    } else {
+                        for row in select_vector {
+                            unsafe {
+                                address[*row]
+                                    .write_u8(write_offset, bitmap.get_bit(row.to_usize()) as u8);
+                            }
                         }
                     }
+                    write_offset += 1;
                 }
-                write_offset += 1;
+                _ => (),
             }
         }
 
@@ -263,16 +276,29 @@ impl Payload {
             let offset = self.row_layout.group_offsets[idx];
             assert!(write_offset == offset);
 
-            unsafe {
-                serialize_column_to_rowformat(
-                    &self.arena,
-                    &entry.to_column(),
-                    select_vector,
-                    address,
-                    offset,
-                    &mut scratch,
-                );
+            match entry {
+                BlockEntry::Const(scalar, _, _) => unsafe {
+                    serialize_const_column_to_rowformat(
+                        &self.arena,
+                        scalar,
+                        select_vector,
+                        address,
+                        offset,
+                        &mut scratch,
+                    )
+                },
+                BlockEntry::Column(column) => unsafe {
+                    serialize_column_to_rowformat(
+                        &self.arena,
+                        column,
+                        select_vector,
+                        address,
+                        offset,
+                        &mut scratch,
+                    );
+                },
             }
+
             write_offset += self.row_layout.group_sizes[idx];
         }
 

@@ -43,7 +43,7 @@ impl RowPtr {
         core::ptr::copy_nonoverlapping(
             value as *const T as *const u8,
             self.0.add(offset),
-            std::mem::size_of::<T>(),
+            size_of::<T>(),
         );
     }
 

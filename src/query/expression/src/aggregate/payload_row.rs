@@ -164,6 +164,82 @@ pub(super) unsafe fn serialize_column_to_rowformat(
     }
 }
 
+pub(super) unsafe fn serialize_const_column_to_rowformat(
+    arena: &Bump,
+    scalar: &Scalar,
+    select_vector: &[RowID],
+    address: &mut [RowPtr; BATCH_SIZE],
+    offset: usize,
+    scratch: &mut Vec<u8>,
+) {
+    match scalar {
+        Scalar::Null | Scalar::EmptyArray | Scalar::EmptyMap => (),
+        Scalar::Number(number_scalar) => with_number_mapped_type!(|NUM_TYPE| match number_scalar {
+            NumberScalar::NUM_TYPE(value) => {
+                for row in select_vector {
+                    address[*row].write(offset, value);
+                }
+            }
+        }),
+        Scalar::Decimal(decimal_scalar) => {
+            let size = decimal_scalar.size();
+            with_decimal_mapped_type!(|T| match size.data_kind() {
+                DecimalDataKind::T => {
+                    let value: T = decimal_scalar.as_decimal();
+                    for row in select_vector {
+                        address[*row].write(offset, &value);
+                    }
+                }
+            })
+        }
+        Scalar::Boolean(value) => {
+            let value = if *value { 1 } else { 0 };
+            for row in select_vector {
+                address[*row].write_u8(offset, value);
+            }
+        }
+        Scalar::Timestamp(value) => {
+            for row in select_vector {
+                address[*row].write(offset, value);
+            }
+        }
+        Scalar::Date(value) => {
+            for row in select_vector {
+                address[*row].write(offset, value);
+            }
+        }
+        Scalar::Interval(value) => {
+            for row in select_vector {
+                address[*row].write(offset, value);
+            }
+        }
+        Scalar::String(value) => {
+            let data = arena.alloc_str(value);
+            let bytes = data.as_bytes();
+            for row in select_vector {
+                address[*row].write_bytes(offset, bytes);
+            }
+        }
+        Scalar::Binary(value)
+        | Scalar::Bitmap(value)
+        | Scalar::Variant(value)
+        | Scalar::Geometry(value) => {
+            let data = arena.alloc_slice_copy(value);
+            for row in select_vector {
+                address[*row].write_bytes(offset, data);
+            }
+        }
+        other => {
+            scratch.clear();
+            bincode_serialize_into_buf(scratch, other).unwrap();
+            let data = arena.alloc_slice_copy(scratch);
+            for row in select_vector {
+                address[*row].write_bytes(offset, data);
+            }
+        }
+    }
+}
+
 unsafe fn serialize_fixed_size_column_to_rowformat<T>(
     column: &T::Column,
     select_vector: &[RowID],
