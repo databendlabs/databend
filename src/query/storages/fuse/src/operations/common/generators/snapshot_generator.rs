@@ -100,6 +100,16 @@ pub(crate) fn set_compaction_num_block_hint(
     ctx: &dyn TableContext,
     table_name: &str,
     summary: &Statistics,
+) {
+    if let Err(e) = try_set_compaction_num_block_hint(ctx, table_name, summary) {
+        log::warn!("set_compaction_num_block_hint failed: {}", e);
+    }
+}
+
+pub(crate) fn try_set_compaction_num_block_hint(
+    ctx: &dyn TableContext,
+    table_name: &str,
+    summary: &Statistics,
 ) -> Result<()> {
     // check if need to auto compact
     // the algorithm is: if the number of imperfect blocks is greater than the threshold, then auto compact.

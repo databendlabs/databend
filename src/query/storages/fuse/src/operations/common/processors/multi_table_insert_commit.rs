@@ -283,7 +283,7 @@ async fn build_update_table_meta_req(
         table_stats_gen,
     )?;
     snapshot.ensure_segments_unique()?;
-    let _ = set_compaction_num_block_hint(
+    set_compaction_num_block_hint(
         snapshot_generator.ctx.as_ref(),
         table_info.name.as_str(),
         &snapshot.summary,

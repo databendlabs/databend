@@ -443,7 +443,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     table_stats_gen,
                 ) {
                     Ok(snapshot) => {
-                        let _ = set_compaction_num_block_hint(
+                        set_compaction_num_block_hint(
                             self.ctx.as_ref(),
                             table_info.name.as_str(),
                             &snapshot.summary,
