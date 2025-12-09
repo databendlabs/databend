@@ -22,6 +22,10 @@ inputs:
   size:
     description: "Small/Medium/Large"
     required: true
+  cache_size:
+    description: "Warehouse cache size"
+    required: false
+    default: "0"
   version:
     description: "Databend version"
     required: true
@@ -69,6 +73,7 @@ runs:
         BENCHMARK_ID: ${{ inputs.run_id }}
         BENCHMARK_DATASET: ${{ inputs.dataset }}
         BENCHMARK_SIZE: ${{ inputs.size }}
+        BENCHMARK_CACHE_SIZE: ${{ inputs.cache_size }}
         BENCHMARK_VERSION: ${{ inputs.version }}
         BENCHMARK_DATABASE: ${{ steps.prepare.outputs.database }}
         BENCHMARK_TRIES: ${{ steps.prepare.outputs.tries }}
@@ -86,10 +91,10 @@ runs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: benchmark-${{ inputs.dataset }}-${{ inputs.size }}
+        name: benchmark-${{ inputs.dataset }}-${{ inputs.size }}-cache-${{ inputs.cache_size }}
         path: |
-          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
-          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-*.ndjson
+          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-cache-${{ inputs.cache_size }}.json
+          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-cache-${{ inputs.cache_size }}-*.ndjson
 
     - name: Remove warehouse
       if: always()

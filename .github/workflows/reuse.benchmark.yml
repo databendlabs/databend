@@ -115,6 +115,7 @@ jobs:
           source: ${{ inputs.source }}
           source_id: ${{ inputs.source_id }}
           size: Small
+          cache_size: "0"
           version: ${{ inputs.version }}
           cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
@@ -137,11 +138,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - { dataset: hits, size: Small, database: hits, timeout: 10 }
-          - { dataset: hits, size: Large, database: hits, timeout: 10 }
-          - { dataset: tpch100, size: Small, database: tpch_100, timeout: 20 }
-          - { dataset: tpch100, size: Large, database: tpch_100, timeout: 20 }
-          - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60 }
+          - { dataset: hits, size: Small, database: hits, timeout: 10, cache_size: 0 }
+          - { dataset: hits, size: Large, database: hits, timeout: 10, cache_size: 0 }
+          - { dataset: tpch100, size: Small, database: tpch_100, timeout: 20, cache_size: 0 }
+          - { dataset: tpch100, size: Large, database: tpch_100, timeout: 20, cache_size: 0 }
+          - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60, cache_size: 0 }
+          - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60, cache_size: 300 }
       fail-fast: true
       max-parallel: 1
     steps:
@@ -165,6 +167,7 @@ jobs:
           source: ${{ inputs.source }}
           source_id: ${{ inputs.source_id }}
           size: ${{ matrix.size }}
+          cache_size: ${{ matrix.cache_size }}
           version: ${{ inputs.version }}
           cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}

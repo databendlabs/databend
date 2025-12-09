@@ -52,6 +52,7 @@ class ResultRecord:
     size: str
     tries: int
     storage: str
+    cache_size: str
     load_time: Optional[float] = None
     data_size: Optional[int] = None
     system: Optional[str] = None
@@ -236,9 +237,10 @@ def run_timed_query(runner: BendSQLRunner, sql: str) -> Optional[float]:
 
 def write_result_files(script_dir: Path, record: ResultRecord) -> None:
     result_path = script_dir / "result.json"
-    final_result_path = script_dir / f"result-{record.dataset}-cloud-{record.size}.json"
+    cache_suffix = f"-cache-{record.cache_size}" if record.cache_size else ""
+    final_result_path = script_dir / f"result-{record.dataset}-cloud-{record.size}{cache_suffix}.json"
     ndjson_name = (
-        f"result-{record.dataset}-cloud-{record.size}"
+        f"result-{record.dataset}-cloud-{record.size}{cache_suffix}"
         f"-{record.run_id}.ndjson"
     )
     ndjson_path = script_dir / ndjson_name
@@ -272,7 +274,7 @@ def main() -> None:
         sys.exit(1)
 
     run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    tags = ["s3"]
+    tags = ["s3", f"cache-{config.cache_size}"]
     cluster_size = SIZE_MAPPING[config.size]["cluster_size"]
     machine = SIZE_MAPPING[config.size]["machine"]
     system: Optional[str] = None
@@ -306,6 +308,7 @@ def main() -> None:
         size=config.size,
         tries=config.tries,
         storage="s3",
+        cache_size=config.cache_size,
         system=system,
         comment=comment,
     )
