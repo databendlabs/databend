@@ -115,7 +115,7 @@ merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t
 
 ## without order by
 query TTT
-select * from t1_separate;
+select * from t1_separate order by a;
 ----
 1 a5 b5
 3 a6 b6

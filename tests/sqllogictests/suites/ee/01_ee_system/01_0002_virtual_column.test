@@ -505,9 +505,6 @@ statement ok
 set enable_experimental_virtual_column = 0;
 
 statement ok
-set auto_compaction_imperfect_blocks_threshold = 25;
-
-statement ok
 INSERT INTO tweets FROM (SELECT * FROM tweets);
 
 query I
