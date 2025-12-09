@@ -19,6 +19,35 @@ use databend_common_column::types::Index;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::types::i256;
+use crate::types::number::Number;
+use crate::types::AccessType;
+use crate::types::AnyType;
+use crate::types::BinaryColumn;
+use crate::types::BinaryType;
+use crate::types::BitmapType;
+use crate::types::BooleanType;
+use crate::types::DataType;
+use crate::types::DateType;
+use crate::types::DecimalColumn;
+use crate::types::DecimalDataKind;
+use crate::types::DecimalScalar;
+use crate::types::DecimalView;
+use crate::types::GeographyColumn;
+use crate::types::GeographyType;
+use crate::types::GeometryType;
+use crate::types::NullableColumn;
+use crate::types::NumberColumn;
+use crate::types::NumberDataType;
+use crate::types::NumberScalar;
+use crate::types::NumberType;
+use crate::types::OpaqueScalarRef;
+use crate::types::StringColumn;
+use crate::types::StringType;
+use crate::types::TimestampType;
+use crate::types::ValueType;
+use crate::types::VariantType;
+use crate::utils::bitmap::normalize_bitmap_column;
 use crate::types::decimal::Decimal;
 use crate::types::*;
 use crate::visitor::ValueVisitor;
@@ -229,7 +258,8 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<()> {
-        self.combine_group_hash_string_column::<BitmapType>(&column);
+        let column = normalize_bitmap_column(&column);
+        self.combine_group_hash_string_column::<BitmapType>(column.as_ref());
         Ok(())
     }
 
@@ -411,7 +441,11 @@ where I: Index
     }
 
     fn visit_bitmap(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
-        self.visit_binary(column)
+        let column = normalize_bitmap_column(&column);
+        self.visit_indices(|i| {
+            let value = column.as_ref().index(i.to_usize()).unwrap();
+            value.agg_hash()
+        })
     }
 
     fn visit_string(&mut self, column: crate::types::StringColumn) -> Result<()> {
@@ -626,12 +660,16 @@ impl AggHash for ScalarRef<'_> {
 #[cfg(test)]
 mod tests {
     use databend_common_column::bitmap::Bitmap;
+    use databend_common_io::HybridBitmap;
+    use roaring::RoaringTreemap;
     use databend_common_column::types::months_days_micros;
     use databend_common_column::types::timestamp_tz;
 
     use super::*;
     use crate::types::geography::Geography;
     use crate::types::ArgType;
+    use crate::types::BitmapType;
+    use crate::types::Int32Type;
     use crate::types::DecimalSize;
     use crate::types::NullableColumn;
     use crate::types::NumberScalar;
@@ -862,6 +900,35 @@ mod tests {
                 &target
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_bitmap_group_hash_legacy_bytes_normalized() -> Result<()> {
+        let values = [1_u64, 5, 42];
+
+        let mut hybrid = HybridBitmap::new();
+        for v in values {
+            hybrid.insert(v);
+        }
+        let mut hybrid_bytes = Vec::new();
+        hybrid.serialize_into(&mut hybrid_bytes).unwrap();
+
+        let mut tree = RoaringTreemap::new();
+        for v in values {
+            tree.insert(v);
+        }
+        let mut legacy_bytes = Vec::new();
+        tree.serialize_into(&mut legacy_bytes).unwrap();
+
+        let bitmap_column = BitmapType::from_data(vec![hybrid_bytes, legacy_bytes]);
+        let block = DataBlock::new(vec![bitmap_column.into()], 2);
+
+        let mut hashes = vec![0_u64; block.num_rows()];
+        group_hash_columns(ProjectedBlock::from(block.columns()), &mut hashes);
+
+        // Legacy-encoded bitmap should hash identically to hybrid-encoded bitmap.
+        assert_eq!(hashes[0], hashes[1]);
         Ok(())
     }
 }
