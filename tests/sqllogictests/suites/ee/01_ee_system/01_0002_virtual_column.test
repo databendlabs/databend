@@ -521,10 +521,14 @@ set enable_experimental_virtual_column = 1;
 statement ok
 REFRESH VIRTUAL COLUMN FOR tweets;
 
+# Compact tweets table, so that number of automatic detected virtual columns could be stablized
+statement ok
+optimize table test_virtual_column.tweets compact
+
 query I
 SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 ----
-64
+6
 
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;
