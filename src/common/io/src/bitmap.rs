@@ -43,7 +43,7 @@ type SmallBitmap = SmallVec<[u64; LARGE_THRESHOLD]>;
 /// - Calculations may frequently create new Bitmaps; reusing them as much as possible can effectively improve performance.
 ///  - do not use Box to construct HybridBitmap
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum HybridBitmap {
     Small(SmallBitmap),
     Large(RoaringTreemap),

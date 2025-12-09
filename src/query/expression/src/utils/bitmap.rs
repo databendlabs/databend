@@ -22,7 +22,7 @@ use databend_common_io::HYBRID_KIND_SMALL;
 use databend_common_io::HYBRID_MAGIC;
 use databend_common_io::HYBRID_VERSION;
 #[inline]
-fn is_hybrid_encoding(bytes: &[u8]) -> bool {
+pub fn is_hybrid_encoding(bytes: &[u8]) -> bool {
     if bytes.is_empty() {
         return true;
     }
