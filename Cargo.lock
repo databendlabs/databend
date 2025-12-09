@@ -3660,6 +3660,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_distr",
  "recursive",
+ "roaring",
  "rust_decimal",
  "rustls 0.23.27",
  "serde",
