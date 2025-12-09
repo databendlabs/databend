@@ -948,7 +948,7 @@ impl PartialOrd for Scalar {
                 let Ok(map_2) = deserialize_bitmap(b2) else {
                     return None;
                 };
-                map_1.eq(&map_2).then(|| Ordering::Equal)
+                map_1.eq(&map_2).then_some(Ordering::Equal)
             }
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
