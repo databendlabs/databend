@@ -339,7 +339,7 @@ HashJoin
 ├── probe keys: [t.number (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 0.25
+├── estimated rows: 0.50
 ├── Filter(Build)
 │   ├── output columns: [numbers.number (#1)]
 │   ├── filters: [numbers.number (#1) < 10, numbers.number (#1) = 0]
