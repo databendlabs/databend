@@ -170,8 +170,10 @@ BEGIN
 END;
 $$;
 
-statement error 3130
+query T
 call procedure sum_even_numbers(1, 2)
+----
+2
 
 query T
 call procedure sum_even_numbers(1::INT, 2::INT)
@@ -180,6 +182,30 @@ call procedure sum_even_numbers(1::INT, 2::INT)
 
 statement ok
 drop procedure sum_even_numbers(Int, Int);
+
+statement ok
+CREATE OR REPLACE PROCEDURE p_throw_expr(email STRING) RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='throw expr test' AS $$
+BEGIN
+    IF email = 'dup' THEN
+        THROW 'Duplicate email: dup';
+    ELSEIF email='deny_user' THEN
+        THROW concat('Denied prefix: ', email);
+    ELSE
+        RETURN email;
+    END IF;
+END;
+$$;
+
+statement error 3129
+call procedure p_throw_expr('dup');
+
+statement error 3129
+call procedure p_throw_expr('deny_user');
+
+query T
+call procedure p_throw_expr('new_user');
+----
+new_user
 
 statement ok
 CREATE PROCEDURE if not exists p2(x STRING) RETURNS Int32 NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
@@ -217,29 +243,276 @@ call procedure p3('x');
 statement ok
 drop procedure p3(string);
 
+## ==========================================
+## Implicit cast resolution tests
+## ==========================================
+
+## Test 1: Auto cast succeeds - INT8 literal matches INT64 parameter
 statement ok
-CREATE OR REPLACE PROCEDURE p_throw_expr(email STRING) RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='throw expr test' AS $$
+CREATE OR REPLACE PROCEDURE test_cast_int64(x INT64) RETURNS INT64 NOT NULL LANGUAGE SQL AS $$
 BEGIN
-    IF email = 'dup' THEN
-        THROW 'Duplicate email: dup';
-    ELSEIF email='deny_user' THEN
-        THROW concat('Denied prefix: ', email);
-    ELSE
-        RETURN email;
-    END IF;
+    RETURN x + 100;
 END;
 $$;
 
-statement error 3129
-call procedure p_throw_expr('dup');
-
-statement error 3129
-call procedure p_throw_expr('deny_user');
-
 query T
-call procedure p_throw_expr('new_user');
+call procedure test_cast_int64(1);
 ----
-new_user
+101
 
 statement ok
-drop procedure p_throw_expr(string);
+drop procedure test_cast_int64(INT64);
+
+## Test 2: Explicit cast blocks auto resolution
+statement ok
+CREATE OR REPLACE PROCEDURE test_explicit_cast(x INT32) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'INT32_VERSION';
+END;
+$$;
+
+## This should fail because user has explicit cast to INT16, but no INT16 version exists
+statement error 3130
+call procedure test_explicit_cast(1::INT16);
+
+statement ok
+drop procedure test_explicit_cast(INT32);
+
+## Test 3: Ambiguous overload - same cast cost
+statement ok
+CREATE OR REPLACE PROCEDURE test_ambiguous(x INT64) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'INT64_VERSION';
+END;
+$$;
+
+statement ok
+CREATE OR REPLACE PROCEDURE test_ambiguous(x FLOAT64) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'FLOAT64_VERSION';
+END;
+$$;
+
+## INT8 can cast to both INT64 and FLOAT64 with same cost, should be ambiguous
+statement error 3130
+call procedure test_ambiguous(1);
+
+statement ok
+drop procedure test_ambiguous(INT64);
+
+statement ok
+drop procedure test_ambiguous(FLOAT64);
+
+## Test 4: Multiple overloads - exact match with explicit cast
+statement ok
+CREATE OR REPLACE PROCEDURE test_best_match(x INT32) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'INT32_EXACT';
+END;
+$$;
+
+statement ok
+CREATE OR REPLACE PROCEDURE test_best_match(x INT64) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'INT64_CAST';
+END;
+$$;
+
+## Multiple overloads without explicit cast should fail
+statement error 3130
+call procedure test_best_match(1);
+
+## INT32 literal with explicit cast should match INT32 version exactly
+query T
+call procedure test_best_match(1::INT32);
+----
+INT32_EXACT
+
+## INT64 with explicit cast should match INT64 version
+query T
+call procedure test_best_match(1::INT64);
+----
+INT64_CAST
+
+statement ok
+drop procedure test_best_match(INT32);
+
+statement ok
+drop procedure test_best_match(INT64);
+
+## Test 5: Multiple overloads require explicit cast
+statement ok
+CREATE OR REPLACE PROCEDURE test_cost(x INT64, y INT64) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'BOTH_INT64';
+END;
+$$;
+
+statement ok
+CREATE OR REPLACE PROCEDURE test_cost(x INT64, y STRING) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'INT64_STRING';
+END;
+$$;
+
+## Multiple overloads without explicit cast should fail
+statement error 3130
+call procedure test_cost(1, 2);
+
+## With explicit cast, matches the right overload
+query T
+call procedure test_cost(1::INT64, 2::INT64);
+----
+BOTH_INT64
+
+statement ok
+drop procedure test_cost(INT64, INT64);
+
+statement ok
+drop procedure test_cost(INT64, STRING);
+
+## Test 6: Timestamp implicit cast from string
+statement ok
+CREATE OR REPLACE PROCEDURE test_timestamp(ts TIMESTAMP) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'GOT_TIMESTAMP';
+END;
+$$;
+
+query T
+call procedure test_timestamp('2024-01-15 10:30:00');
+----
+GOT_TIMESTAMP
+
+query T
+call procedure test_timestamp(to_timestamp('2024-01-15 10:30:00'));
+----
+GOT_TIMESTAMP
+
+statement ok
+drop procedure test_timestamp(TIMESTAMP);
+
+## Test 7: Date implicit cast from string
+statement ok
+CREATE OR REPLACE PROCEDURE test_date(d DATE) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'GOT_DATE';
+END;
+$$;
+
+query T
+call procedure test_date(to_date('2024-01-15'));
+----
+GOT_DATE
+
+## Single candidate allows String -> Date implicit cast
+query T
+call procedure test_date('2024-01-15');
+----
+GOT_DATE
+
+query T
+call procedure test_date('2024-01-15'::DATE);
+----
+GOT_DATE
+
+statement ok
+drop procedure test_date(DATE);
+
+## Test 8: Decimal implicit cast
+statement ok
+CREATE OR REPLACE PROCEDURE test_decimal(x DECIMAL(10, 2)) RETURNS DECIMAL(10, 2) NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN x + 1.5;
+END;
+$$;
+
+query T
+call procedure test_decimal(10);
+----
+11.50
+
+query T
+call procedure test_decimal(10.25);
+----
+11.75
+
+statement ok
+drop procedure test_decimal(DECIMAL(10, 2));
+
+## Test 9: Decimal precision mismatch - should auto cast
+statement ok
+CREATE OR REPLACE PROCEDURE test_decimal_precision(x DECIMAL(18, 6)) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'DECIMAL_18_6';
+END;
+$$;
+
+query T
+call procedure test_decimal_precision(123.45);
+----
+DECIMAL_18_6
+
+statement ok
+drop procedure test_decimal_precision(DECIMAL(18, 6));
+
+## Test 10: Timestamp vs Date overload resolution
+statement ok
+CREATE OR REPLACE PROCEDURE test_time_overload(ts TIMESTAMP) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'TIMESTAMP_VERSION';
+END;
+$$;
+
+statement ok
+CREATE OR REPLACE PROCEDURE test_time_overload(d DATE) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'DATE_VERSION';
+END;
+$$;
+
+query T
+call procedure test_time_overload(to_timestamp('2024-01-15 10:30:00'));
+----
+TIMESTAMP_VERSION
+
+query T
+call procedure test_time_overload(to_date('2024-01-15'));
+----
+DATE_VERSION
+
+statement ok
+drop procedure test_time_overload(TIMESTAMP);
+
+statement ok
+drop procedure test_time_overload(DATE);
+
+## Test 11: Multiple overloads require explicit casts
+statement ok
+CREATE OR REPLACE PROCEDURE test_overload_cast(d DATE) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'DATE_VERSION';
+END;
+$$;
+
+statement ok
+CREATE OR REPLACE PROCEDURE test_overload_cast(ts TIMESTAMP) RETURNS STRING NOT NULL LANGUAGE SQL AS $$
+BEGIN
+    RETURN 'TIMESTAMP_VERSION';
+END;
+$$;
+
+## Without explicit cast it should fail because multiple overloads exist
+statement error 3130
+call procedure test_overload_cast('2024-03-01');
+
+query T
+call procedure test_overload_cast('2024-03-01'::DATE);
+----
+DATE_VERSION
+
+statement ok
+drop procedure test_overload_cast(DATE);
+
+statement ok
+drop procedure test_overload_cast(TIMESTAMP);
