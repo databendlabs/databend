@@ -17,13 +17,9 @@ use std::borrow::Cow;
 use databend_common_column::binary::BinaryColumn;
 use databend_common_column::binary::BinaryColumnBuilder;
 use databend_common_io::deserialize_bitmap;
-
-// Hybrid bitmap encoding header copied from databend_common_io::bitmap.
-const HYBRID_MAGIC: [u8; 2] = *b"HB";
-const HYBRID_VERSION: u8 = 1;
-const HYBRID_KIND_SMALL: u8 = 0;
-const HYBRID_KIND_LARGE: u8 = 1;
-
+use databend_common_io::bitmap::{
+    HYBRID_MAGIC, HYBRID_VERSION, HYBRID_KIND_SMALL, HYBRID_KIND_LARGE,
+};
 #[inline]
 fn is_hybrid_encoding(bytes: &[u8]) -> bool {
     if bytes.is_empty() {
