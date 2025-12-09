@@ -51,6 +51,7 @@ pub async fn build_runtime_filter_infos(
     packet: JoinRuntimeFilterPacket,
     runtime_filter_descs: HashMap<usize, &RuntimeFilterDesc>,
     selectivity_threshold: u64,
+    probe_ratio_threshold: u64,
     max_threads: usize,
 ) -> Result<HashMap<usize, RuntimeFilterInfo>> {
     let total_build_rows = packet.build_rows;
@@ -62,7 +63,12 @@ pub async fn build_runtime_filter_infos(
     // Iterate over all runtime filter packets
     for packet in packets.into_values() {
         let desc = runtime_filter_descs.get(&packet.id).unwrap();
-        let enabled = should_enable_runtime_filter(desc, total_build_rows, selectivity_threshold);
+        let enabled = should_enable_runtime_filter(
+            desc,
+            total_build_rows,
+            selectivity_threshold,
+            probe_ratio_threshold,
+        );
 
         // Apply this single runtime filter to all probe targets (scan_id, probe_key pairs)
         // This implements the design goal: "one runtime filter built once, pushed down to multiple scans"
@@ -106,6 +112,7 @@ pub async fn build_runtime_filter_infos(
                 stats: Arc::new(RuntimeFilterStats::new()),
                 build_rows: total_build_rows,
                 build_table_rows: desc.build_table_rows,
+                probe_table_rows: desc.probe_table_rows,
                 enabled,
             };
 

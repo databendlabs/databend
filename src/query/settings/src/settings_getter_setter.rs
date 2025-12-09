@@ -392,6 +392,10 @@ impl Settings {
         self.try_get_u64("join_runtime_filter_selectivity_threshold")
     }
 
+    pub fn get_join_runtime_filter_probe_ratio_threshold(&self) -> Result<u64> {
+        self.try_get_u64("join_runtime_filter_probe_ratio_threshold")
+    }
+
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("prefer_broadcast_join")? != 0)
     }
