@@ -15,7 +15,6 @@
 use super::PartitionedPayload;
 use super::ProbeState;
 use super::RowPtr;
-use super::BATCH_SIZE;
 use super::LOAD_FACTOR;
 use crate::ProjectedBlock;
 
@@ -23,33 +22,56 @@ pub(super) struct HashIndex {
     pub entries: Vec<Entry>,
     pub count: usize,
     pub capacity: usize,
+    pub capacity_mask: usize,
+}
+
+const INCREMENT_BITS: usize = 5;
+
+/// Derive an odd probing step from the high bits of the hash so the walk spans all slots.
+///
+/// this will generate a step in the range [1, 2^INCREMENT_BITS) based on hash and always odd.
+#[inline(always)]
+fn step(hash: u64) -> usize {
+    ((hash >> (64 - INCREMENT_BITS)) as usize) | 1
+}
+
+/// Move to the next slot with wrap-around using the power-of-two capacity mask.
+///
+/// soundness: capacity is always a power of two, so mask is capacity - 1
+#[inline(always)]
+fn next_slot(slot: usize, hash: u64, mask: usize) -> usize {
+    (slot + step(hash)) & mask
+}
+
+#[inline(always)]
+fn init_slot(hash: u64, capacity_mask: usize) -> usize {
+    hash as usize & capacity_mask
 }
 
 impl HashIndex {
     pub fn with_capacity(capacity: usize) -> Self {
+        debug_assert!(capacity.is_power_of_two());
+        let capacity_mask = capacity - 1;
         Self {
             entries: vec![Entry::default(); capacity],
             count: 0,
             capacity,
+            capacity_mask,
         }
     }
 
-    fn init_slot(&self, hash: u64) -> usize {
-        hash as usize & (self.capacity - 1)
-    }
-
-    fn find_or_insert(&mut self, mut slot: usize, salt: u16) -> (usize, bool) {
+    fn find_or_insert(&mut self, mut slot: usize, hash: u64) -> (usize, bool) {
+        let salt = Entry::hash_to_salt(hash);
         let entries = self.entries.as_mut_slice();
         loop {
-            let entry = &mut entries[slot];
+            debug_assert!(entries.get(slot).is_some());
+            // SAFETY: slot is always in range
+            let entry = unsafe { entries.get_unchecked_mut(slot) };
             if entry.is_occupied() {
                 if entry.get_salt() == salt {
                     return (slot, false);
                 } else {
-                    slot += 1;
-                    if slot >= self.capacity {
-                        slot = 0;
-                    }
+                    slot = next_slot(slot, hash, self.capacity_mask);
                     continue;
                 }
             } else {
@@ -60,13 +82,10 @@ impl HashIndex {
     }
 
     pub fn probe_slot(&mut self, hash: u64) -> usize {
-        let mut slot = self.init_slot(hash);
         let entries = self.entries.as_mut_slice();
+        let mut slot = init_slot(hash, self.capacity_mask);
         while entries[slot].is_occupied() {
-            slot += 1;
-            if slot >= self.capacity {
-                slot = 0;
-            }
+            slot = next_slot(slot, hash, self.capacity_mask);
         }
         slot as _
     }
@@ -120,7 +139,7 @@ impl Entry {
     }
 
     pub fn get_pointer(&self) -> RowPtr {
-        RowPtr::new((self.0 & POINTER_MASK) as *const u8)
+        RowPtr::new((self.0 & POINTER_MASK) as *mut u8)
     }
 
     pub fn set_pointer(&mut self, ptr: RowPtr) {
@@ -152,21 +171,17 @@ impl HashIndex {
         row_count: usize,
         mut adapter: impl TableAdapter,
     ) -> usize {
-        #[derive(Default, Clone, Copy, Debug)]
-        struct Item {
-            slot: usize,
-            hash: u64,
+        for (i, row) in state.no_match_vector[..row_count].iter_mut().enumerate() {
+            *row = i;
         }
 
-        let mut items = [Item::default(); BATCH_SIZE];
-
-        for row in 0..row_count {
-            items[row] = Item {
-                slot: self.init_slot(state.group_hashes[row]),
-                hash: state.group_hashes[row],
-            };
-            state.no_match_vector[row] = row;
-        }
+        let mut slots = state.get_temp();
+        slots.extend(
+            state.group_hashes[..row_count]
+                .iter()
+                .map(|hash| init_slot(*hash, self.capacity_mask)),
+        );
+        let capacity_mask = self.capacity_mask;
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
@@ -178,11 +193,11 @@ impl HashIndex {
 
             // 1. inject new_group_count, new_entry_count, need_compare_count, no_match_count
             for row in state.no_match_vector[..remaining_entries].iter().copied() {
-                let item = &mut items[row];
+                let slot = &mut slots[row];
+                let hash = state.group_hashes[row];
 
                 let is_new;
-                (item.slot, is_new) =
-                    self.find_or_insert(item.slot, Entry::hash_to_salt(item.hash));
+                (*slot, is_new) = self.find_or_insert(*slot, hash);
 
                 if is_new {
                     state.empty_vector[new_entry_count] = row;
@@ -200,7 +215,7 @@ impl HashIndex {
                 adapter.append_rows(state, new_entry_count);
 
                 for row in state.empty_vector[..new_entry_count].iter().copied() {
-                    let entry = self.mut_entry(items[row].slot);
+                    let entry = self.mut_entry(slots[row]);
                     entry.set_pointer(state.addresses[row]);
                     debug_assert_eq!(entry.get_pointer(), state.addresses[row]);
                 }
@@ -212,10 +227,10 @@ impl HashIndex {
                     .iter()
                     .copied()
                 {
-                    let entry = self.mut_entry(items[row].slot);
+                    let entry = self.mut_entry(slots[row]);
 
                     debug_assert!(entry.is_occupied());
-                    debug_assert_eq!(entry.get_salt(), (items[row].hash >> 48) as u16);
+                    debug_assert_eq!(entry.get_salt(), (state.group_hashes[row] >> 48) as u16);
                     state.addresses[row] = entry.get_pointer();
                 }
 
@@ -223,17 +238,16 @@ impl HashIndex {
                 no_match_count = adapter.compare(state, need_compare_count, no_match_count);
             }
 
-            // 5. Linear probing, just increase iter_times
+            // 5. Linear probing with hash-derived step
             for row in state.no_match_vector[..no_match_count].iter().copied() {
-                let slot = &mut items[row].slot;
-                *slot += 1;
-                if *slot >= self.capacity {
-                    *slot = 0;
-                }
+                let slot = &mut slots[row];
+                let hash = state.group_hashes[row];
+                *slot = next_slot(*slot, hash, capacity_mask);
             }
             remaining_entries = no_match_count;
         }
 
+        state.save_temp(slots);
         self.count += new_group_count;
 
         new_group_count
@@ -267,6 +281,7 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::collections::HashSet;
 
     use super::*;
     use crate::ProbeState;
@@ -289,10 +304,8 @@ mod tests {
         }
 
         fn init_state(&self) -> ProbeState {
-            let mut state = ProbeState {
-                row_count: self.incoming.len(),
-                ..Default::default()
-            };
+            let mut state = ProbeState::default();
+            state.row_count = self.incoming.len();
 
             for (i, (_, hash)) in self.incoming.iter().enumerate() {
                 state.group_hashes[i] = *hash
@@ -409,6 +422,38 @@ mod tests {
                 .collect::<HashMap<_, _>>();
 
             assert_eq!(want, got);
+        }
+    }
+
+    #[test]
+    fn test_probe_walk_covers_full_capacity() {
+        // This test make sure that we can always cover all slots in the table
+        let capacity = 16;
+        let capacity_mask = capacity - 1;
+
+        for high_bits in 0u64..(1 << INCREMENT_BITS) {
+            let hash = high_bits << (64 - INCREMENT_BITS);
+            let mut slot = init_slot(hash, capacity_mask);
+            let mut visited = HashSet::with_capacity(capacity);
+
+            for _ in 0..capacity {
+                assert!(
+                    visited.insert(slot),
+                    "hash {hash:#x} revisited slot {slot} before covering the table"
+                );
+                slot = next_slot(slot, hash, capacity_mask);
+            }
+
+            assert_eq!(
+                capacity,
+                visited.len(),
+                "hash {hash:#x} failed to cover every slot for capacity {capacity}"
+            );
+            assert_eq!(
+                init_slot(hash, capacity_mask),
+                slot,
+                "hash {hash:#x} walk did not return to its start after {capacity} steps"
+            );
         }
     }
 

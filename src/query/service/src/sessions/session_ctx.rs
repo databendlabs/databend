@@ -140,7 +140,7 @@ impl SessionContext {
     // Set current catalog.
     pub fn set_current_catalog(&self, catalog_name: String) {
         if catalog_name.is_empty() {
-            log::error!("[HTTP-QUERY] set_current_catalog, catalog_name is empty");
+            log::error!("set_current_catalog, catalog_name is empty");
             return;
         }
         let mut lock = self.current_catalog.write();
@@ -156,7 +156,7 @@ impl SessionContext {
     // Set current database.
     pub fn set_current_database(&self, db: String) {
         if db.is_empty() {
-            log::error!("[HTTP-QUERY] set_current_database, db is empty");
+            log::error!("set_current_database, db is empty");
             return;
         }
         let mut lock = self.current_database.write();
@@ -182,7 +182,7 @@ impl SessionContext {
 
     pub fn set_current_warehouse(&self, w: Option<String>) {
         if w.as_ref().is_some_and(|w| w.is_empty()) {
-            log::error!("[HTTP-QUERY] set_current_warehouse, w is empty");
+            log::error!("set_current_warehouse, w is empty");
             return;
         }
         let mut lock = self.current_warehouse.write();
@@ -220,7 +220,7 @@ impl SessionContext {
 
     pub(in crate::sessions) fn set_current_tenant(&mut self, tenant: Tenant) {
         if tenant.tenant.is_empty() {
-            log::error!("[HTTP-QUERY] set_current_tenant, tenant is empty");
+            log::error!("set_current_tenant, tenant is empty");
             return;
         }
         self.current_tenant = Some(tenant);
@@ -408,7 +408,7 @@ impl SessionContext {
 
     pub fn set_current_workload_group(&self, workload_group: String) {
         if workload_group.is_empty() {
-            log::error!("[HTTP-QUERY] set_current_workload_group, workload_group is empty");
+            log::error!("set_current_workload_group, workload_group is empty");
             return;
         }
         *self.current_workload_group.write() = Some(workload_group)

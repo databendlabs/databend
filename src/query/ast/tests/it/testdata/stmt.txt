@@ -11598,6 +11598,7 @@ Query(
                                     ident_type: None,
                                 },
                                 columns: [],
+                                keep_database_name: false,
                             },
                         ),
                         pivot: None,
@@ -16303,6 +16304,28 @@ Grant(
 
 
 ---------- Input ----------
+GRANT OWNERSHIP on masking policy m1  TO role r1;
+---------- Output ---------
+GRANT OWNERSHIP ON  MASKING POLICY m1 TO ROLE 'r1'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: MaskingPolicy(
+                "m1",
+            ),
+        },
+        principal: Role(
+            "r1",
+        ),
+    },
+)
+
+
+---------- Input ----------
 GRANT access sequence, create sequence ON *.*  TO 'test-grant';
 ---------- Output ---------
 GRANT ACCESS SEQUENCE, CREATE SEQUENCE ON  *.* TO USER 'test-grant'@'%'
@@ -16831,6 +16854,116 @@ Grant(
             UserIdentity {
                 username: "u1",
                 hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT CREATE MASKING POLICY ON *.* TO USER a;
+---------- Output ---------
+GRANT CREATE MASKING POLICY ON  *.* TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                CreateMaskingPolicy,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT APPLY MASKING POLICY ON *.* TO USER a;
+---------- Output ---------
+GRANT APPLY MASKING POLICY ON  *.* TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                ApplyMaskingPolicy,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE human_resources;
+---------- Output ---------
+GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE 'human_resources'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                ApplyMaskingPolicy,
+            ],
+            level: MaskingPolicy(
+                "ssn_mask",
+            ),
+        },
+        principal: Role(
+            "human_resources",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON MASKING POLICY mask_phone TO ROLE role_mask_apply;
+---------- Output ---------
+GRANT OWNERSHIP ON  MASKING POLICY mask_phone TO ROLE 'role_mask_apply'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: MaskingPolicy(
+                "mask_phone",
+            ),
+        },
+        principal: Role(
+            "role_mask_apply",
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS ON MASKING POLICY ssn_mask;
+---------- Output ---------
+SHOW GRANTS ON MASKING POLICY ssn_mask 
+---------- AST ------------
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
+        object: MaskingPolicy(
+            "ssn_mask",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
             },
         ),
     },
@@ -19452,7 +19585,7 @@ ShowObjectPrivileges(
 ---------- Input ----------
 SHOW GRANTS ON CONNECTION c1;
 ---------- Output ---------
-SHOW GRANTS ON  CONNECTION c1 
+SHOW GRANTS ON CONNECTION c1 
 ---------- AST ------------
 ShowObjectPrivileges(
     ShowObjectPrivilegesStmt {
@@ -20438,6 +20571,7 @@ Query(
                                     ident_type: None,
                                 },
                                 columns: [],
+                                keep_database_name: false,
                             },
                         ),
                     },
@@ -20582,6 +20716,7 @@ Query(
                                             ident_type: None,
                                         },
                                         columns: [],
+                                        keep_database_name: false,
                                     },
                                 ),
                             },
@@ -20707,6 +20842,7 @@ Query(
                                     ident_type: None,
                                 },
                                 columns: [],
+                                keep_database_name: false,
                             },
                         ),
                     },
@@ -22379,7 +22515,7 @@ DropDatamaskPolicy(
 ---------- Input ----------
 REFRESH VIRTUAL COLUMN FOR t
 ---------- Output ---------
-REFRESH VIRTUAL COLUMN FOR t
+REFRESH VIRTUAL COLUMN ON t
 ---------- AST ------------
 RefreshVirtualColumn(
     RefreshVirtualColumnStmt {
@@ -22393,6 +22529,9 @@ RefreshVirtualColumn(
             quote: None,
             ident_type: None,
         },
+        selection: None,
+        limit: None,
+        overwrite: false,
     },
 )
 
@@ -27304,6 +27443,7 @@ Query(
                                 ident_type: None,
                             },
                             columns: [],
+                            keep_database_name: false,
                         },
                         user_specified_materialized: false,
                         materialized: false,
@@ -28865,6 +29005,116 @@ DESCRIBE ROW ACCESS POLICY r1
 DescRowAccessPolicy(
     DescRowAccessPolicyStmt {
         name: "r1",
+    },
+)
+
+
+---------- Input ----------
+GRANT CREATE ROW ACCESS POLICY ON *.* TO USER a;
+---------- Output ---------
+GRANT CREATE ROW ACCESS POLICY ON  *.* TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                CreateRowAccessPolicy,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT APPLY ROW ACCESS POLICY ON *.* TO USER a;
+---------- Output ---------
+GRANT APPLY ROW ACCESS POLICY ON  *.* TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                ApplyRowAccessPolicy,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT APPLY ON ROW ACCESS POLICY ssn_mask TO ROLE 'human_resources'
+---------- Output ---------
+GRANT APPLY ON ROW ACCESS POLICY ssn_mask TO ROLE 'human_resources'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                ApplyRowAccessPolicy,
+            ],
+            level: RowAccessPolicy(
+                "ssn_mask",
+            ),
+        },
+        principal: Role(
+            "human_resources",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON  ROW ACCESS POLICY mask_phone TO ROLE 'role_mask_apply'
+---------- Output ---------
+GRANT OWNERSHIP ON  ROW ACCESS POLICY mask_phone TO ROLE 'role_mask_apply'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: RowAccessPolicy(
+                "mask_phone",
+            ),
+        },
+        principal: Role(
+            "role_mask_apply",
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS ON ROW ACCESS POLICY ssn_mask
+---------- Output ---------
+SHOW GRANTS ON ROW ACCESS POLICY ssn_mask 
+---------- AST ------------
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
+        object: RowAccessPolicy(
+            "ssn_mask",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
+            },
+        ),
     },
 )
 

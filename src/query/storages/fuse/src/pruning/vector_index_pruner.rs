@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[FUSE-PRUNER] ...".
+databend_common_tracing::register_module_tag!("[FUSE-PRUNER]");
+
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -54,6 +57,7 @@ use log::info;
 
 use crate::io::read::VectorIndexReader;
 use crate::pruning::PruningContext;
+use crate::pruning::PruningCostKind;
 
 type VectorPruningFutureReturn = Pin<Box<dyn Future<Output = Result<VectorPruneResult>> + Send>>;
 type VectorPruningFuture =
@@ -184,10 +188,25 @@ impl VectorIndexPruner {
             // Otherwise, we need to calculate all the scores and then filter them
             // by conditions or sort them in descending order to get the results.
             let pruned_metas = if !param.has_filter && param.asc {
-                self.vector_index_hnsw_topn_prune(param.limit, metas)
+                self.pruning_ctx
+                    .pruning_cost
+                    .measure_async(
+                        PruningCostKind::BlocksVector,
+                        self.vector_index_hnsw_topn_prune(param.limit, metas),
+                    )
                     .await?
             } else {
-                self.vector_index_topn_prune(&param.filter_expr, param.asc, param.limit, metas)
+                self.pruning_ctx
+                    .pruning_cost
+                    .measure_async(
+                        PruningCostKind::BlocksVector,
+                        self.vector_index_topn_prune(
+                            &param.filter_expr,
+                            param.asc,
+                            param.limit,
+                            metas,
+                        ),
+                    )
                     .await?
             };
 
@@ -203,9 +222,9 @@ impl VectorIndexPruner {
                 metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
             }
             if !param.has_filter && param.asc {
-                info!("[FUSE-PRUNER] Vector index hnsw topn prune elapsed: {elapsed}");
+                info!("Vector index hnsw topn prune elapsed: {elapsed}");
             } else {
-                info!("[FUSE-PRUNER] Vector index calculate score topn prune elapsed: {elapsed}");
+                info!("Vector index calculate score topn prune elapsed: {elapsed}");
             }
 
             return Ok(pruned_metas);
@@ -361,9 +380,17 @@ impl VectorIndexPruner {
         let start = Instant::now();
 
         let results = self
-            .process_vector_pruning_tasks(metas, |vector_reader, row_count, location| async move {
-                vector_reader.generate_scores(row_count, &location).await
-            })
+            .pruning_ctx
+            .pruning_cost
+            .measure_async(
+                PruningCostKind::BlocksVector,
+                self.process_vector_pruning_tasks(
+                    metas,
+                    |vector_reader, row_count, location| async move {
+                        vector_reader.generate_scores(row_count, &location).await
+                    },
+                ),
+            )
             .await?;
 
         let mut vector_prune_result_map = HashMap::with_capacity(results.len());
@@ -391,7 +418,7 @@ impl VectorIndexPruner {
         {
             metrics_inc_block_vector_index_pruning_milliseconds(elapsed);
         }
-        info!("[FUSE-PRUNER] Vector index calculate score elapsed: {elapsed}");
+        info!("Vector index calculate score elapsed: {elapsed}");
 
         Ok(new_metas)
     }

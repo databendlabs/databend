@@ -14,10 +14,10 @@
 
 # multi table INSERT
 statement ok
-create or replace database test_txn_stream;
+create or replace database test_txn_stream_1;
 
 statement ok
-use test_txn_stream;
+use test_txn_stream_1;
 
 statement ok
 CREATE TABLE t_append_only(a INT);
@@ -194,4 +194,4 @@ SELECT * FROM t_consume_append_only_6_1; -- empty
 ----
 
 statement ok
-drop database test_txn_stream;
+drop database test_txn_stream_1;

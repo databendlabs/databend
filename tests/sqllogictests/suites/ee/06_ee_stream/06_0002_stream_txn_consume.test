@@ -371,7 +371,7 @@ insert into t_1 (str) values ('a'), ('b');
 statement ok
 begin;
 
-query I
+query T
 select str from s_1 with consume order by str;
 ----
 a
@@ -383,7 +383,7 @@ select 1/0;
 statement ok
 commit;
 
-query I
+query T
 select str from s_1 order by str;
 ----
 a
@@ -394,20 +394,20 @@ b
 statement ok
 begin;
 
-query I
+query T
 select str from s_1 with consume order by str;
 ----
 a
 b
 
 # inside txn, s_1 is consumed, expects empty result set
-query I
+query T
 select str from s_1;
 
 statement ok
 rollback;
 
-query I
+query T
 select str from s_1 order by str;
 ----
 a
@@ -428,7 +428,7 @@ statement ok
 insert into tmp_sink select str from s_1;
 
 # changes should not be consumed
-query I
+query T
 select str from s_1 order by str;
 ----
 a
@@ -459,7 +459,7 @@ select count() from tmp_sink
 statement ok
 commit;
 
-query I
+query T
 select str from s_1 order by str;
 ----
 
@@ -486,7 +486,7 @@ statement ok
 explain select str from s_1;
 
 # explain should not consume the stream
-query I
+query T
 select str from s_1 order by str;
 ----
 a
@@ -508,7 +508,7 @@ begin;
 statement ok
 insert into target_1 select str from s_1;
 
-query I
+query T
 select str from s_1 with consume order by str;
 ----
 a
@@ -520,13 +520,13 @@ insert into target_2 select str from s_1;
 statement ok
 commit;
 
-query I
+query T
 select str from target_1 order by str;
 ----
 a
 b
 
-query I
+query T
 select str from target_2 order by str;
 ----
 

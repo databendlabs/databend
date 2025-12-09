@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::time::Instant;
 
 use databend_common_base::runtime::profile::Profile;
@@ -34,7 +33,7 @@ use super::packet::JoinRuntimeFilterPacket;
 use super::packet::RuntimeFilterPacket;
 use super::packet::SerializableDomain;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
-use crate::pipelines::processors::transforms::hash_join::util::hash_by_method;
+use crate::pipelines::processors::transforms::hash_join::util::hash_by_method_for_bloom;
 
 struct JoinRuntimeFilterPacketBuilder<'a> {
     build_key_column: Column,
@@ -151,13 +150,13 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         self.dedup_column(&self.build_key_column)
     }
 
-    fn build_bloom(&self, desc: &RuntimeFilterDesc) -> Result<HashSet<u64>> {
+    fn build_bloom(&self, desc: &RuntimeFilterDesc) -> Result<Vec<u64>> {
         let data_type = desc.build_key.data_type();
         let num_rows = self.build_key_column.len();
         let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
-        let mut hashes = HashSet::with_capacity(num_rows);
+        let mut hashes = Vec::with_capacity(num_rows);
         let key_columns = &[self.build_key_column.clone().into()];
-        hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;
+        hash_by_method_for_bloom(&method, key_columns.into(), num_rows, &mut hashes)?;
         Ok(hashes)
     }
 

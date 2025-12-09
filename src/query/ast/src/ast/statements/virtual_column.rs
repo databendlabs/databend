@@ -19,6 +19,7 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_dot_separated_list;
+use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 
@@ -27,11 +28,14 @@ pub struct RefreshVirtualColumnStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub selection: Option<Box<Expr>>,
+    pub limit: Option<u64>,
+    pub overwrite: bool,
 }
 
 impl Display for RefreshVirtualColumnStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "REFRESH VIRTUAL COLUMN FOR ")?;
+        write!(f, "REFRESH VIRTUAL COLUMN ON ")?;
         write_dot_separated_list(
             f,
             self.catalog
@@ -39,7 +43,15 @@ impl Display for RefreshVirtualColumnStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-
+        if let Some(selection) = &self.selection {
+            write!(f, " WHERE {selection}")?;
+        }
+        if let Some(limit) = self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
+        if self.overwrite {
+            write!(f, " OVERWRITE")?;
+        }
         Ok(())
     }
 }

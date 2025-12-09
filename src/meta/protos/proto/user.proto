@@ -93,6 +93,14 @@ message GrantObject {
     uint64 procedure_id = 1;
   }
 
+  message GrantMaskingPolicyObject {
+    uint64 policy_id = 1;
+  }
+
+  message GrantRowAccessPolicyObject {
+    uint64 policy_id = 1;
+  }
+
   oneof object {
     GrantGlobalObject global = 1;
     GrantDatabaseObject database = 2;
@@ -105,6 +113,8 @@ message GrantObject {
     GrantConnectionObject connection = 9;
     GrantSequenceObject sequence = 10;
     GrantProcedureObject procedure = 11;
+    GrantMaskingPolicyObject maskingpolicy = 12;
+    GrantRowAccessPolicyObject row_access_policy = 13;
   }
 }
 

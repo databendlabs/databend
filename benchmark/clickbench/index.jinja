@@ -335,6 +335,12 @@
             </td>
         </tr>
         <tr>
+            <th>Cache size: </th>
+            <td id="selectors_cache_size">
+                <a id="select-all-cache-sizes" class="selector selector-active">All</a>
+            </td>
+        </tr>
+        <tr>
             <th>Metric: </th>
             <td id="selectors_run">
                 <a class="selector" id="selector-metric-cold">Cold Run</a>
@@ -386,9 +392,20 @@
             "type": {},
             "machine": {},
             "cluster_size": {},
+            "cache_size": {},
             "metric": "hot",
             "queries": [],
         };
+
+        function normalizeSelectors() {
+            selectors.system = selectors.system || {};
+            selectors.type = selectors.type || {};
+            selectors.machine = selectors.machine || {};
+            selectors.cluster_size = selectors.cluster_size || {};
+            selectors.cache_size = selectors.cache_size || {};
+            selectors.metric = selectors.metric || 'hot';
+            selectors.queries = selectors.queries || [];
+        }
 
         let theme = 'light';
 
@@ -413,8 +430,16 @@
         let types = document.getElementById('selectors_type');
         let machines = document.getElementById('selectors_machine');
         let cluster_sizes = document.getElementById('selectors_cluster_size');
+        let cache_sizes = document.getElementById('selectors_cache_size');
 
         let unique_systems = [... new Set(data.map(elem => elem.system))];
+        const default_cache_size = 'n/a';
+        const getCacheLabel = entry => {
+            if (entry.cache_size === undefined || entry.cache_size === null || entry.cache_size === '') {
+                return default_cache_size;
+            }
+            return entry.cache_size.toString();
+        };
 
         function toggle(e, elem, selectors_map) {
             selectors_map[elem] = !selectors_map[elem];
@@ -483,11 +508,20 @@
                 if (!(elem in selectors.cluster_size)) { selectors.cluster_size[elem] = true; }
                 selector.addEventListener('click', e => toggle(e, elem, selectors.cluster_size));
             });
+        [... new Set(data.map(getCacheLabel))].map(elem => {
+            let selector = document.createElement('a');
+            selector.className = 'selector selector-active';
+            selector.appendChild(document.createTextNode(elem));
+            cache_sizes.appendChild(selector);
+            if (!(elem in selectors.cache_size)) { selectors.cache_size[elem] = true; }
+            selector.addEventListener('click', e => toggle(e, elem, selectors.cache_size));
+        });
 
         document.getElementById('select-all-systems').addEventListener('click', e => toggleAll(e, selectors.system));
         document.getElementById('select-all-types').addEventListener('click', e => toggleAll(e, selectors.type));
         document.getElementById('select-all-machines').addEventListener('click', e => toggleAll(e, selectors.machine));
         document.getElementById('select-all-cluster-sizes').addEventListener('click', e => toggleAll(e, selectors.cluster_size));
+        document.getElementById('select-all-cache-sizes').addEventListener('click', e => toggleAll(e, selectors.cache_size));
 
         [...document.getElementById('selectors_run').querySelectorAll('a')].map(elem => elem.addEventListener('click', e => {
             [...e.target.parentElement.querySelectorAll('a')].map(elem => { elem.className = elem == e.target ? 'selector selector-active' : 'selector' });
@@ -505,6 +539,7 @@
             [...types.childNodes].map(elem => { elem.className = selectors.type[elem.innerText] ? 'selector selector-active' : 'selector' });
             [...machines.childNodes].map(elem => { elem.className = selectors.machine[elem.innerText] ? 'selector selector-active' : 'selector' });
             [...cluster_sizes.childNodes].map(elem => { elem.className = selectors.cluster_size[elem.innerText] ? 'selector selector-active' : 'selector' });
+            [...cache_sizes.childNodes].map(elem => { elem.className = selectors.cache_size[elem.innerText] ? 'selector selector-active' : 'selector' });
 
             [...document.getElementById('selectors_run').querySelectorAll('a')].map(elem => {
                 elem.className = elem.id == 'selector-metric-' + selectors.metric ? 'selector selector-active' : 'selector'
@@ -713,10 +748,11 @@
             clearElement(details_body);
 
             let filtered_data = data.filter(elem =>
-                selectors.system[elem.system] &&
-                selectors.machine[elem.machine] &&
-                selectors.cluster_size[elem.cluster_size] &&
-                elem.tags.filter(type => selectors.type[type]).length > 0);
+            selectors.system[elem.system] &&
+            selectors.machine[elem.machine] &&
+            selectors.cluster_size[elem.cluster_size] &&
+            selectors.cache_size[getCacheLabel(elem)] &&
+            elem.tags.filter(type => selectors.type[type]).length > 0);
 
             let nothing_selected_elem = document.getElementById('nothing-selected');
             if (filtered_data.length == 0) {
@@ -868,6 +904,7 @@
         window.onpopstate = function (event) {
             if (!event.state) { return; }
             selectors = event.state;
+            normalizeSelectors();
             render();
             updateSelectors();
         };
@@ -875,6 +912,7 @@
         if (window.location.hash) {
             try {
                 selectors = JSON.parse(atob(window.location.hash.substring(1)));
+                normalizeSelectors();
             } catch { }
         }
 

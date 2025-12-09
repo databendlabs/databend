@@ -69,6 +69,7 @@ __pycache__/
 .python-version
 
 *.zip
+!tests/data/ontime_200.csv.zip
 *.profraw
 
 # tpch data set

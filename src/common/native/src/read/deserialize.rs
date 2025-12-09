@@ -168,6 +168,15 @@ where
             ))
         }
         TableDataType::Decimal(decimal) => match decimal {
+            DecimalDataType::Decimal64(size) => {
+                init.push(InitNested::Primitive(is_nullable));
+                DynIter::new(DecimalNestedIter::<_, i64, i64>::new(
+                    readers.pop().unwrap(),
+                    data_type.clone(),
+                    size,
+                    init,
+                ))
+            }
             DecimalDataType::Decimal128(size) => {
                 init.push(InitNested::Primitive(is_nullable));
                 DynIter::new(DecimalNestedIter::<_, i128, i128>::new(
@@ -187,7 +196,6 @@ where
                     readers.pop().unwrap(), data_type.clone(), size, init
                 ))
             }
-            _ => unreachable!(),
         },
         t if t.is_physical_binary() => {
             init.push(InitNested::Primitive(is_nullable));

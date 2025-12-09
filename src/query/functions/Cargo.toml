@@ -54,7 +54,6 @@ proj4rs = { workspace = true }
 proptest = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
-roaring = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha1 = { workspace = true }
@@ -70,6 +69,7 @@ unicase = { workspace = true }
 [dev-dependencies]
 comfy-table = { workspace = true }
 databend-common-ast = { workspace = true }
+databend-common-formats = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
 

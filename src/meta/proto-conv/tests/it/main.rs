@@ -150,3 +150,6 @@ mod v155_row_access_policy_args;
 mod v156_data_mask_args;
 mod v157_type_timestamp_tz;
 mod v158_udtf_server;
+mod v159_grant_object_masking_policy;
+mod v160_udf_update_on;
+mod v161_grant_object_row_access_policy;

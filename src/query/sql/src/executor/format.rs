@@ -138,7 +138,10 @@ impl PhysicalPlan {
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("HashJoin: {} estimated_rows: {}", plan.join_type, estimated_rows),
+                    format!(
+                        "HashJoin: {} estimated_rows: {}",
+                        plan.join_type, estimated_rows
+                    ),
                     children,
                 ))
             }
@@ -1813,6 +1816,18 @@ fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<S
             "inverted pruning: {} to {}",
             info.pruning_stats.blocks_inverted_index_pruning_before,
             info.pruning_stats.blocks_inverted_index_pruning_after
+        );
+    }
+
+    // topn pruning status.
+    if info.pruning_stats.blocks_topn_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description += ", ";
+        }
+        blocks_pruning_description += &format!(
+            "topn pruning: {} to {}",
+            info.pruning_stats.blocks_topn_pruning_before,
+            info.pruning_stats.blocks_topn_pruning_after
         );
     }
 

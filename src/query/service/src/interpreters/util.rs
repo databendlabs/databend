@@ -20,6 +20,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
@@ -137,7 +138,10 @@ impl Client for ScriptClient {
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
-        let schema = plan.schema();
+        let mut schema = plan.schema();
+        if let Some(real_schema) = interpreter.get_dynamic_schema().await {
+            schema = real_schema;
+        }
 
         let block = match blocks.len() {
             0 => DataBlock::empty_with_schema(schema.clone()),
@@ -213,6 +217,13 @@ impl Client for ScriptClient {
                 "`is_true` called on non-boolean value {scalar}",
             ))),
         }
+    }
+
+    fn format_error(&self, value: &Self::Var) -> databend_common_exception::Result<String> {
+        Ok(match value {
+            Scalar::String(s) => s.clone(),
+            _ => scalar_ref_to_string(&value.as_ref()),
+        })
     }
 }
 

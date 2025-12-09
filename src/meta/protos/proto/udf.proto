@@ -131,4 +131,6 @@ message UserDefinedFunction {
   }
   // The time udf created.
   optional string created_on = 5;
+  // The time udf updated.
+  optional string update_on = 11;
 }

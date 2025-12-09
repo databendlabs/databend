@@ -92,6 +92,7 @@ impl AggregateHashTable {
         arena: Arc<Bump>,
         need_init_entry: bool,
     ) -> Self {
+        debug_assert!(capacity.is_power_of_two());
         let entries = if need_init_entry {
             vec![Entry::default(); capacity]
         } else {
@@ -110,6 +111,7 @@ impl AggregateHashTable {
                 entries,
                 count: 0,
                 capacity,
+                capacity_mask: capacity - 1,
             },
             config,
         }
@@ -288,24 +290,20 @@ impl AggregateHashTable {
         while payload.flush(flush_state) {
             let row_count = flush_state.row_count;
 
-            let _ = self.probe_and_create(
-                &mut flush_state.probe_state,
-                (&flush_state.group_columns).into(),
-                row_count,
-            );
+            let state = &mut *flush_state.probe_state;
+            let _ = self.probe_and_create(state, (&flush_state.group_columns).into(), row_count);
+
+            let places = &mut state.state_places[..row_count];
 
             // set state places
             if !self.payload.aggrs.is_empty() {
-                for i in 0..row_count {
-                    flush_state.probe_state.state_places[i] =
-                        flush_state.probe_state.addresses[i].state_addr(&self.payload.row_layout);
+                for (place, ptr) in places.iter_mut().zip(&state.addresses[..row_count]) {
+                    *place = ptr.state_addr(&self.payload.row_layout)
                 }
             }
 
-            let state = &mut flush_state.probe_state;
-            let places = &state.state_places.as_slice()[0..row_count];
-            let rhses = &flush_state.state_places.as_slice()[0..row_count];
             if let Some(layout) = self.payload.row_layout.states_layout.as_ref() {
+                let rhses = &flush_state.state_places[..row_count];
                 for (aggr, loc) in self.payload.aggrs.iter().zip(layout.states_loc.iter()) {
                     aggr.batch_merge_states(places, rhses, loc)?;
                 }

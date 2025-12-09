@@ -57,8 +57,8 @@ pub const SEARCH_SCORE_COLUMN_ID: u32 = u32::MAX - 8;
 pub const VECTOR_SCORE_COLUMN_ID: u32 = u32::MAX - 9;
 
 pub const VIRTUAL_COLUMN_ID_START: u32 = 3_000_000_000;
-pub const VIRTUAL_COLUMNS_ID_UPPER: u32 = 3_000_001_000;
-pub const VIRTUAL_COLUMNS_LIMIT: usize = 1000;
+pub const VIRTUAL_COLUMNS_ID_UPPER: u32 = 3_000_002_000;
+pub const VIRTUAL_COLUMNS_LIMIT: usize = 2000;
 
 // internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
@@ -1678,7 +1678,10 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),
         DataType::Decimal(size) => match size.data_kind() {
-            DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
+            DecimalDataKind::Decimal64 => {
+                Ok(TableDataType::Decimal(DecimalDataType::Decimal64(*size)))
+            }
+            DecimalDataKind::Decimal128 => {
                 Ok(TableDataType::Decimal(DecimalDataType::Decimal128(*size)))
             }
             DecimalDataKind::Decimal256 => {

@@ -29,7 +29,7 @@ AggregateFinal
             │       ├── read size: 20.15 KiB
             │       ├── partitions total: 1
             │       ├── partitions scanned: 1
-            │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
             │       ├── push downs: [filters: [], limit: NONE]
             │       └── estimated rows: 5000.00
             └── TableScan(Probe)
@@ -40,7 +40,7 @@ AggregateFinal
                 ├── read size: 20.15 KiB
                 ├── partitions total: 1
                 ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 5000.00
 

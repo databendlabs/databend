@@ -17,11 +17,9 @@ use std::io::Write;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::i256;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalColumn;
-use databend_common_expression::types::DecimalView;
 use databend_common_expression::types::GeographyColumn;
 use databend_common_expression::types::NullableColumn;
 use databend_common_expression::types::NumberColumn;
@@ -100,16 +98,13 @@ impl<'a, W: Write> ValueVisitor for WriteVisitor<'a, W> {
 
     fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
         match column {
-            DecimalColumn::Decimal64(buffer, _) => {
-                let buffer: Vec<_> = DecimalView::<i64, i128>::iter_column(&buffer).collect();
-                write_primitive::<_, W>(
-                    self.w,
-                    &buffer.into(),
-                    self.validity.clone(),
-                    &self.write_options,
-                    self.scratch,
-                )
-            }
+            DecimalColumn::Decimal64(buffer, _) => write_primitive::<_, W>(
+                self.w,
+                &buffer,
+                self.validity.clone(),
+                &self.write_options,
+                self.scratch,
+            ),
             DecimalColumn::Decimal128(column, _) => write_primitive::<_, W>(
                 self.w,
                 &column,

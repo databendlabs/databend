@@ -351,6 +351,8 @@ pub enum TokenKind {
     ANY,
     #[token("APPEND_ONLY", ignore(ascii_case))]
     APPEND_ONLY,
+    #[token("APPLY", ignore(ascii_case))]
+    APPLY,
     #[token("ARGS", ignore(ascii_case))]
     ARGS,
     #[token("AUTO", ignore(ascii_case))]
@@ -1238,6 +1240,8 @@ pub enum TokenKind {
     TENANT,
     #[token("THEN", ignore(ascii_case))]
     THEN,
+    #[token("THROW", ignore(ascii_case))]
+    THROW,
     #[token("THURSDAY", ignore(ascii_case))]
     THURSDAY,
     #[token("TIME", ignore(ascii_case))]

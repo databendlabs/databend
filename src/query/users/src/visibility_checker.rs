@@ -116,9 +116,11 @@ pub struct GrantObjectVisibilityChecker {
     granted_global_c: bool,
     granted_global_seq: bool,
     granted_global_procedure: bool,
+    granted_global_masking_policy: bool,
     granted_global_stage: bool,
     granted_global_read_stage: bool,
     granted_global_db_table: bool,
+    granted_global_row_access_policy: bool,
 
     // Catalog ID pool for efficient name → ID mapping
     catalog_pool: CatalogIdPool,
@@ -129,6 +131,8 @@ pub struct GrantObjectVisibilityChecker {
     granted_tables_id: FastHashMap<u32, FastHashMap<u64, FastHashSet<u64>>>,
     extra_databases_id: FastHashMap<u32, FastHashSet<u64>>,
     granted_procedures_id: FastHashSet<u64>,
+    granted_masking_policies_id: FastHashSet<u64>,
+    granted_row_access_policies_id: FastHashSet<u64>,
 
     // Name-based storage (backward compatibility)
     granted_databases: FxHashSet<(Arc<str>, Arc<str>)>,
@@ -155,6 +159,8 @@ impl GrantObjectVisibilityChecker {
         let mut granted_global_stage = false;
         let mut granted_global_read_stage = false;
         let mut granted_global_db_table = false;
+        let mut granted_global_masking_policy = false;
+        let mut granted_global_row_access_policy = false;
         let mut catalog_pool = CatalogIdPool::new();
         let total_objects = ownership_objects.len();
         // Most deployments use only the default catalog
@@ -178,8 +184,9 @@ impl GrantObjectVisibilityChecker {
             FastHashMap::with_capacity(estimated_catalogs);
         let mut extra_databases_id: FastHashMap<u32, FastHashSet<u64>> =
             FastHashMap::with_capacity(estimated_catalogs);
-        let mut granted_procedures_id: FastHashSet<u64> =
-            FastHashSet::with_capacity(total_objects / 10);
+        let mut granted_procedures_id: FastHashSet<u64> = FastHashSet::with_capacity(16);
+        let mut granted_masking_policies_id: FastHashSet<u64> = FastHashSet::with_capacity(16);
+        let mut granted_row_access_policies_id: FastHashSet<u64> = FastHashSet::with_capacity(16);
 
         let mut granted_databases: FxHashSet<(Arc<str>, Arc<str>)> =
             FxHashSet::with_capacity_and_hasher(total_objects / 10, Default::default());
@@ -253,6 +260,24 @@ impl GrantObjectVisibilityChecker {
                             grant_entry.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_procedure(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
+
+                        check_privilege(
+                            &mut granted_global_masking_policy,
+                            grant_entry.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_masking_policy(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
+
+                        check_privilege(
+                            &mut granted_global_row_access_policy,
+                            grant_entry.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_row_access_policy(false)
                                     .has_privilege(privilege)
                             },
                         );
@@ -366,6 +391,12 @@ impl GrantObjectVisibilityChecker {
                     GrantObject::Procedure(procedure_id) => {
                         let _ = granted_procedures_id.set_insert(*procedure_id);
                     }
+                    GrantObject::MaskingPolicy(policy_id) => {
+                        let _ = granted_masking_policies_id.set_insert(*policy_id);
+                    }
+                    GrantObject::RowAccessPolicy(policy_id) => {
+                        let _ = granted_row_access_policies_id.set_insert(*policy_id);
+                    }
                 }
             }
         }
@@ -426,8 +457,14 @@ impl GrantObjectVisibilityChecker {
                 OwnershipObject::Sequence { name } => {
                     granted_seq.insert(Arc::from(name.as_str()));
                 }
-                OwnershipObject::Procedure { procedure_id, .. } => {
+                OwnershipObject::Procedure { procedure_id } => {
                     let _ = granted_procedures_id.set_insert(*procedure_id);
+                }
+                OwnershipObject::MaskingPolicy { policy_id } => {
+                    let _ = granted_masking_policies_id.set_insert(*policy_id);
+                }
+                OwnershipObject::RowAccessPolicy { policy_id } => {
+                    let _ = granted_row_access_policies_id.set_insert(*policy_id);
                 }
             }
         }
@@ -447,6 +484,8 @@ impl GrantObjectVisibilityChecker {
             granted_global_c,
             granted_global_seq,
             granted_global_procedure,
+            granted_global_masking_policy,
+            granted_global_row_access_policy,
             granted_global_stage,
             granted_global_read_stage,
             granted_global_db_table,
@@ -465,6 +504,8 @@ impl GrantObjectVisibilityChecker {
             granted_c,
             granted_seq,
             granted_procedures_id,
+            granted_masking_policies_id,
+            granted_row_access_policies_id,
         }
     }
 
@@ -686,6 +727,22 @@ impl GrantObjectVisibilityChecker {
             return true;
         }
         false
+    }
+
+    #[inline(always)]
+    pub fn check_masking_policy_visibility(&self, id: &u64) -> bool {
+        if self.granted_global_masking_policy {
+            return true;
+        }
+        self.granted_masking_policies_id.contains(id)
+    }
+
+    #[inline(always)]
+    pub fn check_row_access_policy_visibility(&self, id: &u64) -> bool {
+        if self.granted_global_row_access_policy {
+            return true;
+        }
+        self.granted_row_access_policies_id.contains(id)
     }
 
     #[allow(clippy::type_complexity)]

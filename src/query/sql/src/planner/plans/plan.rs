@@ -561,6 +561,7 @@ impl Plan {
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
             Plan::ExecuteTask(plan) => plan.schema(),
+            Plan::DescRowAccessPolicy(plan) => plan.schema(),
             Plan::DescNotification(plan) => plan.schema(),
             Plan::DescConnection(plan) => plan.schema(),
             Plan::ShowConnections(plan) => plan.schema(),

@@ -43,8 +43,8 @@ fn basics_string_view() {
     let array2 = Utf8ViewColumn::new_unchecked(
         array.views().clone(),
         array.data_buffers().clone(),
-        array.total_bytes_len(),
-        array.total_buffer_len(),
+        Some(array.total_bytes_len()),
+        Some(array.total_buffer_len()),
     );
 
     assert_eq!(array, array2);
@@ -83,8 +83,8 @@ fn basics_binary_view() {
     let array2 = BinaryViewColumn::new_unchecked(
         array.views().clone(),
         array.data_buffers().clone(),
-        array.total_bytes_len(),
-        array.total_buffer_len(),
+        Some(array.total_bytes_len()),
+        Some(array.total_buffer_len()),
     );
 
     assert_eq!(array, array2);
@@ -151,7 +151,7 @@ fn test_slice() {
     ];
 
     let array: Utf8ViewColumn = data.into_iter().collect();
-    assert_eq!(array.memory_size(), 156);
+    assert_eq!(array.memory_size(false), 156);
 
     let a3 = array.sliced(2, 3);
     assert_eq!(a3.into_iter().collect::<Vec<_>>(), vec![
@@ -159,7 +159,7 @@ fn test_slice() {
         "yyyyyyyyyyyyyyyyyyyyy",
         "zzzzzzzzzzzzzzzzzzzzz",
     ]);
-    assert_eq!(a3.memory_size(), 108);
+    assert_eq!(a3.memory_size(false), 108);
 }
 
 #[test]

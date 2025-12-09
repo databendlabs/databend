@@ -15,7 +15,7 @@
 mod datablock_splitter;
 mod new_aggregate_spiller;
 mod new_final_aggregate_state;
-mod new_transform_aggregate_spill_writer;
+mod new_transform_aggregate_partial;
 mod new_transform_final_aggregate;
 mod transform_partition_bucket_scatter;
 
@@ -23,6 +23,6 @@ pub use datablock_splitter::split_partitioned_meta_into_datablocks;
 pub use new_aggregate_spiller::NewAggregateSpiller;
 pub use new_aggregate_spiller::SharedPartitionStream;
 pub use new_final_aggregate_state::FinalAggregateSharedState;
-pub use new_transform_aggregate_spill_writer::NewTransformAggregateSpillWriter;
+pub use new_transform_aggregate_partial::NewTransformPartialAggregate;
 pub use new_transform_final_aggregate::NewFinalAggregateTransform;
 pub use transform_partition_bucket_scatter::TransformPartitionBucketScatter;

@@ -457,9 +457,7 @@ def stage_summary_udtf(data_stage: StageLocation, value: int):
     rows = []
     for offset in (0, 1):
         current_value = value + offset
-        summary = (
-            f"{data_stage.stage_name}:{bucket}:{data_stage.relative_path}:{current_value}"
-        )
+        summary = f"{data_stage.stage_name}:{bucket}:{data_stage.relative_path}:{current_value}"
         rows.append(
             {
                 "stage_name": data_stage.stage_name or "",

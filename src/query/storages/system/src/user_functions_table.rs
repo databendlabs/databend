@@ -78,6 +78,7 @@ impl AsyncSystemTable for UserFunctionsTable {
         let mut arguments = Vec::with_capacity(user_functions.len());
         let mut definitions = Vec::with_capacity(user_functions.len());
         let mut created_on = Vec::with_capacity(user_functions.len());
+        let mut updated_on = Vec::with_capacity(user_functions.len());
 
         for user_function in &user_functions {
             names.push(user_function.name.as_str());
@@ -87,6 +88,7 @@ impl AsyncSystemTable for UserFunctionsTable {
             arguments.push(serde_json::to_vec(&user_function.arguments)?);
             definitions.push(user_function.definition.as_str());
             created_on.push(user_function.created_on.timestamp_micros());
+            updated_on.push(user_function.update_on.timestamp_micros());
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -97,6 +99,7 @@ impl AsyncSystemTable for UserFunctionsTable {
             StringType::from_data(languages),
             StringType::from_data(definitions),
             TimestampType::from_data(created_on),
+            TimestampType::from_data(updated_on),
         ]))
     }
 }
@@ -126,6 +129,7 @@ pub struct UserFunction {
     category: String,
     definition: String,
     created_on: DateTime<Utc>,
+    update_on: DateTime<Utc>,
     arguments: UserFunctionArguments,
 }
 
@@ -142,6 +146,7 @@ impl UserFunctionsTable {
             TableField::new("language", TableDataType::String),
             TableField::new("definition", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
+            TableField::new("update_on", TableDataType::Timestamp),
         ]);
 
         let table_info = TableInfo {
@@ -174,6 +179,7 @@ impl UserFunctionsTable {
                 category: user_function.definition.category().to_string(),
                 definition: user_function.definition.to_string(),
                 created_on: user_function.created_on,
+                update_on: user_function.update_on,
                 arguments: match &user_function.definition {
                     UDFDefinition::LambdaUDF(x) => UserFunctionArguments {
                         arg_types: vec![],

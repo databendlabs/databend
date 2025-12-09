@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Logs from this module will show up as "[HTTP-SESSION] ...".
+databend_common_tracing::register_module_tag!("[HTTP-SESSION]");
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -133,7 +136,7 @@ impl EndpointKind {
                 }
             }
             EndpointKind::Login | EndpointKind::Clickhouse => Err(ErrorCode::AuthenticateFailure(
-                format!("[HTTP-SESSION] Invalid token usage: databend token cannot be used for {self:?}",),
+                format!("Invalid token usage: databend token cannot be used for {self:?}",),
             )),
         }
     }
@@ -198,7 +201,7 @@ fn get_credential(
     let std_auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if std_auth_headers.len() > 1 {
         let msg = &format!(
-            "[HTTP-SESSION] Authentication error: multiple {} headers detected",
+            "Authentication error: multiple {} headers detected",
             AUTHORIZATION
         );
         return Err(ErrorCode::AuthenticateFailure(msg));
@@ -209,7 +212,7 @@ fn get_credential(
             get_clickhouse_name_password(req, client_ip)
         } else {
             Err(ErrorCode::AuthenticateFailure(
-                "[HTTP-SESSION] Authentication error: no authorization header provided",
+                "Authentication error: no authorization header provided",
             ))
         }
     } else {
@@ -264,7 +267,7 @@ fn get_credential_from_header(
                 Ok(c)
             }
             None => Err(ErrorCode::AuthenticateFailure(
-                "[HTTP-SESSION] Authentication error: invalid Basic auth header format",
+                "Authentication error: invalid Basic auth header format",
             )),
         }
     } else if value.as_bytes().starts_with(b"Bearer ") {
@@ -274,7 +277,9 @@ fn get_credential_from_header(
                 if SessionClaim::is_databend_token(&token) {
                     if let Some(t) = endpoint_kind.require_databend_token_type()? {
                         if t != SessionClaim::get_type(&token)? {
-                            return Err(ErrorCode::AuthenticateFailure("[HTTP-SESSION] Authentication error: incorrect token type for this endpoint"));
+                            return Err(ErrorCode::AuthenticateFailure(
+                                "Authentication error: incorrect token type for this endpoint",
+                            ));
                         }
                     }
                     Ok(Credential::DatabendToken { token })
@@ -283,12 +288,12 @@ fn get_credential_from_header(
                 }
             }
             None => Err(ErrorCode::AuthenticateFailure(
-                "[HTTP-SESSION] Authentication error: invalid Bearer auth header format",
+                "Authentication error: invalid Bearer auth header format",
             )),
         }
     } else {
         Err(ErrorCode::AuthenticateFailure(
-            "[HTTP-SESSION] Authentication error: unsupported authorization header format",
+            "Authentication error: unsupported authorization header format",
         ))
     }
 }
@@ -309,10 +314,7 @@ fn get_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Res
         let query_str = req.uri().query().unwrap_or_default();
         let query_params = serde_urlencoded::from_str::<HashMap<String, String>>(query_str)
             .map_err(|e| {
-                ErrorCode::BadArguments(format!(
-                    "[HTTP-SESSION] Failed to parse query parameters: {}",
-                    e
-                ))
+                ErrorCode::BadArguments(format!("Failed to parse query parameters: {}", e))
             })?;
         let (user, key) = (query_params.get("user"), query_params.get("password"));
         if let (Some(name), Some(password)) = (user, key) {
@@ -323,7 +325,7 @@ fn get_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Res
             })
         } else {
             Err(ErrorCode::AuthenticateFailure(
-                "[HTTP-SESSION] Authentication error: no credentials found in headers or query parameters",
+                "Authentication error: no credentials found in headers or query parameters",
             ))
         }
     }
@@ -428,7 +430,7 @@ impl<E> HTTPSessionEndpoint<E> {
         };
         if client_session.is_none() && !matches!(self.endpoint_kind, EndpointKind::PollQuery) {
             info!(
-                "[HTTP-SESSION] got request without session, url={}, headers={:?}",
+                "got request without session, url={}, headers={:?}",
                 req.uri(),
                 &req.headers()
             );
@@ -437,7 +439,7 @@ impl<E> HTTPSessionEndpoint<E> {
         if let (Some(id1), Some(c)) = (&authed_client_session_id, &client_session) {
             if *id1 != c.header.id {
                 return Err(ErrorCode::AuthenticateFailure(format!(
-                    "[HTTP-SESSION] Session ID mismatch: token session ID '{}' does not match header session ID '{}'",
+                    "Session ID mismatch: token session ID '{}' does not match header session ID '{}'",
                     id1, c.header.id
                 )));
             }
@@ -602,7 +604,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         .map_err(HttpErrorCode::server_error)?
                     {
                         log::info!(
-                            "[HTTP-SESSION] forwarding /v1{} from {local_id} to {sticky_node_id}",
+                            "forwarding /v1{} from {local_id} to {sticky_node_id}",
                             req.uri()
                         );
                         forward_request(req, node).await
@@ -611,7 +613,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                             "Sticky session state lost: node '{sticky_node_id}' not found in cluster, request={}",
                             get_request_info(req)
                         );
-                        warn!("[HTTP-SESSION] {}", msg);
+                        warn!("{}", msg);
                         Err(Error::from(HttpErrorCode::bad_request(
                             ErrorCode::BadArguments(msg),
                         )))
@@ -644,7 +646,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         }
                         Ok(None) => {
                             let msg = format!("Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`. request = {}.", warehouse, get_request_info(req));
-                            warn!("[HTTP-SESSION] {}", msg);
+                            warn!("{}", msg);
                             return Err(Error::from(HttpErrorCode::bad_request(
                                 ErrorCode::UnknownWarehouse(msg),
                             )));
@@ -665,9 +667,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     }
                 }
 
-                log::warn!(
-                    "[HTTP-SESSION] Ignoring warehouse header: {HEADER_WAREHOUSE}={warehouse:?}"
-                );
+                log::warn!("Ignoring warehouse header: {HEADER_WAREHOUSE}={warehouse:?}");
             }
         };
 
@@ -709,13 +709,13 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     let err = HttpErrorCode::error_code(err);
                     if err.status() == StatusCode::UNAUTHORIZED {
                         warn!(
-                            "[HTTP-SESSION] Authentication failure: {method} {uri}, headers={:?}, error={}",
+                            "Authentication failure: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
                             err
                         );
                     } else {
                         error!(
-                            "[HTTP-SESSION] Request error: {method} {uri}, headers={:?}, error={}",
+                            "Request error: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
                             err
                         );

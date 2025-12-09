@@ -102,10 +102,12 @@ pub async fn build_runtime_filter(
 
     let build_side = s_expr.build_side_child();
     let build_side_data_distribution = build_side.get_data_distribution()?;
-    if build_side_data_distribution
-        .as_ref()
-        .is_some_and(|e| !matches!(e, Exchange::Broadcast | Exchange::NodeToNodeHash(_)))
-    {
+    if build_side_data_distribution.as_ref().is_some_and(|e| {
+        !matches!(
+            e,
+            Exchange::Broadcast | Exchange::NodeToNodeHash(_) | Exchange::Merge
+        )
+    }) {
         return Ok(Default::default());
     }
 
@@ -124,9 +126,16 @@ pub async fn build_runtime_filter(
             })
         })
     {
-        // Skip if not a column reference
-        if probe_key.as_column_ref().is_none() {
-            continue;
+        // Skip if the probe expression is neither a direct column reference nor a
+        // cast from not null to nullable type (e.g. CAST(col AS Nullable(T))).
+        match &probe_key {
+            RemoteExpr::ColumnRef { .. } => {}
+            RemoteExpr::Cast {
+                expr: box RemoteExpr::ColumnRef { data_type, .. },
+                dest_type,
+                ..
+            } if &dest_type.remove_nullable() == data_type => {}
+            _ => continue,
         }
 
         let probe_targets =

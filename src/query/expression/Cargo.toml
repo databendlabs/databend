@@ -30,6 +30,7 @@ databend-common-grpc = { workspace = true }
 databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-metrics = { workspace = true }
+databend-common-timezone = { workspace = true }
 educe = { workspace = true }
 either = { workspace = true }
 enum-as-inner = { workspace = true }
@@ -52,7 +53,6 @@ num-traits = { workspace = true }
 rand = { workspace = true }
 rand_distr = { workspace = true }
 recursive = { workspace = true }
-roaring = { workspace = true }
 rust_decimal = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }

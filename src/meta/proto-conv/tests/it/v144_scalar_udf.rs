@@ -53,6 +53,7 @@ fn test_decode_v144_scalar_udf() -> anyhow::Result<()> {
             definition: "CURRENT_DATE".to_string(),
         }),
         created_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
+        update_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

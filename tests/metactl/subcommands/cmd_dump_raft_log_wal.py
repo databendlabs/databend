@@ -39,7 +39,9 @@ def test_dump_raft_log_wal():
     kill_databend_meta()
 
     # Test dump-raft-log-wal from raft directory
-    result = run_command([metactl_bin, "dump-raft-log-wal", "--raft-dir", "./.databend/meta1"])
+    result = run_command(
+        [metactl_bin, "dump-raft-log-wal", "--raft-dir", "./.databend/meta1"]
+    )
 
     print("Output:")
     print(result)
@@ -70,7 +72,9 @@ ChunkId(00_000_000_000_000_000_000)
     def mask_time(text):
         """Mask time fields in the output for comparison."""
         # Mask timestamp in format "time: 2025-10-19T15:03:55.193"
-        text = re.sub(r'time: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+', 'time: <TIME>', text)
+        text = re.sub(
+            r"time: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+", "time: <TIME>", text
+        )
         return text
 
     # Normalize both actual and expected output
@@ -86,14 +90,18 @@ ChunkId(00_000_000_000_000_000_000)
     )
 
     # Compare line by line
-    for i, (actual_line, expected_line) in enumerate(zip(actual_masked, expected_lines)):
+    for i, (actual_line, expected_line) in enumerate(
+        zip(actual_masked, expected_lines)
+    ):
         assert actual_line == expected_line, (
             f"Line {i} mismatch:\n"
             f"  Actual  : {actual_line}\n"
             f"  Expected: {expected_line}"
         )
 
-    print(f"✓ All {len(actual_masked)} lines match expected output (time fields masked)")
+    print(
+        f"✓ All {len(actual_masked)} lines match expected output (time fields masked)"
+    )
 
     # Clean up only on success
     shutil.rmtree(".databend", ignore_errors=True)

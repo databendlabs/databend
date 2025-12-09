@@ -12,28 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::sbbf::Sbbf;
 use databend_common_exception::Result;
+use databend_common_expression::hash_util::hash_by_method_for_bloom;
 use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::NumberColumn;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::HashMethod;
-use databend_common_expression::HashMethodKind;
-use databend_common_expression::KeysState;
-use databend_common_expression::KeysState::U128;
-use databend_common_expression::KeysState::U256;
-use databend_common_hashtable::FastHash;
-use xorf::BinaryFuse16;
-use xorf::Filter;
 
-/// Bloom filter for runtime filtering of data rows.
 pub struct ExprBloomFilter<'a> {
-    filter: &'a BinaryFuse16,
+    filter: &'a Sbbf,
 }
 
 impl<'a> ExprBloomFilter<'a> {
-    /// Create a new bloom filter.
-    pub fn new(filter: &'a BinaryFuse16) -> ExprBloomFilter<'a> {
+    pub fn new(filter: &'a Sbbf) -> Self {
         Self { filter }
     }
 
@@ -44,131 +35,14 @@ impl<'a> ExprBloomFilter<'a> {
         let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
         let entries = &[column.into()];
         let group_columns = entries.into();
-        let mut idx = 0;
-
-        match method {
-            HashMethodKind::Serializer(method) => {
-                let key_state = method.build_keys_state(group_columns, num_rows)?;
-                match key_state {
-                    KeysState::Column(Column::Binary(col)) => col.iter().for_each(|key| {
-                        let hash = key.fast_hash();
-                        if self.filter.contains(&hash) {
-                            bitmap.set(idx, true);
-                        }
-                        idx += 1;
-                    }),
-                    _ => unreachable!(),
-                }
-            }
-            HashMethodKind::SingleBinary(method) => {
-                let key_state = method.build_keys_state(group_columns, num_rows)?;
-                match key_state {
-                    KeysState::Column(Column::Binary(col))
-                    | KeysState::Column(Column::Variant(col))
-                    | KeysState::Column(Column::Bitmap(col)) => col.iter().for_each(|key| {
-                        let hash = key.fast_hash();
-                        if self.filter.contains(&hash) {
-                            bitmap.set(idx, true);
-                        }
-                        idx += 1;
-                    }),
-                    KeysState::Column(Column::String(col)) => col.iter().for_each(|key| {
-                        let hash = key.as_bytes().fast_hash();
-                        if self.filter.contains(&hash) {
-                            bitmap.set(idx, true);
-                        }
-                        idx += 1;
-                    }),
-                    _ => unreachable!(),
-                }
-            }
-            HashMethodKind::KeysU8(hash_method) => {
-                let key_state = hash_method.build_keys_state(group_columns, num_rows)?;
-                match key_state {
-                    KeysState::Column(Column::Number(NumberColumn::UInt8(c))) => {
-                        c.iter().for_each(|key| {
-                            let hash = key.fast_hash();
-                            if self.filter.contains(&hash) {
-                                bitmap.set(idx, true);
-                            }
-                            idx += 1;
-                        })
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            HashMethodKind::KeysU16(hash_method) => {
-                let key_state = hash_method.build_keys_state(group_columns, num_rows)?;
-                match key_state {
-                    KeysState::Column(Column::Number(NumberColumn::UInt16(c))) => {
-                        c.iter().for_each(|key| {
-                            let hash = key.fast_hash();
-                            if self.filter.contains(&hash) {
-                                bitmap.set(idx, true);
-                            }
-                            idx += 1;
-                        })
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            HashMethodKind::KeysU32(hash_method) => {
-                let key_state = hash_method.build_keys_state(group_columns, num_rows)?;
-                match key_state {
-                    KeysState::Column(Column::Number(NumberColumn::UInt32(c))) => {
-                        c.iter().for_each(|key| {
-                            let hash = key.fast_hash();
-                            if self.filter.contains(&hash) {
-                                bitmap.set(idx, true);
-                            }
-                            idx += 1;
-                        })
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            HashMethodKind::KeysU64(hash_method) => {
-                let key_state = hash_method.build_keys_state(group_columns, num_rows)?;
-                match key_state {
-                    KeysState::Column(Column::Number(NumberColumn::UInt64(c))) => {
-                        c.iter().for_each(|key| {
-                            let hash = key.fast_hash();
-                            if self.filter.contains(&hash) {
-                                bitmap.set(idx, true);
-                            }
-                            idx += 1;
-                        })
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            HashMethodKind::KeysU128(hash_method) => {
-                let key_state = hash_method.build_keys_state(group_columns, num_rows)?;
-                match key_state {
-                    U128(c) => c.iter().for_each(|key| {
-                        let hash = key.fast_hash();
-                        if self.filter.contains(&hash) {
-                            bitmap.set(idx, true);
-                        }
-                        idx += 1;
-                    }),
-                    _ => unreachable!(),
-                }
-            }
-            HashMethodKind::KeysU256(hash_method) => {
-                let key_state = hash_method.build_keys_state(group_columns, num_rows)?;
-                match key_state {
-                    U256(c) => c.iter().for_each(|key| {
-                        let hash = key.fast_hash();
-                        if self.filter.contains(&hash) {
-                            bitmap.set(idx, true);
-                        }
-                        idx += 1;
-                    }),
-                    _ => unreachable!(),
-                }
-            }
-        }
+        let mut hashes = Vec::with_capacity(num_rows);
+        hash_by_method_for_bloom(&method, group_columns, num_rows, &mut hashes)?;
+        debug_assert_eq!(hashes.len(), num_rows);
+        let bitmap_len = bitmap.len();
+        self.filter.check_hash_batch(&hashes, |index| {
+            debug_assert!(index < bitmap_len);
+            unsafe { bitmap.set_unchecked(index, true) };
+        });
 
         Ok(())
     }

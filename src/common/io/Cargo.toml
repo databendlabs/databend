@@ -14,6 +14,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-common-timezone = { workspace = true }
 enquote = { workspace = true }
 enumflags2 = { workspace = true }
 ethnum = { workspace = true }
@@ -26,6 +27,7 @@ micromarshal = { workspace = true }
 roaring = { workspace = true }
 scroll = { workspace = true }
 serde = { workspace = true }
+smallvec = { workspace = true }
 wkt = { workspace = true }
 
 [dev-dependencies]

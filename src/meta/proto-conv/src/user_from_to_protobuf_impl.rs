@@ -203,6 +203,12 @@ impl FromToProto for mt::principal::GrantObject {
             pb::grant_object::Object::Procedure(pb::grant_object::GrantProcedureObject {
                 procedure_id,
             }) => Ok(mt::principal::GrantObject::Procedure(procedure_id)),
+            pb::grant_object::Object::Maskingpolicy(
+                pb::grant_object::GrantMaskingPolicyObject { policy_id },
+            ) => Ok(mt::principal::GrantObject::MaskingPolicy(policy_id)),
+            pb::grant_object::Object::RowAccessPolicy(
+                pb::grant_object::GrantRowAccessPolicyObject { policy_id },
+            ) => Ok(mt::principal::GrantObject::RowAccessPolicy(policy_id)),
         }
     }
 
@@ -263,6 +269,20 @@ impl FromToProto for mt::principal::GrantObject {
             mt::principal::GrantObject::Procedure(p) => Some(pb::grant_object::Object::Procedure(
                 pb::grant_object::GrantProcedureObject { procedure_id: *p },
             )),
+            mt::principal::GrantObject::MaskingPolicy(policy_id) => {
+                Some(pb::grant_object::Object::Maskingpolicy(
+                    pb::grant_object::GrantMaskingPolicyObject {
+                        policy_id: *policy_id,
+                    },
+                ))
+            }
+            mt::principal::GrantObject::RowAccessPolicy(policy_id) => {
+                Some(pb::grant_object::Object::RowAccessPolicy(
+                    pb::grant_object::GrantRowAccessPolicyObject {
+                        policy_id: *policy_id,
+                    },
+                ))
+            }
         };
         Ok(pb::GrantObject {
             ver: VER,

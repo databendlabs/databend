@@ -98,12 +98,12 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
         },
         ScalarRef::Decimal(x) => serde_json::to_value(x.to_string()).unwrap(),
         ScalarRef::Date(v) => {
-            let dt = DateConverter::to_date(&v, format.jiff_timezone.clone());
+            let dt = DateConverter::to_date(&v, &format.jiff_timezone);
             serde_json::to_value(strtime::format("%Y-%m-%d", dt).unwrap()).unwrap()
         }
         ScalarRef::Interval(v) => serde_json::to_value(interval_to_string(&v).to_string()).unwrap(),
         ScalarRef::Timestamp(v) => {
-            let dt = DateConverter::to_timestamp(&v, format.jiff_timezone.clone());
+            let dt = DateConverter::to_timestamp(&v, &format.jiff_timezone);
             serde_json::to_value(strtime::format("%Y-%m-%d %H:%M:%S", &dt).unwrap()).unwrap()
         }
         ScalarRef::TimestampTz(v) => serde_json::to_value(v.to_string()).unwrap(),

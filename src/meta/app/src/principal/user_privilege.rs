@@ -66,8 +66,6 @@ pub enum UserPrivilegeType {
     DropRole = 1 << 14,
     // Privilege to Drop user.
     DropUser = 1 << 15,
-    // Privilege to Create/Drop DataMask.
-    CreateDataMask = 1 << 16,
     // Privilege to Own a databend object such as database/table.
     Ownership = 1 << 17,
     // Privilege to Read stage
@@ -90,37 +88,18 @@ pub enum UserPrivilegeType {
     CreateProcedure = 1 << 26,
     // Privilege to Access Procedure
     AccessProcedure = 1 << 27,
+    // Privilege to Apply Masking Policy.
+    ApplyMaskingPolicy = 1 << 28,
+    // Privilege to Create Masking Policy.
+    CreateMaskingPolicy = 1 << 29,
+    // Privilege to Apply Row Access Policy.
+    ApplyRowAccessPolicy = 1 << 30,
+    // Privilege to Create Row Access Policy.
+    CreateRowAccessPolicy = 1 << 31,
     // Discard Privilege Type
     Set = 1 << 4,
+    CreateDataMask = 1 << 16,
 }
-
-const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
-    UserPrivilegeType::{
-        Create
-        | Select
-        | Insert
-        | Update
-        | Delete
-        | Drop
-        | Alter
-        | Super
-        | CreateUser
-        | DropUser
-        | CreateRole
-        | DropRole
-        | Grant
-        | CreateStage
-        | Set
-        | CreateDataMask
-        | Ownership
-        | Read
-        | Write
-        | CreateDatabase
-        | CreateWarehouse
-        | CreateConnection
-        | AccessConnection
-    }
-);
 
 impl Display for UserPrivilegeType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -142,6 +121,10 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::Grant => "GRANT",
             UserPrivilegeType::Set => "SET",
             UserPrivilegeType::CreateDataMask => "CREATE DATAMASK",
+            UserPrivilegeType::CreateMaskingPolicy => "CREATE MASKING POLICY",
+            UserPrivilegeType::ApplyMaskingPolicy => "APPLY MASKING POLICY",
+            UserPrivilegeType::CreateRowAccessPolicy => "CREATE ROW ACCESS POLICY",
+            UserPrivilegeType::ApplyRowAccessPolicy => "APPLY ROW ACCESS POLICY",
             UserPrivilegeType::Ownership => "OWNERSHIP",
             UserPrivilegeType::Read => "Read",
             UserPrivilegeType::Write => "Write",
@@ -181,8 +164,17 @@ impl From<databend_common_ast::ast::UserPrivilegeType> for UserPrivilegeType {
             }
             databend_common_ast::ast::UserPrivilegeType::DropRole => UserPrivilegeType::DropRole,
             databend_common_ast::ast::UserPrivilegeType::DropUser => UserPrivilegeType::DropUser,
-            databend_common_ast::ast::UserPrivilegeType::CreateDataMask => {
-                UserPrivilegeType::CreateDataMask
+            databend_common_ast::ast::UserPrivilegeType::CreateMaskingPolicy => {
+                UserPrivilegeType::CreateMaskingPolicy
+            }
+            databend_common_ast::ast::UserPrivilegeType::ApplyMaskingPolicy => {
+                UserPrivilegeType::ApplyMaskingPolicy
+            }
+            databend_common_ast::ast::UserPrivilegeType::CreateRowAccessPolicy => {
+                UserPrivilegeType::CreateRowAccessPolicy
+            }
+            databend_common_ast::ast::UserPrivilegeType::ApplyRowAccessPolicy => {
+                UserPrivilegeType::ApplyRowAccessPolicy
             }
             databend_common_ast::ast::UserPrivilegeType::Ownership => UserPrivilegeType::Ownership,
             databend_common_ast::ast::UserPrivilegeType::Read => UserPrivilegeType::Read,
@@ -247,14 +239,18 @@ impl UserPrivilegeSet {
         let wh_privs_without_ownership = Self::available_privileges_on_warehouse(false);
         let connection_privs_without_ownership = Self::available_privileges_on_connection(false);
         let seq_privs_without_ownership = Self::available_privileges_on_sequence(false);
-        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateWarehouse | CreateConnection | CreateSequence | CreateProcedure });
+        let mask_privs = Self::available_privileges_on_masking_policy(false);
+        let row_access_privs = Self::available_privileges_on_row_access_policy(false);
+        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateMaskingPolicy | CreateRowAccessPolicy | CreateWarehouse | CreateConnection | CreateSequence | CreateProcedure });
         (database_privs.privileges
             | privs
             | stage_privs_without_ownership.privileges
             | wh_privs_without_ownership.privileges
             | connection_privs_without_ownership.privileges
             | seq_privs_without_ownership.privileges
-            | udf_privs_without_ownership.privileges)
+            | udf_privs_without_ownership.privileges
+            | mask_privs.privileges
+            | row_access_privs.privileges)
             .into()
     }
 
@@ -325,9 +321,20 @@ impl UserPrivilegeSet {
         }
     }
 
-    // TODO: remove this, as ALL has different meanings on different objects
-    pub fn all_privileges() -> Self {
-        ALL_PRIVILEGES.into()
+    pub fn available_privileges_on_masking_policy(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{ ApplyMaskingPolicy | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{ ApplyMaskingPolicy }).into()
+        }
+    }
+
+    pub fn available_privileges_on_row_access_policy(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{ ApplyRowAccessPolicy | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{ ApplyRowAccessPolicy }).into()
+        }
     }
 
     pub fn set_privilege(&mut self, privilege: UserPrivilegeType) {
@@ -336,14 +343,6 @@ impl UserPrivilegeSet {
 
     pub fn has_privilege(&self, privilege: UserPrivilegeType) -> bool {
         self.privileges.contains(privilege)
-    }
-
-    pub fn set_all_privileges(&mut self) {
-        self.privileges |= ALL_PRIVILEGES;
-    }
-
-    pub fn is_all_privileges(&self) -> bool {
-        self.privileges == ALL_PRIVILEGES
     }
 }
 

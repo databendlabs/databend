@@ -23,6 +23,7 @@ use databend_common_ast::parser::query::*;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::script::script_stmt;
 use databend_common_ast::parser::statement::insert_stmt;
+use databend_common_ast::parser::statement::statement_body;
 use databend_common_ast::parser::token::*;
 use databend_common_ast::parser::*;
 use goldenfile::Mint;
@@ -355,6 +356,7 @@ SELECT * from s;"#,
         r#"GRANT access connection on connection c1  TO 'test-grant';"#,
         r#"GRANT all on connection c1  TO 'test-grant';"#,
         r#"GRANT OWNERSHIP on connection c1  TO role r1;"#,
+        r#"GRANT OWNERSHIP on masking policy m1  TO role r1;"#,
         r#"GRANT access sequence, create sequence ON *.*  TO 'test-grant';"#,
         r#"GRANT access sequence on sequence s1  TO 'test-grant';"#,
         r#"GRANT all on sequence s1  TO 'test-grant';"#,
@@ -378,6 +380,11 @@ SELECT * from s;"#,
         r#"GRANT SELECT ON db01.tb1 TO ROLE role1;"#,
         r#"GRANT SELECT ON tb1 TO ROLE role1;"#,
         r#"GRANT ALL ON tb1 TO 'u1';"#,
+        r#"GRANT CREATE MASKING POLICY ON *.* TO USER a;"#,
+        r#"GRANT APPLY MASKING POLICY ON *.* TO USER a;"#,
+        r#"GRANT APPLY ON MASKING POLICY ssn_mask TO ROLE human_resources;"#,
+        r#"GRANT OWNERSHIP ON MASKING POLICY mask_phone TO ROLE role_mask_apply;"#,
+        r#"SHOW GRANTS ON MASKING POLICY ssn_mask;"#,
         r#"SHOW GRANTS;"#,
         r#"SHOW GRANTS FOR 'test-grant';"#,
         r#"SHOW GRANTS FOR USER 'test-grant';"#,
@@ -987,6 +994,11 @@ SELECT * from s;"#,
         )"#,
         r#"DROP row access policy IF EXISTS r1"#,
         r#"desc row access policy r1"#,
+        r#"GRANT CREATE ROW ACCESS POLICY ON *.* TO USER a;"#,
+        r#"GRANT APPLY ROW ACCESS POLICY ON *.* TO USER a;"#,
+        r#"GRANT APPLY ON ROW ACCESS POLICY ssn_mask TO ROLE 'human_resources'"#,
+        r#"GRANT OWNERSHIP ON  ROW ACCESS POLICY mask_phone TO ROLE 'role_mask_apply'"#,
+        r#"SHOW GRANTS ON ROW ACCESS POLICY ssn_mask"#,
     ];
 
     for case in cases {
@@ -1282,6 +1294,28 @@ fn test_query_error() {
 }
 
 #[test]
+fn test_reserved_error() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("reserved-error.txt").unwrap();
+    let cases = &[r#"CREATE OR
+            REPLACE FUNCTION ai_list_files (data_stage STAGE_LOCATION, l INT) RETURNS TABLE (
+            stage VARCHAR,
+            relative_path VARCHAR,
+            path VARCHAR,
+            is_dir BOOLEAN,
+            size BIGINT,
+            mode VARCHAR,
+            content_type VARCHAR,
+            etag VARCHAR,
+            truncated BOOLEAN
+           ) LANGUAGE python HANDLER='ai_list_files' address='https://api.bendml.com'"#];
+
+    for case in cases {
+        run_parser(file, statement_body, case);
+    }
+}
+
+#[test]
 fn test_expr() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("expr.txt").unwrap();
@@ -1521,6 +1555,7 @@ fn test_script() {
         r#"RETURN profit"#,
         r#"RETURN TABLE(t1)"#,
         r#"RETURN TABLE(select count(*) from t1)"#,
+        r#"THROW 'Email already exists.'"#,
         r#"
             FOR i IN REVERSE 1 TO maximum_count DO
                 counter := counter + 1;

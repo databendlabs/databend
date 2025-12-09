@@ -26,6 +26,7 @@ use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::BitmapType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -64,6 +65,7 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
+use databend_common_io::deserialize_bitmap;
 use databend_functions_scalar_decimal::register_decimal_compare;
 use jsonb::RawJsonb;
 use num_traits::AsPrimitive;
@@ -84,6 +86,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_tuple_cmp(registry);
     register_like(registry);
     register_interval_cmp(registry);
+    register_bitmap_cmp(registry);
 }
 
 pub const ALL_COMP_FUNC_NAMES: &[&str] = &["eq", "noteq", "lt", "lte", "gt", "gte"];
@@ -1286,4 +1289,51 @@ fn vectorize_regexp(
             }
         }
     }
+}
+
+fn register_bitmap_cmp(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BooleanType, _, _>(
+        "eq",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
+            |lhs, rhs, builder, ctx| {
+                let row = builder.len();
+                builder.push(compare_bitmap_bytes(lhs, rhs, ctx, row));
+            },
+        ),
+    );
+    registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BooleanType, _, _>(
+        "noteq",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
+            |lhs, rhs, builder, ctx| {
+                let row = builder.len();
+                let equals = compare_bitmap_bytes(lhs, rhs, ctx, row);
+                builder.push(!equals);
+            },
+        ),
+    );
+}
+
+fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usize) -> bool {
+    if lhs == rhs {
+        return true;
+    }
+
+    let left = match deserialize_bitmap(lhs) {
+        Ok(v) => v,
+        Err(e) => {
+            ctx.set_error(row, e.to_string());
+            return false;
+        }
+    };
+    let right = match deserialize_bitmap(rhs) {
+        Ok(v) => v,
+        Err(e) => {
+            ctx.set_error(row, e.to_string());
+            return false;
+        }
+    };
+
+    left.iter().eq(right.iter())
 }

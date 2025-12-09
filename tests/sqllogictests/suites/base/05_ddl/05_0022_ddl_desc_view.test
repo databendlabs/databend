@@ -13,7 +13,7 @@ CREATE TABLE t(a bigint null, b int null, c varchar(255) null, d smallint not nu
 statement ok
 CREATE VIEW v AS SELECT * FROM t
 
-onlyif http
+skipif mysql
 query TTTTT
 DESCRIBE VIEW v
 ----
@@ -23,7 +23,7 @@ c VARCHAR YES NULL (empty)
 d SMALLINT NO 0 (empty)
 e DATE NO '1970-01-01' (empty)
 
-onlyif http
+skipif mysql
 query TTTTT
 DESC VIEW v
 ----
@@ -46,7 +46,7 @@ CREATE TABLE t1(a bigint null, b int null, c char(255) null, d smallint not null
 statement ok
 CREATE VIEW v1 AS SELECT * FROM t1
 
-onlyif http
+skipif mysql
 query VVVVV
 DESCRIBE VIEW v1
 ----
@@ -57,7 +57,7 @@ d SMALLINT NO 0 (empty)
 e DATE NO '1970-01-01' (empty)
 f VARCHAR NO '' (empty)
 
-onlyif http
+skipif mysql
 query VVVVV
 DESC VIEW v1
 ----
@@ -113,21 +113,21 @@ CREATE VIEW v2 AS SELECT c1 AS v2_c1, c2 AS v2_c2 FROM (SELECT t1.c1, t2.c2 from
 statement ok
 CREATE VIEW v3 AS SELECT * FROM v2 UNION ALL select * from v1
 
-onlyif http
+skipif mysql
 query VVVVV
 DESC VIEW v1
 ----
 c1 VARCHAR YES NULL (empty)
 c2 VARCHAR YES NULL (empty)
 
-onlyif http
+skipif mysql
 query VVVVV
 DESC VIEW v2
 ----
 v2_c1 VARCHAR YES NULL (empty)
 v2_c2 VARCHAR YES NULL (empty)
 
-onlyif http
+skipif mysql
 query VVVVV
 DESC VIEW v3
 ----

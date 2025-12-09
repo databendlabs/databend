@@ -107,7 +107,7 @@ impl AccessType for VectorType {
         scalar.memory_size()
     }
 
-    fn column_memory_size(col: &Self::Column) -> usize {
+    fn column_memory_size(col: &Self::Column, _gc: bool) -> usize {
         col.memory_size()
     }
 

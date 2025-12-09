@@ -18,13 +18,16 @@ use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::Result;
 use databend_common_expression::date_helper::calc_date_to_timestamp;
+use databend_common_expression::date_helper::timestamp_tz_components_via_lut;
 use databend_common_expression::date_helper::today_date;
 use databend_common_expression::date_helper::DateConverter;
+use databend_common_expression::date_helper::EvalDaysImpl;
 use databend_common_expression::date_helper::EvalMonthsImpl;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
+use databend_common_expression::types::DateType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::IntervalType;
@@ -37,6 +40,8 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
+use databend_common_timezone::fast_components_from_timestamp;
+use databend_common_timezone::DateTimeComponents;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone;
 use jiff::Timestamp;
@@ -113,6 +118,26 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_passthrough_nullable_2_arg::<DateType, IntervalType, DateType, _, _>(
+        "plus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, IntervalType, DateType>(
+            |date, interval, output, ctx| {
+                eval_date_plus(date, interval, output, ctx);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<IntervalType, DateType, DateType, _, _>(
+        "plus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<IntervalType, DateType, DateType>(
+            |interval, date, output, ctx| {
+                eval_date_plus(date, interval, output, ctx);
+            },
+        ),
+    );
+
     registry
         .register_passthrough_nullable_2_arg::<TimestampType, IntervalType, TimestampType, _, _>(
             "plus",
@@ -131,26 +156,36 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                 },
             ),
         );
-    registry
-        .register_passthrough_nullable_2_arg::<TimestampTzType, IntervalType, TimestampTzType, _, _>(
-            "plus",
-            |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<TimestampTzType, IntervalType, TimestampTzType>(
-                |a, b, output, ctx| {
-                    let offset = match Offset::from_seconds(a.seconds_offset()) {
-                        Ok(offset) => offset,
-                        Err(err) => {
-                            ctx.set_error(output.len(), err.to_string());
-                            output.push(timestamp_tz::default());
-                            return;
-                        }
-                    };
-                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp(), |result| {
-                        timestamp_tz::new(result, a.seconds_offset())
-                    }, TimeZone::fixed(offset));
-                },
-            ),
-        );
+    registry.register_passthrough_nullable_2_arg::<TimestampTzType, IntervalType, TimestampTzType, _, _>(
+        "plus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampTzType, IntervalType, TimestampTzType>(
+            |a, b, output, ctx| {
+                let offset = a.seconds_offset();
+                let offset_micros = match timestamp_tz::micros_offset_inner(offset as i64) {
+                    Some(v) => v,
+                    None => {
+                        ctx.set_error(output.len(), "invalid timestamp timezone offset");
+                        output.push(timestamp_tz::default());
+                        return;
+                    }
+                };
+                let local = a.timestamp().wrapping_add(offset_micros);
+                eval_timestamp_plus(
+                    a,
+                    b,
+                    output,
+                    ctx,
+                    move |_| local,
+                    move |result| {
+                        let utc = result.wrapping_sub(offset_micros);
+                        timestamp_tz::new(utc, offset)
+                    },
+                    TimeZone::UTC,
+                );
+            },
+        ),
+    );
 
     registry
         .register_passthrough_nullable_2_arg::<IntervalType, TimestampType, TimestampType, _, _>(
@@ -171,26 +206,36 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             ),
         );
 
-    registry
-        .register_passthrough_nullable_2_arg::<IntervalType, TimestampTzType, TimestampTzType, _, _>(
-            "plus",
-            |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<IntervalType, TimestampTzType, TimestampTzType>(
-                |b, a, output, ctx| {
-                    let offset = match Offset::from_seconds(a.seconds_offset()) {
-                        Ok(offset) => offset,
-                        Err(err) => {
-                            ctx.set_error(output.len(), err.to_string());
-                            output.push(timestamp_tz::default());
-                            return;
-                        }
-                    };
-                    eval_timestamp_plus(a, b, output, ctx, |input| input.timestamp(), |result| {
-                        timestamp_tz::new(result, a.seconds_offset())
-                    }, TimeZone::fixed(offset));
-                },
-            ),
-        );
+    registry.register_passthrough_nullable_2_arg::<IntervalType, TimestampTzType, TimestampTzType, _, _>(
+        "plus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<IntervalType, TimestampTzType, TimestampTzType>(
+            |b, a, output, ctx| {
+                let offset = a.seconds_offset();
+                let offset_micros = match timestamp_tz::micros_offset_inner(offset as i64) {
+                    Some(v) => v,
+                    None => {
+                        ctx.set_error(output.len(), "invalid timestamp timezone offset");
+                        output.push(timestamp_tz::default());
+                        return;
+                    }
+                };
+                let local = a.timestamp().wrapping_add(offset_micros);
+                eval_timestamp_plus(
+                    a,
+                    b,
+                    output,
+                    ctx,
+                    move |_| local,
+                    move |result| {
+                        let utc = result.wrapping_sub(offset_micros);
+                        timestamp_tz::new(utc, offset)
+                    },
+                    TimeZone::UTC,
+                );
+            },
+        ),
+    );
 
     registry.register_passthrough_nullable_2_arg::<IntervalType, IntervalType, IntervalType, _, _>(
         "minus",
@@ -202,6 +247,16 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                     a.days() - b.days(),
                     a.microseconds() - b.microseconds(),
                 ));
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<DateType, IntervalType, DateType, _, _>(
+        "minus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<DateType, IntervalType, DateType>(
+            |date, interval, output, ctx| {
+                eval_date_minus(date, interval, output, ctx);
             },
         ),
     );
@@ -225,26 +280,36 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             ),
         );
 
-    registry
-        .register_passthrough_nullable_2_arg::<TimestampTzType, IntervalType, TimestampTzType, _, _>(
-            "minus",
-            |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<TimestampTzType, IntervalType, TimestampTzType>(
-                |a, b, output, ctx| {
-                    let offset = match Offset::from_seconds(a.seconds_offset()) {
-                        Ok(offset) => offset,
-                        Err(err) => {
-                            ctx.set_error(output.len(), err.to_string());
-                            output.push(timestamp_tz::default());
-                            return;
-                        }
-                    };
-                    eval_timestamp_minus(a, b, output, ctx, |input| input.timestamp(), |result| {
-                        timestamp_tz::new(result, a.seconds_offset())
-                    }, TimeZone::fixed(offset));
-                },
-            ),
-        );
+    registry.register_passthrough_nullable_2_arg::<TimestampTzType, IntervalType, TimestampTzType, _, _>(
+        "minus",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<TimestampTzType, IntervalType, TimestampTzType>(
+            |a, b, output, ctx| {
+                let offset = a.seconds_offset();
+                let offset_micros = match timestamp_tz::micros_offset_inner(offset as i64) {
+                    Some(v) => v,
+                    None => {
+                        ctx.set_error(output.len(), "invalid timestamp timezone offset");
+                        output.push(timestamp_tz::default());
+                        return;
+                    }
+                };
+                let local = a.timestamp().wrapping_add(offset_micros);
+                eval_timestamp_minus(
+                    a,
+                    b,
+                    output,
+                    ctx,
+                    move |_| local,
+                    move |result| {
+                        let utc = result.wrapping_sub(offset_micros);
+                        timestamp_tz::new(utc, offset)
+                    },
+                    TimeZone::UTC,
+                );
+            },
+        ),
+    );
 
     registry
         .register_passthrough_nullable_2_arg::<TimestampType, TimestampType, IntervalType, _, _>(
@@ -260,9 +325,16 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         is_negative = true;
                     }
                     let tz = &ctx.func_ctx.tz;
-                    let t1 = t1.to_timestamp(tz.clone());
-                    let t2 = t2.to_timestamp(tz.clone());
-                    output.push(calc_age(t1, t2, is_negative));
+                    if let (Some(c1), Some(c2)) = (
+                        fast_components_from_timestamp(t1, tz),
+                        fast_components_from_timestamp(t2, tz),
+                    ) {
+                        output.push(calc_age_from_components(&c1, &c2, is_negative));
+                    } else {
+                        let t1 = t1.to_timestamp(tz);
+                        let t2 = t2.to_timestamp(tz);
+                        output.push(calc_age(t1, t2, is_negative));
+                    }
                 },
             ),
         );
@@ -273,13 +345,6 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<TimestampTzType, TimestampTzType, IntervalType>(
                 |t1, t2, output, ctx| {
-                    let fn_to_zoned = |ts_tz: timestamp_tz| {
-                        let ts = Timestamp::from_microsecond(ts_tz.timestamp())?;
-                        let zone = TimeZone::fixed(Offset::from_seconds(ts_tz.seconds_offset())?);
-
-                        Result::Ok(ts.to_zoned(zone))
-                    };
-
                     let mut is_negative = false;
                     let mut t1 = t1;
                     let mut t2 = t2;
@@ -287,10 +352,51 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
                         std::mem::swap(&mut t1, &mut t2);
                         is_negative = true;
                     }
-                    let (t1, t2) = match (fn_to_zoned(t1), fn_to_zoned(t2)) {
+
+                    if let (Some(c1), Some(c2)) = (
+                        timestamp_tz_components_via_lut(t1),
+                        timestamp_tz_components_via_lut(t2),
+                    ) {
+                        output.push(calc_age_from_components(&c1, &c2, is_negative));
+                        return;
+                    }
+
+                    let zone1 = match Offset::from_seconds(t1.seconds_offset())
+                        .map(TimeZone::fixed)
+                    {
+                        Ok(zone) => zone,
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            return;
+                        }
+                    };
+                    let zone2 = match Offset::from_seconds(t2.seconds_offset())
+                        .map(TimeZone::fixed)
+                    {
+                        Ok(zone) => zone,
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            return;
+                        }
+                    };
+                    if let (Some(c1), Some(c2)) = (
+                        fast_components_from_timestamp(t1.timestamp(), &zone1),
+                        fast_components_from_timestamp(t2.timestamp(), &zone2),
+                    ) {
+                        output.push(calc_age_from_components(&c1, &c2, is_negative));
+                        return;
+                    }
+                    let to_zoned = |ts_tz: timestamp_tz,
+                                    zone: &TimeZone|
+                     -> std::result::Result<Zoned, String> {
+                        let ts =
+                            Timestamp::from_microsecond(ts_tz.timestamp()).map_err(|err| err.to_string())?;
+                        Ok(ts.to_zoned(zone.clone()))
+                    };
+                    let (t1, t2) = match (to_zoned(t1, &zone1), to_zoned(t2, &zone2)) {
                         (Ok(t1), Ok(t2)) => (t1, t2),
                         (Err(err), _) | (_, Err(err)) => {
-                            ctx.set_error(output.len(), err.to_string());
+                            ctx.set_error(output.len(), err);
                             return;
                         }
                     };
@@ -308,16 +414,30 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             let tz = &ctx.func_ctx.tz;
 
             let today_date = today_date(&ctx.func_ctx.now, &ctx.func_ctx.tz);
-            match calc_date_to_timestamp(today_date, tz.clone()) {
+            match calc_date_to_timestamp(today_date, tz) {
                 Ok(t) => {
-                    let mut t1 = t.to_timestamp(tz.clone());
-                    let mut t2 = t2.to_timestamp(tz.clone());
+                    let mut t1 = t;
+                    let mut t2_val = t2;
 
-                    if t1 < t2 {
-                        std::mem::swap(&mut t1, &mut t2);
+                    if t1 < t2_val {
+                        std::mem::swap(&mut t1, &mut t2_val);
                         is_negative = true;
                     }
-                    output.push(calc_age(t1, t2, is_negative));
+                    if let (Some(c1), Some(c2)) = (
+                        fast_components_from_timestamp(t1, tz),
+                        fast_components_from_timestamp(t2_val, tz),
+                    ) {
+                        output.push(calc_age_from_components(&c1, &c2, is_negative));
+                    } else {
+                        let mut t1 = t1.to_timestamp(tz);
+                        let mut t2 = t2_val.to_timestamp(tz);
+
+                        if t1 < t2 {
+                            std::mem::swap(&mut t1, &mut t2);
+                            is_negative = true;
+                        }
+                        output.push(calc_age(t1, t2, is_negative));
+                    }
                 }
                 Err(e) => {
                     ctx.set_error(output.len(), e);
@@ -335,10 +455,33 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             let fn_eval_age = |t2: timestamp_tz, ctx: &mut EvalContext| {
                 let mut is_negative = false;
 
-                let zone = TimeZone::fixed(Offset::from_seconds(t2.seconds_offset())?);
+                let offset = Offset::from_seconds(t2.seconds_offset())?;
+                let zone = TimeZone::fixed(offset);
                 let today_date = today_date(&ctx.func_ctx.now, &zone);
-                let mut t2 = Timestamp::from_microsecond(t2.timestamp())?.to_zoned(zone.clone());
-                let mut t1 = calc_date_to_timestamp(today_date, zone.clone())?.to_timestamp(zone);
+                let t1_raw = calc_date_to_timestamp(today_date, &zone)?;
+                let t2_raw = t2.timestamp();
+                let today_ts = timestamp_tz::new(t1_raw, t2.seconds_offset());
+                let (t1, t2_micros, later_ts, earlier_ts) = if t1_raw >= t2_raw {
+                    (t1_raw, t2_raw, today_ts, t2)
+                } else {
+                    is_negative = true;
+                    (t2_raw, t1_raw, t2, today_ts)
+                };
+
+                if let (Some(c1), Some(c2)) = (
+                    timestamp_tz_components_via_lut(later_ts),
+                    timestamp_tz_components_via_lut(earlier_ts),
+                ) {
+                    return Result::Ok(calc_age_from_components(&c1, &c2, is_negative));
+                }
+                if let (Some(c1), Some(c2)) = (
+                    fast_components_from_timestamp(t1, &zone),
+                    fast_components_from_timestamp(t2_micros, &zone),
+                ) {
+                    return Result::Ok(calc_age_from_components(&c1, &c2, is_negative));
+                }
+                let mut t1 = Timestamp::from_microsecond(t1)?.to_zoned(zone.clone());
+                let mut t2 = Timestamp::from_microsecond(t2_micros)?.to_zoned(zone.clone());
 
                 if t1 < t2 {
                     std::mem::swap(&mut t1, &mut t2);
@@ -401,7 +544,7 @@ fn eval_timestamp_plus<F1, F2, T>(
     let ts = fn_input(a)
         .wrapping_add(b.microseconds())
         .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
-    match EvalMonthsImpl::eval_timestamp(ts, timezone, b.months(), false) {
+    match EvalMonthsImpl::eval_timestamp(ts, &timezone, b.months(), false) {
         Ok(t) => output.push(fn_result(t)),
         Err(e) => {
             ctx.set_error(output.len(), e);
@@ -427,13 +570,71 @@ fn eval_timestamp_minus<F1, F2, T>(
     let ts = fn_input(a)
         .wrapping_sub(b.microseconds())
         .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
-    match EvalMonthsImpl::eval_timestamp(ts, timezone, -b.months(), false) {
+    match EvalMonthsImpl::eval_timestamp(ts, &timezone, -b.months(), false) {
         Ok(t) => output.push(fn_result(t)),
         Err(e) => {
             ctx.set_error(output.len(), e);
             output.push(T::default());
         }
     }
+}
+
+fn eval_date_plus(
+    date: i32,
+    interval: months_days_micros,
+    output: &mut Vec<i32>,
+    ctx: &mut EvalContext,
+) {
+    match apply_interval_to_date(date, interval, &ctx.func_ctx.tz, true) {
+        Ok(result) => output.push(result),
+        Err(err) => {
+            ctx.set_error(output.len(), err);
+            output.push(0);
+        }
+    }
+}
+
+fn eval_date_minus(
+    date: i32,
+    interval: months_days_micros,
+    output: &mut Vec<i32>,
+    ctx: &mut EvalContext,
+) {
+    match apply_interval_to_date(date, interval, &ctx.func_ctx.tz, false) {
+        Ok(result) => output.push(result),
+        Err(err) => {
+            ctx.set_error(output.len(), err);
+            output.push(0);
+        }
+    }
+}
+
+fn apply_interval_to_date(
+    mut date: i32,
+    interval: months_days_micros,
+    tz: &TimeZone,
+    is_addition: bool,
+) -> std::result::Result<i32, String> {
+    if interval.microseconds() != 0 {
+        return Err(
+            "DATE +/- INTERVAL with time parts should be evaluated as TIMESTAMP".to_string(),
+        );
+    }
+
+    let (days, months) = if is_addition {
+        (interval.days(), interval.months())
+    } else {
+        (-interval.days(), -interval.months())
+    };
+
+    if days != 0 {
+        date = EvalDaysImpl::eval_date(date, days);
+    }
+    if months != 0 {
+        date = EvalMonthsImpl::eval_date(date, tz, months, false)?;
+    }
+
+    Ok(date)
 }
 
 fn register_number_to_interval(registry: &mut FunctionRegistry) {
@@ -612,6 +813,48 @@ fn register_number_to_interval(registry: &mut FunctionRegistry) {
             output.push(total_seconds.into());
         }),
     );
+}
+
+fn calc_age_from_components(
+    t1: &DateTimeComponents,
+    t2: &DateTimeComponents,
+    is_negative: bool,
+) -> months_days_micros {
+    let mut years = t1.year - t2.year;
+    let mut months = t1.month as i32 - t2.month as i32;
+    let mut days = t1.day as i32 - t2.day as i32;
+
+    let t1_total_nanos = (t1.hour as i64 * 3600 + t1.minute as i64 * 60 + t1.second as i64)
+        * 1_000_000_000
+        + (t1.micro as i64) * 1_000;
+    let t2_total_nanos = (t2.hour as i64 * 3600 + t2.minute as i64 * 60 + t2.second as i64)
+        * 1_000_000_000
+        + (t2.micro as i64) * 1_000;
+    let mut total_nanoseconds_diff = t1_total_nanos - t2_total_nanos;
+
+    if total_nanoseconds_diff < 0 {
+        total_nanoseconds_diff += 24 * 3600 * 1_000_000_000;
+        days -= 1;
+    }
+
+    if days < 0 {
+        days += t2.days_in_month as i32;
+        months -= 1;
+    }
+
+    if months < 0 {
+        months += 12;
+        years -= 1;
+    }
+
+    let total_months = months + years * 12;
+    let diff_micros = total_nanoseconds_diff / 1_000;
+
+    if is_negative {
+        months_days_micros::new(-total_months, -days, -diff_micros)
+    } else {
+        months_days_micros::new(total_months, days, diff_micros)
+    }
 }
 
 fn calc_age(t1: Zoned, t2: Zoned, is_negative: bool) -> months_days_micros {

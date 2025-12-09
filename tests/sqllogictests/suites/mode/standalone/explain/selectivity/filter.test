@@ -16,7 +16,7 @@ Filter
     ├── read size: 1.10 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(t.number (#0) > 731)], limit: NONE]
     └── estimated rows: 738.00
 
@@ -35,7 +35,7 @@ Filter
     ├── read size: 0
     ├── partitions total: 1
     ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 0>]
+    ├── pruning stats: [segments: <range pruning: 1 to 0 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(t.number (#0) > 737)], limit: NONE]
     └── estimated rows: 738.00
 
@@ -54,7 +54,7 @@ Filter
     ├── read size: 1.10 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(t.number (#0) > 700)], limit: NONE]
     └── estimated rows: 738.00
 

@@ -26,7 +26,7 @@ AggregateFinal
             ├── read size: 1.40 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [t1.number (#0) % 10 = 11], limit: NONE]
             └── estimated rows: 1000.00
 
@@ -55,7 +55,7 @@ AggregateFinal
             ├── read size: 1.40 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
             ├── push downs: [filters: [t1.number (#0) % 10 = 2], limit: NONE]
             └── estimated rows: 1000.00
 

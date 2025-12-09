@@ -34,6 +34,10 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
         .default_session()
         .get_settings()
         .set_data_retention_time_in_days(0)?;
+    fixture
+        .default_session()
+        .get_settings()
+        .set_enable_experimental_virtual_column(1)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
 
@@ -51,7 +55,15 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
     let snapshot = snapshot_opt.unwrap();
 
     let mut build_res = PipelineBuildResult::create();
-    do_refresh_virtual_column(table_ctx.clone(), fuse_table, &mut build_res.main_pipeline).await?;
+    do_refresh_virtual_column(
+        table_ctx.clone(),
+        fuse_table,
+        &mut build_res.main_pipeline,
+        None,
+        false,
+        None,
+    )
+    .await?;
 
     let settings = table_ctx.get_settings();
     build_res.set_max_threads(settings.get_max_threads()? as usize);

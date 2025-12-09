@@ -104,7 +104,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 6
 ├── partitions scanned: 6
-├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
+├── pruning stats: [segments: <range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
 ├── push downs: [filters: [], limit: NONE]
 └── estimated rows: 6.00
 
@@ -120,7 +120,7 @@ TableScan
 ├── read size: < 1 KiB
 ├── partitions total: 6
 ├── partitions scanned: 6
-├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
+├── pruning stats: [segments: <range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
 ├── push downs: [filters: [], limit: NONE]
 └── estimated rows: 6.00
 
@@ -138,6 +138,8 @@ Filter
     ├── output rows: 4
     ├── output bytes: 80.00 B
     ├── bytes scanned: 80.00 B
+    ├── read from remote: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
     ├── scan id: 0
     ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
@@ -145,7 +147,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 6
     ├── partitions scanned: 4
-    ├── pruning stats: [segments: <range pruning: 6 to 4>, blocks: <range pruning: 4 to 4>]
+    ├── pruning stats: [segments: <range pruning: 6 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(article.article_id (#0) < 3)], limit: NONE]
     └── estimated rows: 6.00
 
@@ -165,7 +167,7 @@ HashJoin
 ├── Filter(Build)
 │   ├── cpu time: <slt:ignore>
 │   ├── output rows: 1
-│   ├── output bytes: 31.00 B
+│   ├── output bytes: <slt:ignore>
 │   ├── output columns: [author.id (#4), author.name (#5)]
 │   ├── filters: [is_true(author.name (#5) = 'mark4')]
 │   ├── estimated rows: 1.25
@@ -173,8 +175,10 @@ HashJoin
 │       ├── cpu time: <slt:ignore>
 │       ├── wait time: <slt:ignore>
 │       ├── output rows: 1
-│       ├── output bytes: 31.00 B
-│       ├── bytes scanned: 31.00 B
+│       ├── output bytes: <slt:ignore>
+│       ├── bytes scanned: <slt:ignore>
+│       ├── read from remote: <slt:ignore>
+│       ├── runtime filter inlist/min-max time: <slt:ignore>
 │       ├── table: default.default.author
 │       ├── scan id: 1
 │       ├── output columns: [id (#4), name (#5)]
@@ -182,7 +186,7 @@ HashJoin
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 5
 │       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 5 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+│       ├── pruning stats: [segments: <range pruning: 5 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
 │       ├── push downs: [filters: [is_true(author.name (#5) = 'mark4')], limit: NONE]
 │       └── estimated rows: 5.00
 └── TableScan(Probe)
@@ -191,6 +195,8 @@ HashJoin
     ├── output rows: 6
     ├── output bytes: 120.00 B
     ├── bytes scanned: 120.00 B
+    ├── read from remote: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
     ├── scan id: 0
     ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
@@ -198,7 +204,7 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 6
     ├── partitions scanned: 6
-    ├── pruning stats: [segments: <range pruning: 6 to 6>, blocks: <range pruning: 6 to 6>]
+    ├── pruning stats: [segments: <range pruning: 6 to 6 cost: <slt:ignore>>, blocks: <range pruning: 6 to 6 cost: <slt:ignore>>]
     ├── push downs: [filters: [], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 6.00

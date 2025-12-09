@@ -42,15 +42,6 @@ pub async fn read_parquet_schema_async_rs(
     infer_schema_with_extension(meta.file_metadata())
 }
 
-pub fn read_parquet_schema_sync_rs(
-    operator: &Operator,
-    path: &str,
-    file_size: Option<u64>,
-) -> Result<ArrowSchema> {
-    let meta = read_metadata_sync(path, operator, file_size)?;
-    infer_schema_with_extension(meta.file_metadata())
-}
-
 pub fn infer_schema_with_extension(meta: &FileMetaData) -> Result<ArrowSchema> {
     let mut arrow_schema = parquet_to_arrow_schema(meta.schema_descr(), meta.key_value_metadata())?;
     // Convert data types to extension types using meta information.
@@ -140,54 +131,6 @@ pub async fn read_metadata_async(
             .read_with(path)
             .range((file_size - footer_len)..(file_size - buffer_len as u64))
             .await?
-            .to_vec();
-        metadata.extend(buffer);
-        Ok(ParquetMetaDataReader::decode_metadata(&metadata).map_err(map_err)?)
-    }
-}
-
-pub fn read_metadata_sync(
-    path: &str,
-    operator: &Operator,
-    file_size: Option<u64>,
-) -> Result<ParquetMetaData> {
-    let blocking = operator.blocking();
-    let file_size = match file_size {
-        None => blocking.stat(path)?.content_length(),
-        Some(n) => n,
-    };
-
-    check_footer_size(file_size, path)?;
-
-    let map_err =
-        |e: ParquetError| ErrorCode::BadBytes(format!("Invalid Parquet file '{path}': {e}",));
-    // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
-    let default_end_len = DEFAULT_FOOTER_READ_SIZE.min(file_size);
-    let buffer = blocking
-        .read_with(path)
-        .range((file_size - default_end_len)..file_size)
-        .call()?
-        .to_vec();
-    let buffer_len = buffer.len();
-    let footer_tail = ParquetMetaDataReader::decode_footer_tail(
-        &buffer[(buffer_len - FOOTER_SIZE as usize)..]
-            .try_into()
-            .unwrap(),
-    )
-    .map_err(map_err)?;
-    let metadata_len = footer_tail.metadata_length() as u64;
-    check_meta_size(file_size, metadata_len, path)?;
-
-    let footer_len = FOOTER_SIZE + metadata_len;
-    if (footer_len as usize) <= buffer_len {
-        // The whole metadata is in the bytes we already read
-        let offset = buffer_len - footer_len as usize;
-        Ok(ParquetMetaDataReader::decode_metadata(&buffer[offset..]).map_err(map_err)?)
-    } else {
-        let mut metadata = blocking
-            .read_with(path)
-            .range((file_size - footer_len)..(file_size - buffer_len as u64))
-            .call()?
             .to_vec();
         metadata.extend(buffer);
         Ok(ParquetMetaDataReader::decode_metadata(&metadata).map_err(map_err)?)
