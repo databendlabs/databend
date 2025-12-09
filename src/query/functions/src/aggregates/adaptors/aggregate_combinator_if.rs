@@ -22,6 +22,7 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
@@ -111,24 +112,53 @@ impl AggregateFunction for AggregateIfCombinator {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: ProjectedBlock,
+        block: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         if self.always_false {
             return Ok(());
         }
-        let predicate =
-            BooleanType::try_downcast_column(&columns[self.argument_len - 1].to_column()).unwrap();
 
-        let bitmap = match validity {
-            Some(validity) => validity & (&predicate),
-            None => predicate,
+        let mut predicate;
+        let bitmap = match &block[self.argument_len - 1] {
+            BlockEntry::Column(column) => {
+                predicate = BooleanType::try_downcast_column(column).unwrap();
+                if predicate.null_count() == predicate.len() {
+                    return Ok(());
+                }
+                if predicate.true_count() == predicate.len() {
+                    validity
+                } else {
+                    match validity {
+                        None => Some(&predicate),
+                        Some(validity) => {
+                            predicate = validity & (&predicate);
+                            if predicate.null_count() == predicate.len() {
+                                return Ok(());
+                            }
+                            if predicate.true_count() == predicate.len() {
+                                None
+                            } else {
+                                Some(&predicate)
+                            }
+                        }
+                    }
+                }
+            }
+            BlockEntry::Const(Scalar::Boolean(v), _, _) => {
+                if !*v {
+                    return Ok(());
+                }
+                validity
+            }
+            BlockEntry::Const(_, _, _) => unreachable!(),
         };
+
         self.nested.accumulate(
             place,
-            columns.slice(0..self.argument_len - 1),
-            Some(&bitmap),
+            block.slice(0..self.argument_len - 1),
+            bitmap,
             input_rows,
         )
     }
@@ -137,33 +167,52 @@ impl AggregateFunction for AggregateIfCombinator {
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: ProjectedBlock,
-        _input_rows: usize,
+        block: ProjectedBlock,
+        input_rows: usize,
     ) -> Result<()> {
         if self.always_false {
             return Ok(());
         }
-        let predicate: Bitmap =
-            BooleanType::try_downcast_column(&columns[self.argument_len - 1].to_column()).unwrap();
-        let (columns, row_size) =
-            self.filter_column(columns.slice(0..self.argument_len - 1), &predicate);
-        let new_places = Self::filter_place(places, &predicate);
 
-        let new_places_slice = new_places.as_slice();
-        let entries: Vec<_> = columns.into_iter().map(|c| c.into()).collect();
-        self.nested
-            .accumulate_keys(new_places_slice, loc, (&entries).into(), row_size)
+        match &block[self.argument_len - 1] {
+            BlockEntry::Column(column) => {
+                let predicate = BooleanType::try_downcast_column(column).unwrap();
+                let (columns, num_rows) =
+                    self.filter_column(block.slice(0..self.argument_len - 1), &predicate);
+                let new_places = Self::filter_place(places, &predicate);
+
+                let new_places_slice = new_places.as_slice();
+                let entries: Vec<_> = columns.into_iter().map(|c| c.into()).collect();
+                self.nested
+                    .accumulate_keys(new_places_slice, loc, (&entries).into(), num_rows)
+            }
+            BlockEntry::Const(Scalar::Boolean(v), _, _) => {
+                if *v {
+                    return Ok(());
+                }
+                self.nested.accumulate_keys(
+                    places,
+                    loc,
+                    block.slice(0..self.argument_len - 1),
+                    input_rows,
+                )
+            }
+            BlockEntry::Const(_, _, _) => unreachable!(),
+        }
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, block: ProjectedBlock, row: usize) -> Result<()> {
         if self.always_false {
             return Ok(());
         }
-        let predicate: Bitmap =
-            BooleanType::try_downcast_column(&columns[self.argument_len - 1].to_column()).unwrap();
-        if predicate.get_bit(row) {
+
+        let predicate = block[self.argument_len - 1]
+            .downcast::<BooleanType>()
+            .unwrap();
+
+        if predicate.index(row).unwrap() {
             self.nested
-                .accumulate_row(place, columns.slice(0..self.argument_len - 1), row)?;
+                .accumulate_row(place, block.slice(0..self.argument_len - 1), row)?;
         }
         Ok(())
     }
@@ -185,7 +234,7 @@ impl AggregateFunction for AggregateIfCombinator {
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        state: &databend_common_expression::BlockEntry,
+        state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
         self.nested.batch_merge(places, loc, state, filter)
