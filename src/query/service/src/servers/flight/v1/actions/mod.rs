@@ -27,7 +27,6 @@ use std::sync::Arc;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 pub use flight_actions::flight_actions;
 pub use flight_actions::FlightActions;
@@ -44,10 +43,10 @@ pub use truncate_table::TRUNCATE_TABLE;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 
-pub(crate) fn create_session(tenant: Option<Tenant>) -> Result<Arc<Session>> {
+pub(crate) fn create_session() -> Result<Arc<Session>> {
     let config = GlobalConfig::instance();
-    let tenant_id = tenant.unwrap_or(config.query.tenant_id.clone());
-    let settings = Settings::create(tenant_id.clone());
+    let tenant_id = config.query.tenant_id.clone();
+    let settings = Settings::create(tenant_id);
     match SessionManager::instance().create_with_settings(SessionType::FlightRPC, settings, None) {
         Err(cause) => Err(cause),
         Ok(session) => Ok(Arc::new(session)),

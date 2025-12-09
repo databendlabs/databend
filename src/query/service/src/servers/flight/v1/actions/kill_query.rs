@@ -24,7 +24,7 @@ use crate::servers::flight::v1::actions::create_session;
 pub static KILL_QUERY: &str = "/actions/kill_query";
 
 pub async fn kill_query(plan: KillPlan) -> Result<bool> {
-    let session = create_session(None)?;
+    let session = create_session()?;
     let version = GlobalConfig::version();
     let query_context = session.create_query_context(version).await?;
     let interpreter = KillInterpreter::from_flight(query_context, plan)?;

@@ -23,7 +23,7 @@ use crate::servers::flight::v1::actions::create_session;
 pub static SYSTEM_ACTION: &str = "/actions/system_action";
 
 pub async fn system_action(plan: SystemPlan) -> Result<()> {
-    let session = create_session(Some(plan.clone().tenant))?;
+    let session = create_session()?;
     let version = GlobalConfig::version();
     let query_context = session.create_query_context(version).await?;
     let interpreter = SystemActionInterpreter::from_flight(query_context, plan)?;

@@ -25,15 +25,12 @@ impl Binder {
     #[async_backtrace::framed]
     pub(super) async fn bind_system(&mut self, stmt: &SystemStmt) -> Result<Plan> {
         let SystemStmt { action } = stmt;
-        let tenant = self.ctx.get_tenant();
         match action {
             AstSystemAction::Backtrace(switch) => Ok(Plan::System(Box::new(SystemPlan {
                 action: SystemAction::Backtrace(*switch),
-                tenant,
             }))),
             AstSystemAction::FlushPrivileges => Ok(Plan::System(Box::new(SystemPlan {
                 action: SystemAction::FlushPrivileges,
-                tenant,
             }))),
         }
     }

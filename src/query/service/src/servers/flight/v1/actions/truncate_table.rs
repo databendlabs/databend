@@ -23,7 +23,7 @@ use crate::servers::flight::v1::actions::create_session;
 pub static TRUNCATE_TABLE: &str = "/actions/truncate_table";
 
 pub async fn truncate_table(plan: TruncateTablePlan) -> Result<()> {
-    let session = create_session(None)?;
+    let session = create_session()?;
     let version = GlobalConfig::version();
     let query_context = session.create_query_context(version).await?;
     let interpreter = TruncateTableInterpreter::from_flight(query_context, plan)?;
