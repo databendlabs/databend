@@ -33,6 +33,7 @@ pub struct RuntimeFiltersDesc {
     pub inlist_threshold: usize,
     pub min_max_threshold: usize,
     pub selectivity_threshold: u64,
+    pub probe_ratio_threshold: f64,
 
     broadcast_id: Option<u32>,
     pub filters_desc: Vec<RuntimeFilterDesc>,
@@ -46,6 +47,8 @@ impl RuntimeFiltersDesc {
         let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
         let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
         let selectivity_threshold = settings.get_join_runtime_filter_selectivity_threshold()?;
+        let probe_ratio_threshold =
+            settings.get_join_runtime_filter_probe_ratio_threshold()? as f64;
 
         let mut filters_desc = Vec::with_capacity(join.runtime_filter.filters.len());
         let mut runtime_filters_ready = Vec::with_capacity(join.runtime_filter.filters.len());
@@ -74,6 +77,7 @@ impl RuntimeFiltersDesc {
             runtime_filters_ready,
             ctx: ctx.clone(),
             broadcast_id: join.broadcast_id,
+            probe_ratio_threshold,
         }))
     }
 
@@ -87,6 +91,7 @@ impl RuntimeFiltersDesc {
             packet,
             runtime_filter_descs,
             self.selectivity_threshold,
+            self.probe_ratio_threshold,
             self.ctx.get_settings().get_max_threads()? as usize,
         )
         .await?;
