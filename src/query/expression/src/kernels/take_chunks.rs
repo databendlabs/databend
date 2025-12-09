@@ -25,6 +25,7 @@ use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnVec;
+use crate::ColumnViewVec;
 use crate::DataBlock;
 use crate::Scalar;
 use crate::Value;
@@ -838,6 +839,31 @@ impl Column {
                     }
                 })
             }
+        }
+    }
+
+    pub fn take_value_vec_indices(values: &ColumnViewVec, indices: &[RowPtr]) -> BlockEntry {
+        match values.data_type() {
+            DataType::Null => {
+                BlockEntry::Const(Scalar::Null, values.data_type().clone(), indices.len())
+            }
+
+            DataType::String => {
+                let views = values.downcast_ref::<StringType>().unwrap();
+                let mut builder = StringColumnBuilder::with_capacity(indices.len());
+                for row_ptr in indices {
+                    unsafe {
+                        builder.put_and_commit(
+                            views[row_ptr.chunk_index as usize]
+                                .index_unchecked(row_ptr.row_index as usize),
+                        );
+                    }
+                }
+
+                Column::String(builder.build()).into()
+            }
+
+            _ => todo!(),
         }
     }
 
