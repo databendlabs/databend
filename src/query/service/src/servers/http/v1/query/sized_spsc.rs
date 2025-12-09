@@ -287,6 +287,17 @@ where S: DataBlockSpill
 
         let start_time = std::time::Instant::now();
 
+        log::debug!(
+            target: "result-set-spill",
+            "[RESULT-SET-SPILL] Spill target acquired, parent exists={}, page_rows={}, page_bytes={}",
+            match spiller.spill_location_prefix() {
+                Some(prefix) => std::path::Path::new(&prefix).exists(),
+                None => false,
+            },
+            rows_count,
+            memory_bytes
+        );
+
         log::info!(
             target: "result-set-spill",
             "[RESULT-SET-SPILL] Starting spill to disk blocks={}, rows={}, memory_bytes={}",
