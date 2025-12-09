@@ -19,6 +19,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_management::WarehouseInfo;
 use databend_common_meta_api::DatamaskApi;
+use databend_common_meta_api::RowAccessPolicyApi;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
@@ -157,6 +158,21 @@ pub async fn validate_grant_object_exists(
                 return Err(databend_common_exception::ErrorCode::UnknownDatamask(
                     format!("masking policy id {} not exists", policy_id),
                 ));
+            }
+        }
+        GrantObject::RowAccessPolicy(policy_id) => {
+            let meta_api = UserApiProvider::instance().get_meta_store_client();
+            if meta_api
+                .get_row_access_policy_by_id(&tenant, *policy_id)
+                .await?
+                .is_none()
+            {
+                return Err(
+                    databend_common_exception::ErrorCode::UnknownRowAccessPolicy(format!(
+                        "row access policy id {} not exists",
+                        policy_id
+                    )),
+                );
             }
         }
         GrantObject::Global => (),

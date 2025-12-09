@@ -86,8 +86,8 @@ impl<const INDEX: usize> AccessType for GenericType<INDEX> {
         scalar.memory_size()
     }
 
-    fn column_memory_size(col: &Self::Column) -> usize {
-        col.memory_size()
+    fn column_memory_size(col: &Self::Column, gc: bool) -> usize {
+        col.memory_size(gc)
     }
 
     #[inline(always)]

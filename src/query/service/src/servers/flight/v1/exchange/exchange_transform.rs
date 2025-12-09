@@ -26,7 +26,6 @@ use super::exchange_sink_writer::create_writer_item;
 use super::exchange_source::via_exchange_source;
 use super::exchange_source_reader::create_reader_item;
 use super::exchange_transform_shuffle::exchange_shuffle;
-use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 
@@ -43,7 +42,8 @@ impl ExchangeTransform {
             ExchangeParams::MergeExchange(params) => {
                 via_exchange_source(ctx.clone(), params, injector, pipeline)
             }
-            ExchangeParams::ShuffleExchange(params) => {
+            ExchangeParams::BroadcastExchange(_params) => Ok(()),
+            ExchangeParams::NodeShuffleExchange(params) => {
                 exchange_shuffle(ctx, params, pipeline)?;
 
                 // exchange writer sink and resize and exchange reader
@@ -57,13 +57,12 @@ impl ExchangeTransform {
                 };
 
                 let mut items = Vec::with_capacity(len);
-                let exchange_params = ExchangeParams::ShuffleExchange(params.clone());
+                let exchange_params = ExchangeParams::NodeShuffleExchange(params.clone());
                 let exchange_manager = ctx.get_exchange_manager();
                 let flight_senders = exchange_manager.get_flight_sender(&exchange_params)?;
 
-                let senders = flight_senders.into_iter();
-                for (destination_id, sender) in params.destination_ids.iter().zip(senders) {
-                    items.push(match destination_id == &params.executor_id {
+                for (destination_id, sender) in flight_senders {
+                    items.push(match destination_id == params.executor_id {
                         true => {
                             if local_pipe == 1 {
                                 create_dummy_item()
@@ -71,28 +70,15 @@ impl ExchangeTransform {
                                 create_resize_item(1, local_pipe)
                             }
                         }
-                        false => create_writer_item(
-                            sender,
-                            false,
-                            destination_id,
-                            params.fragment_id,
-                            &ctx.get_cluster().local_id(),
-                        ),
+                        false => create_writer_item(sender, false),
                     });
                 }
 
                 let mut nodes_source = 0;
                 let receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
-                for (destination_id, receiver) in receivers {
-                    if destination_id != params.executor_id {
-                        nodes_source += 1;
-                        items.push(create_reader_item(
-                            receiver,
-                            &destination_id,
-                            &params.executor_id,
-                            params.fragment_id,
-                        ));
-                    }
+                for receiver in receivers {
+                    nodes_source += 1;
+                    items.push(create_reader_item(receiver));
                 }
 
                 let new_outputs = local_pipe + nodes_source;

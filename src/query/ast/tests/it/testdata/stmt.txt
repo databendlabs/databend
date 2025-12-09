@@ -29009,3 +29009,113 @@ DescRowAccessPolicy(
 )
 
 
+---------- Input ----------
+GRANT CREATE ROW ACCESS POLICY ON *.* TO USER a;
+---------- Output ---------
+GRANT CREATE ROW ACCESS POLICY ON  *.* TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                CreateRowAccessPolicy,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT APPLY ROW ACCESS POLICY ON *.* TO USER a;
+---------- Output ---------
+GRANT APPLY ROW ACCESS POLICY ON  *.* TO USER 'a'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                ApplyRowAccessPolicy,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "a",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT APPLY ON ROW ACCESS POLICY ssn_mask TO ROLE 'human_resources'
+---------- Output ---------
+GRANT APPLY ON ROW ACCESS POLICY ssn_mask TO ROLE 'human_resources'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                ApplyRowAccessPolicy,
+            ],
+            level: RowAccessPolicy(
+                "ssn_mask",
+            ),
+        },
+        principal: Role(
+            "human_resources",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON  ROW ACCESS POLICY mask_phone TO ROLE 'role_mask_apply'
+---------- Output ---------
+GRANT OWNERSHIP ON  ROW ACCESS POLICY mask_phone TO ROLE 'role_mask_apply'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: RowAccessPolicy(
+                "mask_phone",
+            ),
+        },
+        principal: Role(
+            "role_mask_apply",
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS ON ROW ACCESS POLICY ssn_mask
+---------- Output ---------
+SHOW GRANTS ON ROW ACCESS POLICY ssn_mask 
+---------- AST ------------
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
+        object: RowAccessPolicy(
+            "ssn_mask",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
+            },
+        ),
+    },
+)
+
+

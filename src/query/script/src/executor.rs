@@ -37,6 +37,7 @@ pub trait Client {
         -> Result<Self::Var>;
     fn num_rows(&self, block: &Self::Set) -> usize;
     fn is_true(&self, scalar: &Self::Var) -> Result<bool>;
+    fn format_error(&self, value: &Self::Var) -> Result<String>;
 }
 
 #[derive(Debug, Clone)]
@@ -180,6 +181,15 @@ impl<C: Client> Executor<C> {
             ScriptIR::ReturnSet { set } => {
                 self.return_value = Some(ReturnValue::Set(self.get_set(set)?.clone()));
                 self.goto_end();
+            }
+            ScriptIR::Throw { span, message } => {
+                let msg = if let Some(var) = message {
+                    let value = self.get_var(var)?;
+                    self.client.format_error(value)?
+                } else {
+                    "Script threw an error".to_string()
+                };
+                return Err(ErrorCode::ScriptExecutionError(msg).set_span(*span));
             }
         }
 

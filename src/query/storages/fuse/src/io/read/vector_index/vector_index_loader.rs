@@ -202,7 +202,7 @@ pub async fn load_vector_index_files<'a>(
             vector_binary,
             &databend_common_expression::types::DataType::Binary,
         )?;
-        vector_bytes_len += column.memory_size();
+        vector_bytes_len += column.memory_size(false);
         vector_columns.push(column);
     }
 

@@ -172,7 +172,7 @@ drop stream s3
 statement ok
 drop table t2 all
 
-query TTTTT
+query TTTTTT
 select catalog, database, name, mode, table_name, comment from system.streams where database='test_stream' order by name
 ----
 default test_stream s append_only test_stream.t (empty)
@@ -194,7 +194,7 @@ drop stream t1
 statement ok
 drop table t1 all
 
-query T
+query TTTTAA
 show columns from s2
 ----
 a int YES (empty) NULL NULL
@@ -210,12 +210,12 @@ s2 Change tracking is not enabled on table 'test_stream'.'t'
 statement ok
 drop table t all
 
-query TTT
+query TT
 select name, invalid_reason from system.streams where database='test_stream' order by name
 ----
 s2 Unknown table 't'
 
-query T
+query TTTTAA
 show columns from s2
 ----
 
@@ -535,7 +535,7 @@ statement ok
 create stream s8_1 on table t7
 
 # test merge into insert only
-query T
+query I
 merge into t7 using (select a, b from t8) as s on t7.a=s.a when not matched then insert *
 ----
 1
@@ -546,7 +546,7 @@ select a, b, change$action, change$is_update from s8_1 order by a, b
 3 3 INSERT 0
 
 # test merge into matched only
-query TT
+query II
 merge into t7 using (select a, b+1 as b from t8) as s on t7.a=s.a when matched and s.a=2 then update * when matched and s.a=4 then delete
 ----
 1 1
@@ -572,7 +572,7 @@ statement ok
 create stream s9_1 on table t7
 
 # test merge into full operation
-query TTT
+query III
 merge into t7 using t8 on t7.a=t8.a when matched and t8.a=2 then update set t7.b=t8.b when matched and t8.a=3 then delete when not matched then insert (a,b) values(t8.a,t8.b)
 ----
 1 1 1
@@ -673,7 +673,7 @@ merge into t9 a using (select 10,'a') b(id,c1) on a.id=b.id when matched then up
 ----
 1 0
 
-query T
+query ITTB
 select id, c1, change$action, change$is_update from stream_t9;
 ----
 10 a INSERT 0
@@ -693,7 +693,7 @@ merge into t9 a using (select 10,'a') b(id,c1) on a.id=b.id when matched then up
 ----
 0 1
 
-query T
+query ITTTB
 select * from stream_t9;
 ----
 
@@ -810,7 +810,7 @@ insert into t1 values(1,1),(2,3),(3,3);
 statement ok
 explain merge into t1 using t2 on t1.a=t2.a when matched then update set t1.b=t2.b when not matched then insert *;
 
-query TT
+query II
 merge into t1 using t2 on t1.a=t2.a when matched then update set t1.b=t2.b when not matched then insert *;
 ----
 1 2
@@ -818,7 +818,7 @@ merge into t1 using t2 on t1.a=t2.a when matched then update set t1.b=t2.b when 
 statement ok
 alter table t1 rename to t1_1
 
-query T
+query TT
 select name, invalid_reason from system.streams where database='test_stream' order by name
 ----
 s1 (empty)

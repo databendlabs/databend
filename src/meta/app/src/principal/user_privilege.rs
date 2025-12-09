@@ -92,6 +92,10 @@ pub enum UserPrivilegeType {
     ApplyMaskingPolicy = 1 << 28,
     // Privilege to Create Masking Policy.
     CreateMaskingPolicy = 1 << 29,
+    // Privilege to Apply Row Access Policy.
+    ApplyRowAccessPolicy = 1 << 30,
+    // Privilege to Create Row Access Policy.
+    CreateRowAccessPolicy = 1 << 31,
     // Discard Privilege Type
     Set = 1 << 4,
     CreateDataMask = 1 << 16,
@@ -119,6 +123,8 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::CreateDataMask => "CREATE DATAMASK",
             UserPrivilegeType::CreateMaskingPolicy => "CREATE MASKING POLICY",
             UserPrivilegeType::ApplyMaskingPolicy => "APPLY MASKING POLICY",
+            UserPrivilegeType::CreateRowAccessPolicy => "CREATE ROW ACCESS POLICY",
+            UserPrivilegeType::ApplyRowAccessPolicy => "APPLY ROW ACCESS POLICY",
             UserPrivilegeType::Ownership => "OWNERSHIP",
             UserPrivilegeType::Read => "Read",
             UserPrivilegeType::Write => "Write",
@@ -163,6 +169,12 @@ impl From<databend_common_ast::ast::UserPrivilegeType> for UserPrivilegeType {
             }
             databend_common_ast::ast::UserPrivilegeType::ApplyMaskingPolicy => {
                 UserPrivilegeType::ApplyMaskingPolicy
+            }
+            databend_common_ast::ast::UserPrivilegeType::CreateRowAccessPolicy => {
+                UserPrivilegeType::CreateRowAccessPolicy
+            }
+            databend_common_ast::ast::UserPrivilegeType::ApplyRowAccessPolicy => {
+                UserPrivilegeType::ApplyRowAccessPolicy
             }
             databend_common_ast::ast::UserPrivilegeType::Ownership => UserPrivilegeType::Ownership,
             databend_common_ast::ast::UserPrivilegeType::Read => UserPrivilegeType::Read,
@@ -228,7 +240,8 @@ impl UserPrivilegeSet {
         let connection_privs_without_ownership = Self::available_privileges_on_connection(false);
         let seq_privs_without_ownership = Self::available_privileges_on_sequence(false);
         let mask_privs = Self::available_privileges_on_masking_policy(false);
-        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateMaskingPolicy | CreateWarehouse | CreateConnection | CreateSequence | CreateProcedure });
+        let row_access_privs = Self::available_privileges_on_row_access_policy(false);
+        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateMaskingPolicy | CreateRowAccessPolicy | CreateWarehouse | CreateConnection | CreateSequence | CreateProcedure });
         (database_privs.privileges
             | privs
             | stage_privs_without_ownership.privileges
@@ -236,7 +249,8 @@ impl UserPrivilegeSet {
             | connection_privs_without_ownership.privileges
             | seq_privs_without_ownership.privileges
             | udf_privs_without_ownership.privileges
-            | mask_privs.privileges)
+            | mask_privs.privileges
+            | row_access_privs.privileges)
             .into()
     }
 
@@ -312,6 +326,14 @@ impl UserPrivilegeSet {
             make_bitflags!(UserPrivilegeType::{ ApplyMaskingPolicy | Ownership }).into()
         } else {
             make_bitflags!(UserPrivilegeType::{ ApplyMaskingPolicy }).into()
+        }
+    }
+
+    pub fn available_privileges_on_row_access_policy(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{ ApplyRowAccessPolicy | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{ ApplyRowAccessPolicy }).into()
         }
     }
 
