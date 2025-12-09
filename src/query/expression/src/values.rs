@@ -860,6 +860,7 @@ impl ScalarRef<'_> {
                         .all(|(val, ty)| val.is_value_of_type(&ty))
                 }
                 (ScalarRef::Vector(val), DataType::Vector(ty)) => val.data_type() == ty,
+                (ScalarRef::Opaque(val), ty) => val.data_type() == ty,
                 _ => false,
             },
         }

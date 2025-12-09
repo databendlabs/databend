@@ -626,20 +626,136 @@ impl AggHash for ScalarRef<'_> {
 #[cfg(test)]
 mod tests {
     use databend_common_column::bitmap::Bitmap;
+    use databend_common_column::types::months_days_micros;
+    use databend_common_column::types::timestamp_tz;
 
     use super::*;
+    use crate::types::geography::Geography;
     use crate::types::ArgType;
-    use crate::types::Int32Type;
+    use crate::types::DecimalSize;
     use crate::types::NullableColumn;
-    use crate::types::NullableType;
-    use crate::types::StringType;
+    use crate::types::NumberScalar;
+    use crate::types::OpaqueScalar;
+    use crate::types::VectorDataType;
+    use crate::types::VectorScalar;
     use crate::BlockEntry;
     use crate::DataBlock;
     use crate::FromData;
+    use crate::ProjectedBlock;
     use crate::Value;
 
     fn merge_hash_slice(ls: &[u64]) -> u64 {
         ls.iter().cloned().reduce(merge_hash).unwrap()
+    }
+
+    #[test]
+    fn test_group_hash_entries_const_equals_column() {
+        let num_rows = 5;
+        let block = sample_block(num_rows);
+        let full_block = block.convert_to_full();
+
+        for projection in (0..block.num_columns())
+            .map_windows(|[a, b]| vec![*a, *b])
+            .chain(Some((0..block.num_columns()).collect()))
+            .collect::<Vec<_>>()
+        {
+            let mut const_hashes = vec![0; block.num_rows()];
+            let mut col_hashes = vec![0; full_block.num_rows()];
+            group_hash_entries(
+                ProjectedBlock::project(&projection, &block),
+                &mut const_hashes,
+            );
+            group_hash_entries(
+                ProjectedBlock::project(&projection, &full_block),
+                &mut col_hashes,
+            );
+            assert_eq!(const_hashes, col_hashes);
+        }
+    }
+
+    fn sample_block(num_rows: usize) -> DataBlock {
+        let cases = [
+            (DataType::Null, Scalar::Null),
+            (DataType::EmptyArray, Scalar::EmptyArray),
+            (DataType::EmptyMap, Scalar::EmptyMap),
+            (DataType::Boolean, Scalar::Boolean(true)),
+            (DataType::Binary, Scalar::Binary(vec![1, 2, 3, 4])),
+            (DataType::String, Scalar::String("const_str".to_string())),
+            (
+                Int32Type::data_type(),
+                Scalar::Number(NumberScalar::Int32(123)),
+            ),
+            (
+                DataType::Number(NumberDataType::Float64),
+                Scalar::Number(NumberScalar::Float64(OrderedFloat(1.25))),
+            ),
+            {
+                let decimal_size = DecimalSize::new(20, 3).unwrap();
+                (
+                    DataType::Decimal(decimal_size),
+                    Scalar::Decimal(DecimalScalar::Decimal128(123456_i128, decimal_size)),
+                )
+            },
+            (DataType::Timestamp, Scalar::Timestamp(123_456_789)),
+            (
+                DataType::TimestampTz,
+                Scalar::TimestampTz(timestamp_tz::new(123_456, 3_600)),
+            ),
+            (DataType::Date, Scalar::Date(42)),
+            (
+                DataType::Interval,
+                Scalar::Interval(months_days_micros::new(1, 2, 3)),
+            ),
+            (DataType::Bitmap, Scalar::Bitmap(vec![0b10101010])),
+            (DataType::Variant, Scalar::Variant(vec![1, 2, 3, 4])),
+            (DataType::Geometry, Scalar::Geometry(vec![9, 9, 9])),
+            (
+                DataType::Geography,
+                Scalar::Geography(Geography(vec![1, 2, 3])),
+            ),
+            (
+                DataType::Vector(VectorDataType::Int8(2)),
+                Scalar::Vector(VectorScalar::Int8(vec![1, 2])),
+            ),
+            (
+                DataType::Opaque(2),
+                Scalar::Opaque(OpaqueScalar::Opaque2([1, 2])),
+            ),
+            {
+                let array_ty = DataType::Array(Box::new(Int32Type::data_type()));
+                (array_ty.clone(), Scalar::default_value(&array_ty))
+            },
+            {
+                let map_ty = DataType::Map(Box::new(DataType::Tuple(vec![
+                    DataType::String,
+                    Int32Type::data_type(),
+                ])));
+                let val = Scalar::default_value(&map_ty);
+                (map_ty, val)
+            },
+            {
+                let tuple_ty = DataType::Tuple(vec![DataType::String, Int32Type::data_type()]);
+                (
+                    tuple_ty,
+                    Scalar::Tuple(vec![
+                        Scalar::String("tuple_0".to_string()),
+                        Scalar::Number(NumberScalar::Int32(0)),
+                    ]),
+                )
+            },
+            (
+                Int32Type::data_type().wrap_nullable(),
+                Scalar::Number(NumberScalar::Int32(999)),
+            ),
+            (Int32Type::data_type().wrap_nullable(), Scalar::Null),
+        ];
+
+        DataBlock::from_iter(
+            cases.into_iter().map(|(data_type, scalar)| {
+                BlockEntry::new_const_column(data_type, scalar, num_rows)
+            }),
+            num_rows,
+        )
     }
 
     #[test]

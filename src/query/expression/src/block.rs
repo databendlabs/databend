@@ -70,7 +70,10 @@ impl BlockEntry {
     }
 
     pub fn new_const_column(data_type: DataType, scalar: Scalar, num_rows: usize) -> Self {
-        debug_assert!(scalar.as_ref().is_value_of_type(&data_type));
+        debug_assert!(
+            scalar.as_ref().is_value_of_type(&data_type),
+            "type not match: {scalar:?}, {data_type:?}"
+        );
         BlockEntry::Const(scalar, data_type, num_rows)
     }
 

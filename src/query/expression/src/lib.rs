@@ -44,6 +44,7 @@
 #![feature(never_type)]
 #![feature(slice_as_array)]
 #![feature(new_zeroed_alloc)]
+#![feature(iter_map_windows)]
 
 #[allow(dead_code)]
 mod block;
