@@ -201,4 +201,25 @@ impl ProcedureMgr {
 
         Ok(procedure_infos)
     }
+
+    #[fastrace::trace]
+    pub async fn list_procedures_by_name(
+        &self,
+        name: &str,
+    ) -> Result<Vec<ProcedureInfo>, MetaError> {
+        debug!(name = (name); "SchemaApi: {}", func_name!());
+        let ident = ProcedureNameIdent::new(&self.tenant, ProcedureIdentity::new(name, ""));
+        let dir = DirName::new_with_level(ident, 1);
+
+        let name_id_metas = self.kv_api.list_id_value(&dir).await?;
+        let procedure_infos = name_id_metas
+            .map(|(k, id, seq_meta)| ProcedureInfo {
+                ident: ProcedureIdIdent::new(&self.tenant, *id),
+                name_ident: k,
+                meta: seq_meta.data,
+            })
+            .collect::<Vec<_>>();
+
+        Ok(procedure_infos)
+    }
 }
