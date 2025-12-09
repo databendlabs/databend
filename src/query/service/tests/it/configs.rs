@@ -1077,7 +1077,7 @@ spill_local_disk_max_bytes = 1073741824
                 let cfg = InnerConfig::load_for_test().expect("config load failed");
                 assert_eq!(cfg.spill.local_path(), Some("/legacy/spill/path".into()));
                 assert_eq!(cfg.spill.reserved_disk_ratio.into_inner(), 0.25);
-                assert_eq!(cfg.spill.global_bytes_limit, 53687091200);
+                assert_eq!(cfg.spill.global_bytes_limit, 1073741824);
             },
         );
         fs::remove_file(file_path)?;
