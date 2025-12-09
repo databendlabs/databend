@@ -5474,7 +5474,7 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
 }
 
 pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
-    let mut create_db_engine = parser_fn(map(
+    let create_db_engine = parser_fn(map(
         rule! {
             ENGINE ~  ^"=" ~ ^#database_engine
         },
@@ -5506,7 +5506,7 @@ pub fn sql_property_list(i: Input) -> IResult<Vec<SQLProperty>> {
         },
     );
 
-    comma_separated_list1(property)(i)
+    comma_separated_list1(property).parse(i)
 }
 
 pub fn catalog_type(i: Input) -> IResult<CatalogType> {
