@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
@@ -89,12 +90,14 @@ impl DiskCacheBuilder {
         disk_cache_bytes_size: usize,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
+        validate_checksum_on_read: Arc<AtomicBool>,
     ) -> Result<DiskCacheAccessor<LruDiskCacheHolder>> {
         let disk_cache = LruDiskCacheBuilder::new_disk_cache(
             path,
             disk_cache_bytes_size,
             disk_cache_reload_policy,
             sync_data,
+            validate_checksum_on_read,
         )?;
         let (tx, rx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;

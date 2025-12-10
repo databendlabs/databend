@@ -128,6 +128,7 @@ pub struct CacheManager {
     ///
     /// In non-EE mode, disk caches are always disabled.
     allows_on_disk_cache: AtomicBool,
+    disk_cache_validate_checksum_on_read: Arc<AtomicBool>,
 }
 
 impl CacheManager {
@@ -158,6 +159,7 @@ impl CacheManager {
         let tenant_id = tenant_id.into();
         let on_disk_cache_sync_data = config.disk_cache_config.sync_data;
         let allows_on_disk_cache = AtomicBool::new(ee_mode);
+        let disk_cache_validate_checksum_on_read = Arc::new(AtomicBool::new(true));
 
         let on_disk_cache_queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
             config.table_data_cache_population_queue_size
@@ -199,6 +201,7 @@ impl CacheManager {
                         config.disk_cache_config.max_bytes as usize,
                         config.data_cache_key_reload_policy.clone(),
                         on_disk_cache_sync_data,
+                        disk_cache_validate_checksum_on_read.clone(),
                         ee_mode,
                     )?
                 }
@@ -241,6 +244,7 @@ impl CacheManager {
                 column_data_cache,
                 iceberg_table_meta_cache: CacheSlot::new(None),
                 allows_on_disk_cache,
+                disk_cache_validate_checksum_on_read,
             }
         } else {
             let table_snapshot_cache = Self::new_items_cache_slot(
@@ -276,6 +280,7 @@ impl CacheManager {
                     config.disk_cache_table_bloom_index_data_size as usize,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
+                    disk_cache_validate_checksum_on_read.clone(),
                     ee_mode,
                 )?
             };
@@ -294,6 +299,7 @@ impl CacheManager {
                     config.disk_cache_table_bloom_index_meta_size as usize,
                     DiskCacheKeyReloadPolicy::Fuzzy,
                     on_disk_cache_sync_data,
+                    disk_cache_validate_checksum_on_read.clone(),
                     ee_mode,
                 )?
             };
@@ -378,6 +384,7 @@ impl CacheManager {
                 block_meta_cache,
                 iceberg_table_meta_cache,
                 allows_on_disk_cache,
+                disk_cache_validate_checksum_on_read,
                 column_data_cache,
             }
         };
@@ -672,6 +679,16 @@ impl CacheManager {
         self.allows_on_disk_cache.store(flag, Ordering::Relaxed)
     }
 
+    pub fn disk_cache_checksum_validation_enabled(&self) -> bool {
+        self.disk_cache_validate_checksum_on_read
+            .load(Ordering::Relaxed)
+    }
+
+    pub fn set_disk_cache_checksum_validation(&self, flag: bool) {
+        self.disk_cache_validate_checksum_on_read
+            .store(flag, Ordering::Relaxed)
+    }
+
     fn new_items_cache_slot<V: Into<CacheValue<V>>>(
         name: impl Into<String>,
         capacity: usize,
@@ -716,6 +733,7 @@ impl CacheManager {
         disk_cache_bytes_size: usize,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
+        validate_checksum_on_read: Arc<AtomicBool>,
         ee_mode: bool,
     ) -> Result<Option<DiskCacheAccessor>> {
         if disk_cache_bytes_size <= TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD || !ee_mode {
@@ -731,6 +749,7 @@ impl CacheManager {
                 disk_cache_bytes_size,
                 disk_cache_key_reload_policy,
                 sync_data,
+                validate_checksum_on_read,
             )?;
             Ok(Some(cache_holder))
         }
@@ -745,6 +764,7 @@ impl CacheManager {
         disk_cache_bytes_size: usize,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
+        validate_checksum_on_read: Arc<AtomicBool>,
         ee_mode: bool,
     ) -> Result<CacheSlot<HybridCache<V>>> {
         let name = name.into();
@@ -774,6 +794,7 @@ impl CacheManager {
             disk_cache_bytes_size,
             disk_cache_key_reload_policy,
             sync_data,
+            validate_checksum_on_read.clone(),
             ee_mode,
         )?;
 
@@ -813,6 +834,7 @@ const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
 
     use arrow::array::ArrayRef;
@@ -1197,6 +1219,7 @@ mod tests {
         let ee_mode = true; // Always use EE mode for this test
         let sync_data = false;
         let key_reload_policy = DiskCacheKeyReloadPolicy::Fuzzy;
+        let validate_checksum = Arc::new(AtomicBool::new(true));
 
         // Case 1: Size below threshold (should disable cache)
         let below_threshold_size = TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD - 1;
@@ -1207,6 +1230,7 @@ mod tests {
             below_threshold_size,
             key_reload_policy.clone(),
             sync_data,
+            validate_checksum.clone(),
             ee_mode,
         )?;
         assert!(
@@ -1223,6 +1247,7 @@ mod tests {
             at_threshold_size,
             key_reload_policy.clone(),
             sync_data,
+            validate_checksum.clone(),
             ee_mode,
         )?;
         assert!(
@@ -1239,6 +1264,7 @@ mod tests {
             above_threshold_size,
             key_reload_policy.clone(),
             sync_data,
+            validate_checksum.clone(),
             ee_mode,
         )?;
         assert!(

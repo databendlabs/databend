@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -36,34 +37,43 @@ impl CacheAccessor for LruDiskCacheHolder {
     // TODO Change Arc<Bytes> to Bytes or Arc<Vec<u8>> ?
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
         let k = k.as_ref();
-        {
+        let (cache_entry, checksum_on_read) = {
             let mut cache = self.write();
-            cache.get_cache_item_path_and_size(k)
-        }
-        .and_then(|(cache_file_path, file_size)| {
+            (
+                cache.get_cache_item_path_and_size(k),
+                cache.validate_checksum_on_read(),
+            )
+        };
+
+        cache_entry.and_then(|(cache_file_path, file_size)| {
             match read_cache_content(cache_file_path, file_size as usize) {
                 Ok(mut bytes) => {
-                    if let Err(e) = validate_checksum(bytes.as_slice()) {
-                        error!("disk cache item of key {k}, crc validation failure: {e}");
-                        {
-                            // remove the invalid cache, error of removal ignored
-                            let r = {
-                                let mut cache = self.write();
-                                cache.remove(k)
-                            };
-                            if let Err(e) = r {
+                    if bytes.len() <= 4 {
+                        error!(
+                            "disk cache item of key {k}, crc checksum validation failure: invalid file length {}",
+                            bytes.len()
+                        );
+                        if let Err(e) = remove_corrupted_item(self, k) {
+                            warn!("failed to remove invalid cache item of key {k}: {e}");
+                        }
+                        return None;
+                    }
+
+                    if checksum_on_read {
+                        if let Err(e) = validate_checksum(bytes.as_slice()) {
+                            error!("disk cache item of key {k}, crc validation failure: {e}");
+                            if let Err(e) = remove_corrupted_item(self, k) {
                                 warn!("failed to remove invalid cache item of key {k}: {e}");
                             }
+                            return None;
                         }
-                        None
-                    } else {
-                        // trim the checksum bytes and return
-                        let total_len = bytes.len();
-                        let body_len = total_len - 4;
-                        bytes.truncate(body_len);
-                        let item = Arc::new(bytes.into());
-                        Some(item)
                     }
+
+                    // trim the checksum bytes and return
+                    let body_len = bytes.len() - 4;
+                    bytes.truncate(body_len);
+                    let item = Arc::new(bytes.into());
+                    Some(item)
                 }
                 Err(e) => {
                     // Failure of reading cache item is ignored,
@@ -136,6 +146,11 @@ impl CacheAccessor for LruDiskCacheHolder {
     }
 }
 
+fn remove_corrupted_item(cache_holder: &LruDiskCacheHolder, key: &str) -> Result<()> {
+    let mut cache = cache_holder.write();
+    cache.remove(key)
+}
+
 /// The crc32 checksum is stored at the end of `bytes` and encoded as le u32.
 // Although parquet page has built-in crc, but it is optional (and not generated in parquet2)
 fn validate_checksum(bytes: &[u8]) -> Result<()> {
@@ -170,12 +185,14 @@ impl LruDiskCacheBuilder {
         disk_cache_bytes_size: usize,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
+        validate_checksum_on_read: Arc<AtomicBool>,
     ) -> Result<LruDiskCacheHolder> {
         let lru_disk_cache = DiskCache::new(
             path,
             disk_cache_bytes_size,
             disk_cache_reload_policy,
             sync_data,
+            validate_checksum_on_read,
         )
         .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
         Ok(Arc::new(RwLock::new(lru_disk_cache)))

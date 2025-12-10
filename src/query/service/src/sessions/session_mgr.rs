@@ -37,6 +37,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_metrics::session::*;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
+use databend_storages_common_cache::CacheManager;
 use futures::future::Either;
 use futures::StreamExt;
 use log::info;
@@ -115,6 +116,9 @@ impl SessionManager {
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let settings = Settings::create(tenant);
         settings.load_changes().await?;
+        if let Ok(flag) = settings.get_disk_cache_validate_checksum() {
+            CacheManager::instance().set_disk_cache_checksum_validation(flag);
+        }
 
         let session = self.create_with_settings_with_conn_id(typ, settings, None, mysql_conn_id)?;
 

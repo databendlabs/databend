@@ -924,6 +924,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_prune_cache")? == 1)
     }
 
+    pub fn get_disk_cache_validate_checksum(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disk_cache_validate_checksum")? != 0)
+    }
+
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }

@@ -29,6 +29,7 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::SetPlan;
 use databend_common_sql::plans::SetScalarsOrQuery;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_cache::CacheManager;
 use fastrace::func_name;
 use futures::TryStreamExt;
 
@@ -97,6 +98,22 @@ impl SetInterpreter {
                         .await?;
                     self.set_settings(var.to_string(), scalar.clone(), is_global)
                         .await?;
+                    true
+                }
+                "disk_cache_validate_checksum" => {
+                    let value = scalar.trim_matches(|c| c == '\'' || c == '"');
+                    let flag = match value {
+                        "0" => false,
+                        "1" => true,
+                        _ => {
+                            return Err(ErrorCode::BadArguments(
+                                "disk_cache_validate_checksum only accepts 0 or 1".to_string(),
+                            ))
+                        }
+                    };
+                    self.set_settings(var.to_string(), value.to_string(), is_global)
+                        .await?;
+                    CacheManager::instance().set_disk_cache_checksum_validation(flag);
                     true
                 }
                 // TODO: if account_admin is built-in meta in future, we need process set sandbox_tenant in there.

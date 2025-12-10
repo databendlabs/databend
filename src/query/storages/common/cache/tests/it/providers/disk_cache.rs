@@ -19,6 +19,8 @@ use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_storages_common_cache::DiskCacheError;
@@ -65,10 +67,21 @@ impl TestFixture {
     }
 }
 
+fn checksum_flag() -> Arc<AtomicBool> {
+    Arc::new(AtomicBool::new(true))
+}
+
 #[test]
 fn test_empty_dir() {
     let f = TestFixture::new();
-    DiskCache::new(f.tmp(), 1024, DiskCacheKeyReloadPolicy::Reset, false).unwrap();
+    DiskCache::new(
+        f.tmp(),
+        1024,
+        DiskCacheKeyReloadPolicy::Reset,
+        false,
+        checksum_flag(),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -79,6 +92,7 @@ fn test_missing_root() {
         1024,
         DiskCacheKeyReloadPolicy::Reset,
         false,
+        checksum_flag(),
     )
     .unwrap();
 }
@@ -86,7 +100,14 @@ fn test_missing_root() {
 #[test]
 fn test_insert_bytes() {
     let f = TestFixture::new();
-    let mut c = DiskCache::new(f.tmp(), 25, DiskCacheKeyReloadPolicy::Reset, false).unwrap();
+    let mut c = DiskCache::new(
+        f.tmp(),
+        25,
+        DiskCacheKeyReloadPolicy::Reset,
+        false,
+        checksum_flag(),
+    )
+    .unwrap();
     c.insert_single_slice("a/b/c", &[0; 10]).unwrap();
     assert!(c.contains_key("a/b/c"));
     c.insert_single_slice("a/b/d", &[0; 10]).unwrap();
@@ -105,7 +126,14 @@ fn test_insert_bytes() {
 fn test_insert_bytes_exact() {
     // Test that files adding up to exactly the size limit works.
     let f = TestFixture::new();
-    let mut c = DiskCache::new(f.tmp(), 20, DiskCacheKeyReloadPolicy::Reset, false).unwrap();
+    let mut c = DiskCache::new(
+        f.tmp(),
+        20,
+        DiskCacheKeyReloadPolicy::Reset,
+        false,
+        checksum_flag(),
+    )
+    .unwrap();
     c.insert_single_slice("file1", &[1; 10]).unwrap();
     c.insert_single_slice("file2", &[2; 10]).unwrap();
     assert_eq!(c.size(), 20);
@@ -118,7 +146,14 @@ fn test_insert_bytes_exact() {
 fn test_add_get_lru() {
     let f = TestFixture::new();
     {
-        let mut c = DiskCache::new(f.tmp(), 25, DiskCacheKeyReloadPolicy::Reset, false).unwrap();
+        let mut c = DiskCache::new(
+            f.tmp(),
+            25,
+            DiskCacheKeyReloadPolicy::Reset,
+            false,
+            checksum_flag(),
+        )
+        .unwrap();
         c.insert_single_slice("file1", &[1; 10]).unwrap();
         c.insert_single_slice("file2", &[2; 10]).unwrap();
         // Get the file to bump its LRU status.
@@ -138,7 +173,14 @@ fn test_add_get_lru() {
 #[test]
 fn test_insert_bytes_too_large() {
     let f = TestFixture::new();
-    let mut c = DiskCache::new(f.tmp(), 1, DiskCacheKeyReloadPolicy::Reset, false).unwrap();
+    let mut c = DiskCache::new(
+        f.tmp(),
+        1,
+        DiskCacheKeyReloadPolicy::Reset,
+        false,
+        checksum_flag(),
+    )
+    .unwrap();
     match c.insert_single_slice("a/b/c", &[0; 2]) {
         Err(DiskCacheError::FileTooLarge) => {}
         x => panic!("Unexpected result: {x:?}"),
@@ -148,7 +190,14 @@ fn test_insert_bytes_too_large() {
 #[test]
 fn test_evict_until_enough_space() {
     let f = TestFixture::new();
-    let mut c = DiskCache::new(f.tmp(), 4, DiskCacheKeyReloadPolicy::Reset, false).unwrap();
+    let mut c = DiskCache::new(
+        f.tmp(),
+        4,
+        DiskCacheKeyReloadPolicy::Reset,
+        false,
+        checksum_flag(),
+    )
+    .unwrap();
     c.insert_single_slice("file1", &[1; 1]).unwrap();
     c.insert_single_slice("file2", &[2; 2]).unwrap();
     c.insert_single_slice("file3", &[3; 1]).unwrap();
@@ -191,6 +240,7 @@ fn test_fuzzy_restart_parallelism() {
         1024 * 1024,
         DiskCacheKeyReloadPolicy::Fuzzy,
         false,
+        checksum_flag(),
     )
     .unwrap();
 
@@ -237,7 +287,14 @@ fn test_reset_restart_parallelism() {
         .sum::<usize>();
     assert_eq!(remaining_files, entry_count);
 
-    let _cache = DiskCache::new(cache_root, 1024, DiskCacheKeyReloadPolicy::Reset, false).unwrap();
+    let _cache = DiskCache::new(
+        cache_root,
+        1024,
+        DiskCacheKeyReloadPolicy::Reset,
+        false,
+        checksum_flag(),
+    )
+    .unwrap();
 
     // Check that all files within prefix directories are removed
     let prefix_dirs = fs::read_dir(cache_root).unwrap();

@@ -1349,6 +1349,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("disk_cache_validate_checksum", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "When set, verifies CRC checksum for disk cache reads; global-only to avoid inconsistent cache behavior.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("copy_dedup_full_path_by_default", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The default value if table option `copy_dedup_full_path` is not set when creating table.",

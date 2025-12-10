@@ -91,6 +91,7 @@ impl Settings {
         if let Some(val) = query_config.databend_enterprise_license.clone() {
             self.apply_local_config("enterprise_license", val)?;
         }
+
         Ok(())
     }
 

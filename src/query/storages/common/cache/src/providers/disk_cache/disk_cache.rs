@@ -18,6 +18,7 @@ use std::io::IoSlice;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -41,6 +42,7 @@ pub struct DiskCache {
     cache: LruCache<String, CacheValue<FileSize>>,
     root: PathBuf,
     sync_data: bool,
+    validate_checksum_on_read: Arc<AtomicBool>,
 }
 
 impl DiskCache {
@@ -58,6 +60,7 @@ impl DiskCache {
         size: usize,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
         sync_data: bool,
+        validate_checksum_on_read: Arc<AtomicBool>,
     ) -> self::io_result::Result<Self>
     where
         PathBuf: From<T>,
@@ -66,6 +69,7 @@ impl DiskCache {
             cache: LruCache::<String, CacheValue<FileSize>>::with_bytes_capacity(size),
             root: PathBuf::from(path),
             sync_data,
+            validate_checksum_on_read,
         }
         .init(disk_cache_key_reload_policy)
     }
@@ -86,6 +90,10 @@ impl DiskCache {
 
     pub fn is_empty(&self) -> bool {
         self.cache.len() == 0
+    }
+
+    pub fn validate_checksum_on_read(&self) -> bool {
+        self.validate_checksum_on_read.load(Ordering::Relaxed)
     }
 
     /// Return the maximum size of the cache.

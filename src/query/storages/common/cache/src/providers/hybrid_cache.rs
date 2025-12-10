@@ -258,6 +258,9 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
     use bytes::Bytes;
     use databend_common_cache::MemSized;
     use databend_common_config::DiskCacheKeyReloadPolicy;
@@ -350,6 +353,7 @@ mod tests {
             InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
 
         // Create disk cache
+        let checksum_flag = Arc::new(AtomicBool::new(true));
         let table_cache = DiskCacheBuilder::try_build_disk_cache(
             "test_disk".to_string(),
             &cache_path,
@@ -357,6 +361,7 @@ mod tests {
             1024 * 1024, // disk_cache_bytes_size
             DiskCacheKeyReloadPolicy::Fuzzy,
             false, // sync_data
+            checksum_flag.clone(),
         )
         .unwrap();
 
@@ -407,6 +412,7 @@ mod tests {
             InMemoryLruCache::with_items_capacity("test_memory".to_string(), 2);
 
         // Create disk cache
+        let checksum_flag = Arc::new(AtomicBool::new(true));
         let table_cache = DiskCacheBuilder::try_build_disk_cache(
             "test_disk".to_string(),
             &cache_path,
@@ -414,6 +420,7 @@ mod tests {
             1024 * 1024, // disk_cache_bytes_size
             DiskCacheKeyReloadPolicy::Fuzzy,
             false, // sync_data
+            checksum_flag.clone(),
         )
         .unwrap();
 
@@ -475,6 +482,7 @@ mod tests {
             InMemoryLruCache::with_items_capacity("test_memory".to_string(), 1);
 
         // Create disk cache
+        let checksum_flag = Arc::new(AtomicBool::new(true));
         let table_cache = DiskCacheBuilder::try_build_disk_cache(
             "test_disk".to_string(),
             &cache_path,
@@ -482,6 +490,7 @@ mod tests {
             1024 * 1024, // disk_cache_bytes_size
             DiskCacheKeyReloadPolicy::Fuzzy,
             false, // sync_data
+            checksum_flag.clone(),
         )
         .unwrap();
 
@@ -546,6 +555,7 @@ mod tests {
             InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
 
         // Create disk cache
+        let checksum_flag = Arc::new(AtomicBool::new(true));
         let table_cache = DiskCacheBuilder::try_build_disk_cache(
             "test_disk".to_string(),
             &cache_path,
@@ -553,6 +563,7 @@ mod tests {
             1024 * 1024, // disk_cache_bytes_size
             DiskCacheKeyReloadPolicy::Fuzzy,
             false, // sync_data
+            checksum_flag.clone(),
         )
         .unwrap();
 
@@ -640,6 +651,7 @@ mod tests {
             InMemoryLruCache::with_items_capacity("test_memory".to_string(), 100);
 
         // Create disk cache
+        let checksum_flag = Arc::new(AtomicBool::new(true));
         let disk_cache = DiskCacheBuilder::try_build_disk_cache(
             "test_disk".to_string(),
             &cache_path,
@@ -647,6 +659,7 @@ mod tests {
             1024 * 1024, // disk_cache_bytes_size
             DiskCacheKeyReloadPolicy::Fuzzy,
             false, // sync_data
+            checksum_flag,
         )
         .unwrap();
 
