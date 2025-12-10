@@ -882,7 +882,7 @@ impl Default for SpillConfig {
         Self {
             local_writeable_root: None,
             path: "".to_string(),
-            reserved_disk_ratio: OrderedFloat(0.3),
+            reserved_disk_ratio: OrderedFloat(0.1),
             global_bytes_limit: u64::MAX,
             storage_params: None,
             sort_spilling_disk_quota_ratio: 60,

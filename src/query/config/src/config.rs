@@ -798,7 +798,7 @@ pub struct FsStorageConfig {
 
 impl FsStorageConfig {
     fn default_reserved_space_percentage() -> Option<OrderedFloat<f64>> {
-        None // Use None as default, will use system default (30.0) if not specified
+        None // Use None as default, will use system default (10.0) if not specified
     }
 }
 
@@ -3585,7 +3585,7 @@ pub struct SpillConfig {
     #[clap(long, value_name = "VALUE", default_value = "")]
     pub spill_local_disk_path: String,
 
-    #[clap(long, value_name = "VALUE", default_value = "30")]
+    #[clap(long, value_name = "VALUE", default_value = "10")]
     /// Percentage of reserve disk space that won't be used for spill to local disk.
     pub spill_local_disk_reserved_space_percentage: OrderedFloat<f64>,
 
@@ -3649,7 +3649,7 @@ impl Default for SpillConfig {
         Self {
             storage: None,
             spill_local_disk_path: String::new(),
-            spill_local_disk_reserved_space_percentage: OrderedFloat(30.0),
+            spill_local_disk_reserved_space_percentage: OrderedFloat(10.0),
             spill_local_disk_max_bytes: u64::MAX,
             sort_spilling_disk_quota_ratio: 60,
             window_partition_spilling_disk_quota_ratio: 40,
@@ -3838,7 +3838,7 @@ mod cache_config_converters {
                         let reserved_ratio = storage
                             .fs
                             .reserved_space_percentage
-                            .unwrap_or(OrderedFloat(30.0))
+                            .unwrap_or(OrderedFloat(10.0))
                             / 100.0;
                         let max_bytes = storage.fs.max_bytes.unwrap_or(u64::MAX);
 
