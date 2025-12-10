@@ -1,6 +1,6 @@
 <h1 align="center">Databend</h1>
-<h3 align="center">Unified Multimodal Database for Any Data at Any Scale.</h3>
-<p align="center">A <strong>next-generation</strong> cloud-native warehouse built in <strong>Rust</strong>. Open-source, Snowflake-compatible, and unifying BI, AI, Search, Geo, and Stream.</p>
+<h3 align="center">The All-in-One Cloud Data Warehouse for Analytics & AI</h3>
+<p align="center">Built in <strong>Rust</strong> for blazing fast, cost-efficient analytics.<br> Open-source, <strong>Snowflake-compatible</strong>, and designed to unify BI, Search, and AI on object storage.</p>
 
 <div align="center">
 
@@ -24,12 +24,13 @@
 
 ## 💡 Why Databend?
 
-Databend is an open-source **unified multimodal database** built in Rust. It empowers **Analytics**, **AI**, **Search**, and **Geo** workloads on a single platform directly from object storage.
+Databend is an open-source, **All-in-One multimodal database** built in Rust. It seamlessly unifies **Analytics**, **AI**, **Search**, and **Geo** workloads into a single platform, enabling high-performance processing directly on top of object storage.
 
-- **Unified Engine**: One optimizer and runtime for all data types (Structured, Semi-structured, Vector).
-- **Native Pipelines**: Built-in **Stream** and **Task** for automated data cleaning and transformation.
-- **Cloud Native**: Stateless compute nodes over object storage (S3, GCS, Azure) with full ACID support.
-- **High Performance**: Vectorized execution and Zero-Copy processing.
+| | |
+| :--- | :--- |
+| **📊 BI & Analytics**<br>Supercharge your analytics with a high-performance, vectorized SQL query engine. | **✨ Vector Search**<br>Power AI and RAG applications with built-in, high-speed vector similarity search. |
+| **📄 JSON Search**<br>Seamlessly query and analyze semi-structured data with powerful JSON optimization. | **🌍 Geo Search**<br>Efficiently store, index, and query geospatial data for location intelligence. |
+| **🔄 ETL Pipeline**<br>Streamline data ingestion and transformation with built-in Streams and Tasks. | **🌿 Branching**<br>Create isolated Copy-on-Write branches instantly for dev, test, or experiments. |
 
 ![Databend Architecture](https://github.com/user-attachments/assets/288dea8d-0243-4c45-8d18-d4d402b08075)
 
