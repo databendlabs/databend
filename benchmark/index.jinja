@@ -431,6 +431,10 @@
             }
             return entry.cache_size.toString();
         };
+        const formatMachineWithCache = entry => {
+            const machine = entry.machine || 'n/a';
+            return `${machine}, cache ${getCacheLabel(entry)}`;
+        };
 
         function toggle(e, elem, selectors_map) {
             selectors_map[elem] = !selectors_map[elem];
@@ -629,13 +633,15 @@
                 let td_name = document.createElement('td');
                 td_name.className = 'summary-name';
 
+                const machineLabel = formatMachineWithCache(elem);
+
                 if (!elem.fake) {
                     let link = document.createElement('a');
-                    link.appendChild(document.createTextNode(`${elem.system} (${elem.machine})`));
+                    link.appendChild(document.createTextNode(`${elem.system} (${machineLabel})`));
                     link.href = "https://github.com/ClickHouse/ClickBench/blob/main/" + elem.source;
                     td_name.appendChild(link);
                 } else {
-                    td_name.appendChild(document.createTextNode(elem.system));
+                    td_name.appendChild(document.createTextNode(`${elem.system} (${machineLabel})`));
                 }
 
                 if (elem.comment) { td_name.appendChild(addNote(elem.comment)); }
@@ -772,7 +778,8 @@
             sorted_indices.map(idx => {
                 const elem = filtered_data[idx];
                 let th = document.createElement('th');
-                th.appendChild(document.createTextNode(`${elem.system}\n(${elem.machine})`));
+                const machineLabel = formatMachineWithCache(elem);
+                th.appendChild(document.createTextNode(`${elem.system}\n(${machineLabel})`));
                 th.className = 'th-entry';
                 th.dataset.system = elem.system;
                 details_head.appendChild(th);
