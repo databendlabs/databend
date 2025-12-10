@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
 use crate::types::binary::BinaryColumnIter;
+use crate::types::bitmap::BitmapColumn;
 use crate::types::BinaryColumn;
 use crate::Column;
 use crate::HashMethod;
@@ -41,9 +42,10 @@ impl HashMethod for HashMethodSingleBinary {
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         match keys_state {
-            KeysState::Column(Column::Binary(col))
-            | KeysState::Column(Column::Variant(col))
-            | KeysState::Column(Column::Bitmap(col)) => Ok(col.iter()),
+            KeysState::Column(Column::Bitmap(col)) => Ok(col.raw().iter()),
+            KeysState::Column(Column::Binary(col)) | KeysState::Column(Column::Variant(col)) => {
+                Ok(col.iter())
+            }
             _ => unreachable!(),
         }
     }
@@ -53,18 +55,20 @@ impl HashMethod for HashMethodSingleBinary {
         keys_state: KeysState,
     ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
-            KeysState::Column(Column::Binary(col))
-            | KeysState::Column(Column::Variant(col))
-            | KeysState::Column(Column::Bitmap(col)) => Ok(Box::new(col)),
+            KeysState::Column(Column::Bitmap(col)) => Ok(Box::new(col.raw().clone())),
+            KeysState::Column(Column::Binary(col)) | KeysState::Column(Column::Variant(col)) => {
+                Ok(Box::new(col))
+            }
             _ => unreachable!(),
         }
     }
 
     fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
         match keys_state {
-            KeysState::Column(Column::Binary(col))
-            | KeysState::Column(Column::Variant(col))
-            | KeysState::Column(Column::Bitmap(col)) => {
+            KeysState::Column(Column::Bitmap(col)) => {
+                hashes.extend(col.raw().iter().map(hash_join_fast_string_hash));
+            }
+            KeysState::Column(Column::Binary(col)) | KeysState::Column(Column::Variant(col)) => {
                 hashes.extend(col.iter().map(hash_join_fast_string_hash));
             }
             _ => unreachable!(),
@@ -80,6 +84,18 @@ impl KeyAccessor for BinaryColumn {
     unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
         debug_assert!(index + 1 < self.offsets().len());
         self.index_unchecked(index)
+    }
+
+    fn len(&self) -> usize {
+        self.len()
+    }
+}
+
+impl KeyAccessor for BitmapColumn {
+    type Key = [u8];
+
+    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
+        self.raw().index_unchecked(index)
     }
 
     fn len(&self) -> usize {

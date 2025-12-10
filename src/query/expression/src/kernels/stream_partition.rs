@@ -387,7 +387,11 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
                 copy_primitive_type(builder, column, indices);
             }
             (ColumnBuilder::Bitmap(builder), Column::Bitmap(column)) => {
-                copy_binary(builder, column, indices);
+                for idx in indices {
+                    // Safety: caller guarantees indices are in range.
+                    let value = unsafe { column.raw().index_unchecked(idx.to_usize()) };
+                    builder.push_raw_bytes(value).unwrap();
+                }
             }
             (ColumnBuilder::Binary(builder), Column::Binary(column)) => {
                 copy_binary(builder, column, indices);

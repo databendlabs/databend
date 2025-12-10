@@ -50,11 +50,12 @@ use serde::Serialize;
 use serde::Serializer;
 use string::StringColumnBuilder;
 
-use crate::bitmap::is_hybrid_encoding;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
+use crate::types::bitmap::BitmapColumn;
+use crate::types::bitmap::BitmapColumnBuilder;
 use crate::types::bitmap::BitmapType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::DATE_MAX;
@@ -120,17 +121,9 @@ pub enum Value<T: AccessType> {
 
 /// Note:
 /// We must modify IndexScalar if we modify Scalar
-#[frozen_api("6d4a04cd")]
+#[frozen_api("5670edec")]
 #[derive(
-    Debug,
-    Clone,
-    EnumAsInner,
-    Eq,
-    Serialize,
-    Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-    FrozenAPI,
+    Debug, Clone, EnumAsInner, Serialize, Deserialize, BorshSerialize, BorshDeserialize, FrozenAPI,
 )]
 pub enum Scalar {
     Null,
@@ -147,7 +140,7 @@ pub enum Scalar {
     String(String),
     Array(Column),
     Map(Column),
-    Bitmap(Vec<u8>),
+    Bitmap(Box<HybridBitmap>),
     Tuple(Vec<Scalar>),
     Variant(Vec<u8>),
     Geometry(Vec<u8>),
@@ -156,7 +149,7 @@ pub enum Scalar {
     Opaque(OpaqueScalar),
 }
 
-#[derive(Clone, Default, Eq, EnumAsInner)]
+#[derive(Clone, Default, EnumAsInner)]
 pub enum ScalarRef<'a> {
     #[default]
     Null,
@@ -173,7 +166,7 @@ pub enum ScalarRef<'a> {
     Interval(months_days_micros),
     Array(Column),
     Map(Column),
-    Bitmap(&'a [u8]),
+    Bitmap(&'a HybridBitmap),
     Tuple(Vec<ScalarRef<'a>>),
     Variant(&'a [u8]),
     Geometry(&'a [u8]),
@@ -198,7 +191,7 @@ pub enum Column {
     Interval(Buffer<months_days_micros>),
     Array(Box<ArrayColumn<AnyType>>),
     Map(Box<ArrayColumn<AnyType>>),
-    Bitmap(BinaryColumn),
+    Bitmap(Box<BitmapColumn>),
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
     Variant(BinaryColumn),
@@ -243,7 +236,7 @@ pub enum ColumnVec {
     Interval(Vec<Buffer<months_days_micros>>),
     Array(Vec<ArrayColumn<AnyType>>),
     Map(Vec<ArrayColumn<KvPair<AnyType, AnyType>>>),
-    Bitmap(Vec<BinaryColumn>),
+    Bitmap(Vec<BitmapColumn>),
     Nullable(Box<NullableColumnVec>),
     Tuple(Vec<ColumnVec>),
     Variant(Vec<BinaryColumn>),
@@ -269,7 +262,7 @@ pub enum ColumnBuilder {
     Interval(Vec<months_days_micros>),
     Array(Box<ArrayColumnBuilder<AnyType>>),
     Map(Box<ArrayColumnBuilder<AnyType>>),
-    Bitmap(BinaryColumnBuilder),
+    Bitmap(BitmapColumnBuilder),
     Nullable(Box<NullableColumnBuilder<AnyType>>),
     Tuple(Vec<ColumnBuilder>),
     Variant(BinaryColumnBuilder),
@@ -438,7 +431,7 @@ impl Scalar {
             Scalar::Interval(d) => ScalarRef::Interval(*d),
             Scalar::Array(col) => ScalarRef::Array(col.clone()),
             Scalar::Map(col) => ScalarRef::Map(col.clone()),
-            Scalar::Bitmap(b) => ScalarRef::Bitmap(b.as_slice()),
+            Scalar::Bitmap(b) => ScalarRef::Bitmap(b),
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
             Scalar::Geometry(s) => ScalarRef::Geometry(s.as_slice()),
@@ -492,7 +485,7 @@ impl Scalar {
                 let col = builder.build();
                 Scalar::Map(col)
             }
-            DataType::Bitmap => Scalar::Bitmap(vec![]),
+            DataType::Bitmap => Scalar::Bitmap(Box::default()),
             DataType::Tuple(tys) => Scalar::Tuple(tys.iter().map(Scalar::default_value).collect()),
             DataType::Variant => Scalar::Variant(vec![]),
             DataType::Geometry => Scalar::Geometry(vec![]),
@@ -560,10 +553,9 @@ impl Scalar {
         match self {
             Scalar::String(val) => Some(val.as_bytes()),
             Scalar::Geography(val) => Some(val.0.as_slice()),
-            Scalar::Binary(val)
-            | Scalar::Bitmap(val)
-            | Scalar::Variant(val)
-            | Scalar::Geometry(val) => Some(val.as_slice()),
+            Scalar::Binary(val) | Scalar::Variant(val) | Scalar::Geometry(val) => {
+                Some(val.as_slice())
+            }
             _ => None,
         }
     }
@@ -586,7 +578,7 @@ impl ScalarRef<'_> {
             ScalarRef::Interval(i) => Scalar::Interval(*i),
             ScalarRef::Array(col) => Scalar::Array(col.clone()),
             ScalarRef::Map(col) => Scalar::Map(col.clone()),
-            ScalarRef::Bitmap(b) => Scalar::Bitmap(b.to_vec()),
+            ScalarRef::Bitmap(b) => Scalar::Bitmap(Box::new((*b).clone())),
             ScalarRef::Tuple(fields) => {
                 Scalar::Tuple(fields.iter().map(ScalarRef::to_owned).collect())
             }
@@ -710,7 +702,7 @@ impl ScalarRef<'_> {
             ScalarRef::Interval(_) => 16,
             ScalarRef::Array(col) => col.memory_size(false),
             ScalarRef::Map(col) => col.memory_size(false),
-            ScalarRef::Bitmap(b) => b.len(),
+            ScalarRef::Bitmap(b) => b.memory_size(false),
             ScalarRef::Tuple(scalars) => scalars.iter().map(|s| s.memory_size()).sum(),
             ScalarRef::Variant(buf) => buf.len(),
             ScalarRef::Geometry(buf) => buf.len(),
@@ -900,7 +892,7 @@ impl ScalarRef<'_> {
             ScalarRef::Interval(_) => n * 16,
             ScalarRef::Array(col) => col.memory_size(false) * n + (n + 1) * 8,
             ScalarRef::Map(col) => col.memory_size(false) * n + (n + 1) * 8,
-            ScalarRef::Bitmap(b) => b.len() * n + (n + 1) * 8,
+            ScalarRef::Bitmap(b) => b.memory_size(false) * n + (n + 1) * 8,
             ScalarRef::Tuple(fields) => {
                 let DataType::Tuple(fields_ty) = data_type else {
                     unreachable!()
@@ -937,19 +929,7 @@ impl PartialOrd for Scalar {
             (Scalar::Interval(i1), Scalar::Interval(i2)) => i1.partial_cmp(i2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
-            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => {
-                // Bitmap only allows PartialEq
-                if is_hybrid_encoding(b1) == is_hybrid_encoding(b2) && b1 == b2 {
-                    return Some(Ordering::Equal);
-                }
-                let Ok(map_1) = deserialize_bitmap(b1) else {
-                    return None;
-                };
-                let Ok(map_2) = deserialize_bitmap(b2) else {
-                    return None;
-                };
-                map_1.eq(&map_2).then(|| Ordering::Equal)
-            }
+            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => b1.iter().partial_cmp(b2.iter()),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
                 let left_jsonb = RawJsonb::new(v1);
@@ -982,6 +962,8 @@ impl PartialEq for Scalar {
     }
 }
 
+impl Eq for Scalar {}
+
 impl<'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'_> {
     fn partial_cmp(&self, other: &ScalarRef<'b>) -> Option<Ordering> {
         match (self, other) {
@@ -998,7 +980,7 @@ impl<'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'_> {
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
-            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => b1.partial_cmp(b2),
+            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => b1.iter().partial_cmp(b2.iter()),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => {
                 let left_jsonb = RawJsonb::new(v1);
@@ -1036,6 +1018,8 @@ impl<'b> PartialEq<ScalarRef<'b>> for ScalarRef<'_> {
     }
 }
 
+impl Eq for ScalarRef<'_> {}
+
 impl Hash for ScalarRef<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
@@ -1065,7 +1049,11 @@ impl Hash for ScalarRef<'_> {
                 let str = serialize_column(v);
                 str.hash(state);
             }
-            ScalarRef::Bitmap(v) => v.hash(state),
+            ScalarRef::Bitmap(v) => {
+                let mut buf = Vec::new();
+                v.serialize_into(&mut buf).unwrap();
+                buf.hash(state);
+            }
             ScalarRef::Tuple(v) => {
                 v.hash(state);
             }
@@ -1111,7 +1099,15 @@ impl PartialOrd for Column {
             }
             (Column::Array(col1), Column::Array(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Map(col1), Column::Map(col2)) => col1.iter().partial_cmp(col2.iter()),
-            (Column::Bitmap(col1), Column::Bitmap(col2)) => col1.iter().partial_cmp(col2.iter()),
+            (Column::Bitmap(col1), Column::Bitmap(col2)) => {
+                for (l, r) in col1.iter().zip(col2.iter()) {
+                    let ord = l.iter().cmp(r.iter());
+                    if ord != Ordering::Equal {
+                        return Some(ord);
+                    }
+                }
+                col1.len().partial_cmp(&col2.len())
+            }
             (Column::Nullable(col1), Column::Nullable(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
@@ -1300,7 +1296,7 @@ impl Column {
             }
             Column::Array(col) => Column::Array(Box::new(col.slice(range))),
             Column::Map(col) => Column::Map(Box::new(col.slice(range))),
-            Column::Bitmap(col) => Column::Bitmap(col.slice(range)),
+            Column::Bitmap(col) => Column::Bitmap(Box::new(col.slice(range))),
             Column::Nullable(col) => Column::Nullable(Box::new(col.slice(range))),
             Column::Tuple(fields) => Column::Tuple(
                 fields
@@ -1654,11 +1650,7 @@ impl Column {
                 (0..len)
                     .map(|_| {
                         let data: [u64; 4] = rng.gen();
-                        let rb = HybridBitmap::from_iter(data.iter());
-                        let mut buf = vec![];
-                        rb.serialize_into(&mut buf)
-                            .expect("failed serialize hybrid bitmap");
-                        buf
+                        HybridBitmap::from_iter(data.iter())
                     })
                     .collect_vec(),
             ),
@@ -1826,10 +1818,8 @@ impl Column {
             Column::Geography(col) => GeographyType::column_memory_size(col, false),
             Column::Boolean(c) => c.len(),
             // 8 * len + size of bytes
-            Column::Binary(col)
-            | Column::Bitmap(col)
-            | Column::Variant(col)
-            | Column::Geometry(col) => col.memory_size(),
+            Column::Binary(col) | Column::Variant(col) | Column::Geometry(col) => col.memory_size(),
+            Column::Bitmap(col) => col.memory_size(),
             Column::String(col) => col.len() * 8 + col.total_bytes_len(),
             Column::Array(col) | Column::Map(col) => {
                 col.underlying_column().serialize_size() + col.len() * 8
@@ -1949,7 +1939,7 @@ impl ColumnBuilder {
             Column::Map(box col) => {
                 ColumnBuilder::Map(Box::new(ArrayColumnBuilder::from_column(col)))
             }
-            Column::Bitmap(col) => ColumnBuilder::Bitmap(BinaryColumnBuilder::from_column(col)),
+            Column::Bitmap(col) => ColumnBuilder::Bitmap(BitmapColumnBuilder::from_column(*col)),
             Column::Nullable(box col) => {
                 ColumnBuilder::Nullable(Box::new(NullableColumnBuilder::from_column(col)))
             }
@@ -2011,7 +2001,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
-            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat(b, n)),
+            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(BitmapColumnBuilder::repeat(b, n)),
             ScalarRef::Tuple(fields) => {
                 let DataType::Tuple(fields_ty) = data_type else {
                     unreachable!()
@@ -2215,7 +2205,7 @@ impl ColumnBuilder {
             }
             DataType::Bitmap => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
-                ColumnBuilder::Bitmap(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
+                ColumnBuilder::Bitmap(BitmapColumnBuilder::with_capacity(capacity, data_capacity))
             }
             DataType::Variant => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
@@ -2281,7 +2271,7 @@ impl ColumnBuilder {
             // binary based
             DataType::Binary => ColumnBuilder::Binary(BinaryColumnBuilder::repeat_default(len)),
             DataType::String => ColumnBuilder::String(StringColumnBuilder::repeat_default(len)),
-            DataType::Bitmap => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat_default(len)),
+            DataType::Bitmap => ColumnBuilder::Bitmap(BitmapColumnBuilder::repeat_default(len)),
             DataType::Variant => ColumnBuilder::Variant(BinaryColumnBuilder::repeat_default(len)),
             DataType::Geometry => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat_default(len)),
             DataType::Geography => {
@@ -2486,7 +2476,7 @@ impl ColumnBuilder {
             ColumnBuilder::Interval(builder) => builder.push(months_days_micros::new(0, 0, 0)),
             ColumnBuilder::Array(builder) => builder.push_default(),
             ColumnBuilder::Map(builder) => builder.push_default(),
-            ColumnBuilder::Bitmap(builder) => builder.commit_row(),
+            ColumnBuilder::Bitmap(builder) => builder.push_default(),
             ColumnBuilder::Nullable(builder) => builder.push_null(),
             ColumnBuilder::Tuple(fields) => {
                 for field in fields {
@@ -2527,13 +2517,18 @@ impl ColumnBuilder {
             }
             ColumnBuilder::Binary(builder)
             | ColumnBuilder::Variant(builder)
-            | ColumnBuilder::Bitmap(builder)
             | ColumnBuilder::Geometry(builder) => {
                 let offset = reader.read_scalar::<u64>()? as usize;
                 builder.data.resize(offset + builder.data.len(), 0);
                 let last = *builder.offsets.last().unwrap() as usize;
                 reader.read_exact(&mut builder.data[last..last + offset])?;
                 builder.commit_row();
+            }
+            ColumnBuilder::Bitmap(builder) => {
+                let offset = reader.read_scalar::<u64>()? as usize;
+                let mut buf = vec![0u8; offset];
+                reader.read_exact(&mut buf)?;
+                builder.push_raw_bytes(&buf)?;
             }
             ColumnBuilder::Geography(builder) => {
                 let offset = reader.read_scalar::<u64>()? as usize;
@@ -2657,9 +2652,14 @@ impl ColumnBuilder {
                     builder.push(v);
                 }
             }
+            ColumnBuilder::Bitmap(builder) => {
+                for row in 0..rows {
+                    let reader = &reader[step * row..];
+                    builder.push_raw_bytes(reader)?;
+                }
+            }
             ColumnBuilder::Binary(builder)
             | ColumnBuilder::Variant(builder)
-            | ColumnBuilder::Bitmap(builder)
             | ColumnBuilder::Geometry(builder)
             | ColumnBuilder::Geography(builder) => {
                 for row in 0..rows {
@@ -2808,7 +2808,7 @@ impl ColumnBuilder {
             ColumnBuilder::Interval(builder) => builder.pop().map(Scalar::Interval),
             ColumnBuilder::Array(builder) => builder.pop().map(Scalar::Array),
             ColumnBuilder::Map(builder) => builder.pop().map(Scalar::Map),
-            ColumnBuilder::Bitmap(builder) => builder.pop().map(Scalar::Bitmap),
+            ColumnBuilder::Bitmap(builder) => builder.pop().map(|v| Scalar::Bitmap(Box::new(v))),
             ColumnBuilder::Nullable(builder) => Some(builder.pop()?.unwrap_or(Scalar::Null)),
             ColumnBuilder::Tuple(fields) => {
                 if fields[0].len() > 0 {
@@ -2979,7 +2979,7 @@ impl ColumnBuilder {
             ColumnBuilder::TimestampTz(b) => Scalar::TimestampTz(TimestampTzType::build_scalar(b)),
             ColumnBuilder::Date(b) => Scalar::Date(DateType::build_scalar(b)),
             ColumnBuilder::Interval(b) => Scalar::Interval(IntervalType::build_scalar(b)),
-            ColumnBuilder::Bitmap(b) => Scalar::Bitmap(BitmapType::build_scalar(b)),
+            ColumnBuilder::Bitmap(b) => Scalar::Bitmap(Box::new(BitmapType::build_scalar(b))),
             ColumnBuilder::Variant(b) => Scalar::Variant(VariantType::build_scalar(b)),
             ColumnBuilder::Geometry(b) => Scalar::Geometry(GeometryType::build_scalar(b)),
             ColumnBuilder::Geography(b) => Scalar::Geography(GeographyType::build_scalar(b)),

@@ -74,8 +74,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_binary",
         |_, _| FunctionDomain::Full,
         |val, _| match val {
-            Value::Scalar(val) => Value::Scalar(val.to_vec()),
-            Value::Column(col) => Value::Column(col),
+            Value::Scalar(val) => {
+                let mut buf = Vec::new();
+                val.serialize_into(&mut buf).unwrap();
+                Value::Scalar(buf)
+            }
+            Value::Column(col) => Value::Column(col.raw().clone()),
         },
     );
 
@@ -83,10 +87,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         "try_to_binary",
         |_, _| FunctionDomain::Full,
         |val, _| match val {
-            Value::Scalar(val) => Value::Scalar(Some(val.to_vec())),
+            Value::Scalar(val) => {
+                let mut buf = Vec::new();
+                val.serialize_into(&mut buf).unwrap();
+                Value::Scalar(Some(buf))
+            }
             Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new_unchecked(col, validity))
+                Value::Column(NullableColumn::new_unchecked(col.raw().clone(), validity))
             }
         },
     );

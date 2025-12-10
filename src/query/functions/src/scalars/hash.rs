@@ -40,6 +40,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
+use databend_common_io::HybridBitmap;
 use databend_functions_scalar_decimal::register_decimal_hash;
 use databend_functions_scalar_decimal::register_decimal_hash_with_seed;
 use databend_functions_scalar_decimal::HashFunction;
@@ -420,7 +421,31 @@ impl DFHash for Scalar {
             Scalar::String(vals) => {
                 DFHash::hash(vals.as_str(), state);
             }
+            Scalar::Bitmap(v) => {
+                DFHash::hash(v.as_ref(), state);
+            }
             _ => {}
         }
+    }
+}
+
+impl DFHash for HybridBitmap {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            HybridBitmap::Small(v) => v.hash(state),
+            HybridBitmap::Large(v) => {
+                for v in v.iter() {
+                    DFHash::hash(&v, state);
+                }
+            }
+        }
+    }
+}
+
+impl DFHash for &HybridBitmap {
+    #[inline]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (*self).hash(state);
     }
 }

@@ -24,6 +24,7 @@ use string::StringColumnBuilder;
 use crate::kernels::take::BIT_MASK;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
+use crate::types::bitmap::BitmapColumn;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnVec;
@@ -760,7 +761,7 @@ impl Column {
                 )
             }
             ColumnVec::Bitmap(columns) => {
-                BitmapType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
+                BitmapType::upcast_column(Self::take_block_vec_bitmap_types(columns, indices))
             }
             ColumnVec::Nullable(columns) => {
                 let inner_data_type = data_type.as_nullable().unwrap();
@@ -849,6 +850,20 @@ impl Column {
             col.get_unchecked(row_ptr.chunk_index as usize)[row_ptr.row_index as usize]
         }));
         builder
+    }
+
+    pub fn take_block_vec_bitmap_types(col: &[BitmapColumn], indices: &[RowPtr]) -> BitmapColumn {
+        let num_rows = indices.len();
+        let mut builder = BitmapColumnBuilder::with_capacity(num_rows, 0);
+        for row_ptr in indices {
+            unsafe {
+                builder.push(
+                    col.get_unchecked(row_ptr.chunk_index as usize)
+                        .index_unchecked(row_ptr.row_index as usize),
+                )
+            }
+        }
+        builder.build()
     }
 
     // TODO: reuse the buffer by `SELECTIVITY_THRESHOLD`

@@ -40,6 +40,7 @@ use super::ARROW_EXT_TYPE_TIMESTAMP_TIMEZONE;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
+use crate::types::bitmap::BitmapColumn;
 use crate::types::opaque::OpaqueColumn;
 use crate::types::AnyType;
 use crate::types::ArrayColumn;
@@ -402,7 +403,9 @@ impl Column {
             DataType::Binary => Column::Binary(try_to_binary_column(array)?),
             DataType::Opaque(size) => Column::Opaque(try_to_opaque_column(array, *size)?),
 
-            DataType::Bitmap => Column::Bitmap(try_to_binary_column(array)?),
+            DataType::Bitmap => Column::Bitmap(Box::new(BitmapColumn::from_binary(
+                try_to_binary_column(array)?,
+            )?)),
             DataType::Variant => Column::Variant(try_to_binary_column(array)?),
             DataType::Geometry => Column::Geometry(try_to_binary_column(array)?),
             DataType::Geography => Column::Geography(GeographyColumn(try_to_binary_column(array)?)),

@@ -53,7 +53,7 @@ impl<const SKIP_DUPLICATES: bool> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
 
         let space_size = match &keys_state {
             // safe to unwrap(): offset.len() >= 1.
-            KeysState::Column(Column::Bitmap(col)) => col.data().len(),
+            KeysState::Column(Column::Bitmap(col)) => col.raw().data().len(),
             KeysState::Column(Column::Binary(col)) => col.data().len(),
             KeysState::Column(Column::Variant(col)) => col.data().len(),
             KeysState::Column(Column::String(col)) => col.total_bytes_len(),

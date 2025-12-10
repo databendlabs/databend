@@ -239,7 +239,6 @@ impl Payload {
             DataType::Date => self.flush_type_column::<DateType>(col_offset, state),
             DataType::Binary => Column::Binary(self.flush_binary_column(col_offset, state)),
             DataType::String => Column::String(self.flush_string_column(col_offset, state)),
-            DataType::Bitmap => Column::Bitmap(self.flush_binary_column(col_offset, state)),
             DataType::Variant => Column::Variant(self.flush_binary_column(col_offset, state)),
             DataType::Geometry => Column::Geometry(self.flush_binary_column(col_offset, state)),
             DataType::Nullable(_) => unreachable!(),

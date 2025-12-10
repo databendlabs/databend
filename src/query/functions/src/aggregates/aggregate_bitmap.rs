@@ -120,10 +120,10 @@ impl BitmapAggResult for BitmapRawResult {
     fn merge_result(place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let mut builder = BitmapType::downcast_builder(builder);
         let state = place.get::<BitmapAggState>();
-        if let Some(rb) = state.rb.as_ref() {
-            rb.serialize_into(&mut builder.data)?;
-        };
-        builder.commit_row();
+        match state.rb.as_ref() {
+            Some(rb) => builder.push(rb),
+            None => builder.push(&HybridBitmap::default()),
+        }
         Ok(())
     }
 
@@ -265,13 +265,11 @@ where
                 if !valid {
                     continue;
                 }
-                let rb = deserialize_bitmap(data)?;
-                state.add::<OP>(rb);
+                state.add::<OP>(data.clone());
             }
         } else {
             for data in view.iter() {
-                let rb = deserialize_bitmap(data)?;
-                state.add::<OP>(rb);
+                state.add::<OP>(data.clone());
             }
         }
         Ok(())
@@ -288,8 +286,7 @@ where
 
         for (data, addr) in view.iter().zip(places.iter().cloned()) {
             let state = AggrState::new(addr, loc).get::<BitmapAggState>();
-            let rb = deserialize_bitmap(data)?;
-            state.add::<OP>(rb);
+            state.add::<OP>(data.clone());
         }
         Ok(())
     }
@@ -298,8 +295,7 @@ where
         let view = entries[0].downcast::<BitmapType>().unwrap();
         let state = place.get::<BitmapAggState>();
         if let Some(data) = view.index(row) {
-            let rb = deserialize_bitmap(data)?;
-            state.add::<OP>(rb);
+            state.add::<OP>(data.clone());
         }
         Ok(())
     }

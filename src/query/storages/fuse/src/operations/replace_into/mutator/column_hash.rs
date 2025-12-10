@@ -70,7 +70,6 @@ pub fn row_hash_of_columns(
             },
             ScalarRef::Timestamp(v) => sip.write_i64(v),
             ScalarRef::String(v) => sip.write(v.as_bytes()),
-            ScalarRef::Bitmap(v) => sip.write(v),
             ScalarRef::Decimal(v) => match v {
                 DecimalScalar::Decimal64(_, _) => {
                     unreachable!()

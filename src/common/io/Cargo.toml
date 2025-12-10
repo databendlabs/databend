@@ -27,7 +27,7 @@ micromarshal = { workspace = true }
 roaring = { workspace = true }
 scroll = { workspace = true }
 serde = { workspace = true }
-smallvec = { workspace = true }
+smallvec = { workspace = true, features = ["serde"] }
 wkt = { workspace = true }
 
 [dev-dependencies]

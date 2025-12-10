@@ -18,6 +18,7 @@
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
+use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -26,6 +27,7 @@ use serde::Serializer;
 
 use crate::types::array::ArrayColumn;
 use crate::types::binary::BinaryColumn;
+use crate::types::bitmap::BitmapColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalScalar;
 use crate::types::nullable::NullableColumn;
@@ -107,7 +109,9 @@ impl From<LegacyScalar> for Scalar {
             LegacyScalar::String(s) => Scalar::String(String::from_utf8_lossy(&s).into_owned()),
             LegacyScalar::Array(col) => Scalar::Array(col.into()),
             LegacyScalar::Map(col) => Scalar::Map(col.into()),
-            LegacyScalar::Bitmap(bmp) => Scalar::Bitmap(bmp),
+            LegacyScalar::Bitmap(bmp) => Scalar::Bitmap(Box::new(
+                deserialize_bitmap(&bmp).expect("invalid legacy bitmap"),
+            )),
             LegacyScalar::Tuple(tuple) => Scalar::Tuple(tuple),
             LegacyScalar::Variant(variant) => Scalar::Variant(variant),
         }
@@ -152,7 +156,10 @@ impl From<LegacyColumn> for Column {
                 map_col.values.into(),
                 map_col.offsets,
             ))),
-            LegacyColumn::Bitmap(str_col) => Column::Bitmap(BinaryColumn::from(str_col)),
+            LegacyColumn::Bitmap(str_col) => Column::Bitmap(Box::new(
+                BitmapColumn::from_binary(BinaryColumn::from(str_col))
+                    .expect("invalid legacy bitmap column"),
+            )),
             LegacyColumn::Nullable(nullable_col) => {
                 Column::Nullable(Box::new(NullableColumn::<AnyType> {
                     column: nullable_col.column.into(),
@@ -188,7 +195,11 @@ impl From<Scalar> for LegacyScalar {
             Scalar::String(string) => LegacyScalar::String(string.as_bytes().to_vec()),
             Scalar::Array(column) => LegacyScalar::Array(column.into()),
             Scalar::Map(column) => LegacyScalar::Map(column.into()),
-            Scalar::Bitmap(bitmap) => LegacyScalar::Bitmap(bitmap),
+            Scalar::Bitmap(bitmap) => {
+                let mut buf = Vec::new();
+                bitmap.serialize_into(&mut buf).unwrap();
+                LegacyScalar::Bitmap(buf)
+            }
             Scalar::Tuple(tuple) => LegacyScalar::Tuple(tuple),
             Scalar::Variant(variant) => LegacyScalar::Variant(variant),
             Scalar::Opaque(_) => unimplemented!("Opaque scalar bincode conversion not implemented"),
@@ -226,7 +237,9 @@ impl From<Column> for LegacyColumn {
                 values: map_col.underlying_column().into(),
                 offsets: map_col.underlying_offsets(),
             })),
-            Column::Bitmap(str_col) => LegacyColumn::Bitmap(LegacyBinaryColumn::from(str_col)),
+            Column::Bitmap(str_col) => {
+                LegacyColumn::Bitmap(LegacyBinaryColumn::from(str_col.into_raw()))
+            }
             Column::Nullable(nullable_col) => {
                 LegacyColumn::Nullable(Box::new(LegacyNullableColumn {
                     column: nullable_col.column.into(),

@@ -62,6 +62,8 @@ pub use self::array::ArrayColumn;
 pub use self::array::ArrayType;
 pub use self::binary::BinaryColumn;
 pub use self::binary::BinaryType;
+pub use self::bitmap::BitmapColumn;
+pub use self::bitmap::BitmapColumnBuilder;
 pub use self::bitmap::BitmapType;
 pub use self::boolean::Bitmap;
 pub use self::boolean::BooleanType;

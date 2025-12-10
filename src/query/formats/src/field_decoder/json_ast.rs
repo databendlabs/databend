@@ -23,6 +23,7 @@ use databend_common_expression::serialize::read_decimal_from_json;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::bitmap::BitmapColumnBuilder;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
@@ -361,20 +362,18 @@ impl FieldJsonAstDecoder {
         }
     }
 
-    fn read_bitmap(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
+    fn read_bitmap(&self, column: &mut BitmapColumnBuilder, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
                 let rb = parse_bitmap(v.as_bytes())?;
-                rb.serialize_into(&mut column.data).unwrap();
-                column.commit_row();
+                column.push(&rb);
                 Ok(())
             }
             Value::Number(number) => match number.as_u64() {
                 Some(n) => {
                     let mut rb = HybridBitmap::new();
                     rb.insert(n);
-                    rb.serialize_into(&mut column.data).unwrap();
-                    column.commit_row();
+                    column.push(&rb);
                     Ok(())
                 }
                 None => Err(ErrorCode::BadArguments(

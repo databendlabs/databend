@@ -117,7 +117,7 @@ pub trait ValueVisitor: Sized {
         self.visit_typed_column::<AnyType>(Column::Tuple(columns), &DataType::Tuple(data_types))
     }
 
-    fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<Self::U, Self::Error> {
+    fn visit_bitmap(&mut self, column: BitmapColumn) -> Result<Self::U, Self::Error> {
         self.visit_typed_column::<BitmapType>(column, &DataType::Bitmap)
     }
 
@@ -188,7 +188,7 @@ pub trait ValueVisitor: Sized {
             Column::Array(column) => visitor.visit_array(column),
             Column::Map(column) => visitor.visit_map(column),
             Column::Tuple(columns) => visitor.visit_tuple(columns),
-            Column::Bitmap(column) => visitor.visit_bitmap(column),
+            Column::Bitmap(column) => visitor.visit_bitmap(*column),
             Column::Nullable(column) => visitor.visit_nullable(column),
             Column::Variant(column) => visitor.visit_variant(column),
             Column::Geometry(column) => visitor.visit_geometry(column),

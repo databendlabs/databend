@@ -19,7 +19,6 @@ use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
-use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::FormatSettings;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
@@ -133,14 +132,11 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
                 .collect();
             JsonValue::Object(vals)
         }
-        ScalarRef::Bitmap(b) => {
-            let rb = deserialize_bitmap(b).expect("failed to deserialize bitmap");
-            let data = rb
-                .iter()
+        ScalarRef::Bitmap(b) => JsonValue::Array(
+            b.iter()
                 .map(|v| JsonValue::Number(serde_json::Number::from(v)))
-                .collect::<Vec<_>>();
-            JsonValue::Array(data)
-        }
+                .collect::<Vec<_>>(),
+        ),
         ScalarRef::Tuple(x) => {
             let vals = x
                 .iter()

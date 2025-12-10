@@ -28,6 +28,7 @@ use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BinaryColumn;
 use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::BitmapColumn;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::VectorColumn;
@@ -319,7 +320,7 @@ impl FieldEncoderValues {
 
     fn write_bitmap(
         &self,
-        _column: &BinaryColumn,
+        _column: &BitmapColumn,
         _row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,

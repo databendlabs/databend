@@ -15,6 +15,7 @@
 use std::io::Cursor;
 
 use databend_common_column::binary::BinaryColumn;
+use databend_common_expression::types::bitmap::BitmapColumn;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::GeographyColumn;
@@ -22,6 +23,7 @@ use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
 use crate::compression::binary::decompress_binary;
+use crate::error::Error;
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;
@@ -132,25 +134,27 @@ fn try_new_binary_column(
     validity: Option<Bitmap>,
 ) -> Result<Column> {
     let column = BinaryColumn::new(values, offsets);
-    Ok(binary_column_to_column(data_type, column, validity))
+    binary_column_to_column(data_type, column, validity)
 }
 
 fn binary_column_to_column(
     data_type: &TableDataType,
     column: BinaryColumn,
     validity: Option<Bitmap>,
-) -> Column {
+) -> Result<Column> {
     let col = match data_type.remove_nullable() {
         TableDataType::Binary => Column::Binary(column),
-        TableDataType::Bitmap => Column::Bitmap(column),
+        TableDataType::Bitmap => Column::Bitmap(Box::new(
+            BitmapColumn::from_binary(column).map_err(|e| Error::OutOfSpec(e.to_string()))?,
+        )),
         TableDataType::Variant => Column::Variant(column),
         TableDataType::Geometry => Column::Geometry(column),
         TableDataType::Geography => Column::Geography(GeographyColumn(column)),
         _ => unreachable!(),
     };
     if data_type.is_nullable() {
-        col.wrap_nullable(validity)
+        Ok(col.wrap_nullable(validity))
     } else {
-        col
+        Ok(col)
     }
 }

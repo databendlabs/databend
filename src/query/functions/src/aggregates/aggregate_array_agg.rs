@@ -384,6 +384,22 @@ where T: ArgType
     _phantom: PhantomData<T>,
 }
 
+impl<T> ArrayAggStateBinary<T>
+where T: ArgType
+{
+    fn push_scalar(&mut self, scalar: Scalar) {
+        match scalar {
+            Scalar::Bitmap(b) => {
+                let mut buf = Vec::new();
+                b.serialize_into(&mut buf).unwrap();
+                self.builder.put_slice(&buf);
+            }
+            other => self.builder.put_slice(other.as_bytes().unwrap()),
+        }
+        self.builder.commit_row();
+    }
+}
+
 impl<T: Debug + ArgType> Default for ArrayAggStateBinary<T> {
     fn default() -> Self {
         Self {
@@ -403,8 +419,7 @@ where T: ArgType + Debug + std::marker::Send
     fn add(&mut self, other: Option<T::ScalarRef<'_>>) {
         if let Some(scalar) = other {
             let val = T::upcast_scalar(T::to_owned_scalar(scalar));
-            self.builder.put_slice(val.as_bytes().unwrap());
-            self.builder.commit_row();
+            self.push_scalar(val);
         }
     }
 
@@ -418,15 +433,13 @@ where T: ArgType + Debug + std::marker::Send
             for (scalar, valid) in T::iter_column(column).zip(validity) {
                 if valid {
                     let val = T::upcast_scalar(T::to_owned_scalar(scalar));
-                    self.builder.put_slice(val.as_bytes().unwrap());
-                    self.builder.commit_row();
+                    self.push_scalar(val);
                 }
             }
         } else {
             for scalar in T::iter_column(column) {
                 let val = T::upcast_scalar(T::to_owned_scalar(scalar));
-                self.builder.put_slice(val.as_bytes().unwrap());
-                self.builder.commit_row();
+                self.push_scalar(val);
             }
         }
 
@@ -450,7 +463,7 @@ where T: ArgType + Debug + std::marker::Send
                 Column::String(builder.build())
             }
             DataType::Binary => Column::Binary(binary_column),
-            DataType::Bitmap => Column::Bitmap(binary_column),
+            DataType::Bitmap => Column::Bitmap(Box::new(BitmapColumn::from_binary(binary_column)?)),
             DataType::Variant => Column::Variant(binary_column),
             DataType::Geometry => Column::Geometry(binary_column),
             DataType::Geography => Column::Geography(GeographyColumn(binary_column)),
@@ -490,7 +503,9 @@ where T: ArgType + std::marker::Send
                     Column::String(builder.build())
                 }
                 DataType::Binary => Column::Binary(binary_column),
-                DataType::Bitmap => Column::Bitmap(binary_column),
+                DataType::Bitmap => {
+                    Column::Bitmap(Box::new(BitmapColumn::from_binary(binary_column)?))
+                }
                 DataType::Variant => Column::Variant(binary_column),
                 DataType::Geometry => Column::Geometry(binary_column),
                 DataType::Geography => Column::Geography(GeographyColumn(binary_column)),
@@ -526,8 +541,8 @@ where T: ArgType + std::marker::Send
                     }
                     builder
                 }
+                ColumnBuilder::Bitmap(builder) => builder.into_raw_builder(),
                 ColumnBuilder::Binary(builder)
-                | ColumnBuilder::Bitmap(builder)
                 | ColumnBuilder::Variant(builder)
                 | ColumnBuilder::Geometry(builder)
                 | ColumnBuilder::Geography(builder) => builder,

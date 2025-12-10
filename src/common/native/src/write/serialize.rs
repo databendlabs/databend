@@ -184,11 +184,14 @@ impl<'a, W: Write> ValueVisitor for WriteVisitor<'a, W> {
                 )
             }
 
-            Column::Binary(b)
-            | Column::Bitmap(b)
-            | Column::Variant(b)
-            | Column::Geography(GeographyColumn(b))
-            | Column::Geometry(b) => write_binary::<W>(
+            Column::Binary(b) | Column::Variant(b) | Column::Geometry(b) => write_binary::<W>(
+                self.w,
+                &b,
+                self.validity.clone(),
+                self.write_options.clone(),
+                self.scratch,
+            ),
+            Column::Geography(GeographyColumn(b)) => write_binary::<W>(
                 self.w,
                 &b,
                 self.validity.clone(),

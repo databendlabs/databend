@@ -25,6 +25,7 @@ use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::bitmap::BitmapColumnBuilder;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
@@ -289,10 +290,9 @@ impl SeparatedTextDecoder {
         read_timestamp_tz(column, data, self.common_settings())
     }
 
-    fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
+    fn read_bitmap(&self, column: &mut BitmapColumnBuilder, data: &[u8]) -> Result<()> {
         let rb = parse_bitmap(data)?;
-        rb.serialize_into(&mut column.data).unwrap();
-        column.commit_row();
+        column.push(&rb);
         Ok(())
     }
 

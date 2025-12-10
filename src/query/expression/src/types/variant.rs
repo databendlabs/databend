@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 
 use databend_common_exception::Result;
-use databend_common_io::deserialize_bitmap;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
 use jiff::tz::TimeZone;
@@ -339,14 +338,7 @@ pub fn cast_scalar_to_variant(
             return;
         }
         ScalarRef::Bitmap(b) => {
-            jsonb::Value::Array(
-                deserialize_bitmap(b)
-                    .unwrap()
-                    .iter()
-                    .map(|x| x.into())
-                    .collect(),
-            )
-            .write_to_vec(buf);
+            jsonb::Value::Array(b.iter().map(|x| x.into()).collect()).write_to_vec(buf);
             return;
         }
         ScalarRef::Tuple(fields) => {

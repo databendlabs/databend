@@ -19,6 +19,7 @@ use databend_common_column::types::Index;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::types::bitmap::BitmapColumn;
 use crate::types::i256;
 use crate::types::number::Number;
 use crate::types::AccessType;
@@ -47,7 +48,6 @@ use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
-use crate::utils::bitmap::normalize_bitmap_column;
 use crate::visitor::ValueVisitor;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
@@ -167,33 +167,40 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     }
 
     fn visit_binary(&mut self, column: BinaryColumn) -> Result<()> {
-        self.combine_group_hash_string_column::<BinaryType>(&column);
+        self.combine_group_hash_string_column::<BinaryType, _>(&column, |x| Ok(x.agg_hash()))?;
         Ok(())
     }
 
     fn visit_string(&mut self, column: StringColumn) -> Result<()> {
-        self.combine_group_hash_string_column::<StringType>(&column);
+        self.combine_group_hash_string_column::<StringType, _>(&column, |x| {
+            Ok(x.as_bytes().agg_hash())
+        })?;
         Ok(())
     }
 
-    fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<()> {
-        let column = normalize_bitmap_column(&column);
-        self.combine_group_hash_string_column::<BitmapType>(column.as_ref());
+    fn visit_bitmap(&mut self, column: BitmapColumn) -> Result<()> {
+        let mut bytes = Vec::new();
+        self.combine_group_hash_string_column::<BitmapType, _>(&column, |x| {
+            x.serialize_into(&mut bytes).unwrap();
+            let hash = bytes.agg_hash();
+            bytes.clear();
+            Ok(hash)
+        })?;
         Ok(())
     }
 
     fn visit_variant(&mut self, column: BinaryColumn) -> Result<()> {
-        self.combine_group_hash_string_column::<VariantType>(&column);
+        self.combine_group_hash_string_column::<VariantType, _>(&column, |x| Ok(x.agg_hash()))?;
         Ok(())
     }
 
     fn visit_geometry(&mut self, column: BinaryColumn) -> Result<()> {
-        self.combine_group_hash_string_column::<GeometryType>(&column);
+        self.combine_group_hash_string_column::<GeometryType, _>(&column, |x| Ok(x.agg_hash()))?;
         Ok(())
     }
 
     fn visit_geography(&mut self, column: GeographyColumn) -> Result<()> {
-        self.combine_group_hash_string_column::<GeographyType>(&column);
+        self.combine_group_hash_string_column::<GeographyType, _>(&column, |x| Ok(x.0.agg_hash()))?;
         Ok(())
     }
 
@@ -225,20 +232,25 @@ impl<const IS_FIRST: bool> HashVisitor<'_, IS_FIRST> {
         }
     }
 
-    fn combine_group_hash_string_column<T>(&mut self, col: &T::Column)
+    fn combine_group_hash_string_column<T, F>(
+        &mut self,
+        col: &T::Column,
+        mut agg_hash: F,
+    ) -> Result<()>
     where
         T: ValueType,
-        for<'a> T::ScalarRef<'a>: AsRef<[u8]>,
+        for<'a> F: FnMut(&T::ScalarRef<'a>) -> Result<u64>,
     {
         if IS_FIRST {
             for (x, val) in T::iter_column(col).zip(self.values.iter_mut()) {
-                *val = x.as_ref().agg_hash();
+                *val = agg_hash(&x)?;
             }
         } else {
             for (x, val) in T::iter_column(col).zip(self.values.iter_mut()) {
-                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ x.as_ref().agg_hash();
+                *val = (*val).wrapping_mul(NULL_HASH_VAL) ^ agg_hash(&x)?;
             }
         }
+        Ok(())
     }
 }
 
@@ -359,11 +371,14 @@ where I: Index
         self.visit_binary(column)
     }
 
-    fn visit_bitmap(&mut self, column: crate::types::BinaryColumn) -> Result<()> {
-        let column = normalize_bitmap_column(&column);
+    fn visit_bitmap(&mut self, column: BitmapColumn) -> Result<()> {
+        let mut bytes = Vec::new();
         self.visit_indices(|i| {
-            let value = column.as_ref().index(i.to_usize()).unwrap();
-            value.agg_hash()
+            let value = column.index(i.to_usize()).unwrap();
+            value.serialize_into(&mut bytes).unwrap();
+            let hash = bytes.agg_hash();
+            bytes.clear();
+            hash
         })
     }
 
@@ -429,8 +444,8 @@ where I: Index
 impl<const IS_FIRST: bool, I> IndexHashVisitor<'_, '_, IS_FIRST, I>
 where I: Index
 {
-    fn visit_indices<F>(&mut self, do_hash: F) -> Result<()>
-    where F: Fn(&I) -> u64 {
+    fn visit_indices<F>(&mut self, mut do_hash: F) -> Result<()>
+    where F: FnMut(&I) -> u64 {
         self.visit_indices_update(|i, val| {
             let hash = do_hash(i);
             if IS_FIRST {
@@ -441,8 +456,8 @@ where I: Index
         })
     }
 
-    fn visit_indices_update<F>(&mut self, update: F) -> Result<()>
-    where F: Fn(&I, &mut u64) {
+    fn visit_indices_update<F>(&mut self, mut update: F) -> Result<()>
+    where F: FnMut(&I, &mut u64) {
         for i in self.indices {
             let val = &mut self.target[i.to_usize()];
             update(i, val);

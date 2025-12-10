@@ -17,7 +17,7 @@ use std::ops::BitOr;
 use std::ops::BitXor;
 use std::ops::Sub;
 
-use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::bitmap::BitmapColumnBuilder;
 use databend_common_expression::types::bitmap::BitmapType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;
@@ -36,7 +36,6 @@ use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
-use databend_common_io::deserialize_bitmap;
 use databend_common_io::parse_bitmap;
 use databend_common_io::HybridBitmap;
 use itertools::join;
@@ -48,19 +47,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<StringType, BitmapType>(|s, builder, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(builder.len()) {
-                    builder.commit_row();
+                    builder.push_default();
                     return;
                 }
             }
             match parse_bitmap(s.as_bytes()) {
-                Ok(rb) => {
-                    rb.serialize_into(&mut builder.data).unwrap();
-                }
+                Ok(rb) => builder.push(&rb),
                 Err(e) => {
                     ctx.set_error(builder.len(), e.to_string());
+                    builder.push_default();
                 }
             }
-            builder.commit_row();
         }),
     );
 
@@ -70,15 +67,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<UInt64Type, BitmapType>(|arg, builder, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(builder.len()) {
-                    builder.commit_row();
+                    builder.push_default();
                     return;
                 }
             }
             let mut rb = HybridBitmap::new();
             rb.insert(arg);
 
-            rb.serialize_into(&mut builder.data).unwrap();
-            builder.commit_row();
+            builder.push(&rb);
         }),
     );
 
@@ -91,7 +87,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType>(|arg, builder, ctx| {
                         if let Some(validity) = &ctx.validity {
                             if !validity.get_bit(builder.len()) {
-                                builder.commit_row();
+                                builder.push_default();
                                 return;
                             }
                         }
@@ -102,8 +98,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         }
 
-                        rb.serialize_into(&mut builder.data).unwrap();
-                        builder.commit_row();
+                        builder.push(&rb);
                     }),
                 );
             }
@@ -120,7 +115,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType>(|arg, builder, ctx| {
                         if let Some(validity) = &ctx.validity {
                             if !validity.get_bit(builder.len()) {
-                                builder.commit_row();
+                                builder.push_default();
                                 return;
                             }
                         }
@@ -135,8 +130,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         }
 
-                        rb.serialize_into(&mut builder.data).unwrap();
-                        builder.commit_row();
+                        builder.push(&rb);
                     }),
                 );
             }
@@ -154,15 +148,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match deserialize_bitmap(arg) {
-                Ok(rb) => {
-                    builder.push(rb.len());
-                }
-                Err(e) => {
-                    ctx.set_error(builder.len(), e.to_string());
-                    builder.push(0_u64);
-                }
-            }
+            builder.push(arg.len());
         }),
     );
 
@@ -178,17 +164,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match deserialize_bitmap(b) {
-                Ok(rb) => {
-                    let raw = rb.into_iter().collect::<Vec<_>>();
-                    let s = join(raw.iter(), ",");
-                    builder.put_and_commit(s);
-                }
-                Err(e) => {
-                    ctx.set_error(builder.len(), e.to_string());
-                    builder.commit_row();
-                }
-            }
+            let raw = b.iter().collect::<Vec<_>>();
+            let s = join(raw.iter(), ",");
+            builder.put_and_commit(s);
         }),
     );
 
@@ -203,16 +181,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match deserialize_bitmap(b) {
-                    Ok(rb) => {
-                        let ids = rb.into_iter().collect::<Vec<_>>();
-                        builder.push(ids.into());
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.commit_row();
-                    }
-                }
+                let ids = b.iter().collect::<Vec<_>>();
+                builder.push(ids.into());
             },
         ),
     );
@@ -228,15 +198,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match deserialize_bitmap(b) {
-                    Ok(rb) => {
-                        builder.push(rb.contains(item));
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.push(false);
-                    }
-                }
+                builder.push(b.contains(item));
             },
         ),
     );
@@ -248,21 +210,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             |b, range_start, limit, builder, ctx| {
                 if let Some(validity) = &ctx.validity {
                     if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
+                        builder.push_default();
                         return;
                     }
                 }
-                match deserialize_bitmap(b) {
-                    Ok(rb) => {
-                        let collection = rb.iter().filter(|x| x >= &range_start).take(limit as usize);
-                        let subset_bitmap = HybridBitmap::from_iter(collection);
-                        subset_bitmap.serialize_into(&mut builder.data).unwrap();
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                    }
-                }
-                builder.commit_row();
+                let collection = b.iter().filter(|x| x >= &range_start).take(limit as usize);
+                let subset_bitmap = HybridBitmap::from_iter(collection);
+                builder.push(&subset_bitmap);
             }
         ),
     );
@@ -274,21 +228,13 @@ pub fn register(registry: &mut FunctionRegistry) {
             |b, start, end, builder, ctx| {
                 if let Some(validity) = &ctx.validity {
                     if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
+                        builder.push_default();
                         return;
                     }
                 }
-                match deserialize_bitmap(b) {
-                    Ok(rb) => {
-                        let collection = rb.iter().filter(|x| x >= &start && x < &end);
-                        let subset_bitmap = HybridBitmap::from_iter(collection);
-                        subset_bitmap.serialize_into(&mut builder.data).unwrap();
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                    }
-                }
-                builder.commit_row();
+                let collection = b.iter().filter(|x| x >= &start && x < &end);
+                let subset_bitmap = HybridBitmap::from_iter(collection);
+                builder.push(&subset_bitmap);
             }
         ),
     );
@@ -300,29 +246,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             |b, offset, length, builder, ctx| {
                 if let Some(validity) = &ctx.validity {
                     if !validity.get_bit(builder.len()) {
-                        builder.commit_row();
+                        builder.push_default();
                         return;
                     }
                 }
-                match deserialize_bitmap(b) {
-                    Ok(rb) => {
-                        let subset_start = offset;
-                        let subset_length = length;
-                        if subset_start >= b.len() as u64 {
-                            let rb = HybridBitmap::new();
-                            rb.serialize_into(&mut builder.data).unwrap();
-                        } else {
-                            let adjusted_length = (subset_start + subset_length).min(b.len() as u64) - subset_start;
-                            let subset_bitmap = &rb.into_iter().collect::<Vec<_>>()[subset_start as usize..(subset_start + adjusted_length) as usize];
-                            let rb = HybridBitmap::from_iter(subset_bitmap.iter());
-                            rb.serialize_into(&mut builder.data).unwrap();
-                        }
-                    }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                    }
+                let values: Vec<_> = b.iter().collect();
+                if offset >= values.len() as u64 {
+                    builder.push(&HybridBitmap::new());
+                    return;
                 }
-                builder.commit_row();
+                let end = ((offset + length) as usize).min(values.len());
+                let subset = HybridBitmap::from_iter(values[offset as usize..end].iter().copied());
+                builder.push(&subset);
             },
         ),
     );
@@ -338,23 +273,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                let rb = match deserialize_bitmap(b) {
-                    Ok(rb) => rb,
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.push(false);
-                        return;
-                    }
-                };
-                let rb2 = match deserialize_bitmap(items) {
-                    Ok(rb) => rb,
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.push(false);
-                        return;
-                    }
-                };
-                builder.push(rb.is_superset(&rb2));
+                builder.push(b.is_superset(items));
             },
         ),
     );
@@ -370,23 +289,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                let rb = match deserialize_bitmap(b) {
-                    Ok(rb) => rb,
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.push(false);
-                        return;
-                    }
-                };
-                let rb2 = match deserialize_bitmap(items) {
-                    Ok(rb) => rb,
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                        builder.push(false);
-                        return;
-                    }
-                };
-                builder.push(rb.intersection_len(&rb2) != 0);
+                builder.push(b.intersection_len(items) != 0);
             },
         ),
     );
@@ -401,16 +304,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            let val = match deserialize_bitmap(b) {
-                Ok(rb) => match rb.max() {
-                    Some(val) => val,
-                    None => {
-                        ctx.set_error(builder.len(), "The bitmap is empty");
-                        0
-                    }
-                },
-                Err(e) => {
-                    ctx.set_error(builder.len(), e.to_string());
+            let val = match b.max() {
+                Some(val) => val,
+                None => {
+                    ctx.set_error(builder.len(), "The bitmap is empty");
                     0
                 }
             };
@@ -428,16 +325,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            let val = match deserialize_bitmap(b) {
-                Ok(rb) => match rb.min() {
-                    Some(val) => val,
-                    None => {
-                        ctx.set_error(builder.len(), "The bitmap is empty");
-                        0
-                    }
-                },
-                Err(e) => {
-                    ctx.set_error(builder.len(), e.to_string());
+            let val = match b.min() {
+                Some(val) => val,
+                None => {
+                    ctx.set_error(builder.len(), "The bitmap is empty");
                     0
                 }
             };
@@ -489,45 +380,25 @@ enum LogicOp {
 
 /// perform a logical operation on two input bitmap, and write result bitmap to builder
 fn bitmap_logic_operate(
-    arg1: &[u8],
-    arg2: &[u8],
-    builder: &mut BinaryColumnBuilder,
+    arg1: &HybridBitmap,
+    arg2: &HybridBitmap,
+    builder: &mut BitmapColumnBuilder,
     ctx: &mut EvalContext,
     op: LogicOp,
 ) {
     if let Some(validity) = &ctx.validity {
         if !validity.get_bit(builder.len()) {
-            builder.commit_row();
+            builder.push_default();
             return;
         }
     }
-    let Some(rb1) = deserialize_bitmap(arg1)
-        .map_err(|e| {
-            ctx.set_error(builder.len(), e.to_string());
-            builder.commit_row();
-        })
-        .ok()
-    else {
-        return;
-    };
-
-    let Some(rb2) = deserialize_bitmap(arg2)
-        .map_err(|e| {
-            ctx.set_error(builder.len(), e.to_string());
-            builder.commit_row();
-        })
-        .ok()
-    else {
-        return;
-    };
 
     let rb = match op {
-        LogicOp::Or => rb1.bitor(rb2),
-        LogicOp::And => rb1.bitand(rb2),
-        LogicOp::Xor => rb1.bitxor(rb2),
-        LogicOp::Not => rb1.sub(rb2),
+        LogicOp::Or => arg1.clone().bitor(arg2.clone()),
+        LogicOp::And => arg1.clone().bitand(arg2.clone()),
+        LogicOp::Xor => arg1.clone().bitxor(arg2.clone()),
+        LogicOp::Not => arg1.clone().sub(arg2.clone()),
     };
 
-    rb.serialize_into(&mut builder.data).unwrap();
-    builder.commit_row();
+    builder.push(&rb);
 }

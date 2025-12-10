@@ -503,10 +503,10 @@ impl From<&Column> for ArrayData {
                 unsafe { builder.build_unchecked() }
             }
             Column::Binary(col)
-            | Column::Bitmap(col)
             | Column::Variant(col)
             | Column::Geometry(col)
             | Column::Geography(GeographyColumn(col)) => col.clone().into(),
+            Column::Bitmap(col) => col.raw().clone().into(),
             Column::Opaque(col) => col.arrow_data(),
         }
     }

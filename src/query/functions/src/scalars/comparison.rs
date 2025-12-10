@@ -65,7 +65,6 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
-use databend_common_io::deserialize_bitmap;
 use databend_functions_scalar_decimal::register_decimal_compare;
 use jsonb::RawJsonb;
 use num_traits::AsPrimitive;
@@ -1296,9 +1295,8 @@ fn register_bitmap_cmp(registry: &mut FunctionRegistry) {
         "eq",
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
-            |lhs, rhs, builder, ctx| {
-                let row = builder.len();
-                builder.push(compare_bitmap_bytes(lhs, rhs, ctx, row));
+            |lhs, rhs, builder, _ctx| {
+                builder.push(lhs == rhs);
             },
         ),
     );
@@ -1306,34 +1304,9 @@ fn register_bitmap_cmp(registry: &mut FunctionRegistry) {
         "noteq",
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
-            |lhs, rhs, builder, ctx| {
-                let row = builder.len();
-                let equals = compare_bitmap_bytes(lhs, rhs, ctx, row);
-                builder.push(!equals);
+            |lhs, rhs, builder, _ctx| {
+                builder.push(lhs != rhs);
             },
         ),
     );
-}
-
-fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usize) -> bool {
-    if lhs == rhs {
-        return true;
-    }
-
-    let left = match deserialize_bitmap(lhs) {
-        Ok(v) => v,
-        Err(e) => {
-            ctx.set_error(row, e.to_string());
-            return false;
-        }
-    };
-    let right = match deserialize_bitmap(rhs) {
-        Ok(v) => v,
-        Err(e) => {
-            ctx.set_error(row, e.to_string());
-            return false;
-        }
-    };
-
-    left.iter().eq(right.iter())
 }

@@ -14,18 +14,25 @@
 
 use std::fmt;
 use std::io;
+use std::io::Read;
+use std::io::Write;
 use std::iter::FromIterator;
 use std::mem;
+use std::mem::size_of;
 use std::ops::BitAndAssign;
 use std::ops::BitOrAssign;
 use std::ops::BitXorAssign;
 use std::ops::SubAssign;
 use std::ptr;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use roaring::treemap::Iter;
 use roaring::RoaringTreemap;
+use serde::Deserialize;
+use serde::Serialize;
 use smallvec::SmallVec;
 
 // https://github.com/ClickHouse/ClickHouse/blob/516a6ed6f8bd8c5f6eed3a10e9037580b2fb6152/src/AggregateFunctions/AggregateFunctionGroupBitmapData.h#L914
@@ -43,7 +50,7 @@ type SmallBitmap = SmallVec<[u64; LARGE_THRESHOLD]>;
 /// - Calculations may frequently create new Bitmaps; reusing them as much as possible can effectively improve performance.
 ///  - do not use Box to construct HybridBitmap
 #[allow(clippy::large_enum_variant)]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum HybridBitmap {
     Small(SmallBitmap),
     Large(RoaringTreemap),
@@ -64,6 +71,15 @@ impl HybridBitmap {
         match self {
             HybridBitmap::Small(set) => set.len() as u64,
             HybridBitmap::Large(tree) => tree.len(),
+        }
+    }
+
+    pub fn memory_size(&self) -> usize {
+        match self {
+            HybridBitmap::Small(set) => {
+                size_of::<SmallBitmap>() + set.capacity() * size_of::<u64>()
+            }
+            HybridBitmap::Large(tree) => tree.serialized_size(),
         }
     }
 
@@ -448,6 +464,33 @@ impl fmt::Debug for HybridBitmap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let values: Vec<u64> = self.iter().collect();
         write!(f, "HybridBitmap<{values:?}>")
+    }
+}
+
+impl BorshSerialize for HybridBitmap {
+    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let mut buf = Vec::new();
+        self.serialize_into(&mut buf)?;
+        let len = u64::try_from(buf.len()).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("hybrid bitmap serialized size overflow: {}", buf.len()),
+            )
+        })?;
+        writer.write_all(&len.to_le_bytes())?;
+        writer.write_all(&buf)
+    }
+}
+
+impl BorshDeserialize for HybridBitmap {
+    fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        let mut len_buf = [0u8; 8];
+        reader.read_exact(&mut len_buf)?;
+        let len = u64::from_le_bytes(len_buf) as usize;
+        let mut buf = vec![0u8; len];
+        reader.read_exact(&mut buf)?;
+        deserialize_bitmap(&buf)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
     }
 }
 

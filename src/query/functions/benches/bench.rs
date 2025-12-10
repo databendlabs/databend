@@ -128,10 +128,7 @@ mod bitmap {
                 rb.insert(1);
                 rb.insert(number % 3);
                 rb.insert(number % 5);
-
-                let mut data = Vec::new();
-                rb.serialize_into(&mut data).unwrap();
-                data
+                rb
             })
             .collect();
 

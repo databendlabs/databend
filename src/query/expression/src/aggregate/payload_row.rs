@@ -20,11 +20,14 @@ use databend_common_io::prelude::bincode_serialize_into_buf;
 use super::probe_state::ProbeState;
 use super::row_ptr::RowLayout;
 use super::row_ptr::RowPtr;
+#[cfg(test)]
+use crate::types::bitmap::BitmapColumn;
 use crate::types::decimal::DecimalColumn;
 use crate::types::i256;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::BinaryType;
+use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
@@ -34,7 +37,6 @@ use crate::types::NumberColumn;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
-use crate::utils::bitmap::normalize_bitmap_column;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
@@ -122,11 +124,12 @@ pub(super) unsafe fn serialize_column_to_rowformat(
             }
         }
         Column::Bitmap(v) => {
-            let normalized = normalize_bitmap_column(v);
-            let col = normalized.as_ref();
+            let mut bytes = Vec::new();
             for &index in select_vector {
-                let data = arena.alloc_slice_copy(unsafe { col.index_unchecked(index) });
-                address[index].write_bytes(offset, data);
+                let map = unsafe { v.index_unchecked(index) };
+                map.serialize_into(bytes.as_mut_slice()).unwrap();
+                address[index].write_bytes(offset, &bytes);
+                bytes.clear();
             }
         }
         Column::Binary(v) | Column::Variant(v) | Column::Geometry(v) => {
@@ -287,15 +290,17 @@ impl ProbeState {
                 },
             ),
             Column::Bitmap(v) => {
-                let normalized = normalize_bitmap_column(v);
-                let col = normalized.as_ref();
+                let mut bytes = Vec::new();
                 self.row_match_column_generic(
                     validity,
                     validity_offset,
                     (count, no_match_count),
                     |idx, row_ptr| unsafe {
-                        let value = BinaryType::index_column_unchecked(col, idx);
-                        row_ptr.is_bytes_eq(col_offset, value)
+                        let value = BitmapType::index_column_unchecked(v, idx);
+                        value.serialize_into(&mut bytes).unwrap();
+                        let is_eq = row_ptr.is_bytes_eq(col_offset, &bytes);
+                        bytes.clear();
+                        is_eq
                     },
                 )
             }
@@ -346,10 +351,10 @@ impl ProbeState {
         validity: Option<&Bitmap>,
         validity_offset: usize,
         (count, mut no_match_count): (usize, usize),
-        compare_fn: F,
+        mut compare_fn: F,
     ) -> (usize, usize)
     where
-        F: Fn(usize, &RowPtr) -> bool,
+        F: FnMut(usize, &RowPtr) -> bool,
     {
         let mut temp = self.get_temp();
         temp.reserve(count);
@@ -451,7 +456,9 @@ mod tests {
         builder.commit_row();
         builder.put_slice(&legacy_bytes);
         builder.commit_row();
-        let column = Column::Bitmap(builder.build());
+        let column = Column::Bitmap(
+            BitmapColumn::from_binary(builder.build()).expect("valid bitmap column"),
+        );
 
         let arena = Bump::new();
         let row_size = rowformat_size(&DataType::Bitmap);

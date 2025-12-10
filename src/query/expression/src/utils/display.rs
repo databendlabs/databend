@@ -23,7 +23,6 @@ use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_column::binary::BinaryColumn;
-use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use databend_common_io::ewkb_to_geo;
@@ -163,8 +162,7 @@ impl Debug for ScalarRef<'_> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = deserialize_bitmap(bits).unwrap();
-                write!(f, "{rb:?}")
+                write!(f, "{bits:?}")
             }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
@@ -259,7 +257,7 @@ impl Debug for Column {
             Column::Interval(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
-            Column::Bitmap(col) => fmt_binary(f, "Bitmap", col),
+            Column::Bitmap(col) => fmt_binary(f, "Bitmap", col.raw()),
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => fmt_binary(f, "Variant", col),
@@ -307,8 +305,7 @@ impl Display for ScalarRef<'_> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = deserialize_bitmap(bits).unwrap();
-                write!(f, "'{}'", rb.into_iter().join(","))
+                write!(f, "'{}'", bits.iter().join(","))
             }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
@@ -363,8 +360,7 @@ pub fn scalar_ref_to_string(value: &ScalarRef) -> String {
         ScalarRef::Date(d) => format!("{}", date_to_string(*d as i64, &TimeZone::UTC)),
         ScalarRef::Interval(interval) => format!("{}", interval_to_string(interval)),
         ScalarRef::Bitmap(bits) => {
-            let rb = deserialize_bitmap(bits).unwrap();
-            format!("{}", rb.into_iter().join(","))
+            format!("{}", bits.iter().join(","))
         }
         ScalarRef::Variant(s) => {
             let raw_jsonb = RawJsonb::new(s);
