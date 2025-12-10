@@ -20,14 +20,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install script dependencies
-      shell: bash
-      run: |
-        sudo apt-get update -yq
-        sudo apt-get install -yq python3
-
     - name: Run Benchmark
-      working-directory: benchmark/clickbench
+      working-directory: benchmark
       env:
         BENCHMARK_ID: ${{ inputs.run_id }}
         BENCHMARK_DATASET: ${{ inputs.dataset }}
@@ -42,7 +36,7 @@ runs:
         name: benchmark_local
 
     - name: Prepare Metadata
-      working-directory: benchmark/clickbench
+      working-directory: benchmark
       shell: bash
       run: |
         case ${{ inputs.source }} in
@@ -63,4 +57,4 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: benchmark-${{ inputs.dataset }}-local
-        path: benchmark/clickbench/result-${{ inputs.dataset }}-local.json
+        path: benchmark/result-${{ inputs.dataset }}-local.json

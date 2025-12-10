@@ -329,12 +329,6 @@
             </td>
         </tr>
         <tr>
-            <th>Cluster size: </th>
-            <td id="selectors_cluster_size">
-                <a id="select-all-cluster-sizes" class="selector selector-active">All</a>
-            </td>
-        </tr>
-        <tr>
             <th>Cache size: </th>
             <td id="selectors_cache_size">
                 <a id="select-all-cache-sizes" class="selector selector-active">All</a>
@@ -391,7 +385,6 @@
             "system": {},
             "type": {},
             "machine": {},
-            "cluster_size": {},
             "cache_size": {},
             "metric": "hot",
             "queries": [],
@@ -401,7 +394,6 @@
             selectors.system = selectors.system || {};
             selectors.type = selectors.type || {};
             selectors.machine = selectors.machine || {};
-            selectors.cluster_size = selectors.cluster_size || {};
             selectors.cache_size = selectors.cache_size || {};
             selectors.metric = selectors.metric || 'hot';
             selectors.queries = selectors.queries || [];
@@ -429,16 +421,19 @@
         let systems = document.getElementById('selectors_system');
         let types = document.getElementById('selectors_type');
         let machines = document.getElementById('selectors_machine');
-        let cluster_sizes = document.getElementById('selectors_cluster_size');
         let cache_sizes = document.getElementById('selectors_cache_size');
 
         let unique_systems = [... new Set(data.map(elem => elem.system))];
-        const default_cache_size = 'n/a';
+        const default_cache_size = '0';
         const getCacheLabel = entry => {
             if (entry.cache_size === undefined || entry.cache_size === null || entry.cache_size === '') {
                 return default_cache_size;
             }
             return entry.cache_size.toString();
+        };
+        const formatMachineWithCache = entry => {
+            const machine = entry.machine || 'n/a';
+            return `${machine}, cache ${getCacheLabel(entry)}`;
         };
 
         function toggle(e, elem, selectors_map) {
@@ -499,15 +494,6 @@
             selector.addEventListener('click', e => toggle(e, elem, selectors.machine));
         });
 
-        [... new Set(data.map(elem => elem.cluster_size))].sort(
-            (a, b) => ((typeof (b) === 'number') - (typeof (a) === 'number')) || (a - b)).map(elem => {
-                let selector = document.createElement('a');
-                selector.className = 'selector selector-active';
-                selector.appendChild(document.createTextNode(elem));
-                cluster_sizes.appendChild(selector);
-                if (!(elem in selectors.cluster_size)) { selectors.cluster_size[elem] = true; }
-                selector.addEventListener('click', e => toggle(e, elem, selectors.cluster_size));
-            });
         [... new Set(data.map(getCacheLabel))].map(elem => {
             let selector = document.createElement('a');
             selector.className = 'selector selector-active';
@@ -520,7 +506,6 @@
         document.getElementById('select-all-systems').addEventListener('click', e => toggleAll(e, selectors.system));
         document.getElementById('select-all-types').addEventListener('click', e => toggleAll(e, selectors.type));
         document.getElementById('select-all-machines').addEventListener('click', e => toggleAll(e, selectors.machine));
-        document.getElementById('select-all-cluster-sizes').addEventListener('click', e => toggleAll(e, selectors.cluster_size));
         document.getElementById('select-all-cache-sizes').addEventListener('click', e => toggleAll(e, selectors.cache_size));
 
         [...document.getElementById('selectors_run').querySelectorAll('a')].map(elem => elem.addEventListener('click', e => {
@@ -538,7 +523,6 @@
             [...systems.childNodes].map(elem => { elem.className = selectors.system[elem.innerText] ? 'selector selector-active' : 'selector' });
             [...types.childNodes].map(elem => { elem.className = selectors.type[elem.innerText] ? 'selector selector-active' : 'selector' });
             [...machines.childNodes].map(elem => { elem.className = selectors.machine[elem.innerText] ? 'selector selector-active' : 'selector' });
-            [...cluster_sizes.childNodes].map(elem => { elem.className = selectors.cluster_size[elem.innerText] ? 'selector selector-active' : 'selector' });
             [...cache_sizes.childNodes].map(elem => { elem.className = selectors.cache_size[elem.innerText] ? 'selector selector-active' : 'selector' });
 
             [...document.getElementById('selectors_run').querySelectorAll('a')].map(elem => {
@@ -593,6 +577,8 @@
 
             let summary = {};
 
+            const total_query_times = new Array(filtered_data.length).fill(null);
+
             const num_queries = filtered_data[0].result.length;
 
             const baseline_data = [...filtered_data[0].result.keys()].map(query_num =>
@@ -610,11 +596,12 @@
                 summaries = filtered_data.map(elem => elem.data_size / min_data_size);
                 document.getElementById('time-or-size').innerText = 'size';
             } else {
-                summaries = filtered_data.map(elem => {
+                summaries = filtered_data.map((elem, idx) => {
                     const fallback_timing = missing_result_penalty * Math.max(missing_result_time, ...elem.result.map(timings => selectRun(timings)));
 
                     let accumulator = 0;
                     let used_queries = 0;
+                    let total_duration = 0;
 
                     const no_queries_selected = selectors.queries.filter(x => x).length == 0;
 
@@ -625,9 +612,11 @@
                             const ratio = (constant_time_add + curr_timing) / (constant_time_add + baseline_timing);
                             accumulator += Math.log(ratio);
                             ++used_queries;
+                            total_duration += curr_timing;
                         }
                     }
 
+                    total_query_times[idx] = total_duration;
                     return Math.exp(accumulator / used_queries);
                 });
                 document.getElementById('time-or-size').innerText = 'time';
@@ -649,13 +638,15 @@
                 let td_name = document.createElement('td');
                 td_name.className = 'summary-name';
 
+                const machineLabel = formatMachineWithCache(elem);
+
                 if (!elem.fake) {
                     let link = document.createElement('a');
-                    link.appendChild(document.createTextNode(`${elem.system} (${Number.isInteger(elem.cluster_size) && elem.cluster_size > 1 ? elem.cluster_size + '×' : ''}${elem.machine})`));
+                    link.appendChild(document.createTextNode(`${elem.system} (${machineLabel})`));
                     link.href = "https://github.com/ClickHouse/ClickBench/blob/main/" + elem.source;
                     td_name.appendChild(link);
                 } else {
-                    td_name.appendChild(document.createTextNode(elem.system));
+                    td_name.appendChild(document.createTextNode(`${elem.system} (${machineLabel})`));
                 }
 
                 if (elem.comment) { td_name.appendChild(addNote(elem.comment)); }
@@ -669,7 +660,7 @@
 
                 const text = selectors.metric == 'load' ? (elem.load_time ? `${Math.round(elem.load_time)}s (×${ratio.toFixed(2)})` : 'stateless')
                     : selectors.metric == 'size' ? `${(elem.data_size / 1024 / 1024 / 1024).toFixed(2)} GiB (×${ratio.toFixed(2)})`
-                        : `×${ratio.toFixed(2)}`;
+                        : `${total_query_times[idx].toFixed(2)}s (×${ratio.toFixed(2)})`;
 
                 td_number.appendChild(document.createTextNode(text));
 
@@ -689,7 +680,7 @@
                 table.appendChild(tr);
             });
 
-            return [sorted_indices, baseline_data];
+            return [sorted_indices, baseline_data, total_query_times];
         }
 
         function colorize(elem, ratio) {
@@ -750,7 +741,6 @@
             let filtered_data = data.filter(elem =>
             selectors.system[elem.system] &&
             selectors.machine[elem.machine] &&
-            selectors.cluster_size[elem.cluster_size] &&
             selectors.cache_size[getCacheLabel(elem)] &&
             elem.tags.filter(type => selectors.type[type]).length > 0);
 
@@ -767,7 +757,7 @@
                 filtered_data = [...filtered_data, ...additional_data_size_points];
             }
 
-            let [sorted_indices, baseline_data] = renderSummary(filtered_data);
+            let [sorted_indices, baseline_data, total_query_times] = renderSummary(filtered_data);
             sorted_indices = sorted_indices.filter(idx => !filtered_data[idx].fake);
 
             /// Generate details
@@ -793,11 +783,38 @@
             sorted_indices.map(idx => {
                 const elem = filtered_data[idx];
                 let th = document.createElement('th');
-                th.appendChild(document.createTextNode(`${elem.system}\n(${Number.isInteger(elem.cluster_size) && elem.cluster_size > 1 ? elem.cluster_size + '×' : ''}${elem.machine})`));
+                const machineLabel = formatMachineWithCache(elem);
+                th.appendChild(document.createTextNode(`${elem.system}\n(${machineLabel})`));
                 th.className = 'th-entry';
                 th.dataset.system = elem.system;
                 details_head.appendChild(th);
             });
+
+            /// Total query times
+            if (selectors.metric == 'hot' || selectors.metric == 'cold') {
+                let tr = document.createElement('tr');
+                tr.className = 'shadow';
+
+                let td_title = document.createElement('td');
+                td_title.colSpan = 2;
+                td_title.appendChild(document.createTextNode('Total query time: '));
+                tr.appendChild(td_title);
+
+                const min_total_time = Math.min(...sorted_indices.map(idx => total_query_times[idx]).filter(x => x !== null));
+
+                sorted_indices.map(idx => {
+                    const total_time = total_query_times[idx];
+                    const ratio = total_time / min_total_time;
+
+                    let td = document.createElement('td');
+                    td.appendChild(document.createTextNode(`${total_time.toFixed(2)}s (×${ratio.toFixed(2)})`));
+
+                    colorize(td, ratio);
+                    tr.appendChild(td);
+                });
+
+                details_body.appendChild(tr);
+            }
 
             /// Load times
             {
