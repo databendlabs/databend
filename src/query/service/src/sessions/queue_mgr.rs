@@ -49,6 +49,7 @@ use databend_common_meta_semaphore::errors::AcquireError;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_metrics::session::dec_session_running_acquired_queries;
+use databend_common_metrics::session::inc_session_acquired_queries_total;
 use databend_common_metrics::session::inc_session_running_acquired_queries;
 use databend_common_metrics::session::incr_session_queue_abort_count;
 use databend_common_metrics::session::incr_session_queue_acquire_error_count;
@@ -288,6 +289,7 @@ impl<Data: QueueData> QueueManager<Data> {
         guards.extend(self.acquire_warehouse_queue(data, timeout, instant).await?);
 
         inc_session_running_acquired_queries();
+        inc_session_acquired_queries_total();
         record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
 
         Ok(AcquireQueueGuard::create(guards))
