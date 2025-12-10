@@ -3726,10 +3726,10 @@ mod cache_config_converters {
                 );
                 let hive = catalog.try_into()?;
                 let catalog = InnerCatalogConfig::Hive(hive);
-	                catalogs.insert(CATALOG_HIVE.to_string(), catalog);
-	            }
+                catalogs.insert(CATALOG_HIVE.to_string(), catalog);
+            }
 
-	            let spill = convert_local_spill_config(spill)?;
+            let spill = convert_local_spill_config(spill)?;
 
             Ok(InnerConfig {
                 query: query.try_into()?,
@@ -3826,7 +3826,7 @@ mod cache_config_converters {
         }
     }
 
-	fn convert_local_spill_config(spill: SpillConfig) -> Result<inner::SpillConfig> {
+    fn convert_local_spill_config(spill: SpillConfig) -> Result<inner::SpillConfig> {
         // Determine configuration based on auto-detected spill type
         let spill_type = spill.get_spill_type();
         let (local_writeable_root, path, reserved_disk_ratio, global_bytes_limit, storage_params) =
@@ -3883,28 +3883,28 @@ mod cache_config_converters {
                         storage_params,
                     )
                 }
-	                _ => {
-	                    // Default behavior for "default" type and any unrecognized types:
-	                    // do NOT implicitly reuse the data cache disk. Local spill is
-	                    // enabled only when explicitly configured via either
-	                    //   - [spill.storage] with type = "fs", or
-	                    //   - legacy spill_local_disk_path.
-	                    let storage_params = spill
-	                        .storage
-	                        .map(|storage| {
-	                            let storage: InnerStorageConfig = storage.try_into()?;
-	                            Ok::<_, ErrorCode>(storage.params)
-	                        })
-	                        .transpose()?;
+                _ => {
+                    // Default behavior for "default" type and any unrecognized types:
+                    // do NOT implicitly reuse the data cache disk. Local spill is
+                    // enabled only when explicitly configured via either
+                    //   - [spill.storage] with type = "fs", or
+                    //   - legacy spill_local_disk_path.
+                    let storage_params = spill
+                        .storage
+                        .map(|storage| {
+                            let storage: InnerStorageConfig = storage.try_into()?;
+                            Ok::<_, ErrorCode>(storage.params)
+                        })
+                        .transpose()?;
 
-	                    (
-	                        None,
-	                        spill.spill_local_disk_path,
-	                        spill.spill_local_disk_reserved_space_percentage / 100.0,
-	                        spill.spill_local_disk_max_bytes,
-	                        storage_params,
-	                    )
-	                }
+                    (
+                        None,
+                        spill.spill_local_disk_path,
+                        spill.spill_local_disk_reserved_space_percentage / 100.0,
+                        spill.spill_local_disk_max_bytes,
+                        storage_params,
+                    )
+                }
             };
 
         Ok(inner::SpillConfig {
