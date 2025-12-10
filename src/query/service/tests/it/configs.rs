@@ -971,14 +971,15 @@ fn test_spill_config_comprehensive() -> Result<()> {
         f.write_all(b"# No [spill] section - should use default behavior")?;
         f.flush()?;
 
-        temp_env::with_vars(
-            vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
-            || {
-                let cfg = InnerConfig::load_for_test().expect("config load failed");
-                // Default behavior: no explicit local path, falls back to cache
-                assert_eq!(cfg.spill.local_path(), None);
-            },
-        );
+	        temp_env::with_vars(
+	            vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
+	            || {
+	                let cfg = InnerConfig::load_for_test().expect("config load failed");
+	                // Default behavior: no explicit local path, local spill is disabled
+	                // unless [spill] is explicitly configured.
+	                assert_eq!(cfg.spill.local_path(), None);
+	            },
+	        );
         fs::remove_file(file_path)?;
     }
 
