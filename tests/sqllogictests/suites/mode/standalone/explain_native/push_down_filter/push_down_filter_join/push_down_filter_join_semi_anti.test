@@ -63,7 +63,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 0.00
+├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── scan id: 1
