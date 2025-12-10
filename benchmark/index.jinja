@@ -329,12 +329,6 @@
             </td>
         </tr>
         <tr>
-            <th>Cluster size: </th>
-            <td id="selectors_cluster_size">
-                <a id="select-all-cluster-sizes" class="selector selector-active">All</a>
-            </td>
-        </tr>
-        <tr>
             <th>Cache size: </th>
             <td id="selectors_cache_size">
                 <a id="select-all-cache-sizes" class="selector selector-active">All</a>
@@ -391,7 +385,6 @@
             "system": {},
             "type": {},
             "machine": {},
-            "cluster_size": {},
             "cache_size": {},
             "metric": "hot",
             "queries": [],
@@ -401,7 +394,6 @@
             selectors.system = selectors.system || {};
             selectors.type = selectors.type || {};
             selectors.machine = selectors.machine || {};
-            selectors.cluster_size = selectors.cluster_size || {};
             selectors.cache_size = selectors.cache_size || {};
             selectors.metric = selectors.metric || 'hot';
             selectors.queries = selectors.queries || [];
@@ -429,7 +421,6 @@
         let systems = document.getElementById('selectors_system');
         let types = document.getElementById('selectors_type');
         let machines = document.getElementById('selectors_machine');
-        let cluster_sizes = document.getElementById('selectors_cluster_size');
         let cache_sizes = document.getElementById('selectors_cache_size');
 
         let unique_systems = [... new Set(data.map(elem => elem.system))];
@@ -499,15 +490,6 @@
             selector.addEventListener('click', e => toggle(e, elem, selectors.machine));
         });
 
-        [... new Set(data.map(elem => elem.cluster_size))].sort(
-            (a, b) => ((typeof (b) === 'number') - (typeof (a) === 'number')) || (a - b)).map(elem => {
-                let selector = document.createElement('a');
-                selector.className = 'selector selector-active';
-                selector.appendChild(document.createTextNode(elem));
-                cluster_sizes.appendChild(selector);
-                if (!(elem in selectors.cluster_size)) { selectors.cluster_size[elem] = true; }
-                selector.addEventListener('click', e => toggle(e, elem, selectors.cluster_size));
-            });
         [... new Set(data.map(getCacheLabel))].map(elem => {
             let selector = document.createElement('a');
             selector.className = 'selector selector-active';
@@ -520,7 +502,6 @@
         document.getElementById('select-all-systems').addEventListener('click', e => toggleAll(e, selectors.system));
         document.getElementById('select-all-types').addEventListener('click', e => toggleAll(e, selectors.type));
         document.getElementById('select-all-machines').addEventListener('click', e => toggleAll(e, selectors.machine));
-        document.getElementById('select-all-cluster-sizes').addEventListener('click', e => toggleAll(e, selectors.cluster_size));
         document.getElementById('select-all-cache-sizes').addEventListener('click', e => toggleAll(e, selectors.cache_size));
 
         [...document.getElementById('selectors_run').querySelectorAll('a')].map(elem => elem.addEventListener('click', e => {
@@ -538,7 +519,6 @@
             [...systems.childNodes].map(elem => { elem.className = selectors.system[elem.innerText] ? 'selector selector-active' : 'selector' });
             [...types.childNodes].map(elem => { elem.className = selectors.type[elem.innerText] ? 'selector selector-active' : 'selector' });
             [...machines.childNodes].map(elem => { elem.className = selectors.machine[elem.innerText] ? 'selector selector-active' : 'selector' });
-            [...cluster_sizes.childNodes].map(elem => { elem.className = selectors.cluster_size[elem.innerText] ? 'selector selector-active' : 'selector' });
             [...cache_sizes.childNodes].map(elem => { elem.className = selectors.cache_size[elem.innerText] ? 'selector selector-active' : 'selector' });
 
             [...document.getElementById('selectors_run').querySelectorAll('a')].map(elem => {
@@ -651,7 +631,7 @@
 
                 if (!elem.fake) {
                     let link = document.createElement('a');
-                    link.appendChild(document.createTextNode(`${elem.system} (${Number.isInteger(elem.cluster_size) && elem.cluster_size > 1 ? elem.cluster_size + '×' : ''}${elem.machine})`));
+                    link.appendChild(document.createTextNode(`${elem.system} (${elem.machine})`));
                     link.href = "https://github.com/ClickHouse/ClickBench/blob/main/" + elem.source;
                     td_name.appendChild(link);
                 } else {
@@ -750,7 +730,6 @@
             let filtered_data = data.filter(elem =>
             selectors.system[elem.system] &&
             selectors.machine[elem.machine] &&
-            selectors.cluster_size[elem.cluster_size] &&
             selectors.cache_size[getCacheLabel(elem)] &&
             elem.tags.filter(type => selectors.type[type]).length > 0);
 
@@ -793,7 +772,7 @@
             sorted_indices.map(idx => {
                 const elem = filtered_data[idx];
                 let th = document.createElement('th');
-                th.appendChild(document.createTextNode(`${elem.system}\n(${Number.isInteger(elem.cluster_size) && elem.cluster_size > 1 ? elem.cluster_size + '×' : ''}${elem.machine})`));
+                th.appendChild(document.createTextNode(`${elem.system}\n(${elem.machine})`));
                 th.className = 'th-entry';
                 th.dataset.system = elem.system;
                 details_head.appendChild(th);

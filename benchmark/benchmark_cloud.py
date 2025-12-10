@@ -44,7 +44,6 @@ class ResultRecord:
     version: str
     warehouse: str
     machine: str
-    cluster_size: str
     tags: List[str]
     result: List[List[float]]
     values: Dict[str, List[float]]
@@ -162,9 +161,9 @@ def ensure_dependencies() -> None:
     logger.info("bendsql version: %s", subprocess.check_output(["bendsql", "--version"]).decode().strip())
 
 
-SIZE_MAPPING: Dict[str, Dict[str, str]] = {
-    "Small": {"cluster_size": "16", "machine": "Small"},
-    "Large": {"cluster_size": "64", "machine": "Large"},
+SIZE_MAPPING: Dict[str, str] = {
+    "Small": "Small",
+    "Large": "Large",
 }
 
 
@@ -282,8 +281,7 @@ def main() -> None:
 
     run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     tags = ["s3", f"cache-{config.cache_size}"]
-    cluster_size = SIZE_MAPPING[config.size]["cluster_size"]
-    machine = SIZE_MAPPING[config.size]["machine"]
+    machine = SIZE_MAPPING[config.size]
     system: Optional[str] = None
     comment: Optional[str] = None
     if config.source and config.source_id:
@@ -307,7 +305,6 @@ def main() -> None:
         version=config.version,
         warehouse=config.warehouse,
         machine=machine,
-        cluster_size=cluster_size,
         tags=tags,
         result=[],
         values={},
