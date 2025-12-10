@@ -948,7 +948,7 @@ spill_local_disk_path = "/data/spill"
             let cfg = InnerConfig::load_for_test().expect("config load failed");
 
             assert_eq!(cfg.spill.local_path(), Some("/data/spill".into()));
-            assert_eq!(cfg.spill.reserved_disk_ratio, 0.3);
+            assert_eq!(cfg.spill.reserved_disk_ratio, 0.1);
         },
     );
 
@@ -975,7 +975,8 @@ fn test_spill_config_comprehensive() -> Result<()> {
             vec![("CONFIG_FILE", Some(file_path.to_string_lossy().as_ref()))],
             || {
                 let cfg = InnerConfig::load_for_test().expect("config load failed");
-                // Default behavior: no explicit local path, falls back to cache
+                // Default behavior: no explicit local path, local spill is disabled
+                // unless [spill] is explicitly configured.
                 assert_eq!(cfg.spill.local_path(), None);
             },
         );
@@ -1065,7 +1066,7 @@ secret_access_key = "test-secret"
             r#"[spill]
 spill_local_disk_path = "/legacy/spill/path"
 spill_local_disk_reserved_space_percentage = 25.0
-spill_local_disk_max_bytes = 53687091200
+spill_local_disk_max_bytes = 1073741824
 "#
             .as_bytes(),
         )?;
@@ -1077,7 +1078,7 @@ spill_local_disk_max_bytes = 53687091200
                 let cfg = InnerConfig::load_for_test().expect("config load failed");
                 assert_eq!(cfg.spill.local_path(), Some("/legacy/spill/path".into()));
                 assert_eq!(cfg.spill.reserved_disk_ratio.into_inner(), 0.25);
-                assert_eq!(cfg.spill.global_bytes_limit, 53687091200);
+                assert_eq!(cfg.spill.global_bytes_limit, 1073741824);
             },
         );
         fs::remove_file(file_path)?;

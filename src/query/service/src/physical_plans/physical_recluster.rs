@@ -21,6 +21,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -319,8 +320,11 @@ impl IPhysicalPlan for HilbertPartition {
         )?;
 
         let settings = builder.settings.clone();
-        let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;
         let temp_dir_manager = TempDirManager::instance();
+
+        let disk_bytes_limit = GlobalConfig::instance()
+            .spill
+            .window_partition_spill_bytes_limit();
 
         let enable_dio = settings.get_enable_dio()?;
         let disk_spill = temp_dir_manager

@@ -19,8 +19,6 @@ use std::time::Instant;
 
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -42,6 +40,7 @@ use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::sessions::QueryContext;
 use crate::spillers::Layout;
 use crate::spillers::SpillAdapter;
+use crate::spillers::SpillTarget;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataWriter;
 
@@ -52,10 +51,12 @@ struct PayloadWriter {
 
 impl PayloadWriter {
     fn try_create(prefix: &str) -> Result<Self> {
-        let operator = DataOperator::instance().spill_operator();
+        let data_operator = DataOperator::instance();
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
+        let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniqName::unique());
-        let spills_data_writer = buffer_pool.writer(operator, file_path.clone())?;
+        let spills_data_writer = buffer_pool.writer(operator, file_path.clone(), target)?;
 
         Ok(PayloadWriter {
             path: file_path,
@@ -218,7 +219,7 @@ impl AggregatePayloadWriters {
         }
 
         let stats = self.write_stats.take();
-        flush_write_profile(&self.ctx, stats);
+        flush_write_profile(&self.ctx, stats, self.is_local);
 
         Ok(spilled_payloads)
     }
@@ -356,18 +357,23 @@ impl NewAggregateSpiller {
             row_group,
         } = payload;
 
-        let operator = DataOperator::instance().spill_operator();
+        let data_operator = DataOperator::instance();
+        let target = SpillTarget::from_storage_params(data_operator.spill_params());
+        let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
 
-        let mut reader =
-            buffer_pool.reader(operator.clone(), location.clone(), vec![row_group.clone()])?;
+        let mut reader = buffer_pool.reader(
+            operator.clone(),
+            location.clone(),
+            vec![row_group.clone()],
+            target,
+        )?;
 
         let instant = Instant::now();
         let data_block = reader.read(self.read_setting)?;
         let elapsed = instant.elapsed();
 
         let read_size = reader.read_bytes();
-        flush_read_profile(&elapsed, read_size);
 
         info!(
             "Read aggregate spill finished: (bucket: {}, location: {}, bytes: {}, rows: {}, elapsed: {:?})",
@@ -400,29 +406,9 @@ impl NewAggregateSpiller {
     }
 }
 
-fn flush_read_profile(elapsed: &Duration, read_bytes: usize) {
-    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadCount, 1);
-    Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillReadBytes, read_bytes);
-    Profile::record_usize_profile(
-        ProfileStatisticsName::RemoteSpillReadTime,
-        elapsed.as_millis() as usize,
-    );
-}
-
-fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats) {
+fn flush_write_profile(ctx: &Arc<QueryContext>, stats: WriteStats, _is_local: bool) {
     if stats.count == 0 && stats.bytes == 0 && stats.rows == 0 {
         return;
-    }
-
-    if stats.count > 0 {
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, stats.count);
-        Profile::record_usize_profile(
-            ProfileStatisticsName::RemoteSpillWriteTime,
-            stats.elapsed.as_millis() as usize,
-        );
-    }
-    if stats.bytes > 0 {
-        Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteBytes, stats.bytes);
     }
 
     if stats.rows > 0 || stats.bytes > 0 {

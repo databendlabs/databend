@@ -20,9 +20,6 @@ SET force_aggregate_data_spill = 1;
 statement ok
 set join_spilling_buffer_threshold_per_proc_mb = 1;
 
-statement ok
-set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
-
 # TPC-H TEST
 include ./queries.test
 

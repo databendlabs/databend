@@ -19,6 +19,7 @@ use std::time::SystemTime;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::CatchUnwindFuture;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -530,7 +531,9 @@ impl ExecuteState {
 
         let spiller = if settings.get_enable_result_set_spilling()? {
             let temp_dir_manager = TempDirManager::instance();
-            let disk_bytes_limit = settings.get_result_set_spilling_to_disk_bytes_limit()?;
+            let disk_bytes_limit = GlobalConfig::instance()
+                .spill
+                .result_set_spill_bytes_limit();
             let enable_dio = settings.get_enable_dio()?;
             let disk_spill = temp_dir_manager
                 .get_disk_spill_dir(disk_bytes_limit, &ctx.get_id())

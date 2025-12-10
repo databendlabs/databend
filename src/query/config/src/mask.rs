@@ -215,6 +215,9 @@ impl SpillConfig {
             ref spill_local_disk_path,
             spill_local_disk_reserved_space_percentage,
             spill_local_disk_max_bytes,
+            sort_spilling_disk_quota_ratio,
+            window_partition_spilling_disk_quota_ratio,
+            result_set_spilling_disk_quota_ratio,
         } = *self;
 
         Self {
@@ -222,6 +225,10 @@ impl SpillConfig {
             spill_local_disk_path: spill_local_disk_path.clone(),
             spill_local_disk_reserved_space_percentage,
             spill_local_disk_max_bytes,
+            sort_spilling_disk_quota_ratio,
+            window_partition_spilling_disk_quota_ratio,
+            // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+            result_set_spilling_disk_quota_ratio,
         }
     }
 }
@@ -375,6 +382,10 @@ mod tests {
             spill_local_disk_path: "".to_string(),
             spill_local_disk_reserved_space_percentage: 30.0.into(),
             spill_local_disk_max_bytes: 10,
+            sort_spilling_disk_quota_ratio: 60,
+            window_partition_spilling_disk_quota_ratio: 30,
+            // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+            result_set_spilling_disk_quota_ratio: 0,
             storage: Some(StorageConfig {
                 typ: "s3".to_string(),
                 s3: S3StorageConfig {

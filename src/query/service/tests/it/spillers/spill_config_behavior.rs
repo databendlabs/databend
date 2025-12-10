@@ -30,7 +30,7 @@ use databend_query::spillers::Location;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
 use databend_query::spillers::SpillerType;
-use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::config_with_spill;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_cache::TempDirManager;
 
@@ -39,8 +39,8 @@ use databend_storages_common_cache::TempDirManager;
 async fn test_spill_directory_operations() -> Result<()> {
     println!("🔄 Starting spill directory operations test");
 
-    // Setup with default config
-    let config = ConfigBuilder::create().build();
+    // Setup with spill-enabled config dedicated for spill tests
+    let config = config_with_spill();
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -102,7 +102,7 @@ async fn test_spill_directory_operations() -> Result<()> {
 /// Test 2: Spill size limit enforcement
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_spill_size_limits() -> Result<()> {
-    let config = ConfigBuilder::create().build();
+    let config = config_with_spill();
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
@@ -144,7 +144,7 @@ async fn test_spill_size_limits() -> Result<()> {
 /// Test 3: Verify spill data integrity and actual file operations
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_spill_data_integrity() -> Result<()> {
-    let config = ConfigBuilder::create().build();
+    let config = config_with_spill();
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 

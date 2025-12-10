@@ -787,6 +787,22 @@ pub struct SpillConfig {
     pub global_bytes_limit: u64,
 
     pub storage_params: Option<StorageParams>,
+
+    /// Maximum percentage of the global local spill quota that a single
+    /// sort operator may use for one query.
+    ///
+    /// Value range: 0-100. Effective only when local spill is enabled
+    /// (i.e. there is a valid local spill path and non-zero global
+    /// bytes limit).
+    pub sort_spilling_disk_quota_ratio: u64,
+
+    /// Maximum percentage of the global local spill quota that window
+    /// partitioners may use for one query.
+    pub window_partition_spilling_disk_quota_ratio: u64,
+
+    /// Maximum percentage of the global local spill quota that HTTP
+    /// result-set spilling may use for one query.
+    pub result_set_spilling_disk_quota_ratio: u64,
 }
 
 impl SpillConfig {
@@ -807,6 +823,44 @@ impl SpillConfig {
         None
     }
 
+    /// Helper to compute a per-query local spill quota (in bytes) from a
+    /// percentage of the global local spill limit.
+    ///
+    /// - If local spill is disabled (no local path or zero global
+    ///   limit), returns 0.
+    /// - `ratio` is clamped into [0, 100].
+    pub fn quota_bytes_from_ratio(&self, ratio: u64) -> usize {
+        // Only effective when local spill is enabled.
+        if self.local_path().is_none() {
+            return 0;
+        }
+
+        let ratio = std::cmp::min(ratio, 100);
+        if ratio == 0 {
+            return 0;
+        }
+
+        let bytes = self.global_bytes_limit.saturating_mul(ratio) / 100;
+
+        // TempDirManager works with `usize` limits.
+        std::cmp::min(bytes, usize::MAX as u64) as usize
+    }
+
+    /// Per-query quota for sort operators.
+    pub fn sort_spill_bytes_limit(&self) -> usize {
+        self.quota_bytes_from_ratio(self.sort_spilling_disk_quota_ratio)
+    }
+
+    /// Per-query quota for window partitioners.
+    pub fn window_partition_spill_bytes_limit(&self) -> usize {
+        self.quota_bytes_from_ratio(self.window_partition_spilling_disk_quota_ratio)
+    }
+
+    /// Per-query quota for HTTP result-set spilling.
+    pub fn result_set_spill_bytes_limit(&self) -> usize {
+        self.quota_bytes_from_ratio(self.result_set_spilling_disk_quota_ratio)
+    }
+
     pub fn new_for_test(path: String, reserved_disk_ratio: f64, global_bytes_limit: u64) -> Self {
         Self {
             local_writeable_root: None,
@@ -814,6 +868,11 @@ impl SpillConfig {
             reserved_disk_ratio: OrderedFloat(reserved_disk_ratio),
             global_bytes_limit,
             storage_params: None,
+            // Use the same defaults as the external config.
+            sort_spilling_disk_quota_ratio: 60,
+            window_partition_spilling_disk_quota_ratio: 60,
+            // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+            result_set_spilling_disk_quota_ratio: 0,
         }
     }
 }
@@ -823,9 +882,13 @@ impl Default for SpillConfig {
         Self {
             local_writeable_root: None,
             path: "".to_string(),
-            reserved_disk_ratio: OrderedFloat(0.3),
+            reserved_disk_ratio: OrderedFloat(0.1),
             global_bytes_limit: u64::MAX,
             storage_params: None,
+            sort_spilling_disk_quota_ratio: 60,
+            window_partition_spilling_disk_quota_ratio: 60,
+            // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+            result_set_spilling_disk_quota_ratio: 0,
         }
     }
 }

@@ -15,6 +15,7 @@
 use databend_common_base::base::GlobalUniqName;
 use databend_common_config::BuiltInConfig;
 use databend_common_config::InnerConfig;
+use databend_common_config::SpillConfig;
 use databend_common_config::UDFConfig;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
@@ -59,7 +60,7 @@ ADDRESS = 'https://databend.com';"
         // set node_id to a unique value
         conf.query.node_id = GlobalUniqName::unique();
 
-        // set storage to fs
+        // set storage to fs for tests; individual tests may override this
         let tmp_dir = TempDir::new().expect("create tmp dir failed");
         let root = tmp_dir.path().to_str().unwrap().to_string();
         conf.storage.params = StorageParams::Fs(StorageFsConfig { root });
@@ -183,4 +184,21 @@ ADDRESS = 'https://databend.com';"
     pub fn config(&self) -> InnerConfig {
         self.conf.clone()
     }
+}
+
+/// Helper for spill-related tests: start from the default test config and
+/// attach a local spill configuration so that TempDirManager has a root path.
+pub fn config_with_spill() -> InnerConfig {
+    let mut conf = ConfigBuilder::create().config();
+
+    // Use a stable directory under the workspace for spill during tests.
+    // TempDirManager::init will create and clean up directories under this
+    // path, so it's safe to reuse across tests.
+    conf.spill = SpillConfig::new_for_test(
+        ".databend/_query_spill".to_string(),
+        0.0,
+        1024 * 1024 * 1024,
+    );
+
+    conf
 }

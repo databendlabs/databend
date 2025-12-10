@@ -798,7 +798,7 @@ pub struct FsStorageConfig {
 
 impl FsStorageConfig {
     fn default_reserved_space_percentage() -> Option<OrderedFloat<f64>> {
-        None // Use None as default, will use system default (30.0) if not specified
+        None // Use None as default, will use system default (10.0) if not specified
     }
 }
 
@@ -3585,13 +3585,32 @@ pub struct SpillConfig {
     #[clap(long, value_name = "VALUE", default_value = "")]
     pub spill_local_disk_path: String,
 
-    #[clap(long, value_name = "VALUE", default_value = "30")]
+    #[clap(long, value_name = "VALUE", default_value = "10")]
     /// Percentage of reserve disk space that won't be used for spill to local disk.
     pub spill_local_disk_reserved_space_percentage: OrderedFloat<f64>,
 
     #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
+
+    /// Maximum percentage of the global local spill quota that a single sort
+    /// operator may use for one query.
+    ///
+    /// Value range: 0-100. Effective only when local spill is enabled (there is
+    /// a valid local spill path and non-zero `spill_local_disk_max_bytes`).
+    #[clap(long, value_name = "PERCENT", default_value = "60")]
+    pub sort_spilling_disk_quota_ratio: u64,
+
+    /// Maximum percentage of the global local spill quota that window
+    /// partitioners may use for one query.
+    #[clap(long, value_name = "PERCENT", default_value = "60")]
+    pub window_partition_spilling_disk_quota_ratio: u64,
+
+    /// Maximum percentage of the global local spill quota that HTTP
+    /// result-set spilling may use for one query.
+    /// TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+    #[clap(long, value_name = "PERCENT", default_value = "0")]
+    pub result_set_spilling_disk_quota_ratio: u64,
 }
 
 impl SpillConfig {
@@ -3630,8 +3649,12 @@ impl Default for SpillConfig {
         Self {
             storage: None,
             spill_local_disk_path: String::new(),
-            spill_local_disk_reserved_space_percentage: OrderedFloat(30.0),
+            spill_local_disk_reserved_space_percentage: OrderedFloat(10.0),
             spill_local_disk_max_bytes: u64::MAX,
+            sort_spilling_disk_quota_ratio: 60,
+            window_partition_spilling_disk_quota_ratio: 60,
+            // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+            result_set_spilling_disk_quota_ratio: 0,
         }
     }
 }
@@ -3706,7 +3729,7 @@ mod cache_config_converters {
                 catalogs.insert(CATALOG_HIVE.to_string(), catalog);
             }
 
-            let spill = convert_local_spill_config(spill, &cache.disk_cache_config)?;
+            let spill = convert_local_spill_config(spill)?;
 
             Ok(InnerConfig {
                 query: query.try_into()?,
@@ -3803,10 +3826,7 @@ mod cache_config_converters {
         }
     }
 
-    fn convert_local_spill_config(
-        spill: SpillConfig,
-        cache: &DiskCacheConfig,
-    ) -> Result<inner::SpillConfig> {
+    fn convert_local_spill_config(spill: SpillConfig) -> Result<inner::SpillConfig> {
         // Determine configuration based on auto-detected spill type
         let spill_type = spill.get_spill_type();
         let (local_writeable_root, path, reserved_disk_ratio, global_bytes_limit, storage_params) =
@@ -3818,7 +3838,7 @@ mod cache_config_converters {
                         let reserved_ratio = storage
                             .fs
                             .reserved_space_percentage
-                            .unwrap_or(OrderedFloat(30.0))
+                            .unwrap_or(OrderedFloat(10.0))
                             / 100.0;
                         let max_bytes = storage.fs.max_bytes.unwrap_or(u64::MAX);
 
@@ -3864,16 +3884,11 @@ mod cache_config_converters {
                     )
                 }
                 _ => {
-                    // Default behavior for "default" type and any unrecognized types
-                    // Default behavior with backward compatibility
-                    let local_writeable_root = if cache.path != DiskCacheConfig::default().path
-                        && spill.spill_local_disk_path.is_empty()
-                    {
-                        Some(cache.path.clone())
-                    } else {
-                        None
-                    };
-
+                    // Default behavior for "default" type and any unrecognized types:
+                    // do NOT implicitly reuse the data cache disk. Local spill is
+                    // enabled only when explicitly configured via either
+                    //   - [spill.storage] with type = "fs", or
+                    //   - legacy spill_local_disk_path.
                     let storage_params = spill
                         .storage
                         .map(|storage| {
@@ -3883,7 +3898,7 @@ mod cache_config_converters {
                         .transpose()?;
 
                     (
-                        local_writeable_root,
+                        None,
                         spill.spill_local_disk_path,
                         spill.spill_local_disk_reserved_space_percentage / 100.0,
                         spill.spill_local_disk_max_bytes,
@@ -3898,6 +3913,10 @@ mod cache_config_converters {
             reserved_disk_ratio,
             global_bytes_limit,
             storage_params,
+            sort_spilling_disk_quota_ratio: spill.sort_spilling_disk_quota_ratio,
+            window_partition_spilling_disk_quota_ratio: spill
+                .window_partition_spilling_disk_quota_ratio,
+            result_set_spilling_disk_quota_ratio: spill.result_set_spilling_disk_quota_ratio,
         })
     }
 
@@ -3916,6 +3935,10 @@ mod cache_config_converters {
                 spill_local_disk_path: value.path,
                 spill_local_disk_reserved_space_percentage: value.reserved_disk_ratio * 100.0,
                 spill_local_disk_max_bytes: value.global_bytes_limit,
+                sort_spilling_disk_quota_ratio: value.sort_spilling_disk_quota_ratio,
+                window_partition_spilling_disk_quota_ratio: value
+                    .window_partition_spilling_disk_quota_ratio,
+                result_set_spilling_disk_quota_ratio: value.result_set_spilling_disk_quota_ratio,
             }
         }
     }
