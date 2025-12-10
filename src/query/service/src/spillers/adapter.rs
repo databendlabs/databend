@@ -62,9 +62,9 @@ impl SpillAdapter for PartitionAdapter {
             .unwrap()
             .insert(location.clone(), layout.clone());
 
-        if location.is_remote() {
-            self.ctx.as_ref().incr_spill_progress(1, size);
-        }
+        // Progress (SpillTotalStats) should reflect total spill volume,
+        // including both local and remote spill files.
+        self.ctx.as_ref().incr_spill_progress(1, size);
         self.ctx.as_ref().add_spill_file(location, layout);
     }
 
@@ -579,9 +579,8 @@ impl SpillReader {
 
 impl SpillAdapter for Arc<QueryContext> {
     fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
-        if matches!(location, Location::Remote(_)) {
-            self.incr_spill_progress(1, size);
-        }
+        // Count both local and remote spills in SpillTotalStats.
+        self.incr_spill_progress(1, size);
         self.as_ref().add_spill_file(location, layout);
     }
 
@@ -599,10 +598,16 @@ impl SpillAdapter for SortAdapter {
     fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
         match location {
             Location::Remote(_) => {
+                // Remote spill files are tracked in QueryContext for cleanup
+                // and contribute to the total spill progress.
                 self.ctx.as_ref().incr_spill_progress(1, size);
                 self.ctx.as_ref().add_spill_file(location, layout);
             }
             Location::Local(temp_path) => {
+                // Local spill files are tracked only in-memory for sort, but
+                // should still be counted in SpillTotalStats so that progress
+                // reflects total (local + remote) spilled bytes/files.
+                self.ctx.as_ref().incr_spill_progress(1, size);
                 self.local_files.write().unwrap().insert(temp_path, layout);
             }
         }
