@@ -29,12 +29,12 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
-use databend_common_functions::aggregates::eval_aggr_for_test;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_io::HybridBitmap;
 use goldenfile::Mint;
 use itertools::Itertools;
 
+use super::eval_aggr_for_test;
 use super::run_agg_ast;
 use super::simulate_two_groups_group_by;
 use super::AggregationSimulator;
@@ -42,12 +42,41 @@ use super::AggregationSimulator;
 fn eval_aggr(
     name: &str,
     params: Vec<databend_common_expression::Scalar>,
-    columns: &[Column],
+    entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
-    eval_aggr_for_test(name, params, &block_entries, rows, true, sort_descs)
+    let res1 = eval_aggr_for_test(
+        name,
+        params.clone(),
+        entries,
+        rows,
+        false,
+        true,
+        sort_descs.clone(),
+    )?;
+
+    let res2 = eval_aggr_for_test(name, params, entries, rows, true, true, sort_descs)?;
+    assert_eq!(res1, res2);
+    Ok(res1)
+}
+
+fn eval_aggr_without_each_row(
+    name: &str,
+    params: Vec<databend_common_expression::Scalar>,
+    entries: &[BlockEntry],
+    rows: usize,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
+) -> Result<(Column, DataType)> {
+    eval_aggr_for_test(
+        name,
+        params.clone(),
+        entries,
+        rows,
+        false,
+        true,
+        sort_descs.clone(),
+    )
 }
 
 #[test]
@@ -55,7 +84,8 @@ fn test_aggr_functions() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("agg.txt").unwrap();
 
-    test_count(file, eval_aggr);
+    // WARNING: AggregateCountFunction::accumulate_row do not check nulls
+    test_count(file, eval_aggr_without_each_row);
     test_count_distinct(file, eval_aggr);
     test_sum(file, eval_aggr);
     test_avg(file, eval_aggr);
@@ -80,8 +110,8 @@ fn test_aggr_functions() {
     test_agg_quantile_tdigest(file, eval_aggr);
     // FIXME
     test_agg_quantile_tdigest_weighted(file, |name, params, columns, rows, _sort_descs| {
-        let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
-        eval_aggr_for_test(name, params, &block_entries, rows, false, vec![])
+        let block_entries = columns.to_vec();
+        eval_aggr_for_test(name, params, &block_entries, rows, false, false, vec![])
     });
     test_agg_median(file, eval_aggr);
     test_agg_median_tdigest(file, eval_aggr);
@@ -135,8 +165,8 @@ fn test_aggr_functions_group_by() {
     test_agg_list_agg(file, simulate_two_groups_group_by);
     test_agg_bitmap_count(file, simulate_two_groups_group_by);
     test_agg_bitmap(file, simulate_two_groups_group_by);
-    test_agg_group_array_moving_avg(file, eval_aggr);
-    test_agg_group_array_moving_sum(file, eval_aggr);
+    test_agg_group_array_moving_avg(file, simulate_two_groups_group_by);
+    test_agg_group_array_moving_sum(file, simulate_two_groups_group_by);
     test_agg_json_agg(file, eval_aggr);
     test_agg_json_array_agg(file, eval_aggr);
     test_agg_json_object_agg(file, eval_aggr);
@@ -1053,6 +1083,20 @@ fn test_agg_array_agg(file: &mut impl Write, simulator: impl AggregationSimulato
     run_agg_ast(
         file,
         "array_agg(1)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "array_agg(const_int)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "array_agg(const_int_null)",
         get_example().as_slice(),
         simulator,
         vec![],

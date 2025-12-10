@@ -35,6 +35,7 @@ use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
+use crate::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BooleanType;
@@ -248,4 +249,16 @@ impl ReturnType for BooleanType {
 pub struct BooleanDomain {
     pub has_false: bool,
     pub has_true: bool,
+}
+
+impl Value<BooleanType> {
+    pub fn and_bitmap(&self, rhs: Option<&Bitmap>) -> Self {
+        match (self, rhs) {
+            (Value::Scalar(false), _) => Value::Scalar(false),
+            (Value::Scalar(true), None) => Value::Scalar(true),
+            (Value::Scalar(true), Some(rhs)) => Value::Column(rhs.clone()),
+            (Value::Column(_), None) => self.clone(),
+            (Value::Column(b), Some(rhs)) => Value::Column(b & rhs),
+        }
+    }
 }

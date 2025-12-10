@@ -28,6 +28,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::Value;
 
 use super::AggrState;
 use super::AggrStateLoc;
@@ -120,45 +121,20 @@ impl AggregateFunction for AggregateIfCombinator {
             return Ok(());
         }
 
-        let mut predicate;
-        let bitmap = match &block[self.argument_len - 1] {
-            BlockEntry::Column(column) => {
-                predicate = BooleanType::try_downcast_column(column).unwrap();
-                if predicate.null_count() == predicate.len() {
-                    return Ok(());
-                }
-                if predicate.true_count() == predicate.len() {
-                    validity
-                } else {
-                    match validity {
-                        None => Some(&predicate),
-                        Some(validity) => {
-                            predicate = validity & (&predicate);
-                            if predicate.null_count() == predicate.len() {
-                                return Ok(());
-                            }
-                            if predicate.true_count() == predicate.len() {
-                                None
-                            } else {
-                                Some(&predicate)
-                            }
-                        }
-                    }
-                }
+        let value = block[self.argument_len - 1].value();
+        let value = value.try_downcast::<BooleanType>().unwrap();
+        let predicate = match value.and_bitmap(validity) {
+            Value::Scalar(true) => None,
+            Value::Scalar(false) => {
+                return Ok(());
             }
-            BlockEntry::Const(Scalar::Boolean(v), _, _) => {
-                if !*v {
-                    return Ok(());
-                }
-                validity
-            }
-            BlockEntry::Const(_, _, _) => unreachable!(),
+            Value::Column(predicate) => Some(predicate),
         };
 
         self.nested.accumulate(
             place,
             block.slice(0..self.argument_len - 1),
-            bitmap,
+            predicate.as_ref(),
             input_rows,
         )
     }

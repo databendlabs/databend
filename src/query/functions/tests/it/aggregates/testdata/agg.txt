@@ -1146,6 +1146,26 @@ evaluation (internal):
 +--------+--------------------------------------------------------------+
 
 
+ast: array_agg(const_int)
+evaluation (internal):
++-----------+--------------------------------------------------------------+
+| Column    | Data                                                         |
++-----------+--------------------------------------------------------------+
+| const_int | Const(Number(5_i32), Number(Int32), 4)                       |
+| Output    | ArrayColumn { values: Int32([5, 5, 5, 5]), offsets: [0, 4] } |
++-----------+--------------------------------------------------------------+
+
+
+ast: array_agg(const_int_null)
+evaluation (internal):
++----------------+----------------------------------------------------+
+| Column         | Data                                               |
++----------------+----------------------------------------------------+
+| const_int_null | Const(Null, Nullable(Number(Int32)), 4)            |
+| Output         | ArrayColumn { values: Int32([]), offsets: [0, 0] } |
++----------------+----------------------------------------------------+
+
+
 ast: array_agg('a')
 evaluation (internal):
 +--------+-------------------------------------------------------------------+
@@ -1466,7 +1486,7 @@ evaluation (internal):
 | Column | Data                                                                            |
 +--------+---------------------------------------------------------------------------------+
 | x_null | Column(NullableColumn { column: UInt64([1, 2, 3, 4]), validity: [0b____0011] }) |
-| Output | ArrayColumn { values: Float64([0.25, 0.75, 1.5, 2.5]), offsets: [0, 4] }        |
+| Output | ArrayColumn { values: Float64([0.25, 0.75, 0.75, 0.75]), offsets: [0, 4] }      |
 +--------+---------------------------------------------------------------------------------+
 
 
@@ -1476,7 +1496,7 @@ evaluation (internal):
 | Column | Data                                                                            |
 +--------+---------------------------------------------------------------------------------+
 | y_null | Column(NullableColumn { column: UInt64([1, 2, 3, 4]), validity: [0b____1100] }) |
-| Output | ArrayColumn { values: Float64([1, 2, 3, 4]), offsets: [0, 4] }                  |
+| Output | ArrayColumn { values: Float64([0, 0, 3, 4]), offsets: [0, 4] }                  |
 +--------+---------------------------------------------------------------------------------+
 
 
@@ -1548,7 +1568,7 @@ evaluation (internal):
 | Column | Data                                                                            |
 +--------+---------------------------------------------------------------------------------+
 | x_null | Column(NullableColumn { column: UInt64([1, 2, 3, 4]), validity: [0b____0011] }) |
-| Output | ArrayColumn { values: UInt64([1, 3, 6, 10]), offsets: [0, 4] }                  |
+| Output | ArrayColumn { values: UInt64([1, 3, 3, 3]), offsets: [0, 4] }                   |
 +--------+---------------------------------------------------------------------------------+
 
 
@@ -1558,7 +1578,7 @@ evaluation (internal):
 | Column | Data                                                                            |
 +--------+---------------------------------------------------------------------------------+
 | y_null | Column(NullableColumn { column: UInt64([1, 2, 3, 4]), validity: [0b____1100] }) |
-| Output | ArrayColumn { values: UInt64([1, 2, 3, 4]), offsets: [0, 4] }                   |
+| Output | ArrayColumn { values: UInt64([0, 0, 3, 4]), offsets: [0, 4] }                   |
 +--------+---------------------------------------------------------------------------------+
 
 

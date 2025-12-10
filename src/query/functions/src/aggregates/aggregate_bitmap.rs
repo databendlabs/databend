@@ -250,7 +250,7 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let view = entries[0].downcast::<BitmapType>().unwrap();
-        if view.len() == 0 {
+        if view.is_empty() {
             return Ok(());
         }
 
@@ -447,7 +447,7 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let view = entries[0].downcast::<NumberType<NUM>>().unwrap();
-        if view.len() == 0 {
+        if view.is_empty() {
             return Ok(());
         }
         let state = place.get::<BitmapAggState>();
@@ -711,7 +711,7 @@ where
     ) -> Result<()> {
         let predicate = self.get_filter_bitmap(block);
         let entry = match &block[0] {
-            BlockEntry::Const(scalar, data_type, n) => BlockEntry::new_const_column(
+            BlockEntry::Const(scalar, data_type, _) => BlockEntry::new_const_column(
                 data_type.clone(),
                 scalar.clone(),
                 predicate.true_count(),

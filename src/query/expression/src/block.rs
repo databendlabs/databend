@@ -26,6 +26,7 @@ use crate::schema::DataSchema;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::ArgType;
+use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::ValueType;
 use crate::Column;
@@ -83,18 +84,50 @@ impl BlockEntry {
 
     pub fn remove_nullable(self) -> Self {
         match self {
-            BlockEntry::Column(Column::Nullable(col)) => col.column().clone().into(),
+            BlockEntry::Column(Column::Nullable(col)) => {
+                let (col, _) = col.destructure();
+                col.into()
+            }
             BlockEntry::Column(_) => self,
             BlockEntry::Const(scalar, DataType::Nullable(inner), num_rows) => {
                 if scalar.is_null() {
-                    let mut builder = ColumnBuilder::with_capacity(&inner, 1);
-                    builder.push_default();
-                    BlockEntry::Const(builder.build_scalar(), *inner, num_rows)
+                    BlockEntry::Const(Scalar::default_value(&inner), *inner, num_rows)
                 } else {
                     BlockEntry::Const(scalar, *inner, num_rows)
                 }
             }
             _ => self,
+        }
+    }
+
+    pub fn split_nullable(self) -> (Self, Value<BooleanType>) {
+        match self {
+            BlockEntry::Column(Column::Nullable(col)) => {
+                let (column, validity) = col.destructure();
+                let validity = if validity.null_count() == 0 {
+                    Value::Scalar(true)
+                } else if validity.true_count() == 0 {
+                    Value::Scalar(false)
+                } else {
+                    Value::Column(validity)
+                };
+                (column.into(), validity)
+            }
+            BlockEntry::Column(_) => (self, Value::Scalar(true)),
+            BlockEntry::Const(scalar, DataType::Nullable(inner), num_rows) => {
+                if scalar.is_null() {
+                    (
+                        BlockEntry::Const(Scalar::default_value(&inner), *inner, num_rows),
+                        Value::Scalar(false),
+                    )
+                } else {
+                    (
+                        BlockEntry::Const(scalar, *inner, num_rows),
+                        Value::Scalar(true),
+                    )
+                }
+            }
+            _ => (self, Value::Scalar(true)),
         }
     }
 
@@ -234,6 +267,10 @@ impl<T: AccessType> ColumnView<T> {
             ColumnView::Const(_, num_rows) => *num_rows,
             ColumnView::Column(column) => T::column_len(column),
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn iter(&self) -> ColumnViewIter<T> {
