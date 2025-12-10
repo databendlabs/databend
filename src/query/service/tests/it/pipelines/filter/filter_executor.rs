@@ -38,7 +38,7 @@ pub fn test_filter_executor() -> databend_common_exception::Result<()> {
             // Random number of rows, number of columns and random max depth of the filter expr.
             let num_rows = rng.gen_range(0..10000);
             let num_columns = rng.gen_range(1..10);
-            let max_depth = rng.gen_range(1..5);
+            let max_depth = rng.gen_range(1..10);
 
             // 1. Generate a random `DataBlock`.
             let columns = (0..num_columns)
