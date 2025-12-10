@@ -112,6 +112,9 @@ statement ok
 set enable_compact_after_write = 1;
 
 statement ok
+set auto_compaction_imperfect_blocks_threshold = 2;
+
+statement ok
 create table t1(a int) change_tracking = true
 
 statement ok

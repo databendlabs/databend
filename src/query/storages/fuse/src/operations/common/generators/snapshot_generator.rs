@@ -15,12 +15,15 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use log::info;
 
 use crate::operations::common::ConflictResolveContext;
 use crate::statistics::TableStatsGenerator;
@@ -89,6 +92,42 @@ pub fn decorate_snapshot(
         // `prev_snapshot_id` of the table when it first appeared in the transaction.
         let previous_of_previous = previous.as_ref().and_then(|prev| prev.prev_snapshot_id);
         snapshot.prev_snapshot_id = previous_of_previous;
+    }
+    Ok(())
+}
+
+pub(crate) fn set_compaction_num_block_hint(
+    ctx: &dyn TableContext,
+    table_name: &str,
+    summary: &Statistics,
+) {
+    if let Err(e) = try_set_compaction_num_block_hint(ctx, table_name, summary) {
+        log::warn!("set_compaction_num_block_hint failed: {}", e);
+    }
+}
+
+pub(crate) fn try_set_compaction_num_block_hint(
+    ctx: &dyn TableContext,
+    table_name: &str,
+    summary: &Statistics,
+) -> Result<()> {
+    // check if need to auto compact
+    // the algorithm is: if the number of imperfect blocks is greater than the threshold, then auto compact.
+    // the threshold is set by the setting `auto_compaction_imperfect_blocks_threshold`, default is 25.
+    let imperfect_count = summary.block_count - summary.perfect_block_count;
+    let auto_compaction_imperfect_blocks_threshold = ctx
+        .get_settings()
+        .get_auto_compaction_imperfect_blocks_threshold()?;
+    if imperfect_count >= auto_compaction_imperfect_blocks_threshold {
+        // If imperfect_count is larger, SLIGHTLY increase the number of blocks
+        // eligible for auto-compaction, this adjustment is intended to help reduce
+        // fragmentation over time.
+        let compact_num_block_hint = std::cmp::min(
+            imperfect_count,
+            (auto_compaction_imperfect_blocks_threshold as f64 * 1.5).ceil() as u64,
+        );
+        info!("set compact_num_block_hint to {compact_num_block_hint }");
+        ctx.set_compaction_num_block_hint(table_name, compact_num_block_hint);
     }
     Ok(())
 }

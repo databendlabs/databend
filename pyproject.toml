@@ -1,0 +1,15 @@
+[project]
+name = "databend"
+version = "0.1.0"
+description = "Databend"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+
+[tool.uv.workspace]
+members = [
+    "benchmark",
+    "tests/udf",
+    "tests/cloud_control_server",
+]

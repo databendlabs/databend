@@ -497,10 +497,6 @@ impl Settings {
         Ok(self.try_get_u64("aggregate_spilling_memory_ratio")? as usize)
     }
 
-    pub fn get_window_partition_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
-        Ok(self.try_get_u64("window_partition_spilling_to_disk_bytes_limit")? as usize)
-    }
-
     pub fn get_window_partition_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("window_partition_spilling_memory_ratio")? as usize)
     }
@@ -523,14 +519,6 @@ impl Settings {
 
     pub fn get_sort_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("sort_spilling_memory_ratio")? as usize)
-    }
-
-    pub fn get_sort_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
-        Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
-    }
-
-    pub fn get_result_set_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
-        Ok(self.try_get_u64("result_set_spilling_to_disk_bytes_limit")? as usize)
     }
 
     pub fn get_enable_result_set_spilling(&self) -> Result<bool> {

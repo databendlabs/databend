@@ -24,5 +24,6 @@ pub use conflict_resolve_context::SnapshotChanges;
 pub use conflict_resolve_context::SnapshotMerged;
 pub use mutation_generator::MutationGenerator;
 pub use snapshot_generator::decorate_snapshot;
+pub(crate) use snapshot_generator::set_compaction_num_block_hint;
 pub use snapshot_generator::SnapshotGenerator;
 pub use truncate_generator::TruncateGenerator;

@@ -54,6 +54,7 @@ use parquet::file::writer::SerializedRowGroupWriter;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::async_buffer::BufferWriter;
+use super::async_buffer::SpillTarget;
 use super::Location;
 use super::SpillerInner;
 use super::SpillsBufferPool;
@@ -411,15 +412,23 @@ impl RangeFetchPlan {
 }
 
 pub enum AnyFileWriter {
-    Local(FileWriter<LocalWriter>),
-    Remote(String, FileWriter<BufferWriter>),
+    Local {
+        /// Absolute path string for symmetry with remote; TempPath is kept
+        /// inside the writer to avoid sharing/cloning while writing.
+        path: String,
+        writer: FileWriter<LocalWriter>,
+    },
+    Remote {
+        path: String,
+        writer: FileWriter<BufferWriter>,
+    },
 }
 
 impl AnyFileWriter {
     pub(super) fn new_row_group(&self) -> RowGroupEncoder {
         match self {
-            AnyFileWriter::Local(file_writer) => file_writer.new_row_group(),
-            AnyFileWriter::Remote(_, file_writer) => file_writer.new_row_group(),
+            AnyFileWriter::Local { writer, .. } => writer.new_row_group(),
+            AnyFileWriter::Remote { writer, .. } => writer.new_row_group(),
         }
     }
 }
@@ -441,23 +450,30 @@ impl<A> SpillerInner<A> {
                 let align = dir.block_alignment();
                 let buf = DmaWriteBuf::new(align, chunk);
 
+                let path_str = path.as_ref().display().to_string();
+
                 let w = LocalWriter {
                     dir: dir.clone(),
                     path,
                     file,
                     buf,
                 };
-                return Ok(AnyFileWriter::Local(FileWriter::new(props, w)?));
+                let writer = FileWriter::new(props, w)?;
+                return Ok(AnyFileWriter::Local {
+                    path: path_str,
+                    writer,
+                });
             }
         };
 
         let remote_location = self.create_unique_location();
-        let remote = pool.buffer_writer(op.clone(), remote_location.clone())?;
+        let remote =
+            pool.buffer_writer(op.clone(), remote_location.clone(), SpillTarget::Remote)?;
 
-        Ok(AnyFileWriter::Remote(
-            remote_location,
-            FileWriter::new(props, remote)?,
-        ))
+        Ok(AnyFileWriter::Remote {
+            path: remote_location.clone(),
+            writer: FileWriter::new(props, remote)?,
+        })
     }
 
     pub(super) fn load_row_groups(

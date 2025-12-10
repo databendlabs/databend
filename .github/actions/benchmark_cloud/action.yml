@@ -46,14 +46,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install script dependencies
-      shell: bash
-      run: |
-        sudo apt-get update -yq
-        sudo apt-get install -yq python3
-
     - name: Prepare
-      working-directory: benchmark/clickbench
+      working-directory: benchmark
       shell: bash
       id: prepare
       env:
@@ -64,7 +58,7 @@ runs:
         else
           database="${{ inputs.database }}"
           if [[ -z "$database" ]]; then
-            database="clickbench"
+            database="benchmark"
           fi
           echo "database=$database" >> $GITHUB_OUTPUT
         fi
@@ -79,7 +73,7 @@ runs:
         echo "tries=$tries" >> $GITHUB_OUTPUT
 
     - name: Run Benchmark
-      working-directory: benchmark/clickbench
+      working-directory: benchmark
       env:
         BENCHMARK_ID: ${{ inputs.run_id }}
         BENCHMARK_DATASET: ${{ inputs.dataset }}
@@ -104,8 +98,8 @@ runs:
       with:
         name: benchmark-${{ inputs.dataset }}-${{ inputs.size }}-cache-${{ inputs.cache_size }}
         path: |
-          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-cache-${{ inputs.cache_size }}.json
-          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-cache-${{ inputs.cache_size }}-*.ndjson
+          benchmark/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-cache-${{ inputs.cache_size }}.json
+          benchmark/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-cache-${{ inputs.cache_size }}-*.ndjson
 
     - name: Remove warehouse
       if: always()

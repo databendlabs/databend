@@ -21,6 +21,7 @@ use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::PoisonError;
+use std::time::Instant;
 
 use arrow_schema::Schema;
 use bytes::Bytes;
@@ -36,6 +37,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_storages_parquet::parquet_reader::row_group::get_ranges;
 use databend_common_storages_parquet::parquet_reader::RowGroupCore;
 use databend_common_storages_parquet::ReadSettings;
@@ -56,7 +58,34 @@ use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 
+use super::record_read_profile;
+use super::record_write_profile;
 const CHUNK_SIZE: usize = 4 * 1024 * 1024;
+
+#[derive(Clone, Copy)]
+pub enum SpillTarget {
+    Local,
+    Remote,
+}
+
+impl SpillTarget {
+    pub fn is_local(&self) -> bool {
+        matches!(self, SpillTarget::Local)
+    }
+
+    /// Derive spill target (local vs remote) from storage params.
+    ///
+    /// Today we only treat `StorageParams::Fs` as local, everything
+    /// else (S3, Azure, memory, etc.) is considered remote. Centralizing
+    /// this decision here keeps higher-level operators simpler and avoids
+    /// duplicating the matching logic at each call site.
+    pub fn from_storage_params(params: Option<&StorageParams>) -> Self {
+        match params {
+            Some(StorageParams::Fs(_)) => SpillTarget::Local,
+            _ => SpillTarget::Remote,
+        }
+    }
+}
 
 /// Buffer Pool Workflow for Spill Operations:
 ///
@@ -182,12 +211,21 @@ impl SpillsBufferPool {
             .expect("Buffer pool working queue need unbounded.");
     }
 
-    pub fn buffer_write(self: &Arc<SpillsBufferPool>, writer: Writer) -> BufferWriter {
-        BufferWriter::new(writer, self.clone())
+    pub fn buffer_write(
+        self: &Arc<SpillsBufferPool>,
+        writer: Writer,
+        target: SpillTarget,
+    ) -> BufferWriter {
+        BufferWriter::new(writer, self.clone(), target)
     }
 
-    pub fn writer(self: &Arc<Self>, op: Operator, path: String) -> Result<SpillsDataWriter> {
-        let writer = self.buffer_writer(op, path)?;
+    pub fn writer(
+        self: &Arc<Self>,
+        op: Operator,
+        path: String,
+        target: SpillTarget,
+    ) -> Result<SpillsDataWriter> {
+        let writer = self.buffer_writer(op, path, target)?;
         Ok(SpillsDataWriter::Uninitialize(Some(writer)))
     }
 
@@ -195,6 +233,7 @@ impl SpillsBufferPool {
         self: &Arc<Self>,
         op: Operator,
         path: String,
+        target: SpillTarget,
     ) -> Result<BufferWriter> {
         let pending_response = BufferOperatorResp::pending();
 
@@ -209,7 +248,7 @@ impl SpillsBufferPool {
             .try_send(operator)
             .expect("Buffer pool working queue need unbounded.");
 
-        Ok(self.buffer_write(pending_response.wait_and_take()?))
+        Ok(self.buffer_write(pending_response.wait_and_take()?, target))
     }
 
     pub fn reader(
@@ -217,8 +256,9 @@ impl SpillsBufferPool {
         op: Operator,
         path: String,
         row_groups: Vec<RowGroupMetaData>,
+        target: SpillTarget,
     ) -> Result<SpillsDataReader> {
-        SpillsDataReader::create(path, op, row_groups, self.clone())
+        SpillsDataReader::create(path, op, row_groups, self.clone(), target)
     }
 
     pub fn fetch_ranges(
@@ -257,16 +297,22 @@ pub struct BufferWriter {
     buffer_pool: Arc<SpillsBufferPool>,
     pending_buffers: VecDeque<Bytes>,
     pending_response: Option<Arc<BufferOperatorResp<BufferWriteResp>>>,
+    target: SpillTarget,
 }
 
 impl BufferWriter {
-    pub fn new(writer: Writer, buffer_pool: Arc<SpillsBufferPool>) -> BufferWriter {
+    pub fn new(
+        writer: Writer,
+        buffer_pool: Arc<SpillsBufferPool>,
+        target: SpillTarget,
+    ) -> BufferWriter {
         BufferWriter {
             buffer_pool,
             writer: Some(writer),
             current_bytes: None,
             pending_buffers: VecDeque::new(),
             pending_response: None,
+            target,
         }
     }
 
@@ -307,6 +353,8 @@ impl BufferWriter {
                 writer,
                 response: pending_response,
                 buffers: std::mem::take(&mut self.pending_buffers),
+                target: self.target,
+                start: Instant::now(),
             });
 
             self.buffer_pool.operator(operator);
@@ -345,6 +393,7 @@ impl BufferWriter {
             buffer_pool: self.buffer_pool.clone(),
             pending_buffers: Default::default(),
             pending_response: None,
+            target: self.target,
         })
         .close()
     }
@@ -534,6 +583,7 @@ pub struct SpillsDataReader {
     data_schema: DataSchemaRef,
     field_levels: FieldLevels,
     read_bytes: usize,
+    target: SpillTarget,
 }
 
 impl SpillsDataReader {
@@ -542,6 +592,7 @@ impl SpillsDataReader {
         operator: Operator,
         row_groups: Vec<RowGroupMetaData>,
         spills_buffer_pool: Arc<SpillsBufferPool>,
+        target: SpillTarget,
     ) -> Result<Self> {
         if row_groups.is_empty() {
             return Err(ErrorCode::Internal(
@@ -566,6 +617,7 @@ impl SpillsDataReader {
             field_levels,
             row_groups: VecDeque::from(row_groups),
             read_bytes: 0,
+            target,
         })
     }
 
@@ -577,6 +629,8 @@ impl SpillsDataReader {
         let Some(row_group) = self.row_groups.pop_front() else {
             return Ok(None);
         };
+
+        let start = Instant::now();
 
         let mut row_group = RowGroupCore::new(row_group, None);
 
@@ -606,6 +660,7 @@ impl SpillsDataReader {
         )?;
         let batch = reader.next().transpose()?.unwrap();
         debug_assert!(reader.next().is_none());
+        record_read_profile(self.target, &start, read_bytes.get());
         Ok(Some(DataBlock::from_record_batch(
             &self.data_schema,
             &batch,
@@ -623,6 +678,8 @@ pub struct BufferWriteOperator {
     writer: Writer,
     buffers: VecDeque<Bytes>,
     response: Arc<BufferOperatorResp<BufferWriteResp>>,
+    target: SpillTarget,
+    start: Instant,
 }
 
 pub struct BufferCloseResp {
@@ -714,7 +771,9 @@ impl Background {
     pub async fn recv(&mut self, op: BufferOperator) {
         match op {
             BufferOperator::Write(mut op) => {
+                let start = op.start;
                 let bytes = op.buffers.clone();
+                let bytes_len = bytes.iter().map(|b| b.len()).sum();
                 let mut error = op
                     .writer
                     .write(op.buffers)
@@ -745,6 +804,8 @@ impl Background {
                     error,
                     writer: op.writer,
                 });
+
+                record_write_profile(op.target, &start, bytes_len);
             }
             BufferOperator::Close(mut op) => {
                 let res = op.writer.close().await;
@@ -811,7 +872,7 @@ mod tests {
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("test_file").await.unwrap();
 
-        let mut buffer_writer = BufferWriter::new(writer, pool);
+        let mut buffer_writer = BufferWriter::new(writer, pool, SpillTarget::Remote);
 
         let data = b"Hello, World!";
         let written = buffer_writer.write(data).unwrap();
@@ -829,7 +890,7 @@ mod tests {
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("large_file").await.unwrap();
 
-        let mut buffer_writer = BufferWriter::new(writer, pool);
+        let mut buffer_writer = BufferWriter::new(writer, pool, SpillTarget::Remote);
 
         // Write data larger than single buffer
         let large_data = vec![0u8; 8 * 1024 * 1024]; // 8MB
@@ -848,7 +909,7 @@ mod tests {
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("multi_write_file").await.unwrap();
 
-        let mut buffer_writer = BufferWriter::new(writer, pool);
+        let mut buffer_writer = BufferWriter::new(writer, pool, SpillTarget::Remote);
 
         let mut total_written = 0;
         for i in 0..100 {
@@ -870,7 +931,7 @@ mod tests {
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("backpressure_test").await.unwrap();
 
-        let mut buffer_writer = BufferWriter::new(writer, pool.clone());
+        let mut buffer_writer = BufferWriter::new(writer, pool.clone(), SpillTarget::Remote);
 
         // Fill the first buffer
         let data = vec![0u8; CHUNK_SIZE];
@@ -923,7 +984,7 @@ mod tests {
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("empty_test").await.unwrap();
 
-        let mut buffer_writer = BufferWriter::new(writer, pool);
+        let mut buffer_writer = BufferWriter::new(writer, pool, SpillTarget::Remote);
 
         let written = buffer_writer.write(b"").unwrap();
         assert_eq!(written, 0);
@@ -940,7 +1001,7 @@ mod tests {
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("no_write_test").await.unwrap();
 
-        let buffer_writer = BufferWriter::new(writer, pool);
+        let buffer_writer = BufferWriter::new(writer, pool, SpillTarget::Remote);
 
         // Should be able to close without any writes
         let metadata = buffer_writer.close().unwrap();
@@ -966,7 +1027,7 @@ mod tests {
                     .writer(&format!("concurrent_{}", i))
                     .await
                     .unwrap();
-                let mut buffer_writer = BufferWriter::new(writer, pool_clone);
+                let mut buffer_writer = BufferWriter::new(writer, pool_clone, SpillTarget::Remote);
 
                 for j in 0..10 {
                     let data = format!("Writer {} - Line {}\n", i, j);
@@ -996,7 +1057,7 @@ mod tests {
         let operator = create_test_operator().unwrap();
         let writer = operator.writer("error_test").await.unwrap();
 
-        let mut buffer_writer = pool.buffer_write(writer);
+        let mut buffer_writer = pool.buffer_write(writer, SpillTarget::Remote);
         buffer_writer.write_all(b"test data").unwrap();
 
         // Close once
@@ -1004,12 +1065,12 @@ mod tests {
 
         // Create another writer and try to close it twice
         let writer2 = operator.writer("error_test2").await.unwrap();
-        let buffer_writer2 = pool.buffer_write(writer2);
+        let buffer_writer2 = pool.buffer_write(writer2, SpillTarget::Remote);
         let _metadata = buffer_writer2.close().unwrap();
 
         // Second close should return error (create new writer for this test)
         let writer3 = operator.writer("error_test3").await.unwrap();
-        let buffer_writer3 = pool.buffer_write(writer3);
+        let buffer_writer3 = pool.buffer_write(writer3, SpillTarget::Remote);
         let _metadata = buffer_writer3.close().unwrap();
     }
 }

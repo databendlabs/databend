@@ -25,6 +25,7 @@ mod test_memory;
 
 pub use adapter::*;
 pub use async_buffer::BufferWriter;
+pub use async_buffer::SpillTarget;
 pub use async_buffer::SpillsBufferPool;
 pub use async_buffer::SpillsDataReader;
 pub use async_buffer::SpillsDataWriter;

@@ -115,7 +115,7 @@ merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t
 
 ## without order by
 query TTT
-select * from t1_separate;
+select * from t1_separate order by a;
 ----
 1 a5 b5
 3 a6 b6
@@ -129,7 +129,7 @@ merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t
 4
 
 query TTT
-select * from t1_separate;
+select * from t1_separate order by a;
 ----
 1 a5 b5
 3 a6 b6
@@ -145,14 +145,8 @@ merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t
 ----
 2 4
 
-query T
-select count(*) from fuse_block('db','t1_separate');
-----
-1
-
-## we will do compact
 query TTT
-select * from t1_separate;
+select * from t1_separate order by a;
 ----
 1 a5 b5
 3 a6 b6

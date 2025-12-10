@@ -1,0 +1,9 @@
+[project]
+name = "benchmark"
+version = "0.1.0"
+description = "Databend benchmark"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "jinja2>=3.1.6",
+]

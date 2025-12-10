@@ -9,9 +9,6 @@ statement ok
 set max_memory_usage = 1024*1024*200;
 
 statement ok
-set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
-
-statement ok
 set max_block_size = 2;
 
 statement ok
@@ -30,6 +27,3 @@ unset max_block_size;
 
 statement ok
 UNSET max_memory_usage;
-
-statement ok
-unset window_partition_spilling_to_disk_bytes_limit;

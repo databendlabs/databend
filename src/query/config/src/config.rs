@@ -784,22 +784,6 @@ pub struct FsStorageConfig {
         default_value = "_data"
     )]
     pub data_path: String,
-
-    /// Percentage of disk space to reserve (0.0-100.0) - for spill usage
-    #[clap(skip)]
-    #[serde(default = "FsStorageConfig::default_reserved_space_percentage")]
-    pub reserved_space_percentage: Option<OrderedFloat<f64>>,
-
-    /// Maximum bytes allowed for spill (0 = unlimited) - for spill usage  
-    #[clap(skip)]
-    #[serde(default)]
-    pub max_bytes: Option<u64>,
-}
-
-impl FsStorageConfig {
-    fn default_reserved_space_percentage() -> Option<OrderedFloat<f64>> {
-        None // Use None as default, will use system default (30.0) if not specified
-    }
 }
 
 impl Default for FsStorageConfig {
@@ -812,8 +796,6 @@ impl From<InnerStorageFsConfig> for FsStorageConfig {
     fn from(inner: InnerStorageFsConfig) -> Self {
         Self {
             data_path: inner.root,
-            reserved_space_percentage: None,
-            max_bytes: None,
         }
     }
 }
@@ -3567,72 +3549,45 @@ impl Default for DiskCacheConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct SpillConfig {
-    /// Unified spill storage configuration
-    /// Auto-detects type based on storage.type field:
-    /// - "fs": Local filesystem spill
-    /// - "s3": S3 remote spill  
-    /// - "azblob": Azure blob remote spill
-    /// - etc.
-    ///   If not configured, uses main data storage with _spill prefix (default)
-    ///
-    /// Note: Spill operator created based on this config will only use Standard S3 storage class,
-    /// regardless of any other configured storage class
-    #[clap(skip)]
-    pub storage: Option<StorageConfig>,
-
-    // Legacy fields for backward compatibility
     /// Path of spill to local disk. disable if it's empty.
     #[clap(long, value_name = "VALUE", default_value = "")]
     pub spill_local_disk_path: String,
 
-    #[clap(long, value_name = "VALUE", default_value = "30")]
+    #[clap(long, value_name = "VALUE", default_value = "10")]
     /// Percentage of reserve disk space that won't be used for spill to local disk.
     pub spill_local_disk_reserved_space_percentage: OrderedFloat<f64>,
 
     #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
-}
 
-impl SpillConfig {
-    /// Get the spill type based on configuration
-    /// Auto-detects from storage configuration
-    pub fn get_spill_type(&self) -> String {
-        // Check new unified storage configuration first (higher priority)
-        if let Some(ref storage) = self.storage {
-            match storage.typ.as_str() {
-                "fs" => "fs".to_string(),
-                "s3" => "s3".to_string(),
-                "azblob" => "azblob".to_string(),
-                "gcs" => "gcs".to_string(),
-                "oss" => "oss".to_string(),
-                "obs" => "obs".to_string(),
-                "cos" => "cos".to_string(),
-                "webhdfs" => "webhdfs".to_string(),
-                _ => "remote".to_string(), // fallback for other storage types
-            }
-        } else if !self.spill_local_disk_path.is_empty() {
-            // Fall back to legacy configuration
-            "fs".to_string() // legacy local disk maps to fs
-        } else {
-            "default".to_string()
-        }
-    }
+    // TODO: We need to fix StorageConfig so that it supports command line injections.
+    #[clap(skip)]
+    pub storage: Option<StorageConfig>,
 
-    /// Check if this is using legacy local disk configuration
-    pub fn is_legacy_local_disk(&self) -> bool {
-        !self.spill_local_disk_path.is_empty()
-    }
+    /// Maximum percentage of the global local spill quota that a single sort
+    /// operator may use for one query.
+    ///
+    /// Value range: 0-100. Effective only when local spill is enabled (there is
+    /// a valid local spill path and non-zero `spill_local_disk_max_bytes`).
+    #[clap(long, value_name = "PERCENT", default_value = "60")]
+    pub sort_spilling_disk_quota_ratio: u64,
+
+    /// Maximum percentage of the global local spill quota that window
+    /// partitioners may use for one query.
+    #[clap(long, value_name = "PERCENT", default_value = "60")]
+    pub window_partition_spilling_disk_quota_ratio: u64,
+
+    /// Maximum percentage of the global local spill quota that HTTP
+    /// result-set spilling may use for one query.
+    /// TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
+    #[clap(long, value_name = "PERCENT", default_value = "0")]
+    pub result_set_spilling_disk_quota_ratio: u64,
 }
 
 impl Default for SpillConfig {
     fn default() -> Self {
-        Self {
-            storage: None,
-            spill_local_disk_path: String::new(),
-            spill_local_disk_reserved_space_percentage: OrderedFloat(30.0),
-            spill_local_disk_max_bytes: u64::MAX,
-        }
+        inner::SpillConfig::default().into()
     }
 }
 
@@ -3706,7 +3661,7 @@ mod cache_config_converters {
                 catalogs.insert(CATALOG_HIVE.to_string(), catalog);
             }
 
-            let spill = convert_local_spill_config(spill, &cache.disk_cache_config)?;
+            let spill = convert_local_spill_config(spill)?;
 
             Ok(InnerConfig {
                 query: query.try_into()?,
@@ -3803,101 +3758,25 @@ mod cache_config_converters {
         }
     }
 
-    fn convert_local_spill_config(
-        spill: SpillConfig,
-        cache: &DiskCacheConfig,
-    ) -> Result<inner::SpillConfig> {
-        // Determine configuration based on auto-detected spill type
-        let spill_type = spill.get_spill_type();
-        let (local_writeable_root, path, reserved_disk_ratio, global_bytes_limit, storage_params) =
-            match spill_type.as_str() {
-                "fs" => {
-                    if let Some(ref storage) = spill.storage {
-                        // Use new filesystem storage configuration (higher priority)
-                        let fs_path = storage.fs.data_path.clone();
-                        let reserved_ratio = storage
-                            .fs
-                            .reserved_space_percentage
-                            .unwrap_or(OrderedFloat(30.0))
-                            / 100.0;
-                        let max_bytes = storage.fs.max_bytes.unwrap_or(u64::MAX);
-
-                        // Validate fs configuration
-                        if fs_path.is_empty() {
-                            return Err(ErrorCode::InvalidConfig(
-                                "FS storage configured but data_path is empty. Either specify a path or remove the fs storage configuration to use default behavior."
-                            ));
-                        } else {
-                            (None, fs_path, reserved_ratio, max_bytes, None)
-                        }
-                    } else if spill.is_legacy_local_disk() {
-                        // Fall back to legacy local disk configuration
-                        (
-                            None,
-                            spill.spill_local_disk_path,
-                            spill.spill_local_disk_reserved_space_percentage / 100.0,
-                            spill.spill_local_disk_max_bytes,
-                            None,
-                        )
-                    } else {
-                        return Err(ErrorCode::InvalidConfig(
-                            "FS storage configuration not found",
-                        ));
-                    }
-                }
-                "s3" | "azblob" | "gcs" | "oss" | "obs" | "cos" | "webhdfs" | "remote" => {
-                    // Use remote storage configuration for all remote storage types
-                    let storage_params = spill
-                        .storage
-                        .map(|storage| {
-                            let storage: InnerStorageConfig = storage.try_into()?;
-                            Ok::<_, ErrorCode>(storage.params)
-                        })
-                        .transpose()?;
-
-                    (
-                        None,
-                        String::new(),
-                        OrderedFloat(0.3),
-                        u64::MAX,
-                        storage_params,
-                    )
-                }
-                _ => {
-                    // Default behavior for "default" type and any unrecognized types
-                    // Default behavior with backward compatibility
-                    let local_writeable_root = if cache.path != DiskCacheConfig::default().path
-                        && spill.spill_local_disk_path.is_empty()
-                    {
-                        Some(cache.path.clone())
-                    } else {
-                        None
-                    };
-
-                    let storage_params = spill
-                        .storage
-                        .map(|storage| {
-                            let storage: InnerStorageConfig = storage.try_into()?;
-                            Ok::<_, ErrorCode>(storage.params)
-                        })
-                        .transpose()?;
-
-                    (
-                        local_writeable_root,
-                        spill.spill_local_disk_path,
-                        spill.spill_local_disk_reserved_space_percentage / 100.0,
-                        spill.spill_local_disk_max_bytes,
-                        storage_params,
-                    )
-                }
-            };
+    fn convert_local_spill_config(spill: SpillConfig) -> Result<inner::SpillConfig> {
+        let storage_params = spill
+            .storage
+            .map(|storage| {
+                let storage: InnerStorageConfig = storage.try_into()?;
+                Ok::<_, ErrorCode>(storage.params)
+            })
+            .transpose()?;
 
         Ok(inner::SpillConfig {
-            local_writeable_root,
-            path,
-            reserved_disk_ratio,
-            global_bytes_limit,
+            local_writeable_root: None,
+            path: spill.spill_local_disk_path,
+            reserved_disk_ratio: spill.spill_local_disk_reserved_space_percentage / 100.0,
+            global_bytes_limit: spill.spill_local_disk_max_bytes,
             storage_params,
+            sort_spilling_disk_quota_ratio: spill.sort_spilling_disk_quota_ratio,
+            window_partition_spilling_disk_quota_ratio: spill
+                .window_partition_spilling_disk_quota_ratio,
+            result_set_spilling_disk_quota_ratio: spill.result_set_spilling_disk_quota_ratio,
         })
     }
 
@@ -3912,10 +3791,14 @@ mod cache_config_converters {
             });
 
             Self {
-                storage,
                 spill_local_disk_path: value.path,
                 spill_local_disk_reserved_space_percentage: value.reserved_disk_ratio * 100.0,
                 spill_local_disk_max_bytes: value.global_bytes_limit,
+                storage,
+                sort_spilling_disk_quota_ratio: value.sort_spilling_disk_quota_ratio,
+                window_partition_spilling_disk_quota_ratio: value
+                    .window_partition_spilling_disk_quota_ratio,
+                result_set_spilling_disk_quota_ratio: value.result_set_spilling_disk_quota_ratio,
             }
         }
     }
