@@ -211,20 +211,20 @@ impl StorageConfig {
 impl SpillConfig {
     fn mask_display(&self) -> Self {
         let Self {
-            ref storage,
             ref spill_local_disk_path,
             spill_local_disk_reserved_space_percentage,
             spill_local_disk_max_bytes,
+            ref storage,
             sort_spilling_disk_quota_ratio,
             window_partition_spilling_disk_quota_ratio,
             result_set_spilling_disk_quota_ratio,
         } = *self;
 
         Self {
-            storage: storage.as_ref().map(|storage| storage.mask_display()),
             spill_local_disk_path: spill_local_disk_path.clone(),
             spill_local_disk_reserved_space_percentage,
             spill_local_disk_max_bytes,
+            storage: storage.as_ref().map(|storage| storage.mask_display()),
             sort_spilling_disk_quota_ratio,
             window_partition_spilling_disk_quota_ratio,
             // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
