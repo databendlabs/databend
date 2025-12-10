@@ -195,11 +195,11 @@ jobs:
           sudo apt-get install -yq python3-jinja2
       - uses: actions/download-artifact@v4
         with:
-          path: benchmark/clickbench/results
+          path: benchmark/results
           pattern: benchmark-*
           merge-multiple: true
       - name: Get Report Prefix
-        working-directory: benchmark/clickbench
+        working-directory: benchmark
         run: |
           shopt -s nullglob
           for result in results/*.json; do
@@ -220,7 +220,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
-        working-directory: benchmark/clickbench
+        working-directory: benchmark
         run: |
           echo -e "## ClickBench Report\n" > /tmp/body
           shopt -s nullglob
@@ -260,11 +260,11 @@ jobs:
           sudo apt-get install -yq python3-jinja2
       - uses: actions/download-artifact@v4
         with:
-          path: benchmark/clickbench/results
+          path: benchmark/results
           pattern: benchmark-${{ matrix.dataset }}-*
           merge-multiple: true
       - name: Prepare results directory
-        working-directory: benchmark/clickbench
+        working-directory: benchmark
         run: |
           shopt -s nullglob
           for result in results/*.json; do
@@ -279,7 +279,7 @@ jobs:
             mv $ndjson ndjsons/${dataset}/$(basename $ndjson)
           done
       - name: Generate report and upload to R2
-        working-directory: benchmark/clickbench
+        working-directory: benchmark
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -299,7 +299,7 @@ jobs:
 
           aws s3 cp ./results/${{ matrix.dataset }}.html s3://benchmark/clickbench/release/${{ matrix.dataset }}.html --no-progress --checksum-algorithm=CRC32
       - name: Upload NDJSON archives to R2
-        working-directory: benchmark/clickbench
+        working-directory: benchmark
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
