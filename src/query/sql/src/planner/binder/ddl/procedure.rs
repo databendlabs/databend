@@ -18,19 +18,27 @@ use databend_common_ast::ast::CreateProcedureStmt;
 use databend_common_ast::ast::DescProcedureStmt;
 use databend_common_ast::ast::DropProcedureStmt;
 use databend_common_ast::ast::ExecuteImmediateStmt;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::ProcedureIdentity as AstProcedureIdentity;
 use databend_common_ast::ast::ProcedureLanguage;
 use databend_common_ast::ast::ProcedureType;
 use databend_common_ast::ast::ShowOptions;
+use databend_common_ast::ast::TypeName;
+use databend_common_ast::parser::expr::type_name as parse_type_name_ast;
 use databend_common_ast::parser::run_parser;
 use databend_common_ast::parser::script::script_block_or_stmt;
 use databend_common_ast::parser::script::ScriptBlockOrStmt;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::ParseMode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::procedure::ProcedureInfo;
+use databend_common_meta_app::principal::GetProcedureReply;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureMeta;
@@ -180,7 +188,7 @@ impl Binder {
             &[],
             true,
         )?;
-        let mut arg_types = vec![];
+        let mut arg_types = Vec::with_capacity(arguments.len());
         for argument in arguments {
             let box (arg, mut arg_type) = type_checker.resolve(argument)?;
             if let ScalarExpr::SubqueryExpr(subquery) = &arg {
@@ -188,31 +196,76 @@ impl Binder {
                     arg_type = arg_type.wrap_nullable();
                 }
             }
-            arg_types.push(arg_type.to_string());
+            arg_types.push(arg_type);
         }
-        let name = name.to_string();
-        let procedure_ident = ProcedureIdentity::new(name, arg_types.join(","));
+
+        let name_str = name.to_string();
+        let procedure_api = UserApiProvider::instance().procedure_api(&tenant);
+
+        // Try exact match first
+        let arg_type_strings: Vec<String> = arg_types.iter().map(|t| t.to_string()).collect();
+        let procedure_ident = ProcedureIdentity::new(name_str.clone(), arg_type_strings.join(","));
         let req = GetProcedureReq {
             inner: ProcedureNameIdent::new(tenant.clone(), procedure_ident.clone()),
         };
-
-        let procedure = UserApiProvider::instance()
-            .procedure_api(&tenant)
-            .get_procedure(&req)
-            .await?;
-        if let Some(procedure) = procedure {
-            Ok(Plan::CallProcedure(Box::new(CallProcedurePlan {
+        if let Some(procedure) = procedure_api.get_procedure(&req).await? {
+            return Ok(Plan::CallProcedure(Box::new(CallProcedurePlan {
                 procedure_id: procedure.id,
                 script: procedure.procedure_meta.script,
                 arg_names: procedure.procedure_meta.arg_names,
                 args: arguments.clone(),
-            })))
-        } else {
-            Err(ErrorCode::UnknownProcedure(format!(
+            })));
+        }
+
+        // Exact match failed, try implicit cast resolution.
+        let candidates = procedure_api.list_procedures_by_name(&name_str).await?;
+        let mut same_arity_candidates = Vec::new();
+        for candidate in candidates {
+            let arg_defs = parse_procedure_signature(&candidate.name_ident.procedure_name().args)?;
+            if arg_defs.len() == arg_types.len() {
+                same_arity_candidates.push(candidate);
+            }
+        }
+
+        let has_explicit_cast = arguments
+            .iter()
+            .any(|expr| matches!(expr, Expr::Cast { .. } | Expr::TryCast { .. }));
+
+        // Multiple overloads plus lack of explicit casts means we cannot disambiguate.
+        if same_arity_candidates.len() > 1 && !has_explicit_cast {
+            return Err(ErrorCode::UnknownProcedure(format!(
                 "Unknown procedure {}",
                 procedure_ident
-            )))
+            )));
         }
+
+        let allow_implicit_cast = same_arity_candidates.len() == 1 && !has_explicit_cast;
+        let (procedure, casts_to_apply) = resolve_procedure_candidate(
+            &procedure_ident,
+            &arg_types,
+            same_arity_candidates,
+            allow_implicit_cast,
+        )?;
+
+        let args = arguments
+            .iter()
+            .zip(casts_to_apply.into_iter())
+            .map(|(expr, cast)| match cast {
+                Some(target_type) => Expr::Cast {
+                    span: expr.span(),
+                    expr: Box::new(expr.clone()),
+                    target_type,
+                    pg_style: false,
+                },
+                None => expr.clone(),
+            })
+            .collect();
+        Ok(Plan::CallProcedure(Box::new(CallProcedurePlan {
+            procedure_id: procedure.id,
+            script: procedure.procedure_meta.script,
+            arg_names: procedure.procedure_meta.arg_names,
+            args,
+        })))
     }
 
     fn procedure_meta(
@@ -271,7 +324,6 @@ fn generate_procedure_name_ident(
         .map(|type_name| resolve_type_name(type_name, true).map(|t| DataType::from(&t)))
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Convert normalized DataType back to string for storage
     let args_type_str = args_data_type
         .iter()
         .map(|dt| dt.to_string())
@@ -282,4 +334,98 @@ fn generate_procedure_name_ident(
         tenant,
         ProcedureIdentity::new(name.name.clone(), args_type_str),
     ))
+}
+
+/// Find the first procedure overload whose signature is compatible with the
+/// actual argument types, optionally allowing implicit casts. Returns the
+/// procedure metadata plus the exact casts we need to inject.
+fn resolve_procedure_candidate(
+    procedure_ident: &ProcedureIdentity,
+    arg_types: &[DataType],
+    candidates: Vec<ProcedureInfo>,
+    allow_implicit_cast: bool,
+) -> Result<(GetProcedureReply, Vec<Option<TypeName>>)> {
+    for candidate in candidates {
+        let arg_defs = parse_procedure_signature(&candidate.name_ident.procedure_name().args)?;
+        if arg_defs.len() != arg_types.len() {
+            continue;
+        }
+
+        let mut casts = Vec::with_capacity(arg_types.len());
+        let mut compatible = true;
+        for (actual, target_ast) in arg_types.iter().zip(arg_defs.iter()) {
+            let target = DataType::from(&resolve_type_name(target_ast, true)?);
+            if actual == &target {
+                casts.push(None);
+                continue;
+            }
+
+            if allow_implicit_cast
+                && common_super_type(
+                    actual.clone(),
+                    target.clone(),
+                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                )
+                .is_some_and(|common| common == target)
+            {
+                casts.push(Some(target_ast.clone()));
+            } else {
+                compatible = false;
+                break;
+            }
+        }
+
+        if compatible {
+            return Ok((
+                GetProcedureReply {
+                    id: *candidate.ident.procedure_id(),
+                    procedure_meta: candidate.meta.clone(),
+                },
+                casts,
+            ));
+        }
+    }
+
+    Err(ErrorCode::UnknownProcedure(format!(
+        "Unknown procedure {}",
+        procedure_ident
+    )))
+}
+
+fn parse_procedure_signature(arg_str: &str) -> Result<Vec<TypeName>> {
+    if arg_str.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let mut segments = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0usize;
+    for (idx, ch) in arg_str.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                // Only split on commas at depth 0 so nested args (like DECIMAL) stay intact.
+                segments.push(arg_str[start..idx].trim());
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    segments.push(arg_str[start..].trim());
+
+    segments
+        .into_iter()
+        .map(|segment| {
+            let tokens = tokenize_sql(segment)?;
+            run_parser(
+                &tokens,
+                Dialect::default(),
+                ParseMode::Default,
+                false,
+                parse_type_name_ast,
+            )
+            .map_err(|e| ErrorCode::SyntaxException(e.to_string()))
+        })
+        .collect()
 }
