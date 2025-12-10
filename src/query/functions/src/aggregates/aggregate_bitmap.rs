@@ -706,11 +706,18 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: ProjectedBlock,
+        block: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let predicate = self.get_filter_bitmap(columns);
-        let entry = columns[0].to_column().filter(&predicate).into();
+        let predicate = self.get_filter_bitmap(block);
+        let entry = match &block[0] {
+            BlockEntry::Const(scalar, data_type, n) => BlockEntry::new_const_column(
+                data_type.clone(),
+                scalar.clone(),
+                predicate.true_count(),
+            ),
+            BlockEntry::Column(column) => column.filter(&predicate).into(),
+        };
 
         let new_places = Self::filter_place(places, &predicate);
         let new_places_slice = new_places.as_slice();
