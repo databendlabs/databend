@@ -243,7 +243,7 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
 }
 
 #[derive(StatementVisitorMut)]
-#[visitor(Expr(enter))]
+#[visitor(Expr(exit))]
 pub struct UDFArgVisitor<'a> {
     arg_types: &'a [(String, DataType)],
     args: &'a [Expr],
@@ -254,7 +254,7 @@ impl<'a> UDFArgVisitor<'a> {
         Self { arg_types, args }
     }
 
-    fn enter_expr(&mut self, expr: &mut Expr) {
+    fn exit_expr(&mut self, expr: &mut Expr) {
         if let Expr::ColumnRef { span, column } = expr {
             if column.database.is_some() || column.table.is_some() {
                 return;
