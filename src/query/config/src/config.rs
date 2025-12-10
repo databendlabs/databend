@@ -3652,7 +3652,7 @@ impl Default for SpillConfig {
             spill_local_disk_reserved_space_percentage: OrderedFloat(30.0),
             spill_local_disk_max_bytes: u64::MAX,
             sort_spilling_disk_quota_ratio: 60,
-            window_partition_spilling_disk_quota_ratio: 20,
+            window_partition_spilling_disk_quota_ratio: 40,
             // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
             result_set_spilling_disk_quota_ratio: 0,
         }
