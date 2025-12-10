@@ -20,12 +20,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install script dependencies
-      shell: bash
-      run: |
-        sudo apt-get update -yq
-        sudo apt-get install -yq python3
-
     - name: Run Benchmark
       working-directory: benchmark
       env:
