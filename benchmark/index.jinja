@@ -424,7 +424,7 @@
         let cache_sizes = document.getElementById('selectors_cache_size');
 
         let unique_systems = [... new Set(data.map(elem => elem.system))];
-        const default_cache_size = 'n/a';
+        const default_cache_size = '0';
         const getCacheLabel = entry => {
             if (entry.cache_size === undefined || entry.cache_size === null || entry.cache_size === '') {
                 return default_cache_size;

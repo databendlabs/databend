@@ -102,7 +102,8 @@ def load_config() -> BenchmarkConfig:
     benchmark_id = os.environ.get("BENCHMARK_ID", str(int(time.time())))
     dataset = os.environ.get("BENCHMARK_DATASET", "hits")
     size = os.environ.get("BENCHMARK_SIZE", "Small")
-    cache_size = os.environ.get("BENCHMARK_CACHE_SIZE", "0")
+    raw_cache_size = os.environ.get("BENCHMARK_CACHE_SIZE", "")
+    cache_size = raw_cache_size.strip() or "0"
     version = os.environ.get("BENCHMARK_VERSION", "")
     database = os.environ.get("BENCHMARK_DATABASE", "default")
     tries_raw = os.environ.get("BENCHMARK_TRIES", "3")
