@@ -34,8 +34,8 @@ use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
+use crate::ColumnView;
 use crate::ScalarRef;
-use crate::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BooleanType;
@@ -251,14 +251,40 @@ pub struct BooleanDomain {
     pub has_true: bool,
 }
 
-impl Value<BooleanType> {
+impl ColumnView<BooleanType> {
     pub fn and_bitmap(&self, rhs: Option<&Bitmap>) -> Self {
+        debug_assert!(rhs.map(|rhs| rhs.len() == self.len()).unwrap_or(true));
+        use ColumnView::*;
         match (self, rhs) {
-            (Value::Scalar(false), _) => Value::Scalar(false),
-            (Value::Scalar(true), None) => Value::Scalar(true),
-            (Value::Scalar(true), Some(rhs)) => Value::Column(rhs.clone()),
-            (Value::Column(_), None) => self.clone(),
-            (Value::Column(b), Some(rhs)) => Value::Column(b & rhs),
+            (Const(false, _), _) | (Const(true, _), None) => self.clone(),
+            (Const(true, n), Some(rhs)) => {
+                if rhs.null_count() == 0 {
+                    Const(true, *n)
+                } else if rhs.true_count() == 0 {
+                    Const(false, *n)
+                } else {
+                    Column(rhs.clone())
+                }
+            }
+            (Column(b), None) => {
+                if b.null_count() == 0 {
+                    Const(true, b.len())
+                } else if b.true_count() == 0 {
+                    Const(false, b.len())
+                } else {
+                    Column(b.clone())
+                }
+            }
+            (Column(b), Some(rhs)) => {
+                let merge = b & rhs;
+                if merge.null_count() == 0 {
+                    Const(true, merge.len())
+                } else if merge.true_count() == 0 {
+                    Const(false, merge.len())
+                } else {
+                    Column(merge)
+                }
+            }
         }
     }
 }

@@ -100,34 +100,35 @@ impl BlockEntry {
         }
     }
 
-    pub fn split_nullable(self) -> (Self, Value<BooleanType>) {
+    pub fn split_nullable(self) -> (Self, ColumnView<BooleanType>) {
+        let n = self.len();
         match self {
             BlockEntry::Column(Column::Nullable(col)) => {
                 let (column, validity) = col.destructure();
                 let validity = if validity.null_count() == 0 {
-                    Value::Scalar(true)
+                    ColumnView::Const(true, n)
                 } else if validity.true_count() == 0 {
-                    Value::Scalar(false)
+                    ColumnView::Const(false, n)
                 } else {
-                    Value::Column(validity)
+                    ColumnView::Column(validity)
                 };
                 (column.into(), validity)
             }
-            BlockEntry::Column(_) => (self, Value::Scalar(true)),
-            BlockEntry::Const(scalar, DataType::Nullable(inner), num_rows) => {
+            BlockEntry::Column(_) => (self, ColumnView::Const(true, n)),
+            BlockEntry::Const(scalar, DataType::Nullable(inner), _) => {
                 if scalar.is_null() {
                     (
-                        BlockEntry::Const(Scalar::default_value(&inner), *inner, num_rows),
-                        Value::Scalar(false),
+                        BlockEntry::Const(Scalar::default_value(&inner), *inner, n),
+                        ColumnView::Const(false, n),
                     )
                 } else {
                     (
-                        BlockEntry::Const(scalar, *inner, num_rows),
-                        Value::Scalar(true),
+                        BlockEntry::Const(scalar, *inner, n),
+                        ColumnView::Const(true, n),
                     )
                 }
             }
-            _ => (self, Value::Scalar(true)),
+            _ => (self, ColumnView::Const(true, n)),
         }
     }
 
@@ -255,7 +256,7 @@ impl TryFrom<Value<AnyType>> for BlockEntry {
     }
 }
 
-#[derive(Debug, EnumAsInner)]
+#[derive(Debug, EnumAsInner, Clone)]
 pub enum ColumnView<T: AccessType> {
     Const(T::Scalar, usize),
     Column(T::Column),

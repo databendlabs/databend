@@ -28,11 +28,11 @@ use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
-use databend_common_expression::Value;
 use num_traits::AsPrimitive;
 
 use super::assert_unary_arguments;
@@ -118,19 +118,19 @@ where
 
         let (not_null, nulls) = entry.clone().split_nullable();
         match nulls.and_bitmap(validity) {
-            Value::Scalar(false) => {
+            ColumnView::Const(false, _) => {
                 for _ in 0..entry.len() {
                     self.values.push(T::default());
                 }
                 return Ok(());
             }
-            Value::Scalar(true) => {
+            ColumnView::Const(true, _) => {
                 let view = not_null.downcast::<NumberType<T>>().unwrap();
                 view.iter().for_each(|v| {
                     self.values.push(v);
                 });
             }
-            Value::Column(validity) => {
+            ColumnView::Column(validity) => {
                 let view = not_null.downcast::<NumberType<T>>().unwrap();
                 for (v, b) in view.iter().zip(validity) {
                     if b {
@@ -345,19 +345,19 @@ where T: Decimal
 
         let (not_null, nulls) = entry.clone().split_nullable();
         match nulls.and_bitmap(validity) {
-            Value::Scalar(false) => {
+            ColumnView::Const(false, _) => {
                 for _ in 0..entry.len() {
                     self.values.push(T::default());
                 }
                 return Ok(());
             }
-            Value::Scalar(true) => {
+            ColumnView::Const(true, _) => {
                 let view = not_null.downcast::<DecimalType<T>>().unwrap();
                 view.iter().for_each(|v| {
                     self.values.push(v);
                 });
             }
-            Value::Column(validity) => {
+            ColumnView::Column(validity) => {
                 let view = not_null.downcast::<DecimalType<T>>().unwrap();
                 for (v, b) in view.iter().zip(validity) {
                     if b {

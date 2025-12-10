@@ -25,10 +25,10 @@ use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
-use databend_common_expression::Value;
 
 use super::AggrState;
 use super::AggrStateLoc;
@@ -121,14 +121,15 @@ impl AggregateFunction for AggregateIfCombinator {
             return Ok(());
         }
 
-        let value = block[self.argument_len - 1].value();
-        let value = value.try_downcast::<BooleanType>().unwrap();
-        let predicate = match value.and_bitmap(validity) {
-            Value::Scalar(true) => None,
-            Value::Scalar(false) => {
+        let view = block[self.argument_len - 1]
+            .downcast::<BooleanType>()
+            .unwrap();
+        let predicate = match view.and_bitmap(validity) {
+            ColumnView::Const(true, _) => None,
+            ColumnView::Const(false, _) => {
                 return Ok(());
             }
-            Value::Column(predicate) => Some(predicate),
+            ColumnView::Column(predicate) => Some(predicate),
         };
 
         self.nested.accumulate(
