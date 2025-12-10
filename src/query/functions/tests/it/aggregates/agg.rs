@@ -454,6 +454,20 @@ fn test_sum(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "sum(a)", get_example().as_slice(), simulator, vec![]);
     run_agg_ast(
         file,
+        "sum(const_int)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "sum(const_int_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
         "sum(x_null)",
         get_example().as_slice(),
         simulator,
@@ -604,6 +618,20 @@ fn test_agg_min(file: &mut impl Write, simulator: impl AggregationSimulator) {
         simulator,
         vec![],
     );
+    run_agg_ast(
+        file,
+        "min(const_int)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "min(const_int_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(file, "min(a)", get_example().as_slice(), simulator, vec![]);
     run_agg_ast(file, "min(b)", get_example().as_slice(), simulator, vec![]);
     run_agg_ast(
@@ -712,6 +740,34 @@ fn test_agg_arg_max(file: &mut impl Write, simulator: impl AggregationSimulator)
     run_agg_ast(
         file,
         "arg_max(b, a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "arg_max(const_int, a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "arg_max(const_int_null, a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "arg_max(a, const_int)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "arg_max(a, const_int_null)",
         get_example().as_slice(),
         simulator,
         vec![],
