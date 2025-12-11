@@ -38,6 +38,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::IterationStrategy;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_io::HybridBitmap;
 use goldenfile::Mint;
 
 use crate::common::*;
@@ -700,7 +701,8 @@ fn test_estimated_scalar_repeat_size() {
 
     // bitmap
     {
-        let scalar = ScalarRef::Bitmap(&[1, 133, 244, 123]);
+        let bitmap = HybridBitmap::from_iter([1_u64, 133, 244, 123]);
+        let scalar = ScalarRef::Bitmap(&bitmap);
         let ty = DataType::Bitmap;
         assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }

@@ -892,7 +892,7 @@ impl ScalarRef<'_> {
             ScalarRef::Interval(_) => n * 16,
             ScalarRef::Array(col) => col.memory_size(false) * n + (n + 1) * 8,
             ScalarRef::Map(col) => col.memory_size(false) * n + (n + 1) * 8,
-            ScalarRef::Bitmap(b) => b.memory_size() * n + (n + 1) * 8,
+            ScalarRef::Bitmap(b) => b.memory_size() * n + b.serialized_size() * n + (n + 1) * 8,
             ScalarRef::Tuple(fields) => {
                 let DataType::Tuple(fields_ty) = data_type else {
                     unreachable!()

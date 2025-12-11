@@ -83,6 +83,13 @@ impl HybridBitmap {
         }
     }
 
+    pub fn serialized_size(&self) -> usize {
+        match self {
+            HybridBitmap::Small(set) => HYBRID_HEADER_LEN + 1 + set.len() * size_of::<u64>(),
+            HybridBitmap::Large(tree) => HYBRID_HEADER_LEN + tree.serialized_size(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
