@@ -567,6 +567,13 @@ fn test_agg_if(file: &mut impl Write, simulator: impl AggregationSimulator) {
     );
     run_agg_ast(
         file,
+        "count_if(1, false)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
         "sum_if(a, x_null is null)",
         get_example().as_slice(),
         simulator,

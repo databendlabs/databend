@@ -152,19 +152,17 @@ impl AggregateFunction for AggregateIfCombinator {
         }
 
         match &block[self.argument_len - 1] {
-            BlockEntry::Column(column) => {
-                let predicate = BooleanType::try_downcast_column(column).unwrap();
-                let (columns, num_rows) =
-                    self.filter_column(block.slice(0..self.argument_len - 1), &predicate);
-                let new_places = Self::filter_place(places, &predicate);
+            BlockEntry::Column(Column::Boolean(predicate)) => {
+                let (entries, num_rows) =
+                    self.filter_column(block.slice(0..self.argument_len - 1), predicate);
+                let new_places = Self::filter_place(places, predicate);
 
                 let new_places_slice = new_places.as_slice();
-                let entries: Vec<_> = columns.into_iter().map(|c| c.into()).collect();
                 self.nested
                     .accumulate_keys(new_places_slice, loc, (&entries).into(), num_rows)
             }
             BlockEntry::Const(Scalar::Boolean(v), _, _) => {
-                if *v {
+                if !*v {
                     return Ok(());
                 }
                 self.nested.accumulate_keys(
@@ -174,7 +172,7 @@ impl AggregateFunction for AggregateIfCombinator {
                     input_rows,
                 )
             }
-            BlockEntry::Const(_, _, _) => unreachable!(),
+            _ => unreachable!(),
         }
     }
 
@@ -256,15 +254,18 @@ impl fmt::Display for AggregateIfCombinator {
 
 impl AggregateIfCombinator {
     #[inline]
-    fn filter_column(&self, columns: ProjectedBlock, predicate: &Bitmap) -> (Vec<Column>, usize) {
-        let columns = columns
+    fn filter_column(&self, block: ProjectedBlock, predicate: &Bitmap) -> (Vec<BlockEntry>, usize) {
+        let entries = block
             .iter()
-            .map(|c| c.to_column().filter(predicate))
-            .collect::<Vec<_>>();
+            .map(|entry| match entry {
+                BlockEntry::Const(scalar, data_type, _) => {
+                    BlockEntry::Const(scalar.clone(), data_type.clone(), predicate.true_count())
+                }
+                BlockEntry::Column(column) => column.filter(predicate).into(),
+            })
+            .collect();
 
-        let rows = predicate.len() - predicate.null_count();
-
-        (columns, rows)
+        (entries, predicate.true_count())
     }
 
     fn filter_place(places: &[StateAddr], predicate: &Bitmap) -> StateAddrs {
