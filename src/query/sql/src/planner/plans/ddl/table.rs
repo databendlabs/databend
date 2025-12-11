@@ -192,10 +192,16 @@ pub struct VacuumTemporaryFilesPlan {
 
 impl crate::plans::VacuumTemporaryFilesPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::new(vec![DataField::new(
-            "Files",
-            DataType::Number(NumberDataType::UInt64),
-        )]))
+        Arc::new(DataSchema::new(vec![
+            DataField::new(
+                "spill_files",
+                DataType::Number(NumberDataType::UInt64),
+            ),
+            DataField::new(
+                "temp_tables",
+                DataType::Number(NumberDataType::UInt64),
+            ),
+        ]))
     }
 }
 
