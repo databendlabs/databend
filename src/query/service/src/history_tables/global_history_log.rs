@@ -364,7 +364,7 @@ impl GlobalHistoryLog {
             info!("periodic retention operation on history log table '{}' completed successfully (delete {} secs, vacuum {} secs)",
                     table.name,
                     delete_elapsed,
-                    start.elapsed().as_secs()
+                    start.elapsed().as_secs() - delete_elapsed
                 );
             return Ok(true);
         }
