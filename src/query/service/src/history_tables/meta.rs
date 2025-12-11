@@ -42,34 +42,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::oneshot;
 
-/// RAII wrapper for Permit that automatically updates timestamp on drop
-pub struct PermitGuard {
-    _permit: Permit,
-    meta_handle: Arc<HistoryMetaHandle>,
-    meta_key: String,
-}
-
-impl PermitGuard {
-    pub fn new(permit: Permit, meta_handle: Arc<HistoryMetaHandle>, meta_key: String) -> Self {
-        Self {
-            _permit: permit,
-            meta_handle,
-            meta_key,
-        }
-    }
-}
-
-impl Drop for PermitGuard {
-    fn drop(&mut self) {
-        let meta_handle = self.meta_handle.clone();
-        let meta_key = self.meta_key.clone();
-
-        block_on(async move {
-            let _ = meta_handle.update_last_execution_timestamp(&meta_key).await;
-        });
-    }
-}
-
 pub struct HeartbeatTaskGuard {
     _cancel: oneshot::Sender<()>,
     exited: Arc<AtomicBool>,
@@ -276,27 +248,6 @@ impl HistoryMetaHandle {
         }
     }
 
-    /// Acquires a permit with automatic timestamp update on drop using RAII pattern.
-    /// Returns a PermitGuard that will automatically update the timestamp when dropped.
-    pub async fn acquire_with_guard(
-        &self,
-        meta_key: &str,
-        interval: u64,
-    ) -> Result<Option<PermitGuard>> {
-        if let Some(permit) = self.acquire(meta_key, interval).await? {
-            Ok(Some(PermitGuard::new(
-                permit,
-                Arc::new(HistoryMetaHandle {
-                    meta_client: self.meta_client.clone(),
-                    node_id: self.node_id.clone(),
-                }),
-                meta_key.to_string(),
-            )))
-        } else {
-            Ok(None)
-        }
-    }
-
     /// Updating the last execution timestamp in the metadata.
     pub async fn update_last_execution_timestamp(&self, meta_key: &str) -> Result<()> {
         self.meta_client
@@ -417,98 +368,6 @@ mod tests {
 
     pub async fn setup_meta_client() -> MetaStore {
         MetaStore::new_local_testing(&databend_common_version::BUILD_INFO).await
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    pub async fn test_history_table_permit_guard() -> databend_common_exception::Result<()> {
-        let meta_store = setup_meta_client().await;
-        let meta_client = meta_store.deref().clone();
-
-        let node_id = "test_node_123".to_string();
-        let meta_handle = HistoryMetaHandle::new(meta_client, node_id);
-
-        // Test 1: Basic permit acquisition with interval 0 (no rate limiting)
-        let meta_key = "test/history_table/permit_guard";
-        let guard_result = meta_handle.acquire_with_guard(meta_key, 0).await?;
-        assert!(
-            guard_result.is_some(),
-            "Should acquire permit when interval is 0"
-        );
-
-        if let Some(guard) = guard_result {
-            // Verify that the guard contains the correct meta key
-            assert_eq!(guard.meta_key, meta_key);
-        }
-
-        // Same meta key, because we set the interval to 0, it should not block
-        let guard_result2 = meta_handle.acquire_with_guard(meta_key, 0).await?;
-
-        assert!(
-            guard_result2.is_some(),
-            "Should acquire permit again when interval is 0"
-        );
-
-        if let Some(guard) = guard_result2 {
-            // Verify that the guard contains the correct meta key
-            assert_eq!(guard.meta_key, meta_key);
-        }
-
-        // Test 2: Permit acquisition with interval > 0 (rate limiting)
-        let meta_key_rate_limited = "test/history_table/permit_guard_rate_limited";
-        let interval_seconds = 2;
-
-        // First acquisition should succeed
-        let first_guard_result = meta_handle
-            .acquire_with_guard(meta_key_rate_limited, interval_seconds)
-            .await?;
-        assert!(
-            first_guard_result.is_some(),
-            "First permit acquisition should succeed"
-        );
-
-        // Drop the first guard to trigger timestamp update
-        drop(first_guard_result);
-
-        // Immediate second acquisition should fail due to rate limiting
-        let second_guard_result = meta_handle
-            .acquire_with_guard(meta_key_rate_limited, interval_seconds)
-            .await?;
-        assert!(
-            second_guard_result.is_none(),
-            "Second permit acquisition should fail due to rate limiting"
-        );
-
-        // Test 3: Verify permit guard automatically updates timestamp on drop
-        let meta_key_timestamp = "test/history_table/permit_guard_timestamp";
-
-        // Get initial timestamp (should be None)
-        let initial_timestamp = meta_handle
-            .get_u64_from_meta(&format!("{}/last_timestamp", meta_key_timestamp))
-            .await?;
-        assert!(
-            initial_timestamp.is_none(),
-            "Initial timestamp should be None"
-        );
-
-        // Acquire permit with guard
-        let guard = meta_handle
-            .acquire_with_guard(meta_key_timestamp, 0)
-            .await?;
-        assert!(guard.is_some(), "Should acquire permit");
-
-        // Drop guard to trigger timestamp update
-        drop(guard);
-
-        // Verify timestamp was updated
-        let updated_timestamp = meta_handle
-            .get_u64_from_meta(&format!("{}/last_timestamp", meta_key_timestamp))
-            .await?;
-        assert!(
-            updated_timestamp.is_some(),
-            "Timestamp should be updated after guard drop"
-        );
-
-        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread")]
