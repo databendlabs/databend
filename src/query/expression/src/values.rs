@@ -702,7 +702,7 @@ impl ScalarRef<'_> {
             ScalarRef::Interval(_) => 16,
             ScalarRef::Array(col) => col.memory_size(false),
             ScalarRef::Map(col) => col.memory_size(false),
-            ScalarRef::Bitmap(b) => b.memory_size(false),
+            ScalarRef::Bitmap(b) => b.memory_size(),
             ScalarRef::Tuple(scalars) => scalars.iter().map(|s| s.memory_size()).sum(),
             ScalarRef::Variant(buf) => buf.len(),
             ScalarRef::Geometry(buf) => buf.len(),
@@ -892,7 +892,7 @@ impl ScalarRef<'_> {
             ScalarRef::Interval(_) => n * 16,
             ScalarRef::Array(col) => col.memory_size(false) * n + (n + 1) * 8,
             ScalarRef::Map(col) => col.memory_size(false) * n + (n + 1) * 8,
-            ScalarRef::Bitmap(b) => b.memory_size(false) * n + (n + 1) * 8,
+            ScalarRef::Bitmap(b) => b.memory_size() * n + (n + 1) * 8,
             ScalarRef::Tuple(fields) => {
                 let DataType::Tuple(fields_ty) = data_type else {
                     unreachable!()
