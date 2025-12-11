@@ -18,7 +18,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::runtime::block_on;
 use databend_common_base::runtime::spawn_named;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
@@ -246,19 +245,6 @@ impl HistoryMetaHandle {
             drop(acquired_guard);
             Ok(None)
         }
-    }
-
-    /// Updating the last execution timestamp in the metadata.
-    pub async fn update_last_execution_timestamp(&self, meta_key: &str) -> Result<()> {
-        self.meta_client
-            .upsert_kv(UpsertKV::new(
-                format!("{}/last_timestamp", meta_key),
-                MatchSeq::Any,
-                Operation::Update(serde_json::to_vec(&chrono::Utc::now().timestamp_millis())?),
-                None,
-            ))
-            .await?;
-        Ok(())
     }
 
     /// Checks if enough time has passed since the last execution to perform a clean operation.
