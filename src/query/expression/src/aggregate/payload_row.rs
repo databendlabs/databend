@@ -124,12 +124,12 @@ pub(super) unsafe fn serialize_column_to_rowformat(
             }
         }
         Column::Bitmap(v) => {
-            let mut bytes = Vec::new();
             for &index in select_vector {
+                scratch.clear();
                 let map = unsafe { v.index_unchecked(index) };
-                map.serialize_into(bytes.as_mut_slice()).unwrap();
-                address[index].write_bytes(offset, &bytes);
-                bytes.clear();
+                map.serialize_into(&mut *scratch).unwrap();
+                let data = arena.alloc_slice_copy(scratch.as_slice());
+                address[index].write_bytes(offset, data);
             }
         }
         Column::Binary(v) | Column::Variant(v) | Column::Geometry(v) => {
