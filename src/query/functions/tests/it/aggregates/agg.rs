@@ -154,13 +154,7 @@ fn gen_bitmap_data() -> Column {
         rb
     });
 
-    let rbs = rbs_iter
-        .map(|rb| {
-            let mut data = Vec::new();
-            rb.serialize_into(&mut data).unwrap();
-            data
-        })
-        .collect_vec();
+    let rbs = rbs_iter.collect_vec();
 
     BitmapType::from_data(rbs)
 }

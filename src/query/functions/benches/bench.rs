@@ -77,7 +77,6 @@ mod bitmap {
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
     use databend_common_functions::aggregates::eval_aggr_for_test;
-    use databend_common_io::deserialize_bitmap;
     use databend_common_io::HybridBitmap;
 
     fn expected_xor_values(rows: usize) -> Vec<u64> {
@@ -142,10 +141,7 @@ mod bitmap {
                 let base = number * 2;
                 rb.insert(base);
                 rb.insert(base + 1);
-
-                let mut data = Vec::new();
-                rb.serialize_into(&mut data).unwrap();
-                data
+                rb
             })
             .collect();
 
@@ -172,10 +168,10 @@ mod bitmap {
         let Column::Bitmap(result) = result_column.remove_nullable() else {
             panic!("{agg_name} should return a Bitmap column");
         };
-        let Some(bytes) = result.index(0) else {
+        let Some(bitmap) = result.index(0) else {
             panic!("{agg_name} should return exactly one row");
         };
-        deserialize_bitmap(bytes).expect("deserialize bitmap result")
+        bitmap.clone()
     }
 
     fn run_bitmap_result_bench<F>(
