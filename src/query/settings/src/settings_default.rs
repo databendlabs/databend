@@ -1353,7 +1353,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(1),
                     desc: "When set, verifies CRC checksum for disk cache reads; global-only to avoid inconsistent cache behavior.",
                     mode: SettingMode::Both,
-                    scope: SettingScope::Global,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("copy_dedup_full_path_by_default", DefaultSettingValue {
