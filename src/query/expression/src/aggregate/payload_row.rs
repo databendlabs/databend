@@ -456,9 +456,9 @@ mod tests {
         builder.commit_row();
         builder.put_slice(&legacy_bytes);
         builder.commit_row();
-        let column = Column::Bitmap(
+        let column = Column::Bitmap(Box::new(
             BitmapColumn::from_binary(builder.build()).expect("valid bitmap column"),
-        );
+        ));
 
         let arena = Bump::new();
         let row_size = rowformat_size(&DataType::Bitmap);

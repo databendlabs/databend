@@ -594,6 +594,7 @@ impl AggHash for ScalarRef<'_> {
 #[cfg(test)]
 mod tests {
     use databend_common_column::bitmap::Bitmap;
+    use databend_common_io::deserialize_bitmap;
     use databend_common_io::HybridBitmap;
     use roaring::RoaringTreemap;
 
@@ -738,7 +739,9 @@ mod tests {
         let mut legacy_bytes = Vec::new();
         tree.serialize_into(&mut legacy_bytes).unwrap();
 
-        let bitmap_column = BitmapType::from_data(vec![hybrid_bytes, legacy_bytes]);
+        let hybrid_bitmap = deserialize_bitmap(&hybrid_bytes)?;
+        let legacy_bitmap = deserialize_bitmap(&legacy_bytes)?;
+        let bitmap_column = BitmapType::from_data(vec![hybrid_bitmap, legacy_bitmap]);
         let block = DataBlock::new(vec![bitmap_column.into()], 2);
 
         let mut hashes = vec![0_u64; block.num_rows()];
