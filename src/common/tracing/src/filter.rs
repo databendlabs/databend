@@ -15,8 +15,13 @@
 use databend_common_base::runtime::ThreadTracker;
 use logforth::filter::FilterResult;
 
+/// ThreadTrackerFilter is used in two scenarios:
+/// - `report issues`: capture logs according to `CaptureLogSettings::capture_query`.
+/// - `system history tables`: filter background SQL produced logs via `CaptureLogSettings::capture_off`.
 #[derive(Debug)]
-pub struct ThreadTrackerFilter;
+pub struct ThreadTrackerFilter {
+    pub report_issues: bool,
+}
 
 impl logforth::Filter for ThreadTrackerFilter {
     fn enabled(&self, metadata: &log::Metadata) -> FilterResult {
@@ -24,8 +29,32 @@ impl logforth::Filter for ThreadTrackerFilter {
             if metadata.level() > settings.level {
                 return FilterResult::Reject;
             }
+            return FilterResult::Neutral;
+        }
+
+        // For `report_issues` this is the only filter (so neutral means accept).
+        // Outside the `report_issues` scope, we must reject to keep `log_enabled!` accurate—
+        // it checks whether any dispatcher accepts the record.
+        if self.report_issues {
+            return FilterResult::Reject;
         }
 
         FilterResult::Neutral
+    }
+}
+
+impl Default for ThreadTrackerFilter {
+    fn default() -> Self {
+        Self {
+            report_issues: false,
+        }
+    }
+}
+
+impl ThreadTrackerFilter {
+    /// Enable the `report issues` mode on this filter.
+    pub fn report_issues(mut self) -> Self {
+        self.report_issues = true;
+        self
     }
 }

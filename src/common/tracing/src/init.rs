@@ -241,7 +241,7 @@ pub fn init_logging(
         logger = logger.dispatch(|dispatch| {
             dispatch
                 .filter(env_filter(&cfg.file.level))
-                .filter(ThreadTrackerFilter)
+                .filter(ThreadTrackerFilter::default())
                 .append(match cfg.file.format {
                     LogFormat::Text => normal_log_file.with_layout(TextLayout::<false>),
                     LogFormat::Json => normal_log_file.with_layout(JsonLayout::<false>),
@@ -256,7 +256,7 @@ pub fn init_logging(
             let stderr = logforth::append::Stderr::default();
             dispatch
                 .filter(env_filter(&cfg.stderr.level))
-                .filter(ThreadTrackerFilter)
+                .filter(ThreadTrackerFilter::default())
                 .append(match cfg.stderr.format {
                     LogFormat::Text => stderr.with_layout(TextLayout::<false>),
                     LogFormat::Json => stderr.with_layout(JsonLayout::<false>),
@@ -286,7 +286,7 @@ pub fn init_logging(
         logger = logger.dispatch(|dispatch| {
             dispatch
                 .filter(env_filter(&cfg.otlp.level))
-                .filter(ThreadTrackerFilter)
+                .filter(ThreadTrackerFilter::default())
                 .append(otel)
         });
     }
@@ -296,7 +296,7 @@ pub fn init_logging(
         logger = logger.dispatch(|dispatch| {
             dispatch
                 .filter(env_filter(&cfg.tracing.capture_log_level))
-                .filter(ThreadTrackerFilter)
+                .filter(ThreadTrackerFilter::default())
                 .append(logforth::append::FastraceEvent::default())
         });
     }
@@ -318,7 +318,7 @@ pub fn init_logging(
                         EnvFilterBuilder::new()
                             .filter(Some("databend::log::query::file"), LevelFilter::Trace),
                     ))
-                    .filter(ThreadTrackerFilter)
+                    .filter(ThreadTrackerFilter::default())
                     .append(query_log_file.with_layout(IdenticalLayout))
             });
         }
@@ -345,7 +345,7 @@ pub fn init_logging(
                         EnvFilterBuilder::new()
                             .filter(Some("databend::log::query::file"), LevelFilter::Trace),
                     ))
-                    .filter(ThreadTrackerFilter)
+                    .filter(ThreadTrackerFilter::default())
                     .append(otel)
             });
         }
@@ -368,7 +368,7 @@ pub fn init_logging(
                         EnvFilterBuilder::new()
                             .filter(Some("databend::log::profile"), LevelFilter::Trace),
                     ))
-                    .filter(ThreadTrackerFilter)
+                    .filter(ThreadTrackerFilter::default())
                     .append(profile_log_file.with_layout(IdenticalLayout))
             });
         }
@@ -392,7 +392,7 @@ pub fn init_logging(
                         EnvFilterBuilder::new()
                             .filter(Some("databend::log::profile"), LevelFilter::Trace),
                     ))
-                    .filter(ThreadTrackerFilter)
+                    .filter(ThreadTrackerFilter::default())
                     .append(otel)
             });
         }
@@ -414,7 +414,7 @@ pub fn init_logging(
                     EnvFilterBuilder::new()
                         .filter(Some("databend::log::structlog"), LevelFilter::Trace),
                 ))
-                .filter(ThreadTrackerFilter)
+                .filter(ThreadTrackerFilter::default())
                 .append(structlog_log_file)
         });
     }
@@ -439,7 +439,7 @@ pub fn init_logging(
         logger = logger.dispatch(|dispatch| {
             dispatch
                 .filter(EnvFilter::new(filter_builder.parse(&cfg.history.level)))
-                .filter(ThreadTrackerFilter)
+                .filter(ThreadTrackerFilter::default())
                 .append(remote_log)
         });
         _drop_guards.push(flush_guard);
@@ -449,7 +449,7 @@ pub fn init_logging(
     {
         logger = logger.dispatch(|dispatch| {
             dispatch
-                .filter(ThreadTrackerFilter)
+                .filter(ThreadTrackerFilter::default().report_issues())
                 .append(QueryLogCollector::new())
         });
     }
