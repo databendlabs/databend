@@ -5054,15 +5054,21 @@ pub fn priority(i: Input) -> IResult<Priority> {
 }
 
 pub fn action(i: Input) -> IResult<SystemAction> {
-    let mut backtrace = parser_fn(map(
+    let backtrace = parser_fn(map(
         rule! {
              #switch ~ EXCEPTION_BACKTRACE
         },
         |(switch, _)| SystemAction::Backtrace(switch),
     ));
+    let flush_privileges = parser_fn(map(
+        rule! {
+             FLUSH ~ PRIVILEGES
+        },
+        |_| SystemAction::FlushPrivileges,
+    ));
     // add other system action type here
     rule!(
-        #backtrace
+        #backtrace | #flush_privileges
     )
     .parse(i)
 }

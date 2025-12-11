@@ -102,7 +102,6 @@ impl HookOperator {
             catalog: self.catalog.to_owned(),
             database: self.database.to_owned(),
             table: self.table.to_owned(),
-            mutation_kind: self.mutation_kind,
         };
 
         let trace_ctx = CompactHookTraceCtx {

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::RowID;
+use crate::types::StringColumn;
 use crate::StateAddr;
 use crate::StatesLayout;
 
@@ -41,7 +43,7 @@ impl RowPtr {
         core::ptr::copy_nonoverlapping(
             value as *const T as *const u8,
             self.0.add(offset),
-            std::mem::size_of::<T>(),
+            size_of::<T>(),
         );
     }
 
@@ -59,6 +61,30 @@ impl RowPtr {
     pub(super) unsafe fn is_bytes_eq(&self, offset: usize, other: &[u8]) -> bool {
         let scalar = self.read_bytes(offset);
         scalar.len() == other.len() && databend_common_hashtable::fast_memcmp(scalar, other)
+    }
+
+    pub(super) unsafe fn eq_string_view(
+        &self,
+        offset: usize,
+        str_view: &StringColumn,
+        row: RowID,
+    ) -> bool {
+        let row = row.to_usize();
+        let v = str_view.views().get_unchecked(row);
+        let len = self.read::<u32>(offset);
+        if v.length != len {
+            return false;
+        }
+        let scalar = {
+            let data_ptr = self.read::<u64>(offset + size_of::<u32>()) as *const u8;
+            std::slice::from_raw_parts(data_ptr, len as _)
+        };
+        let other = v.get_slice_unchecked(str_view.data_buffers());
+        databend_common_hashtable::fast_memcmp(scalar, other)
+    }
+
+    pub(super) unsafe fn read_bool(&self, offset: usize) -> bool {
+        self.read::<u8>(offset) != 0
     }
 
     pub(super) unsafe fn write_u8(&mut self, offset: usize, value: u8) {

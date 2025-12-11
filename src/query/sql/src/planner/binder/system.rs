@@ -29,6 +29,9 @@ impl Binder {
             AstSystemAction::Backtrace(switch) => Ok(Plan::System(Box::new(SystemPlan {
                 action: SystemAction::Backtrace(*switch),
             }))),
+            AstSystemAction::FlushPrivileges => Ok(Plan::System(Box::new(SystemPlan {
+                action: SystemAction::FlushPrivileges,
+            }))),
         }
     }
 }

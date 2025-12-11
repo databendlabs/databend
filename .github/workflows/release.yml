@@ -313,10 +313,6 @@ jobs:
         uses: ./.github/actions/publish_debug_symbols
         env:
           GH_TOKEN: ${{ github.token }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
         with:
           version: ${{ needs.create_release.outputs.version }}
           target: ${{ matrix.target }}

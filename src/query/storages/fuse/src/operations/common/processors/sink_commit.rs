@@ -58,6 +58,7 @@ use opendal::Operator;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::set_backoff;
+use crate::operations::set_compaction_num_block_hint;
 use crate::operations::vacuum::vacuum_table;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
@@ -442,6 +443,11 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     table_stats_gen,
                 ) {
                     Ok(snapshot) => {
+                        set_compaction_num_block_hint(
+                            self.ctx.as_ref(),
+                            table_info.name.as_str(),
+                            &snapshot.summary,
+                        );
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,

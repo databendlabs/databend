@@ -42,7 +42,7 @@ impl ExchangeSink {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let exchange_manager = ctx.get_exchange_manager();
-        let mut senders = exchange_manager.get_flight_sender(params)?;
+        let senders = exchange_manager.get_flight_sender(params)?;
 
         match params {
             ExchangeParams::MergeExchange(params) => {
@@ -77,33 +77,28 @@ impl ExchangeSink {
                     )]));
                 }
 
-                pipeline.try_resize(1)?;
-                assert_eq!(senders.len(), 1);
-                pipeline.add_pipe(Pipe::create(1, 0, vec![create_writer_item(
-                    senders.remove(0),
-                    params.ignore_exchange,
-                    &params.destination_id,
-                    params.fragment_id,
-                    &ctx.get_cluster().local_id(),
-                )]));
+                let output = senders.len();
+                pipeline.try_resize(output)?;
+
+                let items = senders
+                    .into_iter()
+                    .map(|(_, sender)| create_writer_item(sender, params.ignore_exchange))
+                    .collect::<Vec<_>>();
+
+                pipeline.add_pipe(Pipe::create(output, 0, items));
                 Ok(())
             }
-            ExchangeParams::ShuffleExchange(params) => {
+            ExchangeParams::BroadcastExchange(_params) => Ok(()),
+            ExchangeParams::NodeShuffleExchange(params) => {
                 exchange_shuffle(ctx, params, pipeline)?;
 
                 // exchange writer sink
                 let len = pipeline.output_len();
-                let mut items = Vec::with_capacity(senders.len());
 
-                for (destination_id, sender) in params.destination_ids.iter().zip(senders) {
-                    items.push(create_writer_item(
-                        sender,
-                        false,
-                        destination_id,
-                        params.fragment_id,
-                        &ctx.get_cluster().local_id(),
-                    ));
-                }
+                let items = senders
+                    .into_iter()
+                    .map(|(_, sender)| create_writer_item(sender, false))
+                    .collect::<Vec<_>>();
 
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())

@@ -137,6 +137,11 @@ impl TempDirManager {
 
         let mut group = self.group.lock().unwrap();
         if group.dirs.remove(&path).is_some() {
+            log::debug!(
+                target: "spill-tempdir",
+                "[SPILL-TEMP] drop_disk_spill_dir removing path={:?}",
+                path
+            );
             match fs::remove_dir_all(&path) {
                 Ok(_) => return Ok(true),
                 Err(e) if matches!(e.kind(), ErrorKind::NotFound) => {}
@@ -171,6 +176,13 @@ impl TempDirManager {
                     .take(limit)
                     .collect::<Vec<_>>();
                 drop(group);
+                if !to_delete.is_empty() {
+                    log::debug!(
+                        target: "spill-tempdir",
+                        "[SPILL-TEMP] drop_disk_spill_dir_unknown removing={:?}",
+                        to_delete
+                    );
+                }
                 for path in &to_delete {
                     fs::remove_dir_all(path)?;
                 }

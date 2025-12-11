@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::LimitType;
@@ -132,7 +133,7 @@ impl SortPipelineBuilder {
 
         let spiller = {
             let temp_dir_manager = TempDirManager::instance();
-            let disk_bytes_limit = settings.get_sort_spilling_to_disk_bytes_limit()?;
+            let disk_bytes_limit = GlobalConfig::instance().spill.sort_spill_bytes_limit();
             let enable_dio = settings.get_enable_dio()?;
             let disk_spill = temp_dir_manager
                 .get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id())

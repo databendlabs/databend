@@ -72,16 +72,10 @@ pub fn via_exchange_source(
         ));
     }
 
-    for (destination_id, flight_exchange) in flight_receivers {
+    for flight_exchange in flight_receivers {
         let output = OutputPort::create();
         items.push(PipeItem::create(
-            ExchangeSourceReader::create(
-                output.clone(),
-                flight_exchange,
-                &destination_id,
-                &ctx.get_cluster().local_id(),
-                params.fragment_id,
-            ),
+            ExchangeSourceReader::create(output.clone(), flight_exchange),
             vec![],
             vec![output],
         ));

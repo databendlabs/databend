@@ -44,7 +44,6 @@ class ResultRecord:
     version: str
     warehouse: str
     machine: str
-    cluster_size: str
     tags: List[str]
     result: List[List[float]]
     values: Dict[str, List[float]]
@@ -52,6 +51,7 @@ class ResultRecord:
     size: str
     tries: int
     storage: str
+    cache_size: str
     load_time: Optional[float] = None
     data_size: Optional[int] = None
     system: Optional[str] = None
@@ -102,7 +102,8 @@ def load_config() -> BenchmarkConfig:
     benchmark_id = os.environ.get("BENCHMARK_ID", str(int(time.time())))
     dataset = os.environ.get("BENCHMARK_DATASET", "hits")
     size = os.environ.get("BENCHMARK_SIZE", "Small")
-    cache_size = os.environ.get("BENCHMARK_CACHE_SIZE", "0")
+    raw_cache_size = os.environ.get("BENCHMARK_CACHE_SIZE", "")
+    cache_size = raw_cache_size.strip() or "0"
     version = os.environ.get("BENCHMARK_VERSION", "")
     database = os.environ.get("BENCHMARK_DATABASE", "default")
     tries_raw = os.environ.get("BENCHMARK_TRIES", "3")
@@ -120,8 +121,8 @@ def load_config() -> BenchmarkConfig:
         logger.error("BENCHMARK_TRIES must be an integer, got %s", tries_raw)
         sys.exit(1)
 
-    if tries < 1:
-        logger.error("BENCHMARK_TRIES must be positive, got %s", tries)
+    if not 1 <= tries <= 3:
+        logger.error("BENCHMARK_TRIES must be between 1 and 3, got %s", tries)
         sys.exit(1)
 
     user = os.environ.get("CLOUD_USER", "")
@@ -161,9 +162,9 @@ def ensure_dependencies() -> None:
     logger.info("bendsql version: %s", subprocess.check_output(["bendsql", "--version"]).decode().strip())
 
 
-SIZE_MAPPING: Dict[str, Dict[str, str]] = {
-    "Small": {"cluster_size": "16", "machine": "Small"},
-    "Large": {"cluster_size": "64", "machine": "Large"},
+SIZE_MAPPING: Dict[str, str] = {
+    "Small": "Small",
+    "Large": "Large",
 }
 
 
@@ -234,11 +235,19 @@ def run_timed_query(runner: BendSQLRunner, sql: str) -> Optional[float]:
     return parse_time_output(output)
 
 
+def pad_attempts(values: List[float], target_size: int) -> None:
+    if not values:
+        return
+    while len(values) < target_size:
+        values.append(values[-1])
+
+
 def write_result_files(script_dir: Path, record: ResultRecord) -> None:
     result_path = script_dir / "result.json"
-    final_result_path = script_dir / f"result-{record.dataset}-cloud-{record.size}.json"
+    cache_suffix = f"-cache-{record.cache_size}" if record.cache_size else ""
+    final_result_path = script_dir / f"result-{record.dataset}-cloud-{record.size}{cache_suffix}.json"
     ndjson_name = (
-        f"result-{record.dataset}-cloud-{record.size}"
+        f"result-{record.dataset}-cloud-{record.size}{cache_suffix}"
         f"-{record.run_id}.ndjson"
     )
     ndjson_path = script_dir / ndjson_name
@@ -272,9 +281,8 @@ def main() -> None:
         sys.exit(1)
 
     run_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    tags = ["s3"]
-    cluster_size = SIZE_MAPPING[config.size]["cluster_size"]
-    machine = SIZE_MAPPING[config.size]["machine"]
+    tags = ["s3", f"cache-{config.cache_size}"]
+    machine = SIZE_MAPPING[config.size]
     system: Optional[str] = None
     comment: Optional[str] = None
     if config.source and config.source_id:
@@ -298,7 +306,6 @@ def main() -> None:
         version=config.version,
         warehouse=config.warehouse,
         machine=machine,
-        cluster_size=cluster_size,
         tags=tags,
         result=[],
         values={},
@@ -306,6 +313,7 @@ def main() -> None:
         size=config.size,
         tries=config.tries,
         storage="s3",
+        cache_size=config.cache_size,
         system=system,
         comment=comment,
     )
@@ -369,6 +377,9 @@ def main() -> None:
             logger.info("Q%s[%s] succeeded in %.3f seconds", query_num, attempt, q_time)
             record.result[query_num].append(round(q_time, 3))
             record.values[f"Q{query_num}"].append(round(q_time, 3))
+        if config.tries < 3:
+            pad_attempts(record.result[query_num], 3)
+            pad_attempts(record.values[f"Q{query_num}"], 3)
 
     cleanup_runner = BendSQLRunner()
     cleanup_runner.set_dsn(build_dsn(config, warehouse="default", login_disable=True))

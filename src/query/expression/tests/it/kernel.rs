@@ -625,7 +625,7 @@ fn assert_estimated_scalar_repeat_size(scalar: ScalarRef, num_rows: usize, ty: D
     let col = builder.build();
     assert_eq!(
         scalar.estimated_scalar_repeat_size(num_rows, &ty),
-        col.memory_size()
+        col.memory_size(false)
     );
 }
 

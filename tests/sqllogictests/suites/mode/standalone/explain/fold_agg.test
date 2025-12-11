@@ -86,7 +86,7 @@ AggregateFinal
             ├── scan id: 0
             ├── output columns: [number (#0)]
             ├── read rows: 3000
-            ├── read size: 5.89 KiB
+            ├── read size: 5.90 KiB
             ├── partitions total: 2
             ├── partitions scanned: 2
             ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]
@@ -110,7 +110,7 @@ AggregateFinal
         ├── scan id: 0
         ├── output columns: [number (#0)]
         ├── read rows: 3000
-        ├── read size: 5.89 KiB
+        ├── read size: 5.90 KiB
         ├── partitions total: 2
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>>]

@@ -8,9 +8,6 @@ statement ok
 SET force_window_data_spill = 1;
 
 statement ok
-set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
-
-statement ok
 SET force_sort_data_spill = 1;
 
 statement ok

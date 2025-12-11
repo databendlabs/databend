@@ -41,6 +41,7 @@ use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
 use crate::infer_table_schema;
+use crate::schema::is_internal_column_id;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
@@ -50,6 +51,7 @@ use crate::types::VectorColumn;
 use crate::types::VectorDataType;
 use crate::with_number_type;
 use crate::Column;
+use crate::ColumnId;
 use crate::DataBlock;
 use crate::DataField;
 use crate::DataSchema;
@@ -82,6 +84,57 @@ impl From<&TableSchema> for Schema {
     }
 }
 
+pub fn table_schema_arrow_leaf_paths(table_schema: &TableSchema) -> Vec<(ColumnId, Vec<String>)> {
+    let mut arrow_paths = Vec::new();
+    for field in table_schema.fields() {
+        if is_internal_column_id(field.column_id()) {
+            continue;
+        }
+
+        let arrow_field = Field::from(field);
+        let mut current_path = vec![arrow_field.name().clone()];
+        collect_arrow_leaf_paths(&arrow_field, &mut current_path, &mut arrow_paths);
+    }
+
+    let leaf_fields = table_schema.leaf_fields();
+    debug_assert_eq!(leaf_fields.len(), arrow_paths.len());
+
+    leaf_fields
+        .into_iter()
+        .zip(arrow_paths)
+        .map(|(field, path)| (field.column_id(), path))
+        .collect()
+}
+
+fn collect_arrow_leaf_paths(
+    arrow_field: &Field,
+    current_path: &mut Vec<String>,
+    paths: &mut Vec<Vec<String>>,
+) {
+    match arrow_field.data_type() {
+        ArrowDataType::Struct(children) => {
+            for child in children {
+                current_path.push(child.name().clone());
+                collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
+                current_path.pop();
+            }
+        }
+        ArrowDataType::Map(child, _) => {
+            current_path.push(child.name().clone());
+            collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
+            current_path.pop();
+        }
+        ArrowDataType::LargeList(child)
+        | ArrowDataType::List(child)
+        | ArrowDataType::FixedSizeList(child, _) => {
+            current_path.push(child.name().clone());
+            collect_arrow_leaf_paths(child.as_ref(), current_path, paths);
+            current_path.pop();
+        }
+        _ => paths.push(current_path.clone()),
+    }
+}
+
 impl From<&DataType> for ArrowDataType {
     fn from(ty: &DataType) -> Self {
         let fields = DataField::new("dummy", ty.clone());
@@ -93,7 +146,6 @@ impl From<&DataType> for ArrowDataType {
 impl From<&TableField> for Field {
     fn from(f: &TableField) -> Self {
         let mut metadata = HashMap::new();
-
         let ty = match &f.data_type {
             TableDataType::Null => ArrowDataType::Null,
             TableDataType::EmptyArray => {
@@ -264,6 +316,30 @@ impl DataBlock {
         self.to_record_batch(&table_schema)
     }
 
+    pub fn to_record_batch_with_arrow_schema(
+        self,
+        arrow_schema: &Arc<arrow_schema::Schema>,
+    ) -> Result<RecordBatch> {
+        let num_fields = arrow_schema.fields.len();
+        if self.columns().len() != num_fields {
+            return Err(ErrorCode::Internal(format!(
+                "The number of columns in the data block does not match the number of fields in the table schema, block_columns: {}, table_schema_fields: {}",
+                self.columns().len(),
+                num_fields,
+            )));
+        }
+
+        if num_fields == 0 {
+            return Ok(RecordBatch::try_new_with_options(
+                Arc::new(Schema::empty()),
+                vec![],
+                &RecordBatchOptions::default().with_row_count(Some(self.num_rows())),
+            )?);
+        }
+
+        self.build_record_batch(arrow_schema.clone())
+    }
+
     pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
         if self.columns().len() != table_schema.num_fields() {
             return Err(ErrorCode::Internal(format!(
@@ -282,6 +358,10 @@ impl DataBlock {
         }
 
         let arrow_schema = Schema::from(table_schema);
+        self.build_record_batch(Arc::new(arrow_schema))
+    }
+
+    fn build_record_batch(self, arrow_schema: Arc<arrow_schema::Schema>) -> Result<RecordBatch> {
         let mut arrays = Vec::with_capacity(self.columns().len());
         for (entry, arrow_field) in self.take_columns().into_iter().zip(arrow_schema.fields()) {
             let array = entry.to_column().maybe_gc().into_arrow_rs();
@@ -289,7 +369,7 @@ impl DataBlock {
             // Adjust struct array names
             arrays.push(Self::adjust_nested_array(array, arrow_field.as_ref()));
         }
-        Ok(RecordBatch::try_new(Arc::new(arrow_schema), arrays)?)
+        Ok(RecordBatch::try_new(arrow_schema, arrays)?)
     }
 
     fn adjust_nested_array(array: Arc<dyn Array>, arrow_field: &Field) -> Arc<dyn Array> {

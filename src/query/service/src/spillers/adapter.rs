@@ -36,6 +36,7 @@ use opendal::Buffer;
 use opendal::Operator;
 use parquet::file::metadata::RowGroupMetaDataPtr;
 
+use super::async_buffer::SpillTarget;
 use super::block_reader::BlocksReader;
 use super::block_writer::BlocksWriter;
 use super::inner::*;
@@ -61,9 +62,9 @@ impl SpillAdapter for PartitionAdapter {
             .unwrap()
             .insert(location.clone(), layout.clone());
 
-        if location.is_remote() {
-            self.ctx.as_ref().incr_spill_progress(1, size);
-        }
+        // Progress (SpillTotalStats) should reflect total spill volume,
+        // including both local and remote spill files.
+        self.ctx.as_ref().incr_spill_progress(1, size);
         self.ctx.as_ref().add_spill_file(location, layout);
     }
 
@@ -232,7 +233,7 @@ impl Spiller {
         let instant = Instant::now();
         let location = self.write_encodes(write_bytes, buf).await?;
         // Record statistics.
-        record_write_profile(location.is_local(), &instant, write_bytes);
+        record_write_profile(&location, &instant, write_bytes);
 
         self.adapter
             .add_spill_file(location.clone(), layout, write_bytes);
@@ -276,7 +277,7 @@ impl Spiller {
         };
 
         // Record statistics.
-        record_read_profile(location.is_local(), &instant, data.len());
+        record_read_profile(location, &instant, data.len());
 
         // Deserialize partitioned data block.
         let mut partitioned_data = Vec::with_capacity(partitions.len());
@@ -310,7 +311,7 @@ impl Spiller {
             Location::Remote(loc) => self.operator.read_with(loc).range(data_range).await?,
         };
 
-        record_read_profile(location.is_local(), &instant, data.len());
+        record_read_profile(location, &instant, data.len());
 
         deserialize_block(layout, data)
     }
@@ -485,18 +486,21 @@ impl SpillWriter {
         let start = std::time::Instant::now();
 
         match &mut self.file_writer {
-            AnyFileWriter::Local(file_writer) => {
-                let row_group_meta = file_writer.flush_row_group(row_group)?;
+            AnyFileWriter::Local { writer, .. } => {
+                let row_group_meta = writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
-                record_write_profile(true, &start, size);
+                record_write_profile(SpillTarget::Local, &start, size);
                 Ok(row_group_meta)
             }
-            AnyFileWriter::Remote(_, file_writer) => {
-                let row_group_meta = file_writer.flush_row_group(row_group)?;
+            AnyFileWriter::Remote {
+                path: _path,
+                writer,
+            } => {
+                let row_group_meta = writer.flush_row_group(row_group)?;
                 let size = row_group_meta.compressed_size() as _;
                 self.spiller.adapter.update_progress(0, size);
-                record_write_profile(false, &start, size);
+                record_write_profile(SpillTarget::Remote, &start, size);
                 Ok(row_group_meta)
             }
         }
@@ -508,15 +512,16 @@ impl SpillWriter {
 
     pub fn close(self) -> Result<SpillReader> {
         let (metadata, location) = match self.file_writer {
-            AnyFileWriter::Local(file_writer) => {
-                let (metadata, path) = file_writer.finish()?;
+            AnyFileWriter::Local { writer, .. } => {
+                let (metadata, path) = writer.finish()?;
+                let location = Location::Local(path);
                 self.spiller
                     .adapter
-                    .add_spill_file(Location::Local(path.clone()), Layout::Parquet);
-                (metadata, Location::Local(path))
+                    .add_spill_file(location.clone(), Layout::Parquet);
+                (metadata, location)
             }
-            AnyFileWriter::Remote(path, file_writer) => {
-                let (metadata, _) = file_writer.finish()?;
+            AnyFileWriter::Remote { path, writer } => {
+                let (metadata, _) = writer.finish()?;
                 let location = Location::Remote(path);
 
                 self.spiller
@@ -563,7 +568,7 @@ impl SpillReader {
         )?;
 
         record_read_profile(
-            self.location.is_local(),
+            &self.location,
             &start,
             blocks.iter().map(DataBlock::memory_size).sum(),
         );
@@ -574,9 +579,8 @@ impl SpillReader {
 
 impl SpillAdapter for Arc<QueryContext> {
     fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
-        if matches!(location, Location::Remote(_)) {
-            self.incr_spill_progress(1, size);
-        }
+        // Count both local and remote spills in SpillTotalStats.
+        self.incr_spill_progress(1, size);
         self.as_ref().add_spill_file(location, layout);
     }
 
@@ -594,10 +598,16 @@ impl SpillAdapter for SortAdapter {
     fn add_spill_file(&self, location: Location, layout: Layout, size: usize) {
         match location {
             Location::Remote(_) => {
+                // Remote spill files are tracked in QueryContext for cleanup
+                // and contribute to the total spill progress.
                 self.ctx.as_ref().incr_spill_progress(1, size);
                 self.ctx.as_ref().add_spill_file(location, layout);
             }
             Location::Local(temp_path) => {
+                // Local spill files are tracked only in-memory for sort, but
+                // should still be counted in SpillTotalStats so that progress
+                // reflects total (local + remote) spilled bytes/files.
+                self.ctx.as_ref().incr_spill_progress(1, size);
                 self.local_files.write().unwrap().insert(temp_path, layout);
             }
         }

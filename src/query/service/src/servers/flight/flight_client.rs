@@ -136,17 +136,11 @@ impl FlightClient {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn do_get(
-        &mut self,
-        query_id: &str,
-        target: &str,
-        fragment: usize,
-    ) -> Result<FlightExchange> {
+    pub async fn do_get(&mut self, query_id: &str, channel_id: &str) -> Result<FlightExchange> {
         let request = RequestBuilder::create(Ticket::default())
             .with_metadata("x-type", "exchange_fragment")?
-            .with_metadata("x-target", target)?
             .with_metadata("x-query-id", query_id)?
-            .with_metadata("x-fragment-id", &fragment.to_string())?
+            .with_metadata("x-channel-id", channel_id)?
             .build();
         let request = databend_common_tracing::inject_span_to_tonic_request(request);
 

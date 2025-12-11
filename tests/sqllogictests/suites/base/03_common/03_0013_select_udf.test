@@ -317,4 +317,18 @@ SELECT bool_not(1 = 0);
 ----
 1
 
+statement ok
+CREATE OR REPLACE FUNCTION substring_index(str STRING, delim STRING, count INT) RETURNS STRING AS $$ ARRAY_TO_STRING(ARRAY_SLICE(SPLIT(str, delim), 1, count), delim) $$;
+
+statement ok
+CREATE OR REPLACE TABLE str_test ( str VARCHAR NULL ) ENGINE=FUSE;
+
+statement ok
+INSERT INTO str_test VALUES('a-b-c-d');
+
+query T
+SELECT substring_index(str, '-', 2) FROM str_test;
+----
+a-b
+
 # TODO: UDF Timestamp Timezone

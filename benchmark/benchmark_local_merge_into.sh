@@ -79,7 +79,6 @@ echo '{}' >result.json
 yq -i ".date = \"$(date -u +%Y-%m-%d)\"" -o json result.json
 yq -i ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" -o json result.json
 yq -i ".machine = \"${format_instance_type}\"" -o json result.json
-yq -i '.cluster_size = 1' -o json result.json
 yq -i '.tags = ["gp3"]' -o json result.json
 yq -i ".system = \"${1}\"" -o json result.json
 
