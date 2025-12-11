@@ -102,10 +102,6 @@ impl ExprRuntimePruner {
                                 func_ctx,
                                 &BUILTIN_FUNCTIONS,
                             );
-                            debug!(
-                                "Runtime filter after constant fold is {:?}",
-                                new_expr.sql_display()
-                            );
                             if matches!(
                                 new_expr,
                                 Expr::Constant(Constant {
