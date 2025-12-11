@@ -1513,8 +1513,12 @@ fn test_left_semi_deduplication() -> Result<()> {
     let cond_t1_t3 = builder.join_condition(t1_id.clone(), t3_id.clone(), false); // redundant
 
     let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
-    let join_tree =
-        builder.join(join_t1_t2, t3, vec![cond_t2_t3.clone(), cond_t1_t3], JoinType::LeftSemi);
+    let join_tree = builder.join(
+        join_t1_t2,
+        t3,
+        vec![cond_t2_t3.clone(), cond_t1_t3],
+        JoinType::LeftSemi,
+    );
 
     let before_patterns = [r#"
 Join [t2.id = t3.id, t1.id = t3.id]
@@ -1579,8 +1583,12 @@ fn test_right_anti_deduplication() -> Result<()> {
     let cond_t3_t2 = builder.join_condition(t3_id.clone(), t2_id.clone(), false); // redundant
 
     let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
-    let join_tree =
-        builder.join(t3, join_t1_t2, vec![cond_t3_t1.clone(), cond_t3_t2], JoinType::RightAnti);
+    let join_tree = builder.join(
+        t3,
+        join_t1_t2,
+        vec![cond_t3_t1.clone(), cond_t3_t2],
+        JoinType::RightAnti,
+    );
 
     let before_patterns = [r#"
 Join [t3.id = t1.id, t3.id = t2.id]
