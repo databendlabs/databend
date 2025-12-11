@@ -22,17 +22,19 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
-use databend_common_functions::aggregates::eval_aggr_for_test;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_io::HybridBitmap;
 use goldenfile::Mint;
 use itertools::Itertools;
 
+use super::eval_aggr_for_test;
 use super::run_agg_ast;
 use super::simulate_two_groups_group_by;
 use super::AggregationSimulator;
@@ -40,12 +42,41 @@ use super::AggregationSimulator;
 fn eval_aggr(
     name: &str,
     params: Vec<databend_common_expression::Scalar>,
-    columns: &[Column],
+    entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
-    eval_aggr_for_test(name, params, &block_entries, rows, true, sort_descs)
+    let res1 = eval_aggr_for_test(
+        name,
+        params.clone(),
+        entries,
+        rows,
+        false,
+        true,
+        sort_descs.clone(),
+    )?;
+
+    let res2 = eval_aggr_for_test(name, params, entries, rows, true, true, sort_descs)?;
+    assert_eq!(res1, res2);
+    Ok(res1)
+}
+
+fn eval_aggr_without_each_row(
+    name: &str,
+    params: Vec<databend_common_expression::Scalar>,
+    entries: &[BlockEntry],
+    rows: usize,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
+) -> Result<(Column, DataType)> {
+    eval_aggr_for_test(
+        name,
+        params.clone(),
+        entries,
+        rows,
+        false,
+        true,
+        sort_descs.clone(),
+    )
 }
 
 #[test]
@@ -53,7 +84,8 @@ fn test_aggr_functions() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("agg.txt").unwrap();
 
-    test_count(file, eval_aggr);
+    // WARNING: AggregateCountFunction::accumulate_row do not check nulls
+    test_count(file, eval_aggr_without_each_row);
     test_count_distinct(file, eval_aggr);
     test_sum(file, eval_aggr);
     test_avg(file, eval_aggr);
@@ -78,8 +110,8 @@ fn test_aggr_functions() {
     test_agg_quantile_tdigest(file, eval_aggr);
     // FIXME
     test_agg_quantile_tdigest_weighted(file, |name, params, columns, rows, _sort_descs| {
-        let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
-        eval_aggr_for_test(name, params, &block_entries, rows, false, vec![])
+        let block_entries = columns.to_vec();
+        eval_aggr_for_test(name, params, &block_entries, rows, false, false, vec![])
     });
     test_agg_median(file, eval_aggr);
     test_agg_median_tdigest(file, eval_aggr);
@@ -133,8 +165,8 @@ fn test_aggr_functions_group_by() {
     test_agg_list_agg(file, simulate_two_groups_group_by);
     test_agg_bitmap_count(file, simulate_two_groups_group_by);
     test_agg_bitmap(file, simulate_two_groups_group_by);
-    test_agg_group_array_moving_avg(file, eval_aggr);
-    test_agg_group_array_moving_sum(file, eval_aggr);
+    test_agg_group_array_moving_avg(file, simulate_two_groups_group_by);
+    test_agg_group_array_moving_sum(file, simulate_two_groups_group_by);
     test_agg_json_agg(file, eval_aggr);
     test_agg_json_array_agg(file, eval_aggr);
     test_agg_json_object_agg(file, eval_aggr);
@@ -165,8 +197,8 @@ fn gen_bitmap_data() -> Column {
     BitmapType::from_data(rbs)
 }
 
-fn get_example() -> Vec<(&'static str, Column)> {
-    vec![
+fn get_example() -> Vec<(&'static str, BlockEntry)> {
+    [
         ("a", Int64Type::from_data(vec![4i64, 3, 2, 1])),
         ("b", UInt64Type::from_data(vec![1u64, 2, 3, 4])),
         ("c", UInt64Type::from_data(vec![1u64, 2, 1, 3])),
@@ -227,10 +259,23 @@ fn get_example() -> Vec<(&'static str, Column)> {
             ]),
         ),
     ]
+    .into_iter()
+    .map(|(name, column)| (name, column.into()))
+    .chain([
+        (
+            "const_int",
+            BlockEntry::new_const_column_arg::<Int32Type>(5, 4),
+        ),
+        (
+            "const_int_null",
+            BlockEntry::new_const_column_arg::<NullableType<Int32Type>>(None, 4),
+        ),
+    ])
+    .collect()
 }
 
-fn get_geometry_example() -> Vec<(&'static str, Column)> {
-    vec![
+fn get_geometry_example() -> Vec<(&'static str, BlockEntry)> {
+    [
         (
             "point",
             StringType::from_data(vec!["POINT(1 1)", "POINT(2 2)", "POINT(3 3)", "POINT(4 4)"]),
@@ -351,12 +396,29 @@ fn get_geometry_example() -> Vec<(&'static str, Column)> {
             ),
         ),
     ]
+    .into_iter()
+    .map(|(name, column)| (name, column.into()))
+    .collect()
 }
 
 fn test_count(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(
         file,
         "count(1)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "count(const_int)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "count(const_int_null)",
         get_example().as_slice(),
         simulator,
         vec![],
@@ -422,6 +484,20 @@ fn test_sum(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(file, "sum(a)", get_example().as_slice(), simulator, vec![]);
     run_agg_ast(
         file,
+        "sum(const_int)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "sum(const_int_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
         "sum(x_null)",
         get_example().as_slice(),
         simulator,
@@ -485,6 +561,13 @@ fn test_agg_if(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(
         file,
         "count_if(1, x_null is null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "count_if(1, false)",
         get_example().as_slice(),
         simulator,
         vec![],
@@ -568,6 +651,20 @@ fn test_agg_min(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(
         file,
         "min(NULL)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "min(const_int)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "min(const_int_null)",
         get_example().as_slice(),
         simulator,
         vec![],
@@ -680,6 +777,34 @@ fn test_agg_arg_max(file: &mut impl Write, simulator: impl AggregationSimulator)
     run_agg_ast(
         file,
         "arg_max(b, a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "arg_max(const_int, a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "arg_max(const_int_null, a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "arg_max(a, const_int)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "arg_max(a, const_int_null)",
         get_example().as_slice(),
         simulator,
         vec![],
@@ -965,6 +1090,20 @@ fn test_agg_array_agg(file: &mut impl Write, simulator: impl AggregationSimulato
     run_agg_ast(
         file,
         "array_agg(1)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "array_agg(const_int)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "array_agg(const_int_null)",
         get_example().as_slice(),
         simulator,
         vec![],

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
+use super::payload_row::CompareState;
 use super::PartitionedPayload;
 use super::ProbeState;
 use super::RowPtr;
@@ -114,7 +117,7 @@ const SALT_MASK: u64 = 0xFFFF000000000000;
 const POINTER_MASK: u64 = 0x0000FFFFFFFFFFFF;
 
 // The high 16 bits are the salt, the low 48 bits are the pointer address
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub(super) struct Entry(pub(super) u64);
 
 impl Entry {
@@ -153,6 +156,15 @@ impl Entry {
     }
 }
 
+impl Debug for Entry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Entry")
+            .field(&self.get_salt())
+            .field(&self.get_pointer())
+            .finish()
+    }
+}
+
 pub(super) trait TableAdapter {
     fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize);
 
@@ -172,16 +184,9 @@ impl HashIndex {
         mut adapter: impl TableAdapter,
     ) -> usize {
         for (i, row) in state.no_match_vector[..row_count].iter_mut().enumerate() {
-            *row = i;
+            *row = i.into();
+            state.slots[i] = init_slot(state.group_hashes[i], self.capacity_mask);
         }
-
-        let mut slots = state.get_temp();
-        slots.extend(
-            state.group_hashes[..row_count]
-                .iter()
-                .map(|hash| init_slot(*hash, self.capacity_mask)),
-        );
-        let capacity_mask = self.capacity_mask;
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
@@ -193,12 +198,10 @@ impl HashIndex {
 
             // 1. inject new_group_count, new_entry_count, need_compare_count, no_match_count
             for row in state.no_match_vector[..remaining_entries].iter().copied() {
-                let slot = &mut slots[row];
-                let hash = state.group_hashes[row];
-
+                let slot = &mut state.slots[row];
                 let is_new;
-                (*slot, is_new) = self.find_or_insert(*slot, hash);
 
+                (*slot, is_new) = self.find_or_insert(*slot, state.group_hashes[row]);
                 if is_new {
                     state.empty_vector[new_entry_count] = row;
                     new_entry_count += 1;
@@ -215,7 +218,7 @@ impl HashIndex {
                 adapter.append_rows(state, new_entry_count);
 
                 for row in state.empty_vector[..new_entry_count].iter().copied() {
-                    let entry = self.mut_entry(slots[row]);
+                    let entry = self.mut_entry(state.slots[row]);
                     entry.set_pointer(state.addresses[row]);
                     debug_assert_eq!(entry.get_pointer(), state.addresses[row]);
                 }
@@ -227,7 +230,7 @@ impl HashIndex {
                     .iter()
                     .copied()
                 {
-                    let entry = self.mut_entry(slots[row]);
+                    let entry = self.mut_entry(state.slots[row]);
 
                     debug_assert!(entry.is_occupied());
                     debug_assert_eq!(entry.get_salt(), (state.group_hashes[row] >> 48) as u16);
@@ -240,14 +243,13 @@ impl HashIndex {
 
             // 5. Linear probing with hash-derived step
             for row in state.no_match_vector[..no_match_count].iter().copied() {
-                let slot = &mut slots[row];
+                let slot = &mut state.slots[row];
                 let hash = state.group_hashes[row];
-                *slot = next_slot(*slot, hash, capacity_mask);
+                *slot = next_slot(*slot, hash, self.capacity_mask);
             }
             remaining_entries = no_match_count;
         }
 
-        state.save_temp(slots);
         self.count += new_group_count;
 
         new_group_count
@@ -270,7 +272,13 @@ impl<'a> TableAdapter for AdapterImpl<'a> {
         need_compare_count: usize,
         no_match_count: usize,
     ) -> usize {
-        state.row_match_columns(
+        // todo: compare hash first if NECESSARY
+        CompareState {
+            address: &state.addresses,
+            compare: &mut state.group_compare_vector,
+            no_matched: &mut state.no_match_vector,
+        }
+        .row_match_entries(
             self.group_columns,
             &self.payload.row_layout,
             (need_compare_count, no_match_count),
@@ -304,8 +312,10 @@ mod tests {
         }
 
         fn init_state(&self) -> ProbeState {
-            let mut state = ProbeState::default();
-            state.row_count = self.incoming.len();
+            let mut state = ProbeState {
+                row_count: self.incoming.len(),
+                ..Default::default()
+            };
 
             for (i, (_, hash)) in self.incoming.iter().enumerate() {
                 state.group_hashes[i] = *hash
@@ -343,12 +353,12 @@ mod tests {
 
     impl TableAdapter for &mut TestTableAdapter {
         fn append_rows(&mut self, state: &mut ProbeState, new_entry_count: usize) {
-            for row in state.empty_vector[..new_entry_count].iter().copied() {
-                let (key, hash) = self.incoming[row];
+            for row in state.empty_vector[..new_entry_count].iter() {
+                let (key, hash) = self.incoming[*row];
                 let value = key + 20;
 
                 self.payload.push((key, hash, value));
-                state.addresses[row] = self.get_row_ptr(true, row);
+                state.addresses[*row] = self.get_row_ptr(true, row.to_usize());
             }
         }
 
@@ -364,9 +374,7 @@ mod tests {
             {
                 let incoming = self.incoming[row];
 
-                let row_ptr = state.addresses[row];
-
-                let (key, hash, _) = self.get_payload(row_ptr);
+                let (key, hash, _) = self.get_payload(state.addresses[row]);
 
                 const POINTER_MASK: u64 = 0x0000FFFFFFFFFFFF;
                 assert_eq!(incoming.1 | POINTER_MASK, hash | POINTER_MASK);

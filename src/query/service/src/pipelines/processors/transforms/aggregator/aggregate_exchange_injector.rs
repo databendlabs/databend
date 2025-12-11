@@ -103,7 +103,7 @@ fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
         let probe_state = &*state.probe_state;
         for (bucket, (count, sel)) in buckets.iter_mut().zip(&probe_state.partition_entries) {
             if *count > 0 {
-                bucket.copy_rows(&sel[..*count], &state.addresses);
+                bucket.copy_rows(&sel[..*count as usize], &state.addresses);
             }
         }
     }
@@ -152,7 +152,7 @@ pub fn scatter_partitioned_payload(
                 .zip(&state.probe_state.partition_entries)
             {
                 if *count > 0 {
-                    bucket.copy_rows(&sel[..*count], &state.addresses);
+                    bucket.copy_rows(&sel[..*count as usize], &state.addresses);
                 }
             }
         }
