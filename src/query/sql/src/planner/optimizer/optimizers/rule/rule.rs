@@ -122,6 +122,7 @@ pub enum RuleID {
     PushDownSortFilterScan,
     PushDownLimitFilterScan,
     SemiToInnerJoin,
+    PushDownAntiJoin,
     EliminateEvalScalar,
     EliminateFilter,
     EliminateSort,
@@ -194,6 +195,7 @@ impl Display for RuleID {
             RuleID::EliminateUnion => write!(f, "EliminateUnion"),
 
             RuleID::MergeFilterIntoMutation => write!(f, "MergeFilterIntoMutation"),
+            RuleID::PushDownAntiJoin => write!(f, "PushDownAntiJoin"),
         }
     }
 }
