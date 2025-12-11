@@ -21,6 +21,7 @@ use super::probe_state::ProbeState;
 use super::row_ptr::RowPtr;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
+use crate::types::bitmap::BitmapColumn;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
 use crate::types::i256;
@@ -239,6 +240,10 @@ impl Payload {
             DataType::Date => self.flush_type_column::<DateType>(col_offset, state),
             DataType::Binary => Column::Binary(self.flush_binary_column(col_offset, state)),
             DataType::String => Column::String(self.flush_string_column(col_offset, state)),
+            DataType::Bitmap => Column::Bitmap(Box::new(
+                BitmapColumn::from_binary(self.flush_binary_column(col_offset, state))
+                    .expect("valid bitmap column"),
+            )),
             DataType::Variant => Column::Variant(self.flush_binary_column(col_offset, state)),
             DataType::Geometry => Column::Geometry(self.flush_binary_column(col_offset, state)),
             DataType::Nullable(_) => unreachable!(),
