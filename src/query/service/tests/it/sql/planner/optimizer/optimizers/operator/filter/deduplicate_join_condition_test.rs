@@ -1471,3 +1471,135 @@ Join [t2.id = t3.id, t1.id = t3.id]
 
     Ok(())
 }
+
+// Deduplicate redundant equi-conditions on a semi join
+// Inner child builds t1.id = t2.id; upper LEFT SEMI has both t2.id = t3.id
+// and t1.id = t3.id. One of them should be removed.
+#[test]
+fn test_left_semi_deduplication() -> Result<()> {
+    let mut builder = ExprBuilder::new();
+
+    let t1_id = builder.column(
+        "t1.id",
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        "t1",
+        0,
+    );
+    let t2_id = builder.column(
+        "t2.id",
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        "t2",
+        1,
+    );
+    let t3_id = builder.column(
+        "t3.id",
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        "t3",
+        2,
+    );
+
+    let t1 = builder.table_scan(0, "t1");
+    let t2 = builder.table_scan(1, "t2");
+    let t3 = builder.table_scan(2, "t3");
+
+    let cond_t1_t2 = builder.join_condition(t1_id.clone(), t2_id.clone(), false);
+    let cond_t2_t3 = builder.join_condition(t2_id.clone(), t3_id.clone(), false);
+    let cond_t1_t3 = builder.join_condition(t1_id.clone(), t3_id.clone(), false); // redundant
+
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
+    let join_tree =
+        builder.join(join_t1_t2, t3, vec![cond_t2_t3.clone(), cond_t1_t3], JoinType::LeftSemi);
+
+    let before_patterns = [r#"
+Join [t2.id = t3.id, t1.id = t3.id]
+  Join [t1.id = t2.id]
+    Table t0
+    Table t1
+  Table t2
+"#];
+
+    let after_patterns = [r#"
+Join [t2.id = t3.id]
+  Join [t1.id = t2.id]
+    Table t0
+    Table t1
+  Table t2
+"#];
+
+    let optimized = run_optimizer(join_tree.clone())?;
+    compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+
+    Ok(())
+}
+
+// Deduplicate redundant equi-conditions on an anti join
+// Inner child builds t1.id = t2.id; upper RIGHT ANTI has both t3.id = t1.id
+// and t3.id = t2.id. One of them should be removed.
+#[test]
+fn test_right_anti_deduplication() -> Result<()> {
+    let mut builder = ExprBuilder::new();
+
+    let t1_id = builder.column(
+        "t1.id",
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        "t1",
+        0,
+    );
+    let t2_id = builder.column(
+        "t2.id",
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        "t2",
+        1,
+    );
+    let t3_id = builder.column(
+        "t3.id",
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        "t3",
+        2,
+    );
+
+    let t1 = builder.table_scan(0, "t1");
+    let t2 = builder.table_scan(1, "t2");
+    let t3 = builder.table_scan(2, "t3");
+
+    let cond_t1_t2 = builder.join_condition(t1_id.clone(), t2_id.clone(), false);
+    let cond_t3_t1 = builder.join_condition(t3_id.clone(), t1_id.clone(), false);
+    let cond_t3_t2 = builder.join_condition(t3_id.clone(), t2_id.clone(), false); // redundant
+
+    let join_t1_t2 = builder.join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
+    let join_tree =
+        builder.join(t3, join_t1_t2, vec![cond_t3_t1.clone(), cond_t3_t2], JoinType::RightAnti);
+
+    let before_patterns = [r#"
+Join [t3.id = t1.id, t3.id = t2.id]
+  Table t2
+  Join [t1.id = t2.id]
+    Table t0
+    Table t1
+"#];
+
+    let after_patterns = [r#"
+Join [t3.id = t1.id]
+  Table t2
+  Join [t1.id = t2.id]
+    Table t0
+    Table t1
+"#];
+
+    let optimized = run_optimizer(join_tree.clone())?;
+    compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+
+    Ok(())
+}

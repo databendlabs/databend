@@ -20,7 +20,6 @@ use databend_common_exception::Result;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::Optimizer;
 use crate::plans::Join;
-use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::ScalarExpr;
 
@@ -106,18 +105,18 @@ impl DeduplicateJoinConditionOptimizer {
     #[recursive::recursive]
     pub fn deduplicate(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
-            // Only optimize inner joins
-            RelOperator::Join(join) if matches!(join.join_type, JoinType::Inner) => {
-                self.optimize_inner_join(s_expr, join)
+            // Only optimize filtering joins that don't preserve nulls
+            RelOperator::Join(join) if join.join_type.is_filtering_join() => {
+                self.optimize_filtering_join(s_expr, join)
             }
             // Recursively process other nodes
             _ => self.deduplicate_children(s_expr),
         }
     }
 
-    /// Optimize inner join by removing redundant conditions
-    fn optimize_inner_join(&mut self, s_expr: &SExpr, join: &Join) -> Result<SExpr> {
-        debug_assert!(matches!(join.join_type, JoinType::Inner));
+    /// Optimize filtering joins (inner/semi/anti) by removing redundant equi-conditions
+    fn optimize_filtering_join(&mut self, s_expr: &SExpr, join: &Join) -> Result<SExpr> {
+        debug_assert!(join.join_type.is_filtering_join());
 
         // Recursively optimize left and right subtrees
         let left = self.deduplicate(s_expr.child(0)?)?;
