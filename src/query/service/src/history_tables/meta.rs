@@ -310,6 +310,44 @@ impl HistoryMetaHandle {
         Ok(())
     }
 
+    /// Checks if enough time has passed since the last execution to perform a clean operation.
+    /// If enough time has passed, it updates the last execution timestamp atomically.
+    /// Returns `Ok(true)` if the clean operation should be performed, `Ok(false)` otherwise.
+    ///
+    /// Note: This function should only be used for clean operations, cleaning tasks is idempotence
+    /// and not critical if multiple nodes perform cleaning simultaneously.
+    pub async fn check_should_perform_clean(
+        &self,
+        meta_key: &str,
+        interval_secs: u64,
+    ) -> Result<bool> {
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let last_ts_key = format!("{}/last_timestamp", meta_key);
+
+        let current = self.meta_client.get_kv(&last_ts_key).await?;
+
+        if let Some(v) = &current {
+            let last_ts: u64 = serde_json::from_slice(&v.data)?;
+            let enough_time =
+                now_ms - Duration::from_secs(interval_secs).as_millis() as u64 > last_ts;
+            if !enough_time {
+                // Not enough time has passed since last execution
+                return Ok(false);
+            }
+        }
+
+        let last_seq = current.map_or(0, |v| v.seq);
+
+        let condition = TxnCondition::eq_seq(last_ts_key.clone(), last_seq);
+        let operation = TxnOp::put(last_ts_key, serde_json::to_vec(&now_ms)?);
+        let txn_req = TxnRequest::new(vec![condition], vec![operation]);
+        let resp = self.meta_client.transaction(txn_req).await?;
+
+        // we don't retry on failure
+        // some other node has updated the timestamp and do the clean work
+        Ok(resp.success)
+    }
+
     pub async fn get_u64_from_meta(&self, meta_key: &str) -> Result<Option<u64>> {
         match self.meta_client.get_kv(meta_key).await? {
             Some(v) => {
@@ -626,6 +664,55 @@ mod tests {
         // Clean up: drop the successful guard to allow cleanup
         drop(guards);
         tokio::time::sleep(Duration::from_secs(1)).await;
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    pub async fn test_check_and_update_last_execution_timestamp() -> Result<()> {
+        let meta_store = setup_meta_client().await;
+        let meta_client = meta_store.deref().clone();
+
+        let meta_handle = HistoryMetaHandle::new(meta_client, "test_node".to_string());
+        let meta_key = "test/history_table/check_update";
+        let interval_secs = 5;
+
+        // First time: key missing, should insert.
+        let first = meta_handle
+            .check_should_perform_clean(meta_key, interval_secs)
+            .await?;
+        assert!(first);
+        let ts_after_first = meta_handle
+            .get_u64_from_meta(&format!("{}/last_timestamp", meta_key))
+            .await?
+            .expect("timestamp should exist");
+
+        // Immediately again: should not update.
+        let second = meta_handle
+            .check_should_perform_clean(meta_key, interval_secs)
+            .await?;
+        assert!(!second);
+        let ts_after_second = meta_handle
+            .get_u64_from_meta(&format!("{}/last_timestamp", meta_key))
+            .await?
+            .expect("timestamp should still exist");
+        assert_eq!(ts_after_first, ts_after_second);
+
+        // Make the stored timestamp old enough, then it should update.
+        let old_ts = ts_after_first.saturating_sub((interval_secs + 1) * 1000);
+        meta_handle
+            .set_u64_to_meta(&format!("{}/last_timestamp", meta_key), old_ts)
+            .await?;
+
+        let third = meta_handle
+            .check_should_perform_clean(meta_key, interval_secs)
+            .await?;
+        assert!(third);
+        let ts_after_third = meta_handle
+            .get_u64_from_meta(&format!("{}/last_timestamp", meta_key))
+            .await?
+            .expect("timestamp should exist");
+        assert!(ts_after_third > ts_after_first);
 
         Ok(())
     }
