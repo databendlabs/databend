@@ -73,12 +73,12 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
             .plan
             .limit
             .map(|limit| limit.saturating_sub(removed_files as u64));
-        let cleaned_temp_tables =
+        let cleaned_temp_table_sessions =
             vacuum_inactive_temp_tables(&table_ctx, session_limit).await? as u64;
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             UInt64Type::from_data(vec![removed_files as u64]),
-            UInt64Type::from_data(vec![cleaned_temp_tables]),
+            UInt64Type::from_data(vec![cleaned_temp_table_sessions]),
         ])])
     }
 }
