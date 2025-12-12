@@ -18,7 +18,7 @@ use logforth::filter::FilterResult;
 /// ThreadTrackerFilter is used in two scenarios:
 /// - `report issues`: capture logs according to `CaptureLogSettings::capture_query`.
 /// - `system history tables`: filter background SQL produced logs via `CaptureLogSettings::capture_off`.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ThreadTrackerFilter {
     pub report_issues: bool,
 }
@@ -40,6 +40,14 @@ impl logforth::Filter for ThreadTrackerFilter {
         }
 
         FilterResult::Neutral
+    }
+}
+
+impl Default for ThreadTrackerFilter {
+    fn default() -> Self {
+        Self {
+            report_issues: false,
+        }
     }
 }
 
