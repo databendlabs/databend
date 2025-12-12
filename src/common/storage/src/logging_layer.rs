@@ -13,23 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// This layer is originally from OpenDAL's LoggingLayer.
-/// OpenDAL's LoggingLayer logs detailed information at DEBUG level, which is very useful
-/// for debugging storage related issues. But the cost (even `to_string` is expensive)
-/// cannot be ignored with high throughput, which cannot be prevented even logging level is
-/// higher than DEBUG.
+// This layer is originally from OpenDAL's LoggingLayer.
+// OpenDAL's LoggingLayer logs detailed information at DEBUG level,
+// it is very useful for debugging storage related issues but the cost
+// cannot be ignored when we not on DEBUG level.
+
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Arc;
 
-
 use log::log;
 use log::log_enabled;
 use log::Level;
+use opendal::layers::LoggingInterceptor;
 use opendal::raw::oio;
 use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
-use opendal::raw::Layer;
 use opendal::raw::LayeredAccess;
 use opendal::raw::OpCopy;
 use opendal::raw::OpCreateDir;
@@ -55,12 +54,12 @@ use opendal::Error;
 use opendal::ErrorKind;
 use opendal::Metadata;
 
-struct LoggingContext<'a>(&'a [(&'a dyn Display, &'a dyn Display)]);
+#[derive(Debug, Copy, Clone, Default)]
+struct Logger;
 
 static LOGGING_TARGET: &str = "opendal::services";
 
-#[derive(Debug, Copy, Clone, Default)]
-struct Logger;
+struct LoggingContext<'a>(&'a [(&'a str, &'a str)]);
 
 impl Display for LoggingContext<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -72,23 +71,14 @@ impl Display for LoggingContext<'_> {
 }
 
 impl Logger {
-    #[inline]
-    fn debug_enabled(&self) -> bool {
-        log_enabled!(target: LOGGING_TARGET, Level::Debug)
-    }
-
     fn log(
         &self,
         info: &AccessorInfo,
         operation: Operation,
-        context: &[(&dyn Display, &dyn Display)],
+        context: &[(&str, &str)],
         message: &str,
         err: Option<&Error>,
     ) {
-        if err.is_none() && !self.debug_enabled() {
-            return;
-        }
-
         if let Some(err) = err {
             // Print error if it's unexpected, otherwise in warn.
             let lvl = if err.kind() == ErrorKind::Unexpected {
@@ -132,26 +122,6 @@ pub struct LoggingLayer {
     logger: Logger,
 }
 
-impl LoggingLayer {
-    pub fn new() -> Self {
-        Self { logger: Logger }
-    }
-}
-
-impl<A: Access> Layer<A> for LoggingLayer {
-    type LayeredAccess = LoggingAccessor<A>;
-
-    fn layer(&self, inner: A) -> Self::LayeredAccess {
-        let info = inner.info();
-        LoggingAccessor {
-            inner,
-
-            info,
-            logger: self.logger.clone(),
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct LoggingAccessor<A: Access> {
     inner: A,
@@ -179,7 +149,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
         self.logger.log(
             &self.info,
             Operation::CreateDir,
-            &[(&"path", &path)],
+            &[("path", path)],
             "started",
             None,
         );
@@ -191,7 +161,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::CreateDir,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "finished",
                     None,
                 );
@@ -200,7 +170,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::CreateDir,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "failed",
                     Some(err),
                 );
@@ -211,7 +181,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
         self.logger.log(
             &self.info,
             Operation::Read,
-            &[(&"path", &path)],
+            &[("path", path)],
             "started",
             None,
         );
@@ -223,7 +193,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Read,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "created reader",
                     None,
                 );
@@ -236,7 +206,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Read,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "failed",
                     Some(err),
                 );
@@ -247,7 +217,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
         self.logger.log(
             &self.info,
             Operation::Write,
-            &[(&"path", &path)],
+            &[("path", path)],
             "started",
             None,
         );
@@ -259,7 +229,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Write,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "created writer",
                     None,
                 );
@@ -270,7 +240,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Write,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "failed",
                     Some(err),
                 );
@@ -281,7 +251,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
         self.logger.log(
             &self.info,
             Operation::Copy,
-            &[(&"from", &from), (&"to", &to)],
+            &[("from", from), ("to", to)],
             "started",
             None,
         );
@@ -293,7 +263,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Copy,
-                    &[(&"from", &from), (&"to", &to)],
+                    &[("from", from), ("to", to)],
                     "finished",
                     None,
                 );
@@ -302,7 +272,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Copy,
-                    &[(&"from", &from), (&"to", &to)],
+                    &[("from", from), ("to", to)],
                     "failed",
                     Some(err),
                 );
@@ -313,7 +283,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
         self.logger.log(
             &self.info,
             Operation::Rename,
-            &[(&"from", &from), (&"to", &to)],
+            &[("from", from), ("to", to)],
             "started",
             None,
         );
@@ -325,7 +295,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Rename,
-                    &[(&"from", &from), (&"to", &to)],
+                    &[("from", from), ("to", to)],
                     "finished",
                     None,
                 );
@@ -334,7 +304,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Rename,
-                    &[(&"from", &from), (&"to", &to)],
+                    &[("from", from), ("to", to)],
                     "failed",
                     Some(err),
                 );
@@ -345,7 +315,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
         self.logger.log(
             &self.info,
             Operation::Stat,
-            &[(&"path", &path)],
+            &[("path", path)],
             "started",
             None,
         );
@@ -357,7 +327,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Stat,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "finished",
                     None,
                 );
@@ -366,7 +336,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Stat,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "failed",
                     Some(err),
                 );
@@ -396,7 +366,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
         self.logger.log(
             &self.info,
             Operation::List,
-            &[(&"path", &path)],
+            &[("path", path)],
             "started",
             None,
         );
@@ -408,7 +378,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::List,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "created lister",
                     None,
                 );
@@ -419,7 +389,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::List,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "failed",
                     Some(err),
                 );
@@ -430,7 +400,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
         self.logger.log(
             &self.info,
             Operation::Presign,
-            &[(&"path", &path)],
+            &[("path", path)],
             "started",
             None,
         );
@@ -442,7 +412,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Presign,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "finished",
                     None,
                 );
@@ -451,7 +421,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                 self.logger.log(
                     &self.info,
                     Operation::Presign,
-                    &[(&"path", &path)],
+                    &[("path", path)],
                     "failed",
                     Some(err),
                 );
@@ -468,7 +438,7 @@ pub struct LoggingReader<R> {
     inner: R,
 }
 
-impl<R> LoggingReader<R> {
+impl<R, I: LoggingInterceptor> LoggingReader<R> {
     fn new(info: Arc<AccessorInfo>, logger: Logger, path: &str, reader: R) -> Self {
         Self {
             info,
@@ -481,18 +451,17 @@ impl<R> LoggingReader<R> {
     }
 }
 
-impl<R: oio::Read> oio::Read for LoggingReader<R> {
+impl<R: oio::Read, I: LoggingInterceptor> oio::Read for LoggingReader<R> {
     async fn read(&mut self) -> opendal::Result<Buffer> {
         match self.inner.read().await {
             Ok(bs) if bs.is_empty() => {
-                let size = bs.len();
                 self.logger.log(
                     &self.info,
                     Operation::Read,
                     &[
-                        (&"path", &self.path),
-                        (&"read", &self.read),
-                        (&"size", &size),
+                        ("path", &self.path),
+                        ("read", &self.read.to_string()),
+                        ("size", &bs.len().to_string()),
                     ],
                     "finished",
                     None,
@@ -507,7 +476,7 @@ impl<R: oio::Read> oio::Read for LoggingReader<R> {
                 self.logger.log(
                     &self.info,
                     Operation::Read,
-                    &[(&"path", &self.path), (&"read", &self.read)],
+                    &[("path", &self.path), ("read", &self.read.to_string())],
                     "failed",
                     Some(&err),
                 );
@@ -553,9 +522,9 @@ impl<W: oio::Write> oio::Write for LoggingWriter<W> {
                     &self.info,
                     Operation::Write,
                     &[
-                        (&"path", &self.path),
-                        (&"written", &self.written),
-                        (&"size", &size),
+                        ("path", &self.path),
+                        ("written", &self.written.to_string()),
+                        ("size", &size.to_string()),
                     ],
                     "failed",
                     Some(&err),
@@ -571,7 +540,7 @@ impl<W: oio::Write> oio::Write for LoggingWriter<W> {
                 self.logger.log(
                     &self.info,
                     Operation::Write,
-                    &[(&"path", &self.path), (&"written", &self.written)],
+                    &[("path", &self.path), ("written", &self.written.to_string())],
                     "abort succeeded",
                     None,
                 );
@@ -581,7 +550,7 @@ impl<W: oio::Write> oio::Write for LoggingWriter<W> {
                 self.logger.log(
                     &self.info,
                     Operation::Write,
-                    &[(&"path", &self.path), (&"written", &self.written)],
+                    &[("path", &self.path), ("written", &self.written.to_string())],
                     "abort failed",
                     Some(&err),
                 );
@@ -596,7 +565,7 @@ impl<W: oio::Write> oio::Write for LoggingWriter<W> {
                 self.logger.log(
                     &self.info,
                     Operation::Write,
-                    &[(&"path", &self.path), (&"written", &self.written)],
+                    &[("path", &self.path), ("written", &self.written.to_string())],
                     "close succeeded",
                     None,
                 );
@@ -606,7 +575,7 @@ impl<W: oio::Write> oio::Write for LoggingWriter<W> {
                 self.logger.log(
                     &self.info,
                     Operation::Write,
-                    &[(&"path", &self.path), (&"written", &self.written)],
+                    &[("path", &self.path), ("written", &self.written.to_string())],
                     "close failed",
                     Some(&err),
                 );
@@ -650,7 +619,7 @@ impl<P: oio::List> oio::List for LoggingLister<P> {
                 self.logger.log(
                     &self.info,
                     Operation::List,
-                    &[(&"path", &self.path), (&"listed", &self.listed)],
+                    &[("path", &self.path), ("listed", &self.listed.to_string())],
                     "finished",
                     None,
                 );
@@ -659,7 +628,7 @@ impl<P: oio::List> oio::List for LoggingLister<P> {
                 self.logger.log(
                     &self.info,
                     Operation::List,
-                    &[(&"path", &self.path), (&"listed", &self.listed)],
+                    &[("path", &self.path), ("listed", &self.listed.to_string())],
                     "failed",
                     Some(err),
                 );
@@ -679,7 +648,7 @@ pub struct LoggingDeleter<D> {
     inner: D,
 }
 
-impl<D> LoggingDeleter<D> {
+impl<D, I: LoggingInterceptor> LoggingDeleter<D> {
     fn new(info: Arc<AccessorInfo>, logger: Logger, inner: D) -> Self {
         Self {
             info,
@@ -696,7 +665,7 @@ impl<D: oio::Delete> oio::Delete for LoggingDeleter<D> {
     fn delete(&mut self, path: &str, args: OpDelete) -> opendal::Result<()> {
         let version = args
             .version()
-            .map(|v| v.to_owned())
+            .map(|v| v.to_string())
             .unwrap_or_else(|| "<latest>".to_string());
 
         let res = self.inner.delete(path, args);
@@ -710,10 +679,10 @@ impl<D: oio::Delete> oio::Delete for LoggingDeleter<D> {
                     &self.info,
                     Operation::Delete,
                     &[
-                        (&"path", &path),
-                        (&"version", &version),
-                        (&"queued", &self.queued),
-                        (&"deleted", &self.deleted),
+                        ("path", path),
+                        ("version", &version),
+                        ("queued", &self.queued.to_string()),
+                        ("deleted", &self.deleted.to_string()),
                     ],
                     "failed",
                     Some(err),
@@ -734,7 +703,10 @@ impl<D: oio::Delete> oio::Delete for LoggingDeleter<D> {
                 self.logger.log(
                     &self.info,
                     Operation::Delete,
-                    &[(&"queued", &self.queued), (&"deleted", &self.deleted)],
+                    &[
+                        ("queued", &self.queued.to_string()),
+                        ("deleted", &self.deleted.to_string()),
+                    ],
                     "succeeded",
                     None,
                 );
@@ -743,7 +715,10 @@ impl<D: oio::Delete> oio::Delete for LoggingDeleter<D> {
                 self.logger.log(
                     &self.info,
                     Operation::Delete,
-                    &[(&"queued", &self.queued), (&"deleted", &self.deleted)],
+                    &[
+                        ("queued", &self.queued.to_string()),
+                        ("deleted", &self.deleted.to_string()),
+                    ],
                     "failed",
                     Some(err),
                 );
