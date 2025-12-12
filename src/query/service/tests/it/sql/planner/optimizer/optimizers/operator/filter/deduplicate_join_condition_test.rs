@@ -1611,3 +1611,73 @@ Join [t3.id = t1.id]
 
     Ok(())
 }
+
+// Ensure anti join equivalence does not leak upward to remove parent join predicates.
+// Child LEFT ANTI has t1.id = t2.id, parent INNER joins on both t1.id = t3.id and t2.id = t3.id.
+// These two predicates must not be deduplicated using child's equality.
+#[test]
+fn test_anti_equivalence_not_leaking() -> Result<()> {
+    let mut builder = ExprBuilder::new();
+
+    let t1_id = builder.column(
+        "t1.id",
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        "t1",
+        0,
+    );
+    let t2_id = builder.column(
+        "t2.id",
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        "t2",
+        1,
+    );
+    let t3_id = builder.column(
+        "t3.id",
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        "t3",
+        2,
+    );
+
+    let t1 = builder.table_scan(0, "t1");
+    let t2 = builder.table_scan(1, "t2");
+    let t3 = builder.table_scan(2, "t3");
+
+    let cond_t1_t2 = builder.join_condition(t1_id.clone(), t2_id.clone(), false);
+    let cond_t1_t3 = builder.join_condition(t1_id.clone(), t3_id.clone(), false);
+    let cond_t2_t3 = builder.join_condition(t2_id.clone(), t3_id.clone(), false);
+
+    let anti = builder.join(t1, t2, vec![cond_t1_t2], JoinType::LeftAnti);
+    let join_tree = builder.join(
+        anti,
+        t3,
+        vec![cond_t1_t3.clone(), cond_t2_t3.clone()],
+        JoinType::Inner,
+    );
+
+    let before_patterns = [r#"
+Join [t1.id = t3.id, t2.id = t3.id]
+  Join [t1.id = t2.id]
+    Table t0
+    Table t1
+  Table t2
+"#];
+
+    let after_patterns = [r#"
+Join [t1.id = t3.id, t2.id = t3.id]
+  Join [t1.id = t2.id]
+    Table t0
+    Table t1
+  Table t2
+"#];
+
+    let optimized = run_optimizer(join_tree.clone())?;
+    compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
+
+    Ok(())
+}

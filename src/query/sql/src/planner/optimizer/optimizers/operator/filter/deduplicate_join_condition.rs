@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::Optimizer;
 use crate::plans::Join;
+use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::ScalarExpr;
 
@@ -124,6 +125,12 @@ impl DeduplicateJoinConditionOptimizer {
 
         let mut join = join.clone();
         let mut non_redundant_conditions = Vec::new();
+        // Anti joins should not contribute new equivalence to ancestor nodes.
+        let snapshot = if matches!(join.join_type, JoinType::LeftAnti | JoinType::RightAnti) {
+            Some(self.snapshot())
+        } else {
+            None
+        };
 
         // Check each equi-join condition
         for condition in &join.equi_conditions {
@@ -146,6 +153,11 @@ impl DeduplicateJoinConditionOptimizer {
         // Update join conditions if any were removed
         if non_redundant_conditions.len() < join.equi_conditions.len() {
             join.equi_conditions = non_redundant_conditions;
+        }
+
+        // Restore union-find state for anti joins to avoid leaking equivalence upward.
+        if let Some(snapshot) = snapshot {
+            self.restore(snapshot);
         }
 
         // Create new expression
@@ -232,6 +244,28 @@ impl DeduplicateJoinConditionOptimizer {
     fn union(&mut self, idx1: usize, idx2: usize) {
         self.column_group.insert(idx2, idx1);
     }
+
+    /// Snapshot the current union-find state so we can rollback after
+    /// optimizing an anti join.
+    fn snapshot(&self) -> UfSnapshot {
+        UfSnapshot {
+            expr_to_index: self.expr_to_index.clone(),
+            column_group: self.column_group.clone(),
+            next_index: self.next_index,
+        }
+    }
+
+    fn restore(&mut self, snapshot: UfSnapshot) {
+        self.expr_to_index = snapshot.expr_to_index;
+        self.column_group = snapshot.column_group;
+        self.next_index = snapshot.next_index;
+    }
+}
+
+struct UfSnapshot {
+    expr_to_index: HashMap<ScalarExpr, usize>,
+    column_group: HashMap<usize, usize>,
+    next_index: usize,
 }
 
 #[async_trait::async_trait]
