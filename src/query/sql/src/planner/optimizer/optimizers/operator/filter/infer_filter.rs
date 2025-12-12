@@ -732,6 +732,18 @@ impl<'a> InferFilterOptimizer<'a> {
                                 arguments: vec![
                                     self.exprs[equal_indexes[i]].clone(),
                                     self.exprs[equal_indexes[j]].clone(),
+                                    // ScalarExpr::FunctionCall(FunctionCall {
+                                    //     span: None,
+                                    //     func_name: "infer_predicate".to_string(),
+                                    //     params: vec![],
+                                    //     arguments: vec![self.exprs[equal_indexes[i]].clone()],
+                                    // }),
+                                    // ScalarExpr::FunctionCall(FunctionCall {
+                                    //     span: None,
+                                    //     func_name: "infer_predicate".to_string(),
+                                    //     params: vec![],
+                                    //     arguments: vec![self.exprs[equal_indexes[j]].clone()],
+                                    // }),
                                 ],
                             }));
                         }

@@ -225,6 +225,8 @@ impl Operator for ConstantTableScan {
                 max,
                 ndv: ndv as f64,
                 null_count,
+                num_rows: self.num_rows as u64,
+                origin_ndv: ndv as f64,
                 histogram,
             };
             column_stats.insert(*index, column_stat);
