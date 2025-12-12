@@ -47,6 +47,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
+use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
@@ -90,6 +91,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_SEGMENT_FORMAT);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
+    r.insert(OPT_KEY_ENABLE_SCHEMA_EVOLUTION);
     r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
     r
 });
