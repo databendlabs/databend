@@ -225,10 +225,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                     "created reader",
                     None,
                 );
-                (
-                    rp,
-                    LoggingReader::new(self.info.clone(), self.logger, path, r),
-                )
+                (rp, LoggingReader::new(self.info.clone(), self.logger, path, r))
             })
             .inspect_err(|err| {
                 self.logger.log(
