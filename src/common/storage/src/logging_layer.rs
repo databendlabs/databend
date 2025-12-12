@@ -57,10 +57,6 @@ use opendal::Metadata;
 struct LoggingContext<'a>(&'a [(&'a dyn Display, &'a dyn Display)]);
 
 static LOGGING_TARGET: &str = "opendal::services";
-#[inline]
-fn debug_enabled() -> bool {
-    log_enabled!(target: LOGGING_TARGET, Level::Debug)
-}
 
 #[derive(Debug, Copy, Clone, Default)]
 struct Logger;
@@ -75,6 +71,11 @@ impl Display for LoggingContext<'_> {
 }
 
 impl Logger {
+    #[inline]
+    fn debug_enabled(&self) -> bool {
+        log_enabled!(target: LOGGING_TARGET, Level::Debug)
+    }
+
     fn log(
         &self,
         info: &AccessorInfo,
@@ -83,7 +84,7 @@ impl Logger {
         message: &str,
         err: Option<&Error>,
     ) {
-        if err.is_none() && !debug_enabled() {
+        if err.is_none() && !self.debug_enabled() {
             return;
         }
 
@@ -145,7 +146,7 @@ impl<A: Access> Layer<A> for LoggingLayer {
             inner,
 
             info,
-            logger: self.logger,
+            logger: self.logger.clone(),
         }
     }
 }
@@ -225,7 +226,10 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                     "created reader",
                     None,
                 );
-                (rp, LoggingReader::new(self.info.clone(), self.logger, path, r))
+                (
+                    rp,
+                    LoggingReader::new(self.info.clone(), self.logger.clone(), path, r),
+                )
             })
             .inspect_err(|err| {
                 self.logger.log(
@@ -258,7 +262,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                     "created writer",
                     None,
                 );
-                let w = LoggingWriter::new(self.info.clone(), self.logger, path, w);
+                let w = LoggingWriter::new(self.info.clone(), self.logger.clone(), path, w);
                 (rp, w)
             })
             .inspect_err(|err| {
@@ -378,7 +382,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
             .map(|(rp, d)| {
                 self.logger
                     .log(&self.info, Operation::Delete, &[], "finished", None);
-                let d = LoggingDeleter::new(self.info.clone(), self.logger, d);
+                let d = LoggingDeleter::new(self.info.clone(), self.logger.clone(), d);
                 (rp, d)
             })
             .inspect_err(|err| {
@@ -407,7 +411,7 @@ impl<A: Access> LayeredAccess for LoggingAccessor<A> {
                     "created lister",
                     None,
                 );
-                let streamer = LoggingLister::new(self.info.clone(), self.logger, path, v);
+                let streamer = LoggingLister::new(self.info.clone(), self.logger.clone(), path, v);
                 (rp, streamer)
             })
             .inspect_err(|err| {
