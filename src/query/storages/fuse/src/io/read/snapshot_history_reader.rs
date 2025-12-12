@@ -39,57 +39,60 @@ pub trait SnapshotHistoryReader {
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
+        branch_id: Option<u64>,
     ) -> TableSnapshotStream;
 }
+
 impl SnapshotHistoryReader for TableSnapshotReader {
     fn snapshot_history(
         self,
         location: String,
         format_version: u64,
         location_gen: TableMetaLocationGenerator,
+        branch_id: Option<u64>,
     ) -> TableSnapshotStream {
         let stream = stream::try_unfold(
-            (self, location_gen, Some((location, format_version))),
-            |(reader, gen, next)| async move {
+            (
+                self,
+                location_gen,
+                branch_id,
+                Some((location, format_version)),
+            ),
+            |(reader, gen, branch_id, next)| async move {
                 if let Some((loc, ver)) = next {
-                    let load_params = LoadParams {
+                    let params = LoadParams {
                         location: loc,
                         len_hint: None,
                         ver,
                         put_cache: true,
                     };
 
-                    let snapshot = match reader.read(&load_params).await {
-                        Ok(s) => Ok(Some(s)),
-                        Err(e) => {
-                            if e.code() == ErrorCode::STORAGE_NOT_FOUND {
-                                info!(
-                                    "traverse snapshot history break at location ({}, {}), err detail {}",
-                                    load_params.location, load_params.ver, e
-                                );
-                                Ok(None)
-                            } else {
-                                Err(e)
-                            }
+                    let snapshot = match reader.read(&params).await {
+                        Ok(s) => s,
+                        Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                            info!(
+                                "traverse snapshot history break at location ({}, {}), err {}",
+                                params.location, params.ver, e
+                            );
+                            return Ok(None);
                         }
+                        Err(e) => return Err(e),
                     };
-                    match snapshot {
-                        Ok(Some(snapshot)) => {
-                            if let Some((prev_id, prev_version)) = snapshot.prev_snapshot_id {
-                                let new_ver = prev_version;
-                                let new_loc =
-                                    gen.snapshot_location_from_uuid(&prev_id, prev_version)?;
-                                Ok(Some((
-                                    (snapshot, ver),
-                                    (reader, gen, Some((new_loc, new_ver))),
-                                )))
+
+                    let next = snapshot
+                        .prev_snapshot_id
+                        .map(|(prev_id, prev_ver)| {
+                            let next_loc = if let Some(id) = branch_id {
+                                gen.ref_snapshot_location_from_uuid(id, &prev_id, prev_ver)
                             } else {
-                                Ok(Some(((snapshot, ver), (reader, gen, None))))
-                            }
-                        }
-                        Ok(None) => Ok(None),
-                        Err(e) => Err(e),
-                    }
+                                gen.snapshot_location_from_uuid(&prev_id, prev_ver)
+                            };
+
+                            next_loc.map(|loc| (loc, prev_ver))
+                        })
+                        .transpose()?;
+
+                    Ok(Some(((snapshot, ver), (reader, gen, branch_id, next))))
                 } else {
                     Ok(None)
                 }

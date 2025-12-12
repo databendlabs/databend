@@ -219,6 +219,7 @@ pub async fn get_fuse_table_snapshot(
                 snapshot_location,
                 format_version,
                 meta_location_generator.clone(),
+                fuse_table.get_branch_id(),
             );
 
             if let Some(Ok((snapshot, _v))) = lite_snapshot_stream.take(1).next().await {

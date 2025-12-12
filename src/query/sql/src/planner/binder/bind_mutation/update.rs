@@ -66,13 +66,14 @@ impl Binder {
         self.init_cte(bind_context, with)?;
 
         let target_table_identifier =
-            TableIdentifier::new(self, catalog, database, table, table_alias);
+            TableIdentifier::new(self, catalog, database, table, &None, table_alias);
 
         let target_table_reference = TableReference::Table {
             span: None,
             catalog: catalog.clone(),
             database: database.clone(),
             table: table.clone(),
+            ref_name: None,
             alias: table_alias.clone(),
             temporal: None,
             with_options: None,

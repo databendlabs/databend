@@ -120,13 +120,13 @@ impl SegmentsIO {
     #[fastrace::trace]
     pub async fn generic_read_compact_segments<R: SegmentReader>(
         &self,
-        segment_locations: &[Location],
+        segment_locations: &[&Location],
         put_cache: bool,
         projection: &HashSet<String>,
     ) -> Result<Vec<Result<Arc<R::CompactSegment>>>> {
         let mut iter = segment_locations.iter();
         let tasks = std::iter::from_fn(|| {
-            iter.next().map(|location| {
+            iter.next().map(|&location| {
                 let dal = self.operator.clone();
                 let table_schema = self.schema.clone();
                 let segment_location = location.clone();

@@ -188,6 +188,7 @@ fn test_decode_v148_table_meta() -> anyhow::Result<()> {
         row_access_policy_columns_ids: None,
         indexes: btreemap! {},
         constraints: btreemap! {},
+        refs: btreemap! {},
     };
     common::test_load_old(func_name!(), table_meta_v148.as_slice(), 148, want())?;
     common::test_pb_from_to(func_name!(), want())?;
