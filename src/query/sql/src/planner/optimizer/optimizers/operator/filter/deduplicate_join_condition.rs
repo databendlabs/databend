@@ -125,8 +125,11 @@ impl DeduplicateJoinConditionOptimizer {
 
         let mut join = join.clone();
         let mut non_redundant_conditions = Vec::new();
-        // Anti joins should not contribute new equivalence to ancestor nodes.
-        let snapshot = if matches!(join.join_type, JoinType::LeftAnti | JoinType::RightAnti) {
+        // Anti / Semi joins should not contribute new equivalence to ancestor nodes.
+        let snapshot = if matches!(
+            join.join_type,
+            JoinType::LeftAnti | JoinType::RightAnti | JoinType::LeftSemi | JoinType::RightSemi
+        ) {
             Some(self.snapshot())
         } else {
             None
