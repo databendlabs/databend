@@ -51,6 +51,7 @@ use opendal::raw::normalize_root;
 use parking_lot::Mutex;
 use rand::random;
 use tokio::time::sleep;
+use tokio::time::Instant;
 use uuid::Uuid;
 
 use crate::clusters::ClusterDiscovery;
@@ -340,28 +341,31 @@ impl GlobalHistoryLog {
     }
 
     pub async fn clean(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
-        let may_permit = self
+        let got_permit = self
             .meta_handle
-            .acquire_with_guard(
+            .check_should_perform_clean(
                 &format!("{}/{}/lock", meta_key, table.name),
                 Duration::from_hours(self.retention_interval as u64).as_secs(),
             )
             .await?;
-        if let Some(_guard) = may_permit {
+        if got_permit {
+            let start = Instant::now();
             let sql = &table.delete;
             self.execute_sql(sql).await?;
             let context = self.create_context().await?;
+            let delete_elapsed = start.elapsed().as_secs();
             if LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
                 .is_ok()
             {
                 let vacuum = format!("VACUUM TABLE system_history.{}", table.name);
                 self.execute_sql(&vacuum).await?;
-                info!(
-                    "periodic VACUUM operation on history log table '{}' completed successfully.",
-                    table.name
-                );
             }
+            info!("periodic retention operation on history log table '{}' completed successfully (delete {} secs, vacuum {} secs)",
+                    table.name,
+                    delete_elapsed,
+                    start.elapsed().as_secs() - delete_elapsed
+                );
             return Ok(true);
         }
         Ok(false)
