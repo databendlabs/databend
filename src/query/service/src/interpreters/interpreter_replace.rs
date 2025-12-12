@@ -413,7 +413,7 @@ impl ReplaceInterpreter {
                 Plan::CopyIntoTable(copy_plan) => {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    let (physical_plan, _) = interpreter
+                    let (physical_plan, _, _) = interpreter
                         .build_physical_plan(table_info, &copy_plan, table_meta_timestamps)
                         .await?;
 

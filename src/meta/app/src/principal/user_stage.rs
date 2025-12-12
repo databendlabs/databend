@@ -402,6 +402,7 @@ pub struct StageParams {
     pub storage: StorageParams,
 }
 
+// todo(yangxiufeng): not used, remove it later.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, Eq, PartialEq)]
 #[serde(default)]
 pub struct CopyOptions {
@@ -428,6 +429,7 @@ pub struct StageInfo {
     // on `COPY INTO xx FROM 's3://xxx?ak=?&sk=?'`, the URL(ExternalLocation) will be treated as an temporary stage.
     pub is_temporary: bool,
     pub file_format_params: FileFormatParams,
+    // todo(yangxiufeng): not used, remove it later.
     pub copy_options: CopyOptions,
     pub comment: String,
     /// TODO(xuanwo): stage doesn't have this info anymore, remove it.
