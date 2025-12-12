@@ -51,6 +51,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_parquet::read_metas_in_parallel_for_copy;
 use databend_common_storages_stage::StageTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;
 use log::debug;
 use log::info;
@@ -378,7 +379,7 @@ impl CopyIntoTableInterpreter {
         new_schema: Option<TableSchemaRef>,
     ) -> Result<()> {
         let ctx = self.ctx.clone();
-        let to_table = ctx
+        let mut to_table = ctx
             .get_table(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
@@ -386,37 +387,43 @@ impl CopyIntoTableInterpreter {
             )
             .await?;
 
+        let mut prev_snapshot_id = None;
+
         // Commit.
         {
             let mut table_info = to_table.get_table_info().clone();
             if let Some(new_schema) = new_schema {
+                let fuse_table = FuseTable::try_from_table(to_table.as_ref())?;
+                let base_snapshot = fuse_table.read_table_snapshot().await?;
+                prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
+
                 table_info.meta.fill_field_comments();
                 while table_info.meta.field_comments.len() < new_schema.fields.len() {
                     table_info.meta.field_comments.push("".to_string());
                 }
                 table_info.meta.schema = new_schema;
+                to_table = FuseTable::create_and_refresh_table_info(
+                    table_info,
+                    ctx.get_settings().get_s3_storage_class()?,
+                )?
+                .into();
             }
-
-            let new_table = FuseTable::create_and_refresh_table_info(
-                table_info,
-                ctx.get_settings().get_s3_storage_class()?,
-            )?;
 
             let copied_files_meta_req = PipelineBuilder::build_upsert_copied_files_to_meta_req(
                 ctx.clone(),
-                new_table.as_ref(),
+                to_table.as_ref(),
                 &files_to_copy,
                 &plan.stage_table_info.copy_into_table_options,
                 path_prefix,
             )?;
 
-            new_table.commit_insertion(
+            to_table.commit_insertion(
                 ctx.clone(),
                 main_pipeline,
                 copied_files_meta_req,
                 update_stream_meta,
                 plan.write_mode.is_overwrite(),
-                None,
+                prev_snapshot_id,
                 deduplicated_label,
                 table_meta_timestamps,
             )?;
