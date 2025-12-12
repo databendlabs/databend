@@ -37,6 +37,76 @@ use log::info;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
 
+#[async_backtrace::framed]
+pub async fn vacuum_inactive_temp_tables(
+    ctx: &Arc<dyn TableContext>,
+    limit: Option<u64>,
+) -> Result<usize> {
+    let op = DataOperator::instance().operator();
+    let mut lister = op
+        .lister_with(TEMP_TABLE_STORAGE_PREFIX)
+        .recursive(true)
+        .await?;
+
+    let client_session_mgr = UserApiProvider::instance().client_session_api(&ctx.get_tenant());
+    let mut user_session_ids = HashSet::new();
+    let mut inactive_user_session_ids = Vec::new();
+    let session_limit = limit.unwrap_or(u64::MAX) as usize;
+
+    if session_limit == 0 {
+        return Ok(0);
+    }
+
+    while let Some(entry) = lister.try_next().await? {
+        if entry.metadata().is_dir() {
+            continue;
+        }
+        let path = entry.path();
+        let parts: Vec<_> = path.split('/').collect();
+        if parts.len() < 3 {
+            return Err(ErrorCode::Internal(format!(
+                "invalid path for temp table: {path}"
+            )));
+        };
+        let user_name = parts[1].to_string();
+        let session_id = parts[2].to_string();
+        if user_session_ids.contains(&(user_name.clone(), session_id.clone())) {
+            continue;
+        }
+        user_session_ids.insert((user_name.clone(), session_id.clone()));
+        if client_session_mgr
+            .get_client_session(&user_name, &session_id)
+            .await?
+            .is_none()
+        {
+            inactive_user_session_ids.push((user_name, session_id));
+            if inactive_user_session_ids.len() >= session_limit {
+                break;
+            }
+        }
+    }
+
+    let mut session_num = 0;
+
+    for (user_name, session_id) in inactive_user_session_ids {
+        if client_session_mgr
+            .get_client_session(&user_name, &session_id)
+            .await?
+            .is_none()
+        {
+            let path = format!("{}/{}/{}", TEMP_TABLE_STORAGE_PREFIX, user_name, session_id);
+            info!(
+                "[TEMP TABLE] session={session_id} vacuum temporary table: {}",
+                path
+            );
+            op.remove_all(&path).await?;
+            session_num += 1;
+        }
+    }
+
+    Ok(session_num)
+}
+
 pub struct FuseVacuumTemporaryTable {
     limit: Option<u64>,
 }
@@ -64,59 +134,7 @@ impl SimpleTableFunc for FuseVacuumTemporaryTable {
         ctx: &Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
-        let op = DataOperator::instance().operator();
-        let mut lister = op
-            .lister_with(TEMP_TABLE_STORAGE_PREFIX)
-            .recursive(true)
-            .await?;
-        let client_session_mgr = UserApiProvider::instance().client_session_api(&ctx.get_tenant());
-        let mut user_session_ids = HashSet::new();
-        let mut inactive_user_session_ids = HashSet::new();
-        while let Some(entry) = lister.try_next().await? {
-            if entry.metadata().is_dir() {
-                continue;
-            }
-            let path = entry.path();
-            let parts: Vec<_> = path.split('/').collect();
-            if parts.len() < 3 {
-                return Err(ErrorCode::Internal(format!(
-                    "invalid path for temp table: {path}"
-                )));
-            };
-            let user_name = parts[1].to_string();
-            let session_id = parts[2].to_string();
-            if user_session_ids.contains(&(user_name.clone(), session_id.clone())) {
-                continue;
-            }
-            user_session_ids.insert((user_name.clone(), session_id.clone()));
-            if client_session_mgr
-                .get_client_session(&user_name, &session_id)
-                .await?
-                .is_none()
-            {
-                inactive_user_session_ids.insert((user_name, session_id));
-                if inactive_user_session_ids.len() >= self.limit.unwrap_or(u64::MAX) as usize {
-                    break;
-                }
-            }
-        }
-
-        let session_num = inactive_user_session_ids.len();
-
-        for (user_name, session_id) in inactive_user_session_ids {
-            if client_session_mgr
-                .get_client_session(&user_name, &session_id)
-                .await?
-                .is_none()
-            {
-                let path = format!("{}/{}/{}", TEMP_TABLE_STORAGE_PREFIX, user_name, session_id);
-                info!(
-                    "[TEMP TABLE] session={session_id} vacuum temporary table: {}",
-                    path
-                );
-                op.remove_all(&path).await?;
-            }
-        }
+        let session_num = vacuum_inactive_temp_tables(ctx, self.limit).await?;
         let col: Vec<String> = vec![format!(
             "Ok: processed temporary tables from {} inactive sessions",
             session_num
