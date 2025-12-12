@@ -293,8 +293,8 @@ impl Settings {
         self.try_get_u64("input_read_buffer_size")
     }
 
-    pub fn get_enable_new_copy_for_text_formats(&self) -> Result<u64> {
-        self.try_get_u64("enable_new_copy_for_text_formats")
+    pub fn get_enable_split_file_loading(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_split_file_loading")? != 0)
     }
 
     pub fn get_enable_purge_duplicated_files_in_copy(&self) -> Result<bool> {

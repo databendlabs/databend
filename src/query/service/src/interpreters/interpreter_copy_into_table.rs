@@ -122,7 +122,11 @@ impl CopyIntoTableInterpreter {
                 Some(result_columns),
             )
         } else {
-            let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
+            let stage_table = if self.ctx.get_settings().get_enable_split_file_loading()? {
+                StageTable::try_create_with_split_file(plan.stage_table_info.clone())?
+            } else {
+                StageTable::try_create(plan.stage_table_info.clone())?
+            };
 
             let data_source_plan = stage_table
                 .read_plan(self.ctx.clone(), None, None, false, false)

@@ -33,6 +33,7 @@ databend-common-storages-parquet = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 enum-as-inner = { workspace = true }
+fastrace = { workspace = true }
 jsonb = { workspace = true }
 lexical-core = { workspace = true }
 log = { workspace = true }
@@ -44,7 +45,11 @@ parking_lot = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
 typetag = { workspace = true }
+
+[dev-dependencies]
+csv = { workspace = true }
 
 [lints]
 workspace = true

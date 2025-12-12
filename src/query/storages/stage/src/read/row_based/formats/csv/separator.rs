@@ -18,7 +18,6 @@ use std::sync::Arc;
 use csv_core::ReadRecordResult;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_formats::RecordDelimiter;
 use databend_common_storage::FileParseError;
 use databend_common_storage::FileStatus;
 use log::debug;
@@ -74,20 +73,7 @@ impl CsvReader {
         path: &str,
         format: &CsvInputFormat,
     ) -> Result<Self> {
-        let escape = if format.params.escape.is_empty() {
-            None
-        } else {
-            Some(format.params.escape.as_bytes()[0])
-        };
-        let reader = csv_core::ReaderBuilder::new()
-            .delimiter(format.params.field_delimiter.as_bytes()[0])
-            .quote(format.params.quote.as_bytes()[0])
-            .escape(escape)
-            .terminator(match format.params.record_delimiter.as_str().try_into()? {
-                RecordDelimiter::Crlf => csv_core::Terminator::CRLF,
-                RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),
-            })
-            .build();
+        let reader = CsvInputFormat::create_reader(&format.params)?;
         let projection = load_ctx.pos_projection.clone();
         let max_fields = match &projection {
             Some(p) => p.iter().copied().max().unwrap_or(1),
