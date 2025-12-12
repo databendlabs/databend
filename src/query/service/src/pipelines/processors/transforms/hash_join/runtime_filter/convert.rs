@@ -280,7 +280,7 @@ async fn build_bloom_filter(
         filter.insert_hash_batch(&bloom);
         return Ok(RuntimeFilterBloom {
             column_name,
-            filter,
+            filter: Arc::new(filter),
         });
     }
 
@@ -297,7 +297,7 @@ async fn build_bloom_filter(
 
     Ok(RuntimeFilterBloom {
         column_name,
-        filter,
+        filter: Arc::new(filter),
     })
 }
 
