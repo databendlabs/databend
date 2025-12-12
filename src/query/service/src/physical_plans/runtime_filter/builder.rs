@@ -38,6 +38,7 @@ use super::types::PhysicalRuntimeFilters;
 /// Type alias for probe keys with runtime filter information
 /// Contains: (RemoteExpr, scan_id, table_index, column_idx)
 type ProbeKeysWithRuntimeFilter = Vec<Option<(RemoteExpr<String>, usize, usize, IndexType)>>;
+type ProbeTargetWithTable = (RemoteExpr<String>, usize, Option<IndexType>);
 
 /// Check if a data type is supported for bloom filter
 ///
@@ -138,11 +139,17 @@ pub async fn build_runtime_filter(
             _ => continue,
         }
 
-        let probe_targets =
+        let probe_targets_with_tables =
             find_probe_targets(metadata, probe_side, &probe_key, scan_id, column_idx)?;
+        let mut probe_targets = Vec::with_capacity(probe_targets_with_tables.len());
+        let mut probe_table_rows = Vec::with_capacity(probe_targets_with_tables.len());
+        for (probe_expr, probe_scan_id, table_index) in probe_targets_with_tables {
+            probe_targets.push((probe_expr, probe_scan_id));
+            let table_rows = get_table_rows(ctx.clone(), metadata, table_index).await?;
+            probe_table_rows.push(table_rows);
+        }
 
-        let build_table_rows =
-            get_build_table_rows(ctx.clone(), metadata, build_table_index).await?;
+        let build_table_rows = get_table_rows(ctx.clone(), metadata, build_table_index).await?;
 
         let data_type = build_key
             .as_expr(&BUILTIN_FUNCTIONS)
@@ -159,6 +166,7 @@ pub async fn build_runtime_filter(
             id,
             build_key: build_key.clone(),
             probe_targets,
+            probe_table_rows,
             build_table_rows,
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter: true,
@@ -170,12 +178,12 @@ pub async fn build_runtime_filter(
     Ok(PhysicalRuntimeFilters { filters })
 }
 
-async fn get_build_table_rows(
+async fn get_table_rows(
     ctx: Arc<dyn TableContext>,
     metadata: &MetadataRef,
-    build_table_index: Option<IndexType>,
+    table_index: Option<IndexType>,
 ) -> Result<Option<u64>> {
-    if let Some(table_index) = build_table_index {
+    if let Some(table_index) = table_index {
         let table = {
             let metadata_read = metadata.read();
             metadata_read.table(table_index).table().clone()
@@ -194,7 +202,7 @@ fn find_probe_targets(
     probe_key: &RemoteExpr<String>,
     probe_scan_id: usize,
     probe_key_col_idx: IndexType,
-) -> Result<Vec<(RemoteExpr<String>, usize)>> {
+) -> Result<Vec<ProbeTargetWithTable>> {
     let mut uf = UnionFind::new();
     let mut column_to_remote: HashMap<IndexType, (RemoteExpr<String>, usize)> = HashMap::new();
     column_to_remote.insert(probe_key_col_idx, (probe_key.clone(), probe_scan_id));
@@ -217,9 +225,11 @@ fn find_probe_targets(
     let equiv_class = uf.get_equivalence_class(probe_key_col_idx);
 
     let mut result = Vec::new();
+    let metadata_read = metadata.read();
     for idx in equiv_class {
         if let Some((remote_expr, scan_id)) = column_to_remote.get(&idx) {
-            result.push((remote_expr.clone(), *scan_id));
+            let table_index = metadata_read.column(idx).table_index();
+            result.push((remote_expr.clone(), *scan_id, table_index));
         }
     }
 

@@ -516,6 +516,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
+                ("join_runtime_filter_probe_ratio_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(3),
+                    desc: "Probe/build rows ratio threshold for join runtime filters. Filters are enabled only when probe_rows / build_rows > threshold for any probe target.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",
