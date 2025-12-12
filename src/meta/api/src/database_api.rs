@@ -525,7 +525,7 @@ where
                 DatabaseVersionMismatched::new(
                     db_id,
                     MatchSeq::Exact(expected_seq),
-                    seq_meta.seq,
+                    Some(seq_meta.seq),
                     "update_database_options",
                 ),
             )));
@@ -539,11 +539,7 @@ where
         let transition = self.upsert_pb(&upsert).await?;
 
         if !transition.is_changed() {
-            let curr_seq = self
-                .get_pb(&db_key)
-                .await?
-                .map(|v| v.seq())
-                .unwrap_or_default();
+            let curr_seq = transition.prev.map(|seq_v| seq_v.seq);
 
             return Err(KVAppError::AppError(AppError::DatabaseVersionMismatched(
                 DatabaseVersionMismatched::new(

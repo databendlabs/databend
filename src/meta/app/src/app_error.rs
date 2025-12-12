@@ -316,16 +316,21 @@ impl TableVersionMismatched {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("DatabaseVersionMismatched: {db_id} expect `{expect}` but `{curr}`  while `{context}`")]
+#[error("DatabaseVersionMismatched: {db_id} expect `{expect}` but `{curr:?}`  while `{context}`")]
 pub struct DatabaseVersionMismatched {
     db_id: u64,
     expect: MatchSeq,
-    curr: u64,
+    curr: Option<u64>,
     context: String,
 }
 
 impl DatabaseVersionMismatched {
-    pub fn new(db_id: u64, expect: MatchSeq, curr: u64, context: impl Into<String>) -> Self {
+    pub fn new(
+        db_id: u64,
+        expect: MatchSeq,
+        curr: Option<u64>,
+        context: impl Into<String>,
+    ) -> Self {
         Self {
             db_id,
             expect,
