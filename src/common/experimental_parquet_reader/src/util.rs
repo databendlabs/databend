@@ -33,7 +33,7 @@ pub fn from_table_field_type(field_name: String, field_type: &TableDataType) -> 
             NumberDataType::Int64 => PrimitiveType::from_physical(field_name, PhysicalType::Int64),
             NumberDataType::UInt8 => PrimitiveType::from_physical(field_name, PhysicalType::Int32),
             NumberDataType::UInt16 => PrimitiveType::from_physical(field_name, PhysicalType::Int32),
-            NumberDataType::UInt32 => PrimitiveType::from_physical(field_name, PhysicalType::Int64),
+            NumberDataType::UInt32 => PrimitiveType::from_physical(field_name, PhysicalType::Int32),
             NumberDataType::UInt64 => PrimitiveType::from_physical(field_name, PhysicalType::Int64),
             NumberDataType::Float32 => {
                 PrimitiveType::from_physical(field_name, PhysicalType::Float)
