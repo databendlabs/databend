@@ -41,7 +41,7 @@ use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
 use crate::types::opaque::OpaqueColumn;
-use crate::types::AnyType;
+use crate::types::{AnyType, DecimalDataKind};
 use crate::types::ArrayColumn;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
