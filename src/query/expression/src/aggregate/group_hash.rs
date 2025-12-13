@@ -634,10 +634,10 @@ impl AggHash for ScalarRef<'_> {
 #[cfg(test)]
 mod tests {
     use databend_common_column::bitmap::Bitmap;
-    use databend_common_io::HybridBitmap;
-    use roaring::RoaringTreemap;
     use databend_common_column::types::months_days_micros;
     use databend_common_column::types::timestamp_tz;
+    use databend_common_io::HybridBitmap;
+    use roaring::RoaringTreemap;
 
     use super::*;
     use crate::BlockEntry;
@@ -647,9 +647,10 @@ mod tests {
     use crate::Value;
     use crate::types::ArgType;
     use crate::types::BitmapType;
-    use crate::types::Int32Type;
     use crate::types::DecimalSize;
+    use crate::types::Int32Type;
     use crate::types::NullableColumn;
+    use crate::types::NullableType;
     use crate::types::NumberScalar;
     use crate::types::OpaqueScalar;
     use crate::types::VectorDataType;
@@ -899,7 +900,7 @@ mod tests {
         let block = DataBlock::new(vec![bitmap_column.into()], 2);
 
         let mut hashes = vec![0_u64; block.num_rows()];
-        group_hash_columns(ProjectedBlock::from(block.columns()), &mut hashes);
+        group_hash_entries(ProjectedBlock::from(block.columns()), &mut hashes);
 
         // Legacy-encoded bitmap should hash identically to hybrid-encoded bitmap.
         assert_eq!(hashes[0], hashes[1]);

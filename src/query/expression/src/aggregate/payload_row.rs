@@ -133,8 +133,7 @@ pub(super) unsafe fn serialize_column_to_rowformat(
             let normalized = normalize_bitmap_column(v);
             let col = normalized.as_ref();
             for &index in select_vector {
-                let data =
-                    arena.alloc_slice_copy(unsafe { col.index_unchecked(index.to_usize()) });
+                let data = arena.alloc_slice_copy(unsafe { col.index_unchecked(index.to_usize()) });
                 address[index].write_bytes(offset, data);
             }
         }
