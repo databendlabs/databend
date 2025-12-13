@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::arch::is_aarch64_feature_detected;
 use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_column::binview::View;
 use databend_common_column::buffer::Buffer;
@@ -370,12 +371,32 @@ impl<'a> StringIter<'a> {
 
         let mut i = 0;
 
-        let mut processed_chunks_with_simd = false;
+        let mut copy_chunks_scalar = |chunks: &mut std::slice::ChunksExact<'_, i32>,
+                                      out_index: &mut usize| unsafe {
+            for chunk in chunks {
+                let idx1 = chunk[0] as usize;
+                let idx2 = chunk[1] as usize;
+                let idx3 = chunk[2] as usize;
+                let idx4 = chunk[3] as usize;
+
+                *views.as_mut_ptr().add(start_len + *out_index) = *dict_views_ptr.add(idx1);
+                *views
+                    .as_mut_ptr()
+                    .add(start_len + *out_index + 1) = *dict_views_ptr.add(idx2);
+                *views
+                    .as_mut_ptr()
+                    .add(start_len + *out_index + 2) = *dict_views_ptr.add(idx3);
+                *views
+                    .as_mut_ptr()
+                    .add(start_len + *out_index + 3) = *dict_views_ptr.add(idx4);
+
+                *out_index += 4;
+            }
+        };
 
         #[cfg(target_arch = "x86_64")]
         {
             if is_x86_feature_detected!("avx2") {
-                processed_chunks_with_simd = true;
                 use std::arch::x86_64::*;
 
                 for chunk in &mut chunks_4 {
@@ -385,19 +406,14 @@ impl<'a> StringIter<'a> {
                     let idx4 = chunk[3] as usize;
 
                     unsafe {
-                        // Correctly load 4 independent Views using individual SSE2 loads
-                        // This ensures each dictionary index is properly used
                         let view1 = _mm_loadu_si128(dict_views_ptr.add(idx1) as *const __m128i);
                         let view2 = _mm_loadu_si128(dict_views_ptr.add(idx2) as *const __m128i);
                         let view3 = _mm_loadu_si128(dict_views_ptr.add(idx3) as *const __m128i);
                         let view4 = _mm_loadu_si128(dict_views_ptr.add(idx4) as *const __m128i);
 
-                        // Use AVX2 for optimized parallel storage
-                        // Combine pairs of Views into 256-bit registers
                         let views_12 = _mm256_set_m128i(view2, view1);
                         let views_34 = _mm256_set_m128i(view4, view3);
 
-                        // Store 2 Views at once using AVX2 (maintains performance benefit)
                         let output_12_ptr = views.as_mut_ptr().add(start_len + i) as *mut __m256i;
                         let output_34_ptr =
                             views.as_mut_ptr().add(start_len + i + 2) as *mut __m256i;
@@ -408,7 +424,6 @@ impl<'a> StringIter<'a> {
                     i += 4;
                 }
             } else if is_x86_feature_detected!("sse2") {
-                processed_chunks_with_simd = true;
                 use std::arch::x86_64::*;
 
                 for chunk in &mut chunks_4 {
@@ -418,14 +433,11 @@ impl<'a> StringIter<'a> {
                     let idx4 = chunk[3] as usize;
 
                     unsafe {
-                        // Batch load 4 Views using SSE2 (16 bytes each)
-                        // Using aligned instructions - safe with 16-byte aligned View structs
                         let view1 = _mm_load_si128(dict_views_ptr.add(idx1) as *const __m128i);
                         let view2 = _mm_load_si128(dict_views_ptr.add(idx2) as *const __m128i);
                         let view3 = _mm_load_si128(dict_views_ptr.add(idx3) as *const __m128i);
                         let view4 = _mm_load_si128(dict_views_ptr.add(idx4) as *const __m128i);
 
-                        // Batch store 4 Views
                         _mm_store_si128(views.as_mut_ptr().add(start_len + i) as *mut __m128i, view1);
                         _mm_store_si128(
                             views.as_mut_ptr().add(start_len + i + 1) as *mut __m128i,
@@ -443,62 +455,53 @@ impl<'a> StringIter<'a> {
 
                     i += 4;
                 }
+            } else {
+                copy_chunks_scalar(&mut chunks_4, &mut i);
             }
         }
 
         #[cfg(target_arch = "aarch64")]
-        if !processed_chunks_with_simd {
-            processed_chunks_with_simd = true;
-            use std::arch::aarch64::*;
+        {
+            if is_aarch64_feature_detected!("neon") {
+                use std::arch::aarch64::*;
 
-            for chunk in &mut chunks_4 {
-                let idx1 = chunk[0] as usize;
-                let idx2 = chunk[1] as usize;
-                let idx3 = chunk[2] as usize;
-                let idx4 = chunk[3] as usize;
+                for chunk in &mut chunks_4 {
+                    let idx1 = chunk[0] as usize;
+                    let idx2 = chunk[1] as usize;
+                    let idx3 = chunk[2] as usize;
+                    let idx4 = chunk[3] as usize;
 
-                unsafe {
-                    let view1 = vld1q_u8(dict_views_ptr.add(idx1) as *const u8);
-                    let view2 = vld1q_u8(dict_views_ptr.add(idx2) as *const u8);
-                    let view3 = vld1q_u8(dict_views_ptr.add(idx3) as *const u8);
-                    let view4 = vld1q_u8(dict_views_ptr.add(idx4) as *const u8);
+                    unsafe {
+                        let view1 = vld1q_u8(dict_views_ptr.add(idx1) as *const u8);
+                        let view2 = vld1q_u8(dict_views_ptr.add(idx2) as *const u8);
+                        let view3 = vld1q_u8(dict_views_ptr.add(idx3) as *const u8);
+                        let view4 = vld1q_u8(dict_views_ptr.add(idx4) as *const u8);
 
-                    vst1q_u8(views.as_mut_ptr().add(start_len + i) as *mut u8, view1);
-                    vst1q_u8(
-                        views.as_mut_ptr().add(start_len + i + 1) as *mut u8,
-                        view2,
-                    );
-                    vst1q_u8(
-                        views.as_mut_ptr().add(start_len + i + 2) as *mut u8,
-                        view3,
-                    );
-                    vst1q_u8(
-                        views.as_mut_ptr().add(start_len + i + 3) as *mut u8,
-                        view4,
-                    );
+                        vst1q_u8(views.as_mut_ptr().add(start_len + i) as *mut u8, view1);
+                        vst1q_u8(
+                            views.as_mut_ptr().add(start_len + i + 1) as *mut u8,
+                            view2,
+                        );
+                        vst1q_u8(
+                            views.as_mut_ptr().add(start_len + i + 2) as *mut u8,
+                            view3,
+                        );
+                        vst1q_u8(
+                            views.as_mut_ptr().add(start_len + i + 3) as *mut u8,
+                            view4,
+                        );
+                    }
+
+                    i += 4;
                 }
-
-                i += 4;
+            } else {
+                copy_chunks_scalar(&mut chunks_4, &mut i);
             }
         }
 
-        if !processed_chunks_with_simd {
-            // Scalar fallback for non-x86 or when SIMD is unavailable
-            for chunk in chunks_4 {
-                let idx1 = chunk[0] as usize;
-                let idx2 = chunk[1] as usize;
-                let idx3 = chunk[2] as usize;
-                let idx4 = chunk[3] as usize;
-
-                unsafe {
-                    *views.as_mut_ptr().add(start_len + i) = *dict_views_ptr.add(idx1);
-                    *views.as_mut_ptr().add(start_len + i + 1) = *dict_views_ptr.add(idx2);
-                    *views.as_mut_ptr().add(start_len + i + 2) = *dict_views_ptr.add(idx3);
-                    *views.as_mut_ptr().add(start_len + i + 3) = *dict_views_ptr.add(idx4);
-                }
-
-                i += 4;
-            }
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        {
+            copy_chunks_scalar(&mut chunks_4, &mut i);
         }
 
         // Handle remaining elements with 2x unrolling
@@ -531,14 +534,25 @@ impl<'a> StringIter<'a> {
         }
 
         // Use SIMD to accumulate lengths - collect indices first to avoid iterator move issues
+        let chunk_indices: Vec<_> = indices.chunks_exact(4).collect();
 
-        let mut processed_chunk_lengths = false;
+        let mut sum_chunk_lengths_scalar = |chunks: &[&[i32]]| unsafe {
+            for chunk in chunks {
+                let idx1 = chunk[0] as usize;
+                let idx2 = chunk[1] as usize;
+                let idx3 = chunk[2] as usize;
+                let idx4 = chunk[3] as usize;
+
+                local_bytes_len += *dict_lengths_ptr.add(idx1) as usize;
+                local_bytes_len += *dict_lengths_ptr.add(idx2) as usize;
+                local_bytes_len += *dict_lengths_ptr.add(idx3) as usize;
+                local_bytes_len += *dict_lengths_ptr.add(idx4) as usize;
+            }
+        };
 
         #[cfg(target_arch = "x86_64")]
         {
-            let chunk_indices: Vec<_> = indices.chunks_exact(4).collect();
-            if is_x86_feature_detected!("avx2") {
-                processed_chunk_lengths = true;
+            if is_x86_feature_detected!("avx2") && !chunk_indices.is_empty() {
                 use std::arch::x86_64::*;
 
                 unsafe {
@@ -565,28 +579,13 @@ impl<'a> StringIter<'a> {
                     }
                 }
             } else {
-                processed_chunk_lengths = true;
-                for chunk in &chunk_indices {
-                    let idx1 = chunk[0] as usize;
-                    let idx2 = chunk[1] as usize;
-                    let idx3 = chunk[2] as usize;
-                    let idx4 = chunk[3] as usize;
-
-                    unsafe {
-                        local_bytes_len += *dict_lengths_ptr.add(idx1) as usize;
-                        local_bytes_len += *dict_lengths_ptr.add(idx2) as usize;
-                        local_bytes_len += *dict_lengths_ptr.add(idx3) as usize;
-                        local_bytes_len += *dict_lengths_ptr.add(idx4) as usize;
-                    }
-                }
+                sum_chunk_lengths_scalar(&chunk_indices);
             }
         }
 
         #[cfg(target_arch = "aarch64")]
-        if !processed_chunk_lengths {
-            let chunk_indices: Vec<_> = indices.chunks_exact(4).collect();
-            if !chunk_indices.is_empty() {
-                processed_chunk_lengths = true;
+        {
+            if is_aarch64_feature_detected!("neon") && !chunk_indices.is_empty() {
                 use std::arch::aarch64::*;
 
                 unsafe {
@@ -613,23 +612,14 @@ impl<'a> StringIter<'a> {
                         local_bytes_len += x as usize;
                     }
                 }
+            } else {
+                sum_chunk_lengths_scalar(&chunk_indices);
             }
         }
 
-        if !processed_chunk_lengths {
-            for chunk in indices.chunks_exact(4) {
-                let idx1 = chunk[0] as usize;
-                let idx2 = chunk[1] as usize;
-                let idx3 = chunk[2] as usize;
-                let idx4 = chunk[3] as usize;
-
-                unsafe {
-                    local_bytes_len += *dict_lengths_ptr.add(idx1) as usize;
-                    local_bytes_len += *dict_lengths_ptr.add(idx2) as usize;
-                    local_bytes_len += *dict_lengths_ptr.add(idx3) as usize;
-                    local_bytes_len += *dict_lengths_ptr.add(idx4) as usize;
-                }
-            }
+        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+        {
+            sum_chunk_lengths_scalar(&chunk_indices);
         }
 
         // Handle remaining pairs

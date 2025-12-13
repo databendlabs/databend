@@ -761,7 +761,7 @@ mod tests {
         ];
 
         let dict_page = DictPage {
-            buffer: bytes::Bytes::from(dict_data),
+            buffer: dict_data,
             num_values: 3,
             is_sorted: false,
         };
