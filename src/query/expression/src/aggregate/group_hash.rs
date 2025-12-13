@@ -19,6 +19,7 @@ use databend_common_column::types::Index;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::types::decimal::Decimal;
 use crate::types::i256;
 use crate::types::number::Number;
 use crate::types::AccessType;
@@ -48,8 +49,6 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::utils::bitmap::normalize_bitmap_column;
-use crate::types::decimal::Decimal;
-use crate::types::*;
 use crate::visitor::ValueVisitor;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
@@ -660,18 +659,19 @@ impl AggHash for ScalarRef<'_> {
 #[cfg(test)]
 mod tests {
     use databend_common_column::bitmap::Bitmap;
-    use databend_common_io::HybridBitmap;
-    use roaring::RoaringTreemap;
     use databend_common_column::types::months_days_micros;
     use databend_common_column::types::timestamp_tz;
+    use databend_common_io::HybridBitmap;
+    use roaring::RoaringTreemap;
 
     use super::*;
     use crate::types::geography::Geography;
     use crate::types::ArgType;
     use crate::types::BitmapType;
-    use crate::types::Int32Type;
     use crate::types::DecimalSize;
+    use crate::types::Int32Type;
     use crate::types::NullableColumn;
+    use crate::types::NullableType;
     use crate::types::NumberScalar;
     use crate::types::OpaqueScalar;
     use crate::types::VectorDataType;
@@ -925,7 +925,7 @@ mod tests {
         let block = DataBlock::new(vec![bitmap_column.into()], 2);
 
         let mut hashes = vec![0_u64; block.num_rows()];
-        group_hash_columns(ProjectedBlock::from(block.columns()), &mut hashes);
+        group_hash_entries(ProjectedBlock::from(block.columns()), &mut hashes);
 
         // Legacy-encoded bitmap should hash identically to hybrid-encoded bitmap.
         assert_eq!(hashes[0], hashes[1]);

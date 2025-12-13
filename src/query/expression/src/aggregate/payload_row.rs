@@ -129,13 +129,13 @@ pub(super) unsafe fn serialize_column_to_rowformat(
             let normalized = normalize_bitmap_column(v);
             let col = normalized.as_ref();
             for &index in select_vector {
-                let data = arena.alloc_slice_copy(unsafe { col.index_unchecked(index) });
+                let data = arena.alloc_slice_copy(unsafe { col.index_unchecked(index.to_usize()) });
                 address[index].write_bytes(offset, data);
             }
         }
         Column::Binary(v) | Column::Variant(v) | Column::Geometry(v) => {
             for &index in select_vector {
-                let data = arena.alloc_slice_copy(v.index_unchecked(index));
+                let data = arena.alloc_slice_copy(v.index_unchecked(index.to_usize()));
                 address[index].write_bytes(offset, data);
             }
         }
@@ -604,7 +604,7 @@ mod tests {
         addresses[0] = RowPtr::new(row0.as_mut_ptr());
         addresses[1] = RowPtr::new(row1.as_mut_ptr());
 
-        let select_vector = [0usize, 1usize];
+        let select_vector = [RowID::from(0), RowID::from(1)];
         let mut scratch = Vec::new();
         unsafe {
             serialize_column_to_rowformat(
