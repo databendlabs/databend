@@ -12,6 +12,3 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod agg_index_query_rewrite;
-mod eager_aggregation;
-use crate::sql::planner::optimizer::test_utils;
