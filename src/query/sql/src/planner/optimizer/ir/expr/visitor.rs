@@ -91,7 +91,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::expr::SExpr;
-// use crate::plans::RelOperator;
 
 /// Action to take after visiting a node
 #[derive(Clone)]
