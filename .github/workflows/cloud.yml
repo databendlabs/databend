@@ -65,7 +65,7 @@ jobs:
           ref: "refs/pull/${{ github.event.number }}/merge"
       - name: Build Release
         uses: ./.github/actions/build_linux
-        timeout-minutes: 60
+        timeout-minutes: 120
         env:
           DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
           DATABEND_TELEMETRY_ENDPOINT: ${{ secrets.DATABEND_TELEMETRY_ENDPOINT}}
