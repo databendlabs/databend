@@ -811,10 +811,12 @@ pub struct UpdateStreamMetaReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateTableMetaReq {
+    pub tenant: Tenant,
     pub table_id: u64,
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
     pub base_snapshot_location: Option<String>,
+    pub snapshot_ts: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

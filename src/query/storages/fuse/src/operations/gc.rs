@@ -895,6 +895,15 @@ impl FuseTable {
         counter: &mut PurgeCounter,
         dry_run: bool,
     ) -> Result<HashSet<Location>> {
+        if !dry_run {
+            if let Err(e) = self.cleanup_orphan_ref_dirs().await {
+                warn!(
+                    "Failed to clean orphan refs for table {} before purge: {}",
+                    self.table_info.desc, e
+                );
+            }
+        }
+
         let now = Utc::now();
         let table_info = self.get_table_info();
         let op = self.get_operator();
@@ -909,7 +918,7 @@ impl FuseTable {
         for (ref_name, snapshot_ref) in table_info.meta.refs.iter() {
             // Check if ref is expired
             if snapshot_ref.expire_at.is_some_and(|v| v < now) {
-                expired_refs.insert(ref_name);
+                expired_refs.insert(snapshot_ref.id);
                 continue;
             }
 

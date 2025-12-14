@@ -67,6 +67,8 @@ pub struct TxnBuffer {
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
     base_snapshot_location: HashMap<u64, Option<String>>,
+    snapshot_ts: HashMap<u64, Option<DateTime<Utc>>>,
+    tenant: HashMap<u64, Tenant>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
     deduplicated_labels: HashSet<String>,
@@ -106,6 +108,10 @@ impl TxnBuffer {
             self.base_snapshot_location
                 .entry(table_id)
                 .or_insert(req.base_snapshot_location);
+
+            self.snapshot_ts.entry(table_id).or_insert(req.snapshot_ts);
+
+            self.tenant.entry(table_id).or_insert(req.tenant);
         }
 
         for (table_id, file) in std::mem::take(&mut req.copied_files) {
@@ -310,10 +316,12 @@ impl TxnManager {
                 .map(|(id, info)| {
                     (
                         UpdateTableMetaReq {
+                            tenant: self.txn_buffer.tenant.get(id).cloned().unwrap(),
                             table_id: *id,
                             seq: MatchSeq::Exact(info.ident.seq),
                             new_table_meta: info.meta.clone(),
                             base_snapshot_location: None,
+                            snapshot_ts: self.txn_buffer.snapshot_ts.get(id).cloned().flatten(),
                         },
                         info.clone(),
                     )

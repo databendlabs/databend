@@ -89,7 +89,7 @@ impl TableRefHandler for RealTableRefHandler {
             None => base_loc,
         };
 
-        let new_snapshot = if let Some(snapshot) = fuse_table
+        let (new_snapshot, prev_ts) = if let Some(snapshot) = fuse_table
             .read_table_snapshot_with_location(snapshot_loc)
             .await?
         {
@@ -99,9 +99,9 @@ impl TableRefHandler for RealTableRefHandler {
                 ctx.get_table_meta_timestamps(fuse_table, Some(snapshot.clone()))?,
             )?;
             new_snapshot.prev_snapshot_id = None;
-            new_snapshot
+            (new_snapshot, snapshot.timestamp)
         } else {
-            TableSnapshot::try_new(
+            let new_snapshot = TableSnapshot::try_new(
                 Some(seq),
                 None,
                 table_info.schema().as_ref().clone(),
@@ -109,7 +109,8 @@ impl TableRefHandler for RealTableRefHandler {
                 vec![],
                 None,
                 ctx.get_table_meta_timestamps(fuse_table, None)?,
-            )?
+            )?;
+            (new_snapshot, None)
         };
         // write down new snapshot
         let new_snapshot_location = fuse_table
@@ -136,10 +137,14 @@ impl TableRefHandler for RealTableRefHandler {
                 loc: new_snapshot_location,
             });
         let req = UpdateTableMetaReq {
+            tenant,
             table_id: table_info.ident.table_id,
             seq: MatchSeq::Exact(seq),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
+            // Branch references should never point to snapshots that fall behind LVT.
+            // If they did, vacuum could delete the referenced snapshot immediately.
+            snapshot_ts: prev_ts,
         };
         catalog.update_single_table_meta(req, table_info).await?;
         Ok(())
@@ -181,10 +186,12 @@ impl TableRefHandler for RealTableRefHandler {
         let mut new_table_meta = table_info.meta.clone();
         new_table_meta.refs.remove(&plan.ref_name);
         let req = UpdateTableMetaReq {
+            tenant,
             table_id: table_info.ident.table_id,
             seq: MatchSeq::Exact(table_info.ident.seq),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
+            snapshot_ts: None,
         };
         catalog.update_single_table_meta(req, table_info).await?;
 

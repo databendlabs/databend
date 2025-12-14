@@ -127,10 +127,12 @@ pub async fn query_build_update_stream_req(
 
         update_table_meta_reqs.push((
             UpdateTableMetaReq {
+                tenant: ctx.get_tenant(),
                 table_id: stream_info.ident.table_id,
                 seq: MatchSeq::Exact(stream_info.ident.seq),
                 new_table_meta,
                 base_snapshot_location: None,
+                snapshot_ts: None,
             },
             stream_info.clone(),
         ));

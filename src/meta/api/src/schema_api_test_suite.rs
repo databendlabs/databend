@@ -2642,6 +2642,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
         let db_name = "db1";
         let tbl_name = "tb2";
 
@@ -2713,10 +2714,12 @@ impl SchemaApiTestSuite {
                 let table_id = table.ident.table_id;
                 let table_version = table.ident.seq;
                 let req = UpdateTableMetaReq {
+                    tenant: tenant.clone(),
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
+                    snapshot_ts: None,
                 };
 
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2738,10 +2741,12 @@ impl SchemaApiTestSuite {
                 let table_id = table.ident.table_id;
                 let table_version = table.ident.seq;
                 let req = UpdateTableMetaReq {
+                    tenant: tenant.clone(),
                     table_id,
                     seq: MatchSeq::Exact(table_version + 1),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
+                    snapshot_ts: None,
                 };
                 let res = mt
                     .update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2764,10 +2769,12 @@ impl SchemaApiTestSuite {
                 let table_id = table.ident.table_id;
                 let table_version = table.ident.seq;
                 let req = UpdateTableMetaReq {
+                    tenant: tenant.clone(),
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
+                    snapshot_ts: None,
                 };
                 let res = mt
                     .update_multi_table_meta_with_sender(
@@ -2845,10 +2852,12 @@ impl SchemaApiTestSuite {
                 };
 
                 let req = UpdateTableMetaReq {
+                    tenant: tenant.clone(),
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
+                    snapshot_ts: None,
                 };
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
@@ -2895,10 +2904,12 @@ impl SchemaApiTestSuite {
                     insert_if_not_exists: true,
                 };
                 let req = UpdateTableMetaReq {
+                    tenant: tenant.clone(),
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
+                    snapshot_ts: None,
                 };
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
@@ -2945,10 +2956,12 @@ impl SchemaApiTestSuite {
                     insert_if_not_exists: true,
                 };
                 let req = UpdateTableMetaReq {
+                    tenant: tenant.clone(),
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     base_snapshot_location: None,
+                    snapshot_ts: None,
                 };
                 let result = mt
                     .update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2960,6 +2973,63 @@ impl SchemaApiTestSuite {
                 let err = result.unwrap_err();
                 let err = ErrorCode::from(err);
                 assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
+            }
+
+            info!("--- update table meta, snapshot_ts must respect LVT");
+            {
+                let table = util.get_table().await.unwrap();
+                let table_id = table.ident.table_id;
+                let lvt_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
+                let lvt_time = DateTime::<Utc>::from_timestamp(2_000, 0).unwrap();
+                mt.set_table_lvt(&lvt_ident, &LeastVisibleTime::new(lvt_time))
+                    .await?;
+
+                // Snapshot older than LVT should be rejected.
+                let mut new_table_meta = table.meta.clone();
+                new_table_meta.comment = "lvt guard should fail".to_string();
+                let bad_snapshot_ts = DateTime::<Utc>::from_timestamp(1_000, 0).unwrap();
+                let req = UpdateTableMetaReq {
+                    tenant: tenant.clone(),
+                    table_id,
+                    seq: MatchSeq::Exact(table.ident.seq),
+                    new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
+                    snapshot_ts: Some(bad_snapshot_ts),
+                };
+                let err = mt
+                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap_err();
+                assert_eq!(
+                    ErrorCode::TABLE_SNAPSHOT_EXPIRED,
+                    ErrorCode::from(err).code()
+                );
+
+                // Snapshot newer than LVT should succeed.
+                let table = util.get_table().await.unwrap();
+                let mut ok_table_meta = table.meta.clone();
+                ok_table_meta.comment = "lvt guard success".to_string();
+                let ok_snapshot_ts = DateTime::<Utc>::from_timestamp(2_001, 0).unwrap();
+                let req = UpdateTableMetaReq {
+                    tenant,
+                    table_id,
+                    seq: MatchSeq::Exact(table.ident.seq),
+                    new_table_meta: ok_table_meta.clone(),
+                    base_snapshot_location: None,
+                    snapshot_ts: Some(ok_snapshot_ts),
+                };
+                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
+                    update_table_metas: vec![(req, table.as_ref().clone())],
+                    ..Default::default()
+                })
+                .await?
+                .unwrap();
+
+                let updated = util.get_table().await.unwrap();
+                assert_eq!(updated.meta.comment, "lvt guard success");
             }
         }
         Ok(())
@@ -4296,10 +4366,12 @@ impl SchemaApiTestSuite {
             };
 
             let req = UpdateTableMetaReq {
+                tenant: tenant.clone(),
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta.clone(),
                 base_snapshot_location: None,
+                snapshot_ts: None,
             };
 
             let table = mt
@@ -4436,10 +4508,12 @@ impl SchemaApiTestSuite {
             };
 
             let req = UpdateTableMetaReq {
+                tenant: tenant.clone(),
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: create_table_meta.clone(),
                 base_snapshot_location: None,
+                snapshot_ts: None,
             };
 
             let table = mt
@@ -6178,6 +6252,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -6233,10 +6308,12 @@ impl SchemaApiTestSuite {
             };
 
             let req = UpdateTableMetaReq {
+                tenant: tenant.clone(),
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 base_snapshot_location: None,
+                snapshot_ts: None,
             };
 
             let table = mt
@@ -6284,10 +6361,12 @@ impl SchemaApiTestSuite {
             };
 
             let req = UpdateTableMetaReq {
+                tenant,
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 base_snapshot_location: None,
+                snapshot_ts: None,
             };
 
             let table = mt
@@ -7740,6 +7819,7 @@ impl SchemaApiTestSuite {
         mt: &MT,
     ) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
 
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -7797,10 +7877,12 @@ impl SchemaApiTestSuite {
             };
 
             let req = UpdateTableMetaReq {
+                tenant: tenant.clone(),
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 base_snapshot_location: None,
+                snapshot_ts: None,
             };
 
             let table = mt
@@ -7856,10 +7938,12 @@ impl SchemaApiTestSuite {
             };
 
             let req = UpdateTableMetaReq {
+                tenant: tenant.clone(),
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 base_snapshot_location: None,
+                snapshot_ts: None,
             };
 
             let table = mt
@@ -7912,10 +7996,12 @@ impl SchemaApiTestSuite {
             };
 
             let req = UpdateTableMetaReq {
+                tenant,
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 base_snapshot_location: None,
+                snapshot_ts: None,
             };
 
             let table = mt
@@ -8348,6 +8434,9 @@ where MT: SchemaApi + kvapi::KVApi<Error = MetaError>
         &self,
         n: usize,
     ) -> anyhow::Result<BTreeMap<String, TableCopiedFileInfo>> {
+        let tenant_name = "tenant1";
+        let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+
         let mut file_infos = BTreeMap::new();
 
         for i in 0..n {
@@ -8366,10 +8455,12 @@ where MT: SchemaApi + kvapi::KVApi<Error = MetaError>
         };
 
         let req = UpdateTableMetaReq {
+            tenant,
             table_id: self.table_id,
             seq: MatchSeq::Any,
             new_table_meta: self.table_meta(),
             base_snapshot_location: None,
+            snapshot_ts: None,
         };
 
         let req = UpdateMultiTableMetaReq {

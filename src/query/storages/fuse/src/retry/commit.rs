@@ -326,10 +326,14 @@ async fn try_rebuild_req(
         let table_version = latest_table.table_info.ident.seq;
 
         let req = UpdateTableMetaReq {
+            tenant: ctx.get_tenant(),
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             base_snapshot_location: latest_table.snapshot_loc(),
+            // Vacuum can advance LVT mid-commit; sending the new snapshot timestamp lets
+            // meta prevent committing something that vacuum could delete instantly.
+            snapshot_ts: merged_snapshot.timestamp,
         };
         *update_table_meta_req = req;
     }
