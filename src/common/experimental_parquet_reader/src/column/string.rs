@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::arch::is_aarch64_feature_detected;
+
 use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_column::binview::View;
 use databend_common_column::buffer::Buffer;
@@ -380,15 +381,9 @@ impl<'a> StringIter<'a> {
                 let idx4 = chunk[3] as usize;
 
                 *views.as_mut_ptr().add(start_len + *out_index) = *dict_views_ptr.add(idx1);
-                *views
-                    .as_mut_ptr()
-                    .add(start_len + *out_index + 1) = *dict_views_ptr.add(idx2);
-                *views
-                    .as_mut_ptr()
-                    .add(start_len + *out_index + 2) = *dict_views_ptr.add(idx3);
-                *views
-                    .as_mut_ptr()
-                    .add(start_len + *out_index + 3) = *dict_views_ptr.add(idx4);
+                *views.as_mut_ptr().add(start_len + *out_index + 1) = *dict_views_ptr.add(idx2);
+                *views.as_mut_ptr().add(start_len + *out_index + 2) = *dict_views_ptr.add(idx3);
+                *views.as_mut_ptr().add(start_len + *out_index + 3) = *dict_views_ptr.add(idx4);
 
                 *out_index += 4;
             }
@@ -438,7 +433,10 @@ impl<'a> StringIter<'a> {
                         let view3 = _mm_load_si128(dict_views_ptr.add(idx3) as *const __m128i);
                         let view4 = _mm_load_si128(dict_views_ptr.add(idx4) as *const __m128i);
 
-                        _mm_store_si128(views.as_mut_ptr().add(start_len + i) as *mut __m128i, view1);
+                        _mm_store_si128(
+                            views.as_mut_ptr().add(start_len + i) as *mut __m128i,
+                            view1,
+                        );
                         _mm_store_si128(
                             views.as_mut_ptr().add(start_len + i + 1) as *mut __m128i,
                             view2,
@@ -478,18 +476,9 @@ impl<'a> StringIter<'a> {
                         let view4 = vld1q_u8(dict_views_ptr.add(idx4) as *const u8);
 
                         vst1q_u8(views.as_mut_ptr().add(start_len + i) as *mut u8, view1);
-                        vst1q_u8(
-                            views.as_mut_ptr().add(start_len + i + 1) as *mut u8,
-                            view2,
-                        );
-                        vst1q_u8(
-                            views.as_mut_ptr().add(start_len + i + 2) as *mut u8,
-                            view3,
-                        );
-                        vst1q_u8(
-                            views.as_mut_ptr().add(start_len + i + 3) as *mut u8,
-                            view4,
-                        );
+                        vst1q_u8(views.as_mut_ptr().add(start_len + i + 1) as *mut u8, view2);
+                        vst1q_u8(views.as_mut_ptr().add(start_len + i + 2) as *mut u8, view3);
+                        vst1q_u8(views.as_mut_ptr().add(start_len + i + 3) as *mut u8, view4);
                     }
 
                     i += 4;
