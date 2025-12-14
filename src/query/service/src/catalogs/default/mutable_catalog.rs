@@ -971,6 +971,10 @@ impl Catalog for MutableCatalog {
         Ok(self.ctx.meta.set_table_lvt(name_ident, value).await?)
     }
 
+    async fn get_table_lvt(&self, name_ident: &LeastVisibleTimeIdent) -> Result<LeastVisibleTime> {
+        Ok(self.ctx.meta.get_table_lvt(name_ident).await?)
+    }
+
     #[async_backtrace::framed]
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
         let res = self.ctx.meta.rename_dictionary(req).await?;

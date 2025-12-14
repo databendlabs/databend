@@ -921,6 +921,10 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.set_table_lvt(name_ident, value).await
     }
 
+    async fn get_table_lvt(&self, name_ident: &LeastVisibleTimeIdent) -> Result<LeastVisibleTime> {
+        self.mutable_catalog.get_table_lvt(name_ident).await
+    }
+
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
         self.mutable_catalog.rename_dictionary(req).await
     }

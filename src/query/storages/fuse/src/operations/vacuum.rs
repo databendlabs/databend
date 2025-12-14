@@ -439,7 +439,7 @@ impl FuseTable {
     pub async fn update_table_refs_meta(
         &self,
         ctx: &Arc<dyn TableContext>,
-        expired_refs: &HashSet<&String>,
+        expired_refs: &HashSet<u64>,
     ) -> Result<Vec<String>> {
         let catalog = ctx.get_default_catalog()?;
 
@@ -453,7 +453,7 @@ impl FuseTable {
             let mut new_table_meta = latest_table_info.meta.clone();
             new_table_meta
                 .refs
-                .retain(|ref_name, _| !expired_refs.contains(ref_name));
+                .retain(|_, val| !expired_refs.contains(&val.id));
             let req = UpdateTableMetaReq {
                 table_id: latest_table_info.ident.table_id,
                 seq: MatchSeq::Exact(latest_table_info.ident.seq),
@@ -504,6 +504,54 @@ impl FuseTable {
             dir_to_gc.push(dir);
         }
         Ok(dir_to_gc)
+    }
+
+    pub async fn cleanup_orphan_ref_dirs(&self) -> Result<Vec<String>> {
+        let prefix = self
+            .meta_location_generator()
+            .ref_snapshot_location_prefix();
+        let op = self.get_operator();
+        let table_info = self.get_table_info();
+        let table_seq = table_info.ident.seq;
+        let active_ids = table_info
+            .meta
+            .refs
+            .values()
+            .map(|snapshot_ref| snapshot_ref.id)
+            .collect::<HashSet<_>>();
+        let mut removed = Vec::new();
+        let mut lister = op.lister(prefix).await?;
+        while let Some(entry) = lister.try_next().await? {
+            if !entry.metadata().is_dir() {
+                continue;
+            }
+
+            let dir_path = entry.path();
+            let id_str = dir_path.trim_end_matches('/').rsplit('/').next().unwrap();
+            let Ok(ref_id) = id_str.parse::<u64>() else {
+                continue;
+            };
+            if table_seq <= ref_id || active_ids.contains(&ref_id) {
+                continue;
+            }
+
+            match op.remove_all(dir_path).await {
+                Ok(_) => {
+                    info!(
+                        "Removed orphan ref directory '{}' for table {}",
+                        dir_path, table_info.desc
+                    );
+                    removed.push(dir_path.to_string());
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to remove orphan ref directory '{}' for table {}: {}",
+                        dir_path, table_info.desc, e
+                    );
+                }
+            }
+        }
+        Ok(removed)
     }
 }
 

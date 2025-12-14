@@ -1453,6 +1453,7 @@ impl SchemaApiTestSuite {
 
         info!("--- test lvt");
         {
+            let time_zero = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
             let time_small = DateTime::<Utc>::from_timestamp(102, 0).unwrap();
             let time_big = DateTime::<Utc>::from_timestamp(1024, 0).unwrap();
             let time_bigger = DateTime::<Utc>::from_timestamp(1025, 0).unwrap();
@@ -1463,25 +1464,25 @@ impl SchemaApiTestSuite {
 
             let lvt_name_ident = LeastVisibleTimeIdent::new(&tenant, table_id);
 
-            let res = mt.get_pb(&lvt_name_ident).await?;
-            assert!(res.is_none());
+            let res = mt.get_table_lvt(&lvt_name_ident).await?;
+            assert_eq!(res.time, time_zero);
 
             let res = mt.set_table_lvt(&lvt_name_ident, &lvt_big).await?;
             assert_eq!(res.time, time_big);
-            let res = mt.get_pb(&lvt_name_ident).await?;
-            assert_eq!(res.unwrap().data.time, time_big);
+            let res = mt.get_table_lvt(&lvt_name_ident).await?;
+            assert_eq!(res.time, time_big);
 
             // test lvt never fall back
 
             let res = mt.set_table_lvt(&lvt_name_ident, &lvt_small).await?;
             assert_eq!(res.time, time_big);
-            let res = mt.get_pb(&lvt_name_ident).await?;
-            assert_eq!(res.unwrap().data.time, time_big);
+            let res = mt.get_table_lvt(&lvt_name_ident).await?;
+            assert_eq!(res.time, time_big);
 
             let res = mt.set_table_lvt(&lvt_name_ident, &lvt_bigger).await?;
             assert_eq!(res.time, time_bigger);
-            let res = mt.get_pb(&lvt_name_ident).await?;
-            assert_eq!(res.unwrap().data.time, time_bigger);
+            let res = mt.get_table_lvt(&lvt_name_ident).await?;
+            assert_eq!(res.time, time_bigger);
         }
 
         Ok(())

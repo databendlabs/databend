@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use log::info;
+use log::warn;
 use opendal::Entry;
 use opendal::ErrorKind;
 
@@ -612,24 +613,35 @@ async fn process_snapshot_refs(
     ctx: &Arc<dyn TableContext>,
 ) -> Result<RefVacuumInfo> {
     let start = std::time::Instant::now();
+    let table_info = fuse_table.get_table_info();
+    let mut files_to_gc = match fuse_table.cleanup_orphan_ref_dirs().await {
+        Ok(paths) => paths,
+        Err(e) => {
+            warn!(
+                "Failed to clean orphan refs for table {}: {}",
+                table_info.desc, e
+            );
+            Vec::new()
+        }
+    };
     let op = fuse_table.get_operator();
     // Refs that expired and should be cleaned up
     let mut expired_refs = HashSet::new();
+    let mut expired_ref_names = Vec::new();
     // Ref snapshot paths to be cleaned up
     let mut ref_snapshots_to_gc = Vec::new();
     let mut ref_gc_roots = Vec::new();
     let mut gc_root_meta_ts: Option<DateTime<Utc>> = None;
     let mut gc_root_timestamp: Option<DateTime<Utc>> = None;
-    let mut files_to_gc = Vec::new();
 
     let now = Utc::now();
     let (retention_time, num_snapshots_to_keep) =
         fuse_table.get_refs_retention_policy(ctx.as_ref(), now)?;
-    let table_info = fuse_table.get_table_info();
     // Process active refs
     for (ref_name, snapshot_ref) in table_info.meta.refs.iter() {
         if snapshot_ref.expire_at.is_some_and(|v| v < now) {
-            expired_refs.insert(ref_name);
+            expired_refs.insert(snapshot_ref.id);
+            expired_ref_names.push(ref_name);
             continue;
         }
 
@@ -701,9 +713,10 @@ async fn process_snapshot_refs(
 
     if !expired_refs.is_empty() {
         let start_update = std::time::Instant::now();
-        files_to_gc = fuse_table
+        let expired_ref_dirs = fuse_table
             .update_table_refs_meta(ctx, &expired_refs)
             .await?;
+        files_to_gc.extend(expired_ref_dirs);
         ctx.set_status_info(&format!(
             "Updated table meta for table {}, elapsed: {:?}",
             table_info.desc,
@@ -717,12 +730,11 @@ async fn process_snapshot_refs(
         file_op.remove_file_in_batch(&ref_snapshots_to_gc).await?;
     }
 
-    let expired_vec = expired_refs.into_iter().collect::<Vec<_>>();
     ctx.set_status_info(&format!(
         "Processed snapshot refs for table {}, elapsed: {:?}, expire_refs: {}, ref_snapshots_to_gc: {}, ref_gc_root_meta_ts: {:?}",
         table_info.desc,
         start.elapsed(),
-        slice_summary(&expired_vec),
+        slice_summary(&expired_ref_names),
         slice_summary(&ref_snapshots_to_gc),
         gc_root_meta_ts
     ));

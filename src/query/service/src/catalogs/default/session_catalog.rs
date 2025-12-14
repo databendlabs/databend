@@ -791,6 +791,10 @@ impl Catalog for SessionCatalog {
         self.inner.set_table_lvt(name_ident, value).await
     }
 
+    async fn get_table_lvt(&self, name_ident: &LeastVisibleTimeIdent) -> Result<LeastVisibleTime> {
+        self.inner.get_table_lvt(name_ident).await
+    }
+
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
         self.inner.rename_dictionary(req).await
     }

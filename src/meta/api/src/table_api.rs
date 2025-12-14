@@ -1895,6 +1895,18 @@ where
 
         return Ok(transition.unwrap().result.into_value().unwrap_or_default());
     }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<LeastVisibleTime, KVAppError> {
+        debug!(req :? =(&name_ident); "TableApi: {}", func_name!());
+
+        let seq_v = self.get_pb(name_ident).await?;
+        Ok(seq_v.map(|v| v.data).unwrap_or_default())
+    }
 }
 
 #[async_trait::async_trait]
