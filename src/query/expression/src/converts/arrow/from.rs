@@ -41,7 +41,7 @@ use super::ARROW_EXT_TYPE_VARIANT;
 use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
 use crate::types::opaque::OpaqueColumn;
-use crate::types::AnyType;
+use crate::types::{AnyType, DecimalDataKind};
 use crate::types::ArrayColumn;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
@@ -141,10 +141,13 @@ impl TryFrom<&Field> for TableField {
                     )?))
                 }
                 ArrowDataType::Decimal128(precision, scale) if *scale >= 0 => {
-                    TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new(
-                        *precision,
-                        *scale as _,
-                    )?))
+                    let size = DecimalSize::new(*precision, *scale as _)?;
+                    match size.data_kind() {
+                        DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
+                            TableDataType::Decimal(DecimalDataType::Decimal128(size))
+                        }
+                        _ => unreachable!(),
+                    }
                 }
                 ArrowDataType::Decimal256(precision, scale) if *scale >= 0 => {
                     TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new(

@@ -1,0 +1,87 @@
+statement ok
+create or replace database test_new_reader;
+
+statement ok
+use test_new_reader;
+
+statement ok
+SET use_experimental_parquet_reader = 1;
+
+
+statement ok
+create table t1 (a int not null);
+
+statement ok
+insert into t1 values(1), (3), (5);
+
+query I
+select * from t1 order by a;
+----
+1
+3
+5
+
+statement ok
+create table t2 (a int);
+
+statement ok
+insert into t2 values(1), (null), (5);
+
+query I
+select * from t2 order by a;
+----
+1
+5
+NULL
+
+
+statement ok
+create table t3 (a int);
+
+statement ok
+create table r like t3 engine = random;
+
+statement ok
+insert into t3 select * from r limit 100000;
+
+statement ok
+select sum(a) from t3 ignore_result;
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem
+(
+    l_orderkey    BIGINT not null,
+    l_partkey     BIGINT not null,
+    l_suppkey     BIGINT not null,
+    l_linenumber  BIGINT not null,
+    l_quantity    DECIMAL(15, 2) not null,
+    l_extendedprice  DECIMAL(15, 2) not null,
+    l_discount    DECIMAL(15, 2) not null,
+    l_tax         DECIMAL(15, 2) not null,
+    l_returnflag  STRING not null,
+    l_linestatus  STRING not null,
+    l_shipdate    DATE not null,
+    l_commitdate  DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode     STRING not null,
+    l_comment      STRING not null
+);
+
+statement ok
+create table lr like lineitem engine = random;
+
+statement ok
+set enable_fuse_parquet_dictionary_encoding = 1;
+
+statement ok
+insert into lineitem select * from lr limit 1000;
+
+statement ok
+insert into lineitem select * from lr limit 1000;
+
+statement ok
+select * from lineitem ignore_result;
+
+
+
