@@ -16,20 +16,21 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::SnapshotRef;
+use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateTableRefPlan;
 use databend_common_sql::plans::DropTableRefPlan;
-use databend_common_storages_fuse::FUSE_TBL_REF_PREFIX;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_table_ref_handler::TableRefHandler;
 use databend_enterprise_table_ref_handler::TableRefHandlerWrapper;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use log::error;
 
 pub struct RealTableRefHandler {}
 
@@ -79,6 +80,7 @@ impl TableRefHandler for RealTableRefHandler {
             )));
         }
         let seq = table_info.ident.seq;
+        let table_id = table_info.ident.table_id;
         let base_loc = fuse_table.snapshot_loc();
         let snapshot_loc = match &plan.navigation {
             Some(navigation) => {
@@ -89,7 +91,7 @@ impl TableRefHandler for RealTableRefHandler {
             None => base_loc,
         };
 
-        let new_snapshot = if let Some(snapshot) = fuse_table
+        let (new_snapshot, prev_ts) = if let Some(snapshot) = fuse_table
             .read_table_snapshot_with_location(snapshot_loc)
             .await?
         {
@@ -99,9 +101,9 @@ impl TableRefHandler for RealTableRefHandler {
                 ctx.get_table_meta_timestamps(fuse_table, Some(snapshot.clone()))?,
             )?;
             new_snapshot.prev_snapshot_id = None;
-            new_snapshot
+            (new_snapshot, snapshot.timestamp)
         } else {
-            TableSnapshot::try_new(
+            let new_snapshot = TableSnapshot::try_new(
                 Some(seq),
                 None,
                 table_info.schema().as_ref().clone(),
@@ -109,8 +111,36 @@ impl TableRefHandler for RealTableRefHandler {
                 vec![],
                 None,
                 ctx.get_table_meta_timestamps(fuse_table, None)?,
-            )?
+            )?;
+            (new_snapshot, None)
         };
+
+        // check least visible time
+        let mut lvt_check = None;
+        if plan
+            .navigation
+            .as_ref()
+            .is_some_and(|v| !matches!(v, NavigationPoint::TableRef { .. }))
+        {
+            if let Some(ts) = prev_ts {
+                let current_lvt = catalog
+                    .get_table_lvt(&LeastVisibleTimeIdent::new(&tenant, table_id))
+                    .await?;
+                if let Some(lvt) = current_lvt {
+                    if ts < lvt.time {
+                        return Err(ErrorCode::IllegalReference(format!(
+                            "Cannot create {} '{}', because the referred snapshot timestamp {} is older than table least visible time {}",
+                            plan.ref_type, plan.ref_name, ts, lvt.time,
+                        )));
+                    }
+                    lvt_check = Some(TableLvtCheck {
+                        tenant: tenant.clone(),
+                        lvt,
+                    });
+                }
+            }
+        }
+
         // write down new snapshot
         let new_snapshot_location = fuse_table
             .meta_location_generator()
@@ -136,12 +166,19 @@ impl TableRefHandler for RealTableRefHandler {
                 loc: new_snapshot_location,
             });
         let req = UpdateTableMetaReq {
-            table_id: table_info.ident.table_id,
+            table_id,
             seq: MatchSeq::Exact(seq),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
+            lvt_check,
         };
-        catalog.update_single_table_meta(req, table_info).await?;
+
+        // If update fails, cleanup the ref directory
+        if let Err(e) = catalog.update_single_table_meta(req, table_info).await {
+            clearup_ref_dir(fuse_table, seq).await;
+            return Err(e);
+        }
+
         Ok(())
     }
 
@@ -185,20 +222,12 @@ impl TableRefHandler for RealTableRefHandler {
             seq: MatchSeq::Exact(table_info.ident.seq),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
+            lvt_check: None,
         };
         catalog.update_single_table_meta(req, table_info).await?;
 
         // clear the ref snapshot.
-        let operator = fuse_table.get_operator_ref();
-        let dir = format!(
-            "{}/{}/{}/",
-            FuseTable::parse_storage_prefix_from_table_info(table_info)?,
-            FUSE_TBL_REF_PREFIX,
-            plan.ref_name,
-        );
-        operator.remove_all(&dir).await.inspect_err(|err| {
-            error!("failed to remove all in directory {}: {}", dir, err);
-        })?;
+        clearup_ref_dir(fuse_table, table_ref.id).await;
         Ok(())
     }
 }
@@ -209,5 +238,22 @@ impl RealTableRefHandler {
         let wrapper = TableRefHandlerWrapper::new(Box::new(handler));
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())
+    }
+}
+
+async fn clearup_ref_dir(fuse_table: &FuseTable, table_ref_id: u64) {
+    let ref_dir = format!(
+        "{}{}/",
+        fuse_table
+            .meta_location_generator()
+            .ref_snapshot_location_prefix(),
+        table_ref_id
+    );
+    if let Err(cleanup_err) = fuse_table.get_operator_ref().remove_all(&ref_dir).await {
+        log::warn!(
+            "Failed to cleanup ref directory {}: {}",
+            ref_dir,
+            cleanup_err
+        );
     }
 }

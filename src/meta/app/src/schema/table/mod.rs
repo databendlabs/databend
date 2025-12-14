@@ -41,6 +41,7 @@ use super::CatalogInfo;
 use super::CreateOption;
 use super::DatabaseId;
 use super::MarkedDeletedIndexMeta;
+use crate::schema::LeastVisibleTime;
 use crate::schema::constraint::Constraint;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::schema::table_niv::TableNIV;
@@ -815,6 +816,15 @@ pub struct UpdateTableMetaReq {
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
     pub base_snapshot_location: Option<String>,
+    /// Optional optimistic LVT check.
+    /// When set, the table LVT must be equal to the provided value.
+    pub lvt_check: Option<TableLvtCheck>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TableLvtCheck {
+    pub tenant: Tenant,
+    pub lvt: LeastVisibleTime,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

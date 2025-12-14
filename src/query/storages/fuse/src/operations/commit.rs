@@ -274,6 +274,7 @@ impl FuseTable {
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: new_table_meta.clone(),
                 base_snapshot_location: self.snapshot_loc(),
+                lvt_check: None,
             };
             update_table_metas.push((req, table_info.clone()));
             copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();

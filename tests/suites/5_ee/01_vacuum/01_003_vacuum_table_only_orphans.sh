@@ -25,8 +25,6 @@ ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_i_b_v2/ | wc -l
 
 
 stmt "truncate table test_vacuum_table_only_orphans.a"
-stmt "truncate table test_vacuum_table_only_orphans.a"
-stmt "truncate table test_vacuum_table_only_orphans.a"
 
 stmt "set data_retention_time_in_days=0; optimize table test_vacuum_table_only_orphans.a purge"
 
@@ -65,4 +63,12 @@ ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_b/ | wc -l
 ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_sg/ | wc -l
 ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_i_b_v2/ | wc -l
 
+stmt "insert into test_vacuum_table_only_orphans.a values (1)"
+stmt "set data_retention_time_in_days=0; vacuum table test_vacuum_table_only_orphans.a" > /dev/null
+
+echo "after vacuum"
+
+ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_b/ | wc -l
+ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_sg/ | wc -l
+ls -l /tmp/test_vacuum_table_only_orphans/"$PREFIX"/_i_b_v2/ | wc -l
 

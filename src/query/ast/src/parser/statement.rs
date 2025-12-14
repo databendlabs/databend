@@ -4569,6 +4569,10 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
     );
 
+    // NOTE: `AT (BRANCH|TAG => ...)` travel-point syntax is only supported when
+    // creating a branch/tag via `ALTER TABLE ... CREATE`. It is intentionally not
+    // available for SELECT or other query statements, so keep the parsing rule scoped
+    // here to avoid implying broader support.
     let create_snapshot_ref = map(
         rule! {
             CREATE ~ ( BRANCH | TAG ) ~ #ident ~ ( AT ~ ^(#travel_point | #at_table_ref) )? ~ (RETAIN ~ #literal_duration)?

@@ -20,8 +20,10 @@ use chrono::DateTime;
 use chrono::TimeDelta;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 
@@ -367,6 +369,16 @@ pub async fn do_vacuum(
         .await?;
     let status = format!("do_vacuum: purged table, cost:{:?}", start.elapsed());
     ctx.set_status_info(&status);
+
+    let catalog = ctx.get_default_catalog()?;
+    let table_lvt = catalog
+        .get_table_lvt(&LeastVisibleTimeIdent::new(
+            ctx.get_tenant(),
+            fuse_table.get_table_info().ident.table_id,
+        ))
+        .await?;
+    let table = fuse_table.refresh(ctx.as_ref()).await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     // Technically, we should derive a reasonable retention period from the ByNumOfSnapshotsToKeep policy,
     // but it's not worth the effort since VACUUM2 will replace legacy purge and vacuum soon.
     // Use the table retention period for now.
@@ -376,7 +388,12 @@ pub async fn do_vacuum(
     } else {
         fuse_table.get_data_retention_period(ctx.as_ref())?
     };
-    let retention_time = Utc::now() - retention_period;
+    let candidate_time = Utc::now() - retention_period;
+    let retention_time = if let Some(lvt) = table_lvt {
+        std::cmp::min(lvt.time, candidate_time)
+    } else {
+        candidate_time
+    };
     if let Some(mut purge_files) = purge_files_opt {
         let dry_run_limit = dry_run_limit.unwrap();
         if purge_files.len() < dry_run_limit {

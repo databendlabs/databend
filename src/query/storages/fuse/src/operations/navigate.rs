@@ -21,6 +21,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
+use databend_common_meta_app::schema::SnapshotRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::storage::S3StorageClass;
@@ -62,11 +63,7 @@ impl FuseTable {
                     .await
             }
             NavigationPoint::StreamInfo(info) => self.navigate_to_stream(ctx, info).await,
-            NavigationPoint::TableRef { typ, name } => {
-                let table_ref = self.table_info.get_table_ref(Some(typ), name)?;
-                self.load_table_by_location(ctx, Some(table_ref.loc.clone()))
-                    .await
-            }
+            NavigationPoint::TableRef { .. } => unreachable!(),
         }
     }
 
@@ -237,17 +234,31 @@ impl FuseTable {
         table_info.meta.schema = Arc::new(snapshot.schema.clone());
 
         // 2. the table option `snapshot_location`
-        let loc = if let Some(id) = self.get_branch_id() {
-            self.meta_location_generator
-                .ref_snapshot_location_from_uuid(id, &snapshot.snapshot_id, format_version)?
-        } else {
-            self.meta_location_generator
-                .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?
+        let new_branch = match self.table_branch.as_ref() {
+            Some(branch) => {
+                let loc = self
+                    .meta_location_generator
+                    .ref_snapshot_location_from_uuid(
+                        branch.id,
+                        &snapshot.snapshot_id,
+                        format_version,
+                    )?;
+                Some(SnapshotRef {
+                    loc,
+                    ..branch.clone()
+                })
+            }
+            None => {
+                let loc = self
+                    .meta_location_generator
+                    .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?;
+                table_info
+                    .meta
+                    .options
+                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
+                None
+            }
         };
-        table_info
-            .meta
-            .options
-            .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), loc);
 
         // 3. The statistics
         let summary = &snapshot.summary;
@@ -266,7 +277,8 @@ impl FuseTable {
         };
 
         // let's instantiate it
-        let table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
+        let mut table = FuseTable::create_without_refresh_table_info(table_info, s3_storage_class)?;
+        table.table_branch = new_branch;
         Ok(table.into())
     }
 

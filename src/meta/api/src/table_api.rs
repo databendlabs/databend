@@ -99,6 +99,7 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -1201,19 +1202,19 @@ where
             })
             .collect::<Vec<_>>();
         let mut tb_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(self, &tid_vec).await?;
-        for (req, (tb_meta_seq, table_meta)) in
+        for ((req, _), (tb_meta_seq, table_meta)) in
             update_table_metas.iter().zip(tb_meta_vec.iter_mut())
         {
-            let req_seq = req.0.seq;
+            let req_seq = req.seq;
 
             if *tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.0.table_id, "update_multi_table_meta"),
+                    UnknownTableId::new(req.table_id, "update_multi_table_meta"),
                 )));
             }
             if req_seq.match_seq(tb_meta_seq).is_err() {
                 mismatched_tbs.push((
-                    req.0.table_id,
+                    req.table_id,
                     *tb_meta_seq,
                     std::mem::take(table_meta).unwrap(),
                 ));
@@ -1225,27 +1226,37 @@ where
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
-        for (req, (tb_meta_seq, table_meta)) in
+        for ((req, _), (tb_meta_seq, table_meta)) in
             update_table_metas.iter_mut().zip(tb_meta_vec.iter())
         {
             let tbid = TableId {
-                table_id: req.0.table_id,
+                table_id: req.table_id,
             };
             // `update_table_meta` MUST NOT modify `shared_by` field
             let table_meta = table_meta.as_ref().unwrap();
 
-            let mut new_table_meta = req.0.new_table_meta.clone();
+            let mut new_table_meta = req.new_table_meta.clone();
             new_table_meta.shared_by = table_meta.shared_by.clone();
 
-            tbl_seqs.insert(req.0.table_id, *tb_meta_seq);
+            tbl_seqs.insert(req.table_id, *tb_meta_seq);
             txn.condition.push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
+
+            // Add LVT check if provided
+            if let Some(check) = req.lvt_check.as_ref() {
+                let lvt_ident = LeastVisibleTimeIdent::new(&check.tenant, req.table_id);
+                txn.condition.push(TxnCondition::eq_value(
+                    lvt_ident.to_string_key(),
+                    serialize_struct(&check.lvt)?,
+                ));
+            }
+
             txn.if_then
                 .push(txn_op_put(&tbid, serialize_struct(&new_table_meta)?));
             txn.else_then.push(TxnOp {
                 request: Some(Request::Get(TxnGetRequest::new(tbid.to_string_key()))),
             });
 
-            new_table_meta_map.insert(req.0.table_id, new_table_meta);
+            new_table_meta_map.insert(req.table_id, new_table_meta);
         }
 
         // `remove_table_copied_files` and `upsert_table_copied_file_info`
@@ -1897,6 +1908,17 @@ where
             .await?;
 
         return Ok(transition.unwrap().result.into_value().unwrap_or_default());
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+    ) -> Result<Option<LeastVisibleTime>, KVAppError> {
+        debug!(req :? =(&name_ident); "TableApi: {}", func_name!());
+        let res = self.get_pb(name_ident).await?;
+        Ok(res.map(|v| v.data))
     }
 }
 

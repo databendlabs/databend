@@ -511,7 +511,7 @@ build_exceptions! {
     IllegalUser(2218),
 }
 
-// Database and Catalog Management Errors [2301-2317, 2321-2323]
+// Database and Catalog Management Errors [2301-2317, 2321-2326]
 build_exceptions! {
     /// Database already exists
     DatabaseAlreadyExists(2301),
