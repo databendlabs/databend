@@ -70,7 +70,7 @@ pub struct RuntimeFilterDesc {
     pub id: usize,
     pub build_key: Expr,
     pub probe_targets: Vec<(Expr<String>, usize)>,
-    pub build_key_ndv: Option<u64>,
+    pub build_key_ndv: u64,
     pub build_table_rows: Option<u64>,
     pub enable_bloom_runtime_filter: bool,
     pub enable_inlist_runtime_filter: bool,

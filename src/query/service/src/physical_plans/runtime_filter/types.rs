@@ -43,7 +43,7 @@ pub struct PhysicalRuntimeFilter {
     pub probe_targets: Vec<(RemoteExpr<String>, usize)>,
 
     /// Estimated NDV of the build side join key, derived from optimizer statistics.
-    pub build_key_ndv: Option<u64>,
+    pub build_key_ndv: u64,
 
     pub build_table_rows: Option<u64>,
 

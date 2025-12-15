@@ -18,8 +18,10 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::optimizer::ir::ColumnStatSet;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Join;
@@ -149,18 +151,17 @@ pub async fn build_runtime_filter(
         let build_table_rows =
             get_build_table_rows(ctx.clone(), metadata, build_table_index).await?;
 
-        // Estimate NDV for the build side join key using optimizer statistics.
-        let build_key_ndv = match build_key {
-            RemoteExpr::ColumnRef { id, .. } => {
-                build_column_stats.get(id).map(|s| s.ndv.ceil() as u64)
-            }
-            _ => None,
-        };
+        let build_key_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
 
-        let data_type = build_key
-            .as_expr(&BUILTIN_FUNCTIONS)
-            .data_type()
-            .remove_nullable();
+        // Estimate NDV for the build side join key using optimizer statistics.
+        // Handles all RemoteExpr variants by looking at the column references inside
+        // the expression. If the expression is constant, NDV is 1. If it contains
+        // exactly one column reference, reuse that column's NDV. Otherwise, fall
+        // back to the overall build-side cardinality.
+        let build_key_ndv = estimate_build_key_ndv(&build_key_expr, build_column_stats)
+            .unwrap_or_else(|| build_stat_info.cardinality.ceil() as u64);
+
+        let data_type = build_key_expr.data_type().remove_nullable();
         let id = metadata.write().next_runtime_filter_id();
 
         let enable_bloom_runtime_filter = is_type_supported_for_bloom_filter(&data_type);
@@ -182,6 +183,23 @@ pub async fn build_runtime_filter(
     }
 
     Ok(PhysicalRuntimeFilters { filters })
+}
+
+fn estimate_build_key_ndv(
+    build_key: &Expr<IndexType>,
+    build_column_stats: &ColumnStatSet,
+) -> Option<u64> {
+    let mut column_refs = build_key.column_refs();
+    if column_refs.is_empty() {
+        return Some(1);
+    }
+
+    if column_refs.len() == 1 {
+        let (id, _) = column_refs.drain().next().unwrap();
+        build_column_stats.get(&id).map(|s| s.ndv.ceil() as u64)
+    } else {
+        None
+    }
 }
 
 async fn get_build_table_rows(

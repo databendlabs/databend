@@ -155,8 +155,12 @@ pub fn convert_packet_bloom_hashes_to_filter(
                         continue;
                     }
 
-                    let ndv_hint = desc.build_key_ndv;
-                    let filter = build_sbbf_from_hashes(hashes, max_threads, rf.id, ndv_hint)?;
+                    let filter = build_sbbf_from_hashes(
+                        hashes,
+                        max_threads,
+                        rf.id,
+                        Some(desc.build_key_ndv),
+                    )?;
                     BloomPayload::Filter(SerializableBloomFilter {
                         data: filter.to_bytes(),
                     })
