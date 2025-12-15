@@ -63,6 +63,7 @@ use databend_common_storages_system::StatisticsTable;
 use databend_common_storages_system::TableFunctionsTable;
 use databend_common_storages_system::TablesTableWithHistory;
 use databend_common_storages_system::TablesTableWithoutHistory;
+use databend_common_storages_system::TagsTable;
 use databend_common_storages_system::TaskHistoryTable;
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
@@ -135,6 +136,7 @@ impl SystemDatabase {
             EnginesTable::create(sys_db_meta.next_table_id()),
             RolesTable::create(sys_db_meta.next_table_id()),
             StagesTable::create(sys_db_meta.next_table_id()),
+            TagsTable::create(sys_db_meta.next_table_id()),
             CatalogsTable::create(sys_db_meta.next_table_id()),
             VirtualColumnsTable::create(sys_db_meta.next_table_id()),
             PasswordPoliciesTable::create(sys_db_meta.next_table_id()),

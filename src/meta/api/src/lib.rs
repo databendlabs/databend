@@ -45,6 +45,7 @@ pub mod security_api;
 mod sequence_api;
 pub mod serialization_util;
 pub mod table_api;
+pub mod tag_api;
 pub(crate) mod testing;
 pub mod txn_backoff;
 pub mod txn_condition_util;
@@ -82,6 +83,7 @@ pub use error_util::table_has_to_not_exist;
 pub use error_util::unknown_database_error;
 pub use errors::MaskingPolicyError;
 pub use errors::RowAccessPolicyError;
+pub use errors::TagError;
 pub use garbage_collection_api::GarbageCollectionApi;
 pub use index_api::IndexApi;
 // Re-export from new kv_fetch_util module for backward compatibility
@@ -102,6 +104,7 @@ pub use serialization_util::{
     deserialize_struct, deserialize_u64, serialize_struct, serialize_u64,
 };
 pub use table_api::TableApi;
+pub use tag_api::TagApi;
 // Re-export from new txn_condition_util module for backward compatibility
 pub use txn_condition_util::txn_cond_eq_seq;
 pub use txn_condition_util::txn_cond_seq;
