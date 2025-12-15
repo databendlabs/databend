@@ -18,7 +18,9 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberDataType;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use crate::binder::wrap_cast;
@@ -314,7 +316,7 @@ impl Rule for RuleEagerAggregation {
         };
 
         let extra_eval_scalar = match extra_eval_scalar_expr {
-            Some(expr) => expr.plan().clone().try_into()?,
+            Some(expr) => expr.plan().clone().into_eval_scalar().unwrap(),
             None => EvalScalar { items: vec![] },
         };
         // Check if all extra eval scalars can be solved by one of the children.
@@ -453,6 +455,10 @@ impl Rule for RuleEagerAggregation {
                 .all(|cond| cond.used_columns().is_subset(&group_columns_set[side]));
         });
 
+        if !can_eager[Side::Left] && !can_eager[Side::Right] {
+            return Ok(());
+        }
+
         let mut ctx = EagerContext {
             final_agg,
             eval_scalar,
@@ -499,21 +505,20 @@ impl<'a> EagerContext<'a> {
             right: !self.eager_aggregations[Side::Right].is_empty() && self.can_eager[Side::Right],
         };
 
+        let mut results = Vec::new();
+
+        if can_push_down[Side::Left]
+            && can_push_down[Side::Right]
+            && !self.apply_eager_split_and_groupby_count(Side::Left, &mut results)?
+        {
+            return Ok(vec![]);
+        }
+
         let d = if can_push_down[Side::Left] {
             Side::Left
         } else {
             Side::Right
         };
-
-        let mut results = Vec::new();
-
-        if can_push_down[d]
-            && can_push_down[d.other()]
-            && !self.apply_eager_split_and_groupby_count(d, &mut results)?
-        {
-            return Ok(vec![]);
-        }
-
         if can_push_down[d]
             && self.eager_aggregations[d.other()].is_empty()
             && !self.apply_single_side_push(d, &mut results)?
@@ -1019,9 +1024,7 @@ fn get_eager_aggregation_functions(
 fn modify_final_aggregate_function(agg: &mut AggregateFunction, old_index: usize) {
     if agg.func_name.as_str() == "count" {
         agg.func_name = "sum".to_string();
-        agg.return_type = Box::new(DataType::Nullable(Box::new(DataType::Number(
-            NumberDataType::UInt64,
-        ))));
+        agg.return_type = Box::new(UInt64Type::data_type().wrap_nullable());
     }
     let agg_func = ScalarExpr::BoundColumnRef(BoundColumnRef {
         span: None,
@@ -1113,28 +1116,25 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
 }
 
 fn add_eager_count(final_agg: &mut Aggregate, metadata: &MetadataRef) -> (usize, usize) {
-    final_agg
-        .aggregate_functions
-        .push(final_agg.aggregate_functions[0].clone());
-
-    let eager_count_vec_index = final_agg.aggregate_functions.len() - 1;
-
-    let eager_count_aggregation_function =
-        &mut final_agg.aggregate_functions[eager_count_vec_index];
-
-    let eager_count_index = metadata.write().add_derived_column(
+    let eager_count_vec_index = final_agg.aggregate_functions.len();
+    let eager_count_column = metadata.write().add_derived_column(
         "count(*)".to_string(),
         DataType::Number(NumberDataType::UInt64),
     );
-    if let ScalarExpr::AggregateFunction(agg) = &mut eager_count_aggregation_function.scalar {
-        agg.func_name = "count".to_string();
-        agg.distinct = false;
-        agg.return_type = Box::new(DataType::Number(NumberDataType::UInt64));
-        agg.args = vec![];
-        agg.display_name = "count(*)".to_string();
-    }
-    eager_count_aggregation_function.index = eager_count_index;
-    (eager_count_index, eager_count_vec_index)
+    final_agg.aggregate_functions.push(ScalarItem {
+        index: eager_count_column,
+        scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+            span: None,
+            func_name: "count".to_string(),
+            distinct: false,
+            params: vec![],
+            args: vec![],
+            return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+            sort_descs: vec![],
+            display_name: "count(*)".to_string(),
+        }),
+    });
+    (eager_count_column, eager_count_vec_index)
 }
 
 // AVG(C) => SUM(C) / COUNT(C)
@@ -1373,7 +1373,7 @@ impl Side {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Pair<T> {
     left: T,
     right: T,

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::File;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -32,6 +33,7 @@ use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_fuse::TableContext;
+use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use goldenfile::Mint;
 
@@ -49,7 +51,61 @@ async fn test_eager_aggregation() -> Result<()> {
         execute_sql(&ctx, sql).await?;
     }
 
-    let plan = raw_plan(&ctx, TPCH_Q3).await?;
+    const Q0: &str = "SELECT
+    l_orderkey,
+    sum(l_extendedprice * (1 - l_discount)) AS revenue,
+    o_orderdate,
+    o_shippriority
+FROM
+    orders join customer on c_custkey = o_custkey,
+    lineitem
+WHERE
+    c_mktsegment = 'BUILDING'
+    AND l_orderkey = o_orderkey
+    AND o_orderdate < CAST('1995-03-15' AS date)
+    AND l_shipdate > CAST('1995-03-15' AS date)
+GROUP BY
+    l_orderkey,
+    o_orderdate,
+    o_shippriority
+ORDER BY
+    revenue DESC,
+    o_orderdate";
+
+    const Q1: &str = "SELECT o_orderkey, sum(l_extendedprice * (1-l_discount))
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+AND l_returnflag = 'R'
+GROUP BY o_orderkey";
+
+    const Q2: &str = "SELECT o_orderkey, sum(l_extendedprice), sum(o_totalprice)
+FROM lineitem, orders
+WHERE o_orderkey = l_orderkey
+GROUP BY o_orderkey";
+
+    // todo: lazy aggr,
+    // The predicate on o_orderdate highly selective.
+    // In this case, we should delay the group-by until after
+    // the join.
+    const Q3: &str = "SELECT o_orderkey, sum(revenue)
+    FROM (SELECT l_orderkey, sum(l_extendedprice * (1-l_discount)) as revenue
+        FROM lineitem WHERE l_returnflag = 'R' GROUP BY l_orderkey) as loss, orders
+    WHERE o_orderkey = l_orderkey
+    AND o_orderdate BETWEEN CAST('1995-05-01' as date) AND CAST('1995-05-31' as date)
+    GROUP BY o_orderkey";
+
+    for (i, sql) in [Q0, Q1, Q2, Q3].iter().copied().enumerate() {
+        run_query(&mut file, &ctx, i, sql).await?;
+    }
+
+    Ok(())
+}
+
+async fn run_query(file: &mut File, ctx: &Arc<QueryContext>, idx: usize, sql: &str) -> Result<()> {
+    writeln!(file, "=== #{idx} sql ===")?;
+    writeln!(file, "{sql}\n")?;
+
+    let plan = raw_plan(ctx, sql).await?;
 
     let Plan::Query {
         s_expr, metadata, ..
@@ -64,7 +120,7 @@ async fn test_eager_aggregation() -> Result<()> {
     let before_expr = optimize_before(opt_ctx, s_expr).await?;
     let before_plan = plan.replace_query_s_expr(before_expr.clone());
 
-    writeln!(file, "=== before plan ===")?;
+    writeln!(file, "=== #{idx} raw plan ===")?;
     writeln!(file, "{}", before_plan.format_indent(Default::default())?)?;
 
     let mut state = TransformResult::new();
@@ -85,7 +141,7 @@ async fn test_eager_aggregation() -> Result<()> {
     }
 
     for (i, result) in state.results().iter().enumerate() {
-        writeln!(file, "=== after plan {i} ===")?;
+        writeln!(file, "=== #{idx} apply plan {i} ===")?;
         let plan = plan.replace_query_s_expr(result.clone());
         writeln!(file, "{}", plan.format_indent(Default::default())?)?;
     }
@@ -147,7 +203,7 @@ const ORDERS_TABLE: &str = "CREATE TABLE orders
     o_clerk          STRING not null,
     o_shippriority   INTEGER not null,
     o_comment        STRING not null
-) CLUSTER BY (o_orderkey, o_orderdate)";
+)";
 
 const LINEITEM_TABLE: &str = "CREATE TABLE lineitem
 (
@@ -168,24 +224,3 @@ const LINEITEM_TABLE: &str = "CREATE TABLE lineitem
     l_shipmode     STRING not null,
     l_comment      STRING not null
 )";
-
-const TPCH_Q3: &str = "SELECT
-    l_orderkey,
-    sum(l_extendedprice * (1 - l_discount)) AS revenue,
-    o_orderdate,
-    o_shippriority
-FROM
-    orders join customer on c_custkey = o_custkey,
-    lineitem
-WHERE
-    c_mktsegment = 'BUILDING'
-    AND l_orderkey = o_orderkey
-    AND o_orderdate < CAST('1995-03-15' AS date)
-    AND l_shipdate > CAST('1995-03-15' AS date)
-GROUP BY
-    l_orderkey,
-    o_orderdate,
-    o_shippriority
-ORDER BY
-    revenue DESC,
-    o_orderdate";

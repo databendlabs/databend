@@ -85,7 +85,29 @@ fn format_scalar<I: IdHumanizer>(_id_humanizer: &I, scalar: &ScalarExpr) -> Stri
         ScalarExpr::ConstantExpr(constant) => constant.value.to_string(),
         ScalarExpr::TypedConstantExpr(constant, _) => constant.value.to_string(),
         ScalarExpr::WindowFunction(win) => win.display_name.clone(),
-        ScalarExpr::AggregateFunction(agg) => agg.display_name.clone(),
+        ScalarExpr::AggregateFunction(agg) => {
+            format!(
+                "{}{}({})",
+                &agg.func_name,
+                if agg.params.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "({})",
+                        agg.params
+                            .iter()
+                            .map(|param| param.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                },
+                agg.args
+                    .iter()
+                    .map(|arg| format_scalar(_id_humanizer, arg))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
         ScalarExpr::LambdaFunction(lambda) => {
             let args = lambda
                 .args
