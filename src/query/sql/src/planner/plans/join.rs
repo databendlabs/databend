@@ -532,9 +532,6 @@ impl Join {
                     .map(|x| &x.left)
                     .collect::<Vec<_>>();
                 self.anti_cardinality(left_cardinality, &left_statistics, &left_exprs)
-                // left_cardinality
-                // left_cardinality
-                //     * self.compute_selectivity_for_build_side(right_cardinality, &right_statistics)
             }
             JoinType::RightAnti => {
                 let right_exprs = self
@@ -544,8 +541,6 @@ impl Join {
                     .collect::<Vec<_>>();
 
                 self.anti_cardinality(right_cardinality, &right_statistics, &right_exprs)
-                // right_cardinality
-                // * self.compute_selectivity_for_build_side(right_cardinality, &right_statistics)
             }
             JoinType::LeftSingle | JoinType::RightMark => left_cardinality,
             JoinType::RightSingle | JoinType::LeftMark => right_cardinality,
@@ -643,37 +638,6 @@ impl Join {
 
         semi_cardinality
     }
-
-    // fn compute_selectivity_for_build_side(
-    //     &self,
-    //     build_cardinality: f64,
-    //     build_statistics: &Statistics,
-    // ) -> f64 {
-    //     let mut selectivity = 1.0_f64;
-    //     for equi_condition in &self.equi_conditions {
-    //         let expr = &equi_condition.right;
-    //
-    //         if expr.used_columns().len() != 1 {
-    //             continue;
-    //         }
-    //
-    //         let Some(right_col_stat) = build_statistics
-    //             .column_stats
-    //             .get(expr.used_columns().iter().next().unwrap())
-    //         else {
-    //             continue;
-    //         };
-    //
-    //         if right_col_stat.num_rows == 0 {
-    //             continue;
-    //         }
-    //
-    //         let num_rows = right_col_stat.num_rows as f64;
-    //         selectivity = selectivity.min(0.5_f64.max(1.0_f64.min(build_cardinality / num_rows)));
-    //     }
-    //
-    //     selectivity
-    // }
 }
 
 impl Operator for Join {
