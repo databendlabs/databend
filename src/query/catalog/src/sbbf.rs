@@ -239,7 +239,7 @@ impl Sbbf {
 
     /// Create a new [Sbbf] with given number of bytes, the exact number of bytes will be adjusted
     /// to the next power of two bounded by [BITSET_MIN_LENGTH] and [BITSET_MAX_LENGTH].
-    pub(crate) fn new_with_num_of_bytes(num_bytes: usize) -> Self {
+    pub fn new_with_num_of_bytes(num_bytes: usize) -> Self {
         let num_bytes = optimal_num_of_bytes(num_bytes);
         assert_eq!(num_bytes % size_of::<Block>(), 0);
         let num_blocks = num_bytes / size_of::<Block>();
@@ -366,7 +366,7 @@ impl SbbfAtomic {
         Ok(Self::new_with_num_of_bytes(num_bits / 8))
     }
 
-    pub(crate) fn new_with_num_of_bytes(num_bytes: usize) -> Self {
+    pub fn new_with_num_of_bytes(num_bytes: usize) -> Self {
         let num_bytes = optimal_num_of_bytes(num_bytes);
         assert_eq!(size_of::<BlockAtomic>(), size_of::<Block>());
         assert_eq!(num_bytes % size_of::<BlockAtomic>(), 0);

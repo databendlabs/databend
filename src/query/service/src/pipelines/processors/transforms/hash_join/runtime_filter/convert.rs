@@ -155,12 +155,7 @@ pub fn convert_packet_bloom_hashes_to_filter(
                         continue;
                     }
 
-                    let filter = build_sbbf_from_hashes(
-                        hashes,
-                        max_threads,
-                        rf.id,
-                        Some(desc.build_key_ndv),
-                    )?;
+                    let filter = build_sbbf_from_hashes(hashes, max_threads, rf.id, true)?;
                     BloomPayload::Filter(SerializableBloomFilter {
                         data: filter.to_bytes(),
                     })
@@ -309,26 +304,36 @@ fn build_min_max_filter(
     Ok(min_max_filter)
 }
 
+const FIXED_SBBF_BYTES: usize = 64 * 1024 * 1024;
+
 fn build_sbbf_from_hashes(
     bloom: Vec<u64>,
     max_threads: usize,
     filter_id: usize,
-    ndv_hint: Option<u64>,
+    fixed_size: bool,
 ) -> Result<Sbbf> {
     let total_items = bloom.len();
-    let ndv = ndv_hint.unwrap_or(total_items as u64);
 
     if total_items < 3_000_000 {
-        let mut filter =
-            Sbbf::new_with_ndv_fpp(ndv, 0.01).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        let mut filter = if fixed_size {
+            Sbbf::new_with_num_of_bytes(FIXED_SBBF_BYTES)
+        } else {
+            Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
+                .map_err(|e| ErrorCode::Internal(e.to_string()))?
+        };
         filter.insert_hash_batch(&bloom);
         return Ok(filter);
     }
 
     let start = std::time::Instant::now();
-    let builder = SbbfAtomic::new_with_ndv_fpp(ndv, 0.01)
-        .map_err(|e| ErrorCode::Internal(e.to_string()))?
-        .insert_hash_batch_parallel(bloom, max_threads);
+    let builder = if fixed_size {
+        SbbfAtomic::new_with_num_of_bytes(FIXED_SBBF_BYTES)
+            .insert_hash_batch_parallel(bloom, max_threads)
+    } else {
+        SbbfAtomic::new_with_ndv_fpp(total_items as u64, 0.01)
+            .map_err(|e| ErrorCode::Internal(e.to_string()))?
+            .insert_hash_batch_parallel(bloom, max_threads)
+    };
     let filter = builder.finish();
     log::info!(
         "filter_id: {}, build_time: {:?}",
@@ -357,7 +362,7 @@ async fn build_bloom_filter(
     let column_name = probe_key.id.to_string();
     match bloom {
         BloomPayload::Hashes(hashes) => {
-            let filter = build_sbbf_from_hashes(hashes, max_threads, filter_id, None)?;
+            let filter = build_sbbf_from_hashes(hashes, max_threads, filter_id, false)?;
             Ok(RuntimeFilterBloom {
                 column_name,
                 filter: Arc::new(filter),
