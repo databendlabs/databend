@@ -432,11 +432,12 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // update stream metas, currently used by "copy into location form stream"
     async fn update_stream_metas(
         &self,
+        tenant: &Tenant,
         update_stream_metas: Vec<UpdateStreamMetaReq>,
     ) -> Result<()> {
         self.update_multi_table_meta(UpdateMultiTableMetaReq {
             update_stream_metas,
-            ..Default::default()
+            ..UpdateMultiTableMetaReq::empty(tenant.clone())
         })
         .await
         .map(|_| ())
@@ -444,6 +445,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn update_single_table_meta(
         &self,
+        tenant: &Tenant,
         req: UpdateTableMetaReq,
         table_info: &TableInfo,
     ) -> Result<UpdateTableMetaReply> {
@@ -463,7 +465,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         self.update_multi_table_meta(UpdateMultiTableMetaReq {
             update_table_metas,
             update_temp_tables,
-            ..Default::default()
+            ..UpdateMultiTableMetaReq::empty(tenant.clone())
         })
         .await
     }

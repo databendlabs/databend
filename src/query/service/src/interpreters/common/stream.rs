@@ -131,6 +131,7 @@ pub async fn query_build_update_stream_req(
                 seq: MatchSeq::Exact(stream_info.ident.seq),
                 new_table_meta,
                 base_snapshot_location: None,
+                snapshot_ts: None,
             },
             stream_info.clone(),
         ));

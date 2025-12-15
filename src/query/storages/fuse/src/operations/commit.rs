@@ -275,6 +275,10 @@ impl FuseTable {
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: new_table_meta.clone(),
                 base_snapshot_location: self.snapshot_loc(),
+                // Vacuum may be reclaiming snapshots while this commit happens; if the
+                // new snapshot ends up older than LVT it could be deleted immediately,
+                // so we send its timestamp for meta-side validation.
+                snapshot_ts: snapshot.timestamp,
             };
             update_table_metas.push((req, table_info.clone()));
             copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
@@ -283,6 +287,7 @@ impl FuseTable {
         // 3. let's roll
         catalog
             .update_multi_table_meta(UpdateMultiTableMetaReq {
+                tenant: ctx.get_tenant(),
                 update_table_metas,
                 update_stream_metas: update_stream_meta.to_vec(),
                 copied_files: copied_files_req,

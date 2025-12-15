@@ -52,15 +52,21 @@ impl FuseTable {
         let base_version = self.table_info.ident.seq;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let table_id = table_info.ident.table_id;
+        let snapshot = table_reverting_to.read_table_snapshot().await?;
+        let snapshot_ts = snapshot.and_then(|v| v.timestamp);
+        let tenant = ctx.get_tenant();
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(base_version),
             new_table_meta: table_meta_to_be_committed.clone(),
             base_snapshot_location: self.snapshot_loc(),
+            snapshot_ts,
         };
 
         // 4. let's roll
-        let reply = catalog.update_single_table_meta(req, table_info).await;
+        let reply = catalog
+            .update_single_table_meta(&tenant, req, table_info)
+            .await;
         if reply.is_ok() {
             // try keeping the snapshot hit
             let snapshot_location = table_reverting_to.snapshot_loc().ok_or_else(|| {

@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -232,7 +234,7 @@ pub(crate) async fn commit_table_meta(
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        let new_snapshot_location =
+        let (new_snapshot_location, snapshot_ts) =
             generate_new_snapshot(ctx, fuse_tbl, &new_table_meta.schema).await?;
 
         if let Some(new_snapshot_location) = &new_snapshot_location {
@@ -242,14 +244,18 @@ pub(crate) async fn commit_table_meta(
             );
         };
 
+        let tenant = ctx.get_tenant();
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta: new_table_meta.clone(),
             base_snapshot_location: fuse_tbl.snapshot_loc(),
+            snapshot_ts,
         };
 
-        catalog.update_single_table_meta(req, table_info).await?;
+        catalog
+            .update_single_table_meta(&tenant, req, table_info)
+            .await?;
 
         if let Some(new_snapshot_location) = new_snapshot_location {
             FuseTable::write_last_snapshot_hint(
@@ -265,11 +271,11 @@ pub(crate) async fn commit_table_meta(
     Ok(())
 }
 
-pub(crate) async fn generate_new_snapshot(
+async fn generate_new_snapshot(
     ctx: &dyn TableContext,
     fuse_table: &FuseTable,
     new_table_schema: &TableSchema,
-) -> Result<Option<String>> {
+) -> Result<(Option<String>, Option<DateTime<Utc>>)> {
     if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
         let mut new_snapshot = TableSnapshot::try_from_previous(
             snapshot.clone(),
@@ -291,9 +297,9 @@ pub(crate) async fn generate_new_snapshot(
             .write(&new_snapshot_location, data)
             .await?;
 
-        Ok(Some(new_snapshot_location))
+        Ok((Some(new_snapshot_location), new_snapshot.timestamp))
     } else {
         info!("Snapshot not found, no need to generate new snapshot");
-        Ok(None)
+        Ok((None, None))
     }
 }

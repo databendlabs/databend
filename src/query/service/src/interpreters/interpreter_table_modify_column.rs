@@ -674,14 +674,18 @@ impl ModifyTableColumnInterpreter {
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
+        let tenant = self.ctx.get_tenant();
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
+            snapshot_ts: None,
         };
 
-        let _resp = catalog.update_single_table_meta(req, table_info).await?;
+        let _resp = catalog
+            .update_single_table_meta(&tenant, req, table_info)
+            .await?;
 
         Ok(PipelineBuildResult::create())
     }

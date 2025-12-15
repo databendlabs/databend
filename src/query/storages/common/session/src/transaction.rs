@@ -67,6 +67,8 @@ pub struct TxnBuffer {
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
     base_snapshot_location: HashMap<u64, Option<String>>,
+    snapshot_ts: HashMap<u64, DateTime<Utc>>,
+    tenant: Option<Tenant>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
     deduplicated_labels: HashSet<String>,
@@ -93,6 +95,10 @@ impl TxnBuffer {
     }
 
     fn update_multi_table_meta(&mut self, mut req: UpdateMultiTableMetaReq) {
+        match &self.tenant {
+            Some(existing) => debug_assert_eq!(existing, &req.tenant),
+            None => self.tenant = Some(req.tenant.clone()),
+        }
         for (req, table_info) in req.update_table_metas {
             let table_id = req.table_id;
             self.table_desc_to_id
@@ -106,6 +112,10 @@ impl TxnBuffer {
             self.base_snapshot_location
                 .entry(table_id)
                 .or_insert(req.base_snapshot_location);
+
+            if let Some(ts) = req.snapshot_ts {
+                self.snapshot_ts.insert(table_id, ts);
+            }
         }
 
         for (table_id, file) in std::mem::take(&mut req.copied_files) {
@@ -296,6 +306,11 @@ impl TxnManager {
     }
 
     pub fn req(&self) -> UpdateMultiTableMetaReq {
+        let tenant = self
+            .txn_buffer
+            .tenant
+            .clone()
+            .expect("mutated tables should carry tenant info");
         let mut copied_files = Vec::new();
         for (tbl_id, v) in &self.txn_buffer.copied_files {
             for file in v {
@@ -303,6 +318,7 @@ impl TxnManager {
             }
         }
         UpdateMultiTableMetaReq {
+            tenant,
             update_table_metas: self
                 .txn_buffer
                 .mutated_tables
@@ -314,6 +330,7 @@ impl TxnManager {
                             seq: MatchSeq::Exact(info.ident.seq),
                             new_table_meta: info.meta.clone(),
                             base_snapshot_location: None,
+                            snapshot_ts: self.txn_buffer.snapshot_ts.get(id).cloned(),
                         },
                         info.clone(),
                     )

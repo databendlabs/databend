@@ -133,6 +133,7 @@ impl AsyncSink for CommitMultiTableInsert {
 
         loop {
             let update_multi_table_meta_req = UpdateMultiTableMetaReq {
+                tenant: self.ctx.get_tenant(),
                 update_table_metas: update_table_metas.clone(),
                 copied_files: vec![],
                 update_stream_metas: self.update_stream_meta.clone(),
@@ -307,6 +308,9 @@ async fn build_update_table_meta_req(
         seq: MatchSeq::Exact(table_version),
         new_table_meta,
         base_snapshot_location: fuse_table.snapshot_loc(),
+        // Same reasoning as single-table commits: meta must reject any new snapshot
+        // whose timestamp would fall behind the table's LVT to avoid vacuum races.
+        snapshot_ts: snapshot.timestamp,
     };
     Ok(req)
 }

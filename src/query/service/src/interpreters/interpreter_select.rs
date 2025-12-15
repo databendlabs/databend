@@ -147,22 +147,26 @@ impl SelectInterpreter {
         let update_stream_metas = query_build_update_stream_req(&self.ctx).await?;
 
         let catalog = self.ctx.get_default_catalog()?;
+        let tenant = self.ctx.get_tenant();
         build_res
             .main_pipeline
             .set_on_finished(move |info: &ExecutionInfo| match &info.res {
-                Ok(_) => GlobalIORuntime::instance().block_on(async move {
-                    match update_stream_metas {
-                        Some(streams) => {
-                            let r = UpdateMultiTableMetaReq {
-                                update_table_metas: streams.update_table_metas,
-                                ..Default::default()
-                            };
-                            info!("Updating stream metadata to consume data");
-                            catalog.update_multi_table_meta(r).await.map(|_| ())
+                Ok(_) => {
+                    let tenant = tenant.clone();
+                    GlobalIORuntime::instance().block_on(async move {
+                        match update_stream_metas {
+                            Some(streams) => {
+                                let r = UpdateMultiTableMetaReq {
+                                    update_table_metas: streams.update_table_metas,
+                                    ..UpdateMultiTableMetaReq::empty(tenant)
+                                };
+                                info!("Updating stream metadata to consume data");
+                                catalog.update_multi_table_meta(r).await.map(|_| ())
+                            }
+                            None => Ok(()),
                         }
-                        None => Ok(()),
-                    }
-                }),
+                    })
+                }
                 Err(error_code) => Err(error_code.clone()),
             });
         Ok(build_res)

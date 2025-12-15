@@ -740,6 +740,7 @@ pub struct UpdateTableMetaReq {
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
     pub base_snapshot_location: Option<String>,
+    pub snapshot_ts: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -750,8 +751,9 @@ pub struct UpdateTempTableReq {
     pub copied_files: BTreeMap<String, TableCopiedFileInfo>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateMultiTableMetaReq {
+    pub tenant: Tenant,
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
@@ -760,6 +762,17 @@ pub struct UpdateMultiTableMetaReq {
 }
 
 impl UpdateMultiTableMetaReq {
+    pub fn empty(tenant: Tenant) -> Self {
+        Self {
+            tenant,
+            update_table_metas: vec![],
+            copied_files: vec![],
+            update_stream_metas: vec![],
+            deduplicated_labels: vec![],
+            update_temp_tables: vec![],
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.update_table_metas.is_empty()
             && self.copied_files.is_empty()
