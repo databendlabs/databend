@@ -83,10 +83,12 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
         new_table_meta.cluster_key_seq += 1;
 
         let req = UpdateTableMetaReq {
+            tenant,
             table_id: table_info.ident.table_id,
             seq: MatchSeq::Exact(table_info.ident.seq),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
+            snapshot_ts: None,
         };
         catalog.update_single_table_meta(req, table_info).await?;
 

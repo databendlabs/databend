@@ -116,7 +116,7 @@ pub async fn do_vacuum2(
     // By default, do not vacuum all the historical snapshots.
     let mut is_vacuum_all = false;
     let mut respect_flash_back_with_lvt = None;
-
+    let mut need_update_lvt = false;
     let snapshots_before_lvt = match retention_policy {
         RetentionPolicy::ByTimePeriod(delta_duration) => {
             info!("Using ByTimePeriod policy {:?}", delta_duration);
@@ -180,6 +180,7 @@ pub async fn do_vacuum2(
                 // as gc root, this flag will be propagated to the select_gc_root func later.
                 is_vacuum_all = true;
             }
+            need_update_lvt = true;
 
             // When selecting the GC root later, the last snapshot in `snapshots` (after truncation)
             // is the candidate, but its commit status is uncertain, so its previous snapshot is used
@@ -226,6 +227,15 @@ pub async fn do_vacuum2(
 
     let start = std::time::Instant::now();
     let gc_root_timestamp = gc_root.timestamp.unwrap();
+    // Persist the LVT only if we have not written it before.
+    if need_update_lvt {
+        let cat = ctx.get_default_catalog()?;
+        cat.set_table_lvt(
+            &LeastVisibleTimeIdent::new(ctx.get_tenant(), fuse_table.get_id()),
+            &LeastVisibleTime::new(gc_root_timestamp),
+        )
+        .await?;
+    }
     let gc_root_segments = gc_root
         .segments
         .iter()

@@ -864,6 +864,24 @@ impl TableLockExpired {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("Snapshot timestamp {snapshot_ts} for table {table_id} is older than the table's least visible time {lvt}")]
+pub struct TableSnapshotExpired {
+    table_id: u64,
+    snapshot_ts: DateTime<Utc>,
+    lvt: DateTime<Utc>,
+}
+
+impl TableSnapshotExpired {
+    pub fn new(table_id: u64, snapshot_ts: DateTime<Utc>, lvt: DateTime<Utc>) -> Self {
+        Self {
+            table_id,
+            snapshot_ts,
+            lvt,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error(
     "CannotShareDatabaseCreatedFromShare: cannot share database {database_name} which created from share while {context}"
 )]
@@ -1124,6 +1142,9 @@ pub enum AppError {
 
     #[error(transparent)]
     TableLockExpired(#[from] TableLockExpired),
+
+    #[error(transparent)]
+    TableSnapshotExpired(#[from] TableSnapshotExpired),
 
     #[error(transparent)]
     CannotShareDatabaseCreatedFromShare(#[from] CannotShareDatabaseCreatedFromShare),
@@ -1472,6 +1493,15 @@ impl AppErrorMessage for TableLockExpired {
     }
 }
 
+impl AppErrorMessage for TableSnapshotExpired {
+    fn message(&self) -> String {
+        format!(
+            "Snapshot timestamp {} for table {} is older than the table's least visible time {}",
+            self.snapshot_ts, self.table_id, self.lvt,
+        )
+    }
+}
+
 impl AppErrorMessage for CannotShareDatabaseCreatedFromShare {
     fn message(&self) -> String {
         format!(
@@ -1688,6 +1718,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UnknownShareEndpointId(err.message())
             }
             AppError::TableLockExpired(err) => ErrorCode::TableLockExpired(err.message()),
+            AppError::TableSnapshotExpired(err) => ErrorCode::TableSnapshotExpired(err.message()),
             AppError::CannotShareDatabaseCreatedFromShare(err) => {
                 ErrorCode::CannotShareDatabaseCreatedFromShare(err.message())
             }

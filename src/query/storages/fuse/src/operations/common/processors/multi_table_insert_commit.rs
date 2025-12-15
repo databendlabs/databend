@@ -303,10 +303,14 @@ async fn build_update_table_meta_req(
     let table_version = fuse_table.table_info.ident.seq;
 
     let req = UpdateTableMetaReq {
+        tenant: snapshot_generator.ctx.get_tenant(),
         table_id,
         seq: MatchSeq::Exact(table_version),
         new_table_meta,
         base_snapshot_location: fuse_table.snapshot_loc(),
+        // Same reasoning as single-table commits: meta must reject any new snapshot
+        // whose timestamp would fall behind the table's LVT to avoid vacuum races.
+        snapshot_ts: snapshot.timestamp,
     };
     Ok(req)
 }

@@ -675,10 +675,12 @@ impl ModifyTableColumnInterpreter {
         let table_version = table_info.ident.seq;
 
         let req = UpdateTableMetaReq {
+            tenant: self.ctx.get_tenant(),
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             base_snapshot_location: fuse_table.snapshot_loc(),
+            snapshot_ts: None,
         };
 
         let _resp = catalog.update_single_table_meta(req, table_info).await?;

@@ -31,6 +31,7 @@ use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
 use databend_common_meta_app::app_error::StreamVersionMismatched;
 use databend_common_meta_app::app_error::TableAlreadyExists;
+use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
@@ -1188,29 +1189,50 @@ where
         let mut tbl_seqs = HashMap::new();
         let mut txn = TxnRequest::default();
         let mut mismatched_tbs = vec![];
-        let tid_vec = update_table_metas
+        let (tid_vec, lvt_vec): (Vec<_>, Vec<_>) = update_table_metas
             .iter()
-            .map(|req| {
-                TableId {
-                    table_id: req.0.table_id,
-                }
-                .to_string_key()
+            .map(|(req, _)| {
+                (
+                    TableId {
+                        table_id: req.table_id,
+                    }
+                    .to_string_key(),
+                    LeastVisibleTimeIdent::new(&req.tenant, req.table_id),
+                )
             })
-            .collect::<Vec<_>>();
+            .unzip();
         let mut tb_meta_vec: Vec<(u64, Option<TableMeta>)> = mget_pb_values(self, &tid_vec).await?;
-        for (req, (tb_meta_seq, table_meta)) in
-            update_table_metas.iter().zip(tb_meta_vec.iter_mut())
+        let tb_lvt_vec = self.get_pb_values_vec(lvt_vec).await?;
+
+        for (((req, _), (tb_meta_seq, table_meta)), lvt) in update_table_metas
+            .iter()
+            .zip(tb_meta_vec.iter_mut())
+            .zip(tb_lvt_vec.iter())
         {
-            let req_seq = req.0.seq;
+            let req_seq = req.seq;
 
             if *tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.0.table_id, "update_multi_table_meta"),
+                    UnknownTableId::new(req.table_id, "update_multi_table_meta"),
                 )));
+            }
+            if let Some(lvt) = lvt {
+                if let Some(ts) = req.snapshot_ts {
+                    // req.snapshot_ts records the timestamp of the snapshot that will become
+                    // visible after commit. Vacuum may be purging snapshots at the same time,
+                    // so rejecting snapshots older than LVT prevents them from being cleaned
+                    // up immediately after commit.
+                    let lvt = lvt.data.time;
+                    if lvt > ts {
+                        return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                            TableSnapshotExpired::new(req.table_id, ts, lvt),
+                        )));
+                    }
+                }
             }
             if req_seq.match_seq(tb_meta_seq).is_err() {
                 mismatched_tbs.push((
-                    req.0.table_id,
+                    req.table_id,
                     *tb_meta_seq,
                     std::mem::take(table_meta).unwrap(),
                 ));
