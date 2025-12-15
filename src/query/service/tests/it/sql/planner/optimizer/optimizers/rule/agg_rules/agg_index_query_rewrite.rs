@@ -444,7 +444,7 @@ async fn plan_sql(
         *s_expr
     };
 
-    return Ok((s_expr, bind_context, metadata));
+    Ok((s_expr, bind_context, metadata))
 }
 
 fn find_push_down_index_info(s_expr: &SExpr) -> Result<&Option<AggIndexInfo>> {

@@ -1,0 +1,169 @@
+=== before plan ===
+Sort
+├── sort keys: [derived.sum(l_extendedprice * (1 - l_discount)) (#34) DESC NULLS LAST, default.orders.o_orderdate (#4) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#34) AS (#34)]
+    └── Aggregate(Final)
+        ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+        ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#34)]
+        └── Aggregate(Partial)
+            ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+            ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#34)]
+            └── EvalScalar
+                ├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))) AS (#33), orders.o_custkey (#1) AS (#35), customer.c_custkey (#9) AS (#36), customer.c_mktsegment (#15) AS (#37), orders.o_orderkey (#0) AS (#38), lineitem.l_shipdate (#27) AS (#39)]
+                └── Join(Inner)
+                    ├── build keys: [lineitem.l_orderkey (#17)]
+                    ├── probe keys: [orders.o_orderkey (#0)]
+                    ├── other filters: []
+                    ├── Join(Inner)
+                    │   ├── build keys: [customer.c_custkey (#9)]
+                    │   ├── probe keys: [orders.o_custkey (#1)]
+                    │   ├── other filters: []
+                    │   ├── Scan
+                    │   │   ├── table: default.orders (#0)
+                    │   │   ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
+                    │   │   ├── order by: []
+                    │   │   └── limit: NONE
+                    │   └── Scan
+                    │       ├── table: default.customer (#1)
+                    │       ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
+                    │       ├── order by: []
+                    │       └── limit: NONE
+                    └── Scan
+                        ├── table: default.lineitem (#2)
+                        ├── filters: [gt(lineitem.l_shipdate (#27), '1995-03-15')]
+                        ├── order by: []
+                        └── limit: NONE
+
+=== after plan 0 ===
+EvalScalar
+├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#41) AS (#34)]
+└── Aggregate(Final)
+    ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+    ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#41)]
+    └── Aggregate(Partial)
+        ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+        ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#41)]
+        └── Join(Inner)
+            ├── build keys: [lineitem.l_orderkey (#17)]
+            ├── probe keys: [orders.o_orderkey (#0)]
+            ├── other filters: []
+            ├── Join(Inner)
+            │   ├── build keys: [customer.c_custkey (#9)]
+            │   ├── probe keys: [orders.o_custkey (#1)]
+            │   ├── other filters: []
+            │   ├── Scan
+            │   │   ├── table: default.orders (#0)
+            │   │   ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
+            │   │   ├── order by: []
+            │   │   └── limit: NONE
+            │   └── Scan
+            │       ├── table: default.customer (#1)
+            │       ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
+            │       ├── order by: []
+            │       └── limit: NONE
+            └── Aggregate(Final)
+                ├── group items: [lineitem.l_orderkey (#17) AS (#17)]
+                ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#34)]
+                └── Aggregate(Partial)
+                    ├── group items: [lineitem.l_orderkey (#17) AS (#17)]
+                    ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#34)]
+                    └── EvalScalar
+                        ├── scalars: [lineitem.l_orderkey (#17) AS (#17), multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))) AS (#33), lineitem.l_shipdate (#27) AS (#39)]
+                        └── Scan
+                            ├── table: default.lineitem (#2)
+                            ├── filters: [gt(lineitem.l_shipdate (#27), '1995-03-15')]
+                            ├── order by: []
+                            └── limit: NONE
+
+=== after plan 1 ===
+EvalScalar
+├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#34) AS (#34)]
+└── Aggregate(Final)
+    ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+    ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#34)]
+    └── Aggregate(Partial)
+        ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+        ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#34)]
+        └── EvalScalar
+            ├── scalars: [multiply(multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))), CAST(_eager_count (#40) AS UInt64)) AS (#43)]
+            └── Join(Inner)
+                ├── build keys: [lineitem.l_orderkey (#17)]
+                ├── probe keys: [orders.o_orderkey (#0)]
+                ├── other filters: []
+                ├── Aggregate(Final)
+                │   ├── group items: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), orders.o_orderkey (#0) AS (#0)]
+                │   ├── aggregate functions: [count(*) AS (#40)]
+                │   └── Aggregate(Partial)
+                │       ├── group items: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), orders.o_orderkey (#0) AS (#0)]
+                │       ├── aggregate functions: [count(*) AS (#40)]
+                │       └── Join(Inner)
+                │           ├── build keys: [customer.c_custkey (#9)]
+                │           ├── probe keys: [orders.o_custkey (#1)]
+                │           ├── other filters: []
+                │           ├── Scan
+                │           │   ├── table: default.orders (#0)
+                │           │   ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
+                │           │   ├── order by: []
+                │           │   └── limit: NONE
+                │           └── Scan
+                │               ├── table: default.customer (#1)
+                │               ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
+                │               ├── order by: []
+                │               └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#2)
+                    ├── filters: [gt(lineitem.l_shipdate (#27), '1995-03-15')]
+                    ├── order by: []
+                    └── limit: NONE
+
+=== after plan 2 ===
+EvalScalar
+├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#41) AS (#34)]
+└── Aggregate(Final)
+    ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+    ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#41)]
+    └── Aggregate(Partial)
+        ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
+        ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#41)]
+        └── EvalScalar
+            ├── scalars: [multiply(_eager (#34), CAST(_eager_count (#40) AS UInt64)) AS (#42)]
+            └── Join(Inner)
+                ├── build keys: [lineitem.l_orderkey (#17)]
+                ├── probe keys: [orders.o_orderkey (#0)]
+                ├── other filters: []
+                ├── Aggregate(Final)
+                │   ├── group items: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), orders.o_orderkey (#0) AS (#0)]
+                │   ├── aggregate functions: [count(*) AS (#40)]
+                │   └── Aggregate(Partial)
+                │       ├── group items: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), orders.o_orderkey (#0) AS (#0)]
+                │       ├── aggregate functions: [count(*) AS (#40)]
+                │       └── Join(Inner)
+                │           ├── build keys: [customer.c_custkey (#9)]
+                │           ├── probe keys: [orders.o_custkey (#1)]
+                │           ├── other filters: []
+                │           ├── Scan
+                │           │   ├── table: default.orders (#0)
+                │           │   ├── filters: [lt(orders.o_orderdate (#4), '1995-03-15')]
+                │           │   ├── order by: []
+                │           │   └── limit: NONE
+                │           └── Scan
+                │               ├── table: default.customer (#1)
+                │               ├── filters: [eq(customer.c_mktsegment (#15), 'BUILDING')]
+                │               ├── order by: []
+                │               └── limit: NONE
+                └── Aggregate(Final)
+                    ├── group items: [lineitem.l_orderkey (#17) AS (#17)]
+                    ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#34)]
+                    └── Aggregate(Partial)
+                        ├── group items: [lineitem.l_orderkey (#17) AS (#17)]
+                        ├── aggregate functions: [sum(l_extendedprice * (1 - l_discount)) AS (#34)]
+                        └── EvalScalar
+                            ├── scalars: [lineitem.l_orderkey (#17) AS (#17), multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))) AS (#33), lineitem.l_shipdate (#27) AS (#39)]
+                            └── Scan
+                                ├── table: default.lineitem (#2)
+                                ├── filters: [gt(lineitem.l_shipdate (#27), '1995-03-15')]
+                                ├── order by: []
+                                └── limit: NONE
+
