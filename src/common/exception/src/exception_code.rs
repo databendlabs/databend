@@ -373,6 +373,18 @@ build_exceptions! {
     IndexColumnIdNotFound(2726),
 }
 
+// Tag Errors [2750-2753]
+build_exceptions! {
+    /// Tag already exists
+    TagAlreadyExists(2750),
+    /// Unknown tag
+    UnknownTag(2751),
+    /// Tag has active references
+    TagHasReferences(2752),
+    /// Invalid value for tag
+    InvalidTagValue(2753),
+}
+
 // Cloud and Integration Errors [1701-1703]
 build_exceptions! {
     /// Cloud control connect error

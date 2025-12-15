@@ -109,6 +109,7 @@ use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouse
 use crate::interpreters::interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
+use crate::interpreters::DropTagInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
@@ -571,6 +572,14 @@ impl InterpreterFactory {
                 DropFileFormatInterpreter::try_create(ctx, *drop_file_format.clone())?,
             )),
             Plan::ShowFileFormats(_) => Ok(Arc::new(ShowFileFormatsInterpreter::try_create(ctx)?)),
+            Plan::CreateTag(plan) => Ok(Arc::new(CreateTagInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
+            Plan::DropTag(plan) => Ok(Arc::new(DropTagInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
 
             // Grant
             Plan::GrantPriv(grant_priv) => Ok(Arc::new(GrantPrivilegeInterpreter::try_create(

@@ -1223,6 +1223,16 @@ impl AccessChecker for PrivilegeAccess {
                             )))
                         };
                     }
+                    Some(RewriteKind::ShowTags) => {
+                        self.validate_access(
+                            &GrantObject::Global,
+                            UserPrivilegeType::Super,
+                            false,
+                            false,
+                        )
+                        .await?;
+                        return Ok(());
+                    }
                     Some(RewriteKind::ShowSequences) => {
                         // will check privilege in show_sequences_table
                     }
@@ -1808,6 +1818,8 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
             | Plan::ShowFileFormats(_)
+            | Plan::CreateTag(_)
+            | Plan::DropTag(_)
             | Plan::CreateNetworkPolicy(_)
             | Plan::AlterNetworkPolicy(_)
             | Plan::DropNetworkPolicy(_)
