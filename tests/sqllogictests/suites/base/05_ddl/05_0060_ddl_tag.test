@@ -1,0 +1,29 @@
+statement ok
+DROP TAG IF EXISTS env_tag
+
+statement ok
+DROP TAG IF EXISTS owner_tag
+
+statement ok
+CREATE TAG env_tag ALLOWED_VALUES = ('dev', 'prod') COMMENT = 'environment tag'
+
+statement error 2750
+CREATE TAG env_tag COMMENT = 'dup'
+
+statement ok
+CREATE TAG IF NOT EXISTS env_tag COMMENT = 'still env'
+
+statement ok
+CREATE TAG owner_tag COMMENT = 'owner info'
+
+statement ok
+SHOW TAGS
+
+query TTT
+SELECT name, allowed_values, comment FROM system.tags WHERE name IN ('env_tag', 'owner_tag') ORDER BY name
+----
+env_tag ['dev', 'prod'] environment tag
+owner_tag NULL owner info
+
+statement ok
+DROP TAG owner_tag

@@ -758,6 +758,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let show_tags = map(
+        rule! {
+            SHOW ~ TAGS ~ #limit_like? ~ ( LIMIT ~ ^#literal_u64 )?
+        },
+        |(_, _, filter, opt_limit)| {
+            Statement::ShowTags(ShowTagsStmt {
+                filter,
+                limit: opt_limit.map(|(_, limit)| limit),
+            })
+        },
+    );
+
     let show_databases = map(
         rule! {
             SHOW ~ FULL? ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
@@ -1870,6 +1882,71 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    #[derive(Clone)]
+    enum CreateTagOption {
+        AllowedValues(Vec<Literal>),
+        Comment(String),
+    }
+
+    let tag_allowed_values = map(
+        rule! {
+            ALLOWED_VALUES ~ ^"=" ~ ^"(" ~ #comma_separated_list1(literal) ~ ^")"
+        },
+        |(_, _, _, values, _)| CreateTagOption::AllowedValues(values),
+    );
+
+    let tag_comment = map(
+        rule! {
+            COMMENT ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, comment)| CreateTagOption::Comment(comment),
+    );
+
+    let tag_options = map(rule! { ( #tag_allowed_values | #tag_comment )* }, |opts| {
+        opts
+    });
+
+    let create_tag = map_res(
+        rule! {
+            CREATE ~ TAG ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident
+            ~ #tag_options
+        },
+        |(_, _, opt_if_not_exists, name, options)| {
+            let create_option = parse_create_option(false, opt_if_not_exists.is_some())?;
+            let mut allowed_values = None;
+            let mut comment = None;
+            for opt in options {
+                match opt {
+                    CreateTagOption::AllowedValues(values) => {
+                        allowed_values = Some(values);
+                    }
+                    CreateTagOption::Comment(text) => {
+                        comment = Some(text);
+                    }
+                }
+            }
+            Ok(Statement::CreateTag(CreateTagStmt {
+                create_option,
+                name,
+                allowed_values,
+                comment,
+            }))
+        },
+    );
+
+    let drop_tag = map(
+        rule! {
+            DROP ~ TAG ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, name)| {
+            Statement::DropTag(DropTagStmt {
+                if_exists: opt_if_exists.is_some(),
+                name,
+            })
+        },
+    );
+
     // stages
     let create_stage = map_res(
         rule! {
@@ -2602,6 +2679,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 #show_tasks : "`SHOW TASKS [<show_limit>]`"
                 | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
                 | #show_variables : "`SHOW VARIABLES [<show_limit>]`"
+                | #show_tags : "`SHOW TAGS [<show_limit>]`"
                 | #show_stages : "`SHOW STAGES`"
                 | #show_process_list : "`SHOW PROCESSLIST`"
                 | #show_metrics : "`SHOW METRICS`"
@@ -2772,6 +2850,7 @@ AS
                 [ FILE_FORMAT = ( { TYPE = { CSV | PARQUET } [ formatTypeOptions ] ) } ]
                 [ COPY_OPTIONS = ( copyOptions ) ]
                 [ COMMENT = '<string_literal>' ]`"
+                | #create_tag: "`CREATE TAG [IF NOT EXISTS] <tag_name> [ALLOWED_VALUES = ('v1', ...)] [COMMENT = '<comment>']`"
                 | #create_file_format: "`CREATE FILE FORMAT [ IF NOT EXISTS ] <format_name> formatTypeOptions`"
                 | #create_pipe : "`CREATE PIPE [ IF NOT EXISTS ] <name>
   [ AUTO_INGEST = [ TRUE | FALSE ] ]
@@ -2815,6 +2894,7 @@ AS
             )
             | (
                 #drop_stage: "`DROP STAGE <stage_name>`"
+                | #drop_tag: "`DROP TAG [IF EXISTS] <tag_name>`"
                 | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
                 | #drop_pipe : "`DROP PIPE [ IF EXISTS ] <name>`"
                 | #drop_notification : "`DROP NOTIFICATION INTEGRATION [ IF EXISTS ] <name>`"

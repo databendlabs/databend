@@ -26,6 +26,7 @@ use crate::row_access_policy::row_access_policy_name_ident;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
+use crate::schema::tag_name_ident;
 use crate::schema::DictionaryIdentity;
 use crate::schema::SequenceRsc;
 use crate::tenant_key::errors::ExistError;
@@ -128,6 +129,62 @@ impl UndropDbHasNoHistory {
         Self {
             db_name: db_name.into(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("Tag '{tag_name}' is still referenced by {reference_count} object(s)")]
+pub struct TagHasReferences {
+    tag_name: String,
+    reference_count: usize,
+}
+
+impl TagHasReferences {
+    pub fn new(tag_name: impl Into<String>, reference_count: usize) -> Self {
+        Self {
+            tag_name: tag_name.into(),
+            reference_count,
+        }
+    }
+    pub fn tag_name(&self) -> &str {
+        &self.tag_name
+    }
+    pub fn reference_count(&self) -> usize {
+        self.reference_count
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("Invalid value '{value}' for tag '{tag_name}'")]
+pub struct InvalidTagValue {
+    tag_name: String,
+    value: String,
+    allowed: Option<Vec<String>>,
+}
+
+impl InvalidTagValue {
+    pub fn new(
+        tag_name: impl Into<String>,
+        value: impl Into<String>,
+        allowed: Option<Vec<String>>,
+    ) -> Self {
+        Self {
+            tag_name: tag_name.into(),
+            value: value.into(),
+            allowed,
+        }
+    }
+
+    pub fn tag_name(&self) -> &str {
+        &self.tag_name
+    }
+
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+
+    pub fn allowed(&self) -> Option<&[String]> {
+        self.allowed.as_deref()
     }
 }
 
@@ -1147,6 +1204,18 @@ pub enum AppError {
     IndexColumnIdNotFound(#[from] IndexColumnIdNotFound),
 
     #[error(transparent)]
+    TagAlreadyExists(#[from] ExistError<tag_name_ident::Resource>),
+
+    #[error(transparent)]
+    UnknownTag(#[from] UnknownError<tag_name_ident::Resource>),
+
+    #[error(transparent)]
+    TagHasReferences(#[from] TagHasReferences),
+
+    #[error(transparent)]
+    InvalidTagValue(#[from] InvalidTagValue),
+
+    #[error(transparent)]
     DatamaskAlreadyExists(#[from] ExistError<data_mask_name_ident::Resource>),
 
     #[error(transparent)]
@@ -1292,6 +1361,27 @@ impl AppErrorMessage for UnknownTableId {}
 impl AppErrorMessage for UnknownDatabaseId {}
 
 impl AppErrorMessage for TableVersionMismatched {}
+
+impl AppErrorMessage for TagHasReferences {
+    fn message(&self) -> String {
+        format!(
+            "Tag '{}' is still referenced by {} object(s)",
+            self.tag_name, self.reference_count
+        )
+    }
+}
+
+impl AppErrorMessage for InvalidTagValue {
+    fn message(&self) -> String {
+        match &self.allowed {
+            Some(allowed) if !allowed.is_empty() => format!(
+                "Invalid value '{}' for tag '{}', allowed values: {:?}",
+                self.value, self.tag_name, allowed
+            ),
+            _ => format!("Invalid value '{}' for tag '{}'", self.value, self.tag_name),
+        }
+    }
+}
 
 impl AppErrorMessage for StreamAlreadyExists {
     fn message(&self) -> String {
@@ -1703,6 +1793,10 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::DuplicatedIndexColumnId(err.message())
             }
             AppError::IndexColumnIdNotFound(err) => ErrorCode::IndexColumnIdNotFound(err.message()),
+            AppError::TagAlreadyExists(err) => ErrorCode::TagAlreadyExists(err.message()),
+            AppError::UnknownTag(err) => ErrorCode::UnknownTag(err.message()),
+            AppError::TagHasReferences(err) => ErrorCode::TagHasReferences(err.message()),
+            AppError::InvalidTagValue(err) => ErrorCode::InvalidTagValue(err.message()),
 
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDataMask(err) => ErrorCode::UnknownDatamask(err.message()),
