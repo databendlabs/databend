@@ -68,15 +68,6 @@ impl RulePushdownAntiJoin {
                 .collect::<Vec<_>>();
 
             if equi_conditions.iter().all(left_predicate) {
-                // let mut new_equi_conditions = Vec::with_capacity(equi_conditions.len());
-
-                // for (idx, (inferred, predicate)) in equi_conditions.into_iter().enumerate() {
-                //     if !inferred || matches!(predicate, JoinPredicate::Left(_)) {
-                //         new_equi_conditions.push(join.equi_conditions[idx].clone());
-                //     }
-                // }
-
-                // join.equi_conditions = new_equi_conditions;
                 let right_prop = right_rel_expr.derive_relational_prop()?;
                 let mut union_output_columns = ColumnSet::new();
                 union_output_columns.extend(right_prop.output_columns.clone());
@@ -99,15 +90,6 @@ impl RulePushdownAntiJoin {
                     return replace_inner_join(left, new_inner_join);
                 }
             } else if equi_conditions.iter().all(right_predicate) {
-                // let mut new_equi_conditions = Vec::with_capacity(equi_conditions.len());
-
-                // for (idx, (inferred, predicate)) in equi_conditions.into_iter().enumerate() {
-                //     if !inferred || matches!(predicate, JoinPredicate::Left(_)) {
-                //         new_equi_conditions.push(join.equi_conditions[idx].clone());
-                //     }
-                // }
-
-                // join.equi_conditions = new_equi_conditions;
                 let right_prop = right_rel_expr.derive_relational_prop()?;
                 let mut union_output_columns = ColumnSet::new();
                 union_output_columns.extend(right_prop.output_columns.clone());
@@ -185,46 +167,6 @@ fn extract_inner_join(expr: &SExpr) -> Result<Option<SExpr>> {
         _ => Ok(None),
     }
 }
-
-// struct ColumnMappingRewriter<'a> {
-//     mapping: &'a HashMap<usize, ColumnBinding>,
-// }
-//
-// impl VisitorMut<'_> for ColumnMappingRewriter {
-//     fn visit_bound_column_ref(&mut self, col: &mut BoundColumnRef) -> Result<()> {
-//         if let Some(&new_index) = self.mapping.get(&col.column.index) {
-//             col.column = new_index.clone();
-//         }
-//         Ok(())
-//     }
-// }
-//
-// fn replace_by_equivalence(
-//     expr: &ScalarExpr,
-//     mapping: &HashMap<IndexType, ColumnBinding>,
-// ) -> Result<ScalarExpr> {
-//     if mapping.is_empty() {
-//         return Ok(expr.clone());
-//     }
-//
-//     let mut new_expr = expr.clone();
-//     let mut rewriter = ColumnMappingRewriter { mapping };
-//     rewriter.visit(&mut new_expr)?;
-//     Ok(new_expr)
-// }
-//
-// fn collect_mapping(join: &Join) -> Result<Vec<(ColumnBinding, ColumnBinding)>> {
-//     for equi_condition in &join.equi_conditions {
-//         match equi_condition.left
-//     }
-// }
-//
-// fn all_left(
-//     conditions: &[JoinEquiCondition],
-//     inner_join: Join,
-//     left: Arc<RelationalProperty>,
-// ) -> Result<bool> {
-// }
 
 fn left_predicate(tuple: &JoinPredicate) -> bool {
     matches!(&tuple, JoinPredicate::Left(_))

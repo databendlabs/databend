@@ -21,6 +21,8 @@ use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
+use crate::optimizer::optimizers::operator::InferFilterOptimizer;
+use crate::optimizer::optimizers::operator::JoinProperty;
 use crate::optimizer::optimizers::rule::can_filter_null;
 use crate::optimizer::optimizers::rule::constant::false_constant;
 use crate::optimizer::optimizers::rule::constant::is_falsy;
@@ -240,9 +242,10 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
                 right_push_down = vec![];
             }
         }
-        // let join_prop = JoinProperty::new(&left_prop.output_columns, &right_prop.output_columns);
-        // let mut infer_filter = InferFilterOptimizer::new(Some(join_prop));
-        // push_down_predicates = infer_filter.optimize(push_down_predicates)?;
+
+        let join_prop = JoinProperty::new(&left_prop.output_columns, &right_prop.output_columns);
+        let mut infer_filter = InferFilterOptimizer::new(Some(join_prop));
+        push_down_predicates = infer_filter.optimize(push_down_predicates)?;
     }
 
     let mut all_push_down = vec![];

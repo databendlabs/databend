@@ -263,14 +263,14 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         ]))
         // 10. Apply DPhyp algorithm for cost-based join reordering
         .add(DPhpyOptimizer::new(opt_ctx.clone()))
-        .add(RecursiveRuleOptimizer::new(
-            opt_ctx.clone(),
-            [RuleID::PushDownAntiJoin].as_slice(),
-        ))
         // 11. After join reorder, Convert some single join to inner join.
         .add(SingleToInnerOptimizer::new())
         // 12. Deduplicate join conditions.
         .add(DeduplicateJoinConditionOptimizer::new())
+        .add(RecursiveRuleOptimizer::new(
+            opt_ctx.clone(),
+            [RuleID::PushDownAntiJoin].as_slice(),
+        ))
         // 13. Apply join commutativity to further optimize join ordering
         .add_if(
             opt_ctx.get_enable_join_reorder(),
