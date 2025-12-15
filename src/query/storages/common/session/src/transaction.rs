@@ -67,7 +67,7 @@ pub struct TxnBuffer {
     table_desc_to_id: HashMap<String, u64>,
     mutated_tables: HashMap<u64, TableInfo>,
     base_snapshot_location: HashMap<u64, Option<String>>,
-    snapshot_ts: HashMap<u64, Option<DateTime<Utc>>>,
+    snapshot_ts: HashMap<u64, DateTime<Utc>>,
     tenant: HashMap<u64, Tenant>,
     copied_files: HashMap<u64, Vec<UpsertTableCopiedFileReq>>,
     update_stream_meta: HashMap<u64, UpdateStreamMetaReq>,
@@ -109,7 +109,9 @@ impl TxnBuffer {
                 .entry(table_id)
                 .or_insert(req.base_snapshot_location);
 
-            self.snapshot_ts.entry(table_id).or_insert(req.snapshot_ts);
+            if let Some(ts) = req.snapshot_ts {
+                self.snapshot_ts.entry(table_id).or_insert(ts);
+            }
 
             self.tenant.entry(table_id).or_insert(req.tenant);
         }
@@ -321,7 +323,7 @@ impl TxnManager {
                             seq: MatchSeq::Exact(info.ident.seq),
                             new_table_meta: info.meta.clone(),
                             base_snapshot_location: None,
-                            snapshot_ts: self.txn_buffer.snapshot_ts.get(id).cloned().flatten(),
+                            snapshot_ts: self.txn_buffer.snapshot_ts.get(id).cloned(),
                         },
                         info.clone(),
                     )

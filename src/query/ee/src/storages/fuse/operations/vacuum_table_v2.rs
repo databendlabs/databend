@@ -227,7 +227,10 @@ pub async fn do_vacuum2(
 
     let start = std::time::Instant::now();
     let gc_root_timestamp = gc_root.timestamp.unwrap();
-    // Persist the LVT only if we have not written it before.
+    // NOTE: when using the time-based retention policy we already persisted an LVT above to
+    // constrain snapshot listing, and that value can legitimately be newer than the gc_root.
+    // The meta side only ever moves LVT forward, so only retention policies that have not
+    // written an LVT in this run (e.g. keep-N-snapshots) need to persist it here.
     if need_update_lvt {
         let cat = ctx.get_default_catalog()?;
         cat.set_table_lvt(
