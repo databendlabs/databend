@@ -709,7 +709,7 @@ impl Decimal for i64 {
     fn e(n: u8) -> Self {
         const L: usize = i64::MAX_PRECISION as usize + 1;
         const TAB: [i64; L] = {
-            const fn gen() -> [i64; L] {
+            const fn generate_array() -> [i64; L] {
                 let mut arr = [0; L];
                 let mut i = 0;
                 loop {
@@ -721,7 +721,7 @@ impl Decimal for i64 {
                 }
                 arr
             }
-            gen()
+            generate_array()
         };
         TAB.get(n as usize)
             .copied()
@@ -974,7 +974,7 @@ impl Decimal for i128 {
     fn e(n: u8) -> Self {
         const L: usize = i128::MAX_PRECISION as usize + 1;
         const TAB: [i128; L] = {
-            const fn gen() -> [i128; L] {
+            const fn generate_array() -> [i128; L] {
                 let mut arr = [0; L];
                 let mut i = 0;
                 loop {
@@ -986,7 +986,7 @@ impl Decimal for i128 {
                 }
                 arr
             }
-            gen()
+            generate_array()
         };
         TAB.get(n as usize)
             .copied()
@@ -1066,7 +1066,7 @@ impl Decimal for i128 {
         /// `MIN_DECIMAL_FOR_EACH_PRECISION[p]` holds the minimum `i128` value that can
         /// be stored in a [arrow_schema::DataType::Decimal128] value of precision `p`
         const MIN_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = {
-            const fn gen() -> [i128; 38] {
+            const fn generate_array() -> [i128; 38] {
                 let mut arr = [0; 38];
                 let mut i = 0;
                 loop {
@@ -1078,7 +1078,7 @@ impl Decimal for i128 {
                 }
                 arr
             }
-            gen()
+            generate_array()
         };
 
         MIN_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
@@ -1088,7 +1088,7 @@ impl Decimal for i128 {
         /// `MAX_DECIMAL_FOR_EACH_PRECISION[p]` holds the maximum `i128` value that can
         /// be stored in [arrow_schema::DataType::Decimal128] value of precision `p`
         const MAX_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = {
-            const fn gen() -> [i128; 38] {
+            const fn generate_array() -> [i128; 38] {
                 let mut arr = [0; 38];
                 let mut i = 0;
                 loop {
@@ -1100,7 +1100,7 @@ impl Decimal for i128 {
                 }
                 arr
             }
-            gen()
+            generate_array()
         };
         MAX_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }

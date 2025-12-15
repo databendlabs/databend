@@ -320,7 +320,7 @@ where
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<JsonArrayAggState<T>>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 

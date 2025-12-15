@@ -77,7 +77,7 @@ unsafe impl<T: Allocator> Allocator for GlobalAllocator<T> {
 
     #[inline(always)]
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        self.inner.deallocate(ptr, layout)
+        unsafe { self.inner.deallocate(ptr, layout) }
     }
 
     #[inline(always)]
@@ -87,7 +87,7 @@ unsafe impl<T: Allocator> Allocator for GlobalAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        self.inner.grow(ptr, old_layout, new_layout)
+        unsafe { self.inner.grow(ptr, old_layout, new_layout) }
     }
 
     #[inline(always)]
@@ -97,7 +97,7 @@ unsafe impl<T: Allocator> Allocator for GlobalAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        self.inner.grow_zeroed(ptr, old_layout, new_layout)
+        unsafe { self.inner.grow_zeroed(ptr, old_layout, new_layout) }
     }
 
     #[inline(always)]
@@ -107,7 +107,7 @@ unsafe impl<T: Allocator> Allocator for GlobalAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        self.inner.shrink(ptr, old_layout, new_layout)
+        unsafe { self.inner.shrink(ptr, old_layout, new_layout) }
     }
 }
 
@@ -122,8 +122,8 @@ unsafe impl<T: Allocator> GlobalAlloc for GlobalAllocator<T> {
 
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        let ptr = NonNull::new(ptr).unwrap_unchecked();
-        self.deallocate(ptr, layout);
+        let ptr = unsafe { NonNull::new(ptr).unwrap_unchecked() };
+        unsafe { self.deallocate(ptr, layout) };
     }
 
     #[inline]
@@ -138,15 +138,15 @@ unsafe impl<T: Allocator> GlobalAlloc for GlobalAllocator<T> {
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         use std::cmp::Ordering::*;
 
-        let ptr = NonNull::new(ptr).unwrap_unchecked();
+        let ptr = unsafe { NonNull::new(ptr).unwrap_unchecked() };
         let new_layout = Layout::from_size_align(new_size, layout.align()).unwrap();
         match layout.size().cmp(&new_size) {
             Equal => ptr.as_ptr(),
-            Less => match self.grow(ptr, layout, new_layout) {
+            Less => match unsafe { self.grow(ptr, layout, new_layout) } {
                 Ok(ptr) => ptr.as_ptr() as *mut u8,
                 Err(_) => null_mut(),
             },
-            Greater => match self.shrink(ptr, layout, new_layout) {
+            Greater => match unsafe { self.shrink(ptr, layout, new_layout) } {
                 Ok(ptr) => ptr.as_ptr() as *mut u8,
                 Err(_) => null_mut(),
             },

@@ -74,7 +74,7 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
     }
 }
 
-pub fn any_token(i: Input) -> IResult<&Token> {
+pub fn any_token(i: Input<'_>) -> IResult<'_, &Token<'_>> {
     match i.tokens.first().filter(|token| token.kind != EOI) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(

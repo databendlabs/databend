@@ -1026,49 +1026,49 @@ impl<Index: ColumnIndex> Expr<Index> {
                 Expr::FunctionCall(FunctionCall {
                     function, args, id, ..
                 }) => match (function.signature.name.as_str(), args.as_slice()) {
-                    ("and", [ref lhs, ref rhs]) => {
+                    ("and", [lhs, rhs]) => {
                         write_binary_op("AND", lhs, rhs, 10, min_precedence)
                     }
-                    ("or", [ref lhs, ref rhs]) => {
+                    ("or", [lhs, rhs]) => {
                         write_binary_op("OR", lhs, rhs, 5, min_precedence)
                     }
-                    ("not", [ref expr]) => write_unary_op("NOT", expr, 15, min_precedence),
-                    ("gte", [ref lhs, ref rhs]) => {
+                    ("not", [expr]) => write_unary_op("NOT", expr, 15, min_precedence),
+                    ("gte", [lhs, rhs]) => {
                         write_binary_op(">=", lhs, rhs, 20, min_precedence)
                     }
-                    ("gt", [ref lhs, ref rhs]) => {
+                    ("gt", [lhs, rhs]) => {
                         write_binary_op(">", lhs, rhs, 20, min_precedence)
                     }
-                    ("lte", [ref lhs, ref rhs]) => {
+                    ("lte", [lhs, rhs]) => {
                         write_binary_op("<=", lhs, rhs, 20, min_precedence)
                     }
-                    ("lt", [ref lhs, ref rhs]) => {
+                    ("lt", [lhs, rhs]) => {
                         write_binary_op("<", lhs, rhs, 20, min_precedence)
                     }
-                    ("eq", [ref lhs, ref rhs]) => {
+                    ("eq", [lhs, rhs]) => {
                         write_binary_op("=", lhs, rhs, 20, min_precedence)
                     }
-                    ("noteq", [ref lhs, ref rhs]) => {
+                    ("noteq", [lhs, rhs]) => {
                         write_binary_op("<>", lhs, rhs, 20, min_precedence)
                     }
-                    ("plus", [ref expr]) => write_unary_op("+", expr, 50, min_precedence),
-                    ("minus", [ref expr]) => write_unary_op("-", expr, 50, min_precedence),
-                    ("plus", [ref lhs, ref rhs]) => {
+                    ("plus", [expr]) => write_unary_op("+", expr, 50, min_precedence),
+                    ("minus", [expr]) => write_unary_op("-", expr, 50, min_precedence),
+                    ("plus", [lhs, rhs]) => {
                         write_binary_op("+", lhs, rhs, 30, min_precedence)
                     }
-                    ("minus", [ref lhs, ref rhs]) => {
+                    ("minus", [lhs, rhs]) => {
                         write_binary_op("-", lhs, rhs, 30, min_precedence)
                     }
-                    ("multiply", [ref lhs, ref rhs]) => {
+                    ("multiply", [lhs, rhs]) => {
                         write_binary_op("*", lhs, rhs, 40, min_precedence)
                     }
-                    ("divide", [ref lhs, ref rhs]) => {
+                    ("divide", [lhs, rhs]) => {
                         write_binary_op("/", lhs, rhs, 40, min_precedence)
                     }
-                    ("div", [ref lhs, ref rhs]) => {
+                    ("div", [lhs, rhs]) => {
                         write_binary_op("DIV", lhs, rhs, 40, min_precedence)
                     }
-                    ("modulo", [ref lhs, ref rhs]) => {
+                    ("modulo", [lhs, rhs]) => {
                         write_binary_op("%", lhs, rhs, 40, min_precedence)
                     }
                     _ => {

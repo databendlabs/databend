@@ -214,7 +214,7 @@ impl AggregateFunction for MarkovTarin {
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<MarkovModel>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 

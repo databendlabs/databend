@@ -129,7 +129,7 @@ unsafe impl Allocator for DmaAllocator {
     }
 
     unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: Layout) {
-        Global {}.deallocate(ptr, self.real_layout(layout))
+        unsafe { Global {}.deallocate(ptr, self.real_layout(layout)) }
     }
 
     unsafe fn grow(
@@ -138,11 +138,11 @@ unsafe impl Allocator for DmaAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        Global {}.grow(
+        unsafe { Global {}.grow(
             ptr,
             self.real_layout(old_layout),
             self.real_layout(new_layout),
-        )
+        ) }
     }
 
     unsafe fn grow_zeroed(
@@ -151,11 +151,11 @@ unsafe impl Allocator for DmaAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        Global {}.grow_zeroed(
+        unsafe { Global {}.grow_zeroed(
             ptr,
             self.real_layout(old_layout),
             self.real_layout(new_layout),
-        )
+        ) }
     }
 
     unsafe fn shrink(
@@ -164,11 +164,11 @@ unsafe impl Allocator for DmaAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        Global {}.shrink(
+        unsafe { Global {}.shrink(
             ptr,
             self.real_layout(old_layout),
             self.real_layout(new_layout),
-        )
+        ) }
     }
 }
 

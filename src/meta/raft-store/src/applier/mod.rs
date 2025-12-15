@@ -125,18 +125,18 @@ where SM: StateMachineApi<SysData> + 'static
             *sys_data.last_applied_mut() = Some(*log_id);
         });
 
-        let applied_state = match entry.payload {
+        let applied_state = match &entry.payload {
             EntryPayload::Blank => {
                 info!("apply: blank: {}", log_id);
 
                 AppliedState::None
             }
-            EntryPayload::Normal(ref data) => {
+            EntryPayload::Normal(data) => {
                 info!("apply: normal: {} {}", log_id, data);
 
                 self.apply_cmd(&data.cmd).await?
             }
-            EntryPayload::Membership(ref mem) => {
+            EntryPayload::Membership(mem) => {
                 info!("apply: membership: {} {:?}", log_id, mem);
 
                 let membership = StoredMembership::new(Some(*log_id), mem.clone());
@@ -217,11 +217,11 @@ where SM: StateMachineApi<SysData> + 'static
                 res
             }
 
-            Cmd::RemoveNode { ref node_id } => self.apply_remove_node(node_id),
+            Cmd::RemoveNode { node_id } => self.apply_remove_node(node_id),
 
             Cmd::SetFeature { feature, enable } => self.apply_set_feature(feature, *enable),
 
-            Cmd::UpsertKV(ref upsert_kv) => self.apply_upsert_kv(upsert_kv).await?,
+            Cmd::UpsertKV(upsert_kv) => self.apply_upsert_kv(upsert_kv).await?,
 
             Cmd::Transaction(txn) => self.apply_txn(txn).await?,
         };

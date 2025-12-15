@@ -46,7 +46,7 @@ use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
 
-pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
+pub fn tokenize_sql(sql: &str) -> Result<Vec<Token<'_>>> {
     Tokenizer::new(sql).collect::<Result<Vec<_>>>()
 }
 

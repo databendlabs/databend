@@ -1949,7 +1949,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
     )))
 }
 
-pub fn literal_hex_str(i: Input) -> IResult<&str> {
+pub fn literal_hex_str(i: Input<'_>) -> IResult<'_, &str> {
     // 0XFFFF
     let mysql_hex = map(
         rule! {

@@ -346,7 +346,7 @@ where
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 
     fn get_own_null_adaptor(

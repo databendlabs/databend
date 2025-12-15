@@ -222,9 +222,9 @@ where F: SnapshotGenerator + Send + Sync + 'static
         snapshot_gen
             .as_any()
             .downcast_ref::<MutationGenerator>()
-            .is_some_and(|gen| {
+            .is_some_and(|g| {
                 matches!(
-                    gen.mutation_kind,
+                    g.mutation_kind,
                     MutationKind::Update
                         | MutationKind::Delete
                         | MutationKind::MergeInto
@@ -315,14 +315,14 @@ where F: SnapshotGenerator + Send + Sync + 'static
         snapshot_gen
             .as_any()
             .downcast_ref::<TruncateGenerator>()
-            .is_some_and(|gen| matches!(gen.mode(), TruncateMode::DropAll))
+            .is_some_and(|g| matches!(g.mode(), TruncateMode::DropAll))
     }
 
     fn need_truncate(&self) -> bool {
         self.snapshot_gen
             .as_any()
             .downcast_ref::<TruncateGenerator>()
-            .is_some_and(|gen| !matches!(gen.mode(), TruncateMode::Delete))
+            .is_some_and(|g| !matches!(g.mode(), TruncateMode::Delete))
     }
 
     fn is_append_only_txn(&self) -> bool {

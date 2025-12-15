@@ -1166,7 +1166,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Value::Column(col) => {
                         let validity = match col {
                             Column::Null { len } => Some(Bitmap::new_constant(false, *len)),
-                            Column::Nullable(box ref nullable_column) => {
+                            Column::Nullable(box nullable_column) => {
                                 Some(nullable_column.validity.clone())
                             }
                             _ => None,

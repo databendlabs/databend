@@ -1157,7 +1157,7 @@ impl<T> NotNan<T> {
     )]
     #[inline]
     pub const unsafe fn unchecked_new(val: T) -> Self {
-        Self::new_unchecked(val)
+        unsafe { Self::new_unchecked(val) }
     }
 }
 

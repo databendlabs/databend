@@ -270,7 +270,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = Self::get_state(place);
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
 
         if self.inner.need_manual_drop_state() {
             self.inner.drop_state(place.remove_first_loc());

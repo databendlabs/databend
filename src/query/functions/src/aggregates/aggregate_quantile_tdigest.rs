@@ -432,7 +432,7 @@ where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<QuantileTDigestState>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 

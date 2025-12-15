@@ -193,7 +193,7 @@ where State: DistinctStateFunc
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = Self::get_state(place);
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
 
         if self.nested.need_manual_drop_state() {
             self.nested.drop_state(place.remove_first_loc());

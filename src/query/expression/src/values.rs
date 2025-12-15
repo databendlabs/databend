@@ -1552,7 +1552,7 @@ impl Column {
                 with_number_mapped_type!(|NUM_TYPE| match num_ty {
                     NumberDataType::NUM_TYPE => {
                         NumberType::<NUM_TYPE>::from_data(
-                            (0..len).map(|_| rng.gen::<NUM_TYPE>()).collect_vec(),
+                            (0..len).map(|_| rng.r#gen::<NUM_TYPE>()).collect_vec(),
                         )
                     }
                 })
@@ -1561,7 +1561,7 @@ impl Column {
                 with_decimal_mapped_type!(|DECIMAL| match DecimalDataType::from(*size) {
                     DecimalDataType::DECIMAL(size) => {
                         let values = (0..len)
-                            .map(|_| DECIMAL::from(rng.gen::<i16>()))
+                            .map(|_| DECIMAL::from(rng.r#gen::<i16>()))
                             .collect::<Vec<DECIMAL>>();
                         <DECIMAL as Decimal>::upcast_column(values.into(), size)
                     }
@@ -1641,7 +1641,7 @@ impl Column {
             DataType::Bitmap => BitmapType::from_data(
                 (0..len)
                     .map(|_| {
-                        let data: [u64; 4] = rng.gen();
+                        let data: [u64; 4] = rng.r#gen();
                         let rb = HybridBitmap::from_iter(data.iter());
                         let mut buf = vec![];
                         rb.serialize_into(&mut buf)
@@ -1668,8 +1668,8 @@ impl Column {
             DataType::Geometry => {
                 let mut data = Vec::with_capacity(len);
                 (0..len).for_each(|_| {
-                    let x = rng.gen::<f64>();
-                    let y = rng.gen::<f64>();
+                    let x = rng.r#gen::<f64>();
+                    let y = rng.r#gen::<f64>();
                     let val = Point::new(x, y);
                     data.push(
                         Geometry::from(val)
@@ -1696,14 +1696,14 @@ impl Column {
                 match vector_ty {
                     VectorDataType::Int8(dimension) => {
                         for _ in 0..len {
-                            let value = (0..*dimension).map(|_| rng.gen::<i8>()).collect_vec();
+                            let value = (0..*dimension).map(|_| rng.r#gen::<i8>()).collect_vec();
                             let scalar = VectorScalarRef::Int8(&value);
                             builder.push(&scalar);
                         }
                     }
                     VectorDataType::Float32(dimension) => {
                         for _ in 0..len {
-                            let value = (0..*dimension).map(|_| rng.gen::<F32>()).collect_vec();
+                            let value = (0..*dimension).map(|_| rng.r#gen::<F32>()).collect_vec();
                             let scalar = VectorScalarRef::Float32(&value);
                             builder.push(&scalar);
                         }
@@ -1719,7 +1719,7 @@ impl Column {
                         for _ in 0..len {
                             let mut value = [0u64; N];
                             for i in 0..N {
-                                value[i] = rng.gen::<u64>();
+                                value[i] = rng.r#gen::<u64>();
                             }
                             builder.push(value);
                         }
