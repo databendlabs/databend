@@ -14,6 +14,7 @@
 
 use std::ops::Deref;
 use std::sync::Arc;
+use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table_context::TableContext;
@@ -28,7 +29,7 @@ use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 
-use crate::pipelines::processors::transforms::build_runtime_filter_packet;
+use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
@@ -40,7 +41,6 @@ use crate::pipelines::processors::transforms::new_hash_join::memory::basic_state
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
-use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::sessions::QueryContext;
 
@@ -93,18 +93,15 @@ impl Join for InnerHashJoin {
         self.basic_hash_join.final_build()
     }
 
-    fn build_runtime_filter(&self, desc: &RuntimeFiltersDesc) -> Result<JoinRuntimeFilterPacket> {
-        build_runtime_filter_packet(
-            self.basic_state.chunks.deref(),
-            *self.basic_state.build_rows,
-            &desc.filters_desc,
-            &self.function_ctx,
-            desc.inlist_threshold,
-            desc.bloom_threshold,
-            desc.min_max_threshold,
-            desc.selectivity_threshold,
-            false,
-        )
+    fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
+        let locked = self.basic_state.mutex.lock();
+        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+        self.basic_state.packets.as_mut().push(packet);
+    }
+
+    fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
+        let packets = std::mem::take(self.basic_state.packets.as_mut());
+        merge_join_runtime_filter_packets(packets)
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

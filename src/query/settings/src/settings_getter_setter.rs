@@ -305,11 +305,6 @@ impl Settings {
         self.try_get_string("timezone")
     }
 
-    // Get group by two level threshold
-    pub fn get_group_by_two_level_threshold(&self) -> Result<u64> {
-        self.try_get_u64("group_by_two_level_threshold")
-    }
-
     pub fn get_max_inlist_to_or(&self) -> Result<u64> {
         self.try_get_u64("max_inlist_to_or")
     }
@@ -497,10 +492,6 @@ impl Settings {
         Ok(self.try_get_u64("aggregate_spilling_memory_ratio")? as usize)
     }
 
-    pub fn get_window_partition_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
-        Ok(self.try_get_u64("window_partition_spilling_to_disk_bytes_limit")? as usize)
-    }
-
     pub fn get_window_partition_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("window_partition_spilling_memory_ratio")? as usize)
     }
@@ -525,14 +516,6 @@ impl Settings {
         Ok(self.try_get_u64("sort_spilling_memory_ratio")? as usize)
     }
 
-    pub fn get_sort_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
-        Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
-    }
-
-    pub fn get_result_set_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
-        Ok(self.try_get_u64("result_set_spilling_to_disk_bytes_limit")? as usize)
-    }
-
     pub fn get_enable_result_set_spilling(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_result_set_spilling")? == 1)
     }
@@ -547,14 +530,6 @@ impl Settings {
 
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
-    }
-
-    pub fn get_efficiently_memory_group_by(&self) -> Result<bool> {
-        Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
-    }
-
-    pub fn get_enable_experimental_aggregate_hashtable(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_aggregate_hashtable")? == 1)
     }
 
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {

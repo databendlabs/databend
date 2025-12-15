@@ -12,5 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod spill_config_behavior;
+mod spill_fallback;
+mod spill_profile;
+mod spill_target;
 mod spiller;

@@ -115,6 +115,8 @@ jobs:
           source: ${{ inputs.source }}
           source_id: ${{ inputs.source_id }}
           size: Small
+          cache_size: "0"
+          tries: 1
           version: ${{ inputs.version }}
           cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
@@ -137,11 +139,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - { dataset: hits, size: Small, database: hits, timeout: 10 }
-          - { dataset: hits, size: Large, database: hits, timeout: 10 }
-          - { dataset: tpch100, size: Small, database: tpch_100, timeout: 20 }
-          - { dataset: tpch100, size: Large, database: tpch_100, timeout: 20 }
-          - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60 }
+          - { dataset: hits, size: Small, database: hits, timeout: 10, cache_size: 0, tries: 3 }
+          - { dataset: hits, size: Large, database: hits, timeout: 10, cache_size: 0, tries: 3 }
+          - { dataset: tpch100, size: Small, database: tpch_100, timeout: 20, cache_size: 0, tries: 3 }
+          - { dataset: tpch100, size: Large, database: tpch_100, timeout: 20, cache_size: 0, tries: 3 }
+          - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60, cache_size: 0, tries: 1 }
+          - { dataset: tpch1000, size: Large, database: tpch_1000, timeout: 60, cache_size: 300, tries: 1 }
       fail-fast: true
       max-parallel: 1
     steps:
@@ -165,6 +168,8 @@ jobs:
           source: ${{ inputs.source }}
           source_id: ${{ inputs.source_id }}
           size: ${{ matrix.size }}
+          cache_size: ${{ matrix.cache_size }}
+          tries: ${{ matrix.tries }}
           version: ${{ inputs.version }}
           cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
           cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
@@ -184,17 +189,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update -yq
-          sudo apt-get install -yq python3-jinja2
+      - uses: astral-sh/setup-uv@v5
       - uses: actions/download-artifact@v4
         with:
-          path: benchmark/clickbench/results
+          path: benchmark/results
           pattern: benchmark-*
           merge-multiple: true
       - name: Get Report Prefix
-        working-directory: benchmark/clickbench
+        working-directory: benchmark
         run: |
           shopt -s nullglob
           for result in results/*.json; do
@@ -215,16 +217,17 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
-        working-directory: benchmark/clickbench
+        working-directory: benchmark
         run: |
           echo -e "## ClickBench Report\n" > /tmp/body
           shopt -s nullglob
+          uv sync
           for p in results/*; do
             [ -d "$p" ] || continue
             dataset=$(basename $p)
             aws s3 sync results/$dataset/ ${REPORT_S3_PREFIX}/ --include "*.json" --no-progress --checksum-algorithm=CRC32
             aws s3 sync "s3://benchmark/clickbench/release/${dataset}/latest/" ./results/${dataset}/ --exclude "*" --include "*.json" || true
-            ./update_results.py --dataset $dataset --pr ${{ inputs.source_id }}
+            uv run update_results.py --dataset $dataset --pr ${{ inputs.source_id }}
             aws s3 cp ./results/${dataset}.html ${REPORT_S3_PREFIX}/${dataset}.html --no-progress --checksum-algorithm=CRC32
             echo "* **${dataset}**: https://benchmark.databend.com/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html" >> /tmp/body
           done
@@ -249,19 +252,17 @@ jobs:
           # - "internal"
     steps:
       - uses: actions/checkout@v4
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update -yq
-          sudo apt-get install -yq python3-jinja2
+      - uses: astral-sh/setup-uv@v5
       - uses: actions/download-artifact@v4
         with:
-          path: benchmark/clickbench/results
+          path: benchmark/results
           pattern: benchmark-${{ matrix.dataset }}-*
           merge-multiple: true
       - name: Prepare results directory
-        working-directory: benchmark/clickbench
+        working-directory: benchmark
         run: |
           shopt -s nullglob
+          uv sync
           for result in results/*.json; do
             dataset=$(echo $result | sed -E 's/.*result-(\w+)-.*\.json/\1/')
             mkdir -p results/${dataset}/
@@ -274,7 +275,7 @@ jobs:
             mv $ndjson ndjsons/${dataset}/$(basename $ndjson)
           done
       - name: Generate report and upload to R2
-        working-directory: benchmark/clickbench
+        working-directory: benchmark
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -283,7 +284,7 @@ jobs:
         run: |
           aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date --date='-1 month' -u +%Y)/$(date --date='-1 month' -u +%m)/ ./results/${{ matrix.dataset }}/
           aws s3 sync s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/
-          ./update_results.py --dataset ${{ matrix.dataset }} --release ${{ inputs.source_id }}
+          uv run update_results.py --dataset ${{ matrix.dataset }} --release ${{ inputs.source_id }}
 
           RESULT_PREFIX="s3://benchmark/clickbench/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ inputs.source_id }}"
           LATEST_PREFIX="s3://benchmark/clickbench/release/${{ matrix.dataset }}/latest/latest"
@@ -294,7 +295,7 @@ jobs:
 
           aws s3 cp ./results/${{ matrix.dataset }}.html s3://benchmark/clickbench/release/${{ matrix.dataset }}.html --no-progress --checksum-algorithm=CRC32
       - name: Upload NDJSON archives to R2
-        working-directory: benchmark/clickbench
+        working-directory: benchmark
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

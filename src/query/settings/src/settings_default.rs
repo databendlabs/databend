@@ -327,13 +327,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(all_timezones)),
                 }),
-                ("group_by_two_level_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(20000),
-                    desc: "Sets the number of keys in a GROUP BY operation that will trigger a two-level aggregation.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
                 ("max_inlist_to_or", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
                     desc: "Sets the maximum number of values that can be included in an IN expression to be converted to an OR operator.",
@@ -671,13 +664,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
-                ("window_partition_spilling_to_disk_bytes_limit", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of local disk in bytes that each window partitioner can use before spilling data to storage during query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
                 ("window_num_partitions", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256),
                     desc: "Sets the number of partitions for window operator.",
@@ -706,20 +692,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
-                ("sort_spilling_to_disk_bytes_limit", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of local disk in bytes that sorter can use before spilling data to storage during one query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
-                ("result_set_spilling_to_disk_bytes_limit", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of local disk in bytes that result set can use before spilling data to storage during one query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
                 ("enable_result_set_spilling", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable spilling result set data to storage when memory usage exceeds the threshold.",
@@ -747,13 +719,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["before_partial".into(), "before_merge".into()])),
-                }),
-                ("efficiently_memory_group_by", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Memory is used efficiently, but this may cause performance degradation.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
@@ -892,7 +857,7 @@ impl DefaultSettings {
                 }),
                 ("auto_compaction_segments_limit", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
-                    desc: "The maximum number of segments that can be compacted automatically triggered after write(replace-into/merge-into).",
+                    desc: "The maximum number of segments that can be reclustered automatically triggered after write.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(2..=u64::MAX)),
@@ -1022,13 +987,6 @@ impl DefaultSettings {
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables parquet prewhere",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Enables experimental aggregate hashtable",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

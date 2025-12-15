@@ -39,8 +39,9 @@ use hash_index::Entry;
 pub use partitioned_payload::*;
 pub use payload::*;
 pub use payload_flush::*;
-pub use probe_state::*;
-use row_ptr::RowPtr;
+pub use probe_state::ProbeState;
+use probe_state::*;
+use row_ptr::*;
 
 // A batch size to probe, flush, repartition, etc.
 pub(crate) const BATCH_SIZE: usize = 2048;

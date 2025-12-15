@@ -323,7 +323,7 @@ impl FuseTable {
             self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
         let enable_parquet_dictionary_encoding =
-            self.get_option(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY, false);
+            self.get_option(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY, true);
 
         WriteSettings {
             storage_format: self.storage_format,

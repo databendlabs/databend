@@ -19,6 +19,8 @@ use std::collections::HashSet;
 use std::mem;
 use std::sync::Arc;
 
+use arrow_array::RecordBatch;
+use arrow_schema::Schema;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -38,7 +40,8 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_blocks::parquet_writer_properties_builder;
+use databend_storages_common_blocks::build_parquet_writer_properties;
+use databend_storages_common_blocks::NdvProvider;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::Index;
@@ -50,8 +53,10 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
+use parquet::format::FileMetaData;
 
 use crate::io::create_inverted_index_builders;
+use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
 use crate::io::write::stream::ColumnStatisticsState;
@@ -69,14 +74,102 @@ use crate::operations::column_parquet_metas;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
+pub struct UninitializedArrowWriter {
+    write_settings: WriteSettings,
+    arrow_schema: Arc<Schema>,
+    table_schema: TableSchemaRef,
+}
+impl UninitializedArrowWriter {
+    fn init(&self, cols_ndv_info: ColumnsNdvInfo) -> Result<ArrowWriter<Vec<u8>>> {
+        let write_settings = &self.write_settings;
+        let num_rows = cols_ndv_info.num_rows;
+
+        let writer_properties = build_parquet_writer_properties(
+            write_settings.table_compression,
+            write_settings.enable_parquet_dictionary,
+            Some(cols_ndv_info),
+            None,
+            num_rows,
+            self.table_schema.as_ref(),
+        );
+        let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
+        let writer =
+            ArrowWriter::try_new(buffer, self.arrow_schema.clone(), Some(writer_properties))?;
+        Ok(writer)
+    }
+}
+
+pub struct InitializedArrowWriter {
+    inner: ArrowWriter<Vec<u8>>,
+}
+pub enum ArrowParquetWriter {
+    Uninitialized(UninitializedArrowWriter),
+    Initialized(InitializedArrowWriter),
+}
+impl ArrowParquetWriter {
+    fn new_uninitialized(write_settings: WriteSettings, table_schema: TableSchemaRef) -> Self {
+        let arrow_schema = Arc::new(table_schema.as_ref().into());
+        ArrowParquetWriter::Uninitialized(UninitializedArrowWriter {
+            write_settings,
+            arrow_schema,
+            table_schema,
+        })
+    }
+    fn write(&mut self, batch: &RecordBatch) -> Result<()> {
+        let Initialized(writer) = self else {
+            unreachable!("ArrowParquetWriter::write called before initialization");
+        };
+        writer.inner.write(batch)?;
+        Ok(())
+    }
+
+    fn finish(&mut self) -> Result<FileMetaData> {
+        let Initialized(writer) = self else {
+            unreachable!("ArrowParquetWriter::finish called before initialization");
+        };
+        let file_meta = writer.inner.finish()?;
+        Ok(file_meta)
+    }
+
+    fn inner_mut(&mut self) -> &mut Vec<u8> {
+        let Initialized(writer) = self else {
+            unreachable!("ArrowParquetWriter::inner_mut called before initialization");
+        };
+        writer.inner.inner_mut()
+    }
+
+    fn in_progress_size(&self) -> usize {
+        match self {
+            ArrowParquetWriter::Uninitialized(_) => 0,
+            Initialized(writer) => writer.inner.in_progress_size(),
+        }
+    }
+}
+
+pub struct ColumnsNdvInfo {
+    cols_ndv: HashMap<ColumnId, usize>,
+    num_rows: usize,
+}
+
+impl ColumnsNdvInfo {
+    fn new(num_rows: usize, cols_ndv: HashMap<ColumnId, usize>) -> Self {
+        Self { cols_ndv, num_rows }
+    }
+}
+impl NdvProvider for ColumnsNdvInfo {
+    fn column_ndv(&self, column_id: &ColumnId) -> Option<u64> {
+        self.cols_ndv.get(column_id).map(|v| *v as u64)
+    }
+}
+
 pub enum BlockWriterImpl {
-    Arrow(ArrowWriter<Vec<u8>>),
+    Parquet(ArrowParquetWriter),
     // Native format doesnot support stream write.
     Native(NativeWriter<Vec<u8>>),
 }
 
 pub trait BlockWriter {
-    fn start(&mut self) -> Result<()>;
+    fn start(&mut self, cols_ndv: ColumnsNdvInfo) -> Result<()>;
 
     fn write(&mut self, block: DataBlock, schema: &TableSchema) -> Result<()>;
 
@@ -88,18 +181,28 @@ pub trait BlockWriter {
 }
 
 impl BlockWriter for BlockWriterImpl {
-    fn start(&mut self) -> Result<()> {
+    fn start(&mut self, cols_ndv_info: ColumnsNdvInfo) -> Result<()> {
         match self {
-            BlockWriterImpl::Arrow(_) => Ok(()),
-            BlockWriterImpl::Native(writer) => Ok(writer.start()?),
+            BlockWriterImpl::Parquet(arrow_writer) => {
+                let ArrowParquetWriter::Uninitialized(uninitialized) = arrow_writer else {
+                    unreachable!(
+                        "Unexpected writer state: ArrowWriterImpl::Parquet has been initialized"
+                    );
+                };
+
+                let inner = uninitialized.init(cols_ndv_info)?;
+                *arrow_writer = ArrowParquetWriter::Initialized(InitializedArrowWriter { inner });
+                Ok(())
+            }
+            BlockWriterImpl::Native(native_writer) => Ok(native_writer.start()?),
         }
     }
 
     fn write(&mut self, block: DataBlock, schema: &TableSchema) -> Result<()> {
         match self {
-            BlockWriterImpl::Arrow(writer) => {
+            BlockWriterImpl::Parquet(writer) => {
                 let batch = block.to_record_batch(schema)?;
-                writer.write(&batch)?;
+                writer.write(&batch)?
             }
             BlockWriterImpl::Native(writer) => {
                 let block = block.consume_convert_to_full();
@@ -116,7 +219,7 @@ impl BlockWriter for BlockWriterImpl {
 
     fn finish(&mut self, schema: &TableSchemaRef) -> Result<HashMap<ColumnId, ColumnMeta>> {
         match self {
-            BlockWriterImpl::Arrow(writer) => {
+            BlockWriterImpl::Parquet(writer) => {
                 let file_meta = writer.finish()?;
                 column_parquet_metas(&file_meta, schema)
             }
@@ -136,14 +239,14 @@ impl BlockWriter for BlockWriterImpl {
 
     fn inner_mut(&mut self) -> &mut Vec<u8> {
         match self {
-            BlockWriterImpl::Arrow(writer) => writer.inner_mut(),
+            BlockWriterImpl::Parquet(writer) => writer.inner_mut(),
             BlockWriterImpl::Native(writer) => writer.inner_mut(),
         }
     }
 
     fn compressed_size(&self) -> usize {
         match self {
-            BlockWriterImpl::Arrow(writer) => writer.in_progress_size(),
+            BlockWriterImpl::Parquet(writer) => writer.in_progress_size(),
             BlockWriterImpl::Native(writer) => writer.total_size(),
         }
     }
@@ -170,17 +273,10 @@ impl StreamBlockBuilder {
         let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let block_writer = match properties.write_settings.storage_format {
             FuseStorageFormat::Parquet => {
-                let write_settings = &properties.write_settings;
-                let props = parquet_writer_properties_builder(
-                    write_settings.table_compression,
-                    write_settings.enable_parquet_dictionary,
-                    None,
-                )
-                .build();
-
-                let arrow_schema = Arc::new(properties.source_schema.as_ref().into());
-                let writer = ArrowWriter::try_new(buffer, arrow_schema, Some(props))?;
-                BlockWriterImpl::Arrow(writer)
+                BlockWriterImpl::Parquet(ArrowParquetWriter::new_uninitialized(
+                    properties.write_settings.clone(),
+                    properties.source_schema.clone(),
+                ))
             }
             FuseStorageFormat::Native => {
                 let mut default_compress_ratio = Some(2.10f64);
@@ -263,9 +359,7 @@ impl StreamBlockBuilder {
             return Ok(());
         }
 
-        if self.row_count == 0 {
-            self.block_writer.start()?;
-        }
+        let had_existing_rows = self.row_count > 0;
 
         let block = self.cluster_stats_state.add_block(block)?;
         self.column_stats_state
@@ -283,6 +377,16 @@ impl StreamBlockBuilder {
         }
         self.row_count += block.num_rows();
         self.block_size += block.estimate_block_size();
+
+        if !had_existing_rows {
+            // Writer properties must be fixed before the ArrowWriter starts, so we rely on the first
+            // block's NDV stats to heuristically configure the parquet writer.
+            let mut cols_ndv = self.column_stats_state.peek_cols_ndv();
+            cols_ndv.extend(self.block_stats_builder.peek_cols_ndv());
+            self.block_writer
+                .start(ColumnsNdvInfo::new(block.num_rows(), cols_ndv))?;
+        }
+
         self.block_writer
             .write(block, &self.properties.source_schema)?;
         Ok(())

@@ -120,16 +120,12 @@ impl FlightService for DatabendQueryFlightService {
                 )))
             }
             "exchange_fragment" => {
-                let target = request.get_metadata("x-target")?;
                 let query_id = request.get_metadata("x-query-id")?;
-                let fragment = request
-                    .get_metadata("x-fragment-id")?
-                    .parse::<usize>()
-                    .unwrap();
+                let channel_id = request.get_metadata("x-channel-id")?;
 
                 Ok(RawResponse::new(Box::pin(
                     DataExchangeManager::instance()
-                        .handle_exchange_fragment(query_id, target, fragment)?,
+                        .handle_exchange_fragment(query_id, channel_id)?,
                 )))
             }
             exchange_type => Err(Status::unimplemented(format!(

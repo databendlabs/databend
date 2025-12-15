@@ -209,7 +209,14 @@ pub fn column_merge_validity(entry: &BlockEntry, bitmap: Option<Bitmap>) -> Opti
             }
         }
         BlockEntry::Column(Column::Nullable(c)) => match bitmap {
-            None => Some(c.validity().clone()),
+            None => {
+                let validity = c.validity();
+                if validity.null_count() == 0 {
+                    None
+                } else {
+                    Some(validity.clone())
+                }
+            }
             Some(v) => Some(&c.validity & (&v)),
         },
         _ => bitmap,

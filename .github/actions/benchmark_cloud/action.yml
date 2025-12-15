@@ -22,6 +22,14 @@ inputs:
   size:
     description: "Small/Medium/Large"
     required: true
+  cache_size:
+    description: "Warehouse cache size"
+    required: false
+    default: "0"
+  tries:
+    description: "Number of attempts per query (1-3)"
+    required: false
+    default: ""
   version:
     description: "Databend version"
     required: true
@@ -38,14 +46,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install script dependencies
-      shell: bash
-      run: |
-        sudo apt-get update -yq
-        sudo apt-get install -yq python3
-
     - name: Prepare
-      working-directory: benchmark/clickbench
+      working-directory: benchmark
       shell: bash
       id: prepare
       env:
@@ -53,22 +55,30 @@ runs:
       run: |
         if [[ "${{ inputs.dataset }}" == "load" ]]; then
           echo "database=load_test_${{ inputs.run_id }}" >> $GITHUB_OUTPUT
-          echo "tries=1" >> $GITHUB_OUTPUT
         else
           database="${{ inputs.database }}"
           if [[ -z "$database" ]]; then
-            database="clickbench"
+            database="benchmark"
           fi
           echo "database=$database" >> $GITHUB_OUTPUT
-          echo "tries=3" >> $GITHUB_OUTPUT
         fi
+        tries="${{ inputs.tries }}"
+        if [[ -z "$tries" ]]; then
+          if [[ "${{ inputs.dataset }}" == "load" ]]; then
+            tries=1
+          else
+            tries=3
+          fi
+        fi
+        echo "tries=$tries" >> $GITHUB_OUTPUT
 
     - name: Run Benchmark
-      working-directory: benchmark/clickbench
+      working-directory: benchmark
       env:
         BENCHMARK_ID: ${{ inputs.run_id }}
         BENCHMARK_DATASET: ${{ inputs.dataset }}
         BENCHMARK_SIZE: ${{ inputs.size }}
+        BENCHMARK_CACHE_SIZE: ${{ inputs.cache_size }}
         BENCHMARK_VERSION: ${{ inputs.version }}
         BENCHMARK_DATABASE: ${{ steps.prepare.outputs.database }}
         BENCHMARK_TRIES: ${{ steps.prepare.outputs.tries }}
@@ -86,10 +96,10 @@ runs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: benchmark-${{ inputs.dataset }}-${{ inputs.size }}
+        name: benchmark-${{ inputs.dataset }}-${{ inputs.size }}-cache-${{ inputs.cache_size }}
         path: |
-          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}.json
-          benchmark/clickbench/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-*.ndjson
+          benchmark/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-cache-${{ inputs.cache_size }}.json
+          benchmark/result-${{ inputs.dataset }}-cloud-${{ inputs.size }}-cache-${{ inputs.cache_size }}-*.ndjson
 
     - name: Remove warehouse
       if: always()

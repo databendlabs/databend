@@ -46,6 +46,7 @@ mod parquet_variant_table;
 mod schema;
 
 pub use copy_into_table::ParquetTableForCopy;
+pub use meta::read_metas_in_parallel_for_copy;
 pub use parquet_part::DeleteTask;
 pub use parquet_part::DeleteType;
 pub use parquet_part::ParquetFilePart;

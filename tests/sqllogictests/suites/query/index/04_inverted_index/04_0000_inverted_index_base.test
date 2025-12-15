@@ -155,23 +155,22 @@ query IRT
 SELECT id, score(), content FROM t WHERE match(content, '()', 'lenient=true')
 ----
 
-
 statement ok
 UPDATE t SET content = '科技创新是推动社会进步的重要动力，我们应该积极支持和推动科技创新。' WHERE id=24
 
 query IRT
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
-21 1.6232129 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
-28 1.8224978 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
-12 1.9674243 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
-15 2.0775645 中国的茶文化源远流长，品茶已经成为一种生活方式。
+21 1.423108 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
+12 1.4482267 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
+15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
+28 1.5707673 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
 query IRT
 SELECT id, score(), content FROM t WHERE match(content, '科技') ORDER BY score()
 ----
-13 2.8710475 随着科技的发展，人们的生活变得越来越便利。
-24 3.3270247 科技创新是推动社会进步的重要动力，我们应该积极支持和推动科技创新。
+13 2.1947646 随着科技的发展，人们的生活变得越来越便利。
+24 2.8508463 科技创新是推动社会进步的重要动力，我们应该积极支持和推动科技创新。
 
 statement ok
 DELETE FROM t WHERE id=21
@@ -179,9 +178,9 @@ DELETE FROM t WHERE id=21
 query IRT
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
-28 2.0144506 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
-12 2.1761932 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
-15 2.299267 中国的茶文化源远流长，品茶已经成为一种生活方式。
+12 1.4482267 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
+15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
+28 2.002842 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
 # index without optional filters and index rocord is basic
 statement ok
@@ -193,10 +192,10 @@ REFRESH INVERTED INDEX idx1 ON t
 query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'the')
 ----
-1 1.9382918 The quick brown fox jumps over the lazy dog
-3 2.253458 The early bird catches the worm
-6 2.033073 Beauty is in the eye of the beholder
-10 2.033073 An apple a day keeps the doctor away
+1 0.8323383 The quick brown fox jumps over the lazy dog
+3 0.9893832 The early bird catches the worm
+6 0.8788376 Beauty is in the eye of the beholder
+10 0.8788376 An apple a day keeps the doctor away
 
 query IRT
 SELECT id, score(), content FROM t WHERE match(content, 'fly')

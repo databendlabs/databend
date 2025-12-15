@@ -143,29 +143,29 @@ test_virtual_column t2 val 3000000002 ['c'] String
 query II
 select row_count, virtual_column_size from fuse_block('test_virtual_column', 't2')
 ----
-3 833
+3 809
 
 query III
 select block_count, row_count, virtual_column_size from fuse_segment('test_virtual_column', 't2');
 ----
-1 3 833
+1 3 809
 
 query III
 select block_count, row_count, virtual_column_size from fuse_snapshot('test_virtual_column', 't2');
 ----
-1 3 833
+1 3 809
 
 query IITTIII
 select virtual_block_size, row_count, column_name, column_type, column_id, block_offset, bytes_compressed from fuse_virtual_column('test_virtual_column', 't2')
 ----
-833 3 val['a'] UInt64 NULL 3000000000 4 48
-833 3 val['b'] UInt64 NULL 3000000001 52 48
-833 3 val['c'] String NULL 3000000002 100 48
+809 3 val['a'] UInt64 NULL 3000000000 4 40
+809 3 val['b'] UInt64 NULL 3000000001 44 40
+809 3 val['c'] String NULL 3000000002 84 40
 
 query IIIIII
 select block_count, row_count, bytes_uncompressed, bytes_compressed, index_size, virtual_block_count from fuse_segment('test_virtual_column', 't2')
 ----
-1 3 134 712 1271 1
+1 3 134 734 1247 1
 
 statement ok
 insert into t2 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
@@ -349,7 +349,6 @@ test_virtual_column tweets data['text'] 10 10 7 0 a z 16 (empty)
 test_virtual_column tweets data['user']['id'] 10 10 6 0 1 7 8 (empty)
 test_virtual_column tweets id 10 10 10 0 1 10 4 (empty)
 
-
 statement ok
 UPDATE tweets SET data = '{"id":4, "create": "1/08", "text": "aa", "user": {"id": 1}, "replies": 10}' WHERE id = 4;
 
@@ -361,7 +360,10 @@ data['create'] 10 0 16 (empty)
 data['id'] 10 0 8 (empty)
 data['replies'] 7 3 8 (empty)
 data['text'] 8 0 16 (empty)
-data['user']['id'] 4 0 8 (empty)
+data['user']['id'] 6 0 8 (empty)
+data['likes'] 2 0 1 (empty)
+data['tags'][0] 2 0 3 (empty)
+data['tags'][1] 2 0 3 (empty)
 
 query TTTIIIITTIT
 SHOW STATISTICS FROM TABLE test_virtual_column.tweets;
@@ -369,9 +371,12 @@ SHOW STATISTICS FROM TABLE test_virtual_column.tweets;
 test_virtual_column tweets data 10 10 NULL NULL NULL NULL NULL (empty)
 test_virtual_column tweets data['create'] 10 10 10 0 1/08 6/07 16 (empty)
 test_virtual_column tweets data['id'] 10 10 10 0 1 10 8 (empty)
+test_virtual_column tweets data['likes'] 10 10 2 0 10 25 1 (empty)
 test_virtual_column tweets data['replies'] 10 10 7 3 0 10 8 (empty)
+test_virtual_column tweets data['tags'][0] 10 10 2 0 good new 3 (empty)
+test_virtual_column tweets data['tags'][1] 10 10 2 0 interesting popular 3 (empty)
 test_virtual_column tweets data['text'] 10 10 8 0 a z 16 (empty)
-test_virtual_column tweets data['user']['id'] 10 10 4 0 1 7 8 (empty)
+test_virtual_column tweets data['user']['id'] 10 10 6 0 1 7 8 (empty)
 test_virtual_column tweets id 10 10 10 0 1 10 4 (empty)
 
 query IITTIITFIT
@@ -494,7 +499,7 @@ select id, data['id'], data['create'], data['text'], data['user']['id'], data['r
 query I
 SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 ----
-6
+26
 
 statement ok
 set enable_experimental_virtual_column = 0;
@@ -505,7 +510,7 @@ INSERT INTO tweets FROM (SELECT * FROM tweets);
 query I
 SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 ----
-6
+26
 
 statement error
 REFRESH VIRTUAL COLUMN FOR tweets;
@@ -516,10 +521,14 @@ set enable_experimental_virtual_column = 1;
 statement ok
 REFRESH VIRTUAL COLUMN FOR tweets;
 
+# Compact tweets table, so that number of automatic detected virtual columns could be stablized
+statement ok
+optimize table test_virtual_column.tweets compact
+
 query I
 SELECT count(*) FROM fuse_virtual_column('test_virtual_column', 'tweets');
 ----
-12
+6
 
 query IITTIITFIT
 select id, data['id'], data['create'], data['text'], data['user']['id'], data['replies'], data['geo'], data['geo']['lat'], data['likes'], data['tags'] from tweets order by id;

@@ -41,6 +41,8 @@ pub static SESSION_QUEUE_ACQUIRE_DURATION_MS: LazyLock<Histogram> =
 
 pub static SESSION_RUNNING_ACQUIRED_QUERIES: LazyLock<Gauge> =
     LazyLock::new(|| register_gauge("session_running_acquired_queries"));
+pub static SESSION_ACQUIRED_QUERIES_TOTAL: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("session_acquired_queries_total"));
 
 pub fn incr_session_connect_numbers() {
     SESSION_CONNECT_NUMBERS.inc();
@@ -80,4 +82,8 @@ pub fn inc_session_running_acquired_queries() {
 
 pub fn dec_session_running_acquired_queries() {
     SESSION_RUNNING_ACQUIRED_QUERIES.dec();
+}
+
+pub fn inc_session_acquired_queries_total() {
+    SESSION_ACQUIRED_QUERIES_TOTAL.inc();
 }

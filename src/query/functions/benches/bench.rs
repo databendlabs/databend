@@ -30,18 +30,11 @@ fn main() {
 #[divan::bench_group(max_time = 0.5)]
 mod dummy {
     use databend_common_expression::type_check;
-    use databend_common_expression::types::BitmapType;
-    use databend_common_expression::BlockEntry;
-    use databend_common_expression::Column;
     use databend_common_expression::DataBlock;
     use databend_common_expression::Evaluator;
-    use databend_common_expression::FromData;
     use databend_common_expression::FunctionContext;
-    use databend_common_functions::aggregates::eval_aggr_for_test;
     use databend_common_functions::test_utils as parser;
     use databend_common_functions::BUILTIN_FUNCTIONS;
-    use databend_common_io::deserialize_bitmap;
-    use databend_common_io::HybridBitmap;
 
     #[divan::bench(args = [10240, 102400])]
     fn parse(bencher: divan::Bencher, n: usize) {
@@ -74,6 +67,59 @@ mod dummy {
             let _ = divan::black_box(evaluator.run(&expr));
         });
     }
+}
+
+#[divan::bench_group(max_time = 0.5)]
+mod bitmap {
+    use databend_common_expression::types::number::UInt64Type;
+    use databend_common_expression::types::BitmapType;
+    use databend_common_expression::BlockEntry;
+    use databend_common_expression::Column;
+    use databend_common_expression::FromData;
+    use databend_common_functions::aggregates::eval_aggr;
+    use databend_common_io::deserialize_bitmap;
+    use databend_common_io::HybridBitmap;
+
+    fn expected_xor_values(rows: usize) -> Vec<u64> {
+        const PERIOD: usize = 15;
+
+        fn parity_for_rows(count: usize) -> [u8; 5] {
+            let mut parity = [0u8; 5];
+            for n in 0..count {
+                let mut inserted = [false; 5];
+                inserted[1] = true;
+                inserted[n % 3] = true;
+                let v5 = n % 5;
+                inserted[v5] = true;
+                for (idx, flag) in inserted.iter().enumerate() {
+                    if *flag {
+                        parity[idx] ^= 1;
+                    }
+                }
+            }
+            parity
+        }
+
+        let block_parity = parity_for_rows(PERIOD);
+        let mut parity = [0u8; 5];
+        let full_blocks = rows / PERIOD;
+        if full_blocks % 2 == 1 {
+            for (dst, src) in parity.iter_mut().zip(block_parity.iter()) {
+                *dst ^= *src;
+            }
+        }
+        let remainder = rows % PERIOD;
+        let rem_parity = parity_for_rows(remainder);
+        for (dst, src) in parity.iter_mut().zip(rem_parity.iter()) {
+            *dst ^= *src;
+        }
+
+        parity
+            .iter()
+            .enumerate()
+            .filter_map(|(value, bit)| (*bit == 1).then_some(value as u64))
+            .collect()
+    }
 
     fn build_bitmap_column(rows: u64) -> Column {
         let bitmaps = (0..rows)
@@ -92,33 +138,186 @@ mod dummy {
         BitmapType::from_data(bitmaps)
     }
 
-    #[divan::bench(args = [100_000, 10_000_000])]
+    fn build_disjoint_bitmap_column(rows: u64) -> Column {
+        let bitmaps = (0..rows)
+            .map(|number| {
+                let mut rb = HybridBitmap::new();
+                let base = number * 2;
+                rb.insert(base);
+                rb.insert(base + 1);
+
+                let mut data = Vec::new();
+                rb.serialize_into(&mut data).unwrap();
+                data
+            })
+            .collect();
+
+        BitmapType::from_data(bitmaps)
+    }
+
+    fn build_uint64_column<F>(rows: usize, generator: F) -> Column
+    where F: FnMut(u64) -> u64 {
+        let data: Vec<u64> = (0..rows as u64).map(generator).collect();
+        UInt64Type::from_data(data)
+    }
+
+    fn eval_bitmap_result(entry: &BlockEntry, rows: usize, agg_name: &'static str) -> HybridBitmap {
+        let (result_column, _) =
+            eval_aggr(agg_name, vec![], std::slice::from_ref(entry), rows, vec![])
+                .unwrap_or_else(|_| panic!("{agg_name} evaluation failed"));
+
+        let Column::Bitmap(result) = result_column.remove_nullable() else {
+            panic!("{agg_name} should return a Bitmap column");
+        };
+        let Some(bytes) = result.index(0) else {
+            panic!("{agg_name} should return exactly one row");
+        };
+        deserialize_bitmap(bytes).expect("deserialize bitmap result")
+    }
+
+    fn run_bitmap_result_bench<F>(
+        bencher: divan::Bencher,
+        rows: usize,
+        agg_name: &'static str,
+        entry: &BlockEntry,
+        validator: F,
+    ) where
+        F: Fn(&HybridBitmap) + Sync,
+    {
+        bencher.bench(|| {
+            let rb = eval_bitmap_result(entry, rows, agg_name);
+            validator(&rb);
+        });
+    }
+
+    #[divan::bench(args = [100_000, 1_000_000])]
     fn bitmap_intersect(bencher: divan::Bencher, rows: usize) {
         // Emulate `CREATE TABLE ... AS SELECT build_bitmap`
         // followed by `SELECT bitmap_intersect(a) FROM c`.
         let column = build_bitmap_column(rows as u64);
         let entry: BlockEntry = column.into();
 
-        bencher.bench(|| {
-            let (result_column, _) = eval_aggr_for_test(
-                "bitmap_intersect",
-                vec![],
-                std::slice::from_ref(&entry),
-                rows,
-                false,
-                vec![],
-            )
-            .expect("bitmap_intersect evaluation");
-
-            let Column::Bitmap(result) = result_column.remove_nullable() else {
-                panic!("bitmap_intersect should return a Bitmap column");
-            };
-            let Some(bytes) = result.index(0) else {
-                panic!("result should contain exactly one row");
-            };
-            let rb = deserialize_bitmap(bytes).expect("deserialize bitmap result");
+        run_bitmap_result_bench(bencher, rows, "bitmap_intersect", &entry, |rb| {
             assert_eq!(rb.len(), 1);
             assert!(rb.contains(1));
+        });
+    }
+
+    #[divan::bench(args = [100_000, 1_000_000])]
+    fn bitmap_union(bencher: divan::Bencher, rows: usize) {
+        let column = build_bitmap_column(rows as u64);
+        let entry: BlockEntry = column.into();
+
+        run_bitmap_result_bench(bencher, rows, "bitmap_union", &entry, |rb| {
+            assert_eq!(rb.len(), 5);
+            for value in 0..5 {
+                assert!(rb.contains(value), "bitmap_union missing {value}");
+            }
+        });
+    }
+
+    #[divan::bench(args = [100_000, 1_000_000])]
+    fn bitmap_or_agg(bencher: divan::Bencher, rows: usize) {
+        let column = build_bitmap_column(rows as u64);
+        let entry: BlockEntry = column.into();
+
+        run_bitmap_result_bench(bencher, rows, "bitmap_or_agg", &entry, |rb| {
+            assert_eq!(rb.len(), 5);
+            for value in 0..5 {
+                assert!(rb.contains(value), "bitmap_or_agg missing {value}");
+            }
+        });
+    }
+
+    #[divan::bench(args = [100_000, 1_000_000])]
+    fn bitmap_and_agg(bencher: divan::Bencher, rows: usize) {
+        let column = build_bitmap_column(rows as u64);
+        let entry: BlockEntry = column.into();
+
+        run_bitmap_result_bench(bencher, rows, "bitmap_and_agg", &entry, |rb| {
+            assert_eq!(rb.len(), 1);
+            assert!(rb.contains(1));
+        });
+    }
+
+    #[divan::bench(args = [100_000, 1_000_000])]
+    fn bitmap_intersect_empty(bencher: divan::Bencher, rows: usize) {
+        let column = build_disjoint_bitmap_column(rows as u64);
+        let entry: BlockEntry = column.into();
+
+        run_bitmap_result_bench(bencher, rows, "bitmap_intersect", &entry, |rb| {
+            assert_eq!(rb.len(), 0, "intersection should be empty");
+        });
+    }
+
+    #[divan::bench(args = [100_000, 1_000_000])]
+    fn bitmap_union_disjoint(bencher: divan::Bencher, rows: usize) {
+        let column = build_disjoint_bitmap_column(rows as u64);
+        let entry: BlockEntry = column.into();
+
+        run_bitmap_result_bench(bencher, rows, "bitmap_union", &entry, |rb| {
+            let expected = rows as u64 * 2;
+            assert_eq!(rb.len(), expected);
+            if expected > 0 {
+                assert!(rb.contains(0));
+                assert!(rb.contains(expected - 1));
+            }
+        });
+    }
+
+    #[divan::bench(args = [100_000, 1_000_000])]
+    fn bitmap_xor_agg(bencher: divan::Bencher, rows: usize) {
+        let column = build_disjoint_bitmap_column(rows as u64);
+        let entry: BlockEntry = column.into();
+
+        run_bitmap_result_bench(bencher, rows, "bitmap_xor_agg", &entry, |rb| {
+            let expected = rows as u64 * 2;
+            assert_eq!(rb.len(), expected);
+            if expected > 0 {
+                assert!(rb.contains(0));
+                assert!(rb.contains(expected - 1));
+            }
+        });
+    }
+
+    #[divan::bench(args = [100_000, 1_000_000])]
+    fn bitmap_xor_agg_overlap(bencher: divan::Bencher, rows: usize) {
+        let column = build_bitmap_column(rows as u64);
+        let entry: BlockEntry = column.into();
+
+        run_bitmap_result_bench(bencher, rows, "bitmap_xor_agg", &entry, |rb| {
+            let expected = expected_xor_values(rows);
+            let actual: Vec<u64> = rb.iter().collect();
+            assert_eq!(actual, expected);
+        });
+    }
+
+    #[divan::bench(args = [100_000, 1_000_000])]
+    fn bitmap_construct_agg_dense(bencher: divan::Bencher, rows: usize) {
+        let column = build_uint64_column(rows, |value| value);
+        let entry: BlockEntry = column.into();
+
+        run_bitmap_result_bench(bencher, rows, "bitmap_construct_agg", &entry, |rb| {
+            let expected = rows as u64;
+            assert_eq!(rb.len(), expected);
+            if expected > 0 {
+                assert!(rb.contains(expected / 2));
+            }
+        });
+    }
+
+    #[divan::bench(args = [100_000, 1_000_000])]
+    fn bitmap_construct_agg_repeating(bencher: divan::Bencher, rows: usize) {
+        const CARDINALITY: u64 = 1024;
+        let column = build_uint64_column(rows, |value| value % CARDINALITY);
+        let entry: BlockEntry = column.into();
+
+        run_bitmap_result_bench(bencher, rows, "bitmap_construct_agg", &entry, |rb| {
+            let expected = CARDINALITY.min(rows as u64);
+            assert_eq!(rb.len(), expected);
+            if expected > 0 {
+                assert!(rb.contains(expected - 1));
+            }
         });
     }
 }

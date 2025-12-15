@@ -327,7 +327,6 @@ impl NewTransformPartialAggregate {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = block.consume_convert_to_full();
         let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
         let rows_num = block.num_rows();
         let block_bytes = block.memory_size();

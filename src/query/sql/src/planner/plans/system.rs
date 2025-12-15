@@ -23,4 +23,5 @@ pub struct SystemPlan {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum SystemAction {
     Backtrace(bool),
+    FlushPrivileges,
 }

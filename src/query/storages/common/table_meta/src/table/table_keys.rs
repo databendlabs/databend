@@ -30,6 +30,7 @@ pub const OPT_KEY_BLOOM_INDEX_COLUMNS: &str = "bloom_index_columns";
 pub const OPT_KEY_APPROX_DISTINCT_COLUMNS: &str = "approx_distinct_columns";
 pub const OPT_KEY_CHANGE_TRACKING: &str = "change_tracking";
 pub const OPT_KEY_CHANGE_TRACKING_BEGIN_VER: &str = "begin_version";
+pub const OPT_KEY_ENABLE_SCHEMA_EVOLUTION: &str = "enable_schema_evolution";
 
 // Attached table options.
 pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
@@ -62,7 +63,7 @@ pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
 
 /// Table option keys that reserved for internal usage only
-/// - Users are not allowed to specified this option keys in DDL
+/// - Users are not allowed to specify this option keys in DDL
 /// - Should not be shown in `show create table` statement
 pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();

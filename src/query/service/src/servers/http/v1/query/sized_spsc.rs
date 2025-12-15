@@ -199,7 +199,7 @@ impl PageBuilder {
             .iter()
             .map(|entry| match entry {
                 BlockEntry::Const(scalar, _, n) => *n * scalar.as_ref().memory_size(),
-                BlockEntry::Column(column) => column.memory_size(),
+                BlockEntry::Column(column) => column.memory_size(true),
             })
             .sum::<usize>();
 

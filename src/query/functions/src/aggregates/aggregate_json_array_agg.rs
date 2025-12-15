@@ -33,6 +33,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
@@ -88,20 +89,19 @@ where
         }
     }
 
-    fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()> {
-        let column_len = T::column_len(column);
+    fn add_batch(&mut self, column: ColumnView<T>, validity: Option<&Bitmap>) -> Result<()> {
+        let column_len = column.len();
         if column_len == 0 {
             return Ok(());
         }
-        let column_iter = T::iter_column(column);
         if let Some(validity) = validity {
-            for (val, valid) in column_iter.zip(validity.iter()) {
+            for (val, valid) in column.iter().zip(validity.iter()) {
                 if valid {
                     self.values.push(T::to_owned_scalar(val));
                 }
             }
         } else {
-            for val in column_iter {
+            for val in column.iter() {
                 self.values.push(T::to_owned_scalar(val));
             }
         }
@@ -175,16 +175,16 @@ where
 }
 
 #[derive(Clone)]
-struct AggregateJsonArrayAggFunction<T, State> {
+struct AggregateJsonArrayAggFunction<T> {
     display_name: String,
     return_type: DataType,
-    _t: PhantomData<fn(T, State)>,
+    _t: PhantomData<fn(T)>,
 }
 
-impl<T, State> AggregateFunction for AggregateJsonArrayAggFunction<T, State>
+impl<T> AggregateFunction for AggregateJsonArrayAggFunction<T>
 where
     T: ValueType,
-    State: ScalarStateFunc<T>,
+    T::Scalar: borsh::BorshSerialize + borsh::BorshDeserialize,
 {
     fn name(&self) -> &str {
         "AggregateJsonArrayAggFunction"
@@ -195,11 +195,11 @@ where
     }
 
     fn init_state(&self, place: AggrState) {
-        place.write(State::new);
+        place.write(JsonArrayAggState::<T>::new);
     }
 
     fn register_state(&self, registry: &mut AggrStateRegistry) {
-        registry.register(AggrStateType::Custom(Layout::new::<State>()));
+        registry.register(AggrStateType::Custom(Layout::new::<JsonArrayAggState<T>>()));
     }
 
     fn accumulate(
@@ -209,15 +209,20 @@ where
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let state = place.get::<State>();
-        match &columns[0].to_column() {
-            Column::Nullable(box nullable_column) => {
-                let column = T::try_downcast_column(&nullable_column.column).unwrap();
-                state.add_batch(&column, Some(&nullable_column.validity))
+        let state = place.get::<JsonArrayAggState<T>>();
+        match &columns[0] {
+            BlockEntry::Const(Scalar::Null, _, _) => Ok(()),
+            entry @ BlockEntry::Const(_, _, _) => {
+                let column = entry.clone().remove_nullable().downcast::<T>().unwrap();
+                state.add_batch(column, None)
             }
-            _ => {
-                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
-                state.add_batch(&column, None)
+            BlockEntry::Column(Column::Nullable(box nullable_column)) => {
+                let column = T::try_downcast_column(&nullable_column.column).unwrap();
+                state.add_batch(ColumnView::Column(column), Some(&nullable_column.validity))
+            }
+            entry => {
+                let c = entry.downcast::<T>().unwrap();
+                state.add_batch(c, None)
             }
         }
     }
@@ -226,62 +231,52 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: ProjectedBlock,
+        block: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        match &columns[0].to_column() {
-            Column::Nullable(box nullable_column) => {
-                let column = T::try_downcast_column(&nullable_column.column).unwrap();
-                let column_iter = T::iter_column(&column);
-                column_iter
-                    .zip(nullable_column.validity.iter().zip(places.iter()))
-                    .for_each(|(v, (valid, place))| {
-                        let state = AggrState::new(*place, loc).get::<State>();
-                        if valid {
-                            state.add(Some(v.clone()))
-                        } else {
-                            state.add(None)
-                        }
-                    });
-            }
-            _ => {
-                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
-                let column_iter = T::iter_column(&column);
-                column_iter.zip(places.iter()).for_each(|(v, place)| {
-                    let state = AggrState::new(*place, loc).get::<State>();
-                    state.add(Some(v.clone()))
+        let entry = &block[0];
+        if entry.data_type().is_nullable() {
+            entry
+                .downcast::<NullableType<T>>()
+                .unwrap()
+                .iter()
+                .zip(places.iter())
+                .for_each(|(v, place)| {
+                    let state = AggrState::new(*place, loc).get::<JsonArrayAggState<T>>();
+                    state.add(v)
                 });
-            }
+        } else {
+            entry
+                .downcast::<T>()
+                .unwrap()
+                .iter()
+                .zip(places.iter())
+                .for_each(|(v, place)| {
+                    let state = AggrState::new(*place, loc).get::<JsonArrayAggState<T>>();
+                    state.add(Some(v))
+                });
         }
 
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
-        let state = place.get::<State>();
-        match &columns[0].to_column() {
-            Column::Nullable(box nullable_column) => {
-                let valid = nullable_column.validity.get_bit(row);
-                if valid {
-                    let column = T::try_downcast_column(&nullable_column.column).unwrap();
-                    let v = T::index_column(&column, row);
-                    state.add(v);
-                } else {
-                    state.add(None);
-                }
-            }
-            _ => {
-                let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
-                let v = T::index_column(&column, row);
-                state.add(v);
-            }
+    fn accumulate_row(&self, place: AggrState, block: ProjectedBlock, row: usize) -> Result<()> {
+        let state = place.get::<JsonArrayAggState<T>>();
+        let entry = &block[0];
+        if entry.data_type().is_nullable() {
+            let view = entry.downcast::<NullableType<T>>().unwrap();
+            let v = view.index(row).unwrap();
+            state.add(v);
+        } else {
+            let view = entry.downcast::<T>().unwrap();
+            let v = view.index(row).unwrap();
+            state.add(Some(v));
         }
-
         Ok(())
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        State::serialize_type(None)
+        JsonArrayAggState::<T>::serialize_type(None)
     }
 
     fn batch_serialize(
@@ -290,7 +285,7 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        State::batch_serialize(places, loc, builders)
+        JsonArrayAggState::<T>::batch_serialize(places, loc, builders)
     }
 
     fn batch_merge(
@@ -300,12 +295,12 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        State::batch_merge(places, loc, state, filter)
+        JsonArrayAggState::<T>::batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
-        let state = place.get::<State>();
-        let other = rhs.get::<State>();
+        let state = place.get::<JsonArrayAggState<T>>();
+        let other = rhs.get::<JsonArrayAggState<T>>();
         state.merge(other)
     }
 
@@ -315,7 +310,7 @@ where
         _read_only: bool,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
-        let state = place.get::<State>();
+        let state = place.get::<JsonArrayAggState<T>>();
         state.merge_result(builder)
     }
 
@@ -324,24 +319,24 @@ where
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        let state = place.get::<State>();
+        let state = place.get::<JsonArrayAggState<T>>();
         std::ptr::drop_in_place(state);
     }
 }
 
-impl<T, State> fmt::Display for AggregateJsonArrayAggFunction<T, State> {
+impl<T> fmt::Display for AggregateJsonArrayAggFunction<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
     }
 }
 
-impl<T, State> AggregateJsonArrayAggFunction<T, State>
+impl<T> AggregateJsonArrayAggFunction<T>
 where
     T: ValueType,
-    State: ScalarStateFunc<T>,
+    T::Scalar: borsh::BorshSerialize + borsh::BorshDeserialize,
 {
     fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
-        let func = AggregateJsonArrayAggFunction::<T, State> {
+        let func = AggregateJsonArrayAggFunction::<T> {
             display_name: display_name.to_string(),
             return_type,
             _t: PhantomData,
@@ -360,8 +355,7 @@ fn try_create_aggregate_json_array_agg_function(
     assert_unary_arguments(display_name, argument_types.len())?;
     let return_type = DataType::Variant;
 
-    type State = JsonArrayAggState<AnyType>;
-    AggregateJsonArrayAggFunction::<AnyType, State>::try_create(display_name, return_type)
+    AggregateJsonArrayAggFunction::<AnyType>::try_create(display_name, return_type)
 }
 
 pub fn aggregate_json_array_agg_function_desc() -> AggregateFunctionDescription {

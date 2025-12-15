@@ -27,7 +27,7 @@ create or replace stream s on table t APPEND_ONLY = false;
 statement ok
 insert into t values(1,  BUILD_BITMAP([3, 7, 9]));
 
-query T
+query I
 select  count() from s  with consume;
 ----
 1
@@ -35,7 +35,7 @@ select  count() from s  with consume;
 statement ok
 update t set b = BUILD_BITMAP([3, 7, 10]) where a = 1;
 
-query T
+query I
 select count() from s  with consume;
 ----
 2

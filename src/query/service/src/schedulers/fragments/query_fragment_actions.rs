@@ -230,14 +230,15 @@ impl QueryFragmentsActions {
     fn fragments_connections(&self, builder: &mut DataflowDiagramBuilder) -> Result<()> {
         for fragment_actions in &self.fragments_actions {
             if let Some(exchange) = &fragment_actions.data_exchange {
-                let fragment_id = fragment_actions.fragment_id;
                 let destinations = exchange.get_destinations();
 
                 for fragment_action in &fragment_actions.fragment_actions {
                     let source = fragment_action.executor.to_string();
 
                     for destination in &destinations {
-                        builder.add_data_edge(&source, destination, fragment_id)?;
+                        for channel in exchange.get_channels(destination) {
+                            builder.add_data_edge(&source, destination, &channel)?;
+                        }
                     }
                 }
             }
