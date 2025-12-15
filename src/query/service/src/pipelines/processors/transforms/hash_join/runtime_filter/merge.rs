@@ -14,11 +14,14 @@
 
 use std::collections::HashMap;
 
+use databend_common_catalog::sbbf::Sbbf;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 
+use super::packet::BloomPayload;
 use super::packet::JoinRuntimeFilterPacket;
 use super::packet::RuntimeFilterPacket;
+use super::packet::SerializableBloomFilter;
 use super::packet::SerializableDomain;
 
 pub fn merge_join_runtime_filter_packets(
@@ -121,23 +124,93 @@ fn merge_min_max(
     Some(SerializableDomain { min, max })
 }
 
-fn merge_bloom(packets: &[HashMap<usize, RuntimeFilterPacket>], rf_id: usize) -> Option<Vec<u64>> {
+fn merge_bloom(
+    packets: &[HashMap<usize, RuntimeFilterPacket>],
+    rf_id: usize,
+) -> Option<BloomPayload> {
     if packets
         .iter()
         .any(|packet| packet.get(&rf_id).unwrap().bloom.is_none())
     {
         return None;
     }
-    let mut bloom = packets[0]
-        .get(&rf_id)
-        .unwrap()
-        .bloom
-        .as_ref()
-        .unwrap()
-        .clone();
-    for packet in packets.iter().skip(1) {
-        let other = packet.get(&rf_id).unwrap().bloom.as_ref().unwrap();
-        bloom.extend_from_slice(other);
+
+    let first = packets[0].get(&rf_id).unwrap().bloom.as_ref().unwrap();
+    match first {
+        BloomPayload::Hashes(_) => {
+            // Local merge path: concatenate hashes
+            let mut merged = match first {
+                BloomPayload::Hashes(hashes) => hashes.clone(),
+                _ => unreachable!(),
+            };
+
+            for packet in packets.iter().skip(1) {
+                let other = packet.get(&rf_id).unwrap().bloom.as_ref().unwrap();
+                match other {
+                    BloomPayload::Hashes(hashes) => merged.extend_from_slice(hashes),
+                    BloomPayload::Filter(_) => {
+                        // Mixed variants are not expected today. Fallback to disabling bloom.
+                        log::warn!(
+                            "RUNTIME-FILTER: mixed bloom payload variants detected for id {}, disabling bloom merge",
+                            rf_id
+                        );
+                        return None;
+                    }
+                }
+            }
+            Some(BloomPayload::Hashes(merged))
+        }
+        BloomPayload::Filter(_) => {
+            // Global merge path: union serialized bloom filters
+            let mut base_bytes = match first {
+                BloomPayload::Filter(f) => f.data.clone(),
+                _ => unreachable!(),
+            };
+
+            let mut base = match Sbbf::from_bytes(&base_bytes) {
+                Ok(bf) => bf,
+                Err(e) => {
+                    log::warn!(
+                        "RUNTIME-FILTER: failed to deserialize bloom filter for id {}: {}",
+                        rf_id,
+                        e
+                    );
+                    return None;
+                }
+            };
+
+            for packet in packets.iter().skip(1) {
+                let other = packet.get(&rf_id).unwrap().bloom.as_ref().unwrap();
+                let bytes = match other {
+                    BloomPayload::Filter(f) => &f.data,
+                    BloomPayload::Hashes(_) => {
+                        log::warn!(
+                            "RUNTIME-FILTER: mixed bloom payload variants detected for id {}, disabling bloom merge",
+                            rf_id
+                        );
+                        return None;
+                    }
+                };
+
+                let other_bf = match Sbbf::from_bytes(bytes) {
+                    Ok(bf) => bf,
+                    Err(e) => {
+                        log::warn!(
+                            "RUNTIME-FILTER: failed to deserialize bloom filter for id {}: {}",
+                            rf_id,
+                            e
+                        );
+                        return None;
+                    }
+                };
+
+                base.union(&other_bf);
+            }
+
+            base_bytes = base.to_bytes();
+            Some(BloomPayload::Filter(SerializableBloomFilter {
+                data: base_bytes,
+            }))
+        }
     }
-    Some(bloom)
 }

@@ -113,6 +113,11 @@ pub async fn build_runtime_filter(
 
     let mut filters = Vec::new();
 
+    // Derive statistics for the build side to estimate NDV of join keys.
+    let build_rel_expr = databend_common_sql::optimizer::ir::RelExpr::with_s_expr(build_side);
+    let build_stat_info = build_rel_expr.derive_cardinality()?;
+    let build_column_stats = &build_stat_info.statistics.column_stats;
+
     let probe_side = s_expr.probe_side_child();
 
     // Process each probe key that has runtime filter information
@@ -144,6 +149,14 @@ pub async fn build_runtime_filter(
         let build_table_rows =
             get_build_table_rows(ctx.clone(), metadata, build_table_index).await?;
 
+        // Estimate NDV for the build side join key using optimizer statistics.
+        let build_key_ndv = match build_key {
+            RemoteExpr::ColumnRef { id, .. } => {
+                build_column_stats.get(id).map(|s| s.ndv.ceil() as u64)
+            }
+            _ => None,
+        };
+
         let data_type = build_key
             .as_expr(&BUILTIN_FUNCTIONS)
             .data_type()
@@ -159,6 +172,7 @@ pub async fn build_runtime_filter(
             id,
             build_key: build_key.clone(),
             probe_targets,
+            build_key_ndv,
             build_table_rows,
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter: true,

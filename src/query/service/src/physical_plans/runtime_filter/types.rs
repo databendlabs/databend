@@ -42,6 +42,9 @@ pub struct PhysicalRuntimeFilter {
     /// All probe targets in this list are in the same equivalence class
     pub probe_targets: Vec<(RemoteExpr<String>, usize)>,
 
+    /// Estimated NDV of the build side join key, derived from optimizer statistics.
+    pub build_key_ndv: Option<u64>,
+
     pub build_table_rows: Option<u64>,
 
     /// Enable bloom filter for this runtime filter

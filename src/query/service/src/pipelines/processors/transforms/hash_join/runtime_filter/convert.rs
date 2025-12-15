@@ -36,7 +36,9 @@ use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::builder::should_enable_runtime_filter;
+use super::packet::BloomPayload;
 use super::packet::JoinRuntimeFilterPacket;
+use super::packet::SerializableBloomFilter;
 use super::packet::SerializableDomain;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
@@ -117,6 +119,53 @@ pub async fn build_runtime_filter_infos(
         }
     }
     Ok(filters)
+}
+
+/// Convert bloom payloads that are using hash lists into serialized bloom filters.
+/// This is mainly used in distributed hash shuffle joins before global merging,
+/// so that only compact bloom filters are transmitted between nodes.
+pub fn convert_packet_bloom_hashes_to_filter(
+    packet: &mut JoinRuntimeFilterPacket,
+    runtime_filter_descs: &HashMap<usize, &RuntimeFilterDesc>,
+    max_threads: usize,
+) -> Result<()> {
+    let Some(ref mut map) = packet.packets else {
+        return Ok(());
+    };
+
+    for (id, rf) in map.iter_mut() {
+        let desc = match runtime_filter_descs.get(id) {
+            Some(d) => *d,
+            None => continue,
+        };
+
+        // If we don't have global build table statistics, we cannot guarantee
+        // consistent bloom filter size across nodes. Disable bloom for this
+        // runtime filter in distributed mode.
+        if desc.build_table_rows.is_none() {
+            rf.bloom = None;
+            continue;
+        }
+
+        if let Some(bloom) = rf.bloom.take() {
+            rf.bloom = Some(match bloom {
+                BloomPayload::Hashes(hashes) => {
+                    // If there are no hashes, keep bloom disabled.
+                    if hashes.is_empty() {
+                        continue;
+                    }
+
+                    let ndv_hint = desc.build_key_ndv;
+                    let filter = build_sbbf_from_hashes(hashes, max_threads, rf.id, ndv_hint)?;
+                    BloomPayload::Filter(SerializableBloomFilter {
+                        data: filter.to_bytes(),
+                    })
+                }
+                BloomPayload::Filter(filter) => BloomPayload::Filter(filter),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<String>> {
@@ -256,8 +305,38 @@ fn build_min_max_filter(
     Ok(min_max_filter)
 }
 
-async fn build_bloom_filter(
+fn build_sbbf_from_hashes(
     bloom: Vec<u64>,
+    max_threads: usize,
+    filter_id: usize,
+    ndv_hint: Option<u64>,
+) -> Result<Sbbf> {
+    let total_items = bloom.len();
+    let ndv = ndv_hint.unwrap_or(total_items as u64);
+
+    if total_items < 3_000_000 {
+        let mut filter =
+            Sbbf::new_with_ndv_fpp(ndv, 0.01).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        filter.insert_hash_batch(&bloom);
+        return Ok(filter);
+    }
+
+    let start = std::time::Instant::now();
+    let builder = SbbfAtomic::new_with_ndv_fpp(ndv, 0.01)
+        .map_err(|e| ErrorCode::Internal(e.to_string()))?
+        .insert_hash_batch_parallel(bloom, max_threads);
+    let filter = builder.finish();
+    log::info!(
+        "filter_id: {}, build_time: {:?}",
+        filter_id,
+        start.elapsed()
+    );
+
+    Ok(filter)
+}
+
+async fn build_bloom_filter(
+    bloom: BloomPayload,
     probe_key: &Expr<String>,
     max_threads: usize,
     filter_id: usize,
@@ -272,33 +351,23 @@ async fn build_bloom_filter(
         _ => unreachable!(),
     };
     let column_name = probe_key.id.to_string();
-    let total_items = bloom.len();
-
-    if total_items < 3_000_000 {
-        let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
-            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
-        filter.insert_hash_batch(&bloom);
-        return Ok(RuntimeFilterBloom {
-            column_name,
-            filter: Arc::new(filter),
-        });
+    match bloom {
+        BloomPayload::Hashes(hashes) => {
+            let filter = build_sbbf_from_hashes(hashes, max_threads, filter_id, None)?;
+            Ok(RuntimeFilterBloom {
+                column_name,
+                filter: Arc::new(filter),
+            })
+        }
+        BloomPayload::Filter(serialized) => {
+            let filter = Sbbf::from_bytes(&serialized.data)
+                .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+            Ok(RuntimeFilterBloom {
+                column_name,
+                filter: Arc::new(filter),
+            })
+        }
     }
-
-    let start = std::time::Instant::now();
-    let builder = SbbfAtomic::new_with_ndv_fpp(total_items as u64, 0.01)
-        .map_err(|e| ErrorCode::Internal(e.to_string()))?
-        .insert_hash_batch_parallel(bloom, max_threads);
-    let filter = builder.finish();
-    log::info!(
-        "filter_id: {}, build_time: {:?}",
-        filter_id,
-        start.elapsed()
-    );
-
-    Ok(RuntimeFilterBloom {
-        column_name,
-        filter: Arc::new(filter),
-    })
 }
 
 #[cfg(test)]

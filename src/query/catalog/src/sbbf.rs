@@ -307,6 +307,52 @@ impl Sbbf {
     pub fn estimated_memory_size(&self) -> usize {
         self.0.capacity() * std::mem::size_of::<Block>()
     }
+
+    /// Serialize the bloom filter into a little-endian byte array.
+    /// The layout is a contiguous sequence of blocks, each block consisting
+    /// of 8 u32 values in little-endian order.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(self.0.len() * size_of::<Block>());
+        for block in &self.0 {
+            for value in block.0 {
+                bytes.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        bytes
+    }
+
+    /// Deserialize a bloom filter from bytes produced by `to_bytes`.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        if bytes.len() % size_of::<Block>() != 0 {
+            return Err(format!(
+                "Invalid bloom filter bytes length {}, expected multiple of {}",
+                bytes.len(),
+                size_of::<Block>()
+            ));
+        }
+
+        let num_blocks = bytes.len() / size_of::<Block>();
+        if num_blocks == 0 {
+            return Ok(Sbbf(Vec::new()));
+        }
+
+        let mut blocks = Vec::with_capacity(num_blocks);
+        let mut offset = 0;
+        for _ in 0..num_blocks {
+            let mut arr = [0u32; 8];
+            for value in &mut arr {
+                let end = offset + size_of::<u32>();
+                let chunk = bytes
+                    .get(offset..end)
+                    .ok_or_else(|| "Invalid bloom filter bytes".to_string())?;
+                *value = u32::from_le_bytes(chunk.try_into().unwrap());
+                offset = end;
+            }
+            blocks.push(Block(arr));
+        }
+
+        Ok(Sbbf(blocks))
+    }
 }
 
 impl SbbfAtomic {
