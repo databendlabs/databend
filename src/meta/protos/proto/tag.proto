@@ -12,27 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-mod database;
-mod dictionary;
-mod dynamic_table;
-mod index;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod procedure;
-mod role;
-mod row_access_policy;
-mod sequence;
-mod stage;
-mod stream;
-mod table;
-mod tag;
-mod task;
-mod view;
-mod warehouse;
-mod workload;
+syntax = "proto3";
+
+package databend_proto;
+
+message TagMeta {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  repeated string allowed_values = 1;
+  string comment = 2;
+  string created_on = 3;
+  optional string updated_on = 4;
+}
+
+message TagRefValue {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 tag_id = 1;
+  string value = 2;
+  string created_on = 3;
+}

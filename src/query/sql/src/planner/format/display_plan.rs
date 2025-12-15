@@ -155,6 +155,10 @@ impl Plan {
             Plan::DropStage(_) => Ok("DropStage".to_string()),
             Plan::RemoveStage(_) => Ok("RemoveStage".to_string()),
 
+            // Tags
+            Plan::CreateTag(_) => Ok("CreateTag".to_string()),
+            Plan::DropTag(_) => Ok("DropTag".to_string()),
+
             // FileFormat
             Plan::CreateFileFormat(_) => Ok("CreateFileFormat".to_string()),
             Plan::DropFileFormat(_) => Ok("DropFileFormat".to_string()),
