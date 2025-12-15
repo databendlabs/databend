@@ -12,27 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod account;
-mod catalog;
-mod column;
-mod connection;
-mod data_mask;
-mod database;
-mod dictionary;
-mod dynamic_table;
-mod index;
-mod network_policy;
-mod notification;
-mod password_policy;
-mod procedure;
-mod role;
-mod row_access_policy;
-mod sequence;
-mod stage;
-mod stream;
-mod table;
-mod tag;
-mod task;
-mod view;
-mod warehouse;
-mod workload;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
+
+/// Plan for `CREATE TAG`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateTagPlan {
+    pub tenant: Tenant,
+    pub create_option: CreateOption,
+    pub name: String,
+    pub allowed_values: Option<Vec<String>>,
+    pub comment: Option<String>,
+}
+
+/// Plan for `DROP TAG`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropTagPlan {
+    pub tenant: Tenant,
+    pub if_exists: bool,
+    pub name: String,
+}

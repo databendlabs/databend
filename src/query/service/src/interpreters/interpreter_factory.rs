@@ -105,8 +105,10 @@ use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
+use crate::interpreters::CreateTagInterpreter;
 use crate::interpreters::DescUserInterpreter;
 use crate::interpreters::DropStreamInterpreter;
+use crate::interpreters::DropTagInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
 use crate::sessions::QueryContext;
@@ -571,6 +573,14 @@ impl InterpreterFactory {
                 DropFileFormatInterpreter::try_create(ctx, *drop_file_format.clone())?,
             )),
             Plan::ShowFileFormats(_) => Ok(Arc::new(ShowFileFormatsInterpreter::try_create(ctx)?)),
+            Plan::CreateTag(plan) => Ok(Arc::new(CreateTagInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
+            Plan::DropTag(plan) => Ok(Arc::new(DropTagInterpreter::try_create(
+                ctx.clone(),
+                *plan.clone(),
+            )?)),
 
             // Grant
             Plan::GrantPriv(grant_priv) => Ok(Arc::new(GrantPrivilegeInterpreter::try_create(

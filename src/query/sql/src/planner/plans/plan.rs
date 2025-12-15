@@ -69,6 +69,7 @@ use crate::plans::CreateStagePlan;
 use crate::plans::CreateStreamPlan;
 use crate::plans::CreateTableIndexPlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTagPlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
@@ -109,6 +110,7 @@ use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTableIndexPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
+use crate::plans::DropTagPlan;
 use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
@@ -369,6 +371,10 @@ pub enum Plan {
     DropFileFormat(Box<DropFileFormatPlan>),
     ShowFileFormats(Box<ShowFileFormatsPlan>),
 
+    // Tags
+    CreateTag(Box<CreateTagPlan>),
+    DropTag(Box<DropTagPlan>),
+
     // Stages
     CreateStage(Box<CreateStagePlan>),
     DropStage(Box<DropStagePlan>),
@@ -472,6 +478,7 @@ pub enum RewriteKind {
     ShowStatistics,
 
     ShowStreams(String),
+    ShowTags,
 
     ShowFunctions,
     ShowUserFunctions,
