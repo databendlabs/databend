@@ -15,12 +15,12 @@
 use std::time::Duration;
 
 use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
 use log::info;
@@ -63,11 +63,9 @@ async fn test_meta_node_log_time_revert_cross_snapshot_boundary() -> anyhow::Res
     // Log with earlier timestamp (T+60s) but expires at T+120s - not in snapshot
     let log_earlier = LogEntry {
         time_ms: Some(now_ms + 60_000),
-        cmd: Cmd::Transaction(TxnRequest::new(vec![], vec![TxnOp::put(
-            "k1",
-            b"v2".to_vec(),
-        )
-        .with_expires_at_ms(Some(now_ms + 120_000))])),
+        cmd: Cmd::Transaction(TxnRequest::new(vec![], vec![
+            TxnOp::put("k1", b"v2".to_vec()).with_expires_at_ms(Some(now_ms + 120_000)),
+        ])),
     };
 
     let result_with_restart = write_two_logs(log_later.clone(), log_earlier.clone(), true).await?;

@@ -20,8 +20,8 @@ use std::net::ToSocketAddrs;
 
 use anyhow::anyhow;
 use databend_common_base::base::BuildInfoRef;
-use databend_common_meta_client::required;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_client::required;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_types::protobuf;
 use tokio::net::TcpSocket;

@@ -16,9 +16,9 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 

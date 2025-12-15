@@ -22,8 +22,8 @@ use log::info;
 use log::warn;
 use openraft::SnapshotId;
 
-use crate::sm_v003::open_snapshot::OpenSnapshot;
 use crate::sm_v003::SnapshotStoreError;
+use crate::sm_v003::open_snapshot::OpenSnapshot;
 use crate::snapshot_config::SnapshotConfig;
 use crate::state_machine::MetaSnapshotId;
 

@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::NumberScalar;
 
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;

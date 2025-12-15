@@ -50,9 +50,11 @@ fn rev() {
     let result = iter.rev().collect::<Vec<_>>();
     assert_eq!(
         result,
-        vec![false, true, true, false, true, false, true, true, false, true, true, false, true]
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>()
+        vec![
+            false, true, true, false, true, false, true, true, false, true, true, false, true
+        ]
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
     )
 }

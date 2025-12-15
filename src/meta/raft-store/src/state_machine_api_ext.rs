@@ -22,22 +22,22 @@ use std::io;
 use std::ops::RangeBounds;
 use std::time::Duration;
 
-use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::Expirable;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::sys_data::SysData;
 use display_more::DisplayUnixTimeStampExt;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::debug;
 use log::info;
 use log::warn;
+use map_api::IOResultStream;
 use map_api::mvcc::ScopedGet;
 use map_api::mvcc::ScopedRange;
 use map_api::mvcc::ScopedSet;
-use map_api::IOResultStream;
 use seq_marked::SeqMarked;
 use seq_marked::SeqValue;
 use state_machine_api::ExpireKey;
@@ -106,8 +106,7 @@ pub trait StateMachineApiExt: StateMachineApi<SysData> {
             warn!(
                 "upsert_kv_primary_index: expired key inserted: {} < timestamp in log entry: {}; key: {}",
                 Duration::from_millis(expire_ms).display_unix_timestamp_short(),
-                Duration::from_millis(curr_time_ms)
-                    .display_unix_timestamp_short(),
+                Duration::from_millis(curr_time_ms).display_unix_timestamp_short(),
                 upsert_kv.key
             );
             // The record has expired, delete it at once.

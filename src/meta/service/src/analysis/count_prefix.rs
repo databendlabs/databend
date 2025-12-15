@@ -121,9 +121,9 @@ mod tests {
 
     use databend_common_meta_types::protobuf::KeysCount;
     use databend_common_meta_types::protobuf::KeysLayoutRequest;
+    use futures::StreamExt;
     use futures::stream::BoxStream;
     use futures::stream::{self};
-    use futures::StreamExt;
 
     use super::count_prefix;
 

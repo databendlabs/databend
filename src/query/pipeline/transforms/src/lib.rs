@@ -16,7 +16,6 @@
 #![allow(clippy::unconditional_recursion)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
-#![feature(let_chains)]
 #![feature(iter_map_windows)]
 #![feature(assert_matches)]
 #![feature(debug_closure_helpers)]

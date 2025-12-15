@@ -20,7 +20,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(non_local_definitions)]
-#![feature(no_sanitize)]
 
 pub mod app_error;
 pub mod data_id;

@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::runtime::spawn;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::spawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -35,14 +35,14 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_sql::Planner;
-use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
-use databend_common_tracing::get_all_history_table_names;
-use databend_common_tracing::init_history_tables;
+use databend_common_storage::init_operator;
 use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::HistoryTable;
-use futures_util::future::join_all;
+use databend_common_tracing::get_all_history_table_names;
+use databend_common_tracing::init_history_tables;
 use futures_util::TryStreamExt;
+use futures_util::future::join_all;
 use log::debug;
 use log::error;
 use log::info;
@@ -57,10 +57,10 @@ use crate::clusters::ClusterDiscovery;
 use crate::history_tables::alter_table::get_alter_table_sql;
 use crate::history_tables::alter_table::get_log_table;
 use crate::history_tables::alter_table::should_reset;
-use crate::history_tables::error_handling::is_temp_error;
 use crate::history_tables::error_handling::ErrorCounters;
-use crate::history_tables::external::get_external_storage_connection;
+use crate::history_tables::error_handling::is_temp_error;
 use crate::history_tables::external::ExternalStorageConnection;
+use crate::history_tables::external::get_external_storage_connection;
 use crate::history_tables::meta::HistoryMetaHandle;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;

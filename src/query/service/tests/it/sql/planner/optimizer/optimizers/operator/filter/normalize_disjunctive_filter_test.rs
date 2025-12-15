@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::Scalar;
 use databend_common_sql::optimizer::optimizers::operator::NormalizeDisjunctiveFilterOptimizer;
 use databend_common_sql::planner::plans::FunctionCall;
 use databend_common_sql::planner::plans::ScalarExpr;

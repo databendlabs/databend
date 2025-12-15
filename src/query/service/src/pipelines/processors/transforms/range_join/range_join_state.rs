@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::atomic;
 use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::plans::JoinType;
 use parking_lot::Mutex;

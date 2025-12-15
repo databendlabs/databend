@@ -19,24 +19,24 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use fastrace::future::FutureExt;
 use fastrace::Span;
+use fastrace::future::FutureExt;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::executor_graph::ProcessorWrapper;
-use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 use crate::pipelines::executor::ProcessorAsyncTask;
 use crate::pipelines::executor::QueriesExecutorTasksQueue;
 use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 
 pub enum ExecutorTask {
     None,

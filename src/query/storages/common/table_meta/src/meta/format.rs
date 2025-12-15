@@ -22,9 +22,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_io::prelude::BinaryRead;
-use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 #[cfg(feature = "dev")]
 use snap::raw::Decoder as SnapDecoder;
 #[cfg(feature = "dev")]

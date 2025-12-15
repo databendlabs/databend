@@ -17,12 +17,12 @@ mod disk_cache_builder;
 mod hybrid_cache;
 mod memory_cache;
 
-pub use disk_cache::io_result::Error as DiskCacheError;
-pub use disk_cache::io_result::Result as DiskCacheResult;
 pub use disk_cache::DiskCacheKey;
 pub use disk_cache::LruDiskCache;
 pub use disk_cache::LruDiskCacheBuilder;
 pub use disk_cache::LruDiskCacheHolder;
+pub use disk_cache::io_result::Error as DiskCacheError;
+pub use disk_cache::io_result::Result as DiskCacheResult;
 pub use disk_cache_builder::DiskCacheAccessor;
 pub use disk_cache_builder::DiskCacheBuilder;
 pub use disk_cache_builder::TableDataCacheKey;

@@ -24,6 +24,7 @@ use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_mi
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use opendal::Operator;
+use tantivy::Index;
 use tantivy::collector::DocSetCollector;
 use tantivy::collector::TopDocs;
 use tantivy::directory::FileSlice;
@@ -36,7 +37,6 @@ use tantivy::query::QueryClone;
 use tantivy::schema::IndexRecordOption;
 use tantivy::termdict::TermInfoStore;
 use tantivy::tokenizer::TokenizerManager;
-use tantivy::Index;
 use tantivy_common::BinarySerializable;
 use tantivy_fst::raw::Fst;
 

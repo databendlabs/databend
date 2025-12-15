@@ -18,13 +18,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_meta_stoerr::MetaStorageError;
 use thiserror::Error;
 
-use crate::errors;
 use crate::InvalidArgument;
 use crate::InvalidReply;
 use crate::MetaAPIError;
 use crate::MetaClientError;
 use crate::MetaHandshakeError;
 use crate::MetaNetworkError;
+use crate::errors;
 
 /// Top level error MetaNode would return.
 #[derive(Error, Debug, Clone, PartialEq, Eq)]

@@ -32,13 +32,13 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::evaluator::BlockOperator;
 use databend_common_storage::MutationStatus;
 use itertools::Itertools;
 
-use crate::operations::merge_into::mutator::SplitByExprMutator;
 use crate::operations::BlockMetaIndex;
+use crate::operations::merge_into::mutator::SplitByExprMutator;
 // (source_schema,condition,values_exprs)
 pub type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 

@@ -19,12 +19,12 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::AlterNotificationOptions;
 use databend_common_ast::ast::NotificationWebhookOptions;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType::UInt64;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType::UInt64;
 use databend_common_meta_app::tenant::Tenant;
 
 pub fn notification_schema() -> DataSchemaRef {

@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
 use std::cmp::Ordering;
+use std::cmp::min;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 

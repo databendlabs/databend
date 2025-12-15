@@ -14,8 +14,6 @@
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
-use databend_common_expression::arrow::and_validities;
-use databend_common_expression::type_check::check_function;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
@@ -24,9 +22,11 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::arrow::and_validities;
+use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use parking_lot::RwLock;
 
 use crate::physical_plans::HashJoin;

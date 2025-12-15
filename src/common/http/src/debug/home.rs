@@ -14,8 +14,8 @@
 
 use std::num::NonZeroI32;
 
-use poem::web::Html;
 use poem::IntoResponse;
+use poem::web::Html;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct PProfRequest {

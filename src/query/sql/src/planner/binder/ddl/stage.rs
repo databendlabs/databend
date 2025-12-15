@@ -23,9 +23,9 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::init_operator;
 
 use super::super::copy_into_table::resolve_stage_location;
+use crate::binder::Binder;
 use crate::binder::insert::STAGE_PLACEHOLDER;
 use crate::binder::location::parse_storage_params_from_uri;
-use crate::binder::Binder;
 use crate::plans::CreateStagePlan;
 use crate::plans::Plan;
 use crate::plans::RemoveStagePlan;

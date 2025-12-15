@@ -19,8 +19,11 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::ColumnBindingBuilder;
+use crate::IndexType;
+use crate::MetadataRef;
+use crate::Visibility;
 use crate::optimizer::ir::SExpr;
-use crate::plans::walk_expr_mut;
 use crate::plans::AsyncFunction;
 use crate::plans::AsyncFunctionCall;
 use crate::plans::BoundColumnRef;
@@ -29,10 +32,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
-use crate::ColumnBindingBuilder;
-use crate::IndexType;
-use crate::MetadataRef;
-use crate::Visibility;
+use crate::plans::walk_expr_mut;
 
 pub(crate) struct AsyncFunctionRewriter {
     metadata: MetadataRef,

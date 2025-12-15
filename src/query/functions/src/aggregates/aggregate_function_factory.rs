@@ -18,8 +18,8 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 
 use super::AggregateFunctionCombinatorNull;
 use super::AggregateFunctionOrNullAdaptor;

@@ -15,13 +15,13 @@
 mod tests {
 
     use databend_common_ast::ast::Identifier;
+    use databend_common_ast::parser::Dialect;
     use databend_common_ast::parser::parse_sql;
     use databend_common_ast::parser::tokenize_sql;
-    use databend_common_ast::parser::Dialect;
     use databend_common_exception::Result;
 
-    use crate::planner::semantic::name_resolution::normalize_identifier;
     use crate::planner::semantic::name_resolution::NameResolutionContext;
+    use crate::planner::semantic::name_resolution::normalize_identifier;
 
     #[test]
     fn test_sql_to_ast_to_sql_quoted_identifiers() -> Result<()> {

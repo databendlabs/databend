@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 
+use crate::ColumnSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -28,7 +29,6 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::ColumnSet;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecursiveCteScan {

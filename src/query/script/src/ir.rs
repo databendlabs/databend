@@ -16,11 +16,11 @@ use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Statement;
-use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use derive_visitor::DriveMut;

@@ -19,12 +19,12 @@ use std::fmt::Formatter;
 
 use geozero::error::GeozeroError;
 
-use crate::exception_backtrace::capture;
-use crate::span::Span;
 use crate::ErrorCode;
 use crate::ErrorFrame;
 use crate::ParseError;
 use crate::StackTrace;
+use crate::exception_backtrace::capture;
+use crate::span::Span;
 
 #[derive(thiserror::Error)]
 enum OtherErrors {
@@ -184,7 +184,9 @@ impl From<std::convert::Infallible> for ErrorCode {
 impl From<opendal::Error> for ErrorCode {
     fn from(error: opendal::Error) -> Self {
         match error.kind() {
-            opendal::ErrorKind::NotFound => ErrorCode::StorageNotFound(error.to_string()),
+            opendal::ErrorKind::NotFound => {
+                ErrorCode::StorageNotFound(error.message()).add_detail(error.to_string())
+            }
             opendal::ErrorKind::PermissionDenied => {
                 ErrorCode::StoragePermissionDenied(error.to_string())
             }

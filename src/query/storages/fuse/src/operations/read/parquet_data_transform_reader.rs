@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::runtime::profile::Profile;
@@ -230,7 +230,10 @@ impl AsyncTransform for ReadParquetDataTransform {
         if unfinished_processors_count == 1 {
             let blocks_total = self.stats.blocks_total.load(Ordering::Relaxed);
             let blocks_pruned = self.stats.blocks_pruned.load(Ordering::Relaxed);
-            info!("RUNTIME-FILTER: AsyncReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
+            info!(
+                "RUNTIME-FILTER: AsyncReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}",
+                self.scan_id, blocks_total, blocks_pruned
+            );
         }
         Ok(())
     }

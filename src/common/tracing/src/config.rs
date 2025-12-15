@@ -422,7 +422,8 @@ impl Display for HistoryConfig {
                 .iter()
                 .map(|f| format!("{}({} hours)", f.table_name.clone(), f.retention))
                 .join(", "),
-            self.storage_params.as_ref()
+            self.storage_params
+                .as_ref()
                 .map_or("None".to_string(), |p| p.to_string())
         )
     }

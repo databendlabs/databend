@@ -23,9 +23,9 @@ use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
+use databend_common_storage::init_stage_operator;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {

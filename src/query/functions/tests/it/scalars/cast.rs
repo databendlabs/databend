@@ -14,18 +14,18 @@
 
 use std::io::Write;
 
-use databend_common_expression::types::*;
 use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::types::*;
 use databend_common_io::HybridBitmap;
 use goldenfile::Mint;
 use itertools::Itertools;
 
+use super::TestContext;
 use super::run_ast;
 use super::run_ast_with_context;
-use super::TestContext;
 
 #[test]
 fn test_cast() {

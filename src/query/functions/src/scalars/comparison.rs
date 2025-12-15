@@ -16,11 +16,23 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_expression::Column;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::LikePattern;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::generate_like_pattern;
 use databend_common_expression::type_check;
-use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::string::StringDomain;
-use databend_common_expression::types::timestamp_tz::TimestampTzType;
+use databend_common_expression::types::ALL_FLOAT_TYPES;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::types::ALL_NUMBER_CLASSES;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
@@ -31,6 +43,7 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::EmptyArrayType;
+use databend_common_expression::types::F64;
 use databend_common_expression::types::GenericType;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::MutableBitmap;
@@ -44,27 +57,14 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::VariantType;
-use databend_common_expression::types::ALL_FLOAT_TYPES;
-use databend_common_expression::types::ALL_INTEGER_TYPES;
-use databend_common_expression::types::ALL_NUMBER_CLASSES;
-use databend_common_expression::types::F64;
+use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::values::Value;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::Column;
-use databend_common_expression::EvalContext;
-use databend_common_expression::Function;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionEval;
-use databend_common_expression::FunctionFactory;
-use databend_common_expression::FunctionRegistry;
-use databend_common_expression::FunctionSignature;
-use databend_common_expression::LikePattern;
-use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
-use databend_common_expression::SimpleDomainCmp;
 use databend_common_io::deserialize_bitmap;
 use databend_functions_scalar_decimal::register_decimal_compare;
 use jsonb::RawJsonb;
@@ -816,18 +816,10 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
     }
 
     register_tuple_cmp_op(registry, "eq", true, |lhs, rhs| {
-        if lhs != rhs {
-            Some(false)
-        } else {
-            None
-        }
+        if lhs != rhs { Some(false) } else { None }
     });
     register_tuple_cmp_op(registry, "noteq", false, |lhs, rhs| {
-        if lhs != rhs {
-            Some(true)
-        } else {
-            None
-        }
+        if lhs != rhs { Some(true) } else { None }
     });
     register_tuple_cmp_op(registry, "gt", false, |lhs, rhs| {
         match lhs.partial_cmp(&rhs) {
@@ -1087,8 +1079,8 @@ fn variant_vectorize_like_jsonb() -> impl Fn(
     Value<StringType>,
     &mut EvalContext,
 ) -> Value<BooleanType>
-       + Copy
-       + Sized {
++ Copy
++ Sized {
     variant_vectorize_like(|val, pattern_type| match pattern_type {
         LikePattern::OrdinalStr(_)
         | LikePattern::StartOfPercent(_)
@@ -1125,7 +1117,7 @@ fn vectorize_like(
     Value<StringType>,
     &mut EvalContext,
 ) -> Value<BooleanType>
-       + Copy {
++ Copy {
     move |arg1, arg2, arg3, _ctx| {
         let Value::Scalar(escape) = arg3 else {
             unreachable!()
@@ -1187,7 +1179,7 @@ fn variant_vectorize_like(
     Value<StringType>,
     &mut EvalContext,
 ) -> Value<BooleanType>
-       + Copy {
++ Copy {
     move |arg1, arg2, arg3, _ctx| {
         let Value::Scalar(escape) = arg3 else {
             unreachable!()
@@ -1245,13 +1237,13 @@ fn convert_escape_pattern(escape: &str, arg2: String) -> String {
 
 fn vectorize_regexp(
     func: impl Fn(
-            &str,
-            &str,
-            &mut MutableBitmap,
-            &mut EvalContext,
-            &mut HashMap<String, Regex>,
-            &mut HashMap<Vec<u8>, String>,
-        ) + Copy,
+        &str,
+        &str,
+        &mut MutableBitmap,
+        &mut EvalContext,
+        &mut HashMap<String, Regex>,
+        &mut HashMap<Vec<u8>, String>,
+    ) + Copy,
 ) -> impl Fn(Value<StringType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy {
     move |arg1, arg2, ctx| {
         let mut map = HashMap::new();

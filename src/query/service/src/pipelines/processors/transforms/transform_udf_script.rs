@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::str;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::LazyLock;
+use std::sync::atomic::AtomicUsize;
 
 use arrow_array::RecordBatch;
 use arrow_udf_runtime::javascript::FunctionOptions;
@@ -25,17 +25,17 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_cache::Cache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
-use databend_common_expression::converts::arrow::EXTENSION_KEY;
-use databend_common_expression::types::DataType;
-use databend_common_expression::variant_transform::contains_variant;
-use databend_common_expression::variant_transform::transform_variant;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
+use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
+use databend_common_expression::converts::arrow::EXTENSION_KEY;
+use databend_common_expression::types::DataType;
+use databend_common_expression::variant_transform::contains_variant;
+use databend_common_expression::variant_transform::transform_variant;
 #[cfg_attr(not(feature = "python-udf"), allow(unused_imports))]
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_pipeline_transforms::processors::Transform;
@@ -880,9 +880,9 @@ mod venv {
     use parking_lot::RwLock;
     use uuid::Uuid;
     use walkdir::WalkDir;
-    use zip::write::FileOptions;
     use zip::ZipArchive;
     use zip::ZipWriter;
+    use zip::write::FileOptions;
 
     static PY_VENV_ARCHIVE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
         let base = std::env::var("DATABEND_PY_UDF_CACHE_DIR")

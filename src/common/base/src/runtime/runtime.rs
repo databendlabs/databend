@@ -25,20 +25,20 @@ use std::time::Instant;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use futures::future;
 use futures::FutureExt;
+use futures::future;
 use log::warn;
 use tokio::runtime::Builder;
 use tokio::runtime::Handle;
-use tokio::sync::oneshot;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
+use tokio::sync::oneshot;
 
-use crate::runtime::catch_unwind::CatchUnwindFuture;
-use crate::runtime::drop_guard;
 use crate::runtime::Thread;
 use crate::runtime::ThreadJoinHandle;
 use crate::runtime::ThreadTracker;
+use crate::runtime::catch_unwind::CatchUnwindFuture;
+use crate::runtime::drop_guard;
 
 pub struct JoinHandle<Output> {
     inner: tokio::task::JoinHandle<Output>,

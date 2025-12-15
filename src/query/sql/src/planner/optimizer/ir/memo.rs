@@ -18,15 +18,15 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::IndexType;
+use crate::optimizer::ir::Group;
+use crate::optimizer::ir::GroupState;
 use crate::optimizer::ir::expr::MExpr;
 use crate::optimizer::ir::expr::SExpr;
 use crate::optimizer::ir::property::RelExpr;
 use crate::optimizer::ir::property::RelationalProperty;
 use crate::optimizer::ir::property::StatInfo;
-use crate::optimizer::ir::Group;
-use crate::optimizer::ir::GroupState;
 use crate::plans::RelOperator;
-use crate::IndexType;
 
 /// `Memo` is a search space which memoize possible plans of a query.
 /// The plans inside `Memo` are organized with `Group`s.

@@ -24,8 +24,8 @@ use std::ptr;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use roaring::treemap::Iter;
 use roaring::RoaringTreemap;
+use roaring::treemap::Iter;
 use smallvec::SmallVec;
 
 // https://github.com/ClickHouse/ClickHouse/blob/516a6ed6f8bd8c5f6eed3a10e9037580b2fb6152/src/AggregateFunctions/AggregateFunctionGroupBitmapData.h#L914

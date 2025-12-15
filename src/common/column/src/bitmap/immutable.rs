@@ -22,17 +22,17 @@ use arrow_data::ArrayData;
 use arrow_data::ArrayDataBuilder;
 use either::Either;
 
+use super::IntoIter;
+use super::MutableBitmap;
 use super::chunk_iter_to_vec;
-use super::utils::count_zeros;
-use super::utils::fmt;
-use super::utils::get_bit;
-use super::utils::get_bit_unchecked;
 use super::utils::BitChunk;
 use super::utils::BitChunks;
 use super::utils::BitmapIter;
 use super::utils::ZipValidity;
-use super::IntoIter;
-use super::MutableBitmap;
+use super::utils::count_zeros;
+use super::utils::fmt;
+use super::utils::get_bit;
+use super::utils::get_bit_unchecked;
 use crate::buffer::Bytes;
 use crate::error::Error;
 

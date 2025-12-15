@@ -14,15 +14,15 @@
 
 use std::alloc::AllocError;
 use std::ptr::addr_of_mut;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
-use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
-use crate::runtime::memory::OutOfLimit;
+use crate::runtime::GLOBAL_MEM_STAT;
 use crate::runtime::LimitMemGuard;
 use crate::runtime::MemStat;
 use crate::runtime::ThreadTracker;
-use crate::runtime::GLOBAL_MEM_STAT;
+use crate::runtime::memory::OutOfLimit;
+use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
 
 #[thread_local]
 static mut MEM_STAT_BUFFER: MemStatBuffer = MemStatBuffer::empty(&GLOBAL_MEM_STAT);
@@ -232,12 +232,12 @@ mod tests {
     use std::alloc::AllocError;
     use std::sync::atomic::Ordering;
 
+    use crate::runtime::GLOBAL_QUERIES_MANAGER;
+    use crate::runtime::GlobalStatBuffer;
+    use crate::runtime::MemStat;
     use crate::runtime::memory::mem_stat::ParentMemStat;
     use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
     use crate::runtime::memory::stat_buffer_mem_stat::MemStatBuffer;
-    use crate::runtime::GlobalStatBuffer;
-    use crate::runtime::MemStat;
-    use crate::runtime::GLOBAL_QUERIES_MANAGER;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_alloc_with_same_allocator() -> Result<(), AllocError> {

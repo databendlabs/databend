@@ -19,13 +19,13 @@ use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::BindContext;
+use crate::binder::Binder;
+use crate::binder::MutationStrategy;
 use crate::binder::bind_mutation::bind::Mutation;
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
-use crate::binder::Binder;
-use crate::binder::MutationStrategy;
 use crate::plans::Plan;
-use crate::BindContext;
 
 impl Binder {
     #[async_backtrace::framed]

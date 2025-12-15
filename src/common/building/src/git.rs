@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 
 use anyhow::Context;
 use anyhow::Result;
-use gix::commit::describe::SelectRef;
 use gix::Repository;
+use gix::commit::describe::SelectRef;
 
 // Get the latest tag:
 // git describe --tags --abbrev=0

@@ -15,22 +15,22 @@
 use std::marker::PhantomData;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::*;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnView;
 use databend_common_expression::StateAddr;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::*;
 
-use super::aggregate_scalar_state::ChangeIf;
-use super::batch_merge1;
-use super::batch_serialize1;
 use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
+use super::aggregate_scalar_state::ChangeIf;
+use super::batch_merge1;
+use super::batch_serialize1;
 
 pub struct MinMaxAnyDecimalState<T, C>
 where
@@ -144,9 +144,11 @@ where
     C: ChangeIf<T>,
 {
     fn serialize_type(_: Option<&dyn SerializeInfo>) -> Vec<StateSerdeItem> {
-        vec![DataType::Decimal(T::Scalar::default_decimal_size())
-            .wrap_nullable()
-            .into()]
+        vec![
+            DataType::Decimal(T::Scalar::default_decimal_size())
+                .wrap_nullable()
+                .into(),
+        ]
     }
 
     fn batch_serialize(

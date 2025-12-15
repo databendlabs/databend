@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -34,21 +34,21 @@ use databend_common_pipeline_transforms::processors::BlockCompactBuilder;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformDummy;
+use databend_common_sql::ColumnSet;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::ColumnSet;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::operations::new_serialize_segment_processor;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::new_serialize_segment_processor;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
-use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::Statistics;
 use meta::TableMetaTimestamps;
 
-use crate::pipelines::processors::transforms::TransformResortAddOn;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformResortAddOn;
 
 impl PipelineBuilder {
     pub(crate) fn filter_transform_builder(

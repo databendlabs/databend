@@ -20,8 +20,8 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::EmptySink;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::ColumnBinding;
+use databend_common_sql::evaluator::BlockOperator;
 
 use crate::pipelines::PipelineBuilder;
 

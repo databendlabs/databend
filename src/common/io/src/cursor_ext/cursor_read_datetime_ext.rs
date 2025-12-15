@@ -27,12 +27,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_timezone::fast_utc_from_local;
+use jiff::Timestamp;
+use jiff::Zoned;
 use jiff::civil::Date;
 use jiff::civil::Time;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone;
-use jiff::Timestamp;
-use jiff::Zoned;
 
 use crate::cursor_ext::cursor_read_bytes_ext::ReadBytesExt;
 use crate::datetime::parse_standard_timestamp as parse_iso_timestamp;
@@ -186,8 +186,10 @@ where T: AsRef<[u8]>
         let n = self.keep_read(buf, |f| f.is_ascii_digit());
         match n {
             2 => {
-                let hour_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || "hour offset parse error".to_string())?;
+                let hour_offset: i32 = lexical_core::FromLexical::from_lexical(buf.as_slice())
+                    .map_err_to_code(ErrorCode::BadBytes, || {
+                        "hour offset parse error".to_string()
+                    })?;
                 if (0..15).contains(&hour_offset) {
                     buf.clear();
                     if self.ignore_byte(b':') {
@@ -198,9 +200,18 @@ where T: AsRef<[u8]>
                             ));
                         }
                         let minute_offset: i32 =
-                            lexical_core::FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || "minute offset parse error".to_string())?;
+                            lexical_core::FromLexical::from_lexical(buf.as_slice())
+                                .map_err_to_code(ErrorCode::BadBytes, || {
+                                    "minute offset parse error".to_string()
+                                })?;
                         // max utc: 14:00, min utc: 00:00
-                        get_hour_minute_offset(dt, west_tz, &calc_offset, hour_offset, minute_offset)
+                        get_hour_minute_offset(
+                            dt,
+                            west_tz,
+                            &calc_offset,
+                            hour_offset,
+                            minute_offset,
+                        )
                     } else {
                         get_hour_minute_offset(dt, west_tz, &calc_offset, hour_offset, 0)
                     }
@@ -213,11 +224,15 @@ where T: AsRef<[u8]>
             }
             4 => {
                 let hour_offset = &buf.as_slice()[..2];
-                let hour_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(hour_offset).map_err_to_code(ErrorCode::BadBytes, || "hour offset parse error".to_string())?;
+                let hour_offset: i32 = lexical_core::FromLexical::from_lexical(hour_offset)
+                    .map_err_to_code(ErrorCode::BadBytes, || {
+                        "hour offset parse error".to_string()
+                    })?;
                 let minute_offset = &buf.as_slice()[2..];
-                let minute_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(minute_offset).map_err_to_code(ErrorCode::BadBytes, || "minute offset parse error".to_string())?;
+                let minute_offset: i32 = lexical_core::FromLexical::from_lexical(minute_offset)
+                    .map_err_to_code(ErrorCode::BadBytes, || {
+                        "minute offset parse error".to_string()
+                    })?;
                 buf.clear();
                 // max utc: 14:00, min utc: 00:00
                 if (0..15).contains(&hour_offset) {

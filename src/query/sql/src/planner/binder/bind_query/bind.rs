@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
+use databend_common_ast::ast::CTE;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::CreateOption;
 use databend_common_ast::ast::CreateTableSource;
@@ -27,8 +29,6 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::With;
-use databend_common_ast::ast::CTE;
-use databend_common_ast::Span;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -38,16 +38,16 @@ use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
 use derive_visitor::VisitorMut;
 
+use crate::NameResolutionContext;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
-use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
+use crate::planner::binder::scalar::ScalarBinder;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::SortItem;
-use crate::NameResolutionContext;
 #[derive(Debug, Default, Visitor)]
 #[visitor(TableReference(enter))]
 struct CTERefCounter {

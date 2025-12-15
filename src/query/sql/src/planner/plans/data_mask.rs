@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_ast::ast::DataMaskPolicy;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::DatamaskMeta;

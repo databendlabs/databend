@@ -15,11 +15,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use crate::ColumnSet;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SortItem;
-use crate::ColumnSet;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RequiredProperty {

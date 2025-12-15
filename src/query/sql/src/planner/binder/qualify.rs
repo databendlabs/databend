@@ -19,23 +19,23 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::Finder;
-use crate::binder::split_conjunctions;
-use crate::binder::window::WindowRewriter;
+use crate::BindContext;
+use crate::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
 use crate::binder::Visibility;
+use crate::binder::split_conjunctions;
+use crate::binder::window::WindowRewriter;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
-use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
 use crate::plans::VisitorMut;
-use crate::BindContext;
-use crate::Binder;
+use crate::plans::walk_expr_mut;
 
 impl Binder {
     /// Analyze window in qualify clause, this will rewrite window functions.

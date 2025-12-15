@@ -205,8 +205,8 @@ impl SortedStream for Bounds {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::Int32Type;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
 
     use super::*;
     use crate::sorts::core::SimpleRowsAsc;

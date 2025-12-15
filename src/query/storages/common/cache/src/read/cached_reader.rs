@@ -19,9 +19,9 @@ use databend_common_exception::Result;
 use databend_common_metrics::cache::*;
 
 use super::loader::LoadParams;
-use crate::caches::CacheValue;
 use crate::CacheAccessor;
 use crate::Loader;
+use crate::caches::CacheValue;
 
 /// A cache-aware reader
 pub struct CacheReader<L, C> {

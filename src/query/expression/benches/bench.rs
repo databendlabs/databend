@@ -17,18 +17,18 @@ use arrow_buffer::ScalarBuffer;
 use databend_common_base::vec_ext::VecExt;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
 use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DecimalType;
 use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::Column;
-use databend_common_expression::DataBlock;
-use databend_common_expression::FromData;
-use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 fn main() {
     // Run registered benchmarks.

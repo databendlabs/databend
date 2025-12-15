@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::handle_alloc_error;
 use std::alloc::Allocator;
 use std::alloc::Layout;
+use std::alloc::handle_alloc_error;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
+use std::ptr::null_mut;
 
 use databend_common_base::runtime::drop_guard;
 

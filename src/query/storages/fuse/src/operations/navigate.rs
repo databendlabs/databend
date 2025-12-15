@@ -32,13 +32,13 @@ use futures::TryStreamExt;
 use log::info;
 use opendal::EntryMode;
 
+use crate::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::FuseTable;
 use crate::fuse_table::RetentionPolicy;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::FuseTable;
-use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 
 impl FuseTable {
     #[fastrace::trace]

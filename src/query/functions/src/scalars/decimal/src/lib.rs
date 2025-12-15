@@ -21,7 +21,6 @@
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
 #![feature(likely_unlikely)]
-#![feature(let_chains)]
 
 mod arithmetic;
 mod cast;

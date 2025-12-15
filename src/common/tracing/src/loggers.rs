@@ -17,22 +17,22 @@ use std::path::Path;
 
 use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::ThreadTracker;
-use jiff::fmt::temporal::DateTimePrinter;
-use jiff::tz::TimeZone;
 use jiff::Timestamp;
 use jiff::Zoned;
+use jiff::fmt::temporal::DateTimePrinter;
+use jiff::tz::TimeZone;
+use log::Record;
 use log::kv::Key;
 use log::kv::Source;
 use log::kv::Value;
 use log::kv::VisitSource;
-use log::Record;
-use logforth::append::rolling_file::RollingFileWriter;
-use logforth::append::rolling_file::Rotation;
-use logforth::append::RollingFile;
-use logforth::non_blocking::NonBlockingBuilder;
 use logforth::Append;
 use logforth::Diagnostic;
 use logforth::Layout;
+use logforth::append::RollingFile;
+use logforth::append::rolling_file::RollingFileWriter;
+use logforth::append::rolling_file::Rotation;
+use logforth::non_blocking::NonBlockingBuilder;
 use serde_json::Map;
 use serde_json::Value as JsonValue;
 
@@ -244,8 +244,12 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: format!("{timestamp}  INFO test::module: test_file.rs:42 test message"),
-                expected_json_output: format!(r#"{{"timestamp":"{timestamp}","level":"INFO","fields":{{"message":"test message"}}}}"#),
+                expected_text_output: format!(
+                    "{timestamp}  INFO test::module: test_file.rs:42 test message"
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{timestamp}","level":"INFO","fields":{{"message":"test message"}}}}"#
+                ),
             },
             TestCase {
                 name: "empty message",
@@ -259,7 +263,9 @@ mod tests {
                     .line(Some(42))
                     .build(),
                 expected_text_output: format!("{timestamp}  INFO test::module: test_file.rs:42 "),
-                expected_json_output: format!(r#"{{"timestamp":"{timestamp}","level":"INFO","fields":{{"message":""}}}}"#),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{timestamp}","level":"INFO","fields":{{"message":""}}}}"#
+                ),
             },
             TestCase {
                 name: "error level",
@@ -272,8 +278,12 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: format!("{timestamp} ERROR test::module: test_file.rs:42 error occurred"),
-                expected_json_output: format!(r#"{{"timestamp":"{timestamp}","level":"ERROR","fields":{{"message":"error occurred"}}}}"#),
+                expected_text_output: format!(
+                    "{timestamp} ERROR test::module: test_file.rs:42 error occurred"
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{timestamp}","level":"ERROR","fields":{{"message":"error occurred"}}}}"#
+                ),
             },
             TestCase {
                 name: "warn level",
@@ -286,8 +296,12 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: format!("{timestamp}  WARN test::module: test_file.rs:42 warning message"),
-                expected_json_output: format!(r#"{{"timestamp":"{timestamp}","level":"WARN","fields":{{"message":"warning message"}}}}"#),
+                expected_text_output: format!(
+                    "{timestamp}  WARN test::module: test_file.rs:42 warning message"
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{timestamp}","level":"WARN","fields":{{"message":"warning message"}}}}"#
+                ),
             },
             TestCase {
                 name: "debug level",
@@ -300,8 +314,12 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: format!("{timestamp} DEBUG test::module: test_file.rs:42 debug info"),
-                expected_json_output: format!(r#"{{"timestamp":"{timestamp}","level":"DEBUG","fields":{{"message":"debug info"}}}}"#),
+                expected_text_output: format!(
+                    "{timestamp} DEBUG test::module: test_file.rs:42 debug info"
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{timestamp}","level":"DEBUG","fields":{{"message":"debug info"}}}}"#
+                ),
             },
             TestCase {
                 name: "trace level",
@@ -314,8 +332,12 @@ mod tests {
                     .file(Some("test_file.rs"))
                     .line(Some(42))
                     .build(),
-                expected_text_output: format!("{timestamp} TRACE test::module: test_file.rs:42 trace data"),
-                expected_json_output: format!(r#"{{"timestamp":"{timestamp}","level":"TRACE","fields":{{"message":"trace data"}}}}"#),
+                expected_text_output: format!(
+                    "{timestamp} TRACE test::module: test_file.rs:42 trace data"
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{timestamp}","level":"TRACE","fields":{{"message":"trace data"}}}}"#
+                ),
             },
             TestCase {
                 name: "message with key-values",
@@ -332,8 +354,12 @@ mod tests {
                         ("action", &"login" as _),
                     ])
                     .build(),
-                expected_text_output: format!("{timestamp}  INFO test::module: test_file.rs:42 user action user_id=123 action=login"),
-                expected_json_output: format!(r#"{{"timestamp":"{timestamp}","level":"INFO","fields":{{"message":"user action","user_id":123,"action":"login"}}}}"#),
+                expected_text_output: format!(
+                    "{timestamp}  INFO test::module: test_file.rs:42 user action user_id=123 action=login"
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{timestamp}","level":"INFO","fields":{{"message":"user action","user_id":123,"action":"login"}}}}"#
+                ),
             },
             TestCase {
                 name: "error with context",
@@ -351,8 +377,12 @@ mod tests {
                         ("host", &"localhost" as _),
                     ])
                     .build(),
-                expected_text_output: format!("{timestamp} ERROR test::module: test_file.rs:42 database connection failed error_code=500 retry_count=3 host=localhost"),
-                expected_json_output: format!(r#"{{"timestamp":"{timestamp}","level":"ERROR","fields":{{"message":"database connection failed","error_code":500,"retry_count":3,"host":"localhost"}}}}"#),
+                expected_text_output: format!(
+                    "{timestamp} ERROR test::module: test_file.rs:42 database connection failed error_code=500 retry_count=3 host=localhost"
+                ),
+                expected_json_output: format!(
+                    r#"{{"timestamp":"{timestamp}","level":"ERROR","fields":{{"message":"database connection failed","error_code":500,"retry_count":3,"host":"localhost"}}}}"#
+                ),
             },
         ]
     }

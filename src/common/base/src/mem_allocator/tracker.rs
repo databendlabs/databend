@@ -16,8 +16,8 @@ use std::alloc::AllocError;
 use std::alloc::Allocator;
 use std::alloc::Layout;
 use std::mem::ManuallyDrop;
-use std::ptr::slice_from_raw_parts_mut;
 use std::ptr::NonNull;
+use std::ptr::slice_from_raw_parts_mut;
 use std::sync::Arc;
 
 use crate::runtime::GlobalStatBuffer;
@@ -527,20 +527,20 @@ mod tests {
     use std::alloc::Allocator;
     use std::alloc::Layout;
     use std::ptr::NonNull;
-    use std::sync::atomic::Ordering;
     use std::sync::Arc;
+    use std::sync::atomic::Ordering;
 
     use crate::base::GlobalUniqName;
-    use crate::mem_allocator::tracker::MetaTrackerAllocator;
-    use crate::mem_allocator::tracker::META_TRACKER_THRESHOLD;
     use crate::mem_allocator::DefaultAllocator;
+    use crate::mem_allocator::tracker::META_TRACKER_THRESHOLD;
+    use crate::mem_allocator::tracker::MetaTrackerAllocator;
+    use crate::runtime::GLOBAL_QUERIES_MANAGER;
     use crate::runtime::GlobalStatBuffer;
     use crate::runtime::MemStat;
     use crate::runtime::MemStatBuffer;
     use crate::runtime::ParentMemStat;
     use crate::runtime::Thread;
     use crate::runtime::ThreadTracker;
-    use crate::runtime::GLOBAL_QUERIES_MANAGER;
 
     fn with_mock_env<
         T: Allocator + Send + Sync + 'static,

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(let_chains)]
 #![allow(clippy::uninlined_format_args)]
 
 extern crate core;

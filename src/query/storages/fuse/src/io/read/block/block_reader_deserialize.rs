@@ -22,16 +22,16 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_storages_common_cache::SizedColumnArray;
 use databend_storages_common_io::ReadSettings;
-use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 
 use super::BlockReader;
-use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
+use crate::io::read::block::block_reader_merge_io::DataItem;
 
 pub enum DeserializedArray<'a> {
     Cached(&'a Arc<SizedColumnArray>),

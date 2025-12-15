@@ -14,6 +14,6 @@
 
 mod handler;
 
-pub use handler::get_stream_handler;
 pub use handler::StreamHandler;
 pub use handler::StreamHandlerWrapper;
+pub use handler::get_stream_handler;

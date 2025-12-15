@@ -24,10 +24,10 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_storage::StageFilesInfo;
 
-use crate::binder::copy_into_table::resolve_file_location;
-use crate::binder::Binder;
-use crate::optimizer::ir::SExpr;
 use crate::BindContext;
+use crate::binder::Binder;
+use crate::binder::copy_into_table::resolve_file_location;
+use crate::optimizer::ir::SExpr;
 
 impl Binder {
     /// Bind a location.

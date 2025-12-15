@@ -19,8 +19,6 @@ use databend_common_meta_app::app_error::SequenceError;
 use databend_common_meta_app::app_error::UnsupportedSequenceStorageVersion;
 use databend_common_meta_app::app_error::WrongSequenceCount;
 use databend_common_meta_app::primitive::Id;
-use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
-use databend_common_meta_app::schema::sequence_storage::SequenceStorageValue;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
@@ -30,6 +28,8 @@ use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageValue;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
@@ -41,6 +41,7 @@ use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
 
+use crate::SequenceApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::sequence_nextval_impl::NextVal;
@@ -50,7 +51,6 @@ use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_op_builder_util::txn_put_pb;
 use crate::txn_op_del;
-use crate::SequenceApi;
 
 #[async_trait::async_trait]
 #[tonic::async_trait]

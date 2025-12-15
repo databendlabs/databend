@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use async_channel::Sender;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -43,9 +43,9 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use parking_lot::Mutex;
 
+use crate::FuseTable;
 use crate::pruning::FusePruner;
 use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
-use crate::FuseTable;
 
 pub struct SendPartCache {
     partitions: Partitions,

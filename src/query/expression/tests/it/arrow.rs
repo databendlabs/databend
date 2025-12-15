@@ -18,8 +18,8 @@ use arrow_array::ArrayRef;
 use arrow_array::DictionaryArray;
 use arrow_array::Int32Array;
 use arrow_array::StringArray;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
+use databend_common_expression::types::DataType;
 
 #[test]
 fn test_from_arrow_rs() {

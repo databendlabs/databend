@@ -14,21 +14,21 @@
 
 use std::future::Future;
 use std::pin::pin;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use databend_common_base::runtime::block_on;
-use databend_common_base::runtime::spawn_named;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::block_on;
+use databend_common_base::runtime::spawn_named;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::Semaphore;
+use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnCondition;
@@ -363,8 +363,8 @@ impl HistoryMetaHandle {
 #[cfg(test)]
 mod tests {
     use std::ops::Deref;
-    use std::sync::atomic::Ordering;
     use std::sync::Arc;
+    use std::sync::atomic::Ordering;
     use std::time::Duration;
 
     use databend_common_base::runtime::spawn;

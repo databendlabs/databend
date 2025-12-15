@@ -23,11 +23,11 @@ mod zip_validity;
 
 use std::convert::TryInto;
 
-pub(crate) use chunk_iterator::merge_reversed;
 pub use chunk_iterator::BitChunk;
 pub use chunk_iterator::BitChunkIterExact;
 pub use chunk_iterator::BitChunks;
 pub use chunk_iterator::BitChunksExact;
+pub(crate) use chunk_iterator::merge_reversed;
 pub use chunks_exact_mut::BitChunksExactMut;
 pub use fmt::fmt;
 pub use iterator::BitmapIter;

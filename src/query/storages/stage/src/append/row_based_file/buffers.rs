@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
+use databend_common_expression::local_block_meta_serde;
 
 #[derive(Debug)]
 pub struct FileOutputBuffer {

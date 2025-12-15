@@ -23,12 +23,12 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline::core::Pipeline;
 
 use super::ParquetTable;
-use crate::parquet_reader::ParquetReaderBuilder;
-use crate::source::ParquetSource;
-use crate::utils::calc_parallelism;
 use crate::ParquetPart;
 use crate::ParquetPruner;
 use crate::ParquetSourceType;
+use crate::parquet_reader::ParquetReaderBuilder;
+use crate::source::ParquetSource;
+use crate::utils::calc_parallelism;
 
 impl ParquetTable {
     #[inline]

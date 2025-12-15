@@ -24,9 +24,9 @@ use either::Either;
 use num_traits::Zero;
 
 use super::Bytes;
+use crate::bitmap::Bitmap;
 use crate::bitmap::utils::BitmapIter;
 use crate::bitmap::utils::ZipValidity;
-use crate::bitmap::Bitmap;
 use crate::types::NativeType;
 
 /// [`Buffer`] is a contiguous memory region that can be shared across

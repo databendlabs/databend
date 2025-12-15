@@ -21,17 +21,17 @@ use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::cast_scalar;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
+use databend_common_expression::cast_scalar;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::plans::Plan;
 use crate::BindContext;
 use crate::Binder;
 use crate::TypeChecker;
+use crate::plans::Plan;
 
 impl Binder {
     pub async fn bind_statement_settings(

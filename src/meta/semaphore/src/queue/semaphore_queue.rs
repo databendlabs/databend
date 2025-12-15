@@ -15,9 +15,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use crate::queue::semaphore_event::PermitEvent;
 use crate::PermitEntry;
 use crate::PermitSeq;
+use crate::queue::semaphore_event::PermitEvent;
 
 /// Manage the acquired and waiting semaphore entries.
 ///
@@ -208,10 +208,10 @@ fn removed(seq: PermitSeq, entry: PermitEntry) -> PermitEvent {
 mod tests {
     use std::collections::BTreeMap;
 
+    use crate::PermitEntry;
     use crate::queue::semaphore_queue::acquired;
     use crate::queue::semaphore_queue::removed;
     use crate::queue::*;
-    use crate::PermitEntry;
 
     #[test]
     fn test_display() {

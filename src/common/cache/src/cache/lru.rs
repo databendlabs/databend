@@ -52,8 +52,8 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::hash::Hash;
 
-use hashlink::linked_hash_map;
 use hashlink::LinkedHashMap;
+use hashlink::linked_hash_map;
 
 use crate::cache::Cache;
 use crate::mem_sized::MemSized;

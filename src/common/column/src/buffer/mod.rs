@@ -20,8 +20,8 @@ mod iterator;
 
 use std::ops::Deref;
 
-pub use immutable::buffer_to_array_data;
 pub use immutable::Buffer;
+pub use immutable::buffer_to_array_data;
 
 #[allow(dead_code)]
 pub(crate) enum BytesAllocator {

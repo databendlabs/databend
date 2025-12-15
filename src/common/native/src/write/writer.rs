@@ -17,13 +17,13 @@ use std::io::Write;
 use databend_common_expression::Column;
 use databend_common_expression::TableSchema;
 
-use super::common::write_eof;
 use super::common::WriteOptions;
-use crate::error::Error;
-use crate::error::Result;
+use super::common::write_eof;
 use crate::ColumnMeta;
 use crate::STRAWBOAT_MAGIC;
 use crate::STRAWBOAT_VERSION;
+use crate::error::Error;
+use crate::error::Result;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum State {

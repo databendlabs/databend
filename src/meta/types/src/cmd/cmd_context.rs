@@ -19,10 +19,10 @@ use std::time::Duration;
 
 use display_more::DisplayUnixTimeStampExt;
 
+use crate::Time;
 use crate::cmd::io_timing::IoTimer;
 use crate::cmd::io_timing::IoTiming;
 use crate::raft_types::LogId;
-use crate::Time;
 
 /// A context used when executing a [`Cmd`], to provide additional environment information.
 ///

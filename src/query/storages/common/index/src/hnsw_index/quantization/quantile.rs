@@ -15,9 +15,9 @@
 
 use feistel_permutation_rs::DefaultBuildHasher;
 use feistel_permutation_rs::Permutation;
-use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::rngs::SmallRng;
 
 pub const QUANTILE_SAMPLE_SIZE: usize = 100_000;
 

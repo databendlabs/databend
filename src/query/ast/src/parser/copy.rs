@@ -27,11 +27,13 @@ use crate::ast::CopyIntoTableStmt;
 use crate::ast::LiteralStringOrVariable;
 use crate::ast::Statement;
 use crate::ast::Statement::CopyIntoLocation;
+use crate::parser::ErrorKind;
+use crate::parser::Input;
+use crate::parser::common::IResult;
 use crate::parser::common::comma_separated_list0;
 use crate::parser::common::comma_separated_list1;
 use crate::parser::common::ident;
 use crate::parser::common::table_ref;
-use crate::parser::common::IResult;
 use crate::parser::common::*;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
@@ -42,8 +44,6 @@ use crate::parser::stage::file_location;
 use crate::parser::statement::hint;
 use crate::parser::token::TokenKind::COPY;
 use crate::parser::token::TokenKind::*;
-use crate::parser::ErrorKind;
-use crate::parser::Input;
 
 pub fn copy_into_table(i: Input) -> IResult<Statement> {
     let copy_into_table_source = alt((

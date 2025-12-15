@@ -27,18 +27,18 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_storages_common_cache::Table;
 use databend_storages_common_cache::TableSnapshot;
+use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::decode_column_hll;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::merge_column_hll;
-use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use log::info;
 
 use super::diff::SegmentsDiff;
+use crate::FuseTable;
 use crate::operations::set_backoff;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
-use crate::FuseTable;
 
 const FUSE_ENGINE: &str = "FUSE";
 
@@ -288,9 +288,9 @@ async fn try_rebuild_req(
 
                     if txn_begin_timestamp < latest_snapshot_timestamp {
                         return Err(ErrorCode::UnresolvableConflict(format!(
-                       "Unresolvable conflict detected for table {} while resolving conflicts: txn started with logical timestamp {}, which is less than the latest table timestamp {}. Transaction must be aborted.",
-                        tid, txn_begin_timestamp, latest_snapshot_timestamp
-                    )));
+                            "Unresolvable conflict detected for table {} while resolving conflicts: txn started with logical timestamp {}, which is less than the latest table timestamp {}. Transaction must be aborted.",
+                            tid, txn_begin_timestamp, latest_snapshot_timestamp
+                        )));
                     }
                 }
             }
@@ -344,9 +344,10 @@ fn retry_too_many_msg(
     format!(
         "Transaction aborted after retries({} times, {} ms). The table_ids that failed to update: {:?}",
         retries,
-        Instant::now()
-            .duration_since(start_time)
-            .as_millis(),
-        update_failed_tbls.into_iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
+        Instant::now().duration_since(start_time).as_millis(),
+        update_failed_tbls
+            .into_iter()
+            .map(|(tid, _, _)| tid)
+            .collect::<Vec<_>>()
     )
 }

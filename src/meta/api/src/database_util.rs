@@ -15,16 +15,16 @@
 use std::fmt::Display;
 
 use chrono::Utc;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::DropDbWithDropTime;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DbIdList;
-use databend_common_meta_app::KeyWithTenant;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MetaError;

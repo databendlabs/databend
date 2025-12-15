@@ -17,9 +17,13 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::ColumnEntry;
+use databend_common_sql::IndexType;
+use databend_common_sql::MetadataRef;
+use databend_common_sql::TypeCheck;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Exchange;
 use databend_common_sql::plans::Join;
@@ -27,10 +31,6 @@ use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
-use databend_common_sql::ColumnEntry;
-use databend_common_sql::IndexType;
-use databend_common_sql::MetadataRef;
-use databend_common_sql::TypeCheck;
 
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;

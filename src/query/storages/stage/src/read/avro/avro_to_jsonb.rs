@@ -14,10 +14,10 @@
 
 use std::collections::BTreeMap;
 
-use apache_avro::types::Value;
 use apache_avro::Schema;
-use databend_common_expression::types::i256;
+use apache_avro::types::Value;
 use databend_common_expression::types::Decimal;
+use databend_common_expression::types::i256;
 use num_bigint::BigInt;
 
 pub(super) fn to_jsonb<'a>(value: &'a Value, schema: &Schema) -> Result<jsonb::Value<'a>, String> {
@@ -117,7 +117,7 @@ pub(super) fn to_jsonb<'a>(value: &'a Value, schema: &Schema) -> Result<jsonb::V
             return Err(format!(
                 "bug: avro schema and value not match: schema = {:?}, value = {:?}",
                 schema, value
-            ))
+            ));
         }
     };
     Ok(jvalue)
@@ -158,10 +158,10 @@ mod tests {
     use std::ops::Mul;
     use std::str::FromStr;
 
-    use apache_avro::schema::DecimalSchema;
     use apache_avro::Schema;
-    use databend_common_expression::types::i256;
+    use apache_avro::schema::DecimalSchema;
     use databend_common_expression::types::Decimal;
+    use databend_common_expression::types::i256;
     use num_bigint::BigInt;
 
     use crate::read::avro::avro_to_jsonb::to_jsonb;

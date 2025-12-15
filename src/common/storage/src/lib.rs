@@ -39,10 +39,10 @@ mod http_client;
 pub use http_client::StorageHttpClient;
 
 mod operator;
-pub use operator::check_operator;
-pub use operator::init_operator;
 pub use operator::DataOperator;
 pub use operator::OperatorRegistry;
+pub use operator::check_operator;
+pub use operator::init_operator;
 
 mod operator_cache;
 
@@ -61,12 +61,12 @@ pub use parquet::read_metadata_async;
 pub use parquet::read_parquet_schema_async_rs;
 
 mod stage;
-pub use stage::init_stage_operator;
+pub use stage::STDIN_FD;
 pub use stage::StageFileInfo;
 pub use stage::StageFileInfoStream;
 pub use stage::StageFileStatus;
 pub use stage::StageFilesInfo;
-pub use stage::STDIN_FD;
+pub use stage::init_stage_operator;
 
 mod copy;
 mod histogram;
@@ -80,9 +80,9 @@ pub use copy::CopyStatus;
 pub use copy::FileParseError;
 pub use copy::FileParseErrorAtLine;
 pub use copy::FileStatus;
+pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
 pub use histogram::Histogram;
 pub use histogram::HistogramBucket;
-pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
 pub use merge::MutationStatus;
 pub use meta_hll::MetaHLL;
 pub use meta_hll::MetaHLL12;

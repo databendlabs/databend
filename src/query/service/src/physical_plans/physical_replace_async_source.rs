@@ -18,8 +18,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::sources::AsyncSourcer;
-use databend_common_sql::plans::InsertValue;
 use databend_common_sql::NameResolutionContext;
+use databend_common_sql::plans::InsertValue;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;

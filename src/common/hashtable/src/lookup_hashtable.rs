@@ -19,8 +19,8 @@ use std::mem::MaybeUninit;
 
 use databend_common_base::mem_allocator::DefaultAllocator;
 
-use crate::table0::Entry;
 use crate::HashtableLike;
+use crate::table0::Entry;
 
 pub struct LookupHashtable<
     K: Sized,

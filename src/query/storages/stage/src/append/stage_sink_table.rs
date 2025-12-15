@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -27,10 +27,10 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::StageTable;
 use crate::append::output::SumSummaryTransform;
 use crate::append::parquet_file::append_data_to_parquet_files;
 use crate::append::row_based_file::append_data_to_row_based_files;
-use crate::StageTable;
 
 pub struct StageSinkTable {
     info: CopyIntoLocationInfo,

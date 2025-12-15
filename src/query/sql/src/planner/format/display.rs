@@ -16,15 +16,15 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
+use crate::ColumnEntry;
+use crate::IndexType;
+use crate::Metadata;
+use crate::ScalarExpr;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::RelOperator;
-use crate::ColumnEntry;
-use crate::IndexType;
-use crate::Metadata;
-use crate::ScalarExpr;
 
 /// A trait for humanizing IDs.
 pub trait IdHumanizer {

@@ -21,10 +21,10 @@ use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 
 use crate::physical_plans::HashJoin;
-use crate::pipelines::processors::transforms::build_runtime_filter_infos;
-use crate::pipelines::processors::transforms::get_global_runtime_filter_packet;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::RuntimeFilterDesc;
+use crate::pipelines::processors::transforms::build_runtime_filter_infos;
+use crate::pipelines::processors::transforms::get_global_runtime_filter_packet;
 use crate::sessions::QueryContext;
 
 pub struct RuntimeFiltersDesc {

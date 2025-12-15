@@ -18,15 +18,15 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::IndexType;
+use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::expr::MExpr;
 use crate::optimizer::ir::expr::SExpr;
 use crate::optimizer::ir::memo::Memo;
 use crate::optimizer::ir::property::PhysicalProperty;
 use crate::optimizer::ir::property::RelationalProperty;
 use crate::optimizer::ir::property::RequiredProperty;
-use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
-use crate::IndexType;
 
 /// A helper to access children of `SExpr` and `MExpr` in
 /// a unified view.

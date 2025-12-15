@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::TableDataType;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_formats::SeparatedTextDecoder;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_storage::FileParseError;

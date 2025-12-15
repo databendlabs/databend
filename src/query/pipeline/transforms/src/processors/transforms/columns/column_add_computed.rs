@@ -17,19 +17,19 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_cast;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::type_check::check_cast;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::parse_computed_expr;
 
-use crate::blocks::CompoundBlockOperator;
 use crate::Transform;
+use crate::blocks::CompoundBlockOperator;
 
 pub struct TransformAddComputedColumns {
     expression_transform: CompoundBlockOperator,

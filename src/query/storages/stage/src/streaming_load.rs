@@ -19,7 +19,6 @@ use databend_common_ast::ast::OnErrorMode;
 use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
@@ -28,6 +27,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_formats::FileFormatOptionsExt;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
@@ -36,11 +36,12 @@ use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::SyncReceiverSource;
-use databend_common_pipeline_transforms::columns::TransformNullIf;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_pipeline_transforms::columns::TransformNullIf;
 use databend_common_storages_parquet::InmMemoryFile;
 use parking_lot::Mutex;
 
+use crate::BytesBatch;
 use crate::compression::get_compression_with_path;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::format::create_row_based_file_format;
@@ -50,7 +51,6 @@ use crate::read::row_based::processors::Separator;
 use crate::transform_generating::DataBlockIterator;
 use crate::transform_generating::DataBlockIteratorBuilder;
 use crate::transform_generating::GeneratingTransformer;
-use crate::BytesBatch;
 
 pub fn build_streaming_load_pipeline(
     ctx: Arc<dyn TableContext>,

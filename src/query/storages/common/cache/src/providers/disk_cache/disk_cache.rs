@@ -18,9 +18,9 @@ use std::io::IoSlice;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_cache::Cache;
@@ -31,8 +31,8 @@ use log::error;
 use log::info;
 use log::warn;
 use parking_lot::RwLock;
-use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
+use rayon::prelude::*;
 
 use crate::CacheValue;
 use crate::DiskCacheKey;

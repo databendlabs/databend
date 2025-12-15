@@ -17,33 +17,33 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
+use databend_common_ast::ParseError;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::UnmatchedClause;
-use databend_common_ast::ParseError;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 
+use crate::BindContext;
+use crate::ColumnEntry;
+use crate::ScalarBinder;
+use crate::ScalarExpr;
+use crate::binder::Binder;
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::bind_mutation::mutation_expression::MutationExpressionBindResult;
 use crate::binder::util::TableIdentifier;
 use crate::binder::wrap_cast;
-use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::MatchedEvaluator;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::UnmatchedEvaluator;
-use crate::BindContext;
-use crate::ColumnEntry;
-use crate::ScalarBinder;
-use crate::ScalarExpr;
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MutationType {

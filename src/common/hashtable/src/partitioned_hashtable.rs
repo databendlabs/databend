@@ -110,12 +110,12 @@ impl<K: HashtableKeyable + FastHash, const BUCKETS_LG2: u32, const HIGH_BIT: boo
 }
 
 impl<
-        K: ?Sized + FastHash,
-        V,
-        Impl: HashtableLike<Key = K, Value = V>,
-        const BUCKETS_LG2: u32,
-        const HIGH_BIT: bool,
-    > HashtableLike for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
+    K: ?Sized + FastHash,
+    V,
+    Impl: HashtableLike<Key = K, Value = V>,
+    const BUCKETS_LG2: u32,
+    const HIGH_BIT: bool,
+> HashtableLike for PartitionedHashtable<Impl, BUCKETS_LG2, HIGH_BIT>
 {
     type Key = Impl::Key;
     type Value = Impl::Value;

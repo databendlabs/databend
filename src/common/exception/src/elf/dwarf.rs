@@ -35,9 +35,9 @@ use object::CompressionFormat;
 use object::Object;
 use object::ObjectSection;
 
+use crate::elf::ElfFile;
 use crate::elf::dwarf_unit::Unit;
 use crate::elf::dwarf_unit::UnitAttrs;
-use crate::elf::ElfFile;
 
 #[derive(Debug)]
 pub struct CallLocation {

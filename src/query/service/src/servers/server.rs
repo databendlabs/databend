@@ -13,20 +13,20 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_base::base::signal_stream;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
+use databend_common_base::base::signal_stream;
 use databend_common_base::runtime::drop_guard;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
-use futures::stream::Abortable;
 use futures::StreamExt;
+use futures::stream::Abortable;
 use log::error;
 use log::info;
 use tokio_stream::wrappers::TcpListenerStream;

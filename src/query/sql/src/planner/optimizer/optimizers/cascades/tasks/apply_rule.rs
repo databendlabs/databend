@@ -15,12 +15,12 @@
 use databend_common_exception::Result;
 use educe::Educe;
 
-use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
+use crate::IndexType;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
+use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::rule::RuleFactory;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::IndexType;
 
 #[derive(Educe)]
 #[educe(Debug)]

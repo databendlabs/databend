@@ -24,8 +24,8 @@ use log::error;
 use log::warn;
 use parking_lot::RwLock;
 
-use crate::providers::disk_cache::DiskCache;
 use crate::CacheAccessor;
+use crate::providers::disk_cache::DiskCache;
 
 impl CacheAccessor for LruDiskCacheHolder {
     type V = Bytes;
@@ -268,7 +268,7 @@ mod linux_read {
                             "Invalid cache item, expects {} bytes, got {}, path {:?}",
                             size, total_read, path
                         ),
-                    ))
+                    ));
                 }
                 _ => {
                     let err = std::io::Error::last_os_error();
@@ -292,8 +292,8 @@ mod linux_read {
     mod tests_read_content {
         use std::fs::File;
 
-        use mockall::predicate::*;
         use mockall::Sequence;
+        use mockall::predicate::*;
         use tempfile::TempDir;
 
         use super::*;

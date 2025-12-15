@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::ExplainOption;
 use databend_common_ast::ast::Statement;
-use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::plans::Plan;
 use crate::BindContext;
 use crate::Binder;
+use crate::plans::Plan;
 
 /// Configuration for the EXPLAIN statement.
 #[derive(Debug, Clone, PartialEq, Default)]

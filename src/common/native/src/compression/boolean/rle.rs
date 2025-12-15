@@ -17,13 +17,13 @@ use byteorder::ReadBytesExt;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 
-use super::compress_sample_ratio;
 use super::BooleanCompression;
 use super::BooleanStats;
-use crate::compression::integer::Rle;
+use super::compress_sample_ratio;
 use crate::compression::Compression;
 use crate::compression::SAMPLE_COUNT;
 use crate::compression::SAMPLE_SIZE;
+use crate::compression::integer::Rle;
 use crate::error::Result;
 
 impl BooleanCompression for Rle {

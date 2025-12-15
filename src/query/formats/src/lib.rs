@@ -29,9 +29,9 @@ pub use clickhouse::ClickhouseFormatType;
 pub use column_from_json::column_from_json_value;
 pub use delimiter::RecordDelimiter;
 pub use field_decoder::*;
-pub use file_format_type::parse_timezone;
 pub use file_format_type::FileFormatOptionsExt;
 pub use file_format_type::FileFormatTypeExt;
+pub use file_format_type::parse_timezone;
 
 pub use crate::common_settings::InputCommonSettings;
 pub use crate::common_settings::OutputCommonSettings;

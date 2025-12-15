@@ -34,8 +34,8 @@ use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_sql::ColumnSet;
-use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::ChunkAppendDataFormatter;

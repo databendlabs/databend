@@ -16,12 +16,17 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_expression::types::number::NumberDataType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::number::NumberDataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
-use crate::binder::wrap_cast;
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::MetadataRef;
+use crate::ScalarExpr;
+use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::wrap_cast;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -39,11 +44,6 @@ use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
-use crate::ColumnSet;
-use crate::IndexType;
-use crate::MetadataRef;
-use crate::ScalarExpr;
-use crate::Visibility;
 
 /// Rule to push aggregation past a join to reduces the number of input rows to the join.
 /// Read the paper "Eager aggregation and lazy aggregation" for more details.

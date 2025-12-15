@@ -23,8 +23,8 @@ use databend_common_sql::plans::AddTableConstraintPlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 
-use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::Interpreter;
+use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 

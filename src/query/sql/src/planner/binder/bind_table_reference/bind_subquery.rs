@@ -17,10 +17,10 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_exception::Result;
 use databend_common_expression::is_stream_column;
 
-use crate::binder::Binder;
-use crate::optimizer::ir::SExpr;
 use crate::BindContext;
 use crate::Visibility;
+use crate::binder::Binder;
+use crate::optimizer::ir::SExpr;
 
 impl Binder {
     /// Bind a subquery.

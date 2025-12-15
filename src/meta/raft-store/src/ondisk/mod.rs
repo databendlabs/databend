@@ -27,8 +27,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 pub use data_version::DataVersion;
-use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::SledTree;
+use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_stoerr::MetaStorageError;
 pub use header::Header;
 use log::info;

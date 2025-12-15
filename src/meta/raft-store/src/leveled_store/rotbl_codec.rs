@@ -128,10 +128,10 @@ impl RotblCodec {
 
 #[cfg(test)]
 mod tests {
-    use state_machine_api::ExpireKey;
-    use state_machine_api::UserKey;
     use Bound::Excluded;
     use Bound::Included;
+    use state_machine_api::ExpireKey;
+    use state_machine_api::UserKey;
 
     use super::*;
 
@@ -184,10 +184,10 @@ mod tests {
         assert!(RotblCodec::decode_key::<ExpireKey>("exp").is_err());
         assert!(RotblCodec::decode_key::<ExpireKey>("exp-").is_err());
         assert!(RotblCodec::decode_key::<ExpireKey>("exp-/").is_err());
-        assert!(RotblCodec::decode_key::<ExpireKey>(
-            "exp-/00000000000000000012/00000000000000000034/"
-        )
-        .is_err());
+        assert!(
+            RotblCodec::decode_key::<ExpireKey>("exp-/00000000000000000012/00000000000000000034/")
+                .is_err()
+        );
     }
 
     #[test]

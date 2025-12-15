@@ -19,8 +19,8 @@ use std::future::Future;
 use std::io::Error;
 use std::ops::Deref;
 
-use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::protobuf::WatchResponse;
 use log::debug;
 use tonic::Status;
 use watcher::dispatch::DispatcherHandle as GenericDispatcherHandle;

@@ -23,20 +23,20 @@ use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -45,11 +45,18 @@ use databend_storages_common_table_meta::table::is_stream_name;
 use log::warn;
 
 use super::Finder;
+use crate::BindContext;
+use crate::ColumnBinding;
+use crate::MetadataRef;
+use crate::NameResolutionContext;
+use crate::ScalarExpr;
+use crate::TypeChecker;
+use crate::Visibility;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::bind_query::ExpressionScanContext;
 use crate::binder::show::get_show_options;
 use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
-use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::planner::QueryExecutor;
@@ -69,13 +76,6 @@ use crate::plans::ShowFileFormatsPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
-use crate::BindContext;
-use crate::ColumnBinding;
-use crate::MetadataRef;
-use crate::NameResolutionContext;
-use crate::ScalarExpr;
-use crate::TypeChecker;
-use crate::Visibility;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
 ///
@@ -395,9 +395,10 @@ impl Binder {
                 comment,
             } => {
                 if illegal_ident_name(role_name) {
-                    return Err(ErrorCode::IllegalRole(
-                        format!("[SQL-BINDER] Illegal role name [{}]: role names cannot contain quotes (' or \") or control characters (\\b or \\f)", role_name),
-                    ));
+                    return Err(ErrorCode::IllegalRole(format!(
+                        "[SQL-BINDER] Illegal role name [{}]: role names cannot contain quotes (' or \") or control characters (\\b or \\f)",
+                        role_name
+                    )));
                 }
                 Plan::CreateRole(Box::new(CreateRolePlan {
                     create_option: create_option.clone().into(),
@@ -636,7 +637,9 @@ impl Binder {
                 {
                     self.bind_create_row_access(stmt).await?
                 } else {
-                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                    return Err(ErrorCode::Unimplemented(
+                        "Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1",
+                    ));
                 }
             }
             Statement::DropRowAccessPolicy(stmt) => {
@@ -647,7 +650,9 @@ impl Binder {
                 {
                     self.bind_drop_row_access(stmt).await?
                 } else {
-                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                    return Err(ErrorCode::Unimplemented(
+                        "Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1",
+                    ));
                 }
             }
             Statement::DescRowAccessPolicy(stmt) => {
@@ -658,7 +663,9 @@ impl Binder {
                 {
                     self.bind_desc_row_access(stmt).await?
                 } else {
-                    return Err(ErrorCode::Unimplemented("Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1"));
+                    return Err(ErrorCode::Unimplemented(
+                        "Experimental Row Access Policy is unstable and may have compatibility issues. To use it, set enable_experimental_row_access_policy=1",
+                    ));
                 }
             }
             Statement::SetRole {

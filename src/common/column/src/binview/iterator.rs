@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use super::BinaryViewColumnGeneric;
-use crate::binview::builder::BinaryViewColumnBuilder;
 use crate::binview::ViewType;
+use crate::binview::builder::BinaryViewColumnBuilder;
 use crate::iterator::ColumnAccessor;
 use crate::iterator::ColumnValuesIter;
 

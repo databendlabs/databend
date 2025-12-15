@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::types::UInt64Type;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::VacuumTemporaryFilesPlan;

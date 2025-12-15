@@ -16,10 +16,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::ColumnBinding;
 

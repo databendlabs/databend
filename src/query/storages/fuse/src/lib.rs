@@ -16,7 +16,6 @@
 #![allow(clippy::useless_asref)]
 #![feature(type_alias_impl_trait)]
 #![feature(iter_order_by)]
-#![feature(let_chains)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(int_roundings)]
 #![feature(iterator_try_reduce)]
@@ -49,10 +48,10 @@ pub use fuse_part::FuseBlockPartInfo;
 pub use fuse_part::FuseLazyPartInfo;
 pub use fuse_table::FuseTable;
 pub use fuse_table::RetentionPolicy;
-pub use fuse_type::segment_format_from_location;
 pub use fuse_type::FuseSegmentFormat;
 pub use fuse_type::FuseStorageFormat;
 pub use fuse_type::FuseTableType;
+pub use fuse_type::segment_format_from_location;
 pub use io::BlockReadResult;
 pub use pruning::SegmentLocation;
 pub use retry::commit_with_backoff;

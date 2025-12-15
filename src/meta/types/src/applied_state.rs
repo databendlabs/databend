@@ -15,10 +15,10 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::node::Node;
-use crate::protobuf::RaftReply;
 use crate::Change;
 use crate::TxnReply;
+use crate::node::Node;
+use crate::protobuf::RaftReply;
 
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.

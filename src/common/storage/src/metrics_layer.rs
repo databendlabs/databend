@@ -17,12 +17,12 @@ use std::fmt::Debug;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use databend_common_base::runtime::metrics::register_counter_family;
-use databend_common_base::runtime::metrics::register_gauge_family;
-use databend_common_base::runtime::metrics::register_histogram_family;
 use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::metrics::FamilyGauge;
 use databend_common_base::runtime::metrics::FamilyHistogram;
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::register_gauge_family;
+use databend_common_base::runtime::metrics::register_histogram_family;
 use opendal::layers::observe;
 use opendal::raw::Access;
 use opendal::raw::Layer;

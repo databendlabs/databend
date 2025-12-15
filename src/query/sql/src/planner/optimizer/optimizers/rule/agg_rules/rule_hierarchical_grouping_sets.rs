@@ -19,19 +19,21 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::Scalar;
 
+use crate::ColumnBindingBuilder;
+use crate::IndexType;
+use crate::Visibility;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::optimizer::OptimizerContext;
-use crate::plans::walk_expr_mut;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
@@ -46,9 +48,7 @@ use crate::plans::ScalarItem;
 use crate::plans::Sequence;
 use crate::plans::UnionAll;
 use crate::plans::VisitorMut;
-use crate::ColumnBindingBuilder;
-use crate::IndexType;
-use crate::Visibility;
+use crate::plans::walk_expr_mut;
 
 const ID: RuleID = RuleID::HierarchicalGroupingSetsToUnion;
 

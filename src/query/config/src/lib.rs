@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![feature(no_sanitize)]
 
 mod builtin;
 /// Config mods provide config support.

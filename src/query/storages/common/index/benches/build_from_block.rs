@@ -22,22 +22,22 @@ fn main() {
 mod dummy {
     use std::ops::Deref;
 
-    use databend_common_expression::types::number::NumberColumn;
-    use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_common_expression::Column;
+    use databend_common_expression::FunctionContext;
     use databend_common_expression::types::AccessType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::UInt64Type;
-    use databend_common_expression::Column;
-    use databend_common_expression::FunctionContext;
+    use databend_common_expression::types::number::NumberColumn;
+    use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_storages_common_index::BloomIndex;
     use databend_storages_common_index::filters::Filter;
     use databend_storages_common_index::filters::FilterBuilder;
     use databend_storages_common_index::filters::Xor8Builder;
-    use databend_storages_common_index::BloomIndex;
-    use rand::prelude::random;
-    use rand::rngs::StdRng;
     use rand::Rng;
     use rand::SeedableRng;
+    use rand::prelude::random;
+    use rand::rngs::StdRng;
 
     /// Benchmark building BlockFilter from DataBlock.
     ///

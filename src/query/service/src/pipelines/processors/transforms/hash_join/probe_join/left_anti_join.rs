@@ -23,10 +23,10 @@ use databend_common_expression::KeyAccessor;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
 
-use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
-use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
+use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
+use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
 
 impl HashJoinProbeState {
     pub(crate) fn left_anti_join<'a, H: HashJoinHashtableLike>(

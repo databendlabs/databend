@@ -139,7 +139,7 @@ pub fn parse_standard_timestamp(input: &[u8]) -> Option<Result<ParsedTimestamp>>
                     None => {
                         return Some(Err(ErrorCode::BadBytes(
                             "Invalid timezone offset: hour part must be digits".to_string(),
-                        )))
+                        )));
                     }
                 };
                 idx += 2;
@@ -156,7 +156,7 @@ pub fn parse_standard_timestamp(input: &[u8]) -> Option<Result<ParsedTimestamp>>
                         None => {
                             return Some(Err(ErrorCode::BadBytes(
                                 "Invalid timezone offset minute part".to_string(),
-                            )))
+                            )));
                         }
                     };
                     idx += 2;
@@ -169,7 +169,7 @@ pub fn parse_standard_timestamp(input: &[u8]) -> Option<Result<ParsedTimestamp>>
                         None => {
                             return Some(Err(ErrorCode::BadBytes(
                                 "Invalid timezone offset minute part".to_string(),
-                            )))
+                            )));
                         }
                     };
                     idx += 2;

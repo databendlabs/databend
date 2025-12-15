@@ -15,16 +15,16 @@
 use core::fmt;
 use std::cmp::Ordering;
 use std::cmp::Reverse;
-use std::collections::binary_heap;
 use std::collections::BinaryHeap;
+use std::collections::binary_heap;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
-use super::loser_tree;
-use super::utils::find_bigger_child_of_root;
 use super::Cursor as RawCursor;
 use super::CursorOrder;
 use super::Rows;
+use super::loser_tree;
+use super::utils::find_bigger_child_of_root;
 
 pub type Cursor<R> = RawCursor<R, ItemCursorOrder>;
 

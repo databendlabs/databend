@@ -17,10 +17,10 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DropRolePlan;
-use databend_common_users::RoleCacheManager;
-use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 use log::debug;
 use log::warn;
 

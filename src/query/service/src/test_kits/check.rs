@@ -17,18 +17,18 @@ use std::str;
 use databend_common_catalog::table::Table;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
-use databend_common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_storages_fuse::operations::load_last_snapshot_hint;
-use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SEGMENT_STATISTICS_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use futures::TryStreamExt;
 use walkdir::WalkDir;
 
@@ -192,9 +192,11 @@ pub async fn check_data_dir(
             "ts_location_opt: {:?}, table_statistic_files: {:?}",
             ts_location, table_statistic_files
         );
-        assert!(table_statistic_files
-            .iter()
-            .any(|e| e.contains(&ts_location)));
+        assert!(
+            table_statistic_files
+                .iter()
+                .any(|e| e.contains(&ts_location))
+        );
     }
 
     Ok(())

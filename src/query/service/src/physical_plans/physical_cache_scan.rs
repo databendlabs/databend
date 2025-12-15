@@ -18,8 +18,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_sql::plans::CacheSource;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::plans::CacheSource;
 
 use crate::physical_plans::format::CacheScanFormatter;
 use crate::physical_plans::format::PhysicalFormat;
@@ -27,12 +27,12 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
+use crate::pipelines::HashJoinStateRef;
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::CacheSourceState;
 use crate::pipelines::processors::transforms::HashJoinCacheState;
 use crate::pipelines::processors::transforms::NewHashJoinCacheState;
 use crate::pipelines::processors::transforms::TransformCacheScan;
-use crate::pipelines::HashJoinStateRef;
-use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CacheScan {

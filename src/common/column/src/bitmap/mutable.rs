@@ -21,15 +21,15 @@ use std::sync::Arc;
 
 use databend_common_base::vec_ext::VecExt;
 
+use super::Bitmap;
+use super::utils::BitChunk;
+use super::utils::BitChunksExactMut;
+use super::utils::BitmapIter;
 use super::utils::count_zeros;
 use super::utils::fmt;
 use super::utils::get_bit;
 use super::utils::set;
 use super::utils::set_bit;
-use super::utils::BitChunk;
-use super::utils::BitChunksExactMut;
-use super::utils::BitmapIter;
-use super::Bitmap;
 use crate::bitmap::utils::merge_reversed;
 use crate::bitmap::utils::set_bit_unchecked;
 use crate::error::Error;

@@ -14,18 +14,18 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_sql::ColumnSet;
+use databend_common_sql::ScalarExpr;
 use databend_common_sql::binder::is_range_join_condition;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
-use databend_common_sql::ColumnSet;
-use databend_common_sql::ScalarExpr;
 
+use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
-use crate::physical_plans::PhysicalPlanBuilder;
 
 enum PhysicalJoinType {
     Hash,

@@ -21,9 +21,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
+use databend_query::storages::fuse::FuseTable;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
-use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::*;
 use futures::TryStreamExt;
 

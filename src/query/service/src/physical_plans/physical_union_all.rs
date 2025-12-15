@@ -23,23 +23,23 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
-use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::optimizer::ir::SExpr;
 use itertools::Itertools;
 
+use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::UnionAllFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::PhysicalPlanBuilder;
-use crate::pipelines::processors::transforms::TransformRecursiveCteSource;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformRecursiveCteSource;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnionAll {

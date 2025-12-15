@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -26,15 +25,16 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
-use databend_common_expression::SortColumnDescription;
 use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::sorts::TransformSortPartial;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_pipeline_transforms::sorts::TransformSortPartial;
+use databend_common_sql::IndexType;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::SortDesc;
-use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
@@ -45,13 +45,13 @@ use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::NewTransformPartialAggregate;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
-use crate::pipelines::PipelineBuilder;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {

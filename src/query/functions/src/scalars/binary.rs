@@ -15,12 +15,11 @@
 use std::borrow::Cow;
 use std::io::Write;
 
+use databend_common_expression::EvalContext;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Value;
 use databend_common_expression::error_to_null;
-use databend_common_expression::types::binary::BinaryColumn;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::string::StringColumn;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BitmapType;
@@ -29,11 +28,12 @@ use databend_common_expression::types::GeometryType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::vectorize_1_arg;
-use databend_common_expression::EvalContext;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionRegistry;
-use databend_common_expression::Value;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_hex", &["hex", "hex_encode"]);

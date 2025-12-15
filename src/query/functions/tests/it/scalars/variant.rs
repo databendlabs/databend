@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use databend_common_expression::types::*;
 use databend_common_expression::FromData;
+use databend_common_expression::types::*;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -594,7 +594,11 @@ fn test_is_type(file: &mut impl Write) {
         "is_decimal(parse_json('99999999999999999999999999999999999999'))",
         &[],
     );
-    run_ast(file, "is_decimal(parse_json('99999999999999999999999999999999999999999999999999999999999999999999999999991'))", &[]);
+    run_ast(
+        file,
+        "is_decimal(parse_json('99999999999999999999999999999999999999999999999999999999999999999999999999991'))",
+        &[],
+    );
     run_ast(file, "is_string(parse_json('\"ab\"'))", &[]);
     run_ast(file, "is_string(parse_json('12.34'))", &[]);
     run_ast(file, "is_array(parse_json('[1,2,3]'))", &[]);

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
 use iceberg::expr::Predicate;
 use iceberg::expr::Reference;
 use iceberg::spec::Datum;

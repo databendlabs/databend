@@ -21,8 +21,8 @@ use display_more::DisplayUnixTimeStampExt;
 use state_machine_api::KVMeta;
 
 use crate::cmd::CmdContext;
-use crate::time::flexible_timestamp_to_duration;
 use crate::time::Interval;
+use crate::time::flexible_timestamp_to_duration;
 
 /// Specifies the metadata associated with a kv record, used in an `upsert` cmd.
 ///
@@ -128,8 +128,8 @@ mod tests {
     use state_machine_api::KVMeta;
 
     use super::MetaSpec;
-    use crate::cmd::CmdContext;
     use crate::Time;
+    use crate::cmd::CmdContext;
 
     #[test]
     fn test_serde() {

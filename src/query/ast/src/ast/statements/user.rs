@@ -18,7 +18,6 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_list;
 use crate::ast::AuthType;
 use crate::ast::CreateOption;
 use crate::ast::PrincipalIdentity;
@@ -26,6 +25,7 @@ use crate::ast::ProcedureIdentity;
 use crate::ast::ShowOptions;
 use crate::ast::UserIdentity;
 use crate::ast::UserPrivilegeType;
+use crate::ast::write_comma_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateUserStmt {

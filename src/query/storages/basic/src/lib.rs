@@ -40,8 +40,8 @@ pub use null::NullTable;
 pub use random::{RandomPartInfo, RandomTable};
 // Result cache storage exports
 pub use result_cache::{
-    gen_result_cache_key, gen_result_cache_meta_key, gen_result_cache_prefix,
     ResultCacheMetaManager, ResultCacheReader, ResultScan, WriteResultCacheSink,
+    gen_result_cache_key, gen_result_cache_meta_key, gen_result_cache_prefix,
 };
 // View storage exports
 pub use view::view_table;

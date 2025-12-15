@@ -15,12 +15,11 @@
 #![allow(clippy::arc_with_non_send_sync)]
 
 use std::ptr::NonNull;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_hashtable::fast_memcmp;
 use databend_common_hashtable::DictionaryKeys;
 use databend_common_hashtable::DictionaryStringHashMap;
 use databend_common_hashtable::HashMap;
@@ -28,8 +27,9 @@ use databend_common_hashtable::HashtableEntryMutRefLike;
 use databend_common_hashtable::HashtableLike;
 use databend_common_hashtable::ShortStringHashMap;
 use databend_common_hashtable::StackHashMap;
-use rand::distributions::Alphanumeric;
+use databend_common_hashtable::fast_memcmp;
 use rand::Rng;
+use rand::distributions::Alphanumeric;
 
 macro_rules! simple_test {
     ($t: tt) => {
@@ -198,9 +198,11 @@ fn test_dictionary_hash_map() {
                     NonNull::from(index1_str.as_bytes()),
                     NonNull::from(index2_str.as_bytes()),
                 ];
-                assert!(hashtable
-                    .insert_and_entry(&DictionaryKeys::create(&keys))
-                    .is_err());
+                assert!(
+                    hashtable
+                        .insert_and_entry(&DictionaryKeys::create(&keys))
+                        .is_err()
+                );
             }
         }
     }

@@ -19,10 +19,10 @@ use std::ops::BitOr;
 use std::ops::BitXor;
 use std::ops::Not;
 
+use super::Bitmap;
 use super::utils::BitChunk;
 use super::utils::BitChunkIterExact;
 use super::utils::BitChunksExact;
-use super::Bitmap;
 use crate::bitmap::MutableBitmap;
 
 /// Creates a [Vec<u8>] from an [`Iterator`] of [`BitChunk`].

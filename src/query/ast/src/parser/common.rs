@@ -15,6 +15,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use nom::Offset;
+use nom::Parser;
 pub use nom::branch::alt;
 pub use nom::branch::permutation;
 pub use nom::combinator::consumed;
@@ -23,8 +25,6 @@ pub use nom::combinator::not;
 pub use nom::combinator::value;
 pub use nom::multi::many1;
 use nom::sequence::terminated;
-use nom::Offset;
-use nom::Parser;
 use nom_rule::rule;
 use pratt::PrattError;
 use pratt::PrattParser;
@@ -35,7 +35,8 @@ where P: nom::Parser<Input<'a>, Output = O, Error = Error<'a>> {
     move |input| parser.parse(input)
 }
 
-use crate::ast::quote::QuotedIdent;
+use crate::Range;
+use crate::Span;
 use crate::ast::ColumnID;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
@@ -43,14 +44,13 @@ use crate::ast::IdentifierType;
 use crate::ast::SetType;
 use crate::ast::TableRef;
 use crate::ast::TableReference;
+use crate::ast::quote::QuotedIdent;
+use crate::parser::Error;
+use crate::parser::ErrorKind;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::query::with_options;
 use crate::parser::token::*;
-use crate::parser::Error;
-use crate::parser::ErrorKind;
-use crate::Range;
-use crate::Span;
 
 pub type IResult<'a, Output> = nom::IResult<Input<'a>, Output, Error<'a>>;
 

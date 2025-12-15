@@ -16,10 +16,10 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;

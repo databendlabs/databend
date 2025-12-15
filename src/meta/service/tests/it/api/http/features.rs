@@ -14,13 +14,13 @@
 
 use std::time::Duration;
 
+use databend_common_base::base::Stoppable;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::time::Instant;
-use databend_common_base::base::Stoppable;
 use databend_common_meta_raft_store::StateMachineFeature;
 use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
-use databend_meta::api::http::v1::features::FeatureResponse;
 use databend_meta::api::HttpService;
+use databend_meta::api::http::v1::features::FeatureResponse;
 use log::info;
 use pretty_assertions::assert_eq;
 use test_harness::test;

@@ -21,9 +21,9 @@ use std::time::Instant;
 use itertools::EitherOrBoth;
 use itertools::Itertools;
 
+use crate::PermitSeq;
 use crate::queue::EventDesc;
 use crate::queue::PermitEvent;
-use crate::PermitSeq;
 
 /// The statistics about running the semaphore acquirer.
 #[derive(Debug, Clone)]

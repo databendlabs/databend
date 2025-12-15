@@ -22,9 +22,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggrStateRegistry;
@@ -39,13 +36,16 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::DataType;
 use itertools::Itertools;
 
-use super::batch_merge1;
-use super::batch_serialize1;
 use super::AggregateFunctionSortDesc;
 use super::SerializeInfo;
 use super::StateSerde;
+use super::batch_merge1;
+use super::batch_serialize1;
 
 #[derive(Debug, Clone)]
 pub struct SortAggState {

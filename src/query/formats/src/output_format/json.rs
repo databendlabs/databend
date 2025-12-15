@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::date_helper::DateConverter;
-use databend_common_expression::types::interval::interval_to_string;
-use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::date_helper::DateConverter;
+use databend_common_expression::types::VectorScalarRef;
+use databend_common_expression::types::interval::interval_to_string;
+use databend_common_expression::types::number::NumberScalar;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::FormatSettings;
-use geozero::wkb::Ewkb;
 use geozero::ToJson;
+use geozero::wkb::Ewkb;
 use jiff::fmt::strtime;
 use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 
-use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
+use crate::output_format::OutputFormat;
 
 pub struct JSONOutputFormat {
     schema: TableSchemaRef,

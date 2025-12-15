@@ -32,10 +32,10 @@ use async_compression::util::PartialBuffer;
 use bytes::Buf;
 use bytes::BytesMut;
 use databend_common_exception::ErrorCode;
-use futures::io::BufReader;
-use futures::ready;
 use futures::AsyncBufRead;
 use futures::AsyncRead;
+use futures::io::BufReader;
+use futures::ready;
 use log::trace;
 use pin_project::pin_project;
 use zip::ZipArchive;
@@ -439,8 +439,8 @@ mod tests {
 
     use async_compression::futures::bufread::GzipEncoder;
     use async_compression::futures::bufread::ZlibEncoder;
-    use futures::io::Cursor;
     use futures::AsyncReadExt;
+    use futures::io::Cursor;
     use rand::prelude::*;
 
     use super::*;

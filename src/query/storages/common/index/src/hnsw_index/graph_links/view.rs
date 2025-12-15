@@ -19,18 +19,18 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Either;
 use itertools::Itertools as _;
-use zerocopy::native_endian::U64 as NativeU64;
 use zerocopy::FromBytes;
 use zerocopy::Immutable;
+use zerocopy::native_endian::U64 as NativeU64;
 
+use super::GraphLinksFormat;
+use super::header::HEADER_VERSION_COMPRESSED;
 use super::header::HeaderCompressed;
 use super::header::HeaderPlain;
-use super::header::HEADER_VERSION_COMPRESSED;
-use super::GraphLinksFormat;
 use crate::hnsw_index::common::bitpacking::packed_bits;
-use crate::hnsw_index::common::bitpacking_links::iterate_packed_links;
-use crate::hnsw_index::common::bitpacking_links::PackedLinksIterator;
 use crate::hnsw_index::common::bitpacking_links::MIN_BITS_PER_VALUE;
+use crate::hnsw_index::common::bitpacking_links::PackedLinksIterator;
+use crate::hnsw_index::common::bitpacking_links::iterate_packed_links;
 use crate::hnsw_index::common::bitpacking_ordered;
 use crate::hnsw_index::common::types::PointOffsetType;
 

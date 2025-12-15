@@ -20,14 +20,14 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
+use databend_common_sql::IndexType;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::plans::UDFType;
-use databend_common_sql::IndexType;
 use itertools::Itertools;
 
-use crate::pipelines::processors::transforms::aggregator::create_udaf_script_function;
-use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::create_udaf_script_function;
 
 impl PipelineBuilder {
     pub fn build_aggregator_params(

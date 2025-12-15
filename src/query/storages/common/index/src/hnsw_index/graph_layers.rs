@@ -181,11 +181,7 @@ impl GraphLayersBase for GraphLayers {
     }
 
     fn get_m(&self, level: usize) -> usize {
-        if level == 0 {
-            self.m0
-        } else {
-            self.m
-        }
+        if level == 0 { self.m0 } else { self.m }
     }
 }
 

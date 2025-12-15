@@ -20,8 +20,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::base::tokio;
-use databend_common_base::runtime::catch_unwind;
-use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::LimitMemGuard;
@@ -30,6 +28,8 @@ use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -45,13 +45,13 @@ use log::warn;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
-use crate::pipelines::executor::executor_graph::ScheduleQueue;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::QueryExecutorTasksQueue;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::executor::executor_graph::ScheduleQueue;
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
 

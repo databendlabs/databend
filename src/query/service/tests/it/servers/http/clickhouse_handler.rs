@@ -15,25 +15,25 @@
 use std::collections::HashMap;
 
 use databend_common_base::base::tokio;
+use databend_query::servers::HttpHandlerKind;
+use databend_query::servers::http::CLICKHOUSE_VERSION;
 use databend_query::servers::http::middleware::EndpointKind;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::clickhouse_router;
-use databend_query::servers::http::CLICKHOUSE_VERSION;
-use databend_query::servers::HttpHandlerKind;
 use databend_query::test_kits::TestFixture;
 use http::Method;
 use http::StatusCode;
 use http::Uri;
-use poem::error::Result as PoemResult;
-use poem::middleware::CookieJarManager;
-use poem::middleware::CookieJarManagerEndpoint;
-use poem::web::headers::Authorization;
 use poem::Body;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
+use poem::error::Result as PoemResult;
+use poem::middleware::CookieJarManager;
+use poem::middleware::CookieJarManagerEndpoint;
+use poem::web::headers::Authorization;
 use pretty_assertions::assert_eq;
 
 macro_rules! assert_error {

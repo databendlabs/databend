@@ -47,14 +47,6 @@ pub trait OutputFormat: Send {
 #[cfg(test)]
 mod utils {
     use databend_common_exception::Result;
-    use databend_common_expression::types::nullable::NullableColumn;
-    use databend_common_expression::types::number::Float64Type;
-    use databend_common_expression::types::number::Int32Type;
-    use databend_common_expression::types::Bitmap;
-    use databend_common_expression::types::BooleanType;
-    use databend_common_expression::types::DateType;
-    use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::types::StringType;
     use databend_common_expression::Column;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
@@ -62,6 +54,14 @@ mod utils {
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchemaRef;
     use databend_common_expression::TableSchemaRefExt;
+    use databend_common_expression::types::Bitmap;
+    use databend_common_expression::types::BooleanType;
+    use databend_common_expression::types::DateType;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::types::nullable::NullableColumn;
+    use databend_common_expression::types::number::Float64Type;
+    use databend_common_expression::types::number::Int32Type;
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_settings::Settings;
 

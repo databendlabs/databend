@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use base64::engine::general_purpose;
 use base64::Engine as _;
+use base64::engine::general_purpose;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::BinaryFormat;

@@ -22,13 +22,13 @@ use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::S3StorageClass;
 
-use crate::settings::Settings;
-use crate::settings_default::DefaultSettings;
 use crate::ChangeValue;
 use crate::ReplaceIntoShuffleStrategy;
 use crate::ScopeLevel;
 use crate::SettingMode;
 use crate::SettingScope;
+use crate::settings::Settings;
+use crate::settings_default::DefaultSettings;
 
 #[derive(Clone, Copy)]
 pub enum FlightCompression {

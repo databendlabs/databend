@@ -18,12 +18,12 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_list;
-use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::InsertSource;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_dot_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ReplaceStmt {

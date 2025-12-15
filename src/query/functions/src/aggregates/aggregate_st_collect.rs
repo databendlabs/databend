@@ -20,13 +20,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::ArrayType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::GeometryType;
-use databend_common_expression::types::NullableType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -37,6 +30,13 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::GeometryType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::ValueType;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkb;
 use geo::Geometry;
@@ -49,11 +49,6 @@ use geo::Point;
 use geo::Polygon;
 use geozero::wkb::Ewkb;
 
-use super::aggregate_scalar_state::ScalarStateFunc;
-use super::assert_params;
-use super::assert_unary_arguments;
-use super::batch_merge1;
-use super::batch_serialize1;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -62,6 +57,11 @@ use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateSerde;
+use super::aggregate_scalar_state::ScalarStateFunc;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::batch_serialize1;
 
 #[derive(Debug)]
 pub struct StCollectState<T: ValueType> {

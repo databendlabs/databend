@@ -21,9 +21,9 @@ use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::StatisticsTable;
 use databend_common_storages_system::TableColumnStatistics;
+use poem::IntoResponse;
 use poem::web::Json;
 use poem::web::Path;
-use poem::IntoResponse;
 
 use crate::sessions::SessionManager;
 

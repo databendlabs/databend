@@ -43,18 +43,18 @@ use databend_common_storage::OperatorRegistry;
 use databend_storages_common_stage::add_internal_columns;
 use parquet::arrow::parquet_to_arrow_schema;
 
-use crate::meta::check_parquet_schema;
-use crate::meta::read_metadata_async_cached;
-use crate::parquet_part::DeleteTask;
-use crate::parquet_reader::cached_range_full_read;
-use crate::parquet_reader::policy::ReadPolicyImpl;
-use crate::parquet_reader::ParquetWholeFileReader;
-use crate::parquet_reader::RowGroupReader;
-use crate::partition::ParquetRowGroupPart;
-use crate::read_settings::ReadSettings;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
 use crate::ParquetReaderBuilder;
+use crate::meta::check_parquet_schema;
+use crate::meta::read_metadata_async_cached;
+use crate::parquet_part::DeleteTask;
+use crate::parquet_reader::ParquetWholeFileReader;
+use crate::parquet_reader::RowGroupReader;
+use crate::parquet_reader::cached_range_full_read;
+use crate::parquet_reader::policy::ReadPolicyImpl;
+use crate::partition::ParquetRowGroupPart;
+use crate::read_settings::ReadSettings;
 
 enum State {
     Init,

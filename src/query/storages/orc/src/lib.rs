@@ -18,7 +18,6 @@
 #![allow(clippy::diverging_sub_expression)]
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
-#![feature(let_chains)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
 #![feature(box_patterns)]

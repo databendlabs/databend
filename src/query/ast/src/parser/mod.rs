@@ -48,13 +48,13 @@ pub mod statement;
 pub mod stream;
 pub mod token;
 
+pub use common::IResult;
 pub use common::match_text;
 pub use common::match_token;
-pub use common::IResult;
-pub use error::display_parser_error;
 pub use error::Backtrace;
 pub use error::Error;
 pub use error::ErrorKind;
+pub use error::display_parser_error;
 pub use error_suggestion::suggest_correction;
 pub use input::Dialect;
 pub use input::Input;

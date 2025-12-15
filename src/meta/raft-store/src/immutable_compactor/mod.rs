@@ -20,9 +20,9 @@ use log::info;
 use seq_marked::InternalSeq;
 
 use crate::leveled_store::leveled_map::LeveledMap;
+use crate::sm_v003::SMV003;
 use crate::sm_v003::compactor_acquirer::CompactorPermit;
 use crate::sm_v003::writer_acquirer::WriterPermit;
-use crate::sm_v003::SMV003;
 
 /// Compact `ImmutableLevels` to reduce the number of levels.
 pub struct InMemoryCompactor {

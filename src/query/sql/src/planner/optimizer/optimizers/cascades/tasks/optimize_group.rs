@@ -19,16 +19,16 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
-use super::optimize_expr::OptimizeExprTask;
 use super::Task;
+use super::optimize_expr::OptimizeExprTask;
+use crate::IndexType;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::optimizer::optimizers::cascades::tasks::ExploreGroupTask;
 use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
-use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::plans::Operator;
-use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
 pub enum OptimizeGroupState {

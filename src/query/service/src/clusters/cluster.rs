@@ -12,28 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 use std::ops::RangeInclusive;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
 use arrow_flight::flight_service_client::FlightServiceClient;
-use databend_common_base::base::tokio::sync::Mutex;
-use databend_common_base::base::tokio::sync::Notify;
-use databend_common_base::base::tokio::task::JoinHandle;
-use databend_common_base::base::tokio::time::sleep as tokio_async_sleep;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
+use databend_common_base::base::tokio::sync::Mutex;
+use databend_common_base::base::tokio::sync::Notify;
+use databend_common_base::base::tokio::task::JoinHandle;
+use databend_common_base::base::tokio::time::sleep as tokio_async_sleep;
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use databend_common_cache::MemSized;
@@ -60,15 +60,15 @@ use databend_common_version::DATABEND_TELEMETRY_API_KEY;
 use databend_common_version::DATABEND_TELEMETRY_ENDPOINT;
 use databend_common_version::DATABEND_TELEMETRY_SOURCE;
 use databend_enterprise_resources_management::ResourcesManagement;
-use futures::future::select;
-use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
+use futures::future::Either;
+use futures::future::select;
 use log::error;
 use log::info;
 use log::warn;
-use rand::thread_rng;
 use rand::Rng;
+use rand::thread_rng;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::sleep;
@@ -694,7 +694,8 @@ impl ClusterDiscovery {
 
         let total_cpu_nums = nodes.iter().map(|x| x.cpu_nums).sum::<u64>();
 
-        info!("[Cluster] current resource status - online nodes: [{}], available CPU cores: [{}] for tenant [{}].",
+        info!(
+            "[Cluster] current resource status - online nodes: [{}], available CPU cores: [{}] for tenant [{}].",
             nodes.len(),
             total_cpu_nums,
             self.tenant_id

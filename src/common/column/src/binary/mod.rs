@@ -26,9 +26,9 @@ pub use builder::BinaryColumnBuilder;
 pub use iterator::BinaryColumnBuilderIter;
 pub use iterator::BinaryColumnIter;
 
+use crate::bitmap::Bitmap;
 use crate::bitmap::utils::BitmapIter;
 use crate::bitmap::utils::ZipValidity;
-use crate::bitmap::Bitmap;
 use crate::buffer::Buffer;
 use crate::error::Error;
 use crate::error::Result;

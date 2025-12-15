@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledOrderedSerde;
+use databend_common_meta_sled_store::sled;
 use databend_common_meta_types::raft_types::NodeId;
 
 #[test]

@@ -16,24 +16,24 @@ use std::collections::VecDeque;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_expression::block_debug::pretty_format_blocks;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
-use databend_common_pipeline_transforms::sorts::core::algorithm::HeapSort;
-use databend_common_pipeline_transforms::sorts::core::algorithm::LoserTreeSort;
-use databend_common_pipeline_transforms::sorts::core::algorithm::SortAlgorithm;
+use databend_common_expression::block_debug::pretty_format_blocks;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDataType;
 use databend_common_pipeline_transforms::sorts::core::Merger;
 use databend_common_pipeline_transforms::sorts::core::SimpleRowsAsc;
 use databend_common_pipeline_transforms::sorts::core::SortedStream;
+use databend_common_pipeline_transforms::sorts::core::algorithm::HeapSort;
+use databend_common_pipeline_transforms::sorts::core::algorithm::LoserTreeSort;
+use databend_common_pipeline_transforms::sorts::core::algorithm::SortAlgorithm;
 use itertools::Itertools;
-use rand::rngs::ThreadRng;
 use rand::Rng;
+use rand::rngs::ThreadRng;
 
 struct TestStream {
     data: VecDeque<DataBlock>,

@@ -27,10 +27,10 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::ColumnSet;
 use tokio::sync::Barrier;
 
+use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
 use crate::pipelines::processors::transforms::new_hash_join::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::runtime_filter::RuntimeFiltersDesc;
-use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
 
 pub struct TransformHashJoin {
     build_port: Arc<InputPort>,

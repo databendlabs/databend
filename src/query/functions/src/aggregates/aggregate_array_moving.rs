@@ -20,10 +20,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::*;
-use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
-use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -33,13 +29,12 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::*;
+use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::assert_unary_arguments;
-use super::assert_variadic_params;
-use super::batch_merge1;
-use super::batch_serialize1;
-use super::extract_number_param;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -50,6 +45,11 @@ use super::AggregateFunctionSortDesc;
 use super::SerializeInfo;
 use super::StateAddr;
 use super::StateSerde;
+use super::assert_unary_arguments;
+use super::assert_variadic_params;
+use super::batch_merge1;
+use super::batch_serialize1;
+use super::extract_number_param;
 
 trait SumState: StateSerde + Send + Default + 'static {
     fn merge(&mut self, other: &Self) -> Result<()>;

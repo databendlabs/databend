@@ -20,13 +20,6 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberColumn;
-use databend_common_expression::types::NumberColumnBuilder;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -37,14 +30,21 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::sorts::sort_merge;
 
 use crate::physical_plans::RangeJoin;
+use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
 use crate::pipelines::processors::transforms::range_join::probe_l1;
-use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 
 pub struct IEJoinState {
     _l1_data_type: DataType,

@@ -17,8 +17,6 @@ use std::io::Write;
 
 use comfy_table::Table;
 use databend_common_exception::Result;
-use databend_common_expression::type_check;
-use databend_common_expression::types::NullableColumn;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
@@ -28,6 +26,8 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::Value;
+use databend_common_expression::type_check;
+use databend_common_expression::types::NullableColumn;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 use itertools::Itertools;
@@ -363,9 +363,9 @@ fn check_ambiguity() {
 
 #[test]
 fn test_if_function() -> Result<()> {
-    use databend_common_expression::types::*;
     use databend_common_expression::FromData;
     use databend_common_expression::Scalar;
+    use databend_common_expression::types::*;
     let raw_expr = parser::parse_raw_expr("if(eq(n,1), sum_sid + 1,100)", &[
         ("n", UInt8Type::data_type()),
         ("sum_sid", Int32Type::data_type().wrap_nullable()),

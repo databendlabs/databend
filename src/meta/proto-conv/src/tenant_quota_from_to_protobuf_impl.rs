@@ -18,11 +18,11 @@
 use databend_common_meta_app::tenant;
 use databend_common_protos::pb;
 
-use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
+use crate::reader_check_msg;
 
 impl FromToProto for tenant::TenantQuota {
     type PB = pb::TenantQuota;

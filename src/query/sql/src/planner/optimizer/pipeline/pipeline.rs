@@ -20,11 +20,11 @@ use log::info;
 
 use super::common::contains_local_table_scan;
 use super::common::contains_warehouse_table_scan;
+use crate::optimizer::Optimizer;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::pipeline::OptimizerTraceCollector;
-use crate::optimizer::Optimizer;
-use crate::optimizer::OptimizerContext;
 
 /// A pipeline of optimizers that are executed in sequence.
 pub struct OptimizerPipeline {
@@ -75,11 +75,7 @@ impl OptimizerPipeline {
 
     /// Add an optimizer to the pipeline conditionally
     pub fn add_if<T: Optimizer + 'static>(self, condition: bool, optimizer: T) -> Self {
-        if condition {
-            self.add(optimizer)
-        } else {
-            self
-        }
+        if condition { self.add(optimizer) } else { self }
     }
 
     /// Configure distributed optimization based on table types

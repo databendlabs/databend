@@ -25,26 +25,26 @@ use std::sync::atomic::AtomicBool;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::sampler::FixedRateSampler;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
-use rand::rngs::StdRng;
+use databend_common_expression::sampler::FixedRateSampler;
 use rand::SeedableRng;
+use rand::rngs::StdRng;
 
-use super::core::algorithm::SortAlgorithm;
-use super::core::Bounds;
-use super::core::Merger;
-use super::core::Rows;
-use super::core::SortedStream;
 use super::Base;
 use super::RowsStat;
 use super::SortCollectedMeta;
 use super::SortSpillParams;
+use super::core::Bounds;
+use super::core::Merger;
+use super::core::Rows;
+use super::core::SortedStream;
+use super::core::algorithm::SortAlgorithm;
+use crate::MemorySettings;
 use crate::traits::DataBlockSpill;
 use crate::traits::Location;
-use crate::MemorySettings;
 
 pub struct SortSpill<A: SortAlgorithm, S: DataBlockSpill> {
     base: Base<S>,
@@ -975,21 +975,21 @@ mod tests {
     use std::sync::Mutex;
 
     use databend_common_base::base::GlobalUniqName;
-    use databend_common_expression::types::DataType;
-    use databend_common_expression::types::Int32Type;
-    use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::types::NumberScalar;
-    use databend_common_expression::types::StringType;
     use databend_common_expression::Column;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
     use databend_common_expression::SortColumnDescription;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+    use databend_common_expression::types::StringType;
 
     use super::*;
-    use crate::sorts::core::convert_rows;
     use crate::sorts::core::SimpleRowsAsc;
     use crate::sorts::core::SimpleRowsDesc;
+    use crate::sorts::core::convert_rows;
 
     fn test_data() -> (DataSchemaRef, DataBlock) {
         let col1 = Int32Type::from_data(vec![7, 7, 8, 11, 3, 5, 10, 11]);

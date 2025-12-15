@@ -125,8 +125,8 @@ pub static PROFILES_INDEX: OnceCell<
     Arc<[Option<ProfileStatisticsName>; std::mem::variant_count::<ProfileStatisticsName>()]>,
 > = OnceCell::new();
 
-pub fn get_statistics_name_index(
-) -> Arc<[Option<ProfileStatisticsName>; std::mem::variant_count::<ProfileStatisticsName>()]> {
+pub fn get_statistics_name_index()
+-> Arc<[Option<ProfileStatisticsName>; std::mem::variant_count::<ProfileStatisticsName>()]> {
     PROFILES_INDEX
         .get_or_init(|| {
             let statistics_desc = get_statistics_desc();

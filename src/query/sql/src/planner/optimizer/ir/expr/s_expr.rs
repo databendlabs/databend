@@ -23,17 +23,17 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
-use crate::optimizer::ir::property::RelExpr;
-use crate::optimizer::ir::property::RelationalProperty;
+use crate::IndexType;
 use crate::optimizer::ir::SExprVisitor;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::VisitAction;
+use crate::optimizer::ir::property::RelExpr;
+use crate::optimizer::ir::property::RelationalProperty;
 use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::plans::Exchange;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
-use crate::IndexType;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Educe)]

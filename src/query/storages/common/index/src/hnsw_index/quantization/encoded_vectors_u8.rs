@@ -23,10 +23,10 @@ use serde::Serialize;
 
 use crate::hnsw_index::quantization::encoded_storage::EncodedStorage;
 use crate::hnsw_index::quantization::encoded_storage::EncodedStorageBuilder;
-use crate::hnsw_index::quantization::encoded_vectors::validate_vector_parameters;
 use crate::hnsw_index::quantization::encoded_vectors::DistanceType;
 use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
 use crate::hnsw_index::quantization::encoded_vectors::VectorParameters;
+use crate::hnsw_index::quantization::encoded_vectors::validate_vector_parameters;
 use crate::hnsw_index::quantization::quantile::find_min_max_from_iter;
 use crate::hnsw_index::quantization::quantile::find_quantile_interval;
 

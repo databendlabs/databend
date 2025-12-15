@@ -14,12 +14,12 @@
 
 use std::fmt;
 
-use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledBytesError;
 use databend_common_meta_sled_store::SledSerde;
+use databend_common_meta_sled_store::sled;
 
-use crate::ondisk::DataVersion;
 use crate::ondisk::DATA_VERSION;
+use crate::ondisk::DataVersion;
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,

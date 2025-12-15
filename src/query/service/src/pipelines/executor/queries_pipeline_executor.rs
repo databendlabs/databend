@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
-use databend_common_base::runtime::catch_unwind;
-use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
+use databend_common_base::runtime::catch_unwind;
+use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use fastrace::func_path;

@@ -16,8 +16,8 @@ use std::str::FromStr;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use enumflags2::bitflags;
 use enumflags2::BitFlags;
+use enumflags2::bitflags;
 
 // Template Patterns for Numeric Formatting
 // https://github.com/postgres/postgres/blob/master/src/backend/utils/adt/formatting.c
@@ -830,7 +830,7 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
         // } else {
         // TODO: Why is this not the same as the postgres implementation?
         np.sign_wrote = true; // needn't sign
-                              // }
+    // }
     } else {
         if np.sign && np.desc.flag.contains(NumFlag::FillMode) {
             np.desc.flag.remove(NumFlag::Bracket)

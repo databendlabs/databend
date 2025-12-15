@@ -27,9 +27,9 @@ use databend_common_ast::ast::OptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_base::base::short_sql;
-use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -38,13 +38,13 @@ use databend_common_exception::ResultExt;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::SourcePipeBuilder;
-use databend_common_sql::plans::Plan;
+use databend_common_pipeline::core::always_callback;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
+use databend_common_sql::plans::Plan;
 use databend_storages_common_cache::CacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
@@ -53,16 +53,16 @@ use log::info;
 use md5::Digest;
 use md5::Md5;
 
+use super::InterpreterMetrics;
+use super::InterpreterQueryLog;
 use super::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
-use super::InterpreterMetrics;
-use super::InterpreterQueryLog;
 use crate::interpreters::interpreter_txn_commit::execute_commit_statement;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueriesQueueManager;
@@ -123,9 +123,10 @@ pub trait Interpreter: Sync + Send {
             match LicenseManagerSwitch::instance().check_license(license_key.clone()) {
                 Ok(_) => true,
                 Err(e) if !license_key.is_empty() => {
-                    let msg =
-                            format!("CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
-                                    e);
+                    let msg = format!(
+                        "CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
+                        e
+                    );
                     log::error!("{msg}");
 
                     // Also log at warning level to ensure the message could be propagated to client applications

@@ -23,5 +23,5 @@ pub mod refresh_handler;
 mod token;
 
 pub use client_session_manager::ClientSessionManager;
-pub(crate) use token::unix_ts;
 pub(crate) use token::SessionClaim;
+pub(crate) use token::unix_ts;

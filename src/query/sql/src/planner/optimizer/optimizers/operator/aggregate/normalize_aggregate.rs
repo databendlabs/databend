@@ -16,16 +16,16 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
-use crate::optimizer::ir::SExpr;
+use crate::ColumnBinding;
+use crate::Visibility;
 use crate::optimizer::Optimizer;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
-use crate::ColumnBinding;
-use crate::Visibility;
 
 pub struct RuleNormalizeAggregateOptimizer {}
 

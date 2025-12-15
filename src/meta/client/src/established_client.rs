@@ -13,13 +13,16 @@
 // limitations under the License.
 
 use std::fmt;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::MetaHandshakeError;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::protobuf as pb;
-use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::Empty;
@@ -33,28 +36,25 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_meta_types::GrpcHelper;
-use databend_common_meta_types::MetaHandshakeError;
-use databend_common_meta_types::TxnReply;
-use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use display_more::DisplayOptionExt;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
 use parking_lot::Mutex;
+use tonic::Response;
+use tonic::Status;
 use tonic::codec::Streaming;
 use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
-use tonic::Response;
-use tonic::Status;
 
-use crate::endpoints::rotate_failing_endpoint;
+use crate::FeatureSpec;
 use crate::endpoints::Endpoints;
+use crate::endpoints::rotate_failing_endpoint;
 use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
 use crate::required::Features;
-use crate::FeatureSpec;
 
 /// Update the client state according to the result of an RPC.
 trait HandleRPCResult<T> {

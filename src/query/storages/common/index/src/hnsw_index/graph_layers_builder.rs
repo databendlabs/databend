@@ -26,8 +26,8 @@ use databend_common_exception::Result;
 use parking_lot::Mutex;
 use parking_lot::MutexGuard;
 use parking_lot::RwLock;
-use rand::distributions::Uniform;
 use rand::Rng;
+use rand::distributions::Uniform;
 
 use super::graph_layers::GraphLayerData;
 use super::graph_links::GraphLinksFormat;
@@ -86,11 +86,7 @@ impl GraphLayersBase for GraphLayersBuilder {
     }
 
     fn get_m(&self, level: usize) -> usize {
-        if level == 0 {
-            self.m0
-        } else {
-            self.m
-        }
+        if level == 0 { self.m0 } else { self.m }
     }
 }
 

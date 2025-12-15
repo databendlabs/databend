@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::bitpacking::packed_bits;
 use super::bitpacking::BitReader;
 use super::bitpacking::BitWriter;
+use super::bitpacking::packed_bits;
 
 /// To simplify value counting, each value should be at least one byte.
 /// Otherwise the count could would be ambiguous, e.g., a 2-byte slice of 5-bit

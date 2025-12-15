@@ -14,10 +14,10 @@
 
 use std::fmt;
 
-use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledBytesError;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
+use databend_common_meta_sled_store::sled;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::StoredMembership;

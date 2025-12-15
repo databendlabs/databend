@@ -17,10 +17,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -29,6 +25,10 @@ use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 
 use super::AggrState;
 use super::AggrStateLoc;

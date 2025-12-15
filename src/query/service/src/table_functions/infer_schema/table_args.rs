@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::table_args::i64_value;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::i64_value;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storage::StageFilesInfo;

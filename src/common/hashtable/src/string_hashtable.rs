@@ -29,11 +29,11 @@ use super::traits::EntryRefLike;
 use super::traits::HashtableLike;
 use super::traits::UnsizedKeyable;
 use crate::short_string_hashtable::FallbackKey;
-use crate::table0::Table0Iter;
-use crate::table0::Table0IterMut;
 use crate::table_empty::TableEmpty;
 use crate::table_empty::TableEmptyIter;
 use crate::table_empty::TableEmptyIterMut;
+use crate::table0::Table0Iter;
+use crate::table0::Table0IterMut;
 
 /// Simple unsized hashtable is used for storing unsized keys in arena. It can be worked with HashMethodSerializer.
 /// Different from `ShortStringHashTable`, it doesn't use adaptive sub hashtable to store key values via key size.

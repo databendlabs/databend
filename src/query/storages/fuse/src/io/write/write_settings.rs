@@ -15,8 +15,8 @@
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_storages_common_table_meta::table::TableCompression;
 
-use crate::FuseStorageFormat;
 use crate::DEFAULT_ROW_PER_PAGE;
+use crate::FuseStorageFormat;
 
 pub const MAX_BLOCK_UNCOMPRESSED_SIZE: usize = 1024 * 1024 * 400;
 

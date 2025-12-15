@@ -20,11 +20,13 @@ use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::binary::BinaryColumn;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::timestamp_tz::TimestampTzType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FixedLengthEncoding;
+use databend_common_expression::Scalar;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::SortField;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
@@ -41,25 +43,23 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::i256;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_number_type;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::FixedLengthEncoding;
-use databend_common_expression::Scalar;
-use databend_common_expression::SortColumnDescription;
-use databend_common_expression::SortField;
 use jsonb::RawJsonb;
 
+use super::RowConverter;
+use super::Rows;
 use super::fixed_encode::fixed_encode;
 use super::fixed_encode::fixed_encode_const;
 use super::variable_encode::encoded_len;
 use super::variable_encode::var_encode;
-use super::RowConverter;
-use super::Rows;
 
 pub type VariableRows = BinaryColumn;
 
@@ -165,10 +165,12 @@ impl VariableRowConverter {
     /// Convert columns into [`BinaryColumn`] represented comparable row format.
     fn convert_columns(&self, entries: &[BlockEntry], num_rows: usize) -> BinaryColumn {
         debug_assert_eq!(entries.len(), self.fields.len());
-        debug_assert!(entries
-            .iter()
-            .zip(self.fields.iter())
-            .all(|(entry, f)| entry.len() == num_rows && entry.data_type() == f.data_type));
+        debug_assert!(
+            entries
+                .iter()
+                .zip(self.fields.iter())
+                .all(|(entry, f)| entry.len() == num_rows && entry.data_type() == f.data_type)
+        );
 
         let entries: Vec<BlockEntry> = entries
             .iter()
@@ -817,10 +819,10 @@ impl ValueVisitor for EncodeVisitor<'_> {
 #[cfg(test)]
 mod tests {
     use databend_common_base::base::OrderedFloat;
-    use databend_common_expression::types::*;
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
     use databend_common_expression::SortField;
+    use databend_common_expression::types::*;
     use jsonb::OwnedJsonb;
     use proptest::prelude::*;
     use proptest::strategy::ValueTree;

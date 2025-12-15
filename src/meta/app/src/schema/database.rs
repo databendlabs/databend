@@ -23,11 +23,11 @@ use chrono::Utc;
 use databend_common_meta_types::SeqV;
 
 use super::CreateOption;
+use crate::KeyWithTenant;
 use crate::schema::database_id::DatabaseId;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
-use crate::KeyWithTenant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseInfo {
@@ -328,9 +328,9 @@ impl ListDatabaseReq {
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::database_name_ident::DatabaseNameIdentRaw;
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
+    use crate::schema::database_name_ident::DatabaseNameIdentRaw;
 
     impl kvapi::KeyCodec for DatabaseIdToName {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {

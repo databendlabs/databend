@@ -19,12 +19,15 @@ use databend_common_ast::ast::DropViewStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowViewsStmt;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::types::DataType;
 use derive_visitor::DriveMut;
 use log::debug;
 
+use crate::BindContext;
+use crate::SelectBuilder;
+use crate::ViewRewriter;
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::AlterViewPlan;
@@ -33,9 +36,6 @@ use crate::plans::DescribeViewPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
-use crate::BindContext;
-use crate::SelectBuilder;
-use crate::ViewRewriter;
 
 impl Binder {
     #[async_backtrace::framed]

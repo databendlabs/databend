@@ -19,7 +19,13 @@ use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::i256;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FixedLengthEncoding;
+use databend_common_expression::Scalar;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::SortField;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
@@ -36,21 +42,15 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::OpaqueType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::types::i256;
 use databend_common_expression::visitor::ValueVisitor;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::FixedLengthEncoding;
-use databend_common_expression::Scalar;
-use databend_common_expression::SortColumnDescription;
-use databend_common_expression::SortField;
 
-use super::fixed_encode::fixed_encode;
-use super::fixed_encode::fixed_encode_const;
 use super::RowConverter;
 use super::Rows;
+use super::fixed_encode::fixed_encode;
+use super::fixed_encode::fixed_encode_const;
 
 pub fn choose_encode_method(fields: &[SortField]) -> Option<usize> {
     let mut total_len = 0;
@@ -174,10 +174,12 @@ impl<const N: usize> FixedRowConverter<N> {
     /// Convert columns into fixed-size row format.
     fn convert_columns(&self, entries: &[BlockEntry], num_rows: usize) -> FixedRows<N> {
         debug_assert_eq!(entries.len(), self.fields.len());
-        debug_assert!(entries
-            .iter()
-            .zip(self.fields.iter())
-            .all(|(entry, f)| entry.len() == num_rows && entry.data_type() == f.data_type));
+        debug_assert!(
+            entries
+                .iter()
+                .zip(self.fields.iter())
+                .all(|(entry, f)| entry.len() == num_rows && entry.data_type() == f.data_type)
+        );
 
         let (mut buffer, mut offsets) = self.new_empty_rows(num_rows);
         for (entry, field) in entries.iter().zip(self.fields.iter()) {

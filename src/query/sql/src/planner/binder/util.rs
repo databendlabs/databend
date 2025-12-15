@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::TableAlias;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::span::merge_span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
+use crate::Binder;
+use crate::NameResolutionContext;
+use crate::NameResolutionSuggest;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
-use crate::Binder;
-use crate::NameResolutionContext;
-use crate::NameResolutionSuggest;
 
 /// Ident name can not contain ' or "
 /// Forbidden ' or " in UserName and RoleName, to prevent Meta injection problem

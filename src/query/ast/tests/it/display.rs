@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 
 fn test_stmt_display(sql: &str) {
     let tokens = tokenize_sql(sql).unwrap();

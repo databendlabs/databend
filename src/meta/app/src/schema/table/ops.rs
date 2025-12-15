@@ -100,10 +100,10 @@ impl TableMeta {
 mod tests {
     use std::sync::Arc;
 
-    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
 
     use super::*;
 

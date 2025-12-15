@@ -22,12 +22,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::ExprContext;
+use crate::BindContext;
+use crate::IndexType;
+use crate::binder::Binder;
+use crate::binder::ColumnBinding;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::window::WindowRewriter;
-use crate::binder::Binder;
-use crate::binder::ColumnBinding;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
@@ -40,8 +42,6 @@ use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::plans::UDFCall;
 use crate::plans::VisitorMut as _;
-use crate::BindContext;
-use crate::IndexType;
 
 #[derive(Debug)]
 pub struct OrderItems {

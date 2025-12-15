@@ -14,30 +14,30 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::ast::quote::QuotedString;
+use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
+use databend_common_expression::types::StringType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::plans::ShowCreateTablePlan;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
-use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
-use databend_storages_common_table_meta::table::is_internal_opt_key;
-use databend_storages_common_table_meta::table::StreamMode;
+use databend_common_storages_stream::stream_table::StreamTable;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use databend_storages_common_table_meta::table::StreamMode;
+use databend_storages_common_table_meta::table::is_internal_opt_key;
 use itertools::Itertools;
 
 use crate::interpreters::Interpreter;

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use http::StatusCode;
-use poem::web::Json;
 use poem::IntoResponse;
+use poem::web::Json;
 use serde::Deserialize;
 use serde::Serialize;
 use sysinfo::System;

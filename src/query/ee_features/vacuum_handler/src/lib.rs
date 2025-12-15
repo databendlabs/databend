@@ -14,6 +14,6 @@
 
 pub mod vacuum_handler;
 
-pub use vacuum_handler::get_vacuum_handler;
 pub use vacuum_handler::VacuumHandler;
 pub use vacuum_handler::VacuumHandlerWrapper;
+pub use vacuum_handler::get_vacuum_handler;

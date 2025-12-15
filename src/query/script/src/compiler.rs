@@ -17,6 +17,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::vec;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -36,7 +37,6 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnaryOperator;
-use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use derive_visitor::DriveMut;

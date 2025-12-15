@@ -15,17 +15,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::base::mask_connection_info;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
-use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchema;
@@ -40,6 +40,13 @@ use http::StatusCode;
 use log::error;
 use log::info;
 use log::warn;
+use poem::EndpointExt;
+use poem::FromRequest;
+use poem::IntoResponse;
+use poem::Request;
+use poem::RequestBody;
+use poem::Response;
+use poem::Route;
 use poem::error::Error as PoemError;
 use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
@@ -49,13 +56,6 @@ use poem::post;
 use poem::put;
 use poem::web::Json;
 use poem::web::Path;
-use poem::EndpointExt;
-use poem::FromRequest;
-use poem::IntoResponse;
-use poem::Request;
-use poem::RequestBody;
-use poem::Response;
-use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 use uuid::Uuid;
@@ -67,12 +67,16 @@ use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::ResponseState;
 use crate::clusters::ClusterDiscovery;
+use crate::servers::HttpHandlerKind;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::QueryError;
-use crate::servers::http::middleware::forward_request_with_body;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
+use crate::servers::http::middleware::forward_request_with_body;
+use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::HttpQueryManager;
+use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::catalog::catalog_stats_handler;
 use crate::servers::http::v1::catalog::get_database_table_handler;
 use crate::servers::http::v1::catalog::list_database_streams_handler;
@@ -84,8 +88,8 @@ use crate::servers::http::v1::catalog::search_tables_handler;
 use crate::servers::http::v1::discovery_nodes;
 use crate::servers::http::v1::login_handler;
 use crate::servers::http::v1::logout_handler;
-use crate::servers::http::v1::query::blocks_serializer::BlocksSerializer;
 use crate::servers::http::v1::query::Progresses;
+use crate::servers::http::v1::query::blocks_serializer::BlocksSerializer;
 use crate::servers::http::v1::refresh_handler;
 use crate::servers::http::v1::roles::list_roles_handler;
 use crate::servers::http::v1::streaming_load_handler;
@@ -93,10 +97,6 @@ use crate::servers::http::v1::upload_to_stage;
 use crate::servers::http::v1::users::create_user_handler;
 use crate::servers::http::v1::users::list_users_handler;
 use crate::servers::http::v1::verify_handler;
-use crate::servers::http::v1::HttpQueryContext;
-use crate::servers::http::v1::HttpQueryManager;
-use crate::servers::http::v1::HttpSessionConf;
-use crate::servers::HttpHandlerKind;
 use crate::sessions::QueryAffect;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
@@ -616,9 +616,14 @@ pub(crate) async fn query_handler(
                     None => (0, None),
                     Some(p) => (p.page.data.num_rows(), p.next_page_no),
                 };
-                info!("Initial response for query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
-                        &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
-                    );
+                info!(
+                    "Initial response for query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
+                    &query.id,
+                    &resp.state,
+                    rows,
+                    next_page,
+                    mask_connection_info(&sql)
+                );
                 query
                     .update_expire_time(false, resp.is_data_drained())
                     .await;

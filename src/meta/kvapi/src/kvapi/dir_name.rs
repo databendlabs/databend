@@ -96,9 +96,9 @@ impl<K: Key> Key for DirName<K> {
 #[cfg(test)]
 mod tests {
 
+    use crate::kvapi::Key;
     use crate::kvapi::dir_name::DirName;
     use crate::kvapi::testing::FooKey;
-    use crate::kvapi::Key;
 
     #[test]
     fn test_dir_name_from_key() {

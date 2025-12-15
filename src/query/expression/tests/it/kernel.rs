@@ -16,8 +16,16 @@ use core::ops::Range;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FilterVisitor;
+use databend_common_expression::FromData;
+use databend_common_expression::IterationStrategy;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::block_debug::assert_block_value_eq;
-use databend_common_expression::types::number::*;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
@@ -28,22 +36,14 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::types::number::*;
 use databend_common_expression::visitor::ValueVisitor;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::DataBlock;
-use databend_common_expression::FilterVisitor;
-use databend_common_expression::FromData;
-use databend_common_expression::IterationStrategy;
-use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use goldenfile::Mint;
 
+use crate::DataTypeFilter;
 use crate::common::*;
 use crate::get_all_test_data_types;
 use crate::rand_block_for_all_types;
-use crate::DataTypeFilter;
 
 #[test]
 pub fn test_pass() {
@@ -242,9 +242,9 @@ pub fn build_range_selection(selection: &[u32], count: usize) -> Vec<Range<u32>>
 /// This test covers take.rs, take_chunks.rs, take_compact.rs, take_ranges.rs, filter.rs, concat.rs.
 #[test]
 pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()> {
-    use databend_common_expression::types::DataType;
     use databend_common_expression::Column;
     use databend_common_expression::DataBlock;
+    use databend_common_expression::types::DataType;
     use databend_common_hashtable::RowPtr;
     use itertools::Itertools;
     use rand::Rng;
@@ -360,9 +360,9 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
 
 #[test]
 pub fn test_concat_scalar() -> databend_common_exception::Result<()> {
-    use databend_common_expression::types::DataType;
     use databend_common_expression::DataBlock;
     use databend_common_expression::Scalar;
+    use databend_common_expression::types::DataType;
 
     let ty = DataType::Number(NumberDataType::UInt8);
     let scalar = Scalar::Number(NumberScalar::UInt8(1));
@@ -441,9 +441,9 @@ pub fn test_take_compact() -> databend_common_exception::Result<()> {
 /// B.slice(0, l) == B.slice(l, l) == A
 #[test]
 pub fn test_filters() -> databend_common_exception::Result<()> {
-    use databend_common_expression::types::DataType;
     use databend_common_expression::Column;
     use databend_common_expression::DataBlock;
+    use databend_common_expression::types::DataType;
     use rand::Rng;
 
     let mut rng = rand::thread_rng();

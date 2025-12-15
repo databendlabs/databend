@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
+use std::sync::atomic::AtomicI32;
 
 use databend_common_base::base::BuildInfoRef;
 use databend_common_meta_sled_store::openraft::Config;
-use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
+use databend_common_meta_types::raft_types::NodeId;
 use log::info;
-use tokio::sync::watch;
 use tokio::sync::Mutex;
+use tokio::sync::watch;
 use watcher::dispatch::Dispatcher;
 
 use crate::meta_node::meta_node::MetaRaft;
+use crate::meta_service::MetaNode;
 use crate::meta_service::runtime_config::RuntimeConfig;
 use crate::meta_service::watcher::DispatcherHandle;
-use crate::meta_service::MetaNode;
 use crate::network::NetworkFactory;
 use crate::store::RaftStore;
 

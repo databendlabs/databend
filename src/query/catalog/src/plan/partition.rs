@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::collections::hash_map::DefaultHasher;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::hash::Hash;

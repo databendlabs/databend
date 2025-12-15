@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::types::map::KvPair;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::F64;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::UInt8Type;
-use databend_common_expression::types::F64;
+use databend_common_expression::types::map::KvPair;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionRegistry;
 use h3o::CellIndex;
 use h3o::DirectedEdgeIndex;
 use h3o::LatLng;

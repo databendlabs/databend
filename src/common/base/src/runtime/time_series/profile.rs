@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::mem;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 

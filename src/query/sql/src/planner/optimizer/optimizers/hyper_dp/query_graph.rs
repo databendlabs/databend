@@ -17,9 +17,9 @@ use std::collections::HashSet;
 
 use databend_common_exception::Result;
 
-use crate::optimizer::optimizers::hyper_dp::util::is_subset;
 use crate::IndexType;
 use crate::ScalarExpr;
+use crate::optimizer::optimizers::hyper_dp::util::is_subset;
 
 #[derive(Clone, Debug)]
 struct NeighborInfo {

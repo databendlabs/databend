@@ -20,11 +20,11 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
-use databend_common_meta_types::AppliedState;
 use log::debug;
 use log::info;
 use map_api::mvcc::ScopedGet;
@@ -34,12 +34,12 @@ use state_machine_api::StateMachineApi;
 use state_machine_api::UserKey;
 use tokio::sync::Semaphore;
 
-use crate::applier::applier_data::ApplierData;
 use crate::applier::Applier;
+use crate::applier::applier_data::ApplierData;
 use crate::leveled_store::immutable_data::ImmutableData;
+use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::leveled_map::compactor::Compactor;
 use crate::leveled_store::leveled_map::leveled_map_data::LeveledMapData;
-use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::snapshot::StateMachineSnapshot;
 use crate::leveled_store::view::StateMachineView;
 use crate::sm_v003::compactor_acquirer::CompactorAcquirer;

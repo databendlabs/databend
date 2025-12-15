@@ -20,17 +20,17 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::broadcast;
 use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::tokio::task::JoinHandle;
-use futures::future::Either;
 use futures::FutureExt;
+use futures::future::Either;
 use log::error;
 use log::info;
+use poem::Endpoint;
 use poem::listener::Acceptor;
 use poem::listener::AcceptorExt;
 use poem::listener::IntoTlsConfigStream;
 use poem::listener::Listener;
 use poem::listener::OpensslTlsConfig;
 use poem::listener::TcpListener;
-use poem::Endpoint;
 
 use crate::HttpError;
 

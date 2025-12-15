@@ -20,11 +20,11 @@ use std::sync::Arc;
 
 use super::view::CheckUTF8;
 use crate::binary::BinaryColumn;
-use crate::binview::iterator::BinaryViewBuilderIter;
-use crate::binview::view::validate_utf8_only;
 use crate::binview::BinaryViewColumnGeneric;
 use crate::binview::View;
 use crate::binview::ViewType;
+use crate::binview::iterator::BinaryViewBuilderIter;
+use crate::binview::view::validate_utf8_only;
 use crate::buffer::Buffer;
 use crate::error::Result;
 use crate::types::NativeType;

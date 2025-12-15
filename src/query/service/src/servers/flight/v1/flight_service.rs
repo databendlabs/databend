@@ -14,7 +14,6 @@
 
 use std::pin::Pin;
 
-use arrow_flight::flight_service_server::FlightService;
 use arrow_flight::Action;
 use arrow_flight::ActionType;
 use arrow_flight::Criteria;
@@ -29,6 +28,7 @@ use arrow_flight::PutResult;
 use arrow_flight::Result as FlightResult;
 use arrow_flight::SchemaResult;
 use arrow_flight::Ticket;
+use arrow_flight::flight_service_server::FlightService;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use fastrace::func_path;
@@ -41,8 +41,8 @@ use tonic::Status;
 use tonic::Streaming;
 
 use crate::servers::flight::request_builder::RequestGetter;
-use crate::servers::flight::v1::actions::flight_actions;
 use crate::servers::flight::v1::actions::FlightActions;
+use crate::servers::flight::v1::actions::flight_actions;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 
 pub type FlightStream<T> =

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
@@ -24,17 +25,16 @@ use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::Span;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::display::scalar_ref_to_string;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
+use databend_common_expression::display::scalar_ref_to_string;
+use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_storages_basic::ResultCacheMetaManager;
@@ -42,11 +42,15 @@ use databend_common_storages_basic::ResultScan;
 use databend_common_users::UserApiProvider;
 use derive_visitor::DriveMut;
 
-use crate::binder::scalar::ScalarBinder;
-use crate::binder::table_args::bind_table_args;
+use crate::BindContext;
+use crate::Planner;
+use crate::ScalarExpr;
+use crate::UDFArgVisitor;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
+use crate::binder::scalar::ScalarBinder;
+use crate::binder::table_args::bind_table_args;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::BoundColumnRef;
@@ -56,10 +60,6 @@ use crate::plans::FunctionCall;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
-use crate::BindContext;
-use crate::Planner;
-use crate::ScalarExpr;
-use crate::UDFArgVisitor;
 
 impl Binder {
     /// Bind a table function.

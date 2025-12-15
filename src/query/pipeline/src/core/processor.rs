@@ -23,8 +23,8 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use fastrace::prelude::*;
-use futures::future::BoxFuture;
 use futures::FutureExt;
+use futures::future::BoxFuture;
 use petgraph::graph::node_index;
 use petgraph::prelude::NodeIndex;
 

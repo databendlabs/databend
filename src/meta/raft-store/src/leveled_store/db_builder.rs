@@ -28,9 +28,9 @@ use rotbl::v001::RotblMeta;
 use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::leveled_map::LeveledMap;
-use crate::sm_v003::open_snapshot::OpenSnapshot;
 #[cfg(doc)]
 use crate::sm_v003::SnapshotStoreV004;
+use crate::sm_v003::open_snapshot::OpenSnapshot;
 use crate::snapshot_config::SnapshotConfig;
 use crate::state_machine::MetaSnapshotId;
 

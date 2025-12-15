@@ -24,15 +24,15 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
-use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
+use databend_common_hashtable::StringRawEntry;
 
+use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
-use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
 
 impl<const SKIP_DUPLICATES: bool> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
     pub fn new(

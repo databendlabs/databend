@@ -19,6 +19,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
+use crate::IndexType;
+use crate::ScalarExpr;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
@@ -28,8 +30,6 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-use crate::IndexType;
-use crate::ScalarExpr;
 
 pub struct RuleSemiToInnerJoin {
     id: RuleID,

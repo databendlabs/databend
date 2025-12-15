@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use indexmap::IndexMap;
 
+use crate::ColumnBinding;
 use crate::binder::BindContext;
 use crate::binder::Binder;
 use crate::binder::CteContext;
@@ -33,7 +34,6 @@ use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
 use crate::plans::RelOperator;
 use crate::plans::Sequence;
-use crate::ColumnBinding;
 
 impl Binder {
     pub fn init_cte(&mut self, bind_context: &mut BindContext, with: &Option<With>) -> Result<()> {
@@ -124,7 +124,11 @@ impl Binder {
                 "The CTE '{}' has {} columns ({:?}), but {} aliases ({:?}) were provided. Ensure the number of aliases matches the number of columns in the CTE.",
                 table_name,
                 cte_bind_context.columns.len(),
-                cte_bind_context.columns.iter().map(|c| &c.column_name).collect::<Vec<_>>(),
+                cte_bind_context
+                    .columns
+                    .iter()
+                    .map(|c| &c.column_name)
+                    .collect::<Vec<_>>(),
                 column_alias.len(),
                 column_alias,
             )));

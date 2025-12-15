@@ -33,10 +33,10 @@ use log::debug;
 use log::error;
 use log::info;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::common::validate_grant_object_exists;
 use crate::interpreters::util::check_system_history;
 use crate::interpreters::util::check_system_history_stage;
-use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -103,7 +103,7 @@ impl GrantPrivilegeInterpreter {
                     db_id: *db_id,
                     table_id: *table_id,
                 })
-            },
+            }
             GrantObject::DatabaseById(_, db_id) => {
                 let catalog_name = catalog_name.unwrap();
                 let catalog = self.ctx.get_catalog(&catalog_name).await?;
@@ -112,7 +112,7 @@ impl GrantPrivilegeInterpreter {
                     catalog_name,
                     db_id: *db_id,
                 })
-            },
+            }
             GrantObject::Stage(name) => {
                 let config = GlobalConfig::instance();
                 let sensitive_system_stage = config.log.history.stage_name.clone();
@@ -120,22 +120,18 @@ impl GrantPrivilegeInterpreter {
                 Ok(OwnershipObject::Stage {
                     name: name.to_string(),
                 })
-            },
+            }
             GrantObject::UDF(name) => Ok(OwnershipObject::UDF {
                 name: name.to_string(),
             }),
-            GrantObject::Warehouse(id) => Ok(OwnershipObject::Warehouse {
-                id: id.to_string(),
-            }),
+            GrantObject::Warehouse(id) => Ok(OwnershipObject::Warehouse { id: id.to_string() }),
             GrantObject::Connection(name) => Ok(OwnershipObject::Connection {
                 name: name.to_string(),
             }),
             GrantObject::Sequence(name) => Ok(OwnershipObject::Sequence {
                 name: name.to_string(),
             }),
-            GrantObject::Procedure(p) => Ok(OwnershipObject::Procedure {
-                procedure_id: *p,
-            }),
+            GrantObject::Procedure(p) => Ok(OwnershipObject::Procedure { procedure_id: *p }),
             GrantObject::MaskingPolicy(policy_id) => Ok(OwnershipObject::MaskingPolicy {
                 policy_id: *policy_id,
             }),
@@ -295,7 +291,7 @@ pub fn validate_grant_privileges(
         && privileges.iter().any(is_create_ownership_object_privilege)
     {
         return Err(ErrorCode::IllegalGrant(
-            "CREATE-like privileges cannot be granted directly to USER; please grant them to a role"
+            "CREATE-like privileges cannot be granted directly to USER; please grant them to a role",
         ));
     }
     Ok(())

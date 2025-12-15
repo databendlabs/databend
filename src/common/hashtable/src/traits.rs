@@ -20,8 +20,8 @@ use std::num::NonZeroU64;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
-use ethnum::i256;
 use ethnum::U256;
+use ethnum::i256;
 
 use crate::RowPtr;
 

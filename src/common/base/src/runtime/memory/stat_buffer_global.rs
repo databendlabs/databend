@@ -14,15 +14,15 @@
 
 use std::alloc::AllocError;
 use std::ptr::addr_of_mut;
-use std::sync::atomic::Ordering;
 #[cfg(test)]
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
-use crate::runtime::memory::mem_stat::OutOfLimit;
-use crate::runtime::memory::MemStat;
+use crate::runtime::GLOBAL_MEM_STAT;
 use crate::runtime::LimitMemGuard;
 use crate::runtime::ThreadTracker;
-use crate::runtime::GLOBAL_MEM_STAT;
+use crate::runtime::memory::MemStat;
+use crate::runtime::memory::mem_stat::OutOfLimit;
 
 #[thread_local]
 static mut GLOBAL_STAT_BUFFER: GlobalStatBuffer = GlobalStatBuffer::empty(&GLOBAL_MEM_STAT);
@@ -209,10 +209,10 @@ mod tests {
 
     use databend_common_exception::Result;
 
-    use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
+    use crate::runtime::GLOBAL_QUERIES_MANAGER;
     use crate::runtime::memory::GlobalStatBuffer;
     use crate::runtime::memory::MemStat;
-    use crate::runtime::GLOBAL_QUERIES_MANAGER;
+    use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
 
     #[test]
     fn test_alloc() -> Result<()> {

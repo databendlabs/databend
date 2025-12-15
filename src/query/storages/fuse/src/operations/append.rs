@@ -27,22 +27,22 @@ use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::create_dummy_item;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
-use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::FuseTable;
 use crate::io::StreamBlockProperties;
 use crate::operations::TransformBlockBuilder;
 use crate::operations::TransformBlockWriter;
 use crate::operations::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
-use crate::FuseTable;
 
 impl FuseTable {
     pub fn do_append_data(

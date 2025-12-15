@@ -29,8 +29,8 @@ use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_pipeline::sinks::Sink;
 use databend_common_pipeline::sinks::Sinker;
 
-use crate::servers::flight::v1::exchange::serde::ExchangeSerializeMeta;
 use crate::servers::flight::FlightSender;
+use crate::servers::flight::v1::exchange::serde::ExchangeSerializeMeta;
 
 pub struct ExchangeWriterSink {
     flight_sender: FlightSender,

@@ -16,8 +16,8 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_tracing::set_panic_hook;
 use databend_common_version::BUILD_INFO;
-use databend_query::clusters::ClusterDiscovery;
 use databend_query::GlobalServices;
+use databend_query::clusters::ClusterDiscovery;
 use log::info;
 
 use crate::test_kits::mock_services::MockServices;

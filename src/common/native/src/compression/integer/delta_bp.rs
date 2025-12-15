@@ -20,10 +20,10 @@ use bitpacking::BitPacker4x;
 use byteorder::ReadBytesExt;
 use databend_common_column::buffer::Buffer;
 
-use super::compress_sample_ratio;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
+use super::compress_sample_ratio;
 use crate::compression::Compression;
 use crate::compression::SAMPLE_COUNT;
 use crate::compression::SAMPLE_SIZE;

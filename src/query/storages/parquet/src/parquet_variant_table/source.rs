@@ -26,12 +26,12 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
@@ -43,20 +43,20 @@ use databend_storages_common_stage::add_internal_columns;
 use databend_storages_common_stage::read_record_batch_to_variant_column;
 use databend_storages_common_stage::record_batch_to_variant_block;
 use jiff::tz::TimeZone;
+use parquet::arrow::ProjectionMask;
 use parquet::arrow::arrow_reader::ArrowReaderOptions;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::parquet_to_arrow_schema;
-use parquet::arrow::ProjectionMask;
 
-use crate::meta::read_metadata_async_cached;
-use crate::parquet_reader::cached_range_full_read;
-use crate::parquet_reader::InMemoryRowGroup;
-use crate::read_settings::ReadSettings;
-use crate::schema::arrow_to_table_schema;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
+use crate::meta::read_metadata_async_cached;
+use crate::parquet_reader::InMemoryRowGroup;
+use crate::parquet_reader::cached_range_full_read;
+use crate::read_settings::ReadSettings;
+use crate::schema::arrow_to_table_schema;
 
 enum State {
     Init,

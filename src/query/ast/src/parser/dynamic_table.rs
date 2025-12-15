@@ -23,10 +23,11 @@ use crate::ast::RefreshMode;
 use crate::ast::Statement;
 use crate::ast::TargetLag;
 use crate::ast::WarehouseOptions;
+use crate::parser::Input;
+use crate::parser::common::IResult;
 use crate::parser::common::comma_separated_list1;
 use crate::parser::common::dot_separated_idents_1_to_3;
 use crate::parser::common::map_res;
-use crate::parser::common::IResult;
 use crate::parser::common::*;
 use crate::parser::expr::expr;
 use crate::parser::expr::literal_u64;
@@ -37,7 +38,6 @@ use crate::parser::statement::parse_create_option;
 use crate::parser::statement::table_option;
 use crate::parser::statement::task_warehouse_option;
 use crate::parser::token::TokenKind::*;
-use crate::parser::Input;
 
 pub fn dynamic_table(i: Input) -> IResult<Statement> {
     rule!(

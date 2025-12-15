@@ -14,17 +14,17 @@
 
 use std::ops::Deref;
 use std::pin::pin;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::LazyLock;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use arrow_flight::FlightData;
 use arrow_flight::SchemaAsIpc;
-use arrow_ipc::writer;
 use arrow_ipc::MessageBuilder;
 use arrow_ipc::MessageHeader;
 use arrow_ipc::MetadataVersion;
+use arrow_ipc::writer;
 use arrow_schema::Schema as ArrowSchema;
 use async_stream::stream;
 use bytes::Bytes;
@@ -33,10 +33,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
-use databend_common_sql::get_query_kind;
-use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
+use databend_common_sql::get_query_kind;
+use databend_common_sql::plans::Plan;
 use databend_common_storages_fuse::TableContext;
 use futures::Stream;
 use futures::StreamExt;
@@ -45,9 +45,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use tonic::Status;
 
-use super::status;
 use super::DoGetStream;
 use super::FlightSqlServiceImpl;
+use super::status;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;

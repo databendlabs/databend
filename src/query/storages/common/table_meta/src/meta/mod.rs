@@ -29,31 +29,31 @@ mod versions;
 pub use compression::Compression;
 // table meta types of current version
 pub use current::*;
-pub use format::decode;
-pub(crate) use format::load_json;
 pub use format::MetaCompression;
 pub use format::MetaEncoding;
 pub use format::NUM_BLOCK_ID_BITS;
+pub use format::decode;
+pub(crate) use format::load_json;
 pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only
 pub(crate) use testing::*;
+pub use utils::SnapshotTimestampValidationContext;
+pub use utils::TEMP_TABLE_STORAGE_PREFIX;
+pub use utils::TableMetaTimestamps;
+pub use utils::VACUUM2_OBJECT_KEY_PREFIX;
 pub use utils::parse_storage_prefix;
 pub use utils::trim_object_prefix;
 pub use utils::try_extract_uuid_str_from_path;
 pub use utils::uuid_from_date_time;
-pub use utils::SnapshotTimestampValidationContext;
-pub use utils::TableMetaTimestamps;
-pub use utils::TEMP_TABLE_STORAGE_PREFIX;
-pub use utils::VACUUM2_OBJECT_KEY_PREFIX;
 pub(crate) use utils::*;
 pub use v0::ColumnMeta as ColumnMetaV0;
-pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;
 pub use versions::SegmentStatisticsVersion;
 pub use versions::SnapshotVersion;
 pub use versions::TableSnapshotStatisticsVersion;
 pub use versions::Versioned;
+pub use versions::testify_version;
 
 // - export legacy versioned table meta types for testing purposes
 //   currently, only used by crate `test_kits`

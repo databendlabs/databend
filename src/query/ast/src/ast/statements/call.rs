@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_string_list;
 use crate::ast::Identifier;
+use crate::ast::write_comma_separated_string_list;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CallStmt {

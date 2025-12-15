@@ -18,13 +18,13 @@ use std::rc::Rc;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 
+use crate::optimizer::optimizers::CascadesOptimizer;
 use crate::optimizer::optimizers::cascades::tasks::ApplyRuleTask;
 use crate::optimizer::optimizers::cascades::tasks::ExploreExprTask;
 use crate::optimizer::optimizers::cascades::tasks::ExploreGroupTask;
 use crate::optimizer::optimizers::cascades::tasks::OptimizeExprTask;
 use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupTask;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
-use crate::optimizer::optimizers::CascadesOptimizer;
 
 #[derive(Debug)]
 pub struct SharedCounter {

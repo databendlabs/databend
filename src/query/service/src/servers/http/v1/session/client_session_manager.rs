@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -30,8 +30,8 @@ use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
-use databend_storages_common_session::drop_all_temp_tables;
 use databend_storages_common_session::TempTblMgrRef;
+use databend_storages_common_session::drop_all_temp_tables;
 use log::error;
 use log::info;
 use log::warn;
@@ -41,10 +41,10 @@ use sha2::Digest;
 use sha2::Sha256;
 use tokio::time::Instant;
 
+use crate::servers::http::v1::SessionClaim;
 use crate::servers::http::v1::session::consts::TOMBSTONE_TTL;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_META;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_QUERY;
-use crate::servers::http::v1::SessionClaim;
 use crate::sessions::Session;
 use crate::sessions::SessionPrivilegeManager;
 

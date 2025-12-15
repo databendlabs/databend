@@ -22,6 +22,7 @@ use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_settings::Settings;
 use jiff::tz::TimeZone;
 
+use crate::ClickhouseFormatType;
 use crate::output_format::CSVOutputFormat;
 use crate::output_format::CSVWithNamesAndTypesOutputFormat;
 use crate::output_format::CSVWithNamesOutputFormat;
@@ -32,7 +33,6 @@ use crate::output_format::ParquetOutputFormat;
 use crate::output_format::TSVOutputFormat;
 use crate::output_format::TSVWithNamesAndTypesOutputFormat;
 use crate::output_format::TSVWithNamesOutputFormat;
-use crate::ClickhouseFormatType;
 
 pub trait FileFormatTypeExt {
     fn get_content_type(&self) -> String;

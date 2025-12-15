@@ -70,8 +70,8 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::principal::stage_file_ident::StageFileIdent;
     use crate::principal::StageIdent;
+    use crate::principal::stage_file_ident::StageFileIdent;
     use crate::tenant::Tenant;
 
     #[test]

@@ -19,8 +19,8 @@ use std::fmt::Formatter;
 
 use display_more::DisplayOptionExt;
 
-use crate::protobuf as pb;
 use crate::SeqV;
+use crate::protobuf as pb;
 
 impl pb::TxnOpResponse {
     /// Create a new `TxnOpResponse` from a `Response` variant.

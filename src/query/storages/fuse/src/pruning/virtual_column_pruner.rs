@@ -62,7 +62,8 @@ impl VirtualColumnPruner {
             {
                 // If the number of rows is not same, the virtual column data has been corrupted, ignore the data.
                 if virtual_column_meta.num_values != row_count {
-                    warn!("Virtual column row count mismatch, location: {}, block rows: {}, virtual column rows: {}",
+                    warn!(
+                        "Virtual column row count mismatch, location: {}, block rows: {}, virtual column rows: {}",
                         virtual_block_meta.virtual_location.0,
                         row_count,
                         virtual_column_meta.num_values

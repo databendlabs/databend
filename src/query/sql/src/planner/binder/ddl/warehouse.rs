@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 use databend_common_ast::ast::AddWarehouseClusterStmt;
 use databend_common_ast::ast::AssignWarehouseNodesStmt;
@@ -31,6 +31,7 @@ use databend_common_ast::ast::UnassignWarehouseNodesStmt;
 use databend_common_ast::ast::UseWarehouseStmt;
 use databend_common_exception::Result;
 
+use crate::Binder;
 use crate::plans::AddWarehouseClusterPlan;
 use crate::plans::AssignWarehouseNodesPlan;
 use crate::plans::CreateWarehousePlan;
@@ -44,7 +45,6 @@ use crate::plans::ResumeWarehousePlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::UnassignWarehouseNodesPlan;
 use crate::plans::UseWarehousePlan;
-use crate::Binder;
 
 impl Binder {
     pub(in crate::planner::binder) fn bind_show_online_nodes(

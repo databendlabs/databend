@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use base64::engine::general_purpose::URL_SAFE;
 use base64::Engine;
-use serde::de;
+use base64::engine::general_purpose::URL_SAFE;
 use serde::Serialize;
+use serde::de;
 
 pub fn encode_json_header<T>(v: &T) -> String
 where T: ?Sized + Serialize {

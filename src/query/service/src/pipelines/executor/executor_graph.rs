@@ -12,23 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::Arc;
+use std::sync::PoisonError;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
-use std::sync::PoisonError;
 use std::time::SystemTime;
 
 use databend_common_base::base::WatchNotify;
-use databend_common_base::runtime::error_info::NodeErrorType;
-use databend_common_base::runtime::profile::Profile;
-use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
@@ -36,14 +33,12 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfiles;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::error_info::NodeErrorType;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use databend_common_pipeline::core::port::connect;
-use databend_common_pipeline::core::port_trigger::DirectedEdge;
-use databend_common_pipeline::core::port_trigger::UpdateList;
-use databend_common_pipeline::core::port_trigger::UpdateTrigger;
-use databend_common_pipeline::core::profile::PlanScope;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::InputPort;
@@ -51,6 +46,11 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::port::connect;
+use databend_common_pipeline::core::port_trigger::DirectedEdge;
+use databend_common_pipeline::core::port_trigger::UpdateList;
+use databend_common_pipeline::core::port_trigger::UpdateTrigger;
+use databend_common_pipeline::core::profile::PlanScope;
 use databend_common_storages_system::QueryExecutionStatsQueue;
 use fastrace::prelude::*;
 use log::debug;
@@ -58,14 +58,13 @@ use log::trace;
 use log::warn;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
+use petgraph::Direction;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
-use petgraph::Direction;
 
-use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::ProcessorAsyncTask;
@@ -74,6 +73,7 @@ use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::QueryExecutorTasksQueue;
 use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 
 enum State {
     Idle,

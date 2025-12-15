@@ -22,6 +22,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -47,10 +48,9 @@ use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
-use databend_common_ast::Span;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
@@ -63,25 +63,6 @@ use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::cast_scalar;
-use databend_common_expression::display::display_tuple_field_name;
-use databend_common_expression::expr;
-use databend_common_expression::infer_schema_type;
-use databend_common_expression::shrink_scalar;
-use databend_common_expression::type_check;
-use databend_common_expression::type_check::check_number;
-use databend_common_expression::type_check::common_super_type;
-use databend_common_expression::type_check::convert_escape_pattern;
-use databend_common_expression::types::decimal::DecimalScalar;
-use databend_common_expression::types::decimal::DecimalSize;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::vector::VectorDataType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::Decimal;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::F32;
-use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -94,13 +75,30 @@ use databend_common_expression::Expr as EExpr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::RawExpr;
-use databend_common_expression::Scalar;
-use databend_common_expression::TableDataType;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
+use databend_common_expression::Scalar;
+use databend_common_expression::TableDataType;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
-use databend_common_functions::is_builtin_function;
+use databend_common_expression::cast_scalar;
+use databend_common_expression::display::display_tuple_field_name;
+use databend_common_expression::expr;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::shrink_scalar;
+use databend_common_expression::type_check;
+use databend_common_expression::type_check::check_number;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::type_check::convert_escape_pattern;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::Decimal;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::decimal::DecimalScalar;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::i256;
+use databend_common_expression::types::vector::VectorDataType;
+use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
@@ -108,6 +106,8 @@ use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::is_builtin_function;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::LambdaUDF;
@@ -118,11 +118,11 @@ use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::Object;
@@ -132,28 +132,36 @@ use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
 use derive_visitor::VisitorMut;
 use itertools::Itertools;
-use jsonb::keypath::parse_key_paths;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
+use jsonb::keypath::parse_key_paths;
 use serde_json::json;
 use serde_json::to_string;
 use simsearch::SimSearch;
-use tantivy_query_grammar::parse_query_lenient;
 use tantivy_query_grammar::UserInputAst;
 use tantivy_query_grammar::UserInputLeaf;
+use tantivy_query_grammar::parse_query_lenient;
 use unicase::Ascii;
 
 use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
+use crate::BaseTableColumn;
+use crate::BindContext;
+use crate::ColumnBinding;
+use crate::ColumnEntry;
+use crate::DefaultExprBinder;
+use crate::IndexType;
+use crate::MetadataRef;
+use crate::UDFArgVisitor;
+use crate::binder::Binder;
+use crate::binder::ExprContext;
+use crate::binder::InternalColumnBinding;
+use crate::binder::NameResolutionResult;
 use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
 use crate::binder::resolve_stage_location;
 use crate::binder::resolve_stage_locations;
 use crate::binder::wrap_cast;
-use crate::binder::Binder;
-use crate::binder::ExprContext;
-use crate::binder::InternalColumnBinding;
-use crate::binder::NameResolutionResult;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::parse_lambda_expr;
@@ -196,14 +204,6 @@ use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
-use crate::BaseTableColumn;
-use crate::BindContext;
-use crate::ColumnBinding;
-use crate::ColumnEntry;
-use crate::DefaultExprBinder;
-use crate::IndexType;
-use crate::MetadataRef;
-use crate::UDFArgVisitor;
 
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
@@ -1331,7 +1331,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "Hole or Placeholder expression is impossible in trivial query".to_string(),
                 )
-                .set_span(*span))
+                .set_span(*span));
             }
             Expr::StageLocation { span, location } => {
                 self.resolve_stage_location(*span, location)?
@@ -3663,7 +3663,7 @@ impl<'a> TypeChecker<'a> {
             _ => {
                 return Err(ErrorCode::Internal(
                     "Only support resolve datesub, date_sub, date_diff, date_add",
-                ))
+                ));
             }
         };
         let mut args = vec![];
@@ -4791,38 +4791,44 @@ impl<'a> TypeChecker<'a> {
         let uni_case_func_name = Ascii::new(func_name);
         if Self::vector_functions().contains(&uni_case_func_name) {
             match args {
-                [ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    column:
-                        ColumnBinding {
-                            table_index,
-                            database_name,
-                            table_name,
-                            column_name,
-                            data_type,
-                            ..
-                        },
-                    ..
-                }), ScalarExpr::CastExpr(CastExpr {
-                    argument,
-                    target_type,
-                    ..
-                })]
-                | [ScalarExpr::CastExpr(CastExpr {
-                    argument,
-                    target_type,
-                    ..
-                }), ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    column:
-                        ColumnBinding {
-                            table_index,
-                            database_name,
-                            table_name,
-                            column_name,
-                            data_type,
-                            ..
-                        },
-                    ..
-                })] => {
+                [
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        column:
+                            ColumnBinding {
+                                table_index,
+                                database_name,
+                                table_name,
+                                column_name,
+                                data_type,
+                                ..
+                            },
+                        ..
+                    }),
+                    ScalarExpr::CastExpr(CastExpr {
+                        argument,
+                        target_type,
+                        ..
+                    }),
+                ]
+                | [
+                    ScalarExpr::CastExpr(CastExpr {
+                        argument,
+                        target_type,
+                        ..
+                    }),
+                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        column:
+                            ColumnBinding {
+                                table_index,
+                                database_name,
+                                table_name,
+                                column_name,
+                                data_type,
+                                ..
+                            },
+                        ..
+                    }),
+                ] => {
                     let col_data_type = data_type.remove_nullable();
                     let target_type = target_type.remove_nullable();
                     if table_index.is_some()

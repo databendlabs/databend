@@ -20,14 +20,12 @@ use ahash::AHashMap;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::Projection;
+use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
@@ -35,17 +33,19 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::MutableBitmap;
+use databend_common_expression::types::UInt64Type;
 use databend_common_metrics::storage::*;
+use databend_common_sql::StreamContext;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::OnConflictField;
-use databend_common_sql::StreamContext;
 use databend_storages_common_cache::BlockMetaCache;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterImpl;
-use databend_storages_common_index::BloomIndex;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
@@ -56,13 +56,14 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 
-use crate::io::read::bloom::block_filter_reader::BloomBlockFilterReader;
+use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
 use crate::io::BlockWriter;
 use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::WriteSettings;
+use crate::io::read::bloom::block_filter_reader::BloomBlockFilterReader;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
@@ -73,9 +74,8 @@ use crate::operations::read_block;
 use crate::operations::replace_into::meta::DeletionByColumn;
 use crate::operations::replace_into::meta::ReplaceIntoOperation;
 use crate::operations::replace_into::meta::UniqueKeyDigest;
-use crate::operations::replace_into::mutator::row_hash_of_columns;
 use crate::operations::replace_into::mutator::DeletionAccumulator;
-use crate::FuseTable;
+use crate::operations::replace_into::mutator::row_hash_of_columns;
 
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
@@ -788,11 +788,11 @@ impl AggregationContext {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::types::NumberScalar;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
 
     use super::*;
 

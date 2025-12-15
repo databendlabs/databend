@@ -21,12 +21,11 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::runtime::metrics::register_counter_family;
-use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::metrics::FamilyCounter;
+use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_exception::ErrorCode;
-use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::StorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig;
@@ -44,8 +43,11 @@ use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
+use databend_common_meta_app::storage::set_s3_storage_class;
 use databend_enterprise_storage_encryption::get_storage_encryption_handler;
 use log::warn;
+use opendal::Builder;
+use opendal::Operator;
 use opendal::layers::AsyncBacktraceLayer;
 use opendal::layers::ConcurrentLimitLayer;
 use opendal::layers::FastraceLayer;
@@ -57,15 +59,13 @@ use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
-use opendal::Builder;
-use opendal::Operator;
 
+use crate::StorageConfig;
+use crate::StorageHttpClient;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
 use crate::runtime_layer::RuntimeLayer;
-use crate::StorageConfig;
-use crate::StorageHttpClient;
 
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));

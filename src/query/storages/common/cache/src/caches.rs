@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
 
+use crate::CacheAccessor;
+use crate::InMemoryLruCache;
 pub use crate::cache_items::*;
 use crate::manager::CacheManager;
 use crate::providers::HybridCache;
-use crate::CacheAccessor;
-use crate::InMemoryLruCache;
 
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;

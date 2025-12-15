@@ -26,12 +26,12 @@ use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::RawEntry;
 use databend_common_hashtable::RowPtr;
 
+use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
-use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 
 impl<T: HashtableKeyable + FixedKey, const SKIP_DUPLICATES: bool>
     FixedKeyHashJoinHashTable<T, SKIP_DUPLICATES>

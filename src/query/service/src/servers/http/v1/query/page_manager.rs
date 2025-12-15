@@ -17,12 +17,12 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use super::Wait;
 use super::blocks_serializer::BlocksSerializer;
 use super::http_query::PaginationConf;
-use super::sized_spsc::sized_spsc;
 use super::sized_spsc::SizedChannelReceiver;
 use super::sized_spsc::SizedChannelSender;
-use super::Wait;
+use super::sized_spsc::sized_spsc;
 use crate::spillers::LiteSpiller;
 
 #[derive(Clone)]

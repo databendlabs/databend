@@ -24,13 +24,13 @@ use databend_common_ast::ast::InsertStmt;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_raw_insert_stmt;
 use databend_common_ast::parser::parse_raw_replace_stmt;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::token::Token;
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::token::Tokenizer;
-use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::session_type::SessionType;
@@ -44,15 +44,15 @@ use parking_lot::RwLock;
 
 use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
-use crate::planner::QueryExecutor;
-use crate::plans::Plan;
 use crate::Binder;
 use crate::CountSetOps;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::VariableNormalizer;
+use crate::optimizer::OptimizerContext;
+use crate::optimizer::optimize;
+use crate::planner::QueryExecutor;
+use crate::plans::Plan;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 

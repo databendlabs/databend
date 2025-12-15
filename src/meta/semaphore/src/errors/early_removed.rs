@@ -28,7 +28,9 @@ use crate::storage::PermitKey;
 /// This is typically a transient condition that can be resolved by retrying
 /// the acquisition with a fresh permit entry.
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("EarlyRemoved: Semaphore PermitEntry is removed before being acquired: key:{permit_key} entry:{permit_entry}")]
+#[error(
+    "EarlyRemoved: Semaphore PermitEntry is removed before being acquired: key:{permit_key} entry:{permit_entry}"
+)]
 pub struct EarlyRemoved {
     permit_key: PermitKey,
     permit_entry: PermitEntry,

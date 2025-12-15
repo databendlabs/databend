@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Config;
+use crate::StorageConfig;
 use crate::config::AzblobStorageConfig;
 use crate::config::CosStorageConfig;
 use crate::config::FsStorageConfig;
@@ -24,8 +26,6 @@ use crate::config::QueryConfig;
 use crate::config::S3StorageConfig;
 use crate::config::SpillConfig;
 use crate::config::WebhdfsStorageConfig;
-use crate::Config;
-use crate::StorageConfig;
 
 fn mask_sensitive_field(field: &str) -> String {
     if field.is_empty() {

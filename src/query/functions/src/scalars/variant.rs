@@ -20,20 +20,21 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use databend_common_column::types::months_days_micros;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Domain;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::Value;
 use databend_common_expression::display::scalar_ref_to_string;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::clamp_date;
-use databend_common_expression::types::date::string_to_date;
-use databend_common_expression::types::interval::string_to_interval;
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::types::nullable::NullableDomain;
-use databend_common_expression::types::number::*;
-use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::timestamp::clamp_timestamp;
-use databend_common_expression::types::timestamp::string_to_timestamp;
-use databend_common_expression::types::variant::cast_scalar_to_variant;
-use databend_common_expression::types::variant::cast_scalars_to_variants;
+use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BinaryType;
@@ -51,36 +52,35 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
-use databend_common_expression::types::ALL_NUMERICS_TYPES;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::date::clamp_date;
+use databend_common_expression::types::date::string_to_date;
+use databend_common_expression::types::interval::string_to_interval;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::timestamp::clamp_timestamp;
+use databend_common_expression::types::timestamp::string_to_timestamp;
+use databend_common_expression::types::variant::cast_scalar_to_variant;
+use databend_common_expression::types::variant::cast_scalars_to_variants;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Domain;
-use databend_common_expression::EvalContext;
-use databend_common_expression::Function;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionEval;
-use databend_common_expression::FunctionFactory;
-use databend_common_expression::FunctionRegistry;
-use databend_common_expression::FunctionSignature;
-use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
-use databend_common_expression::Value;
 use databend_common_io::Interval;
+use jiff::Unit;
 use jiff::civil::date;
 use jiff::tz::TimeZone;
-use jiff::Unit;
+use jsonb::OwnedJsonb;
+use jsonb::RawJsonb;
+use jsonb::Value as JsonbValue;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::keypath::parse_key_paths;
 use jsonb::parse_owned_jsonb;
 use jsonb::parse_owned_jsonb_with_buf;
-use jsonb::OwnedJsonb;
-use jsonb::RawJsonb;
-use jsonb::Value as JsonbValue;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_string", &["json_to_string"]);
@@ -1876,11 +1876,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             start as usize
                         } else {
                             let start = vals.len() as i64 + start;
-                            if start >= 0 {
-                                start as usize
-                            } else {
-                                0
-                            }
+                            if start >= 0 { start as usize } else { 0 }
                         };
                         let mut new_vals = vec![];
                         for (i, val) in vals.into_iter().enumerate() {

@@ -24,6 +24,10 @@ use itertools::Itertools;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
+use crate::Span;
+use crate::ast::CreateOption;
+use crate::ast::Identifier;
+use crate::ast::Query;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
@@ -37,10 +41,6 @@ use crate::ast::statements::workload::RenameWorkloadGroupStmt;
 use crate::ast::statements::workload::SetWorkloadGroupQuotasStmt;
 use crate::ast::statements::workload::ShowWorkloadGroupsStmt;
 use crate::ast::write_comma_separated_list;
-use crate::ast::CreateOption;
-use crate::ast::Identifier;
-use crate::ast::Query;
-use crate::Span;
 
 // SQL statement
 #[allow(clippy::large_enum_variant)]

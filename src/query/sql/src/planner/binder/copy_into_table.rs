@@ -15,6 +15,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID as AstColumnID;
 use databend_common_ast::ast::ColumnMatchMode;
 use databend_common_ast::ast::ColumnRef;
@@ -33,28 +34,27 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Span;
-use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::shrink_scalar;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::shrink_scalar;
+use databend_common_expression::types::DataType;
+use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_settings::Settings;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
@@ -64,18 +64,18 @@ use log::debug;
 use log::warn;
 use parking_lot::RwLock;
 
-use crate::binder::bind_query::MaxColumnPosition;
-use crate::binder::insert::STAGE_PLACEHOLDER;
-use crate::binder::location::parse_uri_location;
-use crate::binder::Binder;
-use crate::plans::CopyIntoTableMode;
-use crate::plans::CopyIntoTablePlan;
-use crate::plans::Plan;
-use crate::plans::ValidationMode;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 use crate::Metadata;
 use crate::NameResolutionContext;
+use crate::binder::Binder;
+use crate::binder::bind_query::MaxColumnPosition;
+use crate::binder::insert::STAGE_PLACEHOLDER;
+use crate::binder::location::parse_uri_location;
+use crate::plans::CopyIntoTableMode;
+use crate::plans::CopyIntoTablePlan;
+use crate::plans::Plan;
+use crate::plans::ValidationMode;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -652,7 +652,9 @@ pub async fn resolve_stage_location(
     // my_named_stage/abc/
     let names: Vec<&str> = location.splitn(2, '/').filter(|v| !v.is_empty()).collect();
     if names[0] == STAGE_PLACEHOLDER {
-        return Err(ErrorCode::BadArguments("placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client."));
+        return Err(ErrorCode::BadArguments(
+            "placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client.",
+        ));
     }
 
     let stage = if names[0] == "~" {

@@ -15,9 +15,9 @@
 use std::fmt;
 use std::time::Duration;
 
-use display_more::display_unix_epoch::DisplayUnixTimeStamp;
 use display_more::DisplayOptionExt;
 use display_more::DisplayUnixTimeStampExt;
+use display_more::display_unix_epoch::DisplayUnixTimeStamp;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::coarsetime;
 

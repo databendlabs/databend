@@ -15,29 +15,29 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::mpsc::channel;
-use std::sync::Arc;
 use std::time::Duration;
 
+use arrow_array::RecordBatch;
 use arrow_array::builder::StringBuilder;
 use arrow_array::builder::TimestampMicrosecondBuilder;
-use arrow_array::RecordBatch;
 use arrow_schema::DataType;
 use arrow_schema::Field;
 use arrow_schema::Schema;
 use arrow_schema::TimeUnit;
-use async_channel::bounded;
 use async_channel::Receiver;
 use async_channel::Sender;
+use async_channel::bounded;
 use concurrent_queue::ConcurrentQueue;
 use databend_common_base::base::uuid;
-use databend_common_base::runtime::spawn;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_base::runtime::spawn;
 use databend_common_exception::Result;
 use jiff::Timestamp;
 use log::Record;
@@ -51,9 +51,9 @@ use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use serde_json::Map;
 
-use crate::loggers::collect_kvs;
 use crate::Config;
 use crate::GlobalLogger;
+use crate::loggers::collect_kvs;
 
 /// An appender that sends log records to persistent storage
 #[derive(Debug)]

@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::infer_schema_type;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::infer_schema_type;
+use databend_common_native::ColumnMeta;
+use databend_common_native::CommonCompression;
 use databend_common_native::read::reader::read_meta;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
-use databend_common_native::ColumnMeta;
-use databend_common_native::CommonCompression;
 
-use super::io::new_test_column;
 use super::io::WRITE_PAGE;
+use super::io::new_test_column;
 
 fn write_data(dest: &mut Vec<u8>) -> Vec<ColumnMeta> {
     let chunk = new_test_column();

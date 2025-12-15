@@ -14,8 +14,8 @@
 
 #![allow(non_snake_case)]
 
-use crate::exception_backtrace::capture;
 use crate::ErrorCode;
+use crate::exception_backtrace::capture;
 
 macro_rules! build_exceptions {
     ($($(#[$meta:meta])* $body:ident($code:expr)),*$(,)*) => {

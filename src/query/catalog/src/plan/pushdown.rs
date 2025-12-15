@@ -17,16 +17,16 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 
 use databend_common_ast::ast::SampleConfig;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::F32;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::SEARCH_MATCHED_COL_NAME;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::F32;
 use databend_storages_common_table_meta::table::ChangeType;
 
 use super::AggIndexInfo;

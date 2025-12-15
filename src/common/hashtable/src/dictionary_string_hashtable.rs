@@ -22,17 +22,17 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use databend_common_base::mem_allocator::DefaultAllocator;
 
-use crate::container::Container;
-use crate::container::HeapContainer;
-use crate::short_string_hashtable::FallbackKey;
-use crate::table0::Entry;
-use crate::table_empty::TableEmpty;
-use crate::traits::EntryMutRefLike;
-use crate::traits::EntryRefLike;
 use crate::DictionaryStringHashMap;
 use crate::FastHash;
 use crate::HashtableLike;
 use crate::StringHashSet;
+use crate::container::Container;
+use crate::container::HeapContainer;
+use crate::short_string_hashtable::FallbackKey;
+use crate::table_empty::TableEmpty;
+use crate::table0::Entry;
+use crate::traits::EntryMutRefLike;
+use crate::traits::EntryRefLike;
 
 #[derive(Clone, Copy, Debug, Eq)]
 pub struct DictionaryKeys {

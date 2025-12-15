@@ -15,10 +15,10 @@
 mod exchange_deserializer;
 mod exchange_serializer;
 
-pub use exchange_deserializer::deserialize_block;
 pub use exchange_deserializer::ExchangeDeserializeMeta;
 pub use exchange_deserializer::TransformExchangeDeserializer;
-pub use exchange_serializer::serialize_block;
+pub use exchange_deserializer::deserialize_block;
 pub use exchange_serializer::ExchangeSerializeMeta;
 pub use exchange_serializer::TransformExchangeSerializer;
 pub use exchange_serializer::TransformScatterExchangeSerializer;
+pub use exchange_serializer::serialize_block;

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::builder::BinaryColumnBuilder;
 use super::BinaryColumn;
+use super::builder::BinaryColumnBuilder;
 use crate::iterator::ColumnAccessor;
 use crate::iterator::ColumnValuesIter;
 

@@ -14,13 +14,13 @@
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::number::Float64Type;
-use databend_common_expression::types::number::Int32Type;
+use databend_common_expression::FromData;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::FromData;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::number::Float64Type;
+use databend_common_expression::types::number::Int32Type;
 use databend_common_io::prelude::FormatSettings;
 use databend_query::servers::http::v1::BlocksCollector;
 use pretty_assertions::assert_eq;

@@ -17,17 +17,17 @@ mod rle;
 
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_expression::types::Bitmap;
-use rand::thread_rng;
 use rand::Rng;
+use rand::thread_rng;
 
+use super::Compression;
 use super::basic::CommonCompression;
 use super::integer::OneValue;
 use super::integer::Rle;
-use super::Compression;
 use crate::error::Error;
 use crate::error::Result;
-use crate::read::read_basic::read_compress_header;
 use crate::read::NativeReadBuf;
+use crate::read::read_basic::read_compress_header;
 use crate::write::WriteOptions;
 
 pub fn compress_boolean(

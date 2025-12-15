@@ -410,7 +410,7 @@ impl MergeIntoBlockInfoIndex {
         let mut new_chunk = true;
         while chunk_idx < chunks_offsets.len() && partial_idx < partial_unmodified.len() {
             // here is '<', not '<=', chunks_offsets[chunk_idx] is the count of chunks[chunk_idx]
-            if partial_unmodified[partial_idx].0 .1 < chunks_offsets[chunk_idx] {
+            if partial_unmodified[partial_idx].0.1 < chunks_offsets[chunk_idx] {
                 if new_chunk {
                     res.push((Vec::new(), chunk_idx as u64));
                     offset = res.len() - 1;
@@ -629,13 +629,13 @@ fn test_chunk_offsets_skip_chunk() {
     let res = block_info_index.chunk_offsets(&partial_unmodified, &chunks_offsets);
     assert_eq!(res.len(), 2);
     assert_eq!(res[0].0.len(), 1);
-    assert_eq!(res[0].0[0].0 .0, 8);
-    assert_eq!(res[0].0[0].0 .1, 10);
+    assert_eq!(res[0].0[0].0.0, 8);
+    assert_eq!(res[0].0[0].0.1, 10);
 
     assert_eq!(res[1].0.len(), 2);
-    assert_eq!(res[1].0[0].0 .0, 40);
-    assert_eq!(res[1].0[0].0 .1, 46);
+    assert_eq!(res[1].0[0].0.0, 40);
+    assert_eq!(res[1].0[0].0.1, 46);
 
-    assert_eq!(res[1].0[1].0 .0, 51);
-    assert_eq!(res[1].0[1].0 .1, 55);
+    assert_eq!(res[1].0[1].0.0, 51);
+    assert_eq!(res[1].0[1].0.1, 55);
 }

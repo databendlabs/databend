@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::ColumnSet;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::plans::AggregateFunction;
@@ -24,7 +25,6 @@ use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::UDFCall;
-use crate::ColumnSet;
 
 impl SubqueryDecorrelatorOptimizer {
     #[recursive::recursive]

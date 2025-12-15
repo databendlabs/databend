@@ -20,10 +20,9 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use educe::Educe;
 
-use crate::ast::quote::QuotedString;
-use crate::ast::write_comma_separated_list;
-use crate::ast::write_comma_separated_string_map;
-use crate::ast::write_dot_separated_list;
+use crate::ParseError;
+use crate::Result;
+use crate::Span;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Hint;
@@ -31,9 +30,10 @@ use crate::ast::Identifier;
 use crate::ast::Lambda;
 use crate::ast::SelectStageOptions;
 use crate::ast::WindowDefinition;
-use crate::ParseError;
-use crate::Result;
-use crate::Span;
+use crate::ast::quote::QuotedString;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_string_map;
+use crate::ast::write_dot_separated_list;
 
 /// Root node of a query tree
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
 use async_channel::Receiver;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -36,13 +36,13 @@ use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
+use crate::operations::read::DeserializeDataTransform;
+use crate::operations::read::NativeDeserializeDataTransform;
+use crate::operations::read::TransformRuntimeFilterWait;
 use crate::operations::read::block_partition_receiver_source::BlockPartitionReceiverSource;
 use crate::operations::read::block_partition_source::BlockPartitionSource;
 use crate::operations::read::native_data_transform_reader::ReadNativeDataTransform;
 use crate::operations::read::parquet_data_transform_reader::ReadParquetDataTransform;
-use crate::operations::read::DeserializeDataTransform;
-use crate::operations::read::NativeDeserializeDataTransform;
-use crate::operations::read::TransformRuntimeFilterWait;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_native_source_pipeline(

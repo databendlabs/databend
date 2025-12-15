@@ -30,8 +30,8 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
-use crate::UserApiProvider;
 use crate::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use crate::UserApiProvider;
 
 impl UserApiProvider {
     // Get one user from by tenant.

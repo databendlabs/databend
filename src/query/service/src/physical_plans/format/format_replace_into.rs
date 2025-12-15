@@ -15,11 +15,11 @@
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 
-use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::ReplaceInto;
+use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 
 pub struct ReplaceIntoFormatter<'a> {
     inner: &'a ReplaceInto,

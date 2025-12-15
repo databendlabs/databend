@@ -19,13 +19,13 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::PhysicalPlanBuilder;
-use crate::pipelines::processors::transforms::TransformRecursiveCteScan;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformRecursiveCteScan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RecursiveCteScan {

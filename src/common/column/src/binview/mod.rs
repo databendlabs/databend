@@ -31,15 +31,15 @@ pub use builder::BinaryViewColumnBuilder;
 use either::Either;
 pub use iterator::BinaryViewColumnIter;
 use private::Sealed;
-use view::validate_utf8_only;
 pub use view::CheckUTF8;
 pub use view::View;
+use view::validate_utf8_only;
 
 use crate::binary::BinaryColumn;
 use crate::binary::BinaryColumnBuilder;
+use crate::bitmap::Bitmap;
 use crate::bitmap::utils::BitmapIter;
 use crate::bitmap::utils::ZipValidity;
-use crate::bitmap::Bitmap;
 use crate::buffer::Buffer;
 use crate::error::Result;
 use crate::impl_sliced;

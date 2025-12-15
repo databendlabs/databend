@@ -16,11 +16,11 @@ use std::alloc::AllocError;
 use std::alloc::Allocator;
 use std::alloc::GlobalAlloc;
 use std::alloc::Layout;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
+use std::ptr::null_mut;
 
-use crate::mem_allocator::tracker::MetaTrackerAllocator;
 use crate::mem_allocator::DefaultAllocator;
+use crate::mem_allocator::tracker::MetaTrackerAllocator;
 
 pub type DefaultGlobalAllocator = GlobalAllocator<DefaultAllocator>;
 pub type TrackingGlobalAllocator = GlobalAllocator<MetaTrackerAllocator<DefaultAllocator>>;

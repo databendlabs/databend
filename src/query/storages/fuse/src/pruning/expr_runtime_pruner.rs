@@ -118,7 +118,9 @@ impl ExprRuntimePruner {
                         }
                     }
                 } else {
-                    info!("Can't prune the partition by runtime filter, because there is no statistics for the partition");
+                    info!(
+                        "Can't prune the partition by runtime filter, because there is no statistics for the partition"
+                    );
                 }
             }
 

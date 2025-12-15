@@ -16,8 +16,8 @@ use std::collections::HashMap;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::NumberScalar;
 use log::debug;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]

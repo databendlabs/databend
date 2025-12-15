@@ -19,15 +19,15 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
-use crate::physical_plans::explain::PlanStatsInfo;
-use crate::physical_plans::format::MaterializeCTERefFormatter;
-use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanMeta;
-use crate::pipelines::processors::transforms::CTESource;
+use crate::physical_plans::explain::PlanStatsInfo;
+use crate::physical_plans::format::MaterializeCTERefFormatter;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::CTESource;
 
 /// This is a leaf operator that consumes the result of a materialized CTE.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

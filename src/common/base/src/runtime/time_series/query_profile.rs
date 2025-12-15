@@ -13,18 +13,18 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::Arc;
 
 use log::info;
 use serde::Serialize;
 
+use crate::runtime::ThreadTracker;
+use crate::runtime::TimeSeriesProfileDesc;
 use crate::runtime::get_time_series_profile_desc;
 use crate::runtime::time_series::profile::TimeSeriesProfileName;
 use crate::runtime::time_series::profile::TimeSeriesProfiles;
-use crate::runtime::ThreadTracker;
-use crate::runtime::TimeSeriesProfileDesc;
 
 const DEFAULT_BATCH_SIZE: usize = 1024;
 

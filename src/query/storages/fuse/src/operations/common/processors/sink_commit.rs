@@ -21,8 +21,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
+use backoff::backoff::Backoff;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -56,20 +56,20 @@ use log::error;
 use log::info;
 use opendal::Operator;
 
+use crate::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
+use crate::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
+use crate::FuseTable;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::set_backoff;
-use crate::operations::set_compaction_num_block_hint;
-use crate::operations::vacuum::vacuum_table;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::MutationGenerator;
 use crate::operations::SnapshotGenerator;
 use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
+use crate::operations::set_backoff;
+use crate::operations::set_compaction_num_block_hint;
+use crate::operations::vacuum::vacuum_table;
 use crate::statistics::TableStatsGenerator;
-use crate::FuseTable;
-use crate::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
-use crate::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 
 enum State {
     None,

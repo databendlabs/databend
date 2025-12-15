@@ -13,27 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use std::simd::f32x16;
 pub use std::simd::f32x8;
+pub use std::simd::f32x16;
 pub use std::simd::f64x8;
-pub use std::simd::i16x32;
-pub use std::simd::i16x8;
-pub use std::simd::i32x16;
-pub use std::simd::i32x8;
-pub use std::simd::i64x8;
-pub use std::simd::i8x64;
 pub use std::simd::i8x8;
+pub use std::simd::i8x64;
+pub use std::simd::i16x8;
+pub use std::simd::i16x32;
+pub use std::simd::i32x8;
+pub use std::simd::i32x16;
+pub use std::simd::i64x8;
+pub use std::simd::mask8x64 as m8x64;
 pub use std::simd::mask32x16 as m32x16;
 pub use std::simd::mask64x8 as m64x8;
-pub use std::simd::mask8x64 as m8x64;
 pub use std::simd::prelude::SimdPartialEq;
-pub use std::simd::u16x32;
-pub use std::simd::u16x8;
-pub use std::simd::u32x16;
-pub use std::simd::u32x8;
-pub use std::simd::u64x8;
-pub use std::simd::u8x64;
 pub use std::simd::u8x8;
+pub use std::simd::u8x64;
+pub use std::simd::u16x8;
+pub use std::simd::u16x32;
+pub use std::simd::u32x8;
+pub use std::simd::u32x16;
+pub use std::simd::u64x8;
 
 /// Vector of 32 16-bit masks
 #[allow(non_camel_case_types)]

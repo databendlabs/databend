@@ -14,9 +14,9 @@
 
 use std::time::Duration;
 
-use map_api::match_seq::errors::ConflictSeq;
 use map_api::match_seq::MatchSeq;
 use map_api::match_seq::MatchSeqExt;
+use map_api::match_seq::errors::ConflictSeq;
 use state_machine_api::KVMeta;
 use state_machine_api::SeqV;
 

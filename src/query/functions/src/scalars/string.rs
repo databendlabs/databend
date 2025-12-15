@@ -15,21 +15,21 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::string::StringDomain;
-use databend_common_expression::types::ArrayType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
 use databend_common_expression::unify_string;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionRegistry;
 use databend_functions_scalar_decimal::register_decimal_to_uuid;
 use stringslice::StringSlice;
 
@@ -922,8 +922,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 pub(crate) mod soundex {
-    use databend_common_expression::types::string::StringColumnBuilder;
     use databend_common_expression::EvalContext;
+    use databend_common_expression::types::string::StringColumnBuilder;
 
     pub fn soundex(val: &str, output: &mut StringColumnBuilder, _eval_context: &mut EvalContext) {
         let mut last = None;

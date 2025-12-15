@@ -15,14 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -33,24 +31,26 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_types::MetaId;
 use parking_lot::RwLock;
 
-use crate::binder::wrap_cast;
+use crate::Metadata;
+use crate::MetadataRef;
 use crate::binder::AsyncFunctionDesc;
+use crate::binder::wrap_cast;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::walk_expr_mut;
 use crate::plans::AsyncFunctionArgument;
 use crate::plans::AsyncFunctionCall;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 use crate::plans::VisitorMut;
-use crate::Metadata;
-use crate::MetadataRef;
+use crate::plans::walk_expr_mut;
 
 /// Helper for binding scalar expression with `BindContext`.
 pub struct DefaultExprBinder {

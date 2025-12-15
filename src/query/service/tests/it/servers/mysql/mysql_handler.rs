@@ -27,11 +27,11 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::MySQLTlsConfig;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
-use mysql_async::prelude::FromRow;
-use mysql_async::prelude::Queryable;
 use mysql_async::FromRowError;
 use mysql_async::Row;
 use mysql_async::SslOpts;
+use mysql_async::prelude::FromRow;
+use mysql_async::prelude::Queryable;
 use tokio::sync::Barrier;
 
 use crate::tests::tls_constants::*;

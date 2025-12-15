@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -40,7 +41,6 @@ use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::KeyWithTenant;
 use dyn_clone::DynClone;
 
 use crate::table::Table;

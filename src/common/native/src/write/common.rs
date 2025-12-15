@@ -16,17 +16,17 @@ use std::io::Write;
 
 use databend_common_expression::Column;
 
-use super::write;
 use super::NativeWriter;
+use super::write;
+use crate::ColumnMeta;
+use crate::EOF_MARKER;
+use crate::PageMeta;
 use crate::compression::CommonCompression;
 use crate::compression::Compression;
 use crate::error::Result;
 use crate::nested::slice_nest_column;
 use crate::nested::to_leaves;
 use crate::nested::to_nested;
-use crate::ColumnMeta;
-use crate::PageMeta;
-use crate::EOF_MARKER;
 
 /// Options declaring the behaviour of writing to IPC
 #[derive(Debug, Clone, PartialEq, Default)]

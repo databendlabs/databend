@@ -14,10 +14,10 @@
 
 use std::time::Instant;
 
-use mysql_async::prelude::Queryable;
 use mysql_async::Conn;
 use mysql_async::Pool;
 use mysql_async::Row;
+use mysql_async::prelude::Queryable;
 use sqllogictest::DBOutput;
 
 use crate::error::Result;
