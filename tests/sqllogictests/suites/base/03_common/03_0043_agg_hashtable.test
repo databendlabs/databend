@@ -1,7 +1,3 @@
-# test new agg hashtable
-statement ok
-set enable_experimental_aggregate_hashtable=1
-
 statement ok
 SELECT number % 5,max(number),min(number),sum(number) FROM numbers_mt(0) GROUP BY number % 5
 
