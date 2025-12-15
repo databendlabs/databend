@@ -20,6 +20,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ops::Deref;
 use std::ops::Range;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -315,6 +316,13 @@ impl TableInfo {
             .cluster_key
             .clone()
             .map(|k| (self.meta.cluster_key_seq, k))
+    }
+
+    pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
+        self.options()
+            .get(opt_key)
+            .and_then(|s| s.parse::<T>().ok())
+            .unwrap_or(default)
     }
 }
 

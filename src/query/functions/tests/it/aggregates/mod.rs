@@ -19,12 +19,14 @@ use std::io::Write;
 
 use bumpalo::Bump;
 use comfy_table::Table;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use databend_common_expression::get_states_layout;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrState;
+use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -33,6 +35,8 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
+use databend_common_expression::StatesLayout;
 use databend_common_expression::Value;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
@@ -44,7 +48,7 @@ use super::scalars::parser;
 pub trait AggregationSimulator = Fn(
         &str,
         Vec<Scalar>,
-        &[Column],
+        &[BlockEntry],
         usize,
         Vec<AggregateFunctionSortDesc>,
     ) -> databend_common_exception::Result<(Column, DataType)>
@@ -54,21 +58,25 @@ pub trait AggregationSimulator = Fn(
 pub fn run_agg_ast(
     file: &mut impl Write,
     text: &str,
-    columns: &[(&str, Column)],
+    entries: &[(&str, BlockEntry)],
     simulator: impl AggregationSimulator,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) {
     let raw_expr = parser::parse_raw_expr(
         text,
-        &columns
+        &entries
             .iter()
-            .map(|(name, col)| (*name, col.data_type()))
+            .map(|(name, entry)| (*name, entry.data_type()))
             .collect::<Vec<_>>(),
     );
 
-    let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(0);
+    let num_rows = entries
+        .iter()
+        .map(|(_, entry)| entry.len())
+        .max()
+        .unwrap_or(0);
     let block = DataBlock::new(
-        columns.iter().map(|(_, col)| col.clone().into()).collect(),
+        entries.iter().map(|(_, entry)| entry.clone()).collect(),
         num_rows,
     );
 
@@ -79,89 +87,112 @@ pub fn run_agg_ast(
         .sorted()
         .collect::<Vec<_>>();
 
-    // For test only, we just support agg function call here
-    let result: databend_common_exception::Result<(Column, DataType)> = try {
-        match raw_expr {
-            databend_common_expression::RawExpr::FunctionCall {
-                name, params, args, ..
-            } => {
-                let args: Vec<(Value<AnyType>, DataType)> = args
-                    .iter()
-                    .map(|raw_expr| run_scalar_expr(raw_expr, &block))
-                    .collect::<Result<_>>()
-                    .unwrap();
+    let args: databend_common_exception::Result<_> = try {
+        // For test only, we just support agg function call here
+        let databend_common_expression::RawExpr::FunctionCall {
+            name, params, args, ..
+        } = raw_expr
+        else {
+            unimplemented!()
+        };
 
-                // Convert the delimiter of string_agg to params
-                let params = if name.eq_ignore_ascii_case("string_agg") && args.len() == 2 {
-                    let val = args[1].0.as_scalar().unwrap();
-                    vec![val.clone()]
-                } else {
-                    params
-                };
+        let args: Vec<(Value<AnyType>, DataType)> = args
+            .iter()
+            .map(|raw_expr| run_scalar_expr(raw_expr, &block))
+            .collect::<Result<_>>()
+            .unwrap();
 
-                // Convert the num_buckets of histogram to params
-                let params = if name.eq_ignore_ascii_case("histogram") && args.len() == 2 {
-                    let val = args[1].0.as_scalar().unwrap();
-                    vec![val.clone()]
-                } else {
-                    params
-                };
+        // Convert the delimiter of string_agg to params
+        let params = if name.eq_ignore_ascii_case("string_agg") && args.len() == 2 {
+            let val = args[1].0.as_scalar().unwrap();
+            vec![val.clone()]
+        } else {
+            params
+        };
 
-                let arg_columns: Vec<Column> = args
-                    .iter()
-                    .map(|(arg, ty)| match arg {
-                        Value::Scalar(s) => {
-                            let builder = ColumnBuilder::repeat(&s.as_ref(), block.num_rows(), ty);
-                            builder.build()
-                        }
-                        Value::Column(c) => c.clone(),
-                    })
-                    .collect();
+        // Convert the num_buckets of histogram to params
+        let params = if name.eq_ignore_ascii_case("histogram") && args.len() == 2 {
+            let val = args[1].0.as_scalar().unwrap();
+            vec![val.clone()]
+        } else {
+            params
+        };
 
-                simulator(
-                    name.as_str(),
-                    params,
-                    &arg_columns,
-                    block.num_rows(),
-                    sort_descs,
-                )?
-            }
-            _ => unimplemented!(),
+        let arg_columns = args
+            .into_iter()
+            .map(|(arg, ty)| BlockEntry::new(arg, || (ty, block.num_rows())))
+            .collect::<Vec<_>>();
+
+        (name, params, arg_columns)
+    };
+
+    let (name, params, arg_columns) = match args {
+        Ok(x) => x,
+        Err(e) => {
+            writeln!(file, "error: {}\n", e.message()).unwrap();
+            return;
         }
     };
 
-    match result {
-        Ok((column, _)) => {
-            writeln!(file, "ast: {text}").unwrap();
-            {
-                let mut table = Table::new();
-                table.load_preset("||--+-++|    ++++++");
-                table.set_header(["Column", "Data"]);
+    let column = match simulator(
+        name.as_str(),
+        params.clone(),
+        &arg_columns,
+        block.num_rows(),
+        sort_descs.clone(),
+    ) {
+        Ok((column, _)) => column,
+        Err(e) => {
+            writeln!(file, "error: {}\n", e.message()).unwrap();
+            return;
+        }
+    };
 
-                let ids = match used_columns.is_empty() {
-                    true => {
-                        if columns.is_empty() {
-                            vec![]
-                        } else {
-                            vec![0]
-                        }
-                    }
-                    false => used_columns,
-                };
-
-                for id in ids.iter() {
-                    let (name, col) = &columns[*id];
-                    table.add_row(&[name.to_string(), format!("{col:?}")]);
-                }
-                table.add_row(["Output".to_string(), format!("{column:?}")]);
-                writeln!(file, "evaluation (internal):\n{table}").unwrap();
-            }
-            write!(file, "\n\n").unwrap();
+    let arg_columns_full = arg_columns
+        .into_iter()
+        .map(|entry| entry.to_column().into())
+        .collect::<Vec<BlockEntry>>();
+    match simulator(
+        name.as_str(),
+        params.clone(),
+        &arg_columns_full,
+        block.num_rows(),
+        sort_descs.clone(),
+    ) {
+        Ok((column2, _)) => {
+            assert_eq!(column, column2)
         }
         Err(e) => {
             writeln!(file, "error: {}\n", e.message()).unwrap();
+            return;
         }
+    };
+
+    writeln!(file, "ast: {text}").unwrap();
+    {
+        let mut table = Table::new();
+        table.load_preset("||--+-++|    ++++++");
+        table.set_header(["Column", "Data"]);
+
+        let ids = match used_columns.is_empty() {
+            true => {
+                if entries.is_empty() {
+                    vec![]
+                } else {
+                    vec![0]
+                }
+            }
+            false => used_columns,
+        };
+
+        for id in ids.iter() {
+            let (name, entry) = &entries[*id];
+            table.add_row(&[name.to_string(), format!("{entry:?}")]);
+        }
+        table.add_row(["Output".to_string(), format!("{column:?}")]);
+        writeln!(file, "evaluation (internal):\n{table}").unwrap();
     }
+    write!(file, "\n\n").unwrap();
 }
 
 pub fn run_scalar_expr(
@@ -195,12 +226,12 @@ pub fn run_scalar_expr(
 pub fn simulate_two_groups_group_by(
     name: &str,
     params: Vec<Scalar>,
-    columns: &[Column],
+    entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> databend_common_exception::Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
-    let arguments: Vec<DataType> = columns.iter().map(|c| c.data_type()).collect();
+    let arguments: Vec<DataType> = entries.iter().map(|c| c.data_type()).collect();
 
     let func = factory.get(name, params, arguments, sort_descs)?;
     let data_type = func.return_type()?;
@@ -221,12 +252,92 @@ pub fn simulate_two_groups_group_by(
         .map(|i| if i % 2 == 0 { addr1 } else { addr2 })
         .collect::<Vec<_>>();
 
-    let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
-    func.accumulate_keys(&places, &loc, (&block_entries).into(), rows)?;
+    func.accumulate_keys(&places, &loc, entries.into(), rows)?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(state1, false, &mut builder)?;
     func.merge_result(state2, false, &mut builder)?;
 
     Ok((builder.build(), data_type))
+}
+
+pub fn eval_aggr_for_test(
+    name: &str,
+    params: Vec<Scalar>,
+    entries: &[BlockEntry],
+    rows: usize,
+    each_row: bool,
+    with_serialize: bool,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
+) -> Result<(Column, DataType)> {
+    let factory = AggregateFunctionFactory::instance();
+    let arguments = entries.iter().map(BlockEntry::data_type).collect();
+
+    let func = factory.get(name, params, arguments, sort_descs)?;
+    let data_type = func.return_type()?;
+
+    let eval = EvalAggr::new(func.clone());
+    let state = AggrState::new(eval.addr, &eval.state_layout.states_loc[0]);
+
+    if each_row {
+        for row in 0..rows {
+            func.accumulate_row(state, entries.into(), row)?;
+        }
+    } else {
+        func.accumulate(state, entries.into(), None, rows)?;
+    }
+
+    if with_serialize {
+        let data_type = func.serialize_data_type();
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
+        let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
+        func.batch_serialize(&[eval.addr], state.loc, builders)?;
+        func.init_state(state);
+        let column = builder.build();
+        func.batch_merge(&[eval.addr], state.loc, &column.into(), None)?;
+    }
+    let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
+    func.merge_result(state, false, &mut builder)?;
+    Ok((builder.build(), data_type))
+}
+
+struct EvalAggr {
+    addr: StateAddr,
+    state_layout: StatesLayout,
+    _arena: Bump,
+    func: AggregateFunctionRef,
+}
+
+impl EvalAggr {
+    pub fn new(func: AggregateFunctionRef) -> Self {
+        let funcs = [func];
+        let state_layout = get_states_layout(&funcs).unwrap();
+        let [func] = funcs;
+
+        let _arena = Bump::new();
+        let addr = _arena.alloc_layout(state_layout.layout).into();
+
+        let state = AggrState::new(addr, &state_layout.states_loc[0]);
+        func.init_state(state);
+
+        Self {
+            addr,
+            state_layout,
+            _arena,
+            func,
+        }
+    }
+}
+
+impl Drop for EvalAggr {
+    fn drop(&mut self) {
+        drop_guard(move || {
+            if self.func.need_manual_drop_state() {
+                unsafe {
+                    self.func
+                        .drop_state(AggrState::new(self.addr, &self.state_layout.states_loc[0]));
+                }
+            }
+        })
+    }
 }

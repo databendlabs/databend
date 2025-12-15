@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Index;
+use std::ops::IndexMut;
+
 use super::row_ptr::RowPtr;
 use super::StateAddr;
 use super::BATCH_SIZE;
 
-pub type SelectVector = [usize; BATCH_SIZE];
+pub type SelectVector = [RowID; BATCH_SIZE];
 
 /// ProbeState is the state to probe HT
 /// It could be reuse during multiple probe process
@@ -29,12 +32,12 @@ pub struct ProbeState {
 
     pub(super) empty_vector: SelectVector,
 
-    pub(super) group_compare_vector: SelectVector,
-    pub(super) no_match_vector: SelectVector,
+    pub(super) group_compare_vector: [RowID; BATCH_SIZE],
+    pub(super) no_match_vector: [RowID; BATCH_SIZE],
+    pub(super) slots: [usize; BATCH_SIZE],
     pub(super) row_count: usize,
 
-    pub partition_entries: Vec<(usize, SelectVector)>,
-    pool: Vec<Vec<usize>>,
+    pub partition_entries: Vec<(u16, SelectVector)>,
 }
 
 impl Default for ProbeState {
@@ -44,13 +47,13 @@ impl Default for ProbeState {
             addresses: [RowPtr::null(); BATCH_SIZE],
             page_index: [0; BATCH_SIZE],
             state_places: [StateAddr::null(); BATCH_SIZE],
-            group_compare_vector: [0; BATCH_SIZE],
-            no_match_vector: [0; BATCH_SIZE],
-            empty_vector: [0; BATCH_SIZE],
+            group_compare_vector: [RowID::default(); BATCH_SIZE],
+            no_match_vector: [RowID::default(); BATCH_SIZE],
+            empty_vector: [RowID::default(); BATCH_SIZE],
+            slots: [0; BATCH_SIZE],
 
             row_count: 0,
             partition_entries: vec![],
-            pool: vec![],
         }
     }
 }
@@ -64,7 +67,6 @@ impl ProbeState {
         unsafe {
             let uninit = state.assume_init_mut();
             uninit.partition_entries = vec![];
-            uninit.pool = vec![];
 
             for ptr in &mut uninit.addresses {
                 *ptr = RowPtr::null();
@@ -72,7 +74,12 @@ impl ProbeState {
             for addr in &mut uninit.state_places {
                 *addr = StateAddr::null()
             }
-
+            for item in &mut uninit.group_compare_vector {
+                *item = Default::default()
+            }
+            for item in &mut uninit.no_match_vector {
+                *item = Default::default()
+            }
             state.assume_init()
         }
     }
@@ -89,18 +96,42 @@ impl ProbeState {
             *count = 0;
         }
     }
+}
 
-    pub(super) fn get_temp(&mut self) -> Vec<usize> {
-        match self.pool.pop() {
-            Some(mut vec) => {
-                vec.clear();
-                vec
-            }
-            None => vec![],
-        }
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RowID(pub u16);
+
+impl RowID {
+    #[inline]
+    pub fn to_usize(self) -> usize {
+        self.0 as usize
     }
+}
 
-    pub(super) fn save_temp(&mut self, vec: Vec<usize>) {
-        self.pool.push(vec);
+impl<T> Index<RowID> for [T] {
+    type Output = T;
+
+    fn index(&self, index: RowID) -> &T {
+        &self[index.0 as usize]
+    }
+}
+
+impl<T> IndexMut<RowID> for [T] {
+    fn index_mut(&mut self, index: RowID) -> &mut T {
+        &mut self[index.0 as usize]
+    }
+}
+
+impl<T> Index<RowID> for Vec<T> {
+    type Output = T;
+
+    fn index(&self, index: RowID) -> &T {
+        &self[index.0 as usize]
+    }
+}
+
+impl From<usize> for RowID {
+    fn from(v: usize) -> Self {
+        RowID(v as u16)
     }
 }

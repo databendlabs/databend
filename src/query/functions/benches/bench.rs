@@ -76,7 +76,7 @@ mod bitmap {
     use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
-    use databend_common_functions::aggregates::eval_aggr_for_test;
+    use databend_common_functions::aggregates::eval_aggr;
     use databend_common_io::deserialize_bitmap;
     use databend_common_io::HybridBitmap;
 
@@ -162,15 +162,9 @@ mod bitmap {
     }
 
     fn eval_bitmap_result(entry: &BlockEntry, rows: usize, agg_name: &'static str) -> HybridBitmap {
-        let (result_column, _) = eval_aggr_for_test(
-            agg_name,
-            vec![],
-            std::slice::from_ref(entry),
-            rows,
-            false,
-            vec![],
-        )
-        .unwrap_or_else(|_| panic!("{agg_name} evaluation failed"));
+        let (result_column, _) =
+            eval_aggr(agg_name, vec![], std::slice::from_ref(entry), rows, vec![])
+                .unwrap_or_else(|_| panic!("{agg_name} evaluation failed"));
 
         let Column::Bitmap(result) = result_column.remove_nullable() else {
             panic!("{agg_name} should return a Bitmap column");

@@ -2028,6 +2028,7 @@ impl TableContext for QueryContext {
                         copy_into_table_options: Default::default(),
                         stage_root,
                         is_variant: true,
+                        parquet_metas: None,
                     };
                     StageTable::try_create(info)
                 }
@@ -2048,12 +2049,10 @@ impl TableContext for QueryContext {
                     stage_info,
                     files_info,
                     files_to_copy,
-                    duplicated_files_detected: vec![],
-                    is_select: true,
-                    default_exprs: None,
-                    copy_into_table_options: Default::default(),
                     stage_root,
                     is_variant,
+                    is_select: true,
+                    ..Default::default()
                 };
                 OrcTable::try_create(self, info).await
             }
@@ -2067,12 +2066,10 @@ impl TableContext for QueryContext {
                     stage_info,
                     files_info,
                     files_to_copy,
-                    duplicated_files_detected: vec![],
                     is_select: true,
-                    default_exprs: None,
-                    copy_into_table_options: Default::default(),
-                    stage_root,
                     is_variant: true,
+                    stage_root,
+                    ..Default::default()
                 };
                 StageTable::try_create(info)
             }
@@ -2104,12 +2101,9 @@ impl TableContext for QueryContext {
                     stage_info,
                     files_info,
                     files_to_copy,
-                    duplicated_files_detected: vec![],
                     is_select: true,
-                    default_exprs: None,
-                    copy_into_table_options: Default::default(),
                     stage_root,
-                    is_variant: false,
+                    ..Default::default()
                 };
                 StageTable::try_create(info)
             }

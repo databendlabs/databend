@@ -5757,13 +5757,13 @@ impl<'a> TypeChecker<'a> {
         let mut visitor = UDFArgVisitor::new(&arg_types, arguments);
         udf_expr.drive_mut(&mut visitor);
 
-        // independent context
+        // Use current binding context so column references inside arguments can be resolved.
         let box (expr, _) = TypeChecker::try_create(
-            &mut BindContext::new(),
+            self.bind_context,
             self.ctx.clone(),
-            &NameResolutionContext::default(),
-            MetadataRef::default(),
-            &[],
+            self.name_resolution_ctx,
+            self.metadata.clone(),
+            self.aliases,
             self.forbid_udf,
         )?
         .resolve(&udf_expr)?;

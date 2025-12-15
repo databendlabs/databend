@@ -260,12 +260,17 @@ impl<'a> Selector<'a> {
                 select_strategy,
                 count,
             )?;
+            let mut recomputed_count = false;
             if (true_count > 0 && select_strategy == SelectStrategy::All)
                 || select_strategy == SelectStrategy::True
             {
                 select_strategy = SelectStrategy::False;
+                count = temp_mutable_false_idx - *mutable_false_idx;
+                recomputed_count = true;
             }
-            count -= true_count;
+            if !recomputed_count {
+                count -= true_count;
+            }
             if count == 0 {
                 *mutable_false_idx = temp_mutable_false_idx;
                 break;

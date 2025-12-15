@@ -147,6 +147,7 @@ pub struct CopyIntoTablePlan {
 
     pub dedup_full_path: bool,
     pub path_prefix: Option<String>,
+    pub enable_schema_evolution: bool,
 }
 
 fn get_path_prefix(op: &Operator) -> String {

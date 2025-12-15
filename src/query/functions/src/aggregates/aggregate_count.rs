@@ -99,16 +99,17 @@ impl AggregateFunction for AggregateCountFunction {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: ProjectedBlock,
+        block: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        let nulls = if columns.is_empty() {
+        let nulls = if block.is_empty() {
             validity.map(|v| v.null_count()).unwrap_or(0)
         } else {
-            match &columns[0].to_column() {
-                Column::Nullable(c) => validity
+            match &block[0] {
+                BlockEntry::Const(Scalar::Null, DataType::Nullable(_), n) => *n,
+                BlockEntry::Column(Column::Nullable(c)) => validity
                     .map(|v| v & (&c.validity))
                     .unwrap_or_else(|| c.validity.clone())
                     .null_count(),
