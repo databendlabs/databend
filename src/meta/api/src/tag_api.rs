@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use chrono::Utc;
 use databend_common_meta_app::schema::tag_id_ident::Resource as TagIdResource;
 use databend_common_meta_app::schema::tag_name_ident::TagNameIdent;
-use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTagReply;
 use databend_common_meta_app::schema::CreateTagReq;
 use databend_common_meta_app::schema::DropTagReq;
@@ -57,6 +56,7 @@ use crate::name_id_value_api::NameIdValueApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_core_util::send_txn;
+use crate::txn_core_util::txn_delete_exact;
 use crate::txn_op_builder_util::txn_op_del;
 use crate::txn_op_builder_util::txn_op_put_pb;
 
@@ -88,15 +88,17 @@ where
 
         let reply = match create_res {
             Ok(id) => Ok(CreateTagReply { tag_id: *id }),
-            Err(existent) => match req.create_option {
-                CreateOption::Create => Err(TagError::already_exists(
-                    req.name_ident.tag_name().to_string(),
-                )),
-                CreateOption::CreateIfNotExists => Ok(CreateTagReply {
-                    tag_id: *existent.data,
-                }),
-                CreateOption::CreateOrReplace => unreachable!("CreateOrReplace handled above"),
-            },
+            Err(existent) => {
+                if req.if_not_exists {
+                    Ok(CreateTagReply {
+                        tag_id: *existent.data,
+                    })
+                } else {
+                    Err(TagError::already_exists(
+                        req.name_ident.tag_name().to_string(),
+                    ))
+                }
+            }
         };
         Ok(reply)
     }
@@ -106,33 +108,57 @@ where
     async fn drop_tag(&self, req: DropTagReq) -> Result<Result<(), TagError>, MetaTxnError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let references = collect_tag_references(self, &ListTagReferencesReq {
+        let list_req = ListTagReferencesReq {
             tenant: req.name_ident.tenant().clone(),
             tag_name: Some(req.name_ident.tag_name().to_string()),
             object_type: None,
-        })
-        .await
-        .map_err(MetaTxnError::from)?;
+        };
 
-        if !references.is_empty() {
-            return Ok(Err(TagError::has_references(
-                req.name_ident.tag_name().to_string(),
-                references.len(),
-            )));
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
+            let get_res = self
+                .get_id_value(&req.name_ident)
+                .await
+                .map_err(MetaTxnError::from)?;
+
+            let Some((seq_id, seq_meta)) = get_res else {
+                if req.if_exists {
+                    return Ok(Ok(()));
+                }
+                return Ok(Err(TagError::not_found(
+                    req.name_ident.tag_name().to_string(),
+                    "drop_tag",
+                )));
+            };
+
+            let references = collect_tag_references(self, &list_req)
+                .await
+                .map_err(MetaTxnError::from)?;
+
+            if !references.is_empty() {
+                return Ok(Err(TagError::has_references(
+                    req.name_ident.tag_name().to_string(),
+                    references.len(),
+                )));
+            }
+
+            // The transactional safety of this drop operation relies on the fact that
+            // `set_object_tags` and `unset_object_tags` touch tag metadata (tag_id_ident)
+            // after modifying TagRef entries. This ensures that any concurrent reference
+            // modifications will change the seq of tag_id_ident, causing this transaction
+            // to fail and retry.
+            let mut txn = TxnRequest::default();
+            let tag_id_ident = seq_id.data.into_t_ident(req.name_ident.tenant());
+            txn_delete_exact(&mut txn, &req.name_ident, seq_id.seq);
+            txn_delete_exact(&mut txn, &tag_id_ident, seq_meta.seq);
+
+            let (succ, _) = send_txn(self, txn).await?;
+            if succ {
+                return Ok(Ok(()));
+            }
         }
-
-        // NOTE: The reference check above and the delete operation below are not transactional.
-        // A concurrent SET/UNSET TAGS call may introduce new references in between, which is an
-        // acceptable trade-off for the initial version of tag DDL support.
-        let removed = self.remove_id_value(&req.name_ident, |_| vec![]).await?;
-
-        if removed.is_none() && !req.if_exists {
-            return Ok(Err(TagError::not_found(
-                req.name_ident.tag_name().to_string(),
-                "drop_tag",
-            )));
-        }
-        Ok(Ok(()))
     }
 
     #[logcall::logcall]
@@ -241,6 +267,8 @@ where
                     .push(txn_op_put_pb(tag_ref_ident, &tag_ref_value, None)?);
             }
 
+            // Touch tag metadata to invalidate concurrent drop_tag operations.
+            // DO NOT REMOVE: drop_tag relies on this for transactional safety.
             let mut touched = HashSet::new();
             for (_, _, tag_meta, tag_id_ident, _, _) in &bindings {
                 let key = tag_id_ident.to_string_key();
@@ -308,6 +336,8 @@ where
                 txn.if_then.push(txn_op_del(tag_ref_ident));
             }
 
+            // Touch tag metadata to invalidate concurrent drop_tag operations.
+            // DO NOT REMOVE: drop_tag relies on this for transactional safety.
             let mut touched = HashSet::new();
             for (_, tag_meta, tag_id_ident, _) in &bindings {
                 let key = tag_id_ident.to_string_key();
