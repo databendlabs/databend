@@ -26,10 +26,13 @@ use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::SExprVisitor;
 use crate::optimizer::ir::Side;
+use crate::optimizer::ir::VisitAction;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::optimizer::Optimizer;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -1139,5 +1142,46 @@ impl<T> std::ops::IndexMut<Side> for Pair<T> {
             Side::Left => &mut self.left,
             Side::Right => &mut self.right,
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl Optimizer for RuleEagerAggregation {
+    fn name(&self) -> String {
+        "RuleEagerAggregationOptimizer".to_string()
+    }
+
+    async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr, ErrorCode> {
+        self.optimize_sync(s_expr)
+    }
+}
+
+unsafe impl Sync for RuleEagerAggregation {}
+unsafe impl Send for RuleEagerAggregation {}
+
+impl RuleEagerAggregation {
+    pub fn optimize_sync(&mut self, s_expr: &SExpr) -> Result<SExpr, ErrorCode> {
+        s_expr
+            .clone()
+            .accept(self)
+            .map(|res| res.unwrap_or_else(|| s_expr.clone()))
+    }
+}
+
+impl SExprVisitor for RuleEagerAggregation {
+    fn visit(&mut self, expr: &SExpr) -> Result<VisitAction, ErrorCode> {
+        for (i, matcher) in self.matchers.iter().enumerate() {
+            let mut state = TransformResult::new();
+            if matcher.matches(expr) {
+                self.apply_matcher(i, expr, &mut state)?;
+                let results = state.results();
+                if results.is_empty() {
+                    continue;
+                } else {
+                    return Ok(VisitAction::Replace(results[results.len() - 1].clone()));
+                }
+            }
+        }
+        Ok(VisitAction::Continue)
     }
 }

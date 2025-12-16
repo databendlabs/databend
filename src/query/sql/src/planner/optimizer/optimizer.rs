@@ -34,6 +34,7 @@ use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
 use crate::optimizer::optimizers::operator::SingleToInnerOptimizer;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
+use crate::optimizer::optimizers::rule::RuleEagerAggregation;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use crate::optimizer::optimizers::CTEFilterPushdownOptimizer;
@@ -238,48 +239,53 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
 }
 
 pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<SExpr> {
+    let settings = opt_ctx.get_table_ctx().get_settings();
     let mut pipeline = OptimizerPipeline::new(opt_ctx.clone(), s_expr.clone())
         .await?
-        // 2. Eliminate subqueries by rewriting them into more efficient form
+        // Eliminate subqueries by rewriting them into more efficient form
         .add(SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None))
-        // 3. Apply statistics aggregation to gather and propagate statistics
+        // Apply statistics aggregation to gather and propagate statistics
         .add(RuleStatsAggregateOptimizer::new(opt_ctx.clone()))
-        // 4. Collect statistics for SExpr nodes to support cost estimation
+        // Collect statistics for SExpr nodes to support cost estimation
         .add(CollectStatisticsOptimizer::new(opt_ctx.clone()))
-        // 5. Normalize aggregate, it should be executed before RuleSplitAggregate.
+        // Normalize aggregate, it should be executed before RuleSplitAggregate.
         .add(RuleNormalizeAggregateOptimizer::new())
-        // 6. Pull up and infer filter.
+        // Pull up and infer filter.
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
-        // 7. Run default rewrite rules
+        // Run default rewrite rules
         .add(RecursiveRuleOptimizer::new(
             opt_ctx.clone(),
             &DEFAULT_REWRITE_RULES,
         ))
-        // 8. CTE filter pushdown optimization
+        // CTE filter pushdown optimization
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
-        // 9. Run post rewrite rules
+        // Run post rewrite rules
         .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
         ]))
-        // 10. Apply DPhyp algorithm for cost-based join reordering
+        // Apply DPhyp algorithm for cost-based join reordering
         .add(DPhpyOptimizer::new(opt_ctx.clone()))
-        // 11. After join reorder, Convert some single join to inner join.
+        // After join reorder, Convert some single join to inner join.
         .add(SingleToInnerOptimizer::new())
-        // 12. Deduplicate join conditions.
+        // Deduplicate join conditions.
         .add(DeduplicateJoinConditionOptimizer::new())
-        // 13. Apply join commutativity to further optimize join ordering
+        // Apply join commutativity to further optimize join ordering
         .add_if(
             opt_ctx.get_enable_join_reorder(),
             RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::CommuteJoin].as_slice()),
         )
-        // 14. Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
+        .add_if(
+            settings.get_force_eager_aggregate()?,
+            RuleEagerAggregation::new(opt_ctx.get_metadata()),
+        )
+        // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
         .add(CascadesOptimizer::new(opt_ctx.clone())?)
-        // 15. Eliminate unnecessary scalar calculations to clean up the final plan
+        // Eliminate unnecessary scalar calculations to clean up the final plan
         .add_if(
             !opt_ctx.get_planning_agg_index(),
             RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
         )
-        // 16. Clean up unused CTEs
+        // Clean up unused CTEs
         .add(CleanupUnusedCTEOptimizer);
 
     // 17. Execute the pipeline
