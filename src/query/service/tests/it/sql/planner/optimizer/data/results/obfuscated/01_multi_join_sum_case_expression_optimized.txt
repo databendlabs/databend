@@ -1,27 +1,27 @@
 Exchange(Merge)
 └── EvalScalar
-    ├── scalars: [a.a0d (#0) AS (#0), a.a0k (#7) AS (#7), a.a0m (#9) AS (#9), c.a5m (#144) AS (#144), sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167) AS (#167), eq(t.sell_mnt (#167), 0) AS (#168)]
+    ├── scalars: [a0c.a0d (#0) AS (#0), a0c.a0k (#7) AS (#7), a0c.a0m (#9) AS (#9), a2x.a5m (#144) AS (#144), sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167) AS (#167), eq(sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167), 0) AS (#168)]
     └── Aggregate(Final)
-        ├── group items: [a.a0d (#0) AS (#0), a.a0k (#7) AS (#7), a.a0m (#9) AS (#9), c.a5m (#144) AS (#144)]
-        ├── aggregate functions: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) AS (#167)]
+        ├── group items: [a0c.a0d (#0) AS (#0), a0c.a0k (#7) AS (#7), a0c.a0m (#9) AS (#9), a2x.a5m (#144) AS (#144)]
+        ├── aggregate functions: [sum(sum_arg_0 (#166)) AS (#167)]
         └── Aggregate(Partial)
-            ├── group items: [a.a0d (#0) AS (#0), a.a0k (#7) AS (#7), a.a0m (#9) AS (#9), c.a5m (#144) AS (#144)]
-            ├── aggregate functions: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) AS (#167)]
+            ├── group items: [a0c.a0d (#0) AS (#0), a0c.a0k (#7) AS (#7), a0c.a0m (#9) AS (#9), a2x.a5m (#144) AS (#144)]
+            ├── aggregate functions: [sum(sum_arg_0 (#166)) AS (#167)]
             └── Exchange(Hash)
-                ├── Exchange(Hash): keys: [a.a0d (#0)]
+                ├── Exchange(Hash): keys: [a0c.a0d (#0)]
                 └── EvalScalar
-                    ├── scalars: [a.a0d (#0) AS (#0), a.a0k (#7) AS (#7), a.a0m (#9) AS (#9), c.a5m (#144) AS (#144), if(eq(d.a1v (#154), '603020'), 1, 0) AS (#166), b.a2t (#70) AS (#169), c.a4m (#118) AS (#170), d.a5w (#156) AS (#171)]
+                    ├── scalars: [a0c.a0d (#0) AS (#0), a0c.a0k (#7) AS (#7), a0c.a0m (#9) AS (#9), a2x.a5m (#144) AS (#144), if(eq(a5r.a1v (#154), '603020'), 1, 0) AS (#166), a1z.a2t (#70) AS (#169), a2x.a4m (#118) AS (#170), a5r.a5w (#156) AS (#171)]
                     └── Join(Inner)
-                        ├── build keys: [b.a0k (#48), b.a0n (#50)]
-                        ├── probe keys: [a.a0k (#7), a.a0n (#10)]
-                        ├── other filters: [lte(b.a2c (#52), a.a0d (#0)), gt(b.a2k (#61), a.a0d (#0))]
+                        ├── build keys: [a1z.a0k (#48), a1z.a0n (#50)]
+                        ├── probe keys: [a0c.a0k (#7), a0c.a0n (#10)]
+                        ├── other filters: [lte(a1z.a2c (#52), a0c.a0d (#0)), gt(a1z.a2k (#61), a0c.a0d (#0))]
                         ├── Join(Inner)
-                        │   ├── build keys: [c.a0m (#149)]
-                        │   ├── probe keys: [a.a0m (#9)]
+                        │   ├── build keys: [a0m (#149)]
+                        │   ├── probe keys: [a0c.a0m (#9)]
                         │   ├── other filters: []
                         │   ├── Join(Inner)
-                        │   │   ├── build keys: [d.a5t (#151)]
-                        │   │   ├── probe keys: [a.a0l (#8)]
+                        │   │   ├── build keys: [a5r.a5t (#151)]
+                        │   │   ├── probe keys: [a0c.a0l (#8)]
                         │   │   ├── other filters: []
                         │   │   ├── Scan
                         │   │   │   ├── table: default.a0c (#0)
@@ -36,7 +36,7 @@ Exchange(Merge)
                         │   │           └── limit: NONE
                         │   └── Exchange(Broadcast)
                         │       └── EvalScalar
-                        │           ├── scalars: [CAST(c.a0m (#74) AS String NULL) AS (#149)]
+                        │           ├── scalars: [CAST(a2x.a0m (#74) AS String NULL) AS (#149)]
                         │           └── Scan
                         │               ├── table: default.a2x (#2)
                         │               ├── filters: [eq(substring(a2x.a4m (#118), 20, 1), '1')]

@@ -501,7 +501,7 @@ impl<'a> EagerContext<'a> {
 
         if can_push_down[Side::Left]
             && can_push_down[Side::Right]
-            && !self.apply_eager_split_and_groupby_count(Side::Left, &mut results)?
+            && !self.apply_double_eager(Side::Left, &mut results)?
         {
             return Ok(vec![]);
         }
@@ -513,7 +513,7 @@ impl<'a> EagerContext<'a> {
         };
         if can_push_down[d]
             && self.eager_aggregations[d.opposite()].is_empty()
-            && !self.apply_single_side_push(d, &mut results)?
+            && !self.apply_single_eager(d, &mut results)?
         {
             return Ok(vec![]);
         }
@@ -521,11 +521,18 @@ impl<'a> EagerContext<'a> {
         Ok(results)
     }
 
-    fn apply_eager_split_and_groupby_count(
-        &mut self,
-        d: Side,
-        results: &mut Vec<SExpr>,
-    ) -> Result<bool, ErrorCode> {
+    fn apply_double_eager(&mut self, d: Side, results: &mut Vec<SExpr>) -> Result<bool, ErrorCode> {
+        // (1) apply eager split on d and d.opposite.
+        // (2) apply eager groupby-count on d.
+        // we use `final_eager_split` and `final_eager_groupby_count` to represent
+        // the (1) and (2) respectively, the structure of operators is as follows:
+        // final_eager_split / final_eager_groupby_count
+        // |
+        // join
+        // | \
+        // |  eager_group_by_and_eager_count
+        // eager_group_by_and_eager_count
+
         let original_final_agg = self.final_agg.clone();
         let mut final_eager_split = self.final_agg.clone();
 
@@ -690,11 +697,20 @@ impl<'a> EagerContext<'a> {
         Ok(true)
     }
 
-    fn apply_single_side_push(
-        &mut self,
-        d: Side,
-        results: &mut Vec<SExpr>,
-    ) -> Result<bool, ErrorCode> {
+    fn apply_single_eager(&mut self, d: Side, results: &mut Vec<SExpr>) -> Result<bool, ErrorCode> {
+        // (1) Try to apply eager group-by on d.
+        // (2) Try to apply eager count on d.opposite 's sum aggregations.
+        // (3) If (1) and (2) success, apply double eager on d and d^1.
+        // we use `final_eager_group_by`, `final_eager_count` and `final_double_eager`
+        // to represent the (1), (2) and (3) respectively, the structure of operators
+        // is as follows:
+        // final_eager_group_by / final_eager_count / final_double_eager
+        // |
+        // join
+        // | \
+        // |  eager_count
+        // eager_group_by
+
         let mut final_double_eager = self.final_agg.clone();
         let mut final_eager_count = self.final_agg.clone();
 

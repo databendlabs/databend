@@ -67,20 +67,10 @@ fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &RelOperator) -> FormatT
     }
 }
 
-fn format_scalar<I: IdHumanizer>(_id_humanizer: &I, scalar: &ScalarExpr) -> String {
+fn format_scalar<I: IdHumanizer>(id_humanizer: &I, scalar: &ScalarExpr) -> String {
     match scalar {
         ScalarExpr::BoundColumnRef(column_ref) => {
-            if let Some(table_name) = &column_ref.column.table_name {
-                format!(
-                    "{}.{} (#{})",
-                    table_name, column_ref.column.column_name, column_ref.column.index
-                )
-            } else {
-                format!(
-                    "{} (#{})",
-                    column_ref.column.column_name, column_ref.column.index
-                )
-            }
+            id_humanizer.humanize_column_id(column_ref.column.index)
         }
         ScalarExpr::ConstantExpr(constant) => constant.value.to_string(),
         ScalarExpr::TypedConstantExpr(constant, _) => constant.value.to_string(),
@@ -103,7 +93,7 @@ fn format_scalar<I: IdHumanizer>(_id_humanizer: &I, scalar: &ScalarExpr) -> Stri
                 },
                 agg.args
                     .iter()
-                    .map(|arg| format_scalar(_id_humanizer, arg))
+                    .map(|arg| format_scalar(id_humanizer, arg))
                     .collect::<Vec<_>>()
                     .join(", ")
             )
@@ -112,7 +102,7 @@ fn format_scalar<I: IdHumanizer>(_id_humanizer: &I, scalar: &ScalarExpr) -> Stri
             let args = lambda
                 .args
                 .iter()
-                .map(|arg| format_scalar(_id_humanizer, arg))
+                .map(|arg| format_scalar(id_humanizer, arg))
                 .collect::<Vec<String>>()
                 .join(", ");
             format!(
@@ -126,7 +116,7 @@ fn format_scalar<I: IdHumanizer>(_id_humanizer: &I, scalar: &ScalarExpr) -> Stri
                 &func.func_name,
                 func.arguments
                     .iter()
-                    .map(|arg| format_scalar(_id_humanizer, arg))
+                    .map(|arg| format_scalar(id_humanizer, arg))
                     .collect::<Vec<String>>()
                     .join(", ")
             )
@@ -134,18 +124,20 @@ fn format_scalar<I: IdHumanizer>(_id_humanizer: &I, scalar: &ScalarExpr) -> Stri
         ScalarExpr::CastExpr(cast) => {
             format!(
                 "CAST({} AS {})",
-                format_scalar(_id_humanizer, &cast.argument),
+                format_scalar(id_humanizer, &cast.argument),
                 cast.target_type
             )
         }
-        ScalarExpr::SubqueryExpr(_) => "SUBQUERY".to_string(),
+        ScalarExpr::SubqueryExpr(sub) => {
+            format!("SUBQUERY AS (#{})", sub.output_column.index)
+        }
         ScalarExpr::UDFCall(udf) => {
             format!(
                 "{}({})",
                 &udf.handler,
                 udf.arguments
                     .iter()
-                    .map(|arg| format_scalar(_id_humanizer, arg))
+                    .map(|arg| format_scalar(id_humanizer, arg))
                     .collect::<Vec<String>>()
                     .join(", ")
             )
@@ -154,7 +146,7 @@ fn format_scalar<I: IdHumanizer>(_id_humanizer: &I, scalar: &ScalarExpr) -> Stri
             format!(
                 "{}({})",
                 &udf.func_name,
-                format_scalar(_id_humanizer, &udf.scalar)
+                format_scalar(id_humanizer, &udf.scalar)
             )
         }
         ScalarExpr::UDAFCall(udaf) => udaf.display_name.clone(),

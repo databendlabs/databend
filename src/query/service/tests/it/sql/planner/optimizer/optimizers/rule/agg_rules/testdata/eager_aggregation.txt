@@ -22,7 +22,7 @@ ORDER BY
 
 === #0 raw plan ===
 Sort
-├── sort keys: [derived.sum(l_extendedprice * (1 - l_discount)) (#34) DESC NULLS LAST, default.orders.o_orderdate (#4) ASC NULLS LAST]
+├── sort keys: [sum(l_extendedprice * (1 - l_discount)) (#34) DESC NULLS LAST, orders.o_orderdate (#4) ASC NULLS LAST]
 ├── limit: [NONE]
 └── EvalScalar
     ├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#34) AS (#34)]
@@ -60,13 +60,13 @@ Sort
 
 === #0 apply plan 0 ===
 EvalScalar
-├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#41) AS (#34)]
+├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), _eager_final_sum (#41) AS (#34)]
 └── Aggregate(Final)
     ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
-    ├── aggregate functions: [sum(_eager (#34)) AS (#41)]
+    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#34)) AS (#41)]
     └── Aggregate(Partial)
         ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
-        ├── aggregate functions: [sum(_eager (#34)) AS (#41)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#34)) AS (#41)]
         └── Join(Inner)
             ├── build keys: [lineitem.l_orderkey (#17)]
             ├── probe keys: [orders.o_orderkey (#0)]
@@ -104,12 +104,12 @@ EvalScalar
 ├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#34) AS (#34)]
 └── Aggregate(Final)
     ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
-    ├── aggregate functions: [sum(sum_arg_0 (#43)) AS (#34)]
+    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#43)) AS (#34)]
     └── Aggregate(Partial)
         ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
-        ├── aggregate functions: [sum(sum_arg_0 (#43)) AS (#34)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#43)) AS (#34)]
         └── EvalScalar
-            ├── scalars: [multiply(multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))), CAST(_eager_count (#40) AS UInt64)) AS (#43)]
+            ├── scalars: [multiply(multiply(lineitem.l_extendedprice (#22), minus(1, lineitem.l_discount (#23))), CAST(count(*) (#40) AS UInt64)) AS (#43)]
             └── Join(Inner)
                 ├── build keys: [lineitem.l_orderkey (#17)]
                 ├── probe keys: [orders.o_orderkey (#0)]
@@ -142,15 +142,15 @@ EvalScalar
 
 === #0 apply plan 2 ===
 EvalScalar
-├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), sum(l_extendedprice * (1 - l_discount)) (#41) AS (#34)]
+├── scalars: [orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7), lineitem.l_orderkey (#17) AS (#17), _eager_final_sum (#41) AS (#34)]
 └── Aggregate(Final)
     ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
-    ├── aggregate functions: [sum(_eager (#42)) AS (#41)]
+    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#42)) AS (#41)]
     └── Aggregate(Partial)
         ├── group items: [lineitem.l_orderkey (#17) AS (#17), orders.o_orderdate (#4) AS (#4), orders.o_shippriority (#7) AS (#7)]
-        ├── aggregate functions: [sum(_eager (#42)) AS (#41)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#42)) AS (#41)]
         └── EvalScalar
-            ├── scalars: [multiply(_eager (#34), CAST(_eager_count (#40) AS UInt64)) AS (#42)]
+            ├── scalars: [multiply(sum(l_extendedprice * (1 - l_discount)) (#34), CAST(count(*) (#40) AS UInt64)) AS (#42)]
             └── Join(Inner)
                 ├── build keys: [lineitem.l_orderkey (#17)]
                 ├── probe keys: [orders.o_orderkey (#0)]
@@ -224,13 +224,13 @@ EvalScalar
 
 === #1 apply plan 0 ===
 EvalScalar
-├── scalars: [orders.o_orderkey (#16) AS (#16), sum(l_extendedprice * (1 - l_discount)) (#30) AS (#26)]
+├── scalars: [orders.o_orderkey (#16) AS (#16), _eager_final_sum (#30) AS (#26)]
 └── Aggregate(Final)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
-    ├── aggregate functions: [sum(_eager (#26)) AS (#30)]
+    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#26)) AS (#30)]
     └── Aggregate(Partial)
         ├── group items: [orders.o_orderkey (#16) AS (#16)]
-        ├── aggregate functions: [sum(_eager (#26)) AS (#30)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#26)) AS (#30)]
         └── Join(Inner)
             ├── build keys: [orders.o_orderkey (#16)]
             ├── probe keys: [lineitem.l_orderkey (#0)]
@@ -259,12 +259,12 @@ EvalScalar
 ├── scalars: [orders.o_orderkey (#16) AS (#16), sum(l_extendedprice * (1 - l_discount)) (#26) AS (#26)]
 └── Aggregate(Final)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
-    ├── aggregate functions: [sum(sum_arg_0 (#32)) AS (#26)]
+    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#32)) AS (#26)]
     └── Aggregate(Partial)
         ├── group items: [orders.o_orderkey (#16) AS (#16)]
-        ├── aggregate functions: [sum(sum_arg_0 (#32)) AS (#26)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#32)) AS (#26)]
         └── EvalScalar
-            ├── scalars: [multiply(multiply(lineitem.l_extendedprice (#5), minus(1, lineitem.l_discount (#6))), CAST(_eager_count (#29) AS UInt64)) AS (#32)]
+            ├── scalars: [multiply(multiply(lineitem.l_extendedprice (#5), minus(1, lineitem.l_discount (#6))), CAST(count(*) (#29) AS UInt64)) AS (#32)]
             └── Join(Inner)
                 ├── build keys: [orders.o_orderkey (#16)]
                 ├── probe keys: [lineitem.l_orderkey (#0)]
@@ -288,15 +288,15 @@ EvalScalar
 
 === #1 apply plan 2 ===
 EvalScalar
-├── scalars: [orders.o_orderkey (#16) AS (#16), sum(l_extendedprice * (1 - l_discount)) (#30) AS (#26)]
+├── scalars: [orders.o_orderkey (#16) AS (#16), _eager_final_sum (#30) AS (#26)]
 └── Aggregate(Final)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
-    ├── aggregate functions: [sum(_eager (#31)) AS (#30)]
+    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#31)) AS (#30)]
     └── Aggregate(Partial)
         ├── group items: [orders.o_orderkey (#16) AS (#16)]
-        ├── aggregate functions: [sum(_eager (#31)) AS (#30)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) * _eager_count (#31)) AS (#30)]
         └── EvalScalar
-            ├── scalars: [multiply(_eager (#26), CAST(_eager_count (#29) AS UInt64)) AS (#31)]
+            ├── scalars: [multiply(sum(l_extendedprice * (1 - l_discount)) (#26), CAST(count(*) (#29) AS UInt64)) AS (#31)]
             └── Join(Inner)
                 ├── build keys: [orders.o_orderkey (#16)]
                 ├── probe keys: [lineitem.l_orderkey (#0)]
@@ -360,15 +360,15 @@ EvalScalar
 
 === #2 apply plan 0 ===
 EvalScalar
-├── scalars: [orders.o_orderkey (#16) AS (#16), sum(l_extendedprice) (#30) AS (#25), sum(o_totalprice) (#26) AS (#26)]
+├── scalars: [orders.o_orderkey (#16) AS (#16), _eager_final_sum (#30) AS (#25), sum(o_totalprice) (#26) AS (#26)]
 └── Aggregate(Final)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
-    ├── aggregate functions: [sum(_eager (#25)) AS (#30), sum(orders.o_totalprice (#34)) AS (#26)]
+    ├── aggregate functions: [sum(sum(l_extendedprice) (#25)) AS (#30), sum(sum(o_totalprice) * _eager_count (#34)) AS (#26)]
     └── Aggregate(Partial)
         ├── group items: [orders.o_orderkey (#16) AS (#16)]
-        ├── aggregate functions: [sum(_eager (#25)) AS (#30), sum(orders.o_totalprice (#34)) AS (#26)]
+        ├── aggregate functions: [sum(sum(l_extendedprice) (#25)) AS (#30), sum(sum(o_totalprice) * _eager_count (#34)) AS (#26)]
         └── EvalScalar
-            ├── scalars: [multiply(orders.o_totalprice (#19), CAST(_eager_count (#28) AS UInt64)) AS (#34)]
+            ├── scalars: [multiply(orders.o_totalprice (#19), CAST(count(*) (#28) AS UInt64)) AS (#34)]
             └── Join(Inner)
                 ├── build keys: [orders.o_orderkey (#16)]
                 ├── probe keys: [lineitem.l_orderkey (#0)]
@@ -394,15 +394,15 @@ EvalScalar
 
 === #2 apply plan 1 ===
 EvalScalar
-├── scalars: [orders.o_orderkey (#16) AS (#16), sum(l_extendedprice) (#30) AS (#25), sum(o_totalprice) (#31) AS (#26)]
+├── scalars: [orders.o_orderkey (#16) AS (#16), _eager_final_sum (#30) AS (#25), _eager_final_sum (#31) AS (#26)]
 └── Aggregate(Final)
     ├── group items: [orders.o_orderkey (#16) AS (#16)]
-    ├── aggregate functions: [sum(_eager (#32)) AS (#30), sum(_eager (#33)) AS (#31)]
+    ├── aggregate functions: [sum(sum(l_extendedprice) * _eager_count (#32)) AS (#30), sum(sum(o_totalprice) * _eager_count (#33)) AS (#31)]
     └── Aggregate(Partial)
         ├── group items: [orders.o_orderkey (#16) AS (#16)]
-        ├── aggregate functions: [sum(_eager (#32)) AS (#30), sum(_eager (#33)) AS (#31)]
+        ├── aggregate functions: [sum(sum(l_extendedprice) * _eager_count (#32)) AS (#30), sum(sum(o_totalprice) * _eager_count (#33)) AS (#31)]
         └── EvalScalar
-            ├── scalars: [multiply(_eager (#25), CAST(_eager_count (#29) AS UInt64)) AS (#32), multiply(_eager (#26), CAST(_eager_count (#28) AS UInt64)) AS (#33)]
+            ├── scalars: [multiply(sum(l_extendedprice) (#25), CAST(count(*) (#29) AS UInt64)) AS (#32), multiply(sum(o_totalprice) (#26), CAST(count(*) (#28) AS UInt64)) AS (#33)]
             └── Join(Inner)
                 ├── build keys: [orders.o_orderkey (#16)]
                 ├── probe keys: [lineitem.l_orderkey (#0)]
@@ -447,15 +447,15 @@ EvalScalar
 ├── scalars: [orders.o_orderkey (#18) AS (#18), sum(revenue) (#27) AS (#27)]
 └── Aggregate(Final)
     ├── group items: [orders.o_orderkey (#18) AS (#18)]
-    ├── aggregate functions: [sum(loss.revenue (#17)) AS (#27)]
+    ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#17)) AS (#27)]
     └── Aggregate(Partial)
         ├── group items: [orders.o_orderkey (#18) AS (#18)]
-        ├── aggregate functions: [sum(loss.revenue (#17)) AS (#27)]
+        ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#17)) AS (#27)]
         └── EvalScalar
-            ├── scalars: [loss.revenue (#17) AS (#17), orders.o_orderkey (#18) AS (#18), loss.l_orderkey (#0) AS (#29), orders.o_orderdate (#22) AS (#30)]
+            ├── scalars: [sum(l_extendedprice * (1 - l_discount)) (#17) AS (#17), orders.o_orderkey (#18) AS (#18), lineitem.l_orderkey (#0) AS (#29), orders.o_orderdate (#22) AS (#30)]
             └── Join(Inner)
                 ├── build keys: [orders.o_orderkey (#18)]
-                ├── probe keys: [loss.l_orderkey (#0)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
                 ├── other filters: []
                 ├── EvalScalar
                 │   ├── scalars: [lineitem.l_orderkey (#0) AS (#0), sum(l_extendedprice * (1 - l_discount)) (#17) AS (#17)]
@@ -480,25 +480,25 @@ EvalScalar
 
 === #3 apply plan 0 ===
 EvalScalar
-├── scalars: [orders.o_orderkey (#18) AS (#18), sum(revenue) (#32) AS (#27)]
+├── scalars: [orders.o_orderkey (#18) AS (#18), _eager_final_sum (#32) AS (#27)]
 └── Aggregate(Final)
     ├── group items: [orders.o_orderkey (#18) AS (#18)]
-    ├── aggregate functions: [sum(_eager (#27)) AS (#32)]
+    ├── aggregate functions: [sum(sum(revenue) (#27)) AS (#32)]
     └── Aggregate(Partial)
         ├── group items: [orders.o_orderkey (#18) AS (#18)]
-        ├── aggregate functions: [sum(_eager (#27)) AS (#32)]
+        ├── aggregate functions: [sum(sum(revenue) (#27)) AS (#32)]
         └── Join(Inner)
             ├── build keys: [orders.o_orderkey (#18)]
-            ├── probe keys: [loss.l_orderkey (#0)]
+            ├── probe keys: [lineitem.l_orderkey (#0)]
             ├── other filters: []
             ├── Aggregate(Final)
-            │   ├── group items: [loss.l_orderkey (#0) AS (#0)]
-            │   ├── aggregate functions: [sum(loss.revenue (#17)) AS (#27)]
+            │   ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+            │   ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#17)) AS (#27)]
             │   └── Aggregate(Partial)
-            │       ├── group items: [loss.l_orderkey (#0) AS (#0)]
-            │       ├── aggregate functions: [sum(loss.revenue (#17)) AS (#27)]
+            │       ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+            │       ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#17)) AS (#27)]
             │       └── EvalScalar
-            │           ├── scalars: [loss.revenue (#17) AS (#17), loss.l_orderkey (#0) AS (#29)]
+            │           ├── scalars: [sum(l_extendedprice * (1 - l_discount)) (#17) AS (#17), lineitem.l_orderkey (#0) AS (#29)]
             │           └── EvalScalar
             │               ├── scalars: [lineitem.l_orderkey (#0) AS (#0), sum(l_extendedprice * (1 - l_discount)) (#17) AS (#17)]
             │               └── Aggregate(Final)
@@ -525,15 +525,15 @@ EvalScalar
 ├── scalars: [orders.o_orderkey (#18) AS (#18), sum(revenue) (#27) AS (#27)]
 └── Aggregate(Final)
     ├── group items: [orders.o_orderkey (#18) AS (#18)]
-    ├── aggregate functions: [sum(loss.revenue (#34)) AS (#27)]
+    ├── aggregate functions: [sum(sum(revenue) * _eager_count (#34)) AS (#27)]
     └── Aggregate(Partial)
         ├── group items: [orders.o_orderkey (#18) AS (#18)]
-        ├── aggregate functions: [sum(loss.revenue (#34)) AS (#27)]
+        ├── aggregate functions: [sum(sum(revenue) * _eager_count (#34)) AS (#27)]
         └── EvalScalar
-            ├── scalars: [multiply(loss.revenue (#17), CAST(_eager_count (#31) AS UInt64)) AS (#34)]
+            ├── scalars: [multiply(sum(l_extendedprice * (1 - l_discount)) (#17), CAST(count(*) (#31) AS UInt64)) AS (#34)]
             └── Join(Inner)
                 ├── build keys: [orders.o_orderkey (#18)]
-                ├── probe keys: [loss.l_orderkey (#0)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
                 ├── other filters: []
                 ├── EvalScalar
                 │   ├── scalars: [lineitem.l_orderkey (#0) AS (#0), sum(l_extendedprice * (1 - l_discount)) (#17) AS (#17)]
@@ -564,27 +564,27 @@ EvalScalar
 
 === #3 apply plan 2 ===
 EvalScalar
-├── scalars: [orders.o_orderkey (#18) AS (#18), sum(revenue) (#32) AS (#27)]
+├── scalars: [orders.o_orderkey (#18) AS (#18), _eager_final_sum (#32) AS (#27)]
 └── Aggregate(Final)
     ├── group items: [orders.o_orderkey (#18) AS (#18)]
-    ├── aggregate functions: [sum(_eager (#33)) AS (#32)]
+    ├── aggregate functions: [sum(sum(revenue) * _eager_count (#33)) AS (#32)]
     └── Aggregate(Partial)
         ├── group items: [orders.o_orderkey (#18) AS (#18)]
-        ├── aggregate functions: [sum(_eager (#33)) AS (#32)]
+        ├── aggregate functions: [sum(sum(revenue) * _eager_count (#33)) AS (#32)]
         └── EvalScalar
-            ├── scalars: [multiply(_eager (#27), CAST(_eager_count (#31) AS UInt64)) AS (#33)]
+            ├── scalars: [multiply(sum(revenue) (#27), CAST(count(*) (#31) AS UInt64)) AS (#33)]
             └── Join(Inner)
                 ├── build keys: [orders.o_orderkey (#18)]
-                ├── probe keys: [loss.l_orderkey (#0)]
+                ├── probe keys: [lineitem.l_orderkey (#0)]
                 ├── other filters: []
                 ├── Aggregate(Final)
-                │   ├── group items: [loss.l_orderkey (#0) AS (#0)]
-                │   ├── aggregate functions: [sum(loss.revenue (#17)) AS (#27)]
+                │   ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+                │   ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#17)) AS (#27)]
                 │   └── Aggregate(Partial)
-                │       ├── group items: [loss.l_orderkey (#0) AS (#0)]
-                │       ├── aggregate functions: [sum(loss.revenue (#17)) AS (#27)]
+                │       ├── group items: [lineitem.l_orderkey (#0) AS (#0)]
+                │       ├── aggregate functions: [sum(sum(l_extendedprice * (1 - l_discount)) (#17)) AS (#27)]
                 │       └── EvalScalar
-                │           ├── scalars: [loss.revenue (#17) AS (#17), loss.l_orderkey (#0) AS (#29)]
+                │           ├── scalars: [sum(l_extendedprice * (1 - l_discount)) (#17) AS (#17), lineitem.l_orderkey (#0) AS (#29)]
                 │           └── EvalScalar
                 │               ├── scalars: [lineitem.l_orderkey (#0) AS (#0), sum(l_extendedprice * (1 - l_discount)) (#17) AS (#17)]
                 │               └── Aggregate(Final)
