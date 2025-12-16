@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -22,22 +23,30 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
+use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_settings::FlightCompression;
 use databend_common_storage::DataOperator;
 
-use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
+use crate::physical_plans::AggregateShuffleMode;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAggregateSerializer;
 use crate::pipelines::processors::transforms::aggregator::serde::TransformExchangeAsyncBarrier;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
+use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
+use crate::pipelines::processors::transforms::aggregator::RowShuffleReaderTransform;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateSerializer;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
 use crate::servers::flight::v1::exchange::ExchangeSorting;
 use crate::servers::flight::v1::exchange::MergeExchangeParams;
+use crate::servers::flight::v1::exchange::ScatterTransform;
 use crate::servers::flight::v1::exchange::ShuffleExchangeParams;
 use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::sessions::QueryContext;
@@ -76,8 +85,9 @@ impl ExchangeSorting for AggregateExchangeSorting {
     }
 }
 
-struct HashTableHashScatter {
-    buckets: usize,
+pub struct HashTableHashScatter {
+    pub buckets: usize,
+    pub(crate) aggregate_params: Arc<AggregatorParams>,
 }
 
 fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>> {
@@ -179,7 +189,30 @@ impl FlightScatter for HashTableHashScatter {
                 match block_meta {
                     AggregateMeta::Spilled(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(_) => unreachable!(),
-                    AggregateMeta::Serialized(_) => unreachable!(),
+                    AggregateMeta::Serialized(payload) => {
+                        let mut partition = payload.convert_to_partitioned_payload(
+                            self.aggregate_params.group_data_types.clone(),
+                            self.aggregate_params.aggregate_functions.clone(),
+                            self.aggregate_params.num_states(),
+                            0,
+                            Arc::new(Bump::new()),
+                        )?;
+                        let payload = partition.payloads.pop();
+                        if let Some(payload) = payload {
+                            for (bucket, payload) in scatter_payload(payload, self.buckets)?
+                                .into_iter()
+                                .enumerate()
+                            {
+                                blocks.push(DataBlock::empty_with_meta(
+                                    AggregateMeta::create_agg_payload(
+                                        bucket as isize,
+                                        payload,
+                                        MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
+                                    ),
+                                ));
+                            }
+                        }
+                    }
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                     AggregateMeta::NewSpilled(_) => unreachable!(),
@@ -216,16 +249,19 @@ impl FlightScatter for HashTableHashScatter {
 pub struct AggregateInjector {
     ctx: Arc<QueryContext>,
     aggregator_params: Arc<AggregatorParams>,
+    shuffle_mode: AggregateShuffleMode,
 }
 
 impl AggregateInjector {
     pub fn create(
         ctx: Arc<QueryContext>,
         params: Arc<AggregatorParams>,
+        shuffle_mode: AggregateShuffleMode,
     ) -> Arc<dyn ExchangeInjector> {
         Arc::new(AggregateInjector {
             ctx,
             aggregator_params: params,
+            shuffle_mode,
         })
     }
 }
@@ -242,13 +278,18 @@ impl ExchangeInjector for AggregateInjector {
             DataExchange::NodeToNodeExchange(exchange) => {
                 Ok(Arc::new(Box::new(HashTableHashScatter {
                     buckets: exchange.destination_ids.len(),
+                    aggregate_params: self.aggregator_params.clone(),
                 })))
             }
         }
     }
 
     fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>> {
-        Some(Arc::new(AggregateExchangeSorting {}))
+        if self.aggregator_params.enable_experiment_aggregate {
+            None
+        } else {
+            Some(Arc::new(AggregateExchangeSorting {}))
+        }
     }
 
     fn apply_merge_serializer(
@@ -333,6 +374,53 @@ impl ExchangeInjector for AggregateInjector {
     ) -> Result<()> {
         pipeline.add_transform(|input, output| {
             TransformAggregateDeserializer::try_create(input, output, &params.schema)
-        })
+        })?;
+        if self.aggregator_params.enable_experiment_aggregate {
+            let output_len = match &self.shuffle_mode {
+                AggregateShuffleMode::Row => {
+                    // add a resize processor to avoid all spilled bucket flow into one reader processor
+                    let output_len = pipeline.output_len();
+                    pipeline.resize(output_len, true)?;
+
+                    pipeline.add_transform(|input, output| {
+                        let reader = NewAggregateSpillReader::try_create(self.ctx.clone())?;
+                        Ok(ProcessorPtr::create(RowShuffleReaderTransform::create(
+                            input, output, reader,
+                        )))
+                    })?;
+                    let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+                    pipeline.add_transform(|input, output| {
+                        Ok(ScatterTransform::create(
+                            input,
+                            output,
+                            Arc::new(Box::new(HashTableHashScatter {
+                                buckets: max_threads,
+                                aggregate_params: self.aggregator_params.clone(),
+                            })),
+                        ))
+                    })?;
+                    max_threads
+                }
+                AggregateShuffleMode::Bucket(hint) => {
+                    let local_id = self.ctx.get_cluster().local_id.clone();
+                    let thread_hint = hint
+                        .iter()
+                        .find(|(id, _)| *id == local_id)
+                        .expect("this node not in hint")
+                        .1 as usize;
+                    thread_hint
+                }
+            };
+            let input_len = pipeline.output_len();
+            let transform = ExchangeShuffleTransform::create(input_len, output_len, output_len);
+            let inputs = transform.get_inputs();
+            let outputs = transform.get_outputs();
+            pipeline.add_pipe(Pipe::create(input_len, output_len, vec![PipeItem::create(
+                ProcessorPtr::create(Box::new(transform)),
+                inputs,
+                outputs,
+            )]));
+        }
+        Ok(())
     }
 }

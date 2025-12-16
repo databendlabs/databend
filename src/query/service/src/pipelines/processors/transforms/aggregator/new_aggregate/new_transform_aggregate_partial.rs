@@ -17,6 +17,7 @@ use std::vec;
 
 use bumpalo::Bump;
 use databend_common_catalog::plan::AggIndexMeta;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -25,7 +26,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_expression::PartitionedPayload;
-use databend_common_expression::PayloadFlushState;
+use databend_common_expression::Payload;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::types::BinaryType;
@@ -50,6 +51,7 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_exchange_inj
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
+use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
 use crate::sessions::QueryContext;
 
@@ -66,9 +68,9 @@ impl Default for HashTable {
 }
 
 enum Spiller {
-    Standalone(NewAggregateSpiller),
+    Standalone(NewAggregateSpiller<SharedPartitionStream>),
     // (local_pos, spillers for all)
-    Clusters(usize, Vec<NewAggregateSpiller>),
+    Clusters(usize, Vec<NewAggregateSpiller<SharedPartitionStream>>),
 }
 
 impl Spiller {
@@ -77,12 +79,20 @@ impl Spiller {
         partition_streams: Vec<SharedPartitionStream>,
         local_pos: usize,
     ) -> Result<Self> {
+        if partition_streams.is_empty() {
+            return Err(ErrorCode::Internal("partition_streams is empty"));
+        }
+
         match partition_streams.len() {
             1 => {
+                let stream = partition_streams
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| ErrorCode::Internal("partition_streams is empty"))?;
                 let spiller = NewAggregateSpiller::try_create(
                     ctx.clone(),
                     MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
-                    partition_streams[0].clone(),
+                    stream,
                     true,
                 )?;
                 Ok(Spiller::Standalone(spiller))
@@ -106,10 +116,10 @@ impl Spiller {
     }
 
     fn spill_partition(
-        spiller: &mut NewAggregateSpiller,
-        partition: PartitionedPayload,
+        spiller: &mut NewAggregateSpiller<SharedPartitionStream>,
+        payloads: Vec<Payload>,
     ) -> Result<()> {
-        for (bucket, payload) in partition.payloads.into_iter().enumerate() {
+        for (bucket, payload) in payloads.into_iter().enumerate() {
             if payload.len() == 0 {
                 continue;
             }
@@ -121,16 +131,32 @@ impl Spiller {
         Ok(())
     }
 
-    pub fn spill(&mut self, partition: PartitionedPayload) -> Result<()> {
+    pub fn spill(
+        &mut self,
+        mut partition: PartitionedPayload,
+        is_row_shuffle: bool,
+        dispatch_method: &Vec<u64>,
+    ) -> Result<()> {
         match self {
-            Spiller::Standalone(spiller) => Self::spill_partition(spiller, partition),
+            Spiller::Standalone(spiller) => Self::spill_partition(spiller, partition.payloads),
             Spiller::Clusters(_, spillers) => {
                 let nodes_num = spillers.len();
-                for (idx, partition) in scatter_partitioned_payload(partition, nodes_num)?
-                    .into_iter()
-                    .enumerate()
-                {
-                    Self::spill_partition(&mut spillers[idx], partition)?;
+                if is_row_shuffle {
+                    for (idx, partition) in scatter_partitioned_payload(partition, nodes_num)?
+                        .into_iter()
+                        .enumerate()
+                    {
+                        Self::spill_partition(&mut spillers[idx], partition.payloads)?;
+                    }
+                } else {
+                    for (idx, payload_num) in dispatch_method.iter().enumerate() {
+                        let partition = partition
+                            .payloads
+                            .drain(0..*payload_num as usize)
+                            .collect::<Vec<_>>();
+                        Self::spill_partition(&mut spillers[idx], partition)?;
+                    }
+                    debug_assert!(partition.payloads.is_empty());
                 }
 
                 Ok(())
@@ -138,20 +164,42 @@ impl Spiller {
         }
     }
 
-    fn finish_standalone(spiller: &mut NewAggregateSpiller) -> Result<Vec<DataBlock>> {
+    fn finish_standalone(
+        spiller: &mut NewAggregateSpiller<SharedPartitionStream>,
+        is_row_shuffle: bool,
+        dispatch_method: &[u64],
+    ) -> Result<Vec<DataBlock>> {
         let payloads = spiller.spill_finish()?;
+
         if payloads.is_empty() {
             return Ok(vec![]);
         }
 
-        Ok(vec![DataBlock::empty_with_meta(
-            AggregateMeta::create_new_spilled(payloads),
-        )])
+        if is_row_shuffle {
+            let mut blocks = Vec::with_capacity(payloads.len());
+            for payload in payloads {
+                let meta = AggregateMeta::create_new_bucket_spilled(payload);
+                blocks.push(DataBlock::empty_with_meta(meta));
+            }
+            return Ok(blocks);
+        } else {
+            let thread_num = *dispatch_method.first().ok_or_else(|| {
+                ErrorCode::Internal("dispatch_method is empty in finish_standalone")
+            })? as usize;
+
+            return Ok(vec![DataBlock::empty_with_meta(
+                ExchangeShuffleMeta::create(AggregateMeta::create_new_spilled_blocks(
+                    thread_num, payloads,
+                )),
+            )]);
+        }
     }
 
     fn finish_clusters(
         local_pos: usize,
-        spillers: &mut [NewAggregateSpiller],
+        spillers: &mut [NewAggregateSpiller<SharedPartitionStream>],
+        is_row_shuffle: bool,
+        dispatch_method: &[u64],
     ) -> Result<Vec<DataBlock>> {
         let mut serialized_blocks = Vec::with_capacity(spillers.len());
         let write_options = exchange_defines::spilled_write_options();
@@ -160,12 +208,21 @@ impl Spiller {
             let spilled_payloads = spiller.spill_finish()?;
 
             if index == local_pos {
-                let block = if spilled_payloads.is_empty() {
-                    DataBlock::empty()
+                if is_row_shuffle {
+                    let block = DataBlock::empty_with_meta(AggregateMeta::create_new_spilled(
+                        spilled_payloads,
+                    ));
+                    serialized_blocks.push(FlightSerialized::DataBlock(block));
                 } else {
-                    DataBlock::empty_with_meta(AggregateMeta::create_new_spilled(spilled_payloads))
-                };
-                serialized_blocks.push(FlightSerialized::DataBlock(block));
+                    let thread_num = dispatch_method[index] as usize;
+                    let dispatch_blocks =
+                        AggregateMeta::create_new_spilled_blocks(thread_num, spilled_payloads);
+
+                    let block =
+                        DataBlock::empty_with_meta(ExchangeShuffleMeta::create(dispatch_blocks));
+
+                    serialized_blocks.push(FlightSerialized::DataBlock(block));
+                }
                 continue;
             }
 
@@ -192,7 +249,11 @@ impl Spiller {
                 StringType::from_data(location_column),
                 BinaryType::from_data(row_group_column),
             ]);
-            let meta = AggregateSerdeMeta::create_new_spilled();
+            let meta = if is_row_shuffle {
+                AggregateSerdeMeta::create_new_spilled(-1)
+            } else {
+                AggregateSerdeMeta::create_new_spilled(dispatch_method[index] as isize)
+            };
             let data_block = data_block.add_meta(Some(meta))?;
             serialized_blocks.push(FlightSerialized::DataBlock(serialize_block(
                 -1,
@@ -206,10 +267,18 @@ impl Spiller {
         )])
     }
 
-    pub fn finish(&mut self) -> Result<Vec<DataBlock>> {
+    pub fn finish(
+        &mut self,
+        is_row_shuffle: bool,
+        dispatch_method: &[u64],
+    ) -> Result<Vec<DataBlock>> {
         match self {
-            Spiller::Standalone(spiller) => Self::finish_standalone(spiller),
-            Spiller::Clusters(local_pos, spillers) => Self::finish_clusters(*local_pos, spillers),
+            Spiller::Standalone(spiller) => {
+                Self::finish_standalone(spiller, is_row_shuffle, dispatch_method)
+            }
+            Spiller::Clusters(local_pos, spillers) => {
+                Self::finish_clusters(*local_pos, spillers, is_row_shuffle, dispatch_method)
+            }
         }
     }
 }
@@ -224,6 +293,8 @@ pub struct NewTransformPartialAggregate {
     statistics: AggregationStatistics,
     settings: MemorySettings,
     spillers: Spiller,
+    dispatch_method: Vec<u64>,
+    is_row_shuffle: bool,
 }
 
 impl NewTransformPartialAggregate {
@@ -235,10 +306,13 @@ impl NewTransformPartialAggregate {
         config: HashTableConfig,
         partition_streams: Vec<SharedPartitionStream>,
         local_pos: usize,
+        dispatch_method: Vec<u64>,
+        is_row_shuffle: bool,
     ) -> Result<Box<dyn Processor>> {
         let spillers = Spiller::create(ctx.clone(), partition_streams, local_pos)?;
 
         let arena = Arc::new(Bump::new());
+        dbg!(&config.initial_radix_bits);
         let hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
             params.group_data_types.clone(),
             params.aggregate_functions.clone(),
@@ -256,6 +330,8 @@ impl NewTransformPartialAggregate {
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
                 statistics: AggregationStatistics::new("NewPartialAggregate"),
                 spillers,
+                dispatch_method,
+                is_row_shuffle,
             },
         ))
     }
@@ -336,20 +412,10 @@ impl NewTransformPartialAggregate {
         if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
             let group_types = v.payload.group_types.clone();
             let aggrs = v.payload.aggrs.clone();
-            v.config.update_current_max_radix_bits();
-            let config = v
-                .config
-                .clone()
-                .with_initial_radix_bits(v.config.max_radix_bits);
+            let config = v.config.clone();
 
-            let mut state = PayloadFlushState::default();
-
-            // repartition to max for normalization
-            let partition = v
-                .payload
-                .repartition(1 << config.max_radix_bits, &mut state);
-
-            self.spillers.spill(partition)?;
+            self.spillers
+                .spill(v.payload, self.is_row_shuffle, &self.dispatch_method)?;
 
             let arena = Arc::new(Bump::new());
             self.hash_table = HashTable::AggregateHashTable(AggregateHashTable::new(
@@ -387,26 +453,50 @@ impl AccumulatingTransform for NewTransformPartialAggregate {
                 }
             },
             HashTable::AggregateHashTable(hashtable) => {
-                let mut blocks = self.spillers.finish()?;
+                let mut blocks = self
+                    .spillers
+                    .finish(self.is_row_shuffle, &self.dispatch_method)?;
 
                 let partition_count = hashtable.payload.partition_count();
-                let mut memory_blocks = Vec::with_capacity(partition_count);
+                let mut payloads = Vec::with_capacity(partition_count);
 
                 self.statistics.log_finish_statistics(&hashtable);
-
+                dbg!(&hashtable.payload.payloads.len());
                 for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    if payload.len() != 0 {
-                        memory_blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::create_agg_payload(
-                                bucket as isize,
-                                payload,
-                                partition_count,
-                            ),
-                        ));
-                    }
+                    payloads.push(AggregateMeta::create_agg_payload(
+                        bucket as isize,
+                        payload,
+                        partition_count,
+                    ));
                 }
 
-                blocks.extend(memory_blocks);
+                if self.is_row_shuffle {
+                    blocks.extend(payloads.into_iter().map(DataBlock::empty_with_meta))
+                } else {
+                    if self.dispatch_method.len() == 1 {
+                        blocks.push(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
+                            payloads
+                                .into_iter()
+                                .map(DataBlock::empty_with_meta)
+                                .collect(),
+                        )))
+                    } else {
+                        let mut chunks = Vec::with_capacity(self.dispatch_method.len());
+                        for bucket_num in self.dispatch_method.iter() {
+                            let chunk: Vec<AggregateMeta> = payloads
+                                .drain(0..*bucket_num as usize)
+                                .map(|payload| {
+                                    AggregateMeta::downcast_from(payload)
+                                        .expect("AggregateMeta is expected")
+                                })
+                                .collect();
+                            chunks.push(AggregateMeta::create_partitioned(None, chunk));
+                        }
+                        blocks.push(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
+                            chunks.into_iter().map(DataBlock::empty_with_meta).collect(),
+                        )))
+                    }
+                }
                 blocks
             }
         })

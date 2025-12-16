@@ -14,9 +14,9 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
-use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -24,10 +24,10 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::arrow::deserialize_column;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
-use databend_common_expression::arrow::deserialize_column;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -163,7 +163,7 @@ impl Processor for TransformSpillReader {
                     }
 
                     self.deserialized_meta =
-                        Some(AggregateMeta::create_partitioned(bucket, new_data, None));
+                        Some(AggregateMeta::create_partitioned(bucket, new_data));
                 }
                 AggregateMeta::NewBucketSpilled(_) => unreachable!(),
                 AggregateMeta::NewSpilled(_) => unreachable!(),
@@ -301,7 +301,7 @@ impl Processor for TransformSpillReader {
 
                     if processed_count != 0 {
                         info!(
-                            "Read aggregate finished: (bucket: {}, total read count: {}, total bytes: {}, total elapsed: {:?})",
+                            "Read aggregate finished: (bucket: {:?}, total read count: {}, total bytes: {}, total elapsed: {:?})",
                             bucket,
                             processed_count,
                             processed_bytes,

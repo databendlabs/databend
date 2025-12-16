@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -25,16 +26,16 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
-use databend_common_expression::MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_pipeline::core::Pipe;
+use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::ProcessorPtr;
-use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::sorts::TransformSortPartial;
-use databend_common_sql::IndexType;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::SortDesc;
+use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
 
@@ -42,16 +43,22 @@ use crate::clusters::ClusterHelper;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::AggregatePartialFormatter;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::physical_aggregate_final::AggregateShuffleMode;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
+use crate::pipelines::processors::transforms::aggregator::HashTableHashScatter;
+use crate::pipelines::processors::transforms::aggregator::NewAggregateSpillReader;
 use crate::pipelines::processors::transforms::aggregator::NewTransformPartialAggregate;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
+use crate::pipelines::processors::transforms::aggregator::RowShuffleReaderTransform;
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
+use crate::pipelines::PipelineBuilder;
+use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
+use crate::servers::flight::v1::exchange::ScatterTransform;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
@@ -65,6 +72,9 @@ pub struct AggregatePartial {
     pub rank_limit: Option<(Vec<SortDesc>, usize)>,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+
+    // Only used when enable_experiment_aggregate is true
+    pub shuffle_mode: AggregateShuffleMode,
 }
 
 #[typetag::serde]
@@ -165,6 +175,7 @@ impl IPhysicalPlan for AggregatePartial {
             group_by_display: self.group_by_display.clone(),
             rank_limit: self.rank_limit.clone(),
             stat_info: self.stat_info.clone(),
+            shuffle_mode: self.shuffle_mode.clone(),
         })
     }
 
@@ -175,8 +186,8 @@ impl IPhysicalPlan for AggregatePartial {
         let max_block_bytes = builder.settings.get_max_block_bytes()? as usize;
         let max_threads = builder.settings.get_max_threads()?;
         let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
-
         let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
+        let cluster = &builder.ctx.get_cluster();
 
         let params = PipelineBuilder::build_aggregator_params(
             self.input.output_schema()?,
@@ -197,12 +208,21 @@ impl IPhysicalPlan for AggregatePartial {
 
         let schema_before_group_by = params.input_schema.clone();
 
-        // Need a global atomic to read the max current radix bits hint
-        let partial_agg_config = if !builder.is_exchange_parent() {
-            HashTableConfig::default().with_partial(true, max_threads as usize)
+        let partial_agg_config = if enable_experiment_aggregate {
+            let radix_bits = self.shuffle_mode.determine_radix_bits(builder);
+            HashTableConfig::new_experiment_partial(
+                radix_bits,
+                cluster.nodes.len(),
+                max_threads as usize,
+            )
         } else {
-            HashTableConfig::default()
-                .cluster_with_partial(true, builder.ctx.get_cluster().nodes.len())
+            // Need a global atomic to read the max current radix bits hint
+            if !builder.is_exchange_parent() {
+                HashTableConfig::default().with_partial(true, max_threads as usize)
+            } else {
+                HashTableConfig::default()
+                    .cluster_with_partial(true, builder.ctx.get_cluster().nodes.len())
+            }
         };
 
         // For rank limit, we can filter data using sort with rank before partial.
@@ -215,20 +235,19 @@ impl IPhysicalPlan for AggregatePartial {
         }
 
         if params.enable_experiment_aggregate {
-            let cluster = &builder.ctx.get_cluster();
-            let streams_num = if !builder.is_exchange_parent() {
-                1
-            } else {
-                cluster.nodes.len()
-            };
             let local_pos = cluster.ordered_index();
-            let shared_partition_streams = (0..streams_num)
-                .map(|_| {
+
+            let dispatch_method = self
+                .shuffle_mode
+                .determine_shuffle_dispatch(builder, cluster);
+            let shared_partition_streams = dispatch_method
+                .iter()
+                .map(|thread_num| {
                     SharedPartitionStream::new(
                         builder.main_pipeline.output_len(),
                         max_block_rows,
                         max_block_bytes,
-                        MAX_AGGREGATE_HASHTABLE_BUCKETS_NUM as usize,
+                        *thread_num as usize,
                     )
                 })
                 .collect::<Vec<_>>();
@@ -243,9 +262,55 @@ impl IPhysicalPlan for AggregatePartial {
                         partial_agg_config.clone(),
                         shared_partition_streams.clone(),
                         local_pos,
+                        dispatch_method.clone(),
+                        matches!(self.shuffle_mode, AggregateShuffleMode::Row),
                     )?,
                 ))
             })?;
+
+            if !builder.is_exchange_parent() {
+                let input_len = builder.main_pipeline.output_len();
+
+                if matches!(self.shuffle_mode, AggregateShuffleMode::Row) {
+                    // add a resize processor to avoid all spilled bucket flow into one reader processor
+                    builder.main_pipeline.resize(input_len, true)?;
+
+                    builder.main_pipeline.add_transform(|input, output| {
+                        let reader = NewAggregateSpillReader::try_create(builder.ctx.clone())?;
+                        Ok(ProcessorPtr::create(RowShuffleReaderTransform::create(
+                            input, output, reader,
+                        )))
+                    })?;
+                    builder.main_pipeline.add_transform(|input, output| {
+                        Ok(ScatterTransform::create(
+                            input,
+                            output,
+                            Arc::new(Box::new(HashTableHashScatter {
+                                buckets: input_len,
+                                aggregate_params: params.clone(),
+                            })),
+                        ))
+                    })?;
+                }
+
+                let output_len = if matches!(self.shuffle_mode, AggregateShuffleMode::Bucket(_)) {
+                    let adjust_parallelism =
+                        2_usize.pow(partial_agg_config.initial_radix_bits as u32);
+                    adjust_parallelism
+                } else {
+                    input_len
+                };
+                let transform = ExchangeShuffleTransform::create(input_len, output_len, output_len);
+                let inputs = transform.get_inputs();
+                let outputs = transform.get_outputs();
+                builder
+                    .main_pipeline
+                    .add_pipe(Pipe::create(input_len, output_len, vec![PipeItem::create(
+                        ProcessorPtr::create(Box::new(transform)),
+                        inputs,
+                        outputs,
+                    )]));
+            }
         } else {
             builder.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
@@ -276,7 +341,11 @@ impl IPhysicalPlan for AggregatePartial {
             })?;
         }
 
-        builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());
+        builder.exchange_injector = AggregateInjector::create(
+            builder.ctx.clone(),
+            params.clone(),
+            self.shuffle_mode.clone(),
+        );
         Ok(())
     }
 }

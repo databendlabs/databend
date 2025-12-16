@@ -425,7 +425,7 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("force_eager_aggregate", DefaultSettingValue { 
+                ("force_eager_aggregate", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Force apply rule eager aggregate.",
                     mode: SettingMode::Both,
@@ -1506,6 +1506,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=16)),
+                }),
+                ("force_aggregate_shuffle_mode", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("auto")),
+                    desc: "For testing only. Shuffle mode for aggregation. Options are 'auto', 'row', 'bucket'. Default is 'auto'.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["auto".into(),"row".into(), "bucket".into()])),
                 }),
             ]);
 

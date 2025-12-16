@@ -26,8 +26,8 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::processors::BlockMetaTransform;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 
-use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
 pub struct TransformFinalAggregate {
     params: Arc<AggregatorParams>,
@@ -54,6 +54,7 @@ impl TransformFinalAggregate {
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta) -> Result<DataBlock> {
         let mut agg_hashtable: Option<AggregateHashTable> = None;
         if let AggregateMeta::Partitioned { bucket, data, .. } = meta {
+            let bucket = bucket.expect("final aggregate should have bucket info");
             for bucket_data in data {
                 match bucket_data {
                     AggregateMeta::Serialized(payload) => match agg_hashtable.as_mut() {

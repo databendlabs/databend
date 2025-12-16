@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfo;
@@ -30,7 +31,6 @@ use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::ProbeState;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::types::DataType;
 use parquet::file::metadata::RowGroupMetaData;
 
 pub struct SerializedPayload {
@@ -138,9 +138,8 @@ pub enum AggregateMeta {
     Spilled(Vec<BucketSpilledPayload>),
 
     Partitioned {
-        bucket: isize,
+        bucket: Option<isize>,
         data: Vec<Self>,
-        activate_worker: Option<usize>,
     },
 
     NewBucketSpilled(NewSpilledPayload),
@@ -184,16 +183,8 @@ impl AggregateMeta {
         Box::new(AggregateMeta::BucketSpilled(payload))
     }
 
-    pub fn create_partitioned(
-        bucket: isize,
-        data: Vec<Self>,
-        activate_worker: Option<usize>,
-    ) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Partitioned {
-            data,
-            bucket,
-            activate_worker,
-        })
+    pub fn create_partitioned(bucket: Option<isize>, data: Vec<Self>) -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::Partitioned { data, bucket })
     }
 
     pub fn create_new_bucket_spilled(payload: NewSpilledPayload) -> BlockMetaInfoPtr {
@@ -202,6 +193,29 @@ impl AggregateMeta {
 
     pub fn create_new_spilled(payloads: Vec<NewSpilledPayload>) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::NewSpilled(payloads))
+    }
+
+    pub fn create_new_spilled_blocks(
+        thread_num: usize,
+        payloads: Vec<NewSpilledPayload>,
+    ) -> Vec<DataBlock> {
+        let mut grouped_payloads = Vec::with_capacity(thread_num);
+        grouped_payloads.resize_with(thread_num, Vec::new);
+        for payload in payloads {
+            let bucket_index = payload.bucket as usize;
+            grouped_payloads[bucket_index].push(payload);
+        }
+
+        grouped_payloads
+            .into_iter()
+            .map(|bucket_payloads| {
+                if bucket_payloads.is_empty() {
+                    DataBlock::empty()
+                } else {
+                    DataBlock::empty_with_meta(Self::create_new_spilled(bucket_payloads))
+                }
+            })
+            .collect()
     }
 }
 
