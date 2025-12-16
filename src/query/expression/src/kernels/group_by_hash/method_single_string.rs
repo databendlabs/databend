@@ -77,10 +77,10 @@ impl KeyAccessor for BinaryColumn {
 
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
+    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key { unsafe {
         debug_assert!(index + 1 < self.offsets().len());
         self.index_unchecked(index)
-    }
+    }}
 
     fn len(&self) -> usize {
         self.len()

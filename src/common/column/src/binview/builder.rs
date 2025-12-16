@@ -132,7 +132,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
     /// - caller must allocate enough capacity
     /// - caller must ensure the view and buffers match.
     #[inline]
-    pub(crate) unsafe fn push_view_unchecked(&mut self, v: View, buffers: &[Buffer<u8>]) {
+    pub(crate) unsafe fn push_view_unchecked(&mut self, v: View, buffers: &[Buffer<u8>]) { unsafe {
         let len = v.length;
         if len <= 12 {
             self.total_bytes_len += len as usize;
@@ -144,7 +144,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
             let t = T::from_bytes_unchecked(bytes);
             self.push_value(t)
         }
-    }
+    }}
 
     /// # Safety
     /// - caller ensure that view is duplicated
@@ -295,7 +295,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
     /// # Safety
     /// Assumes that the `i < self.len`.
     #[inline]
-    pub unsafe fn value_unchecked(&self, i: usize) -> &T {
+    pub unsafe fn value_unchecked(&self, i: usize) -> &T { unsafe {
         let v = *self.views.get_unchecked(i);
         let len = v.length;
 
@@ -326,10 +326,10 @@ impl<T: ViewType + ?Sized> BinaryViewColumnBuilder<T> {
             data.get_unchecked(offset..offset + len as usize)
         };
         T::from_bytes_unchecked(bytes)
-    }
+    }}
 
     /// Returns an iterator of `&[u8]` over every element of this array
-    pub fn iter(&self) -> BinaryViewBuilderIter<T> {
+    pub fn iter(&self) -> BinaryViewBuilderIter<'_, T> {
         BinaryViewBuilderIter::new(self)
     }
 

@@ -28,7 +28,6 @@ use crate::compression::integer::compress_integer;
 use crate::compression::integer::decompress_integer;
 use crate::error::Error;
 use crate::error::Result;
-use crate::general_err;
 use crate::write::WriteOptions;
 
 impl<T: DoubleType> DoubleCompression<T> for Dict {

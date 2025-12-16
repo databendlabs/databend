@@ -168,7 +168,7 @@ impl<'a> VisitorMut<'a> for AsyncFunctionRewriter {
         for (i, arg) in async_func.arguments.iter_mut().enumerate() {
             self.visit(arg)?;
 
-            let new_column_ref = if let ScalarExpr::BoundColumnRef(ref column_ref) = &arg {
+            let new_column_ref = if let ScalarExpr::BoundColumnRef(column_ref) = &arg {
                 column_ref.clone()
             } else {
                 let name = format!("{}_arg_{}", &async_func.display_name, i);

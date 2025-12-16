@@ -88,7 +88,7 @@ impl BinaryColumn {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     #[inline]
-    pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
+    pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] { unsafe {
         let start = *self.offsets.get_unchecked(index) as usize;
         let end = *self.offsets.get_unchecked(index + 1) as usize;
         // here we use checked slice to avoid UB
@@ -98,7 +98,7 @@ impl BinaryColumn {
         //                     change: [+1.4430% +1.5796% +1.7344%] (p = 0.00 < 0.05)
         //                     Performance has regressed.
         &self.data[start..end]
-    }
+    }}
 
     pub fn slice(&self, range: Range<usize>) -> Self {
         let offsets = self
@@ -111,7 +111,7 @@ impl BinaryColumn {
         }
     }
 
-    pub fn iter(&self) -> BinaryColumnIter {
+    pub fn iter(&self) -> BinaryColumnIter<'_> {
         BinaryColumnIter::new(self)
     }
 

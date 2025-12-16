@@ -153,7 +153,7 @@ where
         &mut self,
         key: *const K,
     ) -> Result<ShortStringHashtableEntryMutRef<'_, K, V>, ShortStringHashtableEntryMutRef<'_, K, V>>
-    {
+    { unsafe {
         let key = (*key).as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => {
@@ -263,25 +263,25 @@ where
                     })
             }
         }
-    }
+    }}
     /// # Safety
     ///
     /// * The uninitialized value of returned entry should be written immediately.
     /// * The lifetime of key lives longer than the hashtable.
     #[inline(always)]
-    pub unsafe fn insert_borrowing(&mut self, key: &K) -> Result<&mut MaybeUninit<V>, &mut V> {
+    pub unsafe fn insert_borrowing(&mut self, key: &K) -> Result<&mut MaybeUninit<V>, &mut V> { unsafe {
         match self.insert_and_entry_borrowing(key) {
             Ok(e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
             Err(e) => Err(&mut *e.get_mut_ptr()),
         }
-    }
+    }}
 
     #[inline(always)]
     unsafe fn insert_and_entry(
         &mut self,
         key: &K,
     ) -> Result<ShortStringHashtableEntryMutRef<'_, K, V>, ShortStringHashtableEntryMutRef<'_, K, V>>
-    {
+    { unsafe {
         let key = key.as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => {
@@ -396,7 +396,7 @@ where
                 }
             }
         }
-    }
+    }}
 
     #[inline(always)]
     unsafe fn insert_and_entry_with_hash(
@@ -404,7 +404,7 @@ where
         key: &K,
         hash: u64,
     ) -> Result<ShortStringHashtableEntryMutRef<'_, K, V>, ShortStringHashtableEntryMutRef<'_, K, V>>
-    {
+    { unsafe {
         let key = key.as_bytes();
         match key.len() {
             _ if key.last().copied() == Some(0) => {
@@ -523,7 +523,7 @@ where
                 }
             }
         }
-    }
+    }}
 }
 
 pub struct ShortStringHashtableIter<'a, K, V>
@@ -1193,12 +1193,12 @@ where A: Allocator + Clone + Default
     unsafe fn insert(
         &mut self,
         key: &Self::Key,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> { unsafe {
         match self.insert_and_entry(key) {
             Ok(e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
             Err(e) => Err(&mut *e.get_mut_ptr()),
         }
-    }
+    }}
 
     fn iter(&self) -> Self::Iterator<'_> {
         ShortStringHashtableIter {
@@ -1225,15 +1225,15 @@ where A: Allocator + Clone + Default
     unsafe fn insert_and_entry(
         &mut self,
         key_ref: &Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
         self.insert_and_entry(key_ref)
-    }
+    }}
 
     unsafe fn insert_and_entry_with_hash(
         &mut self,
         key_ref: &Self::Key,
         hash: u64,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
         self.insert_and_entry_with_hash(key_ref, hash)
-    }
+    }}
 }

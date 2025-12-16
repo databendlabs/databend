@@ -313,7 +313,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.nested.drop_state(place.remove_last_loc())
+        unsafe { self.nested.drop_state(place.remove_last_loc()) }
     }
 }
 

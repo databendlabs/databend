@@ -20,7 +20,6 @@ use crate::compression::Compression;
 use crate::compression::integer::OneValue;
 use crate::error::Error;
 use crate::error::Result;
-use crate::general_err;
 
 impl BooleanCompression for OneValue {
     fn to_compression(&self) -> Compression {

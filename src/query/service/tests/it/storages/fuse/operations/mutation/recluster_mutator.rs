@@ -217,7 +217,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             number_of_segments, number_of_blocks,
         );
 
-        let unclustered: bool = rand.gen();
+        let unclustered: bool = rand.r#gen();
         let mut unclustered_segment_indices = HashSet::new();
         if unclustered {
             unclustered_segment_indices = block_number_of_segments

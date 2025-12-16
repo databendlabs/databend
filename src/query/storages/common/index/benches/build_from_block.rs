@@ -171,7 +171,7 @@ mod dummy {
         let seed: u64 = random();
 
         let mut rng = StdRng::seed_from_u64(seed);
-        let keys: Vec<i64> = (0..n).map(|_| rng.gen::<i64>()).collect();
+        let keys: Vec<i64> = (0..n).map(|_| rng.r#gen::<i64>()).collect();
 
         Column::Number(NumberColumn::Int64(keys.into()))
     }

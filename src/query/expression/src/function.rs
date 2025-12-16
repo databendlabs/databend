@@ -28,11 +28,16 @@ use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
-use jiff::tz::TimeZone;
 use jiff::Zoned;
+use jiff::tz::TimeZone;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::Column;
+use crate::ColumnIndex;
+use crate::Expr;
+use crate::FunctionDomain;
+use crate::Scalar;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::type_check::try_unify_signature;
@@ -40,11 +45,6 @@ use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
-use crate::Column;
-use crate::ColumnIndex;
-use crate::Expr;
-use crate::FunctionDomain;
-use crate::Scalar;
 
 pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 pub type DynamicCastRules = Vec<Arc<dyn Fn(&DataType, &DataType) -> bool + Send + Sync>>;
@@ -127,6 +127,7 @@ pub struct FunctionSignature {
     pub return_type: DataType,
 }
 
+#[allow(dead_code)]
 #[derive(EnumAsInner)]
 #[allow(clippy::type_complexity)]
 pub enum FunctionEval {
@@ -246,11 +247,12 @@ pub struct FunctionRegistry {
 
 impl Function {
     pub fn passthrough_nullable(self) -> Self {
-        debug_assert!(self
-            .signature
-            .args_type
-            .iter()
-            .all(|ty| !ty.is_nullable_or_null()));
+        debug_assert!(
+            self.signature
+                .args_type
+                .iter()
+                .all(|ty| !ty.is_nullable_or_null())
+        );
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
 
@@ -716,9 +718,9 @@ impl EvalContext<'_> {
             format!("{error} while evaluating function `{func_name}({args})` in expr `{expr_name}`")
         } else {
             format!(
-                    "{error} while evaluating function `{func_name}({params})({args})` in expr `{expr_name}`",
-                    params = params.iter().join(", ")
-                )
+                "{error} while evaluating function `{func_name}({params})({args})` in expr `{expr_name}`",
+                params = params.iter().join(", ")
+            )
         };
 
         Err(ErrorCode::BadArguments(err_msg).set_span(span))

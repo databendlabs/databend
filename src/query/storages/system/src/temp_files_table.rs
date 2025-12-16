@@ -202,8 +202,11 @@ impl TempFilesTable {
             if metadata.is_file() {
                 temp_files_name.push(path.trim_start_matches(location_prefix).to_string());
 
-                temp_files_last_modified
-                    .push(metadata.last_modified().map(|x| x.timestamp_micros()));
+                temp_files_last_modified.push(
+                    metadata
+                        .last_modified()
+                        .map(|x| x.into_inner().as_microsecond()),
+                );
                 temp_files_content_length.push(metadata.content_length());
             }
         }
@@ -252,9 +255,7 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 
     pub fn build(
         self,
-        block_builder: (
-            impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static
-        ),
+        block_builder: impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static,
     ) -> Result<SendableDataBlockStream> {
         stream_source_from_entry_lister_with_chunk_size(
             self.op.clone(),
@@ -271,7 +272,7 @@ fn stream_source_from_entry_lister_with_chunk_size<T>(
     lister_fut: FutureLister<T>,
     limit: Option<usize>,
     chunk_size: usize,
-    block_builder: (impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static),
+    block_builder: impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static,
 ) -> Result<SendableDataBlockStream>
 where
     T: Future<Output = opendal::Result<Lister>> + Send + 'static,

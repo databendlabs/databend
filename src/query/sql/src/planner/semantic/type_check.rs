@@ -4512,8 +4512,8 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 let nulls_first = nulls_first.unwrap_or_else(|| {
-                    let default_nulls_first = self.ctx.get_settings().get_nulls_first();
-                    default_nulls_first(asc)
+                    let settings = self.ctx.get_settings();
+                    settings.get_nulls_first()(asc)
                 });
 
                 let func_name = match (asc, nulls_first) {
@@ -4726,7 +4726,7 @@ impl<'a> TypeChecker<'a> {
         {
             return None;
         }
-        let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = &args[0] else {
+        let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = &args[0] else {
             return None;
         };
         if column.index >= self.metadata.read().columns().len() {
@@ -5249,8 +5249,10 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         }
 
+        let tenant = self.ctx.get_tenant();
+        let provider = UserApiProvider::instance();
         let udf = databend_common_base::runtime::block_on({
-            UserApiProvider::instance().get_udf(&self.ctx.get_tenant(), udf_name)
+            provider.get_udf(&tenant, udf_name)
         })?;
 
         let Some(udf) = udf else {
@@ -6085,7 +6087,7 @@ impl<'a> TypeChecker<'a> {
         }
         // If the type of source column is a tuple, rewrite to json_object_keep_null function,
         // using the name of tuple inner fields as the object name.
-        if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
+        if let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = scalar {
             let column_entry = self.metadata.read().column(column.index).clone();
             if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
                 let new_scalar = Self::rewrite_cast_to_variant(span, scalar, &data_type, is_try);

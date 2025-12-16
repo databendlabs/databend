@@ -609,7 +609,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         for agg_func in hierarchical_agg.aggregate_functions.iter_mut() {
             // Get the original data type before modifying the function
             let original_data_type = agg_func.scalar.data_type()?;
-            if let ScalarExpr::AggregateFunction(ref mut func) = &mut agg_func.scalar {
+            if let ScalarExpr::AggregateFunction(func) = &mut agg_func.scalar {
                 match func.func_name.as_str() {
                     "count" => {
                         // COUNT(*) from pre-aggregated -> sum0(pre_computed_count)

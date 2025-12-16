@@ -225,7 +225,7 @@ mod linux_read {
             buf: *mut libc::c_void,
             count: libc::size_t,
         ) -> libc::ssize_t {
-            libc::read(fd, buf, count)
+            unsafe { libc::read(fd, buf, count) }
         }
     }
 

@@ -735,7 +735,7 @@ where SM: StateMachineApi<SysData> + 'static
         let to_clean = {
             let _timer = self.cmd_ctx.start_io_timer("expire_scan", "expired_keys");
             let mut to_clean = vec![];
-            let mut strm = self.sm.list_expire_index(log_time_ms).await?;
+            let strm = self.sm.list_expire_index(log_time_ms).await?;
 
             // Save the log time for next cleaning.
             // Avoid listing tombstone records.

@@ -316,7 +316,7 @@ impl Binder {
                 FileFormatOptionsReader::from_map(options.clone()),
                 false,
             )?;
-            if let FileFormatParams::Csv(ref mut fmt) = &mut params {
+            if let FileFormatParams::Csv(fmt) = &mut params {
                 // TODO: remove this after 1. the old server is no longer supported 2. Driver add the option "EmptyFieldAs=FieldDefault"
                 // CSV attachment is mainly used in Drivers for insert.
                 // In the future, client should use EmptyFieldAs=STRING or FieldDefault to distinguish NULL and empty string.

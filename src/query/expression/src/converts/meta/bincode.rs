@@ -24,6 +24,8 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+use crate::Column;
+use crate::Scalar;
 use crate::types::array::ArrayColumn;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
@@ -32,8 +34,6 @@ use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberScalar;
 use crate::types::*;
-use crate::Column;
-use crate::Scalar;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum LegacyScalar {
@@ -54,6 +54,7 @@ pub enum LegacyScalar {
     Variant(Vec<u8>),
 }
 
+#[allow(dead_code)]
 #[derive(Clone, EnumAsInner)]
 pub enum LegacyColumn {
     Null { len: usize },

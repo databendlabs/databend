@@ -88,9 +88,9 @@ impl<T: AccessType> AccessType for ArrayType<T> {
     }
 
     #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
         col.index_unchecked(index)
-    }
+    }}
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
@@ -262,7 +262,7 @@ impl<T: AccessType> ArrayColumn<T> {
         }
     }
 
-    pub fn iter(&self) -> ArrayIterator<T> {
+    pub fn iter(&self) -> ArrayIterator<'_, T> {
         ArrayIterator {
             values: &self.values,
             offsets: self.offsets.windows(2),

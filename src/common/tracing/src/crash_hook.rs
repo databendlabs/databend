@@ -266,7 +266,7 @@ fn signal_message(sig: i32, si_code: i32, si_addr: usize) -> String {
     }
 }
 
-unsafe extern "C" fn signal_handler(sig: i32, info: *mut libc::siginfo_t, uc: *mut libc::c_void) {
+unsafe extern "C" fn signal_handler(sig: i32, info: *mut libc::siginfo_t, uc: *mut libc::c_void) { unsafe {
     let lock = CRASH_HANDLER_LOCK.lock();
     let mut guard = lock.unwrap_or_else(PoisonError::into_inner);
 
@@ -290,13 +290,13 @@ unsafe extern "C" fn signal_handler(sig: i32, info: *mut libc::siginfo_t, uc: *m
             },
         }
     }
-}
+}}
 
-pub unsafe fn add_signal_handler(signals: Vec<i32>) {
+pub unsafe fn add_signal_handler(signals: Vec<i32>) { unsafe {
     let mut sa = std::mem::zeroed::<libc::sigaction>();
 
     sa.sa_flags = libc::SA_ONSTACK | libc::SA_SIGINFO;
-    sa.sa_sigaction = signal_handler as usize;
+    sa.sa_sigaction = signal_handler as *const () as usize;
 
     libc::sigemptyset(&mut sa.sa_mask);
 
@@ -307,10 +307,10 @@ pub unsafe fn add_signal_handler(signals: Vec<i32>) {
     for signal in &signals {
         libc::sigaction(*signal, &sa, std::ptr::null_mut());
     }
-}
+}}
 
 // https://man7.org/linux/man-pages/man2/sigaltstack.2.html
-pub unsafe fn add_signal_stack(stack_bytes: usize) {
+pub unsafe fn add_signal_stack(stack_bytes: usize) { unsafe {
     let page_size = libc::sysconf(libc::_SC_PAGESIZE) as usize;
     let alloc_size = page_size + stack_bytes;
 
@@ -340,7 +340,7 @@ pub unsafe fn add_signal_stack(stack_bytes: usize) {
     if libc::sigaltstack(&new_signal_stack, std::ptr::null_mut()) != 0 {
         libc::munmap(stack_ptr, alloc_size);
     }
-}
+}}
 
 pub fn set_crash_hook(output: File) {
     let lock = CRASH_HANDLER_LOCK.lock();

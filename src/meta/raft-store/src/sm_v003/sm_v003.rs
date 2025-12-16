@@ -161,7 +161,7 @@ impl SMV003 {
         self.leveled_map.to_state_machine_snapshot()
     }
 
-    pub fn kv_api(&self) -> SMV003KVApi {
+    pub fn kv_api(&self) -> SMV003KVApi<'_> {
         SMV003KVApi { sm: self }
     }
 

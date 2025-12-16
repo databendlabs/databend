@@ -159,9 +159,9 @@ impl AccessType for GeographyType {
     }
 
     #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
         col.index_unchecked(index)
-    }
+    }}
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
@@ -301,7 +301,7 @@ impl GeographyColumn {
         self.0.memory_size()
     }
 
-    pub fn index(&self, index: usize) -> Option<GeographyRef> {
+    pub fn index(&self, index: usize) -> Option<GeographyRef<'_>> {
         self.0.index(index).map(GeographyRef)
     }
 
@@ -309,9 +309,9 @@ impl GeographyColumn {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     #[inline]
-    pub unsafe fn index_unchecked(&self, index: usize) -> GeographyRef<'_> {
+    pub unsafe fn index_unchecked(&self, index: usize) -> GeographyRef<'_> { unsafe {
         GeographyRef(self.0.index_unchecked(index))
-    }
+    }}
 
     pub fn slice(&self, range: Range<usize>) -> Self {
         Self(self.0.slice(range))

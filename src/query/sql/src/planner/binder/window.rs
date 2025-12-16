@@ -490,7 +490,7 @@ impl<'a> WindowRewriter<'a> {
         }
     }
 
-    pub fn as_window_aggregate_rewriter(&self) -> WindowAggregateRewriter {
+    pub fn as_window_aggregate_rewriter(&self) -> WindowAggregateRewriter<'_> {
         WindowAggregateRewriter {
             bind_context: self.bind_context,
         }
@@ -631,7 +631,8 @@ pub fn bind_window_function_info(
         child
     };
 
-    let default_nulls_first = ctx.get_settings().get_nulls_first();
+    let settings = ctx.get_settings();
+    let default_nulls_first = settings.get_nulls_first();
 
     let mut sort_items: Vec<SortItem> = vec![];
     if !window_plan.partition_by.is_empty() {

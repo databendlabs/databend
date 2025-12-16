@@ -50,12 +50,6 @@ const CONTAINER_RETRY_TIMES: usize = 3;
 const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 60;
 const CONTAINER_TIMEOUT_SECONDS: u64 = 300;
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
-pub struct ServerInfo {
-    pub id: String,
-    pub start_time: String,
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HttpSessionConf {
     pub catalog: Option<String>,

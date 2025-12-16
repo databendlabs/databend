@@ -92,11 +92,11 @@ pub trait Processor: Send {
 // we need to wrap UnsafeCell<Box<(dyn Processor)>>, and make it Sync,
 // so that later an Arc of it could be moved into the async closure,
 // which async_process returns.
-struct UnsafeSyncCelledProcessor(UnsafeCell<Box<(dyn Processor)>>);
+struct UnsafeSyncCelledProcessor(UnsafeCell<Box<dyn Processor>>);
 unsafe impl Sync for UnsafeSyncCelledProcessor {}
 
 impl Deref for UnsafeSyncCelledProcessor {
-    type Target = UnsafeCell<Box<(dyn Processor)>>;
+    type Target = UnsafeCell<Box<dyn Processor>>;
 
     fn deref(&self) -> &Self::Target {
         &(self.0)
@@ -109,8 +109,8 @@ pub struct ProcessorPtr {
     inner: Arc<UnsafeSyncCelledProcessor>,
 }
 
-impl From<UnsafeCell<Box<(dyn Processor)>>> for UnsafeSyncCelledProcessor {
-    fn from(value: UnsafeCell<Box<(dyn Processor)>>) -> Self {
+impl From<UnsafeCell<Box<dyn Processor>>> for UnsafeSyncCelledProcessor {
+    fn from(value: UnsafeCell<Box<dyn Processor>>) -> Self {
         Self(value)
     }
 }
@@ -129,42 +129,42 @@ impl ProcessorPtr {
     }
 
     /// # Safety
-    pub unsafe fn as_any(&mut self) -> &mut dyn Any {
+    pub unsafe fn as_any(&mut self) -> &mut dyn Any { unsafe {
         (*self.inner.get()).as_any()
-    }
+    }}
 
     /// # Safety
-    pub unsafe fn id(&self) -> NodeIndex {
+    pub unsafe fn id(&self) -> NodeIndex { unsafe {
         *self.id.get()
-    }
+    }}
 
     /// # Safety
-    pub unsafe fn set_id(&self, id: NodeIndex) {
+    pub unsafe fn set_id(&self, id: NodeIndex) { unsafe {
         *self.id.get() = id;
-    }
+    }}
 
     /// # Safety
-    pub unsafe fn name(&self) -> String {
+    pub unsafe fn name(&self) -> String { unsafe {
         (*self.inner.get()).name()
-    }
+    }}
 
     /// # Safety
-    pub unsafe fn event(&self, cause: EventCause) -> Result<Event> {
+    pub unsafe fn event(&self, cause: EventCause) -> Result<Event> { unsafe {
         (*self.inner.get()).event_with_cause(cause)
-    }
+    }}
 
     /// # Safety
-    pub unsafe fn un_reacted(&self, cause: EventCause) -> Result<()> {
+    pub unsafe fn un_reacted(&self, cause: EventCause) -> Result<()> { unsafe {
         (*self.inner.get()).un_reacted(cause, self.id().index())
-    }
+    }}
 
     /// # Safety
-    pub unsafe fn interrupt(&self) {
+    pub unsafe fn interrupt(&self) { unsafe {
         (*self.inner.get()).interrupt()
-    }
+    }}
 
     /// # Safety
-    pub unsafe fn process(&self) -> Result<()> {
+    pub unsafe fn process(&self) -> Result<()> { unsafe {
         let span = LocalSpan::enter_with_local_parent(format!("{}::process", self.name()))
             .with_property(|| ("graph-node-id", self.id().index().to_string()));
 
@@ -183,10 +183,10 @@ impl ProcessorPtr {
                 Err(err)
             }
         }
-    }
+    }}
 
     /// # Safety
-    pub unsafe fn async_process(&self) -> BoxFuture<'static, Result<()>> {
+    pub unsafe fn async_process(&self) -> BoxFuture<'static, Result<()>> { unsafe {
         let id = self.id();
         let mut name = self.name();
         name.push_str("::async_process");
@@ -225,10 +225,10 @@ impl ProcessorPtr {
             }
         }
         .boxed()
-    }
+    }}
 
     /// # Safety
-    pub unsafe fn details_status(&self) -> Option<String> {
+    pub unsafe fn details_status(&self) -> Option<String> { unsafe {
         (*self.inner.get()).details_status()
-    }
+    }}
 }

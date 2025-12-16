@@ -173,7 +173,6 @@ use hashbrown_v0_14::hash_map::RawEntryMut;
 
 use crate::compression::Compression;
 use crate::compression::get_bits_needed;
-use crate::general_err;
 use crate::util::AsBytes;
 use crate::write::WriteOptions;
 

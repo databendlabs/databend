@@ -146,7 +146,9 @@ impl Planner {
                 .collect::<databend_common_ast::Result<_>>()
                 .unwrap()
         } else {
-            (&mut tokenizer).collect::<databend_common_ast::Result<_>>()?
+            (&mut tokenizer)
+                .collect::<databend_common_ast::Result<_>>()
+                .map_err(ErrorCode::from)?
         };
         let session_type = self.ctx.get_session_type();
         let in_streaming_load = session_type == SessionType::HTTPStreamingLoad;
@@ -156,13 +158,17 @@ impl Planner {
                 // Step 2: Parse the SQL.
                 let (mut stmt, format) = if is_insert_stmt {
                     (
-                        parse_raw_insert_stmt(&tokens, sql_dialect, in_streaming_load)?,
+                        parse_raw_insert_stmt(&tokens, sql_dialect, in_streaming_load)
+                            .map_err(ErrorCode::from)?,
                         None,
                     )
                 } else if is_replace_stmt {
-                    (parse_raw_replace_stmt(&tokens, sql_dialect)?, None)
+                    (
+                        parse_raw_replace_stmt(&tokens, sql_dialect).map_err(ErrorCode::from)?,
+                        None,
+                    )
                 } else {
-                    parse_sql(&tokens, sql_dialect)?
+                    parse_sql(&tokens, sql_dialect).map_err(ErrorCode::from)?
                 };
                 if !matches!(stmt, Statement::SetStmt { .. })
                     && sql_dialect == Dialect::PRQL

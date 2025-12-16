@@ -52,13 +52,13 @@ where T: fmt::Display
 
 /// Add `display_jwt_claims` method to `JWTClaims<T>` if `T` is Display.
 pub trait DisplayJWTClaimsExt<T> {
-    fn display_jwt_claims(&self) -> DisplayJWTClaims<T>;
+    fn display_jwt_claims(&self) -> DisplayJWTClaims<'_, T>;
 }
 
 impl<T> DisplayJWTClaimsExt<T> for JWTClaims<T>
 where T: fmt::Display
 {
-    fn display_jwt_claims(&self) -> DisplayJWTClaims<T> {
+    fn display_jwt_claims(&self) -> DisplayJWTClaims<'_, T> {
         DisplayJWTClaims { claims: self }
     }
 }

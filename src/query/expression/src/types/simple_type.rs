@@ -123,10 +123,10 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
     unsafe fn index_column_unchecked(
         buffer: &Buffer<Self::Scalar>,
         index: usize,
-    ) -> Self::ScalarRef<'_> {
+    ) -> Self::ScalarRef<'_> { unsafe {
         debug_assert!(index < buffer.len());
         *buffer.get_unchecked(index)
-    }
+    }}
 
     fn slice_column(buffer: &Buffer<Self::Scalar>, range: Range<usize>) -> Buffer<Self::Scalar> {
         buffer.clone().sliced(range.start, range.end - range.start)
@@ -139,9 +139,9 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
     unsafe fn index_column_unchecked_scalar(
         col: &Buffer<Self::Scalar>,
         index: usize,
-    ) -> Self::Scalar {
+    ) -> Self::Scalar { unsafe {
         Self::to_owned_scalar(Self::index_column_unchecked(col, index))
-    }
+    }}
 
     fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
         std::mem::size_of::<Self::Scalar>()

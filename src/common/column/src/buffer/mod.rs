@@ -43,9 +43,9 @@ impl<T> Bytes<T> {
     /// This function leaks if and only if `owner` does not deallocate
     /// the region `[ptr, ptr+length[` when dropped.
     #[inline]
-    pub(crate) unsafe fn from_foreign(ptr: *const T, length: usize, owner: BytesAllocator) -> Self {
+    pub(crate) unsafe fn from_foreign(ptr: *const T, length: usize, owner: BytesAllocator) -> Self { unsafe {
         Self(BytesInner::from_foreign(ptr, length, owner))
-    }
+    }}
 
     /// Returns a `Some` mutable reference of [`Vec<T>`] iff this was initialized
     /// from a [`Vec<T>`] and `None` otherwise.

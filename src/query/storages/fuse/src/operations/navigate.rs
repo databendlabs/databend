@@ -437,11 +437,13 @@ impl FuseTable {
                         let meta = op.stat(de.path()).await?;
                         meta.last_modified()
                     };
-
                     let location = de.path().to_string();
                     if let Some(modified) = modified {
-                        if f(location.clone(), modified) {
-                            file_list.push((location, modified));
+                        let utc_modified = DateTime::from_timestamp_nanos(
+                            modified.into_inner().as_nanosecond() as i64,
+                        );
+                        if f(location.clone(), utc_modified) {
+                            file_list.push((location, utc_modified));
                         }
                     }
                 }

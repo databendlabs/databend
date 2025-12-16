@@ -21,9 +21,9 @@ unsafe impl<'a> ColumnAccessor<'a> for BinaryColumn {
     type Item = &'a [u8];
 
     #[inline]
-    unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item {
+    unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item { unsafe {
         self.index_unchecked(index)
-    }
+    }}
 
     #[inline]
     fn len(&self) -> usize {
@@ -47,9 +47,9 @@ unsafe impl<'a> ColumnAccessor<'a> for BinaryColumnBuilder {
     type Item = &'a [u8];
 
     #[inline]
-    unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item {
+    unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item { unsafe {
         self.index_unchecked(index)
-    }
+    }}
 
     #[inline]
     fn len(&self) -> usize {

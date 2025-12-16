@@ -30,7 +30,7 @@ use crate::bitmap::MutableBitmap;
 /// The iterator must be [`TrustedLen`].
 pub unsafe fn from_chunk_iter_unchecked<T: BitChunk, I: Iterator<Item = T>>(
     iterator: I,
-) -> Vec<u8> {
+) -> Vec<u8> { unsafe {
     let (_, upper) = iterator.size_hint();
     let upper = upper.expect("try_from_trusted_len_iter requires an upper limit");
     let len = upper * std::mem::size_of::<T>();
@@ -52,7 +52,7 @@ pub unsafe fn from_chunk_iter_unchecked<T: BitChunk, I: Iterator<Item = T>>(
     );
     buffer.set_len(len);
     buffer
-}
+}}
 
 /// Creates a [`Vec<u8>`] from a [`TrustedLen`] of [`BitChunk`].
 pub fn chunk_iter_to_vec<T: BitChunk, I: TrustedLen<Item = T>>(iter: I) -> Vec<u8> {

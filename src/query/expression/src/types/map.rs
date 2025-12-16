@@ -95,9 +95,9 @@ impl<K: AccessType, V: AccessType> AccessType for KvPair<K, V> {
         col.index(index)
     }
 
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
         col.index_unchecked(index)
-    }
+    }}
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
@@ -268,12 +268,12 @@ impl<K: AccessType, V: AccessType> KvColumn<K, V> {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, index: usize) -> (K::ScalarRef<'_>, V::ScalarRef<'_>) {
+    pub unsafe fn index_unchecked(&self, index: usize) -> (K::ScalarRef<'_>, V::ScalarRef<'_>) { unsafe {
         (
             K::index_column_unchecked(&self.keys, index),
             V::index_column_unchecked(&self.values, index),
         )
-    }
+    }}
 
     fn slice(&self, range: Range<usize>) -> Self {
         KvColumn {
@@ -282,7 +282,7 @@ impl<K: AccessType, V: AccessType> KvColumn<K, V> {
         }
     }
 
-    pub fn iter(&self) -> KvIterator<K, V> {
+    pub fn iter(&self) -> KvIterator<'_, K, V> {
         KvIterator {
             keys: K::iter_column(&self.keys),
             values: V::iter_column(&self.values),
@@ -485,9 +485,9 @@ impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
     }
 
     #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
         MapInternal::<K, V>::index_column_unchecked(col, index)
-    }
+    }}
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         MapInternal::<K, V>::slice_column(col, range)

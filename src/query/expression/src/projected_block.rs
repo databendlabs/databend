@@ -63,7 +63,7 @@ impl<'a> ProjectedBlock<'a> {
         }
     }
 
-    pub fn iter(&self) -> EntriesIter {
+    pub fn iter(&self) -> EntriesIter<'_> {
         match &self.map {
             Some(map) => EntriesIter {
                 iter: 0..map.len(),

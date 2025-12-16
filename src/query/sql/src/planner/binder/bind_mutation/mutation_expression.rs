@@ -591,7 +591,7 @@ pub fn target_probe(s_expr: &SExpr, target_table_index: usize) -> Result<bool> {
     }
 
     fn contains_target_table(s_expr: &SExpr, target_table_index: usize) -> bool {
-        if let RelOperator::Scan(ref scan) = s_expr.plan() {
+        if let RelOperator::Scan(scan) = s_expr.plan() {
             scan.table_index == target_table_index
         } else {
             s_expr

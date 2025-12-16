@@ -84,12 +84,12 @@ where
 {
     let buf = &seqv.data;
     let x: Result<_, PbDecodeError> = try {
-        let p: T::PB = prost::Message::decode(buf.as_ref())?;
-        let v: T = FromToProto::from_pb(p)?;
+        let p: T::PB = prost::Message::decode(buf.as_ref()).map_err(PbDecodeError::from)?;
+        let v: T = FromToProto::from_pb(p).map_err(PbDecodeError::from)?;
         SeqV::new_with_meta(seqv.seq, seqv.meta, v)
     };
 
-    x.map_err(|e| e.with_context(context()))
+    x.map_err(|e: PbDecodeError| e.with_context(context()))
 }
 
 /// Decode key and protobuf encoded value from `StreamItem`.

@@ -388,7 +388,7 @@ pub mod io_result {
             match self {
                 Error::FileTooLarge => write!(f, "File too large"),
                 Error::MalformedPath(p) => write!(f, "Malformed catch file path: {:?}", p),
-                Error::Io(ref e) => write!(f, "{e}"),
+                Error::Io(e) => write!(f, "{e}"),
                 Error::Misc(msg) => write!(f, "{msg}"),
             }
         }
@@ -397,7 +397,7 @@ pub mod io_result {
     impl StdError for Error {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             match self {
-                Error::Io(ref e) => Some(e),
+                Error::Io(e) => Some(e),
                 _ => None,
             }
         }

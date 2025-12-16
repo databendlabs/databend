@@ -30,7 +30,6 @@ use crate::compression::integer::decompress_integer;
 use crate::compression::is_valid;
 use crate::error::Error;
 use crate::error::Result;
-use crate::general_err;
 use crate::util::AsBytes;
 use crate::write::WriteOptions;
 

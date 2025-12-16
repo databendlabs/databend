@@ -272,7 +272,7 @@ pub(super) fn validate_utf8_view(views: &[View], buffers: &[Buffer<u8>]) -> Resu
 
 /// # Safety
 /// The views and buffers must uphold the invariants of BinaryView otherwise we will go OOB.
-pub(super) unsafe fn validate_utf8_only(views: &[View], buffers: &[Buffer<u8>]) -> Result<()> {
+pub(super) unsafe fn validate_utf8_only(views: &[View], buffers: &[Buffer<u8>]) -> Result<()> { unsafe {
     for view in views {
         let len = view.length;
         if len <= 12 {
@@ -290,7 +290,7 @@ pub(super) unsafe fn validate_utf8_only(views: &[View], buffers: &[Buffer<u8>]) 
     }
 
     Ok(())
-}
+}}
 
 pub trait CheckUTF8 {
     fn check_utf8(&self) -> Result<()>;

@@ -233,7 +233,7 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.nested.drop_state(place);
+        unsafe { self.nested.drop_state(place) };
     }
 
     fn get_if_condition(&self, entries: ProjectedBlock) -> Option<Bitmap> {

@@ -110,7 +110,7 @@ impl CmdContext {
         &self,
         op_type: impl Into<String>,
         details: impl Into<String>,
-    ) -> IoTimer {
+    ) -> IoTimer<'_> {
         IoTimer::new(self, op_type, details)
     }
 }

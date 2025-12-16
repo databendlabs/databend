@@ -1683,7 +1683,7 @@ dependencies = [
  "bitflags 2.9.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.11.0",
  "lazy_static",
  "lazycell",
  "log",
@@ -3290,7 +3290,7 @@ dependencies = [
  "http 1.3.1",
  "log",
  "logforth",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "tokio",
  "toml 0.8.22",
 ]
@@ -3314,7 +3314,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "limits-rs",
  "log",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "serde",
  "serde_json",
  "serfig",
@@ -3599,7 +3599,7 @@ dependencies = [
  "libc",
  "object",
  "once_cell",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "parquet 56.2.0",
  "paste",
  "prost",
@@ -3990,7 +3990,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-exception",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "serde",
 ]
 
@@ -4311,7 +4311,7 @@ dependencies = [
  "lz4",
  "match-template",
  "num",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "rand 0.8.5",
  "ringbuffer",
  "roaring",
@@ -4503,7 +4503,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "parking_lot 0.12.3",
  "pretty_assertions",
  "prqlc",
@@ -4545,7 +4545,9 @@ dependencies = [
  "iceberg",
  "log",
  "lru",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
+ "opendal-layer-immutable-index",
+ "opendal-layer-observe-metrics-common",
  "parquet 56.2.0",
  "prometheus-client 0.22.3",
  "regex",
@@ -4576,7 +4578,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "parking_lot 0.12.3",
  "parquet 56.2.0",
  "serde",
@@ -4688,7 +4690,7 @@ dependencies = [
  "jsonb",
  "log",
  "match-template",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "parking_lot 0.12.3",
  "parquet 56.2.0",
  "paste",
@@ -4735,7 +4737,7 @@ dependencies = [
  "futures",
  "hive_metastore",
  "log",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "parquet 56.2.0",
  "recursive",
  "serde",
@@ -4817,7 +4819,7 @@ dependencies = [
  "futures-util",
  "jiff",
  "log",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "orc-rust",
  "serde",
  "serde_json",
@@ -4854,7 +4856,7 @@ dependencies = [
  "futures",
  "jiff",
  "log",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "parquet 56.2.0",
  "rand 0.8.5",
  "serde",
@@ -4898,7 +4900,7 @@ dependencies = [
  "match-template",
  "num-bigint",
  "num-traits",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "parking_lot 0.12.3",
  "parquet 56.2.0",
  "serde",
@@ -4959,7 +4961,7 @@ dependencies = [
  "jsonb",
  "log",
  "once_cell",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "parking_lot 0.12.3",
  "regex",
  "serde",
@@ -5009,7 +5011,7 @@ dependencies = [
  "libc",
  "log",
  "logforth",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "opentelemetry 0.29.1",
  "opentelemetry-otlp 0.29.0",
  "opentelemetry_sdk 0.29.0",
@@ -5183,7 +5185,7 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "log",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "serde",
  "tantivy",
  "tempfile",
@@ -5583,7 +5585,7 @@ dependencies = [
  "mysql_async",
  "naive-cityhash",
  "num_cpus",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "opensrv-mysql",
  "opentelemetry 0.29.1",
  "opentelemetry_sdk 0.29.0",
@@ -5791,7 +5793,7 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "parquet 56.2.0",
 ]
 
@@ -5821,7 +5823,7 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "log",
- "opendal 0.55.0 (git+https://github.com/apache/opendal.git?rev=02953ef)",
+ "opendal",
  "parking_lot 0.12.3",
  "serde",
  "uuid",
@@ -9083,7 +9085,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.0",
+ "windows-core 0.57.0",
 ]
 
 [[package]]
@@ -9098,7 +9100,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=32b1403#32b1403eef8b00d7f2a526c551aa35b8fc31927e"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=ac0f6d5#ac0f6d56f914c74e1481d5b5432773b60bd351d5"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -9123,7 +9125,7 @@ dependencies = [
  "murmur3",
  "num-bigint",
  "once_cell",
- "opendal 0.54.1",
+ "opendal",
  "ordered-float 4.6.0",
  "parquet 56.2.0",
  "rand 0.8.5",
@@ -9147,7 +9149,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-glue"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=32b1403#32b1403eef8b00d7f2a526c551aa35b8fc31927e"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=ac0f6d5#ac0f6d56f914c74e1481d5b5432773b60bd351d5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9164,7 +9166,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=32b1403#32b1403eef8b00d7f2a526c551aa35b8fc31927e"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=ac0f6d5#ac0f6d56f914c74e1481d5b5432773b60bd351d5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9188,7 +9190,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=32b1403#32b1403eef8b00d7f2a526c551aa35b8fc31927e"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=ac0f6d5#ac0f6d56f914c74e1481d5b5432773b60bd351d5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -9208,7 +9210,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-s3tables"
 version = "0.4.0"
-source = "git+https://github.com/databendlabs/iceberg-rust?rev=32b1403#32b1403eef8b00d7f2a526c551aa35b8fc31927e"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=ac0f6d5#ac0f6d56f914c74e1481d5b5432773b60bd351d5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -11303,15 +11305,15 @@ dependencies = [
 [[package]]
 name = "object_store_opendal"
 version = "0.55.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "113ab0769e972eee585e57407b98de08bda5354fa28e8ba4d89038d6cb6a8991"
+source = "git+https://github.com/apache/opendal.git?rev=02953ef#02953ef90c475eb592596f1a0b68370188a80128"
 dependencies = [
  "async-trait",
  "bytes",
  "chrono",
  "futures",
+ "mea",
  "object_store",
- "opendal 0.55.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "opendal",
  "pin-project",
  "tokio",
 ]
@@ -11337,61 +11339,6 @@ name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
-
-[[package]]
-name = "opendal"
-version = "0.54.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42afda58fa2cf50914402d132cc1caacff116a85d10c72ab2082bb7c50021754"
-dependencies = [
- "anyhow",
- "backon",
- "base64 0.22.1",
- "bytes",
- "chrono",
- "crc32c",
- "futures",
- "getrandom 0.2.16",
- "http 1.3.1",
- "http-body 1.0.1",
- "log",
- "md-5",
- "percent-encoding",
- "quick-xml 0.38.4",
- "reqsign",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "opendal"
-version = "0.55.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d075ab8a203a6ab4bc1bce0a4b9fe486a72bf8b939037f4b78d95386384bc80a"
-dependencies = [
- "anyhow",
- "backon",
- "base64 0.22.1",
- "bytes",
- "futures",
- "getrandom 0.2.16",
- "http 1.3.1",
- "http-body 1.0.1",
- "jiff",
- "log",
- "md-5",
- "percent-encoding",
- "quick-xml 0.38.4",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "url",
- "uuid",
-]
 
 [[package]]
 name = "opendal"
@@ -11458,6 +11405,14 @@ version = "0.55.0"
 source = "git+https://github.com/apache/opendal.git?rev=02953ef#02953ef90c475eb592596f1a0b68370188a80128"
 dependencies = [
  "fastrace",
+ "opendal-core",
+]
+
+[[package]]
+name = "opendal-layer-immutable-index"
+version = "0.55.0"
+source = "git+https://github.com/apache/opendal.git?rev=02953ef#02953ef90c475eb592596f1a0b68370188a80128"
+dependencies = [
  "opendal-core",
 ]
 
@@ -12888,7 +12843,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "log",
  "multimap",
  "once_cell",
@@ -12908,7 +12863,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.106",
@@ -13200,16 +13155,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f50b1c63b38611e7d4d7f68b82d3ad0cc71a2ad2e7f61fc10f1328d917c93cd"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "quick-xml"
-version = "0.37.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "331e97a1af0bf59823e6eadffe373d7b27f485be8748f71471c662c1f269b7fb"
-dependencies = [
- "memchr",
- "serde",
 ]
 
 [[package]]
@@ -13690,16 +13635,13 @@ dependencies = [
  "log",
  "once_cell",
  "percent-encoding",
- "quick-xml 0.37.5",
  "rand 0.8.5",
  "reqwest",
  "rsa",
- "rust-ini",
  "serde",
  "serde_json",
  "sha1",
  "sha2",
- "tokio",
 ]
 
 [[package]]
@@ -17876,7 +17818,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

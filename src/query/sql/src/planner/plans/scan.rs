@@ -329,7 +329,7 @@ impl Operator for Scan {
             .and_then(|stat| stat.num_rows);
 
         let cardinality = match (precise_cardinality, &self.prewhere) {
-            (Some(precise_cardinality), Some(ref prewhere)) => {
+            (Some(precise_cardinality), Some(prewhere)) => {
                 let mut statistics = OpStatistics {
                     precise_cardinality: Some(precise_cardinality),
                     column_stats,

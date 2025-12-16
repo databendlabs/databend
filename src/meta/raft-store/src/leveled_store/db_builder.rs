@@ -67,7 +67,7 @@ impl DBBuilder {
     #[allow(dead_code)]
     pub async fn append_kv_stream(
         &mut self,
-        mut strm: impl Stream<Item = Result<(String, SeqMarked), io::Error>>,
+        strm: impl Stream<Item = Result<(String, SeqMarked), io::Error>>,
     ) -> Result<(), io::Error> {
         let mut strm = std::pin::pin!(strm);
         while let Some((k, v)) = strm.try_next().await? {

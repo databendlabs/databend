@@ -1623,7 +1623,7 @@ impl MetaNode {
     }
 
     /// Get a kvapi::KVApi implementation.
-    pub fn kv_api(&self) -> MetaKVApi {
+    pub fn kv_api(&self) -> MetaKVApi<'_> {
         MetaKVApi::new(self)
     }
 

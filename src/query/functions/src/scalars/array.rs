@@ -1181,7 +1181,7 @@ impl<'a> ArrayAggEvaluator<'a> {
         }
     }
 
-    fn state(&self) -> AggrState {
+    fn state(&self) -> AggrState<'_> {
         AggrState::new(self.addr, &self.state_layout.states_loc[0])
     }
 
@@ -1232,7 +1232,7 @@ impl ArrayAggDesc {
         })
     }
 
-    fn create_evaluator(&self) -> ArrayAggEvaluator {
+    fn create_evaluator(&self) -> ArrayAggEvaluator<'_> {
         ArrayAggEvaluator::new(&self.func, &self.state_layout)
     }
 }

@@ -84,9 +84,9 @@ impl AccessType for StringType {
     }
 
     #[inline]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
         col.value_unchecked(index)
-    }
+    }}
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.end - range.start)
@@ -348,9 +348,9 @@ impl StringColumnBuilder {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, row: usize) -> &str {
+    pub unsafe fn index_unchecked(&self, row: usize) -> &str { unsafe {
         self.data.value_unchecked(row)
-    }
+    }}
 
     pub fn push_repeat(&mut self, item: &str, n: usize) {
         self.data.extend_constant(n, item);

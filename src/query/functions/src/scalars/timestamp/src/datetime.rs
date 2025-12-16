@@ -210,7 +210,7 @@ fn timestamp_tz_domain_to_timestamp_domain(
 
 // jiff don't support local formats:
 // https://github.com/BurntSushi/jiff/issues/219
-fn replace_time_format(format: &str) -> Cow<str> {
+fn replace_time_format(format: &str) -> Cow<'_, str> {
     if ["%c", "x", "X"].iter().any(|f| format.contains(f)) {
         let format = format
             .replace("%c", "%x %X")

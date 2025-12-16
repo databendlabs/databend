@@ -22,9 +22,9 @@ unsafe impl<'a, T: ViewType + ?Sized> ColumnAccessor<'a> for BinaryViewColumnGen
     type Item = &'a T;
 
     #[inline]
-    unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item {
+    unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item { unsafe {
         self.value_unchecked(index)
-    }
+    }}
 
     #[inline]
     fn len(&self) -> usize {
@@ -48,9 +48,9 @@ unsafe impl<'a, T: ViewType + ?Sized> ColumnAccessor<'a> for BinaryViewColumnBui
     type Item = &'a T;
 
     #[inline]
-    unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item {
+    unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item { unsafe {
         self.value_unchecked(index)
-    }
+    }}
 
     #[inline]
     fn len(&self) -> usize {

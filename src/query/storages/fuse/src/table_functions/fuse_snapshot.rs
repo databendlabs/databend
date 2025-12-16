@@ -105,7 +105,7 @@ impl FuseSnapshotFunc {
             inverted_index_size.push(s.inverted_index_size);
             vector_index_size.push(s.vector_index_size);
             virtual_column_size.push(s.virtual_column_size);
-            timestamps.push(s.timestamp.map(|dt| (dt.timestamp_micros())));
+            timestamps.push(s.timestamp.map(|dt| dt.timestamp_micros()));
             current_snapshot_version = ver;
         }
 

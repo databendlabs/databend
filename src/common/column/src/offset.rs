@@ -183,12 +183,12 @@ impl<O: Offset> Offsets<O> {
     /// # Safety
     /// `index` must be `< self.len()`
     #[inline]
-    pub unsafe fn start_end_unchecked(&self, index: usize) -> (usize, usize) {
+    pub unsafe fn start_end_unchecked(&self, index: usize) -> (usize, usize) { unsafe {
         // soundness: the invariant of the function
         let start = self.0.get_unchecked(index).to_usize();
         let end = self.0.get_unchecked(index + 1).to_usize();
         (start, end)
-    }
+    }}
 
     /// Returns the length an array with these offsets would be.
     #[inline]
@@ -468,12 +468,12 @@ impl<O: Offset> OffsetsBuffer<O> {
     /// # Safety
     /// `index` must be `< self.len()`
     #[inline]
-    pub unsafe fn start_end_unchecked(&self, index: usize) -> (usize, usize) {
+    pub unsafe fn start_end_unchecked(&self, index: usize) -> (usize, usize) { unsafe {
         // soundness: the invariant of the function
         let start = self.0.get_unchecked(index).to_usize();
         let end = self.0.get_unchecked(index + 1).to_usize();
         (start, end)
-    }
+    }}
 
     /// Slices this [`OffsetsBuffer`].
     /// # Panics
@@ -489,9 +489,9 @@ impl<O: Offset> OffsetsBuffer<O> {
     /// # Safety
     /// The caller must ensure `offset + length <= self.len()`
     #[inline]
-    pub unsafe fn slice_unchecked(&mut self, offset: usize, length: usize) {
+    pub unsafe fn slice_unchecked(&mut self, offset: usize, length: usize) { unsafe {
         self.0.slice_unchecked(offset, length);
-    }
+    }}
 
     /// Returns an iterator with the lengths of the offsets
     #[inline]

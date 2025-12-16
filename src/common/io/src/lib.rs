@@ -19,7 +19,6 @@
 #![feature(can_vector)]
 #![feature(read_buf)]
 #![feature(slice_internals)]
-#![feature(maybe_uninit_slice)]
 #![feature(cursor_split)]
 #![feature(buf_read_has_data_left)]
 

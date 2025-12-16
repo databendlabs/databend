@@ -52,7 +52,7 @@ impl HttpService {
         })
     }
 
-    fn build_router(&self) -> impl Endpoint {
+    fn build_router(&self) -> impl Endpoint + use<> {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))

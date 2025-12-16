@@ -328,7 +328,7 @@ impl Network {
         }
     }
 
-    pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> {
+    pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> + use<> {
         let policy = ExponentialBuilder::default()
             .with_factor(self.backoff.back_off_ratio)
             .with_min_delay(self.backoff.back_off_min_delay)
@@ -351,7 +351,7 @@ impl Network {
         E: std::error::Error,
     {
         // Return status error
-        let resp = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+        let resp = grpc_res.map_err(|e| RPCError::Unreachable(self.status_to_unreachable(e)))?;
 
         // Parse serialized response into `Result<RaftReply.data, RaftReply.error>`
         let raft_res = GrpcHelper::parse_raft_reply::<R, E>(resp).map_err(|serde_err| {
@@ -645,7 +645,8 @@ impl Network {
                     }
                 }
             }
-            let grpc_response = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+            let grpc_response =
+                grpc_res.map_err(|e| StreamingError::Unreachable(self.status_to_unreachable(e)))?;
             let snapshot_response = grpc_response.into_inner();
 
             // Convert protobuf Vote back to internal Vote
@@ -727,9 +728,12 @@ impl Network {
                 }
             }
 
-            let grpc_response = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+            let grpc_response =
+                grpc_res.map_err(|e| StreamingError::Unreachable(self.status_to_unreachable(e)))?;
             let snapshot_response = grpc_response.into_inner();
-            let vote = snapshot_response.to_vote()?;
+            let vote = snapshot_response
+                .to_vote()
+                .map_err(|e| StreamingError::Network(e))?;
 
             SnapshotResponse { vote }
         };
@@ -956,7 +960,7 @@ impl RaftNetworkV2<TypeConfig> for Network {
             }
         }
 
-        grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+        grpc_res.map_err(|e| RPCError::Unreachable(self.status_to_unreachable(e)))?;
         Ok(())
     }
 

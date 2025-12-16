@@ -211,7 +211,7 @@ impl<V> DictionaryStringHashTable<V> {
         &self,
         key: &[NonNull<[u8]>],
         hash: u64,
-    ) -> Option<&DictionaryEntry<V>> {
+    ) -> Option<&DictionaryEntry<V>> { unsafe {
         assume(key.len() == self.dict_keys);
         let index = (hash as usize) & (self.entries.len() - 1);
         for i in (index..self.entries.len()).chain(0..index) {
@@ -230,7 +230,7 @@ impl<V> DictionaryStringHashTable<V> {
             }
         }
         None
-    }
+    }}
 
     /// # Safety
     ///
@@ -240,7 +240,7 @@ impl<V> DictionaryStringHashTable<V> {
         &mut self,
         key: &[NonNull<[u8]>],
         hash: u64,
-    ) -> Option<&mut DictionaryEntry<V>> {
+    ) -> Option<&mut DictionaryEntry<V>> { unsafe {
         assume(key.len() == self.dict_keys);
         let index = (hash as usize) & (self.entries.len() - 1);
         for i in (index..self.entries.len()).chain(0..index) {
@@ -259,7 +259,7 @@ impl<V> DictionaryStringHashTable<V> {
             }
         }
         None
-    }
+    }}
 
     pub fn dictionary_slot_iter(&self) -> DictionarySlotIter<'_> {
         DictionarySlotIter {
@@ -361,25 +361,25 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
     unsafe fn insert(
         &mut self,
         key: &Self::Key,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> { unsafe {
         match self.insert_and_entry(key) {
             Ok(mut e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
             Err(mut e) => Err(&mut *e.get_mut_ptr()),
         }
-    }
+    }}
 
     unsafe fn insert_and_entry(
         &mut self,
         key: &Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
         self.insert_and_entry_with_hash(key, key.fast_hash())
-    }
+    }}
 
     unsafe fn insert_and_entry_with_hash(
         &mut self,
         key: &Self::Key,
         hash: u64,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
         self.check_grow();
 
         assume(key.keys.len() == self.dict_keys);
@@ -430,7 +430,7 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
         }
 
         panic!("the hash table overflows")
-    }
+    }}
 
     fn iter(&self) -> Self::Iterator<'_> {
         DictionaryTableIter {

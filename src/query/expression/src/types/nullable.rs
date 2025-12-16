@@ -100,9 +100,9 @@ impl<T: AccessType> AccessType for NullableType<T> {
     }
 
     #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
         col.index_unchecked(index)
-    }
+    }}
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
@@ -134,9 +134,9 @@ impl<T: AccessType> AccessType for NullableType<T> {
         }
     }
 
-    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar {
+    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar { unsafe {
         Self::to_owned_scalar(Self::index_column_unchecked(col, index))
-    }
+    }}
 
     fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         std::matches!(Self::compare(left, right), Ordering::Equal)
@@ -320,7 +320,7 @@ impl<T: AccessType> NullableColumn<T> {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, index: usize) -> Option<T::ScalarRef<'_>> {
+    pub unsafe fn index_unchecked(&self, index: usize) -> Option<T::ScalarRef<'_>> { unsafe {
         // we need to check the validity firstly
         // cause `self.validity.get_bit_unchecked` may check the index from buffer address with `true` result
         if index < self.validity.len() {
@@ -331,7 +331,7 @@ impl<T: AccessType> NullableColumn<T> {
         } else {
             None
         }
-    }
+    }}
 
     pub fn slice(&self, range: Range<usize>) -> Self {
         NullableColumn {
@@ -343,7 +343,7 @@ impl<T: AccessType> NullableColumn<T> {
         }
     }
 
-    pub fn iter(&self) -> NullableIterator<T> {
+    pub fn iter(&self) -> NullableIterator<'_, T> {
         NullableIterator {
             iter: T::iter_column(&self.column),
             validity: self.validity.iter(),

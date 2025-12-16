@@ -92,7 +92,7 @@ impl SledTree {
     }
 
     /// Borrows the SledTree and creates a wrapper with access limited to a specified key space `KV`.
-    pub fn key_space<KV: SledKeySpace>(&self) -> AsKeySpace<KV> {
+    pub fn key_space<KV: SledKeySpace>(&self) -> AsKeySpace<'_, KV> {
         AsKeySpace::<KV> {
             inner: self,
             phantom: PhantomData,

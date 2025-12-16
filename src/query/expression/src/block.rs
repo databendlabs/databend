@@ -188,7 +188,7 @@ impl BlockEntry {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
+    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef<'_> { unsafe {
         match self {
             BlockEntry::Const(scalar, _, _n) => {
                 #[cfg(debug_assertions)]
@@ -203,7 +203,7 @@ impl BlockEntry {
             }
             BlockEntry::Column(column) => column.index_unchecked(index),
         }
-    }
+    }}
 
     pub fn len(&self) -> usize {
         match self {
@@ -274,7 +274,7 @@ impl<T: AccessType> ColumnView<T> {
         self.len() == 0
     }
 
-    pub fn iter(&self) -> ColumnViewIter<T> {
+    pub fn iter(&self) -> ColumnViewIter<'_, T> {
         match self {
             ColumnView::Const(scalar, num_rows) => {
                 ColumnViewIter::Const(T::to_scalar_ref(scalar), *num_rows)
@@ -299,13 +299,13 @@ impl<T: AccessType> ColumnView<T> {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, i: usize) -> T::ScalarRef<'_> {
+    pub unsafe fn index_unchecked(&self, i: usize) -> T::ScalarRef<'_> { unsafe {
         debug_assert!(i < self.len());
         match self {
             ColumnView::Const(scalar, _) => T::to_scalar_ref(scalar),
             ColumnView::Column(column) => T::index_column_unchecked(column, i),
         }
-    }
+    }}
 }
 
 impl<T: ValueType> ColumnView<T> {

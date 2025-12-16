@@ -94,10 +94,10 @@ where
         F::index_column(col, index).map(C::compute)
     }
 
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
         let scalar = F::index_column_unchecked(col, index);
         C::compute(scalar)
-    }
+    }}
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         F::slice_column(col, range)

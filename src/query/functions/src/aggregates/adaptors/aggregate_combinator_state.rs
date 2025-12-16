@@ -151,7 +151,7 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.nested.drop_state(place);
+        unsafe { self.nested.drop_state(place) };
     }
 
     fn get_own_null_adaptor(

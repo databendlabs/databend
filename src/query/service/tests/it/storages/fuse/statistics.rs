@@ -822,10 +822,10 @@ fn test_reduce_block_meta() -> Result<()> {
     let mut acc_file_size = 0;
     let mut acc_bloom_filter_index_size = 0;
     for _ in 0..size {
-        let row_count = rng.gen::<u64>() / size;
-        let block_size = rng.gen::<u64>() / size;
-        let file_size = rng.gen::<u64>() / size;
-        let bloom_filter_index_size = rng.gen::<u64>() / size;
+        let row_count = rng.r#gen::<u64>() / size;
+        let block_size = rng.r#gen::<u64>() / size;
+        let file_size = rng.r#gen::<u64>() / size;
+        let bloom_filter_index_size = rng.r#gen::<u64>() / size;
         acc_row_count += row_count;
         acc_block_size += block_size;
         acc_file_size += file_size;

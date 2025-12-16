@@ -116,8 +116,8 @@ impl Distribution {
             | (Distribution::NodeToNodeHash(_), Distribution::Broadcast) => true,
 
             (
-                Distribution::NodeToNodeHash(ref keys),
-                Distribution::NodeToNodeHash(ref other_keys),
+                Distribution::NodeToNodeHash(keys),
+                Distribution::NodeToNodeHash(other_keys),
             ) => keys == other_keys,
             _ => false,
         }
@@ -131,7 +131,7 @@ impl Display for Distribution {
             Distribution::Random => write!(f, "Random"),
             Distribution::Serial => write!(f, "Serial"),
             Distribution::Broadcast => write!(f, "Broadcast"),
-            Distribution::NodeToNodeHash(ref keys) => write!(
+            Distribution::NodeToNodeHash(keys) => write!(
                 f,
                 "Hash({})",
                 keys.iter()

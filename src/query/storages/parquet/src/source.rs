@@ -214,13 +214,13 @@ impl Processor for ParquetSource {
                 readers: mut vs,
                 location,
             } => {
-                if let Some((reader, mut start_row)) = vs.front_mut() {
+                if let Some((reader, start_row)) = vs.front_mut() {
                     if let Some(mut block) = reader.as_mut().read_block()? {
                         add_internal_columns(
                             &self.internal_columns,
                             location.clone(),
                             &mut block,
-                            &mut start_row,
+                            start_row,
                         );
 
                         if self.is_copy {

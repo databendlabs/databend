@@ -318,12 +318,12 @@ impl OutputPort {
 /// Connect input and output ports.
 ///
 /// # Safety
-pub unsafe fn connect(input: &InputPort, output: &OutputPort) {
+pub unsafe fn connect(input: &InputPort, output: &OutputPort) { unsafe {
     let shared_status = SharedStatus::create();
 
     input.set_shared(shared_status.clone());
     output.set_shared(shared_status);
-}
+}}
 
 #[cfg(test)]
 mod tests {

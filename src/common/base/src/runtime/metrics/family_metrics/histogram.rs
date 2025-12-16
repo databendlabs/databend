@@ -106,7 +106,7 @@ impl<Labels: FamilyLabels> FamilyHistogram<Labels> {
         }
     }
 
-    pub(crate) fn get(&self) -> (f64, u64, MappedRwLockReadGuard<Vec<(f64, u64)>>) {
+    pub(crate) fn get(&self) -> (f64, u64, MappedRwLockReadGuard<'_, Vec<(f64, u64)>>) {
         let inner = self.inner.read();
         let sum = inner.sum;
         let count = inner.count;

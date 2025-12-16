@@ -153,7 +153,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 rand::rngs::SmallRng::from_entropy()
             };
             let rand_nums = (0..ctx.num_rows)
-                .map(|_| rng.gen::<F64>())
+                .map(|_| rng.r#gen::<F64>())
                 .collect::<Vec<_>>();
             Value::Column(rand_nums.into())
         },
@@ -169,7 +169,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |val, _| {
             let mut rng = rand::rngs::SmallRng::seed_from_u64(val);
-            rng.gen::<F64>()
+            rng.r#gen::<F64>()
         },
     );
 

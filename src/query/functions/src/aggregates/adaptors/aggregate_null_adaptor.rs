@@ -215,7 +215,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.0.drop_state(place);
+        unsafe { self.0.drop_state(place) };
     }
 
     fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
@@ -348,7 +348,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.0.drop_state(place);
+        unsafe { self.0.drop_state(place) };
     }
 
     fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
@@ -638,7 +638,7 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             return self.nested.merge_result(place, read_only, builder);
         }
 
-        let ColumnBuilder::Nullable(ref mut inner) = builder else {
+        let ColumnBuilder::Nullable(inner) = builder else {
             unreachable!()
         };
 
@@ -654,9 +654,9 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
 
     unsafe fn drop_state(&self, place: AggrState) {
         if !NULLABLE_RESULT {
-            self.nested.drop_state(place)
+            unsafe { self.nested.drop_state(place) }
         } else {
-            self.nested.drop_state(place.remove_last_loc())
+            unsafe { self.nested.drop_state(place.remove_last_loc()) }
         }
     }
 

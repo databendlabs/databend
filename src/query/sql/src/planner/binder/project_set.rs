@@ -66,7 +66,7 @@ impl<'a> SetReturningAnalyzer<'a> {
         }
     }
 
-    fn as_aggregate_rewriter(&mut self) -> AggregateRewriter {
+    fn as_aggregate_rewriter(&mut self) -> AggregateRewriter<'_> {
         AggregateRewriter::new(self.bind_context, self.metadata.clone())
     }
 }

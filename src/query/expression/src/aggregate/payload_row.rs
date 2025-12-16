@@ -86,79 +86,88 @@ pub(super) unsafe fn serialize_column_to_rowformat(
     offset: usize,
     scratch: &mut Vec<u8>,
 ) {
-    match column {
-        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
-        Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
-            NumberColumn::NUM_TYPE(buffer) => {
+    unsafe {
+        match column {
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
+            Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
+                NumberColumn::NUM_TYPE(buffer) => {
+                    for row in select_vector {
+                        address[*row].write(offset, &buffer[*row]);
+                    }
+                }
+            }),
+            Column::Decimal(decimal_column) => {
+                with_decimal_mapped_type!(|F| match decimal_column {
+                    DecimalColumn::F(buffer, size) => {
+                        with_decimal_mapped_type!(|T| match size.data_kind() {
+                            DecimalDataKind::T => {
+                                serialize_fixed_size_column_to_rowformat::<DecimalView<F, T>>(
+                                    buffer,
+                                    select_vector,
+                                    address,
+                                    offset,
+                                );
+                            }
+                        });
+                    }
+                });
+            }
+            Column::Boolean(v) => {
+                if v.null_count() == 0 || v.null_count() == v.len() {
+                    let val: u8 = if v.null_count() == 0 { 1 } else { 0 };
+                    // faster path
+                    for row in select_vector {
+                        unsafe { address[*row].write_u8(offset, val); }
+                    }
+                } else {
+                    for row in select_vector {
+                        unsafe { address[*row].write_u8(offset, v.get_bit(row.to_usize()) as u8); }
+                    }
+                }
+            }
+            Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
                 for row in select_vector {
-                    address[*row].write(offset, &buffer[*row]);
+                    let data = arena.alloc_slice_copy(unsafe { v.index_unchecked(row.to_usize()) });
+                    unsafe { address[*row].write_bytes(offset, data); }
                 }
             }
-        }),
-        Column::Decimal(decimal_column) => {
-            with_decimal_mapped_type!(|F| match decimal_column {
-                DecimalColumn::F(buffer, size) => {
-                    with_decimal_mapped_type!(|T| match size.data_kind() {
-                        DecimalDataKind::T => {
-                            serialize_fixed_size_column_to_rowformat::<DecimalView<F, T>>(
-                                buffer,
-                                select_vector,
-                                address,
-                                offset,
-                            );
-                        }
-                    });
-                }
-            });
-        }
-        Column::Boolean(v) => {
-            if v.null_count() == 0 || v.null_count() == v.len() {
-                let val: u8 = if v.null_count() == 0 { 1 } else { 0 };
-                // faster path
+            Column::String(v) => {
                 for row in select_vector {
-                    address[*row].write_u8(offset, val);
+                    let data = arena.alloc_str(unsafe { v.index_unchecked(row.to_usize()) });
+                    unsafe { address[*row].write_bytes(offset, data.as_bytes()); }
                 }
-            } else {
+            }
+            Column::Timestamp(buffer) => {
                 for row in select_vector {
-                    address[*row].write_u8(offset, v.get_bit(row.to_usize()) as u8);
+                    unsafe { address[*row].write(offset, &buffer[*row]); }
                 }
             }
-        }
-        Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
-            for row in select_vector {
-                let data = arena.alloc_slice_copy(v.index_unchecked(row.to_usize()));
-                address[*row].write_bytes(offset, data);
+            Column::Date(buffer) => {
+                for row in select_vector {
+                    unsafe { address[*row].write(offset, &buffer[*row]); }
+                }
             }
-        }
-        Column::String(v) => {
-            for row in select_vector {
-                let data = arena.alloc_str(v.index_unchecked(row.to_usize()));
-                address[*row].write_bytes(offset, data.as_bytes());
-            }
-        }
-        Column::Timestamp(buffer) => {
-            for row in select_vector {
-                address[*row].write(offset, &buffer[*row]);
-            }
-        }
-        Column::Date(buffer) => {
-            for row in select_vector {
-                address[*row].write(offset, &buffer[*row]);
-            }
-        }
-        Column::Nullable(c) => {
-            serialize_column_to_rowformat(arena, &c.column, select_vector, address, offset, scratch)
-        }
+            Column::Nullable(c) => unsafe {
+                serialize_column_to_rowformat(
+                    arena,
+                    &c.column,
+                    select_vector,
+                    address,
+                    offset,
+                    scratch,
+                )
+            },
 
-        // for complex column
-        other => {
-            for row in select_vector {
-                let s = other.index_unchecked(row.to_usize()).to_owned();
-                scratch.clear();
-                bincode_serialize_into_buf(scratch, &s).unwrap();
+            // for complex column
+            other => {
+                for row in select_vector {
+                    let s = unsafe { other.index_unchecked(row.to_usize()) }.to_owned();
+                    scratch.clear();
+                    bincode_serialize_into_buf(scratch, &s).unwrap();
 
-                let data = arena.alloc_slice_copy(scratch);
-                address[*row].write_bytes(offset, data);
+                    let data = arena.alloc_slice_copy(scratch);
+                    unsafe { address[*row].write_bytes(offset, data); }
+                }
             }
         }
     }
@@ -173,82 +182,84 @@ pub(super) unsafe fn serialize_const_column_to_rowformat(
     offset: usize,
     scratch: &mut Vec<u8>,
 ) {
-    match scalar {
-        Scalar::Null => {
-            if let Some(box data_type) = data_type.as_nullable() {
-                serialize_const_column_to_rowformat(
-                    arena,
-                    &Scalar::default_value(data_type),
-                    data_type,
-                    select_vector,
-                    address,
-                    offset,
-                    scratch,
-                )
+    unsafe {
+        match scalar {
+            Scalar::Null => {
+                if let Some(box data_type) = data_type.as_nullable() {
+                    serialize_const_column_to_rowformat(
+                        arena,
+                        &Scalar::default_value(data_type),
+                        data_type,
+                        select_vector,
+                        address,
+                        offset,
+                        scratch,
+                    )
+                }
             }
-        }
-        Scalar::EmptyArray | Scalar::EmptyMap => (),
-        Scalar::Number(number_scalar) => with_number_mapped_type!(|NUM_TYPE| match number_scalar {
-            NumberScalar::NUM_TYPE(value) => {
+            Scalar::EmptyArray | Scalar::EmptyMap => (),
+            Scalar::Number(number_scalar) => with_number_mapped_type!(|NUM_TYPE| match number_scalar {
+                NumberScalar::NUM_TYPE(value) => {
+                    for row in select_vector {
+                        address[*row].write(offset, value);
+                    }
+                }
+            }),
+            Scalar::Decimal(decimal_scalar) => {
+                let size = decimal_scalar.size();
+                with_decimal_mapped_type!(|T| match size.data_kind() {
+                    DecimalDataKind::T => {
+                        let value: T = decimal_scalar.as_decimal();
+                        for row in select_vector {
+                            address[*row].write(offset, &value);
+                        }
+                    }
+                })
+            }
+            Scalar::Boolean(value) => {
+                let value = if *value { 1 } else { 0 };
+                for row in select_vector {
+                    address[*row].write_u8(offset, value);
+                }
+            }
+            Scalar::Timestamp(value) => {
                 for row in select_vector {
                     address[*row].write(offset, value);
                 }
             }
-        }),
-        Scalar::Decimal(decimal_scalar) => {
-            let size = decimal_scalar.size();
-            with_decimal_mapped_type!(|T| match size.data_kind() {
-                DecimalDataKind::T => {
-                    let value: T = decimal_scalar.as_decimal();
-                    for row in select_vector {
-                        address[*row].write(offset, &value);
-                    }
+            Scalar::Date(value) => {
+                for row in select_vector {
+                    address[*row].write(offset, value);
                 }
-            })
-        }
-        Scalar::Boolean(value) => {
-            let value = if *value { 1 } else { 0 };
-            for row in select_vector {
-                address[*row].write_u8(offset, value);
             }
-        }
-        Scalar::Timestamp(value) => {
-            for row in select_vector {
-                address[*row].write(offset, value);
+            Scalar::Interval(value) => {
+                for row in select_vector {
+                    address[*row].write(offset, value);
+                }
             }
-        }
-        Scalar::Date(value) => {
-            for row in select_vector {
-                address[*row].write(offset, value);
+            Scalar::String(value) => {
+                let data = arena.alloc_str(value);
+                let bytes = data.as_bytes();
+                for row in select_vector {
+                    address[*row].write_bytes(offset, bytes);
+                }
             }
-        }
-        Scalar::Interval(value) => {
-            for row in select_vector {
-                address[*row].write(offset, value);
+            Scalar::Binary(value)
+            | Scalar::Bitmap(value)
+            | Scalar::Variant(value)
+            | Scalar::Geometry(value) => {
+                let data = arena.alloc_slice_copy(value);
+                for row in select_vector {
+                    address[*row].write_bytes(offset, data);
+                }
             }
-        }
-        Scalar::String(value) => {
-            let data = arena.alloc_str(value);
-            let bytes = data.as_bytes();
-            for row in select_vector {
-                address[*row].write_bytes(offset, bytes);
-            }
-        }
-        Scalar::Binary(value)
-        | Scalar::Bitmap(value)
-        | Scalar::Variant(value)
-        | Scalar::Geometry(value) => {
-            let data = arena.alloc_slice_copy(value);
-            for row in select_vector {
-                address[*row].write_bytes(offset, data);
-            }
-        }
-        other => {
-            scratch.clear();
-            bincode_serialize_into_buf(scratch, other).unwrap();
-            let data = arena.alloc_slice_copy(scratch);
-            for row in select_vector {
-                address[*row].write_bytes(offset, data);
+            other => {
+                scratch.clear();
+                bincode_serialize_into_buf(scratch, other).unwrap();
+                let data = arena.alloc_slice_copy(scratch);
+                for row in select_vector {
+                    address[*row].write_bytes(offset, data);
+                }
             }
         }
     }
@@ -261,12 +272,12 @@ unsafe fn serialize_fixed_size_column_to_rowformat<T>(
     offset: usize,
 ) where
     T: AccessType<Scalar: Copy>,
-{
+{ unsafe {
     for row in select_vector {
         let val = T::index_column_unchecked_scalar(column, row.to_usize());
         address[*row].write(offset, &val);
     }
-}
+}}
 
 pub struct CompareState<'a> {
     pub(super) address: &'a [RowPtr; BATCH_SIZE],

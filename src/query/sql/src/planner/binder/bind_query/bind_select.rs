@@ -55,10 +55,6 @@ use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 
-// A normalized IR for `SELECT` clause.
-#[derive(Debug, Default)]
-pub struct SelectList {}
-
 impl Binder {
     #[async_backtrace::framed]
     pub(crate) fn bind_select(
@@ -797,7 +793,7 @@ impl SelectRewriter {
         let columns = unpivot
             .column_names
             .iter()
-            .map(|name| (name.ident.to_owned()))
+            .map(|name| name.ident.to_owned())
             .collect::<Vec<_>>();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
             star.exclude(columns.clone());

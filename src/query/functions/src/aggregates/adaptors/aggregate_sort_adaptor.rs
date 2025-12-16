@@ -273,7 +273,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         unsafe { std::ptr::drop_in_place(state) };
 
         if self.inner.need_manual_drop_state() {
-            self.inner.drop_state(place.remove_first_loc());
+            unsafe { self.inner.drop_state(place.remove_first_loc()) };
         }
     }
 
@@ -297,7 +297,7 @@ impl AggregateFunctionSortAdaptor {
         }))
     }
 
-    fn get_state(place: AggrState) -> &mut SortAggState {
+    fn get_state(place: AggrState<'_>) -> &mut SortAggState {
         place
             .addr
             .next(place.loc[0].into_custom().unwrap().1)

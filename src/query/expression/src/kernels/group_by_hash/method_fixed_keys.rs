@@ -555,9 +555,9 @@ impl<T: Send + Sync> KeyAccessor for PrimitiveKeyAccessor<T> {
 
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
+    unsafe fn key_unchecked(&self, index: usize) -> &Self::Key { unsafe {
         self.data.get_unchecked(index)
-    }
+    }}
 
     fn len(&self) -> usize {
         self.data.len()

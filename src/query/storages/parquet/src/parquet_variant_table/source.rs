@@ -180,7 +180,7 @@ impl Processor for ParquetVariantSource {
                 readers: mut vs,
                 location,
             } => {
-                if let Some((reader, mut start_row, typ, data_schema)) = vs.front_mut() {
+                if let Some((reader, start_row, typ, data_schema)) = vs.front_mut() {
                     if let Some(batch) = reader.next() {
                         let mut block =
                             record_batch_to_variant_block(batch?, &self.tz, typ, data_schema)?;
@@ -188,7 +188,7 @@ impl Processor for ParquetVariantSource {
                             &self.internal_columns,
                             location.clone(),
                             &mut block,
-                            &mut start_row,
+                            start_row,
                         );
 
                         if self.is_copy {

@@ -164,9 +164,9 @@ unsafe impl UnsizedKeyable for str {
         self.as_bytes()
     }
 
-    unsafe fn from_bytes(bytes: &[u8]) -> &Self {
+    unsafe fn from_bytes(bytes: &[u8]) -> &Self { unsafe {
         std::str::from_utf8_unchecked(bytes)
-    }
+    }}
 }
 
 pub trait FastHash {

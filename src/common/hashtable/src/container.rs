@@ -75,11 +75,11 @@ unsafe impl<T, A: Allocator> Container for HeapContainer<T, A> {
         Layout::array::<T>(self.0.len()).unwrap().size()
     }
 
-    unsafe fn new_zeroed(len: usize, allocator: Self::A) -> Self {
+    unsafe fn new_zeroed(len: usize, allocator: Self::A) -> Self { unsafe {
         Self(Box::new_zeroed_slice_in(len, allocator).assume_init())
-    }
+    }}
 
-    unsafe fn grow_zeroed(&mut self, new_len: usize) {
+    unsafe fn grow_zeroed(&mut self, new_len: usize) { unsafe {
         debug_assert!(self.len() <= new_len);
         let old_layout = Layout::array::<T>(self.len()).unwrap();
         let new_layout = Layout::array::<T>(new_len).unwrap();
@@ -96,7 +96,7 @@ unsafe impl<T, A: Allocator> Container for HeapContainer<T, A> {
                 std::ptr::write(self, Self(new_box));
             }
         }
-    }
+    }}
 }
 
 pub struct StackContainer<T, const N: usize, A: Allocator> {
@@ -182,7 +182,7 @@ unsafe impl<T, const N: usize, A: Allocator + Clone> Container for StackContaine
         }
     }
 
-    unsafe fn grow_zeroed(&mut self, new_len: usize) {
+    unsafe fn grow_zeroed(&mut self, new_len: usize) { unsafe {
         debug_assert!(self.len <= new_len);
         if new_len <= N {
             self.len = new_len;
@@ -217,7 +217,7 @@ unsafe impl<T, const N: usize, A: Allocator + Clone> Container for StackContaine
                 }
             };
         }
-    }
+    }}
 }
 
 impl<T, const N: usize, A: Allocator> Drop for StackContainer<T, N, A> {

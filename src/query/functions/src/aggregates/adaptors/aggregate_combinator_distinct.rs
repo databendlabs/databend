@@ -76,7 +76,7 @@ impl<State> Clone for AggregateDistinctCombinator<State> {
 impl<State> AggregateDistinctCombinator<State>
 where State: Send + 'static
 {
-    fn get_state(place: AggrState) -> &mut State {
+    fn get_state(place: AggrState<'_>) -> &mut State {
         place
             .addr
             .next(place.loc[0].into_custom().unwrap().1)
@@ -196,7 +196,7 @@ where State: DistinctStateFunc
         unsafe { std::ptr::drop_in_place(state) };
 
         if self.nested.need_manual_drop_state() {
-            self.nested.drop_state(place.remove_first_loc());
+            unsafe { self.nested.drop_state(place.remove_first_loc()) };
         }
     }
 

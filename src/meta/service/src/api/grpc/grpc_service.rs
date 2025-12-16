@@ -328,6 +328,7 @@ impl MetaService for MetaServiceImpl {
 
     type KvReadV1Stream = BoxStream<StreamItem>;
 
+    #[allow(unused_assignments)]
     async fn kv_read_v1(
         &self,
         request: Request<RaftRequest>,
@@ -349,12 +350,12 @@ impl MetaService for MetaServiceImpl {
             let (endpoint, strm) = self.handle_kv_read_v1(req).in_span(root).await?;
 
             // MetricsCollector logs metrics when dropped
-            let mut collector = MetricsCollector::new(req_str);
+            let mut _collector = MetricsCollector::new(req_str);
 
             let strm = strm.map(move |item| {
                 let _g = &guard; // hold the guard until the stream is done.
                 network_metrics::incr_stream_sent_item(req_typ);
-                collector.count += 1;
+                _collector.count += 1;
                 item
             });
 

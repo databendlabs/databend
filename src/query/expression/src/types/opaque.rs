@@ -158,9 +158,9 @@ impl<const N: usize> AccessType for OpaqueType<N> {
         col.get(index)
     }
 
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
         col.get_unchecked(index)
-    }
+    }}
 
     fn slice_column(col: &Self::Column, range: std::ops::Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.len())

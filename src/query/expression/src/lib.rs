@@ -42,7 +42,6 @@
 #![feature(alloc_layout_extra)]
 #![feature(debug_closure_helpers)]
 #![feature(never_type)]
-#![feature(new_zeroed_alloc)]
 #![feature(iter_map_windows)]
 
 #[allow(dead_code)]

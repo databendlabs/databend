@@ -168,7 +168,8 @@ impl Binder {
         );
         let mut order_by_items = Vec::with_capacity(query.order_by.len());
 
-        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
+        let settings = self.ctx.get_settings();
+        let default_nulls_first = settings.get_nulls_first();
 
         for order in query.order_by.iter() {
             match order.expr {

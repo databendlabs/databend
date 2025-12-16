@@ -111,7 +111,7 @@ impl DefaultExprBinder {
         self
     }
 
-    fn evaluator(&self) -> Evaluator {
+    fn evaluator(&self) -> Evaluator<'_> {
         Evaluator::new(&self.dummy_block, &self.func_ctx, &BUILTIN_FUNCTIONS)
     }
 

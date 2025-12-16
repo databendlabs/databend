@@ -91,9 +91,9 @@ impl AccessType for VectorType {
     unsafe fn index_column_unchecked<'a>(
         col: &'a Self::Column,
         index: usize,
-    ) -> Self::ScalarRef<'a> {
+    ) -> Self::ScalarRef<'a> { unsafe {
         col.index_unchecked(index)
-    }
+    }}
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
@@ -445,7 +445,7 @@ impl VectorColumn {
         })
     }
 
-    pub fn iter(&self) -> VectorIterator {
+    pub fn iter(&self) -> VectorIterator<'_> {
         VectorIterator {
             column: self,
             index: 0,

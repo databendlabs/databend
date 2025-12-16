@@ -251,7 +251,7 @@ impl ParquetRowsFetcher {
         metadata: Arc<RowsFetchMetadataImpl>,
         final_index: u32,
         take_indices: Vec<BlockRowIndex>,
-    ) -> impl Future<Output = Result<(u32, DataBlock)>> {
+    ) -> impl Future<Output = Result<(u32, DataBlock)>> + use<> {
         {
             let settings = self.settings;
             let reader = self.reader.clone();

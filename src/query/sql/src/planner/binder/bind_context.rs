@@ -366,7 +366,6 @@ impl BindContext {
                             alias: alias.clone(),
                             scalar: scalar.clone(),
                         });
-                        alias_match_count += 1;
                     }
                 }
             }

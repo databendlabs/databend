@@ -18,7 +18,6 @@
 #![feature(allocator_api)]
 #![feature(arbitrary_self_types)]
 #![feature(ptr_metadata)]
-#![feature(maybe_uninit_slice)]
 #![feature(trusted_len)]
 
 extern crate core;
