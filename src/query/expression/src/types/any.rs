@@ -21,12 +21,12 @@ use super::AccessType;
 use super::BuilderMut;
 use super::DataType;
 use super::ValueType;
-use crate::property::Domain;
-use crate::values::Column;
-use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ColumnIterator;
 use crate::ScalarRef;
+use crate::property::Domain;
+use crate::values::Column;
+use crate::values::Scalar;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnyType;

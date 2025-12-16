@@ -17,13 +17,13 @@ use std::iter::Iterator;
 use databend_common_column::bitmap::MutableBitmap;
 use itertools::Itertools;
 
+use crate::Column;
 use crate::types::decimal::*;
 use crate::types::geometry::GeometryType;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::*;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::*;
-use crate::Column;
 
 pub trait FromData<D> {
     fn from_data(_: Vec<D>) -> Column;

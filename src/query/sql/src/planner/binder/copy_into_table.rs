@@ -59,6 +59,7 @@ use databend_common_settings::Settings;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
+use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
 use derive_visitor::Drive;
 use log::debug;
 use log::warn;
@@ -157,10 +158,11 @@ impl Binder {
             .await?;
         let dedup_full_path = table
             .get_table_info()
-            .meta
-            .options
-            .get(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH)
-            == Some(&"1".to_string());
+            .get_option(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH, false);
+
+        let enable_schema_evolution = table
+            .get_table_info()
+            .get_option(OPT_KEY_ENABLE_SCHEMA_EVOLUTION, false);
 
         let validation_mode = ValidationMode::from_str(stmt.options.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
@@ -217,6 +219,7 @@ impl Binder {
             validation_mode,
             is_transform,
             dedup_full_path,
+            enable_schema_evolution,
             path_prefix: None,
             no_file_to_copy: false,
             from_attachment: false,
@@ -224,13 +227,11 @@ impl Binder {
                 schema: stage_schema,
                 files_info,
                 stage_info,
-                files_to_copy: None,
-                duplicated_files_detected: vec![],
                 is_select: false,
                 default_exprs: default_values,
                 copy_into_table_options: stmt.options.clone(),
-                stage_root: "".to_string(),
                 is_variant: false,
+                ..Default::default()
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
@@ -249,7 +250,8 @@ impl Binder {
         bind_ctx: &mut BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        let use_query = matches!(&plan.stage_table_info.stage_info.file_format_params,
+        let use_query = !plan.enable_schema_evolution
+            && matches!(&plan.stage_table_info.stage_info.file_format_params,
             FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
 
         if use_query {
@@ -444,6 +446,7 @@ impl Binder {
                 copy_into_table_options,
                 stage_root: "".to_string(),
                 is_variant: false,
+                ..Default::default()
             },
             write_mode,
             query: None,
@@ -452,6 +455,7 @@ impl Binder {
             enable_distributed: false,
             is_transform: false,
             files_collected: true,
+            enable_schema_evolution: false,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)

@@ -25,7 +25,7 @@ use databend_common_expression::Expr;
 
 use crate::sbbf::Sbbf;
 
-pub type RuntimeBloomFilter = Sbbf;
+pub type RuntimeBloomFilter = Arc<Sbbf>;
 
 #[derive(Clone, Default)]
 pub struct RuntimeFilterInfo {

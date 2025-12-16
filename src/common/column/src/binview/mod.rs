@@ -78,9 +78,9 @@ impl ViewType for str {
     type Owned = String;
 
     #[inline(always)]
-    unsafe fn from_bytes_unchecked(slice: &[u8]) -> &Self { unsafe {
-        std::str::from_utf8_unchecked(slice)
-    }}
+    unsafe fn from_bytes_unchecked(slice: &[u8]) -> &Self {
+        unsafe { std::str::from_utf8_unchecked(slice) }
+    }
 
     #[inline(always)]
     fn to_bytes(&self) -> &[u8] {
@@ -254,28 +254,34 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     /// # Safety
     /// Assumes that the `i < self.len`.
     #[inline]
-    pub unsafe fn value_unchecked(&self, i: usize) -> &T { unsafe {
-        let v = self.views.get_unchecked(i);
-        T::from_bytes_unchecked(v.get_slice_unchecked(&self.buffers))
-    }}
+    pub unsafe fn value_unchecked(&self, i: usize) -> &T {
+        unsafe {
+            let v = self.views.get_unchecked(i);
+            T::from_bytes_unchecked(v.get_slice_unchecked(&self.buffers))
+        }
+    }
 
     /// same as value_unchecked
     /// # Safety
     /// Assumes that the `i < self.len`.
     #[inline]
-    pub unsafe fn index_unchecked(&self, i: usize) -> &T { unsafe {
-        let v = self.views.get_unchecked(i);
-        T::from_bytes_unchecked(v.get_slice_unchecked(&self.buffers))
-    }}
+    pub unsafe fn index_unchecked(&self, i: usize) -> &T {
+        unsafe {
+            let v = self.views.get_unchecked(i);
+            T::from_bytes_unchecked(v.get_slice_unchecked(&self.buffers))
+        }
+    }
 
     /// same as value_unchecked, yet it will return bytes
     /// # Safety
     /// Assumes that the `i < self.len`.
     #[inline]
-    pub unsafe fn index_unchecked_bytes(&self, i: usize) -> &[u8] { unsafe {
-        let v = self.views.get_unchecked(i);
-        v.get_slice_unchecked(&self.buffers)
-    }}
+    pub unsafe fn index_unchecked_bytes(&self, i: usize) -> &[u8] {
+        unsafe {
+            let v = self.views.get_unchecked(i);
+            v.get_slice_unchecked(&self.buffers)
+        }
+    }
 
     /// Returns an iterator of `&[u8]` over every element of this array, ignoring the validity
     pub fn iter(&self) -> BinaryViewColumnIter<'_, T> {
@@ -418,11 +424,13 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         unsafe { self.slice_unchecked(offset, length) }
     }
 
-    unsafe fn slice_unchecked(&mut self, offset: usize, length: usize) { unsafe {
-        debug_assert!(offset + length <= self.len());
-        self.views.slice_unchecked(offset, length);
-        self.total_bytes_len = OnceLock::new();
-    }}
+    unsafe fn slice_unchecked(&mut self, offset: usize, length: usize) {
+        unsafe {
+            debug_assert!(offset + length <= self.len());
+            self.views.slice_unchecked(offset, length);
+            self.total_bytes_len = OnceLock::new();
+        }
+    }
 
     impl_sliced!();
 

@@ -20,13 +20,13 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::BuilderMut;
 use super::DataType;
 use super::ValueType;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
@@ -158,9 +158,9 @@ impl<const N: usize> AccessType for OpaqueType<N> {
         col.get(index)
     }
 
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
-        col.get_unchecked(index)
-    }}
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        unsafe { col.get_unchecked(index) }
+    }
 
     fn slice_column(col: &Self::Column, range: std::ops::Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.len())

@@ -20,9 +20,6 @@ use std::ops::Range;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::BuilderMut;
 use super::DataType;
@@ -30,11 +27,14 @@ use super::GenericMap;
 use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
-use crate::arrow::buffer_into_mut;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
 use crate::ScalarRef;
+use crate::arrow::buffer_into_mut;
 
 pub trait SimpleType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + Copy + PartialEq + Eq + Default + Send + 'static;
@@ -123,10 +123,12 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
     unsafe fn index_column_unchecked(
         buffer: &Buffer<Self::Scalar>,
         index: usize,
-    ) -> Self::ScalarRef<'_> { unsafe {
-        debug_assert!(index < buffer.len());
-        *buffer.get_unchecked(index)
-    }}
+    ) -> Self::ScalarRef<'_> {
+        unsafe {
+            debug_assert!(index < buffer.len());
+            *buffer.get_unchecked(index)
+        }
+    }
 
     fn slice_column(buffer: &Buffer<Self::Scalar>, range: Range<usize>) -> Buffer<Self::Scalar> {
         buffer.clone().sliced(range.start, range.end - range.start)
@@ -139,9 +141,9 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
     unsafe fn index_column_unchecked_scalar(
         col: &Buffer<Self::Scalar>,
         index: usize,
-    ) -> Self::Scalar { unsafe {
-        Self::to_owned_scalar(Self::index_column_unchecked(col, index))
-    }}
+    ) -> Self::Scalar {
+        unsafe { Self::to_owned_scalar(Self::index_column_unchecked(col, index)) }
+    }
 
     fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
         std::mem::size_of::<Self::Scalar>()

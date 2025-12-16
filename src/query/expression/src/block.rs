@@ -22,13 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
-use crate::schema::DataSchema;
-use crate::types::AccessType;
-use crate::types::AnyType;
-use crate::types::ArgType;
-use crate::types::BooleanType;
-use crate::types::DataType;
-use crate::types::ValueType;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnSet;
@@ -39,6 +32,13 @@ use crate::Scalar;
 use crate::ScalarRef;
 use crate::TableSchemaRef;
 use crate::Value;
+use crate::schema::DataSchema;
+use crate::types::AccessType;
+use crate::types::AnyType;
+use crate::types::ArgType;
+use crate::types::BooleanType;
+use crate::types::DataType;
+use crate::types::ValueType;
 
 pub type SendableDataBlockStream =
     std::pin::Pin<Box<dyn futures::stream::Stream<Item = Result<DataBlock>> + Send>>;
@@ -188,22 +188,24 @@ impl BlockEntry {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef<'_> { unsafe {
-        match self {
-            BlockEntry::Const(scalar, _, _n) => {
-                #[cfg(debug_assertions)]
-                if index >= *_n {
-                    panic!(
-                        "index out of bounds: the len is {:?} but the index is {}",
-                        _n, index
-                    )
-                }
+    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef<'_> {
+        unsafe {
+            match self {
+                BlockEntry::Const(scalar, _, _n) => {
+                    #[cfg(debug_assertions)]
+                    if index >= *_n {
+                        panic!(
+                            "index out of bounds: the len is {:?} but the index is {}",
+                            _n, index
+                        )
+                    }
 
-                scalar.as_ref()
+                    scalar.as_ref()
+                }
+                BlockEntry::Column(column) => column.index_unchecked(index),
             }
-            BlockEntry::Column(column) => column.index_unchecked(index),
         }
-    }}
+    }
 
     pub fn len(&self) -> usize {
         match self {
@@ -299,13 +301,15 @@ impl<T: AccessType> ColumnView<T> {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, i: usize) -> T::ScalarRef<'_> { unsafe {
-        debug_assert!(i < self.len());
-        match self {
-            ColumnView::Const(scalar, _) => T::to_scalar_ref(scalar),
-            ColumnView::Column(column) => T::index_column_unchecked(column, i),
+    pub unsafe fn index_unchecked(&self, i: usize) -> T::ScalarRef<'_> {
+        unsafe {
+            debug_assert!(i < self.len());
+            match self {
+                ColumnView::Const(scalar, _) => T::to_scalar_ref(scalar),
+                ColumnView::Column(column) => T::index_column_unchecked(column, i),
+            }
         }
-    }}
+    }
 }
 
 impl<T: ValueType> ColumnView<T> {
@@ -450,10 +454,10 @@ impl DataBlock {
                     c.check_valid()?;
                     if c.len() != num_rows {
                         return Err(ErrorCode::Internal(format!(
-                        "DataBlock corrupted, column length mismatch, col rows: {}, num_rows: {num_rows}, datatype: {}",
-                        c.len(),
-                        c.data_type()
-                    )));
+                            "DataBlock corrupted, column length mismatch, col rows: {}, num_rows: {num_rows}, datatype: {}",
+                            c.len(),
+                            c.data_type()
+                        )));
                     }
                 }
             }

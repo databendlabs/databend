@@ -57,6 +57,8 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
+pub use self::OpaqueColumn;
+pub use self::OpaqueColumnBuilder;
 pub use self::any::AnyType;
 pub use self::array::ArrayColumn;
 pub use self::array::ArrayType;
@@ -96,8 +98,8 @@ pub use self::vector::VectorScalar;
 pub use self::vector::VectorScalarRef;
 pub use self::vector::VectorType;
 use self::zero_size_type::*;
-pub use self::OpaqueColumn;
-pub use self::OpaqueColumnBuilder;
+use crate::ColumnBuilder;
+use crate::ScalarRef;
 use crate::property::Domain;
 use crate::types::date::DATE_MAX;
 use crate::types::date::DATE_MIN;
@@ -105,8 +107,6 @@ use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
-use crate::ScalarRef;
 
 pub type GenericMap = [DataType];
 
@@ -596,9 +596,9 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar { unsafe {
-        Self::to_owned_scalar(Self::index_column_unchecked(col, index))
-    }}
+    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar {
+        unsafe { Self::to_owned_scalar(Self::index_column_unchecked(col, index)) }
+    }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_>;

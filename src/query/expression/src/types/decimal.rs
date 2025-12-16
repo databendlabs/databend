@@ -38,8 +38,8 @@ use databend_common_exception::Result;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use enum_as_inner::EnumAsInner;
-use ethnum::u256;
 use ethnum::AsI256;
+use ethnum::u256;
 use itertools::Itertools;
 use micromarshal::Marshal;
 use num_bigint::BigInt;
@@ -49,29 +49,29 @@ use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::column_type_error;
-use super::compute_view::Compute;
-use super::compute_view::ComputeView;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::AnyType;
 use super::DataType;
+use super::F64;
 use super::NumberType;
 use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
 use super::ValueType;
-use super::F64;
-use crate::utils::arrow::buffer_into_mut;
-use crate::with_decimal_mapped_type;
-use crate::with_decimal_type;
+use super::column_type_error;
+use super::compute_view::Compute;
+use super::compute_view::ComputeView;
+use super::domain_type_error;
+use super::scalar_type_error;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
 use crate::Scalar;
 use crate::ScalarRef;
 use crate::Value;
+use crate::utils::arrow::buffer_into_mut;
+use crate::with_decimal_mapped_type;
+use crate::with_decimal_type;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreDecimal<T: Decimal>(PhantomData<T>);
@@ -129,9 +129,9 @@ impl<Num: Decimal> AccessType for CoreDecimal<Num> {
         col.get(index).copied()
     }
 
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
-        *col.get_unchecked(index)
-    }}
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        unsafe { *col.get_unchecked(index) }
+    }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.end - range.start)
@@ -269,9 +269,9 @@ impl<Num: Decimal> AccessType for CoreScalarDecimal<Num> {
         col.get(index).copied()
     }
 
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
-        *col.get_unchecked(index)
-    }}
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        unsafe { *col.get_unchecked(index) }
+    }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.end - range.start)
@@ -3008,7 +3008,7 @@ impl TryFrom<u256> for i256 {
 
 impl BorshSerialize for i256 {
     fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
-        BorshSerialize::serialize(&self.0 .0, writer)
+        BorshSerialize::serialize(&self.0.0, writer)
     }
 }
 

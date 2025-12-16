@@ -305,11 +305,6 @@ impl Settings {
         self.try_get_string("timezone")
     }
 
-    // Get group by two level threshold
-    pub fn get_group_by_two_level_threshold(&self) -> Result<u64> {
-        self.try_get_u64("group_by_two_level_threshold")
-    }
-
     pub fn get_max_inlist_to_or(&self) -> Result<u64> {
         self.try_get_u64("max_inlist_to_or")
     }
@@ -535,14 +530,6 @@ impl Settings {
 
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
-    }
-
-    pub fn get_efficiently_memory_group_by(&self) -> Result<bool> {
-        Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
-    }
-
-    pub fn get_enable_experimental_aggregate_hashtable(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_aggregate_hashtable")? == 1)
     }
 
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {

@@ -115,10 +115,9 @@ impl Distribution {
             | (Distribution::Broadcast, Distribution::Broadcast)
             | (Distribution::NodeToNodeHash(_), Distribution::Broadcast) => true,
 
-            (
-                Distribution::NodeToNodeHash(keys),
-                Distribution::NodeToNodeHash(other_keys),
-            ) => keys == other_keys,
+            (Distribution::NodeToNodeHash(keys), Distribution::NodeToNodeHash(other_keys)) => {
+                keys == other_keys
+            }
             _ => false,
         }
     }

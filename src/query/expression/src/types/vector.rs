@@ -24,22 +24,22 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::BuilderMut;
 use super::DataType;
+use super::F32;
 use super::NumberColumn;
 use super::NumberDataType;
 use super::ValueType;
-use super::F32;
-use crate::property::Domain;
-use crate::values::Column;
-use crate::values::Scalar;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 use crate::TableDataType;
+use crate::property::Domain;
+use crate::values::Column;
+use crate::values::Scalar;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VectorType;
@@ -91,9 +91,9 @@ impl AccessType for VectorType {
     unsafe fn index_column_unchecked<'a>(
         col: &'a Self::Column,
         index: usize,
-    ) -> Self::ScalarRef<'a> { unsafe {
-        col.index_unchecked(index)
-    }}
+    ) -> Self::ScalarRef<'a> {
+        unsafe { col.index_unchecked(index) }
+    }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)

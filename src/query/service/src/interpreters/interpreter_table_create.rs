@@ -409,7 +409,7 @@ impl CreateTableInterpreter {
             if settings.get_copy_dedup_full_path_by_default()? {
                 options.insert(
                     OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH.to_string(),
-                    "1".to_string(),
+                    "true".to_string(),
                 );
             };
 

@@ -17,17 +17,17 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
-use crate::expr::*;
-use crate::filter::select_expr_permutation::FilterPermutation;
-use crate::filter::SelectOp;
-use crate::generate_like_pattern;
-use crate::type_check::convert_escape_pattern;
-use crate::types::DataType;
 use crate::Expr;
 use crate::Function;
 use crate::FunctionID;
 use crate::LikePattern;
 use crate::Scalar;
+use crate::expr::*;
+use crate::filter::SelectOp;
+use crate::filter::select_expr_permutation::FilterPermutation;
+use crate::generate_like_pattern;
+use crate::type_check::convert_escape_pattern;
+use crate::types::DataType;
 
 /// The `SelectExpr` is used to represent the predicates expression.
 #[derive(Clone, Debug)]

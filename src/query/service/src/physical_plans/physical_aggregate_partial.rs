@@ -59,7 +59,6 @@ pub struct AggregatePartial {
     pub input: PhysicalPlan,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
-    pub enable_experimental_aggregate_hashtable: bool,
     pub group_by_display: Vec<String>,
 
     // Order by keys if keys are subset of group by key, then we can use rank to filter data in previous
@@ -163,7 +162,6 @@ impl IPhysicalPlan for AggregatePartial {
             meta: self.meta.clone(),
             group_by: self.group_by.clone(),
             agg_funcs: self.agg_funcs.clone(),
-            enable_experimental_aggregate_hashtable: self.enable_experimental_aggregate_hashtable,
             group_by_display: self.group_by_display.clone(),
             rank_limit: self.rank_limit.clone(),
             stat_info: self.stat_info.clone(),
@@ -178,17 +176,12 @@ impl IPhysicalPlan for AggregatePartial {
         let max_threads = builder.settings.get_max_threads()?;
         let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
 
-        let enable_experimental_aggregate_hashtable = builder
-            .settings
-            .get_enable_experimental_aggregate_hashtable()?;
-
         let enable_experiment_aggregate = builder.settings.get_enable_experiment_aggregate()?;
 
         let params = PipelineBuilder::build_aggregator_params(
             self.input.output_schema()?,
             &self.group_by,
             &self.agg_funcs,
-            enable_experimental_aggregate_hashtable,
             builder.is_exchange_parent(),
             max_spill_io_requests as usize,
             enable_experiment_aggregate,

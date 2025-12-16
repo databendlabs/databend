@@ -17,17 +17,17 @@ use core::ops::Range;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 
-use crate::filter::SelectExpr;
-use crate::filter::Selector;
-use crate::types::BooleanType;
 use crate::ColumnSet;
 use crate::DataBlock;
 use crate::Evaluator;
 use crate::Expr;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
-use crate::SelectExprBuilder;
 use crate::SELECTIVITY_THRESHOLD;
+use crate::SelectExprBuilder;
+use crate::filter::SelectExpr;
+use crate::filter::Selector;
+use crate::types::BooleanType;
 
 // FilterExecutor is used to filter `DataBlock` by `SelectExpr`.
 pub struct FilterExecutor {

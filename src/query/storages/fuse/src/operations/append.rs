@@ -252,10 +252,6 @@ impl FuseTable {
     }
 
     pub fn get_option<T: FromStr>(&self, opt_key: &str, default: T) -> T {
-        self.table_info
-            .options()
-            .get(opt_key)
-            .and_then(|s| s.parse::<T>().ok())
-            .unwrap_or(default)
+        self.table_info.get_option(opt_key, default)
     }
 }

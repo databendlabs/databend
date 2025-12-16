@@ -1,0 +1,52 @@
+statement ok
+create or replace table t1(a int);
+
+statement ok
+create or replace stage s1;
+
+statement ok
+copy into @s1 from (select 1 as a, 2 as b,  3 as c)
+
+statement ok
+copy into @s1 from (select 4 as a, 6 as c)
+
+statement ok
+copy into t1 from @s1/ file_format=(type=parquet missing_field_as = FIELD_DEFAULT);
+
+query 
+select * from t1 order by a;
+----
+1
+4
+
+statement ok
+truncate table t1;
+
+statement ok
+ALTER TABLE t1 SET options(ENABLE_SCHEMA_EVOLUTION = true);
+
+statement ok
+copy into t1 from @s1/ file_format=(type=parquet missing_field_as = FIELD_DEFAULT) force=true;
+
+query 
+select * from t1 order by a;
+----
+1 2 3
+4 NULL 6
+
+query 
+desc t1;
+----
+a INT YES NULL (empty)
+b TINYINT UNSIGNED YES NULL (empty)
+c TINYINT UNSIGNED YES NULL (empty)
+
+
+statement ok
+copy into @s1 from (select 4 as a, '7' as d)
+
+statement ok
+copy into @s1 from (select 4 as a, 8 as d)
+
+statement error 1046.*mismatch
+copy into t1 from @s1/ file_format=(type=parquet missing_field_as = FIELD_DEFAULT);

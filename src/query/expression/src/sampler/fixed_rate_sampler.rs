@@ -179,8 +179,8 @@ mod rate_sampling {
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     use super::*;
     use crate::types::Int32Type;

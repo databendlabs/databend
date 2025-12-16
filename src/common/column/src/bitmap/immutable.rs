@@ -248,10 +248,12 @@ impl Bitmap {
     /// The caller must ensure that `self.offset + offset + length <= self.len()`
     #[inline]
     #[must_use]
-    pub unsafe fn sliced_unchecked(mut self, offset: usize, length: usize) -> Self { unsafe {
-        self.slice_unchecked(offset, length);
-        self
-    }}
+    pub unsafe fn sliced_unchecked(mut self, offset: usize, length: usize) -> Self {
+        unsafe {
+            self.slice_unchecked(offset, length);
+            self
+        }
+    }
 
     /// Returns whether the bit at position `i` is set.
     /// # Panics
@@ -265,9 +267,9 @@ impl Bitmap {
     /// # Safety
     /// Unsound iff `i >= self.len()`.
     #[inline]
-    pub unsafe fn get_bit_unchecked(&self, i: usize) -> bool { unsafe {
-        get_bit_unchecked(&self.bytes, self.offset + i)
-    }}
+    pub unsafe fn get_bit_unchecked(&self, i: usize) -> bool {
+        unsafe { get_bit_unchecked(&self.bytes, self.offset + i) }
+    }
 
     /// Returns a pointer to the start of this [`Bitmap`] (ignores `offsets`)
     /// This pointer is allocated iff `self.len() > 0`.
@@ -454,9 +456,9 @@ impl Bitmap {
     /// # Safety
     /// The iterator must report an accurate length.
     #[inline]
-    pub unsafe fn from_trusted_len_iter_unchecked<I: Iterator<Item = bool>>(iterator: I) -> Self { unsafe {
-        MutableBitmap::from_trusted_len_iter_unchecked(iterator).into()
-    }}
+    pub unsafe fn from_trusted_len_iter_unchecked<I: Iterator<Item = bool>>(iterator: I) -> Self {
+        unsafe { MutableBitmap::from_trusted_len_iter_unchecked(iterator).into() }
+    }
 
     /// Creates a new [`Bitmap`] from an iterator of booleans.
     #[inline]

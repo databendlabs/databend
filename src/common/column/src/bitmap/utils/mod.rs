@@ -75,10 +75,12 @@ pub fn set_bit(data: &mut [u8], i: usize, value: bool) {
 /// # Safety
 /// caller must ensure that `i / 8 < data.len()`
 #[inline]
-pub unsafe fn set_bit_unchecked(data: &mut [u8], i: usize, value: bool) { unsafe {
-    let byte = data.get_unchecked_mut(i / 8);
-    *byte = set(*byte, i % 8, value);
-}}
+pub unsafe fn set_bit_unchecked(data: &mut [u8], i: usize, value: bool) {
+    unsafe {
+        let byte = data.get_unchecked_mut(i / 8);
+        *byte = set(*byte, i % 8, value);
+    }
+}
 
 /// Returns whether bit at position `i` in `data` is set
 /// # Panics
@@ -93,9 +95,9 @@ pub fn get_bit(bytes: &[u8], i: usize) -> bool {
 /// # Safety
 /// `i / 8 >= data.len()` results in undefined behavior
 #[inline]
-pub unsafe fn get_bit_unchecked(data: &[u8], i: usize) -> bool { unsafe {
-    (*data.as_ptr().add(i >> 3) & BIT_MASK[i & 7]) != 0
-}}
+pub unsafe fn get_bit_unchecked(data: &[u8], i: usize) -> bool {
+    unsafe { (*data.as_ptr().add(i >> 3) & BIT_MASK[i & 7]) != 0 }
+}
 
 /// Returns the number of bytes required to hold `bits` bits.
 #[inline]

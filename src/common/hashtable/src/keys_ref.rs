@@ -38,9 +38,9 @@ impl KeysRef {
 
     #[allow(clippy::missing_safety_doc)]
     #[inline]
-    pub unsafe fn as_slice(&self) -> &[u8] { unsafe {
-        std::slice::from_raw_parts(self.address as *const u8, self.length)
-    }}
+    pub unsafe fn as_slice(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.address as *const u8, self.length) }
+    }
 }
 
 impl Eq for KeysRef {}

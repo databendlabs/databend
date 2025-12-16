@@ -19,8 +19,8 @@ use std::fmt::Write;
 
 use comfy_table::Cell;
 use comfy_table::Table;
-use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::ast::quote::QuotedString;
+use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
 use databend_common_column::binary::BinaryColumn;
 use databend_common_io::deserialize_bitmap;
@@ -36,6 +36,12 @@ use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
+use crate::Column;
+use crate::ColumnIndex;
+use crate::ExprVisitor;
+use crate::FunctionEval;
+use crate::TableDataType;
+use crate::VariantDataType;
 use crate::block::DataBlock;
 use crate::expr::*;
 use crate::expression::Expr;
@@ -44,6 +50,13 @@ use crate::function::Function;
 use crate::function::FunctionSignature;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
+use crate::types::AccessType;
+use crate::types::AnyType;
+use crate::types::DataType;
+use crate::types::DecimalSize;
+use crate::types::NumberClass;
+use crate::types::ValueType;
+use crate::types::VectorScalarRef;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::date_to_string;
 use crate::types::decimal::DecimalColumn;
@@ -63,13 +76,6 @@ use crate::types::opaque::OpaqueScalarRef;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
 use crate::types::vector::VectorDataType;
-use crate::types::AccessType;
-use crate::types::AnyType;
-use crate::types::DataType;
-use crate::types::DecimalSize;
-use crate::types::NumberClass;
-use crate::types::ValueType;
-use crate::types::VectorScalarRef;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::values::Value;
@@ -77,12 +83,6 @@ use crate::visit_expr;
 use crate::with_integer_mapped_type;
 use crate::with_opaque_type;
 use crate::with_vector_number_type;
-use crate::Column;
-use crate::ColumnIndex;
-use crate::ExprVisitor;
-use crate::FunctionEval;
-use crate::TableDataType;
-use crate::VariantDataType;
 
 const FLOAT_NUM_FRAC_DIGITS: u32 = 10;
 
@@ -1026,51 +1026,23 @@ impl<Index: ColumnIndex> Expr<Index> {
                 Expr::FunctionCall(FunctionCall {
                     function, args, id, ..
                 }) => match (function.signature.name.as_str(), args.as_slice()) {
-                    ("and", [lhs, rhs]) => {
-                        write_binary_op("AND", lhs, rhs, 10, min_precedence)
-                    }
-                    ("or", [lhs, rhs]) => {
-                        write_binary_op("OR", lhs, rhs, 5, min_precedence)
-                    }
+                    ("and", [lhs, rhs]) => write_binary_op("AND", lhs, rhs, 10, min_precedence),
+                    ("or", [lhs, rhs]) => write_binary_op("OR", lhs, rhs, 5, min_precedence),
                     ("not", [expr]) => write_unary_op("NOT", expr, 15, min_precedence),
-                    ("gte", [lhs, rhs]) => {
-                        write_binary_op(">=", lhs, rhs, 20, min_precedence)
-                    }
-                    ("gt", [lhs, rhs]) => {
-                        write_binary_op(">", lhs, rhs, 20, min_precedence)
-                    }
-                    ("lte", [lhs, rhs]) => {
-                        write_binary_op("<=", lhs, rhs, 20, min_precedence)
-                    }
-                    ("lt", [lhs, rhs]) => {
-                        write_binary_op("<", lhs, rhs, 20, min_precedence)
-                    }
-                    ("eq", [lhs, rhs]) => {
-                        write_binary_op("=", lhs, rhs, 20, min_precedence)
-                    }
-                    ("noteq", [lhs, rhs]) => {
-                        write_binary_op("<>", lhs, rhs, 20, min_precedence)
-                    }
+                    ("gte", [lhs, rhs]) => write_binary_op(">=", lhs, rhs, 20, min_precedence),
+                    ("gt", [lhs, rhs]) => write_binary_op(">", lhs, rhs, 20, min_precedence),
+                    ("lte", [lhs, rhs]) => write_binary_op("<=", lhs, rhs, 20, min_precedence),
+                    ("lt", [lhs, rhs]) => write_binary_op("<", lhs, rhs, 20, min_precedence),
+                    ("eq", [lhs, rhs]) => write_binary_op("=", lhs, rhs, 20, min_precedence),
+                    ("noteq", [lhs, rhs]) => write_binary_op("<>", lhs, rhs, 20, min_precedence),
                     ("plus", [expr]) => write_unary_op("+", expr, 50, min_precedence),
                     ("minus", [expr]) => write_unary_op("-", expr, 50, min_precedence),
-                    ("plus", [lhs, rhs]) => {
-                        write_binary_op("+", lhs, rhs, 30, min_precedence)
-                    }
-                    ("minus", [lhs, rhs]) => {
-                        write_binary_op("-", lhs, rhs, 30, min_precedence)
-                    }
-                    ("multiply", [lhs, rhs]) => {
-                        write_binary_op("*", lhs, rhs, 40, min_precedence)
-                    }
-                    ("divide", [lhs, rhs]) => {
-                        write_binary_op("/", lhs, rhs, 40, min_precedence)
-                    }
-                    ("div", [lhs, rhs]) => {
-                        write_binary_op("DIV", lhs, rhs, 40, min_precedence)
-                    }
-                    ("modulo", [lhs, rhs]) => {
-                        write_binary_op("%", lhs, rhs, 40, min_precedence)
-                    }
+                    ("plus", [lhs, rhs]) => write_binary_op("+", lhs, rhs, 30, min_precedence),
+                    ("minus", [lhs, rhs]) => write_binary_op("-", lhs, rhs, 30, min_precedence),
+                    ("multiply", [lhs, rhs]) => write_binary_op("*", lhs, rhs, 40, min_precedence),
+                    ("divide", [lhs, rhs]) => write_binary_op("/", lhs, rhs, 40, min_precedence),
+                    ("div", [lhs, rhs]) => write_binary_op("DIV", lhs, rhs, 40, min_precedence),
+                    ("modulo", [lhs, rhs]) => write_binary_op("%", lhs, rhs, 40, min_precedence),
                     _ => {
                         let mut s = String::new();
                         s += &function.signature.name;

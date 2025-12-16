@@ -29,7 +29,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::statistics_to_domain;
-use log::debug;
 use log::info;
 
 use crate::FuseBlockPartInfo;
@@ -101,10 +100,6 @@ impl ExprRuntimePruner {
                                 &input_domains,
                                 func_ctx,
                                 &BUILTIN_FUNCTIONS,
-                            );
-                            debug!(
-                                "Runtime filter after constant fold is {:?}",
-                                new_expr.sql_display()
                             );
                             if matches!(
                                 new_expr,

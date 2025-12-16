@@ -137,12 +137,14 @@ macro_rules! lookup_impl {
             unsafe fn insert(
                 &mut self,
                 key: &$ty,
-            ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> { unsafe {
-                match self.insert_and_entry(key) {
-                    Ok(e) => Ok(&mut e.val),
-                    Err(e) => Err(e.val.assume_init_mut()),
+            ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+                unsafe {
+                    match self.insert_and_entry(key) {
+                        Ok(e) => Ok(&mut e.val),
+                        Err(e) => Err(e.val.assume_init_mut()),
+                    }
                 }
-            }}
+            }
 
             unsafe fn insert_and_entry(
                 &mut self,
@@ -164,9 +166,9 @@ macro_rules! lookup_impl {
                 &mut self,
                 key: &$ty,
                 _hash: u64,
-            ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
-                self.insert_and_entry(key)
-            }}
+            ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+                unsafe { self.insert_and_entry(key) }
+            }
 
             fn iter(&self) -> Self::Iterator<'_> {
                 LookupTableIter::create(&self.flags, &self.data)

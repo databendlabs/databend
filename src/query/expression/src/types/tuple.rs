@@ -19,11 +19,11 @@ use std::marker::PhantomData;
 
 use databend_common_exception::Result;
 
+use super::AccessType;
+use super::AnyType;
 use super::column_type_error;
 use super::domain_type_error;
 use super::scalar_type_error;
-use super::AccessType;
-use super::AnyType;
 use crate::Column;
 use crate::Domain;
 use crate::ScalarRef;
@@ -95,9 +95,9 @@ where A: AccessType
         A::index_column(col, index)
     }
 
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
-        A::index_column_unchecked(col, index)
-    }}
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        unsafe { A::index_column_unchecked(col, index) }
+    }
 
     fn slice_column(col: &Self::Column, range: std::ops::Range<usize>) -> Self::Column {
         A::slice_column(col, range)
@@ -173,12 +173,14 @@ where
         Some((A::index_column(a, index)?, B::index_column(b, index)?))
     }
 
-    unsafe fn index_column_unchecked((a, b): &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
-        (
-            A::index_column_unchecked(a, index),
-            B::index_column_unchecked(b, index),
-        )
-    }}
+    unsafe fn index_column_unchecked((a, b): &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        unsafe {
+            (
+                A::index_column_unchecked(a, index),
+                B::index_column_unchecked(b, index),
+            )
+        }
+    }
 
     fn slice_column((a, b): &Self::Column, range: std::ops::Range<usize>) -> Self::Column {
         (A::slice_column(a, range.clone()), B::slice_column(b, range))
@@ -289,13 +291,15 @@ where
     unsafe fn index_column_unchecked(
         (a, b, c): &Self::Column,
         index: usize,
-    ) -> Self::ScalarRef<'_> { unsafe {
-        (
-            A::index_column_unchecked(a, index),
-            B::index_column_unchecked(b, index),
-            C::index_column_unchecked(c, index),
-        )
-    }}
+    ) -> Self::ScalarRef<'_> {
+        unsafe {
+            (
+                A::index_column_unchecked(a, index),
+                B::index_column_unchecked(b, index),
+                C::index_column_unchecked(c, index),
+            )
+        }
+    }
 
     fn slice_column((a, b, c): &Self::Column, range: std::ops::Range<usize>) -> Self::Column {
         (
@@ -423,14 +427,16 @@ where
     unsafe fn index_column_unchecked(
         (a, b, c, d): &Self::Column,
         index: usize,
-    ) -> Self::ScalarRef<'_> { unsafe {
-        (
-            A::index_column_unchecked(a, index),
-            B::index_column_unchecked(b, index),
-            C::index_column_unchecked(c, index),
-            D::index_column_unchecked(d, index),
-        )
-    }}
+    ) -> Self::ScalarRef<'_> {
+        unsafe {
+            (
+                A::index_column_unchecked(a, index),
+                B::index_column_unchecked(b, index),
+                C::index_column_unchecked(c, index),
+                D::index_column_unchecked(d, index),
+            )
+        }
+    }
 
     fn slice_column((a, b, c, d): &Self::Column, range: std::ops::Range<usize>) -> Self::Column {
         (

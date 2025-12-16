@@ -34,12 +34,12 @@ use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct GetDatabaseTableResponse {
-    pub table: Option<TableDetails>,
+    pub table: Option<TableDetail>,
     pub warnings: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
-pub struct TableDetails {
+pub struct TableDetail {
     pub name: String,
     pub database: String,
     pub catalog: String,
@@ -122,7 +122,7 @@ async fn handle(
     });
 
     Ok(GetDatabaseTableResponse {
-        table: Some(TableDetails {
+        table: Some(TableDetail {
             name: tbl.name().to_string(),
             database: db.name().to_string(),
             catalog: catalog.name().to_string(),

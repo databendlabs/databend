@@ -17,6 +17,15 @@ use std::collections::HashMap;
 use databend_common_ast::Span;
 use log::error;
 
+use crate::ColumnBuilder;
+use crate::ColumnIndex;
+use crate::EvalContext;
+use crate::FunctionContext;
+use crate::FunctionDomain;
+use crate::FunctionEval;
+use crate::FunctionRegistry;
+use crate::Scalar;
+use crate::Value;
 use crate::block::DataBlock;
 use crate::evaluator::Evaluator;
 use crate::expression::Cast;
@@ -28,19 +37,10 @@ use crate::expression::LambdaFunctionCall;
 use crate::property::Domain;
 use crate::type_check::check_function;
 use crate::type_check::get_simple_cast_function;
+use crate::types::DataType;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberScalar;
-use crate::types::DataType;
-use crate::ColumnBuilder;
-use crate::ColumnIndex;
-use crate::EvalContext;
-use crate::FunctionContext;
-use crate::FunctionDomain;
-use crate::FunctionEval;
-use crate::FunctionRegistry;
-use crate::Scalar;
-use crate::Value;
 
 const MAX_FUNCTION_ARGS_TO_FOLD: usize = 4096;
 

@@ -125,6 +125,20 @@ impl JoinType {
             JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
         )
     }
+
+    /// Joins that behave like filters (no null preserving side) so
+    /// equi-join conditions can be deduplicated safely.
+    pub fn is_filtering_join(&self) -> bool {
+        matches!(
+            self,
+            JoinType::Inner
+                | JoinType::InnerAny
+                | JoinType::LeftSemi
+                | JoinType::RightSemi
+                | JoinType::LeftAnti
+                | JoinType::RightAnti
+        )
+    }
 }
 
 impl Display for JoinType {

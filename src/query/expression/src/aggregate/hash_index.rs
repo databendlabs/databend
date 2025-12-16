@@ -14,11 +14,11 @@
 
 use std::fmt::Debug;
 
-use super::payload_row::CompareState;
+use super::LOAD_FACTOR;
 use super::PartitionedPayload;
 use super::ProbeState;
 use super::RowPtr;
-use super::LOAD_FACTOR;
+use super::payload_row::CompareState;
 use crate::ProjectedBlock;
 
 pub(super) struct HashIndex {

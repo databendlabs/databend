@@ -5251,9 +5251,7 @@ impl<'a> TypeChecker<'a> {
 
         let tenant = self.ctx.get_tenant();
         let provider = UserApiProvider::instance();
-        let udf = databend_common_base::runtime::block_on({
-            provider.get_udf(&tenant, udf_name)
-        })?;
+        let udf = databend_common_base::runtime::block_on({ provider.get_udf(&tenant, udf_name) })?;
 
         let Some(udf) = udf else {
             return Ok(None);

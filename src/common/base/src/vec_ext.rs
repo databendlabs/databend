@@ -61,7 +61,13 @@ impl VecU8Ext for Vec<u8> {
     unsafe fn store_value_uncheckd<T>(&mut self, val: &T) {
         debug_assert!(self.capacity() >= self.len() + std::mem::size_of::<T>());
         let end = unsafe { self.as_mut_ptr().add(self.len()) };
-        unsafe { std::ptr::copy_nonoverlapping(val as *const T as *const u8, end, std::mem::size_of::<T>()) };
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                val as *const T as *const u8,
+                end,
+                std::mem::size_of::<T>(),
+            )
+        };
         unsafe { self.set_len(self.len() + std::mem::size_of::<T>()) };
     }
 }

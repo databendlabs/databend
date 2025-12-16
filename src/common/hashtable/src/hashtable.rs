@@ -132,32 +132,36 @@ where
     pub unsafe fn insert_and_entry(
         &mut self,
         key: K,
-    ) -> Result<&mut Entry<K, V>, &mut Entry<K, V>> { unsafe {
-        if unlikely(K::equals_zero(&key)) {
-            let res = self.zero.is_some();
-            if !res {
-                *self.zero = Some(MaybeUninit::zeroed().assume_init());
+    ) -> Result<&mut Entry<K, V>, &mut Entry<K, V>> {
+        unsafe {
+            if unlikely(K::equals_zero(&key)) {
+                let res = self.zero.is_some();
+                if !res {
+                    *self.zero = Some(MaybeUninit::zeroed().assume_init());
+                }
+                let zero = self.zero.as_mut().unwrap();
+                if res {
+                    return Err(zero);
+                } else {
+                    return Ok(zero);
+                }
             }
-            let zero = self.zero.as_mut().unwrap();
-            if res {
-                return Err(zero);
-            } else {
-                return Ok(zero);
-            }
+            self.table.check_grow();
+            self.table.insert(key)
         }
-        self.table.check_grow();
-        self.table.insert(key)
-    }}
+    }
     /// # Safety
     ///
     /// The returned uninitialized value should be written immediately.
     #[inline(always)]
-    pub unsafe fn insert(&mut self, key: K) -> Result<&mut MaybeUninit<V>, &mut V> { unsafe {
-        match self.insert_and_entry(key) {
-            Ok(e) => Ok(&mut e.val),
-            Err(e) => Err(e.val.assume_init_mut()),
+    pub unsafe fn insert(&mut self, key: K) -> Result<&mut MaybeUninit<V>, &mut V> {
+        unsafe {
+            match self.insert_and_entry(key) {
+                Ok(e) => Ok(&mut e.val),
+                Err(e) => Err(e.val.assume_init_mut()),
+            }
         }
-    }}
+    }
     pub fn iter(&self) -> HashtableIter<'_, K, V> {
         HashtableIter {
             inner: self.zero.iter().chain(self.table.iter()),
@@ -285,54 +289,58 @@ where
     unsafe fn insert(
         &mut self,
         key: &Self::Key,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> { unsafe {
-        self.insert(*key)
-    }}
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+        unsafe { self.insert(*key) }
+    }
 
     #[inline(always)]
     unsafe fn insert_and_entry(
         &mut self,
         key: &Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
-        if unlikely(K::equals_zero(key)) {
-            let res = self.zero.is_some();
-            if !res {
-                *self.zero = Some(MaybeUninit::zeroed().assume_init());
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        unsafe {
+            if unlikely(K::equals_zero(key)) {
+                let res = self.zero.is_some();
+                if !res {
+                    *self.zero = Some(MaybeUninit::zeroed().assume_init());
+                }
+                let zero = self.zero.as_mut().unwrap();
+                if res {
+                    return Err(zero);
+                } else {
+                    return Ok(zero);
+                }
             }
-            let zero = self.zero.as_mut().unwrap();
-            if res {
-                return Err(zero);
-            } else {
-                return Ok(zero);
-            }
+            self.table.check_grow();
+            self.table.insert(*key)
         }
-        self.table.check_grow();
-        self.table.insert(*key)
-    }}
+    }
 
     #[inline(always)]
     unsafe fn insert_and_entry_with_hash(
         &mut self,
         key: &Self::Key,
         hash: u64,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
-        if unlikely(K::equals_zero(key)) {
-            let res = self.zero.is_some();
-            if !res {
-                *self.zero = Some(MaybeUninit::zeroed().assume_init());
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        unsafe {
+            if unlikely(K::equals_zero(key)) {
+                let res = self.zero.is_some();
+                if !res {
+                    *self.zero = Some(MaybeUninit::zeroed().assume_init());
+                }
+                let zero = self.zero.as_mut().unwrap();
+                if res {
+                    return Err(zero);
+                } else {
+                    return Ok(zero);
+                }
             }
-            let zero = self.zero.as_mut().unwrap();
-            if res {
-                return Err(zero);
-            } else {
-                return Ok(zero);
-            }
+
+            self.table.check_grow();
+
+            self.table.insert_with_hash(*key, hash)
         }
-
-        self.table.check_grow();
-
-        self.table.insert_with_hash(*key, hash)
-    }}
+    }
 
     fn iter(&self) -> Self::Iterator<'_> {
         HashtableIter {

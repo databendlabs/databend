@@ -37,7 +37,6 @@ pub struct AggregatorParams {
     // If there is no aggregate function, layout is None
     pub states_layout: Option<StatesLayout>,
 
-    pub enable_experimental_aggregate_hashtable: bool,
     pub cluster_aggregator: bool,
     pub max_spill_io_requests: usize,
 
@@ -55,7 +54,6 @@ impl AggregatorParams {
         group_columns: &[usize],
         agg_funcs: &[AggregateFunctionRef],
         agg_args: &[Vec<usize>],
-        enable_experimental_aggregate_hashtable: bool,
         cluster_aggregator: bool,
         max_spill_io_requests: usize,
         enable_experiment_aggregate: bool,
@@ -75,7 +73,6 @@ impl AggregatorParams {
             aggregate_functions: agg_funcs.to_vec(),
             aggregate_functions_arguments: agg_args.to_vec(),
             states_layout,
-            enable_experimental_aggregate_hashtable,
             cluster_aggregator,
             max_block_rows,
             max_block_bytes,

@@ -115,71 +115,77 @@ where
     ///
     /// `key` doesn't equal to zero.
     #[inline(always)]
-    pub unsafe fn get(&self, key: &K) -> Option<&Entry<K, V>> { unsafe {
-        self.get_with_hash(key, key.hash())
-    }}
+    pub unsafe fn get(&self, key: &K) -> Option<&Entry<K, V>> {
+        unsafe { self.get_with_hash(key, key.hash()) }
+    }
     /// # Safety
     ///
     /// `key` doesn't equal to zero.
     /// Provided hash is correct.
     #[inline(always)]
-    pub unsafe fn get_with_hash(&self, key: &K, hash: u64) -> Option<&Entry<K, V>> { unsafe {
-        assume(!K::equals_zero(key));
-        let index = (hash as usize) & (self.entries.len() - 1);
-        for i in (index..self.entries.len()).chain(0..index) {
-            assume(i < self.entries.len());
-            if self.entries[i].is_zero() {
-                return None;
-            }
+    pub unsafe fn get_with_hash(&self, key: &K, hash: u64) -> Option<&Entry<K, V>> {
+        unsafe {
+            assume(!K::equals_zero(key));
+            let index = (hash as usize) & (self.entries.len() - 1);
+            for i in (index..self.entries.len()).chain(0..index) {
+                assume(i < self.entries.len());
+                if self.entries[i].is_zero() {
+                    return None;
+                }
 
-            if self.entries[i].key.assume_init_ref() == key {
-                return Some(&self.entries[i]);
+                if self.entries[i].key.assume_init_ref() == key {
+                    return Some(&self.entries[i]);
+                }
             }
+            None
         }
-        None
-    }}
+    }
     /// # Safety
     ///
     /// `key` doesn't equal to zero.
     #[inline(always)]
-    pub unsafe fn get_mut(&mut self, key: &K) -> Option<&mut Entry<K, V>> { unsafe {
-        self.get_with_hash_mut(key, key.hash())
-    }}
+    pub unsafe fn get_mut(&mut self, key: &K) -> Option<&mut Entry<K, V>> {
+        unsafe { self.get_with_hash_mut(key, key.hash()) }
+    }
     /// # Safety
     ///
     /// `key` doesn't equal to zero.
     /// Provided hash is correct.
     #[inline(always)]
-    pub unsafe fn get_with_hash_mut(&mut self, key: &K, hash: u64) -> Option<&mut Entry<K, V>> { unsafe {
-        assume(!K::equals_zero(key));
-        let index = (hash as usize) & (self.entries.len() - 1);
-        for i in (index..self.entries.len()).chain(0..index) {
-            assume(i < self.entries.len());
-            if self.entries[i].is_zero() {
-                return None;
+    pub unsafe fn get_with_hash_mut(&mut self, key: &K, hash: u64) -> Option<&mut Entry<K, V>> {
+        unsafe {
+            assume(!K::equals_zero(key));
+            let index = (hash as usize) & (self.entries.len() - 1);
+            for i in (index..self.entries.len()).chain(0..index) {
+                assume(i < self.entries.len());
+                if self.entries[i].is_zero() {
+                    return None;
+                }
+                if self.entries[i].key.assume_init_ref() == key {
+                    return Some(&mut self.entries[i]);
+                }
             }
-            if self.entries[i].key.assume_init_ref() == key {
-                return Some(&mut self.entries[i]);
-            }
+            None
         }
-        None
-    }}
+    }
 
-    pub unsafe fn get_slot_index(&self, key: &K) -> Option<usize> { unsafe {
-        assume(!K::equals_zero(key));
+    pub unsafe fn get_slot_index(&self, key: &K) -> Option<usize> {
+        unsafe {
+            assume(!K::equals_zero(key));
 
-        let index = (key.hash() as usize) & (self.entries.len() - 1);
-        for i in (index..self.entries.len()).chain(0..index) {
-            assume(i < self.entries.len());
-            if self.entries[i].is_zero() {
-                return None;
+            let index = (key.hash() as usize) & (self.entries.len() - 1);
+            for i in (index..self.entries.len()).chain(0..index) {
+                assume(i < self.entries.len());
+                if self.entries[i].is_zero() {
+                    return None;
+                }
+                if self.entries[i].key.assume_init_ref() == key {
+                    return Some(i);
+                }
             }
-            if self.entries[i].key.assume_init_ref() == key {
-                return Some(i);
-            }
+            None
         }
-        None
-    }}
+    }
 
     /// # Safety
     ///
@@ -190,9 +196,9 @@ where
     ///
     /// Panics if the hash table overflows.
     #[inline(always)]
-    pub unsafe fn insert(&mut self, key: K) -> Result<&mut Entry<K, V>, &mut Entry<K, V>> { unsafe {
-        self.insert_with_hash(key, key.hash())
-    }}
+    pub unsafe fn insert(&mut self, key: K) -> Result<&mut Entry<K, V>, &mut Entry<K, V>> {
+        unsafe { self.insert_with_hash(key, key.hash()) }
+    }
     /// # Safety
     ///
     /// `key` doesn't equal to zero.
@@ -206,22 +212,24 @@ where
         &mut self,
         key: K,
         hash: u64,
-    ) -> Result<&mut Entry<K, V>, &mut Entry<K, V>> { unsafe {
-        assume(!K::equals_zero(&key));
-        let index = (hash as usize) & (self.entries.len() - 1);
-        for i in (index..self.entries.len()).chain(0..index) {
-            assume(i < self.entries.len());
-            if self.entries[i].is_zero() {
-                self.len += 1;
-                self.entries[i].key.write(key);
-                return Ok(&mut self.entries[i]);
+    ) -> Result<&mut Entry<K, V>, &mut Entry<K, V>> {
+        unsafe {
+            assume(!K::equals_zero(&key));
+            let index = (hash as usize) & (self.entries.len() - 1);
+            for i in (index..self.entries.len()).chain(0..index) {
+                assume(i < self.entries.len());
+                if self.entries[i].is_zero() {
+                    self.len += 1;
+                    self.entries[i].key.write(key);
+                    return Ok(&mut self.entries[i]);
+                }
+                if self.entries[i].key.assume_init_ref() == &key {
+                    return Err(&mut self.entries[i]);
+                }
             }
-            if self.entries[i].key.assume_init_ref() == &key {
-                return Err(&mut self.entries[i]);
-            }
+            panic!("the hash table overflows")
         }
-        panic!("the hash table overflows")
-    }}
+    }
     pub fn iter(&self) -> Table0Iter<'_, K, V> {
         Table0Iter {
             slice: self.entries.as_ref(),
@@ -323,19 +331,21 @@ where
     C: Container<T = Entry<K, ()>, A = A>,
     A: Allocator + Clone,
 {
-    pub unsafe fn set_merge(&mut self, other: &Self) { unsafe {
-        while (self.len() + other.len()) * 2 > self.capacity() {
-            if (self.entries.len() >> 22) == 0 {
-                self.grow(2);
-            } else {
-                self.grow(1);
+    pub unsafe fn set_merge(&mut self, other: &Self) {
+        unsafe {
+            while (self.len() + other.len()) * 2 > self.capacity() {
+                if (self.entries.len() >> 22) == 0 {
+                    self.grow(2);
+                } else {
+                    self.grow(1);
+                }
+            }
+            for entry in other.iter() {
+                let key = entry.key.assume_init();
+                let _ = self.insert(key);
             }
         }
-        for entry in other.iter() {
-            let key = entry.key.assume_init();
-            let _ = self.insert(key);
-        }
-    }}
+    }
 }
 
 impl<K, V, C, A> Drop for Table0<K, V, C, A>

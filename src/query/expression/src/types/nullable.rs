@@ -21,8 +21,6 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 
-use super::column_type_error;
-use super::domain_type_error;
 use super::AccessType;
 use super::AnyType;
 use super::ArgType;
@@ -31,13 +29,15 @@ use super::DataType;
 use super::GenericMap;
 use super::ReturnType;
 use super::ValueType;
+use super::column_type_error;
+use super::domain_type_error;
+use crate::ColumnBuilder;
+use crate::ColumnVec;
+use crate::ScalarRef;
 use crate::property::Domain;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
-use crate::ColumnVec;
-use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NullableType<T>(PhantomData<T>);
@@ -100,9 +100,9 @@ impl<T: AccessType> AccessType for NullableType<T> {
     }
 
     #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
-        col.index_unchecked(index)
-    }}
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        unsafe { col.index_unchecked(index) }
+    }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)
@@ -134,9 +134,9 @@ impl<T: AccessType> AccessType for NullableType<T> {
         }
     }
 
-    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar { unsafe {
-        Self::to_owned_scalar(Self::index_column_unchecked(col, index))
-    }}
+    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar {
+        unsafe { Self::to_owned_scalar(Self::index_column_unchecked(col, index)) }
+    }
 
     fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         std::matches!(Self::compare(left, right), Ordering::Equal)
@@ -320,18 +320,20 @@ impl<T: AccessType> NullableColumn<T> {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, index: usize) -> Option<T::ScalarRef<'_>> { unsafe {
-        // we need to check the validity firstly
-        // cause `self.validity.get_bit_unchecked` may check the index from buffer address with `true` result
-        if index < self.validity.len() {
-            match self.validity.get_bit_unchecked(index) {
-                true => Some(T::index_column_unchecked(&self.column, index)),
-                false => None,
+    pub unsafe fn index_unchecked(&self, index: usize) -> Option<T::ScalarRef<'_>> {
+        unsafe {
+            // we need to check the validity firstly
+            // cause `self.validity.get_bit_unchecked` may check the index from buffer address with `true` result
+            if index < self.validity.len() {
+                match self.validity.get_bit_unchecked(index) {
+                    true => Some(T::index_column_unchecked(&self.column, index)),
+                    false => None,
+                }
+            } else {
+                None
             }
-        } else {
-            None
         }
-    }}
+    }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
         NullableColumn {
@@ -417,11 +419,7 @@ impl<'a, T: AccessType> Iterator for NullableIterator<'a, T> {
             .zip(self.validity.next())
             .map(
                 |(scalar, is_not_null)| {
-                    if is_not_null {
-                        Some(scalar)
-                    } else {
-                        None
-                    }
+                    if is_not_null { Some(scalar) } else { None }
                 },
             )
     }

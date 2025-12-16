@@ -240,16 +240,9 @@ impl Table for InferSchemaTable {
                 Self::build_read_stage_source(ctx.clone(), pipeline, &info.stage_info)?;
 
                 let stage_table_info = StageTableInfo {
-                    stage_root: "".to_string(),
                     stage_info: info.stage_info.clone(),
-                    schema: Arc::new(Default::default()),
-                    default_exprs: None,
                     files_info: info.files_info.clone(),
-                    files_to_copy: None,
-                    duplicated_files_detected: vec![],
-                    is_select: false,
-                    copy_into_table_options: Default::default(),
-                    is_variant: false,
+                    ..Default::default()
                 };
 
                 let load_ctx = Arc::new(LoadContext::try_create_for_copy(

@@ -15,12 +15,12 @@
 #![allow(unused_parens)]
 #![allow(unused_variables)]
 #![allow(clippy::redundant_closure)]
-use crate::types::*;
-use crate::values::Value;
 use crate::EvalContext;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionRegistry;
+use crate::types::*;
+use crate::values::Value;
 
 impl FunctionRegistry {
     pub fn register_comparison_2_arg<I1: ArgType, I2: ArgType, F, G>(

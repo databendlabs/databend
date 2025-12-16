@@ -173,19 +173,23 @@ impl<T> Buffer<T> {
     /// The caller must ensure `offset + length <= self.len()`
     #[inline]
     #[must_use]
-    pub unsafe fn sliced_unchecked(mut self, offset: usize, length: usize) -> Self { unsafe {
-        self.slice_unchecked(offset, length);
-        self
-    }}
+    pub unsafe fn sliced_unchecked(mut self, offset: usize, length: usize) -> Self {
+        unsafe {
+            self.slice_unchecked(offset, length);
+            self
+        }
+    }
 
     /// Slices this buffer starting at `offset`.
     /// # Safety
     /// The caller must ensure `offset + length <= self.len()`
     #[inline]
-    pub unsafe fn slice_unchecked(&mut self, offset: usize, length: usize) { unsafe {
-        self.ptr = self.ptr.add(offset);
-        self.length = length;
-    }}
+    pub unsafe fn slice_unchecked(&mut self, offset: usize, length: usize) {
+        unsafe {
+            self.ptr = self.ptr.add(offset);
+            self.length = length;
+        }
+    }
 
     /// Returns a pointer to the start of this buffer.
     #[inline]
@@ -265,10 +269,12 @@ impl<T> Buffer<T> {
     ///
     /// # Safety
     /// Callers must ensure all invariants of this struct are upheld.
-    pub unsafe fn from_inner_unchecked(data: Arc<Bytes<T>>, offset: usize, length: usize) -> Self { unsafe {
-        let ptr = data.as_ptr().add(offset);
-        Self { data, ptr, length }
-    }}
+    pub unsafe fn from_inner_unchecked(data: Arc<Bytes<T>>, offset: usize, length: usize) -> Self {
+        unsafe {
+            let ptr = data.as_ptr().add(offset);
+            Self { data, ptr, length }
+        }
+    }
 }
 
 impl<T: Clone> Buffer<T> {

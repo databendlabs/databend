@@ -20,10 +20,6 @@ use databend_common_column::binview::BinaryViewColumnIter;
 use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_exception::Result;
 
-use super::binary::BinaryColumn;
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::ArgType;
 use super::BuilderMut;
@@ -32,10 +28,14 @@ use super::DataType;
 use super::GenericMap;
 use super::ReturnType;
 use super::ValueType;
+use super::binary::BinaryColumn;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
+use crate::ScalarRef;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StringType;
@@ -84,9 +84,9 @@ impl AccessType for StringType {
     }
 
     #[inline]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
-        col.value_unchecked(index)
-    }}
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        unsafe { col.value_unchecked(index) }
+    }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.end - range.start)
@@ -348,9 +348,9 @@ impl StringColumnBuilder {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, row: usize) -> &str { unsafe {
-        self.data.value_unchecked(row)
-    }}
+    pub unsafe fn index_unchecked(&self, row: usize) -> &str {
+        unsafe { self.data.value_unchecked(row) }
+    }
 
     pub fn push_repeat(&mut self, item: &str, n: usize) {
         self.data.extend_constant(n, item);

@@ -211,26 +211,28 @@ impl<V> DictionaryStringHashTable<V> {
         &self,
         key: &[NonNull<[u8]>],
         hash: u64,
-    ) -> Option<&DictionaryEntry<V>> { unsafe {
-        assume(key.len() == self.dict_keys);
-        let index = (hash as usize) & (self.entries.len() - 1);
-        for i in (index..self.entries.len()).chain(0..index) {
-            assume(i < self.entries.len());
-            if self.entries[i].is_zero() {
-                return None;
-            }
+    ) -> Option<&DictionaryEntry<V>> {
+        unsafe {
+            assume(key.len() == self.dict_keys);
+            let index = (hash as usize) & (self.entries.len() - 1);
+            for i in (index..self.entries.len()).chain(0..index) {
+                assume(i < self.entries.len());
+                if self.entries[i].is_zero() {
+                    return None;
+                }
 
-            let slice = std::slice::from_raw_parts(
-                self.entries[i].key.assume_init_ref().as_ptr(),
-                self.dict_keys,
-            );
+                let slice = std::slice::from_raw_parts(
+                    self.entries[i].key.assume_init_ref().as_ptr(),
+                    self.dict_keys,
+                );
 
-            if key == slice {
-                return Some(&self.entries[i]);
+                if key == slice {
+                    return Some(&self.entries[i]);
+                }
             }
+            None
         }
-        None
-    }}
+    }
 
     /// # Safety
     ///
@@ -240,26 +242,28 @@ impl<V> DictionaryStringHashTable<V> {
         &mut self,
         key: &[NonNull<[u8]>],
         hash: u64,
-    ) -> Option<&mut DictionaryEntry<V>> { unsafe {
-        assume(key.len() == self.dict_keys);
-        let index = (hash as usize) & (self.entries.len() - 1);
-        for i in (index..self.entries.len()).chain(0..index) {
-            assume(i < self.entries.len());
-            if self.entries[i].is_zero() {
-                return None;
-            }
+    ) -> Option<&mut DictionaryEntry<V>> {
+        unsafe {
+            assume(key.len() == self.dict_keys);
+            let index = (hash as usize) & (self.entries.len() - 1);
+            for i in (index..self.entries.len()).chain(0..index) {
+                assume(i < self.entries.len());
+                if self.entries[i].is_zero() {
+                    return None;
+                }
 
-            let slice = std::slice::from_raw_parts(
-                self.entries[i].key.assume_init_ref().as_ptr(),
-                self.dict_keys,
-            );
+                let slice = std::slice::from_raw_parts(
+                    self.entries[i].key.assume_init_ref().as_ptr(),
+                    self.dict_keys,
+                );
 
-            if key == slice {
-                return Some(&mut self.entries[i]);
+                if key == slice {
+                    return Some(&mut self.entries[i]);
+                }
             }
+            None
         }
-        None
-    }}
+    }
 
     pub fn dictionary_slot_iter(&self) -> DictionarySlotIter<'_> {
         DictionarySlotIter {
@@ -361,76 +365,80 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
     unsafe fn insert(
         &mut self,
         key: &Self::Key,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> { unsafe {
-        match self.insert_and_entry(key) {
-            Ok(mut e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
-            Err(mut e) => Err(&mut *e.get_mut_ptr()),
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+        unsafe {
+            match self.insert_and_entry(key) {
+                Ok(mut e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
+                Err(mut e) => Err(&mut *e.get_mut_ptr()),
+            }
         }
-    }}
+    }
 
     unsafe fn insert_and_entry(
         &mut self,
         key: &Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
-        self.insert_and_entry_with_hash(key, key.fast_hash())
-    }}
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        unsafe { self.insert_and_entry_with_hash(key, key.fast_hash()) }
+    }
 
     unsafe fn insert_and_entry_with_hash(
         &mut self,
         key: &Self::Key,
         hash: u64,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
-        self.check_grow();
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        unsafe {
+            self.check_grow();
 
-        assume(key.keys.len() == self.dict_keys);
-        let mut dictionary_keys = Vec::with_capacity(self.dict_keys);
+            assume(key.keys.len() == self.dict_keys);
+            let mut dictionary_keys = Vec::with_capacity(self.dict_keys);
 
-        for key in key.keys.as_ref() {
-            // println!("insert: {:?}", String::from_utf8(key.as_ref().to_vec()).unwrap());
-            dictionary_keys.push(NonNull::from(
-                match self.dictionary_hashset.insert_and_entry(key.as_ref()) {
-                    Ok(e) => e.key(),
-                    Err(e) => e.key(),
-                },
-            ));
-        }
-
-        let index = (hash as usize) & (self.entries.len() - 1);
-        for i in (index..self.entries.len()).chain(0..index) {
-            assume(i < self.entries.len());
-
-            if self.entries[i].is_zero() {
-                self.entries_len += 1;
-
-                let global_keys = self.arena.alloc_slice_copy(&dictionary_keys);
-                // for key in global_keys.iter() {
-                //     println!("insert: {:?}", String::from_utf8(key.as_ref().to_vec()).unwrap());
-                // }
-                self.entries[i].hash = hash;
-                self.entries[i]
-                    .key
-                    .write(NonNull::new(global_keys.as_mut_ptr()).unwrap());
-                return Ok(DictionaryMutEntryRef::create(
-                    &mut self.entries[i],
-                    self.dict_keys,
+            for key in key.keys.as_ref() {
+                // println!("insert: {:?}", String::from_utf8(key.as_ref().to_vec()).unwrap());
+                dictionary_keys.push(NonNull::from(
+                    match self.dictionary_hashset.insert_and_entry(key.as_ref()) {
+                        Ok(e) => e.key(),
+                        Err(e) => e.key(),
+                    },
                 ));
             }
 
-            let slice = std::slice::from_raw_parts(
-                self.entries[i].key.assume_init_ref().as_ptr(),
-                self.dict_keys,
-            );
+            let index = (hash as usize) & (self.entries.len() - 1);
+            for i in (index..self.entries.len()).chain(0..index) {
+                assume(i < self.entries.len());
 
-            if dictionary_keys.as_slice() == slice {
-                return Err(DictionaryMutEntryRef::create(
-                    &mut self.entries[i],
+                if self.entries[i].is_zero() {
+                    self.entries_len += 1;
+
+                    let global_keys = self.arena.alloc_slice_copy(&dictionary_keys);
+                    // for key in global_keys.iter() {
+                    //     println!("insert: {:?}", String::from_utf8(key.as_ref().to_vec()).unwrap());
+                    // }
+                    self.entries[i].hash = hash;
+                    self.entries[i]
+                        .key
+                        .write(NonNull::new(global_keys.as_mut_ptr()).unwrap());
+                    return Ok(DictionaryMutEntryRef::create(
+                        &mut self.entries[i],
+                        self.dict_keys,
+                    ));
+                }
+
+                let slice = std::slice::from_raw_parts(
+                    self.entries[i].key.assume_init_ref().as_ptr(),
                     self.dict_keys,
-                ));
-            }
-        }
+                );
 
-        panic!("the hash table overflows")
-    }}
+                if dictionary_keys.as_slice() == slice {
+                    return Err(DictionaryMutEntryRef::create(
+                        &mut self.entries[i],
+                        self.dict_keys,
+                    ));
+                }
+            }
+
+            panic!("the hash table overflows")
+        }
+    }
 
     fn iter(&self) -> Self::Iterator<'_> {
         DictionaryTableIter {

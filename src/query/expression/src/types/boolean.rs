@@ -19,9 +19,6 @@ use std::ops::Range;
 pub use databend_common_column::bitmap::*;
 use databend_common_exception::Result;
 
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::ArgType;
 use super::BuilderMut;
@@ -29,13 +26,16 @@ use super::DataType;
 use super::GenericMap;
 use super::ReturnType;
 use super::ValueType;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
+use crate::ColumnBuilder;
+use crate::ColumnView;
+use crate::ScalarRef;
 use crate::property::Domain;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
-use crate::ColumnView;
-use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BooleanType;
@@ -85,11 +85,13 @@ impl AccessType for BooleanType {
     }
 
     #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
-        debug_assert!(index < col.len());
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        unsafe {
+            debug_assert!(index < col.len());
 
-        col.get_bit_unchecked(index)
-    }}
+            col.get_bit_unchecked(index)
+        }
+    }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.clone().sliced(range.start, range.end - range.start)

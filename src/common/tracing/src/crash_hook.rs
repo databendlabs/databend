@@ -266,81 +266,87 @@ fn signal_message(sig: i32, si_code: i32, si_addr: usize) -> String {
     }
 }
 
-unsafe extern "C" fn signal_handler(sig: i32, info: *mut libc::siginfo_t, uc: *mut libc::c_void) { unsafe {
-    let lock = CRASH_HANDLER_LOCK.lock();
-    let mut guard = lock.unwrap_or_else(PoisonError::into_inner);
+unsafe extern "C" fn signal_handler(sig: i32, info: *mut libc::siginfo_t, uc: *mut libc::c_void) {
+    unsafe {
+        let lock = CRASH_HANDLER_LOCK.lock();
+        let mut guard = lock.unwrap_or_else(PoisonError::into_inner);
 
-    if let Some(crash_handler) = guard.as_mut() {
-        crash_handler.recv_signal(sig, info, uc);
-    }
+        if let Some(crash_handler) = guard.as_mut() {
+            crash_handler.recv_signal(sig, info, uc);
+        }
 
-    #[cfg(test)]
-    {
-        drop(guard);
-        siglongjmp(addr_of_mut!(TEST_JMP_BUFFER), 1);
-    }
+        #[cfg(test)]
+        {
+            drop(guard);
+            siglongjmp(addr_of_mut!(TEST_JMP_BUFFER), 1);
+        }
 
-    #[allow(unreachable_code)]
-    if sig != libc::SIGTRAP {
-        match libc::SIG_ERR == libc::signal(sig, libc::SIG_DFL) {
-            true => std::process::exit(1),
-            false => match libc::raise(sig) {
-                0 => {}
-                _ => std::process::exit(1),
-            },
+        #[allow(unreachable_code)]
+        if sig != libc::SIGTRAP {
+            match libc::SIG_ERR == libc::signal(sig, libc::SIG_DFL) {
+                true => std::process::exit(1),
+                false => match libc::raise(sig) {
+                    0 => {}
+                    _ => std::process::exit(1),
+                },
+            }
         }
     }
-}}
+}
 
-pub unsafe fn add_signal_handler(signals: Vec<i32>) { unsafe {
-    let mut sa = std::mem::zeroed::<libc::sigaction>();
+pub unsafe fn add_signal_handler(signals: Vec<i32>) {
+    unsafe {
+        let mut sa = std::mem::zeroed::<libc::sigaction>();
 
-    sa.sa_flags = libc::SA_ONSTACK | libc::SA_SIGINFO;
-    sa.sa_sigaction = signal_handler as *const () as usize;
+        sa.sa_flags = libc::SA_ONSTACK | libc::SA_SIGINFO;
+        sa.sa_sigaction = signal_handler as *const () as usize;
 
-    libc::sigemptyset(&mut sa.sa_mask);
+        libc::sigemptyset(&mut sa.sa_mask);
 
-    for signal in &signals {
-        libc::sigaddset(&mut sa.sa_mask, *signal);
+        for signal in &signals {
+            libc::sigaddset(&mut sa.sa_mask, *signal);
+        }
+
+        for signal in &signals {
+            libc::sigaction(*signal, &sa, std::ptr::null_mut());
+        }
     }
-
-    for signal in &signals {
-        libc::sigaction(*signal, &sa, std::ptr::null_mut());
-    }
-}}
+}
 
 // https://man7.org/linux/man-pages/man2/sigaltstack.2.html
-pub unsafe fn add_signal_stack(stack_bytes: usize) { unsafe {
-    let page_size = libc::sysconf(libc::_SC_PAGESIZE) as usize;
-    let alloc_size = page_size + stack_bytes;
+pub unsafe fn add_signal_stack(stack_bytes: usize) {
+    unsafe {
+        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as usize;
+        let alloc_size = page_size + stack_bytes;
 
-    let stack_memory_arena = libc::mmap(
-        std::ptr::null_mut(),
-        alloc_size,
-        libc::PROT_NONE,
-        libc::MAP_PRIVATE | libc::MAP_ANON,
-        -1,
-        0,
-    );
+        let stack_memory_arena = libc::mmap(
+            std::ptr::null_mut(),
+            alloc_size,
+            libc::PROT_NONE,
+            libc::MAP_PRIVATE | libc::MAP_ANON,
+            -1,
+            0,
+        );
 
-    if std::ptr::eq(stack_memory_arena, libc::MAP_FAILED) {
-        return;
+        if std::ptr::eq(stack_memory_arena, libc::MAP_FAILED) {
+            return;
+        }
+
+        let stack_ptr = (stack_memory_arena as usize + page_size) as *mut libc::c_void;
+
+        if libc::mprotect(stack_ptr, stack_bytes, libc::PROT_READ | libc::PROT_WRITE) != 0 {
+            libc::munmap(stack_ptr, alloc_size);
+            return;
+        }
+
+        let mut new_signal_stack = std::mem::zeroed::<libc::stack_t>();
+        new_signal_stack.ss_sp = stack_memory_arena;
+        new_signal_stack.ss_size = stack_bytes;
+        if libc::sigaltstack(&new_signal_stack, std::ptr::null_mut()) != 0 {
+            libc::munmap(stack_ptr, alloc_size);
+        }
     }
-
-    let stack_ptr = (stack_memory_arena as usize + page_size) as *mut libc::c_void;
-
-    if libc::mprotect(stack_ptr, stack_bytes, libc::PROT_READ | libc::PROT_WRITE) != 0 {
-        libc::munmap(stack_ptr, alloc_size);
-        return;
-    }
-
-    let mut new_signal_stack = std::mem::zeroed::<libc::stack_t>();
-    new_signal_stack.ss_sp = stack_memory_arena;
-    new_signal_stack.ss_size = stack_bytes;
-    if libc::sigaltstack(&new_signal_stack, std::ptr::null_mut()) != 0 {
-        libc::munmap(stack_ptr, alloc_size);
-    }
-}}
+}
 
 pub fn set_crash_hook(output: File) {
     let lock = CRASH_HANDLER_LOCK.lock();

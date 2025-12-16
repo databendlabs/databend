@@ -195,31 +195,37 @@ impl<
     unsafe fn insert(
         &mut self,
         key: &Self::Key,
-    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> { unsafe {
-        let hash = key.fast_hash();
-        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
-        self.tables[index].insert(key)
-    }}
+    ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+        unsafe {
+            let hash = key.fast_hash();
+            let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
+            self.tables[index].insert(key)
+        }
+    }
 
     #[inline(always)]
     unsafe fn insert_and_entry(
         &mut self,
         key: &Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
-        let hash = key.fast_hash();
-        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
-        self.tables[index].insert_and_entry_with_hash(key, hash)
-    }}
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        unsafe {
+            let hash = key.fast_hash();
+            let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
+            self.tables[index].insert_and_entry_with_hash(key, hash)
+        }
+    }
 
     #[inline(always)]
     unsafe fn insert_and_entry_with_hash(
         &mut self,
         key: &Self::Key,
         hash: u64,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> { unsafe {
-        let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
-        self.tables[index].insert_and_entry_with_hash(key, hash)
-    }}
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        unsafe {
+            let index = hash2bucket::<BUCKETS_LG2, HIGH_BIT>(hash as usize);
+            self.tables[index].insert_and_entry_with_hash(key, hash)
+        }
+    }
 
     fn iter(&self) -> Self::Iterator<'_> {
         let mut inner = VecDeque::with_capacity(self.tables.len());

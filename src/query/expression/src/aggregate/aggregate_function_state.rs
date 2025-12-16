@@ -20,9 +20,9 @@ use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
 use super::AggregateFunctionRef;
-use crate::types::binary::BinaryColumnBuilder;
-use crate::types::DataType;
 use crate::ColumnBuilder;
+use crate::types::DataType;
+use crate::types::binary::BinaryColumnBuilder;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StateAddr(*mut u8);

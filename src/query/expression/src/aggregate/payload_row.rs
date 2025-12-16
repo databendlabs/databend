@@ -21,9 +21,11 @@ use databend_common_io::prelude::bincode_serialize_into_buf;
 use super::RowID;
 use super::RowLayout;
 use super::RowPtr;
-use crate::types::decimal::Decimal;
-use crate::types::decimal::DecimalColumn;
-use crate::types::i256;
+use crate::BATCH_SIZE;
+use crate::BlockEntry;
+use crate::Column;
+use crate::ProjectedBlock;
+use crate::Scalar;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::BinaryType;
@@ -37,13 +39,11 @@ use crate::types::NumberColumn;
 use crate::types::NumberScalar;
 use crate::types::NumberType;
 use crate::types::TimestampType;
+use crate::types::decimal::Decimal;
+use crate::types::decimal::DecimalColumn;
+use crate::types::i256;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
-use crate::BlockEntry;
-use crate::Column;
-use crate::ProjectedBlock;
-use crate::Scalar;
-use crate::BATCH_SIZE;
 
 pub(super) fn rowformat_size(data_type: &DataType) -> usize {
     match data_type {
@@ -117,34 +117,46 @@ pub(super) unsafe fn serialize_column_to_rowformat(
                     let val: u8 = if v.null_count() == 0 { 1 } else { 0 };
                     // faster path
                     for row in select_vector {
-                        unsafe { address[*row].write_u8(offset, val); }
+                        unsafe {
+                            address[*row].write_u8(offset, val);
+                        }
                     }
                 } else {
                     for row in select_vector {
-                        unsafe { address[*row].write_u8(offset, v.get_bit(row.to_usize()) as u8); }
+                        unsafe {
+                            address[*row].write_u8(offset, v.get_bit(row.to_usize()) as u8);
+                        }
                     }
                 }
             }
             Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
                 for row in select_vector {
                     let data = arena.alloc_slice_copy(unsafe { v.index_unchecked(row.to_usize()) });
-                    unsafe { address[*row].write_bytes(offset, data); }
+                    unsafe {
+                        address[*row].write_bytes(offset, data);
+                    }
                 }
             }
             Column::String(v) => {
                 for row in select_vector {
                     let data = arena.alloc_str(unsafe { v.index_unchecked(row.to_usize()) });
-                    unsafe { address[*row].write_bytes(offset, data.as_bytes()); }
+                    unsafe {
+                        address[*row].write_bytes(offset, data.as_bytes());
+                    }
                 }
             }
             Column::Timestamp(buffer) => {
                 for row in select_vector {
-                    unsafe { address[*row].write(offset, &buffer[*row]); }
+                    unsafe {
+                        address[*row].write(offset, &buffer[*row]);
+                    }
                 }
             }
             Column::Date(buffer) => {
                 for row in select_vector {
-                    unsafe { address[*row].write(offset, &buffer[*row]); }
+                    unsafe {
+                        address[*row].write(offset, &buffer[*row]);
+                    }
                 }
             }
             Column::Nullable(c) => unsafe {
@@ -166,7 +178,9 @@ pub(super) unsafe fn serialize_column_to_rowformat(
                     bincode_serialize_into_buf(scratch, &s).unwrap();
 
                     let data = arena.alloc_slice_copy(scratch);
-                    unsafe { address[*row].write_bytes(offset, data); }
+                    unsafe {
+                        address[*row].write_bytes(offset, data);
+                    }
                 }
             }
         }
@@ -198,13 +212,15 @@ pub(super) unsafe fn serialize_const_column_to_rowformat(
                 }
             }
             Scalar::EmptyArray | Scalar::EmptyMap => (),
-            Scalar::Number(number_scalar) => with_number_mapped_type!(|NUM_TYPE| match number_scalar {
-                NumberScalar::NUM_TYPE(value) => {
-                    for row in select_vector {
-                        address[*row].write(offset, value);
+            Scalar::Number(number_scalar) => {
+                with_number_mapped_type!(|NUM_TYPE| match number_scalar {
+                    NumberScalar::NUM_TYPE(value) => {
+                        for row in select_vector {
+                            address[*row].write(offset, value);
+                        }
                     }
-                }
-            }),
+                })
+            }
             Scalar::Decimal(decimal_scalar) => {
                 let size = decimal_scalar.size();
                 with_decimal_mapped_type!(|T| match size.data_kind() {
@@ -272,12 +288,14 @@ unsafe fn serialize_fixed_size_column_to_rowformat<T>(
     offset: usize,
 ) where
     T: AccessType<Scalar: Copy>,
-{ unsafe {
-    for row in select_vector {
-        let val = T::index_column_unchecked_scalar(column, row.to_usize());
-        address[*row].write(offset, &val);
+{
+    unsafe {
+        for row in select_vector {
+            let val = T::index_column_unchecked_scalar(column, row.to_usize());
+            address[*row].write(offset, &val);
+        }
     }
-}}
+}
 
 pub struct CompareState<'a> {
     pub(super) address: &'a [RowPtr; BATCH_SIZE],

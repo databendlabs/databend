@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
-use std::iter::once;
 use std::iter::TrustedLen;
+use std::iter::once;
 use std::marker::PhantomData;
 use std::ops::Range;
 
@@ -22,9 +22,6 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::AnyType;
 use super::ArgType;
@@ -36,8 +33,11 @@ use super::ReturnType;
 use super::Scalar;
 use super::ScalarRef;
 use super::ValueType;
-use crate::property::Domain;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
 use crate::ColumnBuilder;
+use crate::property::Domain;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArrayType<T>(PhantomData<T>);
@@ -88,9 +88,9 @@ impl<T: AccessType> AccessType for ArrayType<T> {
     }
 
     #[inline(always)]
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> { unsafe {
-        col.index_unchecked(index)
-    }}
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        unsafe { col.index_unchecked(index) }
+    }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
         col.slice(range)

@@ -31,14 +31,12 @@
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(generic_const_exprs)]
 #![feature(trait_alias)]
-
 #![feature(iterator_try_collect)]
 #![feature(core_intrinsics)]
 #![feature(trusted_len)]
 #![feature(iter_order_by)]
 #![feature(int_roundings)]
 #![feature(try_blocks)]
-
 #![feature(alloc_layout_extra)]
 #![feature(debug_closure_helpers)]
 #![feature(never_type)]
