@@ -110,7 +110,7 @@ impl TxnBuffer {
                 .or_insert(req.base_snapshot_location);
 
             if let Some(ts) = req.snapshot_ts {
-                self.snapshot_ts.entry(table_id).or_insert(ts);
+                self.snapshot_ts.insert(table_id, ts);
             }
 
             self.tenant.entry(table_id).or_insert(req.tenant);
