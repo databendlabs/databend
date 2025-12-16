@@ -222,6 +222,13 @@ impl SExpr {
         }
     }
 
+    pub fn replace_side_child(&self, side: Side, child: impl Into<Arc<SExpr>>) -> SExpr {
+        match side {
+            Side::Left => self.replace_left_child(child),
+            Side::Right => self.replace_right_child(child),
+        }
+    }
+
     pub fn replace_plan(&self, plan: impl Into<Arc<RelOperator>>) -> Self {
         Self {
             plan: plan.into(),
@@ -405,5 +412,27 @@ impl SExpr {
         let mut visitor = DataDistributionVisitor { result: None };
         let _ = self.accept(&mut visitor);
         Ok(visitor.result)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    Left,
+    Right,
+}
+
+impl Side {
+    pub fn opposite(self) -> Self {
+        match self {
+            Side::Left => Side::Right,
+            Side::Right => Side::Left,
+        }
+    }
+
+    pub fn child(self, s_expr: &SExpr) -> Arc<SExpr> {
+        match self {
+            Side::Left => s_expr.left_child_arc(),
+            Side::Right => s_expr.right_child_arc(),
+        }
     }
 }
