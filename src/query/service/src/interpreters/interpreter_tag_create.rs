@@ -15,8 +15,10 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::tag_api::TagApi;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTagReq;
 use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::TagNameIdent;
@@ -61,7 +63,15 @@ impl Interpreter for CreateTagInterpreter {
             updated_on: None,
         };
         let req = CreateTagReq {
-            create_option: self.plan.create_option,
+            if_not_exists: match self.plan.create_option {
+                CreateOption::Create => false,
+                CreateOption::CreateIfNotExists => true,
+                CreateOption::CreateOrReplace => {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Not support create or replace tag",
+                    ))
+                }
+            },
             name_ident: TagNameIdent::new(&self.plan.tenant, &self.plan.name),
             meta,
         };

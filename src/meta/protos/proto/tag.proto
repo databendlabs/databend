@@ -20,6 +20,11 @@ message TagMeta {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
+  // Ordered list of string values that may be set on this tag.
+  // Matches CREATE TAG ... ALLOWED_VALUES semantics: must be declared before
+  // other parameters, accepts up to 5,000 entries, and when omitted any string
+  // (including empty) is accepted. Propagating tags use the order to resolve
+  // conflicts, mirroring Snowflake behavior.
   repeated string allowed_values = 1;
   string comment = 2;
   string created_on = 3;
@@ -30,7 +35,11 @@ message TagRefValue {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
+  // Identifier of the referenced tag definition.
   uint64 tag_id = 1;
+  // Payload assigned when the tag is set on an object. If the tag defined
+  // `allowed_values`, this must match one of those entries; otherwise any string
+  // (including empty) is permitted.
   string value = 2;
   string created_on = 3;
 }

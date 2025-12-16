@@ -22,7 +22,6 @@ use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::schema::CreateOption;
 use crate::schema::TagNameIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -33,8 +32,10 @@ use crate::tenant::ToTenant;
 /// (databases, tables, stages, connections) for governance and classification.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TagMeta {
-    /// Optional list of allowed values for this tag.
-    /// If set, only these values can be assigned when tagging objects.
+    /// Optional list of allowed values for this tag. Mirrors the semantics of
+    /// `CREATE TAG ... ALLOWED_VALUES`: declare before other options, accept up
+    /// to 5,000 entries, and use order to resolve propagation conflicts. If
+    /// unset, any string (including empty) is accepted when binding tags.
     pub allowed_values: Option<Vec<String>>,
     /// User-provided description of the tag.
     pub comment: String,
@@ -45,7 +46,7 @@ pub struct TagMeta {
 /// Request to create a new tag definition.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTagReq {
-    pub create_option: CreateOption,
+    pub if_not_exists: bool,
     pub name_ident: TagNameIdent,
     pub meta: TagMeta,
 }
@@ -187,8 +188,9 @@ impl TaggableObject {
 pub struct TagRefValue {
     /// The ID of the tag definition this reference points to.
     pub tag_id: u64,
-    /// User-supplied payload for the tag, e.g. a classification label.
-    /// When the tag definition defined `allowed_values`, this must be one of them.
+    /// Payload assigned when tagging an object. When [`TagMeta::allowed_values`]
+    /// is present, this string must match one of the configured entries,
+    /// otherwise any string (including empty) is allowed.
     pub value: String,
     pub created_on: DateTime<Utc>,
 }
