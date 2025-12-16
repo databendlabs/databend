@@ -177,7 +177,7 @@ Exchange
     ├── probe keys: [table1.value (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── estimated rows: 250.00
+    ├── estimated rows: 225.00
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Broadcast
@@ -227,7 +227,7 @@ Exchange
     ├── filters: []
     ├── build join filters(distributed):
     │   └── filter id:0, build key:table2.value (#1), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
-    ├── estimated rows: 250.00
+    ├── estimated rows: 234.13
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
     │   ├── exchange type: Hash(table2.value (#1))

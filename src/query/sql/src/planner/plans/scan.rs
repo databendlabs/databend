@@ -259,6 +259,7 @@ impl Operator for Scan {
             .unwrap_or(0);
 
         let mut column_stats: ColumnStatSet = Default::default();
+
         for (k, v) in &self.statistics.column_stats {
             // No need to cal histogram for unused columns
             if !used_columns.contains(k) {
@@ -311,11 +312,14 @@ impl Operator for Scan {
                         None
                     }
                 };
+
                 let column_stat = ColumnStat {
                     min,
                     max,
                     ndv: ndv as f64,
                     null_count: col_stat.null_count,
+                    origin_ndv: ndv as f64,
+                    num_rows,
                     histogram,
                 };
                 column_stats.insert(*k as IndexType, column_stat);
