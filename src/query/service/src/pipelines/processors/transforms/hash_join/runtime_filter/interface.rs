@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
 
 use super::convert::build_runtime_filter_infos;
+use super::convert::convert_packet_bloom_hashes_to_filter;
 use super::global::get_global_runtime_filter_packet;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::HashJoinBuildState;
@@ -28,7 +29,22 @@ pub async fn build_and_push_down_runtime_filter(
 ) -> Result<()> {
     let overall_start = Instant::now();
 
+    let max_threads = join.ctx.get_settings().get_max_threads()? as usize;
+    let runtime_filter_descs: std::collections::HashMap<
+        usize,
+        &crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc,
+    > = join
+        .runtime_filter_desc()
+        .iter()
+        .map(|r| (r.id, r))
+        .collect();
+
     if let Some(broadcast_id) = join.broadcast_id {
+        // For distributed hash shuffle joins, convert bloom hashes into compact
+        // bloom filters before performing global merge so that only filters are
+        // transmitted between nodes.
+        convert_packet_bloom_hashes_to_filter(&mut packet, &runtime_filter_descs, max_threads)?;
+
         let merge_start = Instant::now();
         packet = get_global_runtime_filter_packet(broadcast_id, packet, &join.ctx).await?;
         let merge_time = merge_start.elapsed();
@@ -38,16 +54,10 @@ pub async fn build_and_push_down_runtime_filter(
         );
     }
 
-    let runtime_filter_descs = join
-        .runtime_filter_desc()
-        .iter()
-        .map(|r| (r.id, r))
-        .collect();
     let selectivity_threshold = join
         .ctx
         .get_settings()
         .get_join_runtime_filter_selectivity_threshold()?;
-    let max_threads = join.ctx.get_settings().get_max_threads()? as usize;
     let build_rows = packet.build_rows;
     let runtime_filter_infos = build_runtime_filter_infos(
         packet,
