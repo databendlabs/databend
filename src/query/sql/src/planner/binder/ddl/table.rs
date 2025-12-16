@@ -90,6 +90,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_pipeline::core::SharedLockGuard;
 use databend_common_storage::check_operator;
 use databend_common_storage::init_operator;
 use databend_common_storages_basic::view_table::QUERY;
@@ -1225,7 +1226,8 @@ impl Binder {
                                 &table,
                                 &LockTableOption::LockWithRetry,
                             )
-                            .await?;
+                            .await?
+                            .map(SharedLockGuard::new);
                         let schema = self
                             .ctx
                             .get_table(&catalog, &database, &table)

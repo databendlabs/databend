@@ -34,7 +34,7 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline::core::LockGuard;
+use databend_common_pipeline::core::SharedLockGuard;
 
 use crate::plans::Plan;
 
@@ -406,7 +406,7 @@ pub struct ModifyTableColumnPlan {
     pub database: String,
     pub table: String,
     pub action: ModifyColumnAction,
-    pub lock_guard: Option<Arc<LockGuard>>,
+    pub lock_guard: Option<SharedLockGuard>,
 }
 
 impl ModifyTableColumnPlan {
