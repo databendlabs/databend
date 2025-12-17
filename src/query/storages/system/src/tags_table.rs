@@ -69,7 +69,7 @@ impl AsyncSystemTable for TagsTable {
                 format!(
                     "[{}]",
                     vals.iter()
-                        .map(|v| format!("'{}'", v))
+                        .map(|v| format!("'{}'", v.replace('\'', "\\'")))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )

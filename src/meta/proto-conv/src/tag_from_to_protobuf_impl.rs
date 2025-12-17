@@ -66,7 +66,7 @@ impl FromToProto for mt::TagMeta {
     }
 }
 
-impl FromToProto for mt::TagRefValue {
+impl FromToProto for mt::TagRefObjectValue {
     type PB = pb::TagRefValue;
 
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -76,20 +76,14 @@ impl FromToProto for mt::TagRefValue {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(Self {
-            tag_id: p.tag_id,
-            value: p.value,
-            created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-        })
+        Ok(Self { value: p.value })
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         Ok(Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            tag_id: self.tag_id,
             value: self.value.clone(),
-            created_on: self.created_on.to_pb()?,
         })
     }
 }
