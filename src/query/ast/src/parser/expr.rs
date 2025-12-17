@@ -37,7 +37,7 @@ use crate::parser::token::*;
 use crate::span::merge_span;
 
 macro_rules! with_span {
-    ($parser:expr) => {
+    ($parser:expr_2021) => {
         map(consumed($parser), |(span, elem)| WithSpan { span, elem })
     };
 }
@@ -1786,7 +1786,7 @@ fn return_op<T>(i: Input, start: usize, op: T) -> IResult<T> {
 }
 
 macro_rules! op_branch {
-    ($i:ident, $token_0:ident, $($kind:ident => $op:expr),+ $(,)?) => {
+    ($i:ident, $token_0:ident, $($kind:ident => $op:expr_2021),+ $(,)?) => {
         match $token_0.kind {
             $(
                 TokenKind::$kind => return return_op($i, 1, $op),

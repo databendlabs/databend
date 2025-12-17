@@ -297,7 +297,7 @@ impl Spiller {
 
         let data = match location {
             Location::Local(path) => match &self.local_operator {
-                Some(ref local) => {
+                Some(local) => {
                     local
                         .read_with(path.file_name().unwrap().to_str().unwrap())
                         .range(data_range)

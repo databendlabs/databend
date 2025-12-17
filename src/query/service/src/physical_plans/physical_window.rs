@@ -449,7 +449,8 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
+        let settings = self.ctx.get_settings();
+        let default_nulls_first = settings.get_nulls_first();
 
         let order_by_items = w
             .order_by

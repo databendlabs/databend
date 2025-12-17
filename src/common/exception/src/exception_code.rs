@@ -18,7 +18,7 @@ use crate::ErrorCode;
 use crate::exception_backtrace::capture;
 
 macro_rules! build_exceptions {
-    ($($(#[$meta:meta])* $body:ident($code:expr)),*$(,)*) => {
+    ($($(#[$meta:meta])* $body:ident($code:expr_2021)),*$(,)*) => {
         impl ErrorCode {
             $(
 

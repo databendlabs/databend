@@ -25,7 +25,7 @@ use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 
 pub(crate) trait RowScalarValue {
-    fn row_scalar(&self, idx: usize) -> Result<ScalarRef>;
+    fn row_scalar(&self, idx: usize) -> Result<ScalarRef<'_>>;
 }
 
 impl RowScalarValue for Value<AnyType> {

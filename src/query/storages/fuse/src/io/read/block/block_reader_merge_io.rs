@@ -52,7 +52,7 @@ impl BlockReadResult {
         }
     }
 
-    pub fn columns_chunks(&self) -> Result<HashMap<ColumnId, DataItem>> {
+    pub fn columns_chunks(&self) -> Result<HashMap<ColumnId, DataItem<'_>>> {
         let mut res = HashMap::with_capacity(self.merge_io_result.columns_chunk_offsets.len());
 
         // merge column data fetched from object storage

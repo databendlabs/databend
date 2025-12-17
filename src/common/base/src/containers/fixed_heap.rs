@@ -291,7 +291,7 @@ impl<T: Ord> FixedHeap<T> {
     /// assert_eq!(heap.pop_at(1), Some(1));
     /// ```
     pub fn pop_at(&mut self, index: usize) -> Option<T> {
-        if let Some(removed_node) = self.swap_remove(index) {
+        match self.swap_remove(index) { Some(removed_node) => {
             let mut node_index: usize = index;
             loop {
                 let lchild_index = (node_index << 1) + 1;
@@ -326,9 +326,9 @@ impl<T: Ord> FixedHeap<T> {
             }
 
             Some(removed_node)
-        } else {
+        } _ => {
             None
-        }
+        }}
     }
 
     /// Provides immutable access to the backing array of the heap.

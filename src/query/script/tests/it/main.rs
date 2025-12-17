@@ -22,20 +22,20 @@ use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use databend_common_ast::Range;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
-use databend_common_ast::parser::Dialect;
-use databend_common_ast::parser::ParseMode;
 use databend_common_ast::parser::run_parser;
 use databend_common_ast::parser::script::script_stmts;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::Dialect;
+use databend_common_ast::parser::ParseMode;
+use databend_common_ast::Range;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_script::Client;
-use databend_common_script::Executor;
 use databend_common_script::compile;
 use databend_common_script::ir::ColumnAccess;
+use databend_common_script::Client;
+use databend_common_script::Executor;
 use goldenfile::Mint;
 use tokio::runtime::Runtime;
 
@@ -43,7 +43,7 @@ fn run_script(file: &mut dyn Write, src: &str) {
     let src = unindent::unindent(src);
     let src = src.trim();
 
-    let res: Result<_> = try {
+    let res: Result<_, ErrorCode> = try {
         let tokens = tokenize_sql(src).unwrap();
         let ast = run_parser(
             &tokens,
@@ -51,7 +51,9 @@ fn run_script(file: &mut dyn Write, src: &str) {
             ParseMode::Template,
             false,
             script_stmts,
-        )?;
+        )
+        .map_err(ErrorCode::from)?;
+
         let ir = compile(&ast)?;
         let client = mock_client();
         let query_log = client.query_log.clone();

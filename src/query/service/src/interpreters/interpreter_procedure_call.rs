@@ -22,6 +22,7 @@ use databend_common_ast::parser::ParseMode;
 use databend_common_ast::parser::run_parser;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_script::Executor;
@@ -84,14 +85,15 @@ impl Interpreter for CallProcedureInterpreter {
             }
             let settings = self.ctx.get_settings();
             let sql_dialect = settings.get_sql_dialect()?;
-            let tokens = tokenize_sql(&self.plan.script)?;
+            let tokens = tokenize_sql(&self.plan.script).map_err(ErrorCode::from)?;
             let mut ast = run_parser(
                 &tokens,
                 sql_dialect,
                 ParseMode::Template,
                 false,
                 script_block,
-            )?;
+            )
+            .map_err(ErrorCode::from)?;
 
             for declare in ast.declares {
                 match declare {

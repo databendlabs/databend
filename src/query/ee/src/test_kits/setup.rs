@@ -28,7 +28,7 @@ impl TestFixture {
     pub async fn setup(config: &InnerConfig, public_key: String) -> Result<()> {
         let version = &BUILD_INFO;
         set_panic_hook(version.commit_detail.clone());
-        std::env::set_var("UNIT_TEST", "TRUE");
+        unsafe { std::env::set_var("UNIT_TEST", "TRUE") };
 
         #[cfg(debug_assertions)]
         {

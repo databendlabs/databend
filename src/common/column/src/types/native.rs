@@ -86,7 +86,7 @@ pub trait NativeType:
 }
 
 macro_rules! native_type {
-    ($type:ty, $primitive_type:expr) => {
+    ($type:ty, $primitive_type:expr_2021) => {
         impl NativeType for $type {
             const PRIMITIVE: PrimitiveType = $primitive_type;
 

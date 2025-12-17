@@ -79,7 +79,7 @@ mod packed;
 pub use packed::*;
 
 macro_rules! native_simd {
-    ($name:tt, $type:ty, $lanes:expr, $mask:ty) => {
+    ($name:tt, $type:ty, $lanes:expr_2021, $mask:ty) => {
         /// Multi-Data correspondence of the native type
         #[allow(non_camel_case_types)]
         #[derive(Copy, Clone)]

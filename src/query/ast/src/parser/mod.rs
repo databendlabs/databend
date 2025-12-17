@@ -13,7 +13,7 @@
 // limitations under the License.
 
 macro_rules! try_dispatch {
-    ($input:expr, $return_if_ok:literal, $($pat:pat => $body:expr),+ $(,)?) => {{
+    ($input:expr_2021, $return_if_ok:literal, $($pat:pat => $body:expr_2021),+ $(,)?) => {{
         if let Some(token_0) = $input.tokens.first() {
             use TokenKind::*;
 

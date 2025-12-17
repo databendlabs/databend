@@ -284,16 +284,15 @@ impl ShowCreateTableInterpreter {
         }
 
         if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
-            table_create_sql.push_str({
-                let mut opts = table_info.options().iter().collect::<Vec<_>>();
-                opts.sort_by_key(|(k, _)| *k);
-                opts.iter()
-                    .filter(|(k, _)| !is_internal_opt_key(k))
-                    .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
-                    .collect::<Vec<_>>()
-                    .join("")
-                    .as_str()
-            });
+            let mut opts = table_info.options().iter().collect::<Vec<_>>();
+            opts.sort_by_key(|(k, _)| *k);
+            let s = opts
+                .iter()
+                .filter(|(k, _)| !is_internal_opt_key(k))
+                .map(|(k, v)| format!(" {}='{}'", k.to_uppercase(), v))
+                .collect::<Vec<_>>()
+                .join("");
+            table_create_sql.push_str(&s);
         }
 
         if engine != "ICEBERG" && engine != "DELTA" {

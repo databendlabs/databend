@@ -19,7 +19,6 @@ use std::collections::BTreeMap;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
-use std::str::FromStr;
 
 use anyhow::anyhow;
 use databend_common_ast::ast::Connection;
@@ -45,6 +44,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
 use databend_common_storage::STDIN_FD;
+use databend_common_storage::Scheme;
 use log::LevelFilter;
 use log::info;
 use opendal::raw::normalize_path;
@@ -655,77 +655,4 @@ pub async fn get_storage_params_from_options(
     )
     .await?;
     Ok(sp)
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Scheme {
-    Azblob,
-    Gcs,
-    Hdfs,
-    Ipfs,
-    S3,
-    Oss,
-    Obs,
-    Cos,
-    Http,
-    Fs,
-    Webhdfs,
-    Huggingface,
-    Custom(&'static str),
-}
-
-impl Scheme {
-    /// Convert self into static str.
-    pub fn into_static(self) -> &'static str {
-        self.into()
-    }
-}
-
-impl From<Scheme> for &'static str {
-    fn from(v: Scheme) -> Self {
-        match v {
-            Scheme::Azblob => "azblob",
-            Scheme::Gcs => "gcs",
-            Scheme::Hdfs => "hdfs",
-            Scheme::Ipfs => "ipfs",
-            Scheme::S3 => "s3",
-            Scheme::Oss => "oss",
-            Scheme::Obs => "obs",
-            Scheme::Cos => "cos",
-            Scheme::Http => "http",
-            Scheme::Fs => "fs",
-            Scheme::Webhdfs => "webhdfs",
-            Scheme::Huggingface => "huggingface",
-            Scheme::Custom(s) => s,
-        }
-    }
-}
-
-impl FromStr for Scheme {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        let s = s.to_lowercase();
-        match s.as_str() {
-            "azblob" => Ok(Scheme::Azblob),
-            "gcs" => Ok(Scheme::Gcs),
-            "hdfs" => Ok(Scheme::Hdfs),
-            "ipfs" => Ok(Scheme::Ipfs),
-            "s3" => Ok(Scheme::S3),
-            "oss" => Ok(Scheme::Oss),
-            "obs" => Ok(Scheme::Obs),
-            "cos" => Ok(Scheme::Cos),
-            "http" | "https" => Ok(Scheme::Http),
-            "fs" => Ok(Scheme::Fs),
-            "webhdfs" => Ok(Scheme::Webhdfs),
-            "huggingface" | "hf" => Ok(Scheme::Huggingface),
-            _ => Ok(Scheme::Custom(Box::leak(s.into_boxed_str()))),
-        }
-    }
-}
-
-impl std::fmt::Display for Scheme {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.into_static())
-    }
 }

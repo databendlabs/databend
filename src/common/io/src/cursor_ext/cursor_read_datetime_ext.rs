@@ -393,16 +393,16 @@ where T: AsRef<[u8]>
             // only date part
             if need_date {
                 Ok(DateTimeResType::Date(d))
-            } else if let Some(zoned) = fast_local_to_zoned(tz, &d, 0, 0, 0, 0) {
+            } else { match fast_local_to_zoned(tz, &d, 0, 0, 0, 0) { Some(zoned) => {
                 Ok(DateTimeResType::Datetime(zoned))
-            } else {
+            } _ => {
                 let zoned = tz
                     .to_zoned(d.to_datetime(Time::midnight()))
                     .map_err_to_code(ErrorCode::BadBytes, || {
                         format!("Failed to parse date {} as timestamp.", d)
                     })?;
                 Ok(DateTimeResType::Datetime(zoned))
-            }
+            }}}
         }
     }
 }

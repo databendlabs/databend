@@ -42,7 +42,7 @@ pub type m16x32 = std::simd::Mask<i16, 32>;
 use super::*;
 
 macro_rules! simd {
-    ($name:tt, $type:ty, $lanes:expr, $chunk:ty, $mask:tt) => {
+    ($name:tt, $type:ty, $lanes:expr_2021, $chunk:ty, $mask:tt) => {
         unsafe impl NativeSimd for $name {
             const LANES: usize = $lanes;
             type Native = $type;
@@ -86,7 +86,7 @@ simd!(f32x16, f32, 16, u16, m32x16);
 simd!(f64x8, f64, 8, u8, m64x8);
 
 macro_rules! chunk_macro {
-    ($type:ty, $chunk:ty, $simd:ty, $mask:tt, $m:expr) => {
+    ($type:ty, $chunk:ty, $simd:ty, $mask:tt, $m:expr_2021) => {
         impl FromMaskChunk<$chunk> for $mask {
             #[inline]
             fn from_chunk(chunk: $chunk) -> Self {

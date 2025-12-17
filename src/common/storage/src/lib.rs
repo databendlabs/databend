@@ -41,6 +41,7 @@ pub use http_client::StorageHttpClient;
 mod operator;
 pub use operator::DataOperator;
 pub use operator::OperatorRegistry;
+pub use operator::Scheme;
 pub use operator::check_operator;
 pub use operator::init_operator;
 

@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use databend_common_meta_app::storage::StorageParams;
-use opendal::Scheme;
+use databend_common_storage::Scheme;
 use opendal::raw::normalize_root;
 
 #[derive(Debug)]

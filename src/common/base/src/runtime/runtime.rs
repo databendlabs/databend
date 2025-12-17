@@ -518,7 +518,7 @@ fn location_future<F>(
     future: F,
     frame_location: &'static Location,
     frame_name: Option<String>,
-) -> impl Future<Output = F::Output>
+) -> impl Future<Output = F::Output> + use<F>
 where
     F: Future,
 {

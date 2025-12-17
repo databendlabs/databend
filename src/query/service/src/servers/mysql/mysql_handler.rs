@@ -76,7 +76,11 @@ impl MySQLHandler {
         Ok((TcpListenerStream::new(listener), listener_addr))
     }
 
-    fn listen_loop(&self, stream: ListeningStream, rt: Arc<Runtime>) -> impl Future<Output = ()> {
+    fn listen_loop(
+        &self,
+        stream: ListeningStream,
+        rt: Arc<Runtime>,
+    ) -> impl Future<Output = ()> + use<> {
         let keepalive = self.keepalive.clone();
         let tls = self.tls.clone();
 

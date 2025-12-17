@@ -373,7 +373,7 @@ pub async fn clickhouse_ping_handler() -> String {
     "OK.\n".to_string()
 }
 
-pub fn clickhouse_router() -> impl Endpoint {
+pub fn clickhouse_router() -> impl Endpoint + use<> {
     Route::new()
         .at(
             "/",

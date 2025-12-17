@@ -101,7 +101,7 @@ impl PipelineCompleteExecutor {
         .flatten()
     }
 
-    fn thread_function(&self) -> impl Fn() -> Result<()> {
+    fn thread_function(&self) -> impl Fn() -> Result<()> + use<> {
         let span = Span::enter_with_local_parent(func_path!());
         let executor = self.executor.clone();
 

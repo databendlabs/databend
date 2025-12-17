@@ -162,8 +162,8 @@ impl HttpShutdownHandler {
                     error!("Timeout during shutdown Http Server {}", self.service_name);
                 }
             }
-        } else if let Some(join_handle) = self.join_handle.take() {
+        } else { match self.join_handle.take() { Some(join_handle) => {
             join_handle.abort();
-        }
+        } _ => {}}}
     }
 }

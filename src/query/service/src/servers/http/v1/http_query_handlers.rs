@@ -276,7 +276,7 @@ impl QueryResponse {
             BodyFormat::Arrow if !schema.fields.is_empty() && !data.is_empty() => {
                 let buf: Result<_, ErrorCode> = try {
                     const META_KEY: &str = "response_header";
-                    let json_res = serde_json::to_string(&res)?;
+                    let json_res = serde_json::to_string(&res).map_err(ErrorCode::from)?;
                     data.to_arrow_ipc(&schema, vec![(META_KEY.to_string(), json_res)])?
                 };
 

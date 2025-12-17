@@ -1845,7 +1845,7 @@ impl<T: FloatCore> NumCast for NotNan<T> {
 }
 
 macro_rules! impl_float_const_method {
-    ($wrapper:expr, $method:ident) => {
+    ($wrapper:expr_2021, $method:ident) => {
         #[allow(non_snake_case)]
         #[allow(clippy::redundant_closure_call)]
         fn $method() -> Self {
@@ -1855,7 +1855,7 @@ macro_rules! impl_float_const_method {
 }
 
 macro_rules! impl_float_const {
-    ($type:ident, $wrapper:expr) => {
+    ($type:ident, $wrapper:expr_2021) => {
         impl<T: FloatConst> FloatConst for $type<T> {
             impl_float_const_method!($wrapper, E);
             impl_float_const_method!($wrapper, FRAC_1_PI);

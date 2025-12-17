@@ -48,7 +48,6 @@ use log::info;
 use opendal::Entry;
 use opendal::ErrorKind;
 use opendal::Operator;
-use opendal::Scheme;
 use uuid::Version;
 
 /// An assumption of the maximum duration from the time the first block is written to the time the
@@ -486,7 +485,7 @@ async fn list_until_prefix(
     let dal = fuse_table.get_operator_ref();
 
     match dal.info().scheme() {
-        Scheme::Fs => fs_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
+        "fs" => fs_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
         _ => general_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
     }
 }
@@ -587,6 +586,9 @@ async fn is_gc_candidate_segment_block(
         })?
     };
 
+    let last_modified =
+        DateTime::from_timestamp_nanos(last_modified.into_inner().as_nanosecond() as i64);
+
     Ok(last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts)
 }
 
@@ -674,12 +676,15 @@ async fn select_gc_root(
     let gc_root = read_snapshot_from_location(fuse_table, &gc_root_path).await;
 
     let gc_root_meta_ts = match dal.stat(&gc_root_path).await {
-        Ok(v) => v.last_modified().ok_or_else(|| {
-            ErrorCode::StorageOther(format!(
-                "Failed to get `last_modified` metadata of the gc root object '{}'",
-                gc_root_path
-            ))
-        })?,
+        Ok(v) => v
+            .last_modified()
+            .ok_or_else(|| {
+                ErrorCode::StorageOther(format!(
+                    "Failed to get `last_modified` metadata of the gc root object '{}'",
+                    gc_root_path
+                ))
+            })
+            .map(|v| DateTime::from_timestamp_nanos(v.into_inner().as_nanosecond() as i64))?,
         Err(e) => {
             return if e.kind() == ErrorKind::NotFound {
                 // Concurrent vacuum, ignore it
@@ -711,8 +716,13 @@ async fn select_gc_root(
                                 gc_root_path
                             ))
                         })?,
-                        Some(v) => v,
+                        Some(v) => v
                     };
+
+                    let last_modified = DateTime::from_timestamp_nanos(
+                        last_modified.into_inner().as_nanosecond() as i64,
+                    );
+
                     if last_modified + ASSUMPTION_MAX_TXN_DURATION < gc_root_meta_ts {
                         gc_candidates.push(path.to_owned());
                     }

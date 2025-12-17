@@ -797,9 +797,9 @@ mod tests {
                 self.0.allocate(layout)
             }
 
-            unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) { unsafe {
                 self.0.deallocate(ptr, layout)
-            }
+            }}
 
             unsafe fn grow(
                 &self,
@@ -875,9 +875,9 @@ mod tests {
                 self.0.allocate(layout)
             }
 
-            unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) { unsafe {
                 self.0.deallocate(ptr, layout)
-            }
+            }}
 
             unsafe fn grow_zeroed(
                 &self,
@@ -952,9 +952,9 @@ mod tests {
                 self.0.allocate(layout)
             }
 
-            unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) { unsafe {
                 self.0.deallocate(ptr, layout)
-            }
+            }}
 
             unsafe fn shrink(
                 &self,
@@ -1045,48 +1045,48 @@ mod tests {
                 }
             }
 
-            unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) { unsafe {
                 self.inner.deallocate(ptr, layout)
-            }
+            }}
 
             unsafe fn grow(
                 &self,
                 ptr: NonNull<u8>,
                 old_layout: Layout,
                 new_layout: Layout,
-            ) -> Result<NonNull<[u8]>, AllocError> {
+            ) -> Result<NonNull<[u8]>, AllocError> { unsafe {
                 if rand::random::<f64>() < self.failure_rate {
                     Err(AllocError)
                 } else {
                     self.inner.grow(ptr, old_layout, new_layout)
                 }
-            }
+            }}
 
             unsafe fn grow_zeroed(
                 &self,
                 ptr: NonNull<u8>,
                 old_layout: Layout,
                 new_layout: Layout,
-            ) -> Result<NonNull<[u8]>, AllocError> {
+            ) -> Result<NonNull<[u8]>, AllocError> { unsafe {
                 if rand::random::<f64>() < self.failure_rate {
                     Err(AllocError)
                 } else {
                     self.inner.grow_zeroed(ptr, old_layout, new_layout)
                 }
-            }
+            }}
 
             unsafe fn shrink(
                 &self,
                 ptr: NonNull<u8>,
                 old_layout: Layout,
                 new_layout: Layout,
-            ) -> Result<NonNull<[u8]>, AllocError> {
+            ) -> Result<NonNull<[u8]>, AllocError> { unsafe {
                 if rand::random::<f64>() < self.failure_rate {
                     Err(AllocError)
                 } else {
                     self.inner.shrink(ptr, old_layout, new_layout)
                 }
-            }
+            }}
         }
 
         let test_function =
