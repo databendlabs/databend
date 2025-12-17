@@ -14,7 +14,6 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoDowncast;
 
 use super::merge::merge_join_runtime_filter_packets;
 use super::packet::JoinRuntimeFilterPacket;
@@ -30,13 +29,13 @@ pub async fn get_global_runtime_filter_packet(
     let mut received = vec![];
 
     sender
-        .send(Box::new(local_packet))
+        .send(local_packet.try_into()?)
         .await
         .map_err(|_| ErrorCode::TokioError("send runtime filter shards failed"))?;
     sender.close();
 
-    while let Ok(r) = receiver.recv().await {
-        received.push(JoinRuntimeFilterPacket::downcast_from(r).unwrap());
+    while let Ok(data_block) = receiver.recv().await {
+        received.push(JoinRuntimeFilterPacket::try_from(data_block)?);
     }
     merge_join_runtime_filter_packets(received)
 }
