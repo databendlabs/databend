@@ -168,5 +168,3 @@ impl IPhysicalPlan for MutationManipulate {
         Ok(())
     }
 }
-
-crate::register_physical_plan!(MutationManipulate => crate::physical_plans::physical_mutation_manipulate::MutationManipulate);

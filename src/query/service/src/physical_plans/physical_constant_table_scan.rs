@@ -133,5 +133,3 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
-
-crate::register_physical_plan!(ConstantTableScan => crate::physical_plans::physical_constant_table_scan::ConstantTableScan);

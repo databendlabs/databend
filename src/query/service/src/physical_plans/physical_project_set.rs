@@ -188,5 +188,3 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
-
-crate::register_physical_plan!(ProjectSet => crate::physical_plans::physical_project_set::ProjectSet);

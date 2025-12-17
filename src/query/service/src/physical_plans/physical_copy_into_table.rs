@@ -186,5 +186,3 @@ pub enum CopyIntoTableSource {
     Query(PhysicalPlan),
     Stage(PhysicalPlan),
 }
-
-crate::register_physical_plan!(CopyIntoTable => crate::physical_plans::physical_copy_into_table::CopyIntoTable);

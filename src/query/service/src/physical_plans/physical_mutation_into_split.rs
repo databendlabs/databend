@@ -89,5 +89,3 @@ impl IPhysicalPlan for MutationSplit {
         Ok(())
     }
 }
-
-crate::register_physical_plan!(MutationSplit => crate::physical_plans::physical_mutation_into_split::MutationSplit);

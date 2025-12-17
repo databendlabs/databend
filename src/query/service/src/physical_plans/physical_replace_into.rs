@@ -250,5 +250,3 @@ impl IPhysicalPlan for ReplaceInto {
         Ok(())
     }
 }
-
-crate::register_physical_plan!(ReplaceInto => crate::physical_plans::physical_replace_into::ReplaceInto);

@@ -143,5 +143,3 @@ impl Debug for QueryFragment {
             .finish()
     }
 }
-
-crate::register_physical_plan!(SerializedPhysicalPlanRef => crate::servers::flight::v1::packets::packet_fragment::SerializedPhysicalPlanRef);

@@ -98,5 +98,3 @@ impl Display for RecursiveCteScan {
         write!(f, "RecursiveCTEScan")
     }
 }
-
-crate::register_physical_plan!(RecursiveCteScan => crate::physical_plans::physical_r_cte_scan::RecursiveCteScan);

@@ -294,5 +294,3 @@ impl PhysicalPlanBuilder {
         Ok(root)
     }
 }
-
-crate::register_physical_plan!(CompactSource => crate::physical_plans::physical_compact_source::CompactSource);

@@ -409,5 +409,3 @@ impl<'a> Visitor<'a> for FlattenColumnsVisitor {
         Ok(())
     }
 }
-
-crate::register_physical_plan!(EvalScalar => crate::physical_plans::physical_eval_scalar::EvalScalar);

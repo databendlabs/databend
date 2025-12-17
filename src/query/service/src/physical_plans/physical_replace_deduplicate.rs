@@ -229,5 +229,3 @@ pub struct ReplaceSelectCtx {
     pub select_column_bindings: Vec<ColumnBinding>,
     pub select_schema: DataSchemaRef,
 }
-
-crate::register_physical_plan!(ReplaceDeduplicate => crate::physical_plans::physical_replace_deduplicate::ReplaceDeduplicate);

@@ -214,5 +214,3 @@ impl IPhysicalPlan for ColumnMutation {
         })
     }
 }
-
-crate::register_physical_plan!(ColumnMutation => crate::physical_plans::physical_column_mutation::ColumnMutation);

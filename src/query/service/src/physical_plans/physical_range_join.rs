@@ -348,5 +348,3 @@ fn resolve_scalar(scalar: &ScalarExpr, schema: &DataSchemaRef) -> Result<RemoteE
         .project_column_ref(|index| schema.index_of(&index.to_string()))?;
     Ok(expr.as_remote_expr())
 }
-
-crate::register_physical_plan!(RangeJoin => crate::physical_plans::physical_range_join::RangeJoin);

@@ -576,5 +576,3 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
-
-crate::register_physical_plan!(Window => crate::physical_plans::physical_window::Window);

@@ -304,5 +304,3 @@ impl AggregatePartial {
         Some((resolved.into(), *limit))
     }
 }
-
-crate::register_physical_plan!(AggregatePartial => crate::physical_plans::physical_aggregate_partial::AggregatePartial);
