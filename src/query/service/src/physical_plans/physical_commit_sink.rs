@@ -225,5 +225,3 @@ pub enum CommitType {
         merge_meta: bool,
     },
 }
-
-crate::register_physical_plan!(CommitSink => crate::physical_plans::physical_commit_sink::CommitSink);

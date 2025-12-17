@@ -16,17 +16,18 @@ use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
 
 fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     let src_dir = Path::new(&manifest_dir).join("src");
-    let out_dir = Path::new(&env::var("OUT_DIR").expect("OUT_DIR not set")).to_path_buf();
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
 
-    let mut entries = collect_registrations(&src_dir);
+    let mut entries = collect_impls(&src_dir);
     entries.sort_by(|a, b| a.1.cmp(&b.1));
 
-    let out_path = out_dir.join("physical_plan_impls.rs");
-    write_impls(&out_path, &entries);
+    let impls_out = out_dir.join("physical_plan_impls.rs");
+    write_impls(&impls_out, &entries);
 
     let dispatch_out = out_dir.join("physical_plan_dispatch.rs");
     write_dispatch(&dispatch_out, &entries);
@@ -34,7 +35,7 @@ fn main() {
     println!("cargo:rerun-if-changed={}", src_dir.display());
 }
 
-fn collect_registrations(src_dir: &Path) -> Vec<(Option<String>, String, String)> {
+fn collect_impls(src_dir: &Path) -> Vec<(Option<String>, String, String)> {
     let mut entries = Vec::new();
 
     for entry in walkdir::WalkDir::new(src_dir)
@@ -50,34 +51,68 @@ fn collect_registrations(src_dir: &Path) -> Vec<(Option<String>, String, String)
             .unwrap_or_else(|e| panic!("read {}: {e}", entry.path().display()));
 
         for line in content.lines() {
-            if let Some(pos) = line.find("register_physical_plan!") {
-                let rest = &line[pos..];
-                if let Some((variant, path)) = parse_registration(rest) {
-                    entries.push((None, variant, path));
-                }
+            if let Some(e) = parse_impl_line(src_dir, entry.path(), line) {
+                entries.push(e);
             }
         }
     }
 
-    // test-only plan variant
-    entries.push((
-        Some("#[cfg(test)]".to_string()),
-        "StackDepthPlan".to_string(),
-        "crate::physical_plans::physical_plan::tests::StackDepthPlan".to_string(),
-    ));
-
     entries
 }
 
-fn parse_registration(line: &str) -> Option<(String, String)> {
-    let start = line.find('(')? + 1;
-    let end = line.find(')')?;
-    let body = &line[start..end];
-    let mut parts = body.split("=>").map(str::trim);
-    let variant = parts.next()?.trim_end_matches(',');
-    let path = parts.next()?.trim_end_matches(',');
+fn parse_impl_line(
+    src_root: &Path,
+    path: &Path,
+    line: &str,
+) -> Option<(Option<String>, String, String)> {
+    // match `impl ... IPhysicalPlan for Type ... {`
+    let marker = "IPhysicalPlan for";
+    let idx = line.find(marker)?;
+    let after = &line[idx + marker.len()..];
+    let type_part = after
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .trim_end_matches('{')
+        .trim_end_matches(';');
+    if type_part.is_empty() {
+        return None;
+    }
 
-    Some((variant.to_string(), path.to_string()))
+    let type_name = type_part
+        .split("::")
+        .last()
+        .unwrap_or(type_part)
+        .split('<')
+        .next()
+        .unwrap_or(type_part)
+        .to_string();
+
+    let mut module_path = module_path_from_file(src_root, path);
+    let mut meta = None;
+
+    if type_name == "StackDepthPlan" && path.ends_with("physical_plan.rs") {
+        module_path.push_str("::tests");
+        meta = Some("#[cfg(test)]".to_string());
+    }
+
+    let full_path = format!("{module_path}::{type_part}");
+
+    Some((meta, type_name, full_path))
+}
+
+fn module_path_from_file(src_root: &Path, path: &Path) -> String {
+    let mut module_path = String::from("crate");
+    let rel = path
+        .strip_prefix(src_root)
+        .unwrap_or(path)
+        .with_extension("");
+    for comp in rel.components() {
+        let c = comp.as_os_str().to_string_lossy();
+        module_path.push_str("::");
+        module_path.push_str(&c);
+    }
+    module_path
 }
 
 fn write_impls(out_path: &Path, entries: &[(Option<String>, String, String)]) {

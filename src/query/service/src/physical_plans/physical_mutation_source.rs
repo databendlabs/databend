@@ -310,5 +310,3 @@ pub fn create_push_down_filters(
         inverted_filter: remote_inverted_filter,
     })
 }
-
-crate::register_physical_plan!(MutationSource => crate::physical_plans::physical_mutation_source::MutationSource);

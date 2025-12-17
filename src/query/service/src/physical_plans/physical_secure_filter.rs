@@ -185,5 +185,3 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
-
-crate::register_physical_plan!(SecureFilter => crate::physical_plans::physical_secure_filter::SecureFilter);

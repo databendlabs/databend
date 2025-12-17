@@ -241,5 +241,3 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
-
-crate::register_physical_plan!(Udf => crate::physical_plans::physical_udf::Udf);

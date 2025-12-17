@@ -108,5 +108,3 @@ impl IPhysicalPlan for ExchangeSink {
         self.input.build_pipeline(builder)
     }
 }
-
-crate::register_physical_plan!(ExchangeSink => crate::physical_plans::physical_exchange_sink::ExchangeSink);

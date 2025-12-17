@@ -372,7 +372,3 @@ impl IPhysicalPlan for HilbertPartition {
             })
     }
 }
-
-crate::register_physical_plan!(HilbertPartition => crate::physical_plans::physical_recluster::HilbertPartition);
-
-crate::register_physical_plan!(Recluster => crate::physical_plans::physical_recluster::Recluster);

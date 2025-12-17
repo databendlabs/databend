@@ -145,5 +145,3 @@ fn sink_create_by(version: &Version) -> String {
     }
     create_by
 }
-
-crate::register_physical_plan!(CopyIntoLocation => crate::physical_plans::physical_copy_into_location::CopyIntoLocation);

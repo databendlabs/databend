@@ -130,5 +130,3 @@ impl IPhysicalPlan for DistributedInsertSelect {
         Ok(())
     }
 }
-
-crate::register_physical_plan!(DistributedInsertSelect => crate::physical_plans::physical_distributed_insert_select::DistributedInsertSelect);

@@ -118,5 +118,3 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
-
-crate::register_physical_plan!(Sequence => crate::physical_plans::physical_sequence::Sequence);
