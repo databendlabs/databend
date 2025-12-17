@@ -17,4 +17,5 @@ mod types;
 
 pub use builder::build_runtime_filter;
 pub use builder::supported_join_type_for_runtime_filter;
+pub use builder::JoinEquivalenceClasses;
 pub use types::*;

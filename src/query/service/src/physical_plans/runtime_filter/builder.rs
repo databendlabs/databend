@@ -35,6 +35,60 @@ use databend_common_sql::TypeCheck;
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
 
+type ScalarExprId = usize;
+
+#[derive(Default)]
+pub struct JoinEquivalenceClasses {
+    expr_to_id: HashMap<ScalarExpr, ScalarExprId>,
+    uf: UnionFind,
+    next_id: ScalarExprId,
+}
+
+impl JoinEquivalenceClasses {
+    pub fn build_from_sexpr(s_expr: &SExpr) -> Self {
+        let mut ec = Self::default();
+        ec.collect_equi_conditions_recursive(s_expr);
+        ec
+    }
+
+    fn collect_equi_conditions_recursive(&mut self, s_expr: &SExpr) {
+        if let RelOperator::Join(join) = s_expr.plan() {
+            if matches!(join.join_type, JoinType::Inner) {
+                for cond in &join.equi_conditions {
+                    let left_id = self.get_or_create_id(&cond.left);
+                    let right_id = self.get_or_create_id(&cond.right);
+                    self.uf.union(left_id, right_id);
+                }
+            }
+        }
+
+        for child in s_expr.children() {
+            self.collect_equi_conditions_recursive(child);
+        }
+    }
+
+    fn get_or_create_id(&mut self, expr: &ScalarExpr) -> ScalarExprId {
+        if let Some(&id) = self.expr_to_id.get(expr) {
+            return id;
+        }
+
+        let id = self.next_id;
+        self.next_id += 1;
+        self.expr_to_id.insert(expr.clone(), id);
+        id
+    }
+
+    pub fn are_equivalent(&mut self, expr1: &ScalarExpr, expr2: &ScalarExpr) -> bool {
+        let id1 = self.expr_to_id.get(expr1);
+        let id2 = self.expr_to_id.get(expr2);
+
+        match (id1, id2) {
+            (Some(&id1), Some(&id2)) => self.uf.find(id1) == self.uf.find(id2),
+            _ => false,
+        }
+    }
+}
+
 /// Type alias for probe keys with runtime filter information
 /// Contains: (RemoteExpr, scan_id, table_index, column_idx)
 type ProbeKeysWithRuntimeFilter = Vec<Option<(RemoteExpr<String>, usize, usize, IndexType)>>;
@@ -195,7 +249,7 @@ fn find_probe_targets(
     probe_scan_id: usize,
     probe_key_col_idx: IndexType,
 ) -> Result<Vec<(RemoteExpr<String>, usize)>> {
-    let mut uf = UnionFind::new();
+    let mut uf = UnionFind::default();
     let mut column_to_remote: HashMap<IndexType, (RemoteExpr<String>, usize)> = HashMap::new();
     column_to_remote.insert(probe_key_col_idx, (probe_key.clone(), probe_scan_id));
 
@@ -270,17 +324,12 @@ fn scalar_to_remote_expr(
     Ok(None)
 }
 
+#[derive(Default)]
 struct UnionFind {
     parent: HashMap<IndexType, IndexType>,
 }
 
 impl UnionFind {
-    fn new() -> Self {
-        Self {
-            parent: HashMap::new(),
-        }
-    }
-
     fn find(&mut self, x: IndexType) -> IndexType {
         if !self.parent.contains_key(&x) {
             self.parent.insert(x, x);
