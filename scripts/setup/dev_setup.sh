@@ -625,6 +625,8 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
 
+	CARGO_HOME="${CARGO_HOME:-${HOME}/.cargo}"
+
 	## install cargo-binstall
 	curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
@@ -633,9 +635,9 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	if [[ "$(uname)" == "Linux" ]]; then
 		if [[ "$(uname -m)" == "x86_64" ]]; then
-			curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C "${CARGO_HOME:-~/.cargo}/bin"
+			curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C "${CARGO_HOME}/bin"
 		elif [[ "$(uname -m)" == "aarch64" ]]; then
-			curl -LsSf https://get.nexte.st/latest/linux-arm | tar zxf - -C "${CARGO_HOME:-~/.cargo}/bin"
+			curl -LsSf https://get.nexte.st/latest/linux-arm | tar zxf - -C "${CARGO_HOME}/bin"
 		fi
 	elif [[ "$(uname)" == "Darwin" ]]; then
 		brew install cargo-nextest
