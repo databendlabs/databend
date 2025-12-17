@@ -675,8 +675,10 @@ function install_cargo_audit {
 		;;
 	esac
 
+	local tag
+	tag="cargo-audit%2F${version}"
 	asset="cargo-audit-${triple}-${version}.tgz"
-	url="https://github.com/rustsec/rustsec/releases/download/cargo-audit/${version}/${asset}"
+	url="https://github.com/rustsec/rustsec/releases/download/${tag}/${asset}"
 	tmpdir=$(mktemp -d)
 	if ! curl -fsSL "$url" -o "${tmpdir}/${asset}"; then
 		rm -rf "$tmpdir"
