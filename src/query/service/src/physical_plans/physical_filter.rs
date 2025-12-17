@@ -48,7 +48,6 @@ pub struct Filter {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for Filter {
     fn as_any(&self) -> &dyn Any {
         self

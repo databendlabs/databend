@@ -35,7 +35,6 @@ pub struct BroadcastSource {
     pub broadcast_id: u32,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for BroadcastSource {
     fn as_any(&self) -> &dyn Any {
         self
@@ -75,7 +74,6 @@ pub struct BroadcastSink {
     pub input: PhysicalPlan,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for BroadcastSink {
     fn as_any(&self) -> &dyn Any {
         self

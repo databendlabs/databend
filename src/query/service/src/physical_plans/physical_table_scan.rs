@@ -97,7 +97,6 @@ pub struct TableScan {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for TableScan {
     fn as_any(&self) -> &dyn Any {
         self

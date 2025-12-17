@@ -33,7 +33,6 @@ pub struct MutationSplit {
     pub split_index: IndexType,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for MutationSplit {
     fn as_any(&self) -> &dyn Any {
         self

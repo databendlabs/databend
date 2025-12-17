@@ -67,7 +67,6 @@ pub struct Recluster {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for Recluster {
     fn as_any(&self) -> &dyn Any {
         self
@@ -266,7 +265,6 @@ pub struct HilbertPartition {
     pub rows_per_block: usize,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for HilbertPartition {
     fn as_any(&self) -> &dyn Any {
         self

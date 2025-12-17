@@ -74,7 +74,6 @@ pub struct MutationSource {
     pub statistics: PartStatistics,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for MutationSource {
     fn as_any(&self) -> &dyn Any {
         self

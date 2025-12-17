@@ -31,7 +31,6 @@ pub struct MutationOrganize {
     pub strategy: MutationStrategy,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for MutationOrganize {
     fn as_any(&self) -> &dyn Any {
         self

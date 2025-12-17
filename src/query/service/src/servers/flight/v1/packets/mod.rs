@@ -15,7 +15,7 @@
 mod packet_data;
 mod packet_data_progressinfo;
 mod packet_executor;
-mod packet_fragment;
+pub mod packet_fragment;
 mod packet_publisher;
 
 pub use packet_data::DataPacket;

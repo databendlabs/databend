@@ -54,7 +54,6 @@ pub struct MutationManipulate {
     pub target_table_index: usize,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for MutationManipulate {
     fn as_any(&self) -> &dyn Any {
         self

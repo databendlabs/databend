@@ -40,7 +40,6 @@ pub struct DistributedInsertSelect {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for DistributedInsertSelect {
     fn as_any(&self) -> &dyn Any {
         self

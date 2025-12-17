@@ -57,7 +57,6 @@ pub struct ReplaceInto {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ReplaceInto {
     fn as_any(&self) -> &dyn Any {
         self
