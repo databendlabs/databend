@@ -45,7 +45,6 @@ pub struct ExchangeSink {
     pub allow_adjust_parallelism: bool,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ExchangeSink {
     fn as_any(&self) -> &dyn Any {
         self

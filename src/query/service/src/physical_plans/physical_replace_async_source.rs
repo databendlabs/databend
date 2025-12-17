@@ -35,7 +35,6 @@ pub struct ReplaceAsyncSourcer {
     pub source: InsertValue,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for ReplaceAsyncSourcer {
     fn as_any(&self) -> &dyn Any {
         self

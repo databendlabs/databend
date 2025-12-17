@@ -58,7 +58,6 @@ pub struct CommitSink {
     pub recluster_info: Option<ReclusterInfoSideCar>,
 }
 
-#[typetag::serde]
 impl IPhysicalPlan for CommitSink {
     fn as_any(&self) -> &dyn Any {
         self

@@ -50,9 +50,8 @@ impl QueryFragment {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-struct SerializedPhysicalPlanRef(u32);
+pub struct SerializedPhysicalPlanRef(u32);
 
-#[typetag::serde]
 impl IPhysicalPlan for SerializedPhysicalPlanRef {
     fn as_any(&self) -> &dyn Any {
         self
