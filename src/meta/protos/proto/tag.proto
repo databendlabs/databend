@@ -31,15 +31,15 @@ message TagMeta {
   optional string updated_on = 4;
 }
 
+// Value stored for tag-to-object binding (indexed by object).
+// Key format: __fd_object_tag_ref/<tenant>/<object_type>/<object_id>/<tag_id>
+// The tag_id is part of the key, so only value payload and timestamp stored here.
 message TagRefValue {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  // Identifier of the referenced tag definition.
-  uint64 tag_id = 1;
   // Payload assigned when the tag is set on an object. If the tag defined
   // `allowed_values`, this must match one of those entries; otherwise any string
   // (including empty) is permitted.
-  string value = 2;
-  string created_on = 3;
+  string value = 1;
 }

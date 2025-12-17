@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
@@ -50,7 +51,7 @@ impl Display for CreateTagStmt {
             write!(f, ")")?;
         }
         if let Some(comment) = &self.comment {
-            write!(f, " COMMENT = '{comment}'")?;
+            write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
         }
         Ok(())
     }
