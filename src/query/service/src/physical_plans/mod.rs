@@ -109,6 +109,16 @@ pub use physical_window_partition::*;
 pub use runtime_filter::PhysicalRuntimeFilter;
 pub use runtime_filter::PhysicalRuntimeFilters;
 
+// Marker macro: used by build.rs to collect physical plan variants for codegen.
+// Expands to a no-op, so plan modules can call it without affecting runtime code.
+#[macro_export]
+macro_rules! register_physical_plan {
+    ($variant:ident => $path:path) => {
+        #[allow(dead_code)]
+        const _: () = ();
+    };
+}
+
 pub mod explain;
 mod format;
 mod physical_cte_consumer;

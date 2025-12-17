@@ -138,3 +138,5 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
+
+crate::register_physical_plan!(Exchange => crate::physical_plans::physical_exchange::Exchange);

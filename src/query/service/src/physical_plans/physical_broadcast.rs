@@ -156,3 +156,7 @@ pub fn build_broadcast_plans(ctx: &dyn TableContext) -> Result<Vec<PhysicalPlan>
     }
     Ok(plans)
 }
+
+crate::register_physical_plan!(BroadcastSink => crate::physical_plans::physical_broadcast::BroadcastSink);
+
+crate::register_physical_plan!(BroadcastSource => crate::physical_plans::physical_broadcast::BroadcastSource);

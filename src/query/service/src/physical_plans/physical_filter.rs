@@ -176,3 +176,5 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
+
+crate::register_physical_plan!(Filter => crate::physical_plans::physical_filter::Filter);

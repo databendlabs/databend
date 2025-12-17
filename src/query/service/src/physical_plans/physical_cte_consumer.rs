@@ -110,3 +110,5 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
+
+crate::register_physical_plan!(MaterializeCTERef => crate::physical_plans::physical_cte_consumer::MaterializeCTERef);

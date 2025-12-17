@@ -202,3 +202,5 @@ pub enum WindowPartitionTopNFunc {
     Rank,
     DenseRank,
 }
+
+crate::register_physical_plan!(WindowPartition => crate::physical_plans::physical_window_partition::WindowPartition);

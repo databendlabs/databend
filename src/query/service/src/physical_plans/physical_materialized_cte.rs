@@ -142,3 +142,5 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
+
+crate::register_physical_plan!(MaterializedCTE => crate::physical_plans::physical_materialized_cte::MaterializedCTE);

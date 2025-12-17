@@ -994,3 +994,5 @@ impl PhysicalPlanBuilder {
         }
     }
 }
+
+crate::register_physical_plan!(TableScan => crate::physical_plans::physical_table_scan::TableScan);

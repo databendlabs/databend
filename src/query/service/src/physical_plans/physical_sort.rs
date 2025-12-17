@@ -535,3 +535,5 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
+
+crate::register_physical_plan!(Sort => crate::physical_plans::physical_sort::Sort);

@@ -171,3 +171,5 @@ impl IPhysicalPlan for AggregateExpand {
         Ok(())
     }
 }
+
+crate::register_physical_plan!(AggregateExpand => crate::physical_plans::physical_aggregate_expand::AggregateExpand);

@@ -82,3 +82,5 @@ impl IPhysicalPlan for ReplaceAsyncSourcer {
         )
     }
 }
+
+crate::register_physical_plan!(ReplaceAsyncSourcer => crate::physical_plans::physical_replace_async_source::ReplaceAsyncSourcer);
