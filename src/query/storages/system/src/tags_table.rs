@@ -26,7 +26,6 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_api::tag_api::TagApi;
-use databend_common_meta_app::schema::ListTagsReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -55,7 +54,7 @@ impl AsyncSystemTable for TagsTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let meta_client = UserApiProvider::instance().get_meta_store_client();
-        let mut tags = meta_client.list_tags(ListTagsReq::new(tenant)).await?.tags;
+        let mut tags = meta_client.list_tags(&tenant).await?;
         tags.sort_by(|a, b| a.name.cmp(&b.name));
 
         let mut names = Vec::with_capacity(tags.len());
@@ -65,7 +64,7 @@ impl AsyncSystemTable for TagsTable {
 
         for tag in tags {
             names.push(tag.name);
-            allowed_values.push(tag.meta.allowed_values.map(|vals| {
+            allowed_values.push(tag.meta.data.allowed_values.as_ref().map(|vals| {
                 format!(
                     "[{}]",
                     vals.iter()
@@ -74,8 +73,8 @@ impl AsyncSystemTable for TagsTable {
                         .join(", ")
                 )
             }));
-            comments.push(tag.meta.comment);
-            created_on.push(tag.meta.created_on.timestamp_micros());
+            comments.push(tag.meta.data.comment.clone());
+            created_on.push(tag.meta.data.created_on.timestamp_micros());
         }
 
         Ok(DataBlock::new_from_columns(vec![

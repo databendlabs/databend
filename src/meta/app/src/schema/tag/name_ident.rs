@@ -39,8 +39,8 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
+    use super::super::id_ident::TagId;
     use crate::key_with_tenant::KeyWithTenant;
-    use crate::schema::tag_id_ident::TagId;
     use crate::schema::TagNameIdent;
     use crate::tenant_key::resource::TenantResource;
 

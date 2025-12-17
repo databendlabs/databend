@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::schema::tag_id_ident::TagId;
+use super::id_ident::TagId;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
@@ -29,7 +29,7 @@ pub use kvapi_impl::Resource;
 mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::tag_name_ident::TagNameIdentRaw;
+    use super::super::name_ident::TagNameIdentRaw;
     use crate::schema::TagIdToNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
@@ -54,8 +54,8 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
+    use super::TagId;
     use super::TagIdToNameIdent;
-    use crate::schema::tag_id_ident::TagId;
     use crate::tenant::Tenant;
 
     #[test]
