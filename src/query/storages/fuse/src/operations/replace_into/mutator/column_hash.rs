@@ -29,7 +29,7 @@ pub(crate) trait RowScalarValue {
 }
 
 impl RowScalarValue for Value<AnyType> {
-    fn row_scalar(&self, idx: usize) -> Result<ScalarRef> {
+    fn row_scalar(&self, idx: usize) -> Result<ScalarRef<'_>> {
         match self {
             Value::Scalar(v) => Ok(v.as_ref()),
             Value::Column(c) => c.index(idx).ok_or_else(|| {

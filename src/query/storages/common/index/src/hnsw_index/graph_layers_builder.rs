@@ -70,7 +70,7 @@ pub struct GraphLayersBuilder {
 }
 
 impl GraphLayersBase for GraphLayersBuilder {
-    fn get_visited_list_from_pool(&self) -> VisitedListHandle {
+    fn get_visited_list_from_pool(&self) -> VisitedListHandle<'_> {
         self.visited_pool.get(self.num_points())
     }
 
@@ -92,7 +92,7 @@ impl GraphLayersBase for GraphLayersBuilder {
 
 impl GraphLayersBuilder {
     #[allow(dead_code)]
-    pub fn get_entry_points(&self) -> MutexGuard<EntryPoints> {
+    pub fn get_entry_points(&self) -> MutexGuard<'_, EntryPoints> {
         self.entry_points.lock()
     }
 

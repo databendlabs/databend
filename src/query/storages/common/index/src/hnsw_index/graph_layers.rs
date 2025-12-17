@@ -61,7 +61,7 @@ pub struct GraphLayers {
 }
 
 pub trait GraphLayersBase {
-    fn get_visited_list_from_pool(&self) -> VisitedListHandle;
+    fn get_visited_list_from_pool(&self) -> VisitedListHandle<'_>;
 
     fn links_map<F>(&self, point_id: PointOffsetType, level: usize, f: F)
     where F: FnMut(PointOffsetType);
@@ -171,7 +171,7 @@ pub trait GraphLayersBase {
 }
 
 impl GraphLayersBase for GraphLayers {
-    fn get_visited_list_from_pool(&self) -> VisitedListHandle {
+    fn get_visited_list_from_pool(&self) -> VisitedListHandle<'_> {
         self.visited_pool.get(self.links.num_points())
     }
 

@@ -130,7 +130,7 @@ impl QueryExecutorTasksQueue {
         }
     }
 
-    #[allow(unused_assignments)]
+    #[allow(unused)]
     pub fn push_tasks(&self, ctx: &mut ExecutorWorkerContext, mut tasks: VecDeque<ExecutorTask>) {
         let mut workers_tasks = self.workers_tasks.lock();
 

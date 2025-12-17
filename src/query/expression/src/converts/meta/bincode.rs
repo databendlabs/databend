@@ -54,7 +54,7 @@ pub enum LegacyScalar {
     Variant(Vec<u8>),
 }
 
-#[allow(dead_code)]
+#[allow(unused, dead_code)]
 #[derive(Clone, EnumAsInner)]
 pub enum LegacyColumn {
     Null { len: usize },

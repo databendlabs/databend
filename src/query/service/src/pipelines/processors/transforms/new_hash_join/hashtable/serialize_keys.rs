@@ -197,7 +197,7 @@ impl<const SKIP_DUPLICATES: bool> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
 pub struct BinaryKeyProbeStream<const MATCHED: bool> {
     key_idx: usize,
     pointers: Vec<u64>,
-    keys: Box<(dyn KeyAccessor<Key = [u8]>)>,
+    keys: Box<dyn KeyAccessor<Key = [u8]>>,
     probe_entry_ptr: u64,
     matched_num_rows: usize,
 }
@@ -297,7 +297,7 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
 pub struct EarlyFilteringProbeStream<'a, const MATCHED: bool> {
     idx: usize,
     pointers: Vec<u64>,
-    keys: Box<(dyn KeyAccessor<Key = [u8]>)>,
+    keys: Box<dyn KeyAccessor<Key = [u8]>>,
     probe_entry_ptr: u64,
     selections: &'a [u32],
     unmatched_selection: &'a [u32],

@@ -20,7 +20,6 @@ use std::time::Duration;
 
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::block_on;
 use databend_common_base::runtime::spawn_named;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

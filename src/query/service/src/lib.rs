@@ -24,7 +24,7 @@
 #![feature(trusted_len)]
 #![feature(box_patterns)]
 #![feature(sync_unsafe_cell)]
-#![allow(elided_named_lifetimes)]
+#![allow(mismatched_lifetime_syntaxes)]
 #![feature(iterator_try_reduce)]
 #![feature(cursor_split)]
 #![allow(clippy::large_enum_variant)]

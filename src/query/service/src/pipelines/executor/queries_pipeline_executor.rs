@@ -144,7 +144,7 @@ impl QueriesPipelineExecutor {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn execute_single_thread(self: &Arc<Self>, thread_num: usize) -> Result<()> {
+    pub unsafe fn execute_single_thread(self: &Arc<Self>, thread_num: usize) -> Result<()> { unsafe {
         let workers_condvar = self.workers_condvar.clone();
         let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
 
@@ -221,7 +221,7 @@ impl QueriesPipelineExecutor {
         }
 
         Ok(())
-    }
+    }}
 
     pub fn finish(&self, cause: Option<ErrorCode>) {
         if let Some(cause) = cause {

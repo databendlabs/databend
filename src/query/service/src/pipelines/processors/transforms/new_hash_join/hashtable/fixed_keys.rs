@@ -178,7 +178,7 @@ struct FixedKeyProbeStream<Key: FixedKey + HashtableKeyable, const MATCHED: bool
     key_idx: usize,
     pointers: Vec<u64>,
     probe_entry_ptr: u64,
-    keys: Box<(dyn KeyAccessor<Key = Key>)>,
+    keys: Box<dyn KeyAccessor<Key = Key>>,
     matched_num_rows: usize,
 }
 
@@ -267,7 +267,7 @@ struct EarlyFilteringProbeStream<'a, Key: FixedKey + HashtableKeyable, const MAT
     idx: usize,
     pointers: Vec<u64>,
     probe_entry_ptr: u64,
-    keys: Box<(dyn KeyAccessor<Key = Key>)>,
+    keys: Box<dyn KeyAccessor<Key = Key>>,
     selections: &'a [u32],
     unmatched_selection: &'a [u32],
     matched_num_rows: usize,

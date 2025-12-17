@@ -211,7 +211,7 @@ impl TransformPartitionBucketScatter {
         Ok(self.initialized_all_inputs)
     }
 
-    #[allow(unused_assignments)]
+    #[allow(unused)]
     fn add_bucket(&mut self, mut data_block: DataBlock) -> Result<(isize, usize)> {
         let (mut bucket, mut partition_count) = (0, 0);
         let mut is_empty_block = false;

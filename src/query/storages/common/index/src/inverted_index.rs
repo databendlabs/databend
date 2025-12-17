@@ -1506,6 +1506,7 @@ impl Directory for InvertedIndexDirectory {
 
 impl Versioned<0> for InvertedIndexFile {}
 
+#[allow(dead_code)]
 pub enum InvertedIndexFileVersion {
     V0(PhantomData<InvertedIndexFile>),
 }

@@ -196,10 +196,10 @@ impl AggregateFunction for AggregateUdfScript {
         true
     }
 
-    unsafe fn drop_state(&self, place: AggrState) {
+    unsafe fn drop_state(&self, place: AggrState) { unsafe {
         let state = place.get::<UdfAggState>();
         std::ptr::drop_in_place(state);
-    }
+    }}
 }
 
 impl fmt::Display for AggregateUdfScript {

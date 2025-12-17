@@ -38,7 +38,7 @@ impl HashJoinProbeState {
     >(
         &self,
         probe_state: &mut ProbeState,
-        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
+        keys: Box<dyn KeyAccessor<Key = H::Key>>,
         hash_table: &H,
     ) -> Result<Vec<DataBlock>>
     where

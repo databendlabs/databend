@@ -34,7 +34,7 @@ impl HashJoinProbeState {
     pub(crate) fn right_mark_join<'a, H: HashJoinHashtableLike>(
         &self,
         probe_state: &mut ProbeState,
-        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
+        keys: Box<dyn KeyAccessor<Key = H::Key>>,
         hash_table: &H,
     ) -> Result<Vec<DataBlock>>
     where
@@ -93,7 +93,7 @@ impl HashJoinProbeState {
     pub(crate) fn right_mark_join_with_conjunct<'a, H: HashJoinHashtableLike>(
         &self,
         probe_state: &mut ProbeState,
-        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
+        keys: Box<dyn KeyAccessor<Key = H::Key>>,
         hash_table: &H,
     ) -> Result<Vec<DataBlock>>
     where

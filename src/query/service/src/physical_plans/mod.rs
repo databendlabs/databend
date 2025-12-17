@@ -46,7 +46,6 @@ mod physical_project_set;
 mod physical_r_cte_scan;
 mod physical_range_join;
 mod physical_recluster;
-mod physical_refresh_index;
 mod physical_replace_async_source;
 mod physical_replace_deduplicate;
 mod physical_replace_into;

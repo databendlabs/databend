@@ -127,8 +127,8 @@ pub struct FunctionSignature {
     pub return_type: DataType,
 }
 
-#[allow(dead_code)]
 #[derive(EnumAsInner)]
+#[allow(unused, dead_code)]
 #[allow(clippy::type_complexity)]
 pub enum FunctionEval {
     /// Scalar function that returns a single value.

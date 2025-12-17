@@ -125,7 +125,7 @@ impl ExecutorWorkerContext {
     pub unsafe fn execute_task(
         &mut self,
         executor: Option<&Arc<QueriesPipelineExecutor>>,
-    ) -> std::result::Result<Option<(NodeIndex, Arc<RunningGraph>)>, Box<NodeErrorType>> {
+    ) -> std::result::Result<Option<(NodeIndex, Arc<RunningGraph>)>, Box<NodeErrorType>> { unsafe {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(Box::new(NodeErrorType::LocalError(ErrorCode::Internal(
                 "Execute none task.",
@@ -155,13 +155,13 @@ impl ExecutorWorkerContext {
                 Err(cause) => Err(Box::new(NodeErrorType::AsyncProcessError(cause))),
             },
         }
-    }
+    }}
 
     /// # Safety
     unsafe fn execute_sync_task(
         &mut self,
         proc: ProcessorWrapper,
-    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
+    ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> { unsafe {
         let payload = proc.graph.get_node_tracking_payload(proc.processor.id());
         let guard = ThreadTracker::tracking(payload.clone());
         let begin = SystemTime::now();
@@ -180,7 +180,7 @@ impl ExecutorWorkerContext {
         }
 
         Ok(Some((proc.processor.id(), proc.graph)))
-    }
+    }}
 
     pub fn execute_async_task(
         &mut self,

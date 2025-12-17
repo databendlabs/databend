@@ -153,15 +153,15 @@ impl Node {
         }
     }
 
-    pub unsafe fn trigger(&self, queue: &mut VecDeque<DirectedEdge>) {
+    pub unsafe fn trigger(&self, queue: &mut VecDeque<DirectedEdge>) { unsafe {
         self.updated_list.trigger(queue)
-    }
+    }}
 
-    pub unsafe fn create_trigger(&self, index: EdgeIndex) -> *mut UpdateTrigger {
+    pub unsafe fn create_trigger(&self, index: EdgeIndex) -> *mut UpdateTrigger { unsafe {
         self.updated_list
             .create_trigger(index)
             .expect("Failed to create trigger")
-    }
+    }}
 }
 
 const POINTS_MASK: u64 = 0xFFFFFFFF00000000;
@@ -339,14 +339,14 @@ impl ExecutingGraph {
         locker: &StateLockGuard,
         capacity: usize,
         graph: &Arc<RunningGraph>,
-    ) -> Result<ScheduleQueue> {
+    ) -> Result<ScheduleQueue> { unsafe {
         let mut schedule_queue = ScheduleQueue::with_capacity(capacity);
         for sink_index in locker.graph.externals(Direction::Outgoing) {
             ExecutingGraph::schedule_queue(locker, sink_index, &mut schedule_queue, graph)?;
         }
 
         Ok(schedule_queue)
-    }
+    }}
 
     /// # Safety
     ///
@@ -356,7 +356,7 @@ impl ExecutingGraph {
         index: NodeIndex,
         schedule_queue: &mut ScheduleQueue,
         graph: &Arc<RunningGraph>,
-    ) -> Result<()> {
+    ) -> Result<()> { unsafe {
         let mut need_schedule_nodes = VecDeque::new();
         let mut need_schedule_edges = VecDeque::new();
 
@@ -451,7 +451,7 @@ impl ExecutingGraph {
         }
 
         Ok(())
-    }
+    }}
 
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
     pub fn can_perform_task(&self, global_epoch: u32) -> bool {
@@ -715,18 +715,18 @@ impl RunningGraph {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn init_schedule_queue(self: Arc<Self>, capacity: usize) -> Result<ScheduleQueue> {
+    pub unsafe fn init_schedule_queue(self: Arc<Self>, capacity: usize) -> Result<ScheduleQueue> { unsafe {
         ExecutingGraph::init_schedule_queue(&self.0, capacity, &self)
-    }
+    }}
 
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn schedule_queue(self: Arc<Self>, node_index: NodeIndex) -> Result<ScheduleQueue> {
+    pub unsafe fn schedule_queue(self: Arc<Self>, node_index: NodeIndex) -> Result<ScheduleQueue> { unsafe {
         let mut schedule_queue = ScheduleQueue::with_capacity(0);
         ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue, &self)?;
         Ok(schedule_queue)
-    }
+    }}
 
     pub(crate) fn get_node_tracking_payload(&self, pid: NodeIndex) -> &TrackingPayload {
         &self.0.graph[pid].tracking_payload

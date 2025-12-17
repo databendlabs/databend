@@ -181,6 +181,7 @@ pub enum ScalarRef<'a> {
     Opaque(OpaqueScalarRef<'a>),
 }
 
+#[allow(unused, dead_code)]
 #[derive(Clone, EnumAsInner)]
 pub enum Column {
     Null { len: usize },
@@ -252,7 +253,7 @@ pub enum ColumnVec {
     Opaque(OpaqueColumnVec),
 }
 
-#[allow(dead_code)]
+#[allow(unused, dead_code)]
 #[derive(Debug, Clone, EnumAsInner)]
 pub enum ColumnBuilder {
     Null { len: usize },

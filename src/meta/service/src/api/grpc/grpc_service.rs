@@ -328,7 +328,7 @@ impl MetaService for MetaServiceImpl {
 
     type KvReadV1Stream = BoxStream<StreamItem>;
 
-    #[allow(unused_assignments)]
+    #[allow(unused)]
     async fn kv_read_v1(
         &self,
         request: Request<RaftRequest>,
