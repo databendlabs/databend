@@ -44,6 +44,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 use tokio::sync::Barrier;
 
+use super::runtime_filter::supported_join_type_for_runtime_filter;
 use super::runtime_filter::PhysicalRuntimeFilters;
 use super::PhysicalPlanCast;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -508,15 +509,28 @@ impl HashJoin {
 }
 
 impl PhysicalPlanBuilder {
-    /// Builds the physical plans for both sides of the join
     pub async fn build_join_sides(
         &mut self,
         s_expr: &SExpr,
+        join: Option<&Join>,
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<(PhysicalPlan, PhysicalPlan)> {
         let probe_side = self.build(s_expr.left_child(), left_required).await?;
+
+        let should_track = join
+            .map(|j| supported_join_type_for_runtime_filter(&j.join_type))
+            .unwrap_or(false);
+
+        if should_track {
+            self.runtime_filter_anchors.push(Arc::new(s_expr.clone()));
+        }
+
         let build_side = self.build(s_expr.right_child(), right_required).await?;
+
+        if should_track {
+            self.runtime_filter_anchors.pop();
+        }
 
         Ok((probe_side, build_side))
     }
@@ -1270,7 +1284,7 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         // Step 1: Build probe and build sides
         let (mut probe_side, mut build_side) = self
-            .build_join_sides(s_expr, left_required, right_required)
+            .build_join_sides(s_expr, Some(join), left_required, right_required)
             .await?;
 
         // Step 2: Prepare column projections

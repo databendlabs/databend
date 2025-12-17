@@ -39,6 +39,7 @@ pub struct PhysicalPlanBuilder {
     pub dry_run: bool,
     // DataMutation info, used to build MergeInto physical plan
     pub mutation_build_info: Option<MutationBuildInfo>,
+    pub runtime_filter_anchors: Vec<Arc<SExpr>>,
 }
 
 impl PhysicalPlanBuilder {
@@ -50,6 +51,7 @@ impl PhysicalPlanBuilder {
             func_ctx,
             dry_run,
             mutation_build_info: None,
+            runtime_filter_anchors: Vec::new(),
         }
     }
 

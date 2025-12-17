@@ -226,7 +226,7 @@ impl PhysicalPlanBuilder {
 
         // Construct IEJoin
         let (right_side, left_side) = self
-            .build_join_sides(s_expr, left_required, right_required)
+            .build_join_sides(s_expr, None, left_required, right_required)
             .await?;
 
         let left_schema = self.prepare_probe_schema(join_type, &left_side)?;
