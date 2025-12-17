@@ -632,7 +632,6 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 		export CARGO_BUILD_TARGET="${MUSL_TARGET}"
 	fi
 	cargo binstall -y --disable-strategies compile sccache
-	cargo binstall -y --disable-strategies compile cargo-nextest
 	unset CARGO_BUILD_TARGET
 fi
 
