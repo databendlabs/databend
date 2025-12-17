@@ -628,11 +628,10 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	## install cargo-binstall
 	curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
-	if [[ "$(uname)" == "Linux" ]]; then
-		export CARGO_BUILD_TARGET="${MUSL_TARGET}"
-	fi
 	cargo binstall -y --disable-strategies compile sccache
-	unset CARGO_BUILD_TARGET
+	sccache --version
+	cargo binstall -y --disable-strategies compile cargo-nextest
+	cargo nextest --version
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then

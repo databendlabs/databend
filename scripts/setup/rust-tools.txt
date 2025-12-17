@@ -1,5 +1,4 @@
 cargo-audit@0.22.0
 cargo-machete@0.9.1
-cargo-nextest@0.9.115
 taplo-cli@0.10.0
 typos-cli@1.40.0
