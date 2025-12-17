@@ -245,3 +245,5 @@ impl AddStreamColumn {
         }))
     }
 }
+
+crate::register_physical_plan!(AddStreamColumn => crate::physical_plans::physical_add_stream_column::AddStreamColumn);

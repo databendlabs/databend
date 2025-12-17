@@ -133,3 +133,5 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
+
+crate::register_physical_plan!(CacheScan => crate::physical_plans::physical_cache_scan::CacheScan);

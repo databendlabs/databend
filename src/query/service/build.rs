@@ -1,0 +1,133 @@
+use std::env;
+use std::fs;
+use std::io::Write;
+use std::path::Path;
+
+fn main() {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+    let src_dir = Path::new(&manifest_dir).join("src");
+    let out_dir = Path::new(&env::var("OUT_DIR").expect("OUT_DIR not set")).to_path_buf();
+
+    let mut entries = collect_registrations(&src_dir);
+    entries.sort_by(|a, b| a.1.cmp(&b.1));
+
+    let out_path = out_dir.join("physical_plan_impls.rs");
+    write_impls(&out_path, &entries);
+
+    let dispatch_out = out_dir.join("physical_plan_dispatch.rs");
+    write_dispatch(&dispatch_out, &entries);
+
+    println!("cargo:rerun-if-changed={}", src_dir.display());
+}
+
+fn collect_registrations(src_dir: &Path) -> Vec<(Option<String>, String, String)> {
+    let mut entries = Vec::new();
+
+    for entry in walkdir::WalkDir::new(src_dir)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
+    {
+        if entry.path().extension().and_then(|s| s.to_str()) != Some("rs") {
+            continue;
+        }
+
+        let content = fs::read_to_string(entry.path())
+            .unwrap_or_else(|e| panic!("read {}: {e}", entry.path().display()));
+
+        for line in content.lines() {
+            if let Some(pos) = line.find("register_physical_plan!") {
+                let rest = &line[pos..];
+                if let Some((variant, path)) = parse_registration(rest) {
+                    entries.push((None, variant, path));
+                }
+            }
+        }
+    }
+
+    // test-only plan variant
+    entries.push((
+        Some("#[cfg(test)]".to_string()),
+        "StackDepthPlan".to_string(),
+        "crate::physical_plans::physical_plan::tests::StackDepthPlan".to_string(),
+    ));
+
+    entries
+}
+
+fn parse_registration(line: &str) -> Option<(String, String)> {
+    let start = line.find('(')? + 1;
+    let end = line.find(')')?;
+    let body = &line[start..end];
+    let mut parts = body.split("=>").map(str::trim);
+    let variant = parts.next()?.trim_end_matches(',');
+    let path = parts.next()?.trim_end_matches(',');
+
+    Some((variant.to_string(), path.to_string()))
+}
+
+fn write_impls(out_path: &Path, entries: &[(Option<String>, String, String)]) {
+    let mut out = String::new();
+    out.push_str("define_physical_plan_impl!(\n");
+
+    for (meta, variant, path) in entries {
+        if let Some(meta) = meta {
+            out.push_str("    ");
+            out.push_str(meta);
+            out.push('\n');
+        }
+        out.push_str("    ");
+        out.push_str(variant);
+        out.push_str(" => ");
+        out.push_str(path);
+        out.push_str(",\n");
+    }
+
+    out.push_str(");\n");
+
+    let mut file = fs::File::create(out_path).expect("create physical_plan_impls.rs");
+    file.write_all(out.as_bytes())
+        .expect("write physical_plan_impls.rs");
+}
+
+fn write_dispatch(out_path: &Path, entries: &[(Option<String>, String, String)]) {
+    let mut out = String::new();
+
+    out.push_str("macro_rules! dispatch_plan_ref {\n");
+    out.push_str("    ($s:expr, $plan:ident => $body:expr) => {\n");
+    out.push_str("        match $s.inner.as_ref() {\n");
+    for (meta, variant, _) in entries {
+        if let Some(meta) = meta {
+            out.push_str("            ");
+            out.push_str(meta);
+            out.push('\n');
+        }
+        out.push_str("            PhysicalPlanImpl::");
+        out.push_str(variant);
+        out.push_str("($plan) => $body,\n");
+    }
+    out.push_str("        }\n");
+    out.push_str("    };\n");
+    out.push_str("}\n\n");
+
+    out.push_str("macro_rules! dispatch_plan_mut {\n");
+    out.push_str("    ($s:expr, $plan:ident => $body:expr) => {\n");
+    out.push_str("        match $s.inner.as_mut() {\n");
+    for (meta, variant, _) in entries {
+        if let Some(meta) = meta {
+            out.push_str("            ");
+            out.push_str(meta);
+            out.push('\n');
+        }
+        out.push_str("            PhysicalPlanImpl::");
+        out.push_str(variant);
+        out.push_str("($plan) => $body,\n");
+    }
+    out.push_str("        }\n");
+    out.push_str("    };\n");
+    out.push_str("}\n");
+
+    let mut file = fs::File::create(out_path).expect("create physical_plan_dispatch.rs");
+    file.write_all(out.as_bytes())
+        .expect("write physical_plan_dispatch.rs");
+}

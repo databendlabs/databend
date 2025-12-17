@@ -145,3 +145,5 @@ impl IPhysicalPlan for RowFetch {
         Ok(())
     }
 }
+
+crate::register_physical_plan!(RowFetch => crate::physical_plans::physical_row_fetch::RowFetch);

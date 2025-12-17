@@ -146,3 +146,5 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
+
+crate::register_physical_plan!(ExpressionScan => crate::physical_plans::physical_expression_scan::ExpressionScan);

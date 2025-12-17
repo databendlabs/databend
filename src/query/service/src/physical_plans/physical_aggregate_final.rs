@@ -685,3 +685,5 @@ impl PhysicalPlanBuilder {
         Ok(result)
     }
 }
+
+crate::register_physical_plan!(AggregateFinal => crate::physical_plans::physical_aggregate_final::AggregateFinal);

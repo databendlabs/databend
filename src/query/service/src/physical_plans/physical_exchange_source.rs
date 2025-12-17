@@ -99,3 +99,5 @@ impl IPhysicalPlan for ExchangeSource {
         Ok(())
     }
 }
+
+crate::register_physical_plan!(ExchangeSource => crate::physical_plans::physical_exchange_source::ExchangeSource);

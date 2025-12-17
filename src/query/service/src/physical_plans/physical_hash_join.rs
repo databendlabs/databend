@@ -1362,3 +1362,5 @@ impl PhysicalPlanBuilder {
         )
     }
 }
+
+crate::register_physical_plan!(HashJoin => crate::physical_plans::physical_hash_join::HashJoin);

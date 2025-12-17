@@ -200,3 +200,5 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
+
+crate::register_physical_plan!(AsyncFunction => crate::physical_plans::physical_async_func::AsyncFunction);

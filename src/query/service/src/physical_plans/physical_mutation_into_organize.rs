@@ -137,3 +137,5 @@ impl MutationOrganize {
         builder.main_pipeline.resize_partial_one(ranges.clone())
     }
 }
+
+crate::register_physical_plan!(MutationOrganize => crate::physical_plans::physical_mutation_into_organize::MutationOrganize);

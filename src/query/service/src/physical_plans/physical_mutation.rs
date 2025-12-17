@@ -1069,3 +1069,5 @@ fn build_field_id_to_schema_index(
         }
     }
 }
+
+crate::register_physical_plan!(Mutation => crate::physical_plans::physical_mutation::Mutation);

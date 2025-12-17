@@ -248,3 +248,5 @@ impl PhysicalPlanBuilder {
         }))
     }
 }
+
+crate::register_physical_plan!(Limit => crate::physical_plans::physical_limit::Limit);

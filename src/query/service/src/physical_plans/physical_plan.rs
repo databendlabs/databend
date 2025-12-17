@@ -269,18 +269,16 @@ impl<T: IPhysicalPlan> PhysicalPlanCast for T {
 }
 
 macro_rules! define_physical_plan_impl {
-    ( $( $variant:ident => $path:path ),+ $(,)? ) => {
+    ( $( $(#[$meta:meta])? $variant:ident => $path:path ),+ $(,)? ) => {
         #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
         /// static dispatch replacement for typetag-based dynamic dispatch, performance improvement via reduced stack depth
         ///
         /// compatibility: [LegacyPhysicalPlanImpl](LegacyPhysicalPlanImpl)
         pub(crate) enum PhysicalPlanImpl {
-            $( $variant($path), )+
-            #[cfg(test)]
-            StackDepthPlan(crate::physical_plans::physical_plan::tests::StackDepthPlan),
+            $( $(#[$meta])? $variant($path), )+
         }
 
-        $( impl From<$path> for PhysicalPlanImpl {
+        $( $(#[$meta])? impl From<$path> for PhysicalPlanImpl {
             fn from(v: $path) -> Self {
                 PhysicalPlanImpl::$variant(v)
             }
@@ -291,24 +289,15 @@ macro_rules! define_physical_plan_impl {
                 type_name: &str,
                 value: JsonValue,
             ) -> std::result::Result<Option<Self>, E> {
-                $({
+                $(
+                    $(#[$meta])?
                     if type_name == std::any::type_name::<$path>()
                         || type_name == stringify!($variant)
                     {
                         let value = serde_json::from_value::<$path>(value).map_err(E::custom)?;
                         return Ok(Some(PhysicalPlanImpl::$variant(value)));
                     }
-                })+
-
-                #[cfg(test)]
-                if type_name
-                    == std::any::type_name::<crate::physical_plans::physical_plan::tests::StackDepthPlan>()
-                    || type_name == stringify!(StackDepthPlan)
-                {
-                    let value = serde_json::from_value::<crate::physical_plans::physical_plan::tests::StackDepthPlan>(value)
-                        .map_err(E::custom)?;
-                    return Ok(Some(PhysicalPlanImpl::StackDepthPlan(value)));
-                }
+                )+
 
                 Ok(None)
             }
@@ -316,204 +305,9 @@ macro_rules! define_physical_plan_impl {
     };
 }
 
-define_physical_plan_impl!(
-    AddStreamColumn => crate::physical_plans::physical_add_stream_column::AddStreamColumn,
-    AggregateExpand => crate::physical_plans::physical_aggregate_expand::AggregateExpand,
-    AggregateFinal => crate::physical_plans::physical_aggregate_final::AggregateFinal,
-    AggregatePartial => crate::physical_plans::physical_aggregate_partial::AggregatePartial,
-    AsyncFunction => crate::physical_plans::physical_async_func::AsyncFunction,
-    BroadcastSink => crate::physical_plans::physical_broadcast::BroadcastSink,
-    BroadcastSource => crate::physical_plans::physical_broadcast::BroadcastSource,
-    CacheScan => crate::physical_plans::physical_cache_scan::CacheScan,
-    ChunkAppendData => crate::physical_plans::physical_multi_table_insert::ChunkAppendData,
-    ChunkCastSchema => crate::physical_plans::physical_multi_table_insert::ChunkCastSchema,
-    ChunkCommitInsert => crate::physical_plans::physical_multi_table_insert::ChunkCommitInsert,
-    ChunkEvalScalar => crate::physical_plans::physical_multi_table_insert::ChunkEvalScalar,
-    ChunkFillAndReorder => crate::physical_plans::physical_multi_table_insert::ChunkFillAndReorder,
-    ChunkFilter => crate::physical_plans::physical_multi_table_insert::ChunkFilter,
-    ChunkMerge => crate::physical_plans::physical_multi_table_insert::ChunkMerge,
-    ColumnMutation => crate::physical_plans::physical_column_mutation::ColumnMutation,
-    CommitSink => crate::physical_plans::physical_commit_sink::CommitSink,
-    CompactSource => crate::physical_plans::physical_compact_source::CompactSource,
-    ConstantTableScan => crate::physical_plans::physical_constant_table_scan::ConstantTableScan,
-    CopyIntoLocation => crate::physical_plans::physical_copy_into_location::CopyIntoLocation,
-    CopyIntoTable => crate::physical_plans::physical_copy_into_table::CopyIntoTable,
-    DistributedInsertSelect => crate::physical_plans::physical_distributed_insert_select::DistributedInsertSelect,
-    Duplicate => crate::physical_plans::physical_multi_table_insert::Duplicate,
-    EvalScalar => crate::physical_plans::physical_eval_scalar::EvalScalar,
-    Exchange => crate::physical_plans::physical_exchange::Exchange,
-    ExchangeSink => crate::physical_plans::physical_exchange_sink::ExchangeSink,
-    ExchangeSource => crate::physical_plans::physical_exchange_source::ExchangeSource,
-    ExpressionScan => crate::physical_plans::physical_expression_scan::ExpressionScan,
-    Filter => crate::physical_plans::physical_filter::Filter,
-    HashJoin => crate::physical_plans::physical_hash_join::HashJoin,
-    HilbertPartition => crate::physical_plans::physical_recluster::HilbertPartition,
-    Limit => crate::physical_plans::physical_limit::Limit,
-    MaterializeCTERef => crate::physical_plans::physical_cte_consumer::MaterializeCTERef,
-    MaterializedCTE => crate::physical_plans::physical_materialized_cte::MaterializedCTE,
-    Mutation => crate::physical_plans::physical_mutation::Mutation,
-    MutationManipulate => crate::physical_plans::physical_mutation_manipulate::MutationManipulate,
-    MutationOrganize => crate::physical_plans::physical_mutation_into_organize::MutationOrganize,
-    MutationSource => crate::physical_plans::physical_mutation_source::MutationSource,
-    MutationSplit => crate::physical_plans::physical_mutation_into_split::MutationSplit,
-    ProjectSet => crate::physical_plans::physical_project_set::ProjectSet,
-    RangeJoin => crate::physical_plans::physical_range_join::RangeJoin,
-    Recluster => crate::physical_plans::physical_recluster::Recluster,
-    RecursiveCteScan => crate::physical_plans::physical_r_cte_scan::RecursiveCteScan,
-    ReplaceAsyncSourcer => crate::physical_plans::physical_replace_async_source::ReplaceAsyncSourcer,
-    ReplaceDeduplicate => crate::physical_plans::physical_replace_deduplicate::ReplaceDeduplicate,
-    ReplaceInto => crate::physical_plans::physical_replace_into::ReplaceInto,
-    RowFetch => crate::physical_plans::physical_row_fetch::RowFetch,
-    SecureFilter => crate::physical_plans::physical_secure_filter::SecureFilter,
-    Sequence => crate::physical_plans::physical_sequence::Sequence,
-    SerializedPhysicalPlanRef => crate::servers::flight::v1::packets::packet_fragment::SerializedPhysicalPlanRef,
-    Shuffle => crate::physical_plans::physical_multi_table_insert::Shuffle,
-    Sort => crate::physical_plans::physical_sort::Sort,
-    TableScan => crate::physical_plans::physical_table_scan::TableScan,
-    Udf => crate::physical_plans::physical_udf::Udf,
-    UnionAll => crate::physical_plans::physical_union_all::UnionAll,
-    Window => crate::physical_plans::physical_window::Window,
-    WindowPartition => crate::physical_plans::physical_window_partition::WindowPartition,
-);
+include!(concat!(env!("OUT_DIR"), "/physical_plan_impls.rs"));
 
-macro_rules! dispatch_plan_ref {
-    ($s:expr, $plan:ident => $body:expr) => {
-        match $s.inner.as_ref() {
-            PhysicalPlanImpl::AddStreamColumn($plan) => $body,
-            PhysicalPlanImpl::AggregateExpand($plan) => $body,
-            PhysicalPlanImpl::AggregateFinal($plan) => $body,
-            PhysicalPlanImpl::AggregatePartial($plan) => $body,
-            PhysicalPlanImpl::AsyncFunction($plan) => $body,
-            PhysicalPlanImpl::BroadcastSink($plan) => $body,
-            PhysicalPlanImpl::BroadcastSource($plan) => $body,
-            PhysicalPlanImpl::CacheScan($plan) => $body,
-            PhysicalPlanImpl::ChunkAppendData($plan) => $body,
-            PhysicalPlanImpl::ChunkCastSchema($plan) => $body,
-            PhysicalPlanImpl::ChunkCommitInsert($plan) => $body,
-            PhysicalPlanImpl::ChunkEvalScalar($plan) => $body,
-            PhysicalPlanImpl::ChunkFillAndReorder($plan) => $body,
-            PhysicalPlanImpl::ChunkFilter($plan) => $body,
-            PhysicalPlanImpl::ChunkMerge($plan) => $body,
-            PhysicalPlanImpl::ColumnMutation($plan) => $body,
-            PhysicalPlanImpl::CommitSink($plan) => $body,
-            PhysicalPlanImpl::CompactSource($plan) => $body,
-            PhysicalPlanImpl::ConstantTableScan($plan) => $body,
-            PhysicalPlanImpl::CopyIntoLocation($plan) => $body,
-            PhysicalPlanImpl::CopyIntoTable($plan) => $body,
-            PhysicalPlanImpl::DistributedInsertSelect($plan) => $body,
-            PhysicalPlanImpl::Duplicate($plan) => $body,
-            PhysicalPlanImpl::EvalScalar($plan) => $body,
-            PhysicalPlanImpl::Exchange($plan) => $body,
-            PhysicalPlanImpl::ExchangeSink($plan) => $body,
-            PhysicalPlanImpl::ExchangeSource($plan) => $body,
-            PhysicalPlanImpl::ExpressionScan($plan) => $body,
-            PhysicalPlanImpl::Filter($plan) => $body,
-            PhysicalPlanImpl::HashJoin($plan) => $body,
-            PhysicalPlanImpl::HilbertPartition($plan) => $body,
-            PhysicalPlanImpl::Limit($plan) => $body,
-            PhysicalPlanImpl::MaterializeCTERef($plan) => $body,
-            PhysicalPlanImpl::MaterializedCTE($plan) => $body,
-            PhysicalPlanImpl::Mutation($plan) => $body,
-            PhysicalPlanImpl::MutationManipulate($plan) => $body,
-            PhysicalPlanImpl::MutationOrganize($plan) => $body,
-            PhysicalPlanImpl::MutationSource($plan) => $body,
-            PhysicalPlanImpl::MutationSplit($plan) => $body,
-            PhysicalPlanImpl::ProjectSet($plan) => $body,
-            PhysicalPlanImpl::RangeJoin($plan) => $body,
-            PhysicalPlanImpl::Recluster($plan) => $body,
-            PhysicalPlanImpl::RecursiveCteScan($plan) => $body,
-            PhysicalPlanImpl::ReplaceAsyncSourcer($plan) => $body,
-            PhysicalPlanImpl::ReplaceDeduplicate($plan) => $body,
-            PhysicalPlanImpl::ReplaceInto($plan) => $body,
-            PhysicalPlanImpl::RowFetch($plan) => $body,
-            PhysicalPlanImpl::SecureFilter($plan) => $body,
-            PhysicalPlanImpl::Sequence($plan) => $body,
-            PhysicalPlanImpl::SerializedPhysicalPlanRef($plan) => $body,
-            PhysicalPlanImpl::Shuffle($plan) => $body,
-            PhysicalPlanImpl::Sort($plan) => $body,
-            PhysicalPlanImpl::TableScan($plan) => $body,
-            PhysicalPlanImpl::Udf($plan) => $body,
-            PhysicalPlanImpl::UnionAll($plan) => $body,
-            PhysicalPlanImpl::Window($plan) => $body,
-            PhysicalPlanImpl::WindowPartition($plan) => $body,
-            #[cfg(test)]
-            PhysicalPlanImpl::StackDepthPlan($plan) => $body,
-        }
-    };
-}
-
-macro_rules! dispatch_plan_mut {
-    ($s:expr, $plan:ident => $body:expr) => {
-        match $s.inner.as_mut() {
-            PhysicalPlanImpl::AddStreamColumn($plan) => $body,
-            PhysicalPlanImpl::AggregateExpand($plan) => $body,
-            PhysicalPlanImpl::AggregateFinal($plan) => $body,
-            PhysicalPlanImpl::AggregatePartial($plan) => $body,
-            PhysicalPlanImpl::AsyncFunction($plan) => $body,
-            PhysicalPlanImpl::BroadcastSink($plan) => $body,
-            PhysicalPlanImpl::BroadcastSource($plan) => $body,
-            PhysicalPlanImpl::CacheScan($plan) => $body,
-            PhysicalPlanImpl::ChunkAppendData($plan) => $body,
-            PhysicalPlanImpl::ChunkCastSchema($plan) => $body,
-            PhysicalPlanImpl::ChunkCommitInsert($plan) => $body,
-            PhysicalPlanImpl::ChunkEvalScalar($plan) => $body,
-            PhysicalPlanImpl::ChunkFillAndReorder($plan) => $body,
-            PhysicalPlanImpl::ChunkFilter($plan) => $body,
-            PhysicalPlanImpl::ChunkMerge($plan) => $body,
-            PhysicalPlanImpl::ColumnMutation($plan) => $body,
-            PhysicalPlanImpl::CommitSink($plan) => $body,
-            PhysicalPlanImpl::CompactSource($plan) => $body,
-            PhysicalPlanImpl::ConstantTableScan($plan) => $body,
-            PhysicalPlanImpl::CopyIntoLocation($plan) => $body,
-            PhysicalPlanImpl::CopyIntoTable($plan) => $body,
-            PhysicalPlanImpl::DistributedInsertSelect($plan) => $body,
-            PhysicalPlanImpl::Duplicate($plan) => $body,
-            PhysicalPlanImpl::EvalScalar($plan) => $body,
-            PhysicalPlanImpl::Exchange($plan) => $body,
-            PhysicalPlanImpl::ExchangeSink($plan) => $body,
-            PhysicalPlanImpl::ExchangeSource($plan) => $body,
-            PhysicalPlanImpl::ExpressionScan($plan) => $body,
-            PhysicalPlanImpl::Filter($plan) => $body,
-            PhysicalPlanImpl::HashJoin($plan) => $body,
-            PhysicalPlanImpl::HilbertPartition($plan) => $body,
-            PhysicalPlanImpl::Limit($plan) => $body,
-            PhysicalPlanImpl::MaterializeCTERef($plan) => $body,
-            PhysicalPlanImpl::MaterializedCTE($plan) => $body,
-            PhysicalPlanImpl::Mutation($plan) => $body,
-            PhysicalPlanImpl::MutationManipulate($plan) => $body,
-            PhysicalPlanImpl::MutationOrganize($plan) => $body,
-            PhysicalPlanImpl::MutationSource($plan) => $body,
-            PhysicalPlanImpl::MutationSplit($plan) => $body,
-            PhysicalPlanImpl::ProjectSet($plan) => $body,
-            PhysicalPlanImpl::RangeJoin($plan) => $body,
-            PhysicalPlanImpl::Recluster($plan) => $body,
-            PhysicalPlanImpl::RecursiveCteScan($plan) => $body,
-            PhysicalPlanImpl::ReplaceAsyncSourcer($plan) => $body,
-            PhysicalPlanImpl::ReplaceDeduplicate($plan) => $body,
-            PhysicalPlanImpl::ReplaceInto($plan) => $body,
-            PhysicalPlanImpl::RowFetch($plan) => $body,
-            PhysicalPlanImpl::SecureFilter($plan) => $body,
-            PhysicalPlanImpl::Sequence($plan) => $body,
-            PhysicalPlanImpl::SerializedPhysicalPlanRef($plan) => $body,
-            PhysicalPlanImpl::Shuffle($plan) => $body,
-            PhysicalPlanImpl::Sort($plan) => $body,
-            PhysicalPlanImpl::TableScan($plan) => $body,
-            PhysicalPlanImpl::Udf($plan) => $body,
-            PhysicalPlanImpl::UnionAll($plan) => $body,
-            PhysicalPlanImpl::Window($plan) => $body,
-            PhysicalPlanImpl::WindowPartition($plan) => $body,
-            #[cfg(test)]
-            PhysicalPlanImpl::StackDepthPlan($plan) => $body,
-        }
-    };
-}
-
-#[cfg(test)]
-impl From<crate::physical_plans::physical_plan::tests::StackDepthPlan> for PhysicalPlanImpl {
-    fn from(v: crate::physical_plans::physical_plan::tests::StackDepthPlan) -> Self {
-        PhysicalPlanImpl::StackDepthPlan(v)
-    }
-}
+include!(concat!(env!("OUT_DIR"), "/physical_plan_dispatch.rs"));
 
 pub struct PhysicalPlan {
     inner: Box<PhysicalPlanImpl>,

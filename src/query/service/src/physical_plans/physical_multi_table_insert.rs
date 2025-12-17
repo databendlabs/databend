@@ -796,3 +796,21 @@ impl IPhysicalPlan for ChunkCommitInsert {
         })
     }
 }
+
+crate::register_physical_plan!(ChunkAppendData => crate::physical_plans::physical_multi_table_insert::ChunkAppendData);
+
+crate::register_physical_plan!(ChunkCastSchema => crate::physical_plans::physical_multi_table_insert::ChunkCastSchema);
+
+crate::register_physical_plan!(ChunkCommitInsert => crate::physical_plans::physical_multi_table_insert::ChunkCommitInsert);
+
+crate::register_physical_plan!(ChunkEvalScalar => crate::physical_plans::physical_multi_table_insert::ChunkEvalScalar);
+
+crate::register_physical_plan!(ChunkFillAndReorder => crate::physical_plans::physical_multi_table_insert::ChunkFillAndReorder);
+
+crate::register_physical_plan!(ChunkFilter => crate::physical_plans::physical_multi_table_insert::ChunkFilter);
+
+crate::register_physical_plan!(ChunkMerge => crate::physical_plans::physical_multi_table_insert::ChunkMerge);
+
+crate::register_physical_plan!(Duplicate => crate::physical_plans::physical_multi_table_insert::Duplicate);
+
+crate::register_physical_plan!(Shuffle => crate::physical_plans::physical_multi_table_insert::Shuffle);

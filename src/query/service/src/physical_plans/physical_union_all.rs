@@ -314,3 +314,5 @@ fn process_outputs(
     }
     Ok(results)
 }
+
+crate::register_physical_plan!(UnionAll => crate::physical_plans::physical_union_all::UnionAll);
