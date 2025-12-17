@@ -404,8 +404,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         .session_token(&cfg.security_token)
         .role_arn(&cfg.role_arn)
         .external_id(&cfg.external_id)
-        // It's safe to allow anonymous since opendal will perform the check first.
-        .allow_anonymous()
+        // Don't enable it otherwise we will get Permission in stat unknow files
+        // .allow_anonymous()
         // Root.
         .root(&cfg.root);
 

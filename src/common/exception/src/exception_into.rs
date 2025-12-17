@@ -188,9 +188,9 @@ impl From<opendal::Error> for ErrorCode {
                 ErrorCode::StorageNotFound(error.message()).add_detail(error.to_string())
             }
             opendal::ErrorKind::PermissionDenied => {
-                ErrorCode::StoragePermissionDenied(error.to_string())
+                ErrorCode::StoragePermissionDenied(error.message()).add_detail(error.to_string())
             }
-            _ => ErrorCode::StorageOther(format!("{error:?}")),
+            _ => ErrorCode::StorageOther(error.message()).add_detail(error.to_string()),
         }
     }
 }
