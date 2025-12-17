@@ -1535,10 +1535,10 @@ impl DefaultSettings {
             Some(conf) => {
                 let mut num_cpus = num_cpus::get() as u64;
 
-                if conf.storage.params.is_fs() {
-                    if let Ok(n) = std::thread::available_parallelism() {
-                        num_cpus = n.get() as u64;
-                    }
+                if conf.storage.params.is_fs()
+                    && let Ok(n) = std::thread::available_parallelism()
+                {
+                    num_cpus = n.get() as u64;
 
                     // Most of x86_64 CPUs have 2-way Hyper-Threading
                     #[cfg(target_arch = "x86_64")]
