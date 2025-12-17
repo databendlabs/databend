@@ -579,6 +579,7 @@ if [ ! -f rust-toolchain.toml ]; then
 	exit 1
 fi
 RUST_TOOLCHAIN="$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)"
+MUSL_TARGET="$(uname -m)-unknown-linux-musl"
 
 PACKAGE_MANAGER=
 if [[ "$(uname)" == "Linux" ]]; then
@@ -661,23 +662,24 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 
 	if [[ "$(uname)" == "Linux" ]]; then
-		export CARGO_BUILD_TARGET="$(uname -m)-unknown-linux-musl"
+		export CARGO_BUILD_TARGET="${MUSL_TARGET}"
 	fi
-	cargo binstall -y sccache
-	cargo binstall -y cargo-zigbuild
-	cargo binstall -y cargo-nextest
+	cargo binstall -y --disable-strategies compile sccache
+	cargo binstall -y --disable-strategies compile cargo-nextest
+	unset CARGO_BUILD_TARGET
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
 	if [[ "$(uname)" == "Linux" ]]; then
 		# install musl target to avoid downloading the tools with incompatible GLIBC
-		export CARGO_BUILD_TARGET="$(uname -m)-unknown-linux-musl"
+		export CARGO_BUILD_TARGET="${MUSL_TARGET}"
 	fi
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		while read -r tool; do
-			cargo binstall -y "$tool"
+			cargo binstall -y --disable-strategies compile "$tool"
 		done <scripts/setup/rust-tools.txt
 	fi
+	unset CARGO_BUILD_TARGET
 
 	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
 		# needed by lcov
