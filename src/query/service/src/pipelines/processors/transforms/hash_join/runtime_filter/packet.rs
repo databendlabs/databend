@@ -178,12 +178,15 @@ impl TryInto<DataBlock> for JoinRuntimeFilterPacket {
             join_flight_packets = Some(flight_packets);
         }
 
-        DataBlock::new_from_columns(entities).add_meta(Some(Box::new(
-            FlightJoinRuntimeFilterPacket {
-                build_rows: self.build_rows,
-                packets: join_flight_packets,
-            },
-        )))
+        let data_block = match entities.is_empty() {
+            true => DataBlock::empty(),
+            false => DataBlock::new_from_columns(entities),
+        };
+
+        data_block.add_meta(Some(Box::new(FlightJoinRuntimeFilterPacket {
+            build_rows: self.build_rows,
+            packets: join_flight_packets,
+        })))
     }
 }
 
