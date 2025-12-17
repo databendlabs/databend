@@ -271,6 +271,9 @@ impl<T: IPhysicalPlan> PhysicalPlanCast for T {
 macro_rules! define_physical_plan_impl {
     ( $( $variant:ident => $path:path ),+ $(,)? ) => {
         #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+        /// static dispatch replacement for typetag-based dynamic dispatch, performance improvement via reduced stack depth
+        ///
+        /// compatibility: [LegacyPhysicalPlanImpl](LegacyPhysicalPlanImpl)
         pub(crate) enum PhysicalPlanImpl {
             $( $variant($path), )+
             #[cfg(test)]
@@ -841,7 +844,7 @@ mod tests {
                 line.trim_start()
                     .chars()
                     .next()
-                    .map_or(false, |c| c.is_ascii_digit())
+                    .is_some_and(|c| c.is_ascii_digit())
             })
             .count()
     }
@@ -917,15 +920,13 @@ mod tests {
         match value {
             Value::Object(map) => {
                 if map.len() == 1 {
-                    if let Some((variant, inner)) = map.iter().next() {
-                        if let Value::Object(inner_obj) = inner {
-                            let mut legacy = serde_json::Map::new();
-                            legacy.insert("type".to_string(), Value::String(variant.clone()));
-                            for (k, v) in inner_obj {
-                                legacy.insert(k.clone(), convert_to_legacy(v));
-                            }
-                            return Value::Object(legacy);
+                    if let Some((variant, Value::Object(inner_obj))) = map.iter().next() {
+                        let mut legacy = serde_json::Map::new();
+                        legacy.insert("type".to_string(), Value::String(variant.clone()));
+                        for (k, v) in inner_obj {
+                            legacy.insert(k.clone(), convert_to_legacy(v));
                         }
+                        return Value::Object(legacy);
                     }
                 }
 
