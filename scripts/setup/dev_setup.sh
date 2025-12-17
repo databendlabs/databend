@@ -630,7 +630,16 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	cargo binstall -y --disable-strategies compile sccache
 	sccache --version
-	cargo binstall -y --disable-strategies compile cargo-nextest
+
+	if [[ "$(uname)" == "Linux" ]]; then
+		if [[ "$(uname -m)" == "x86_64" ]]; then
+			curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C "${CARGO_HOME:-~/.cargo}/bin"
+		elif [[ "$(uname -m)" == "aarch64" ]]; then
+			curl -LsSf https://get.nexte.st/latest/linux-arm | tar zxf - -C "${CARGO_HOME:-~/.cargo}/bin"
+		fi
+	elif [[ "$(uname)" == "Darwin" ]]; then
+		brew install cargo-nextest
+	fi
 	cargo nextest --version
 fi
 
