@@ -398,10 +398,233 @@ function install_rustup {
 	else
 		curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "${RUST_TOOLCHAIN}" --profile minimal
 		PATH="${HOME}/.cargo/bin:${PATH}"
-		source $HOME/.cargo/env
+		source "$HOME"/.cargo/env
 	fi
 
 	rustup show
+}
+
+function install_sccache {
+	local version="$1"
+
+	echo "==> installing sccache..."
+	if sccache --version &>/dev/null; then
+		echo "sccache is already installed"
+		return
+	fi
+
+	if [[ -z "$version" ]]; then
+		echo "Missing sccache version"
+		return 1
+	fi
+
+	local os
+	os="$(uname -s)"
+	if [[ "$os" == "Darwin" ]]; then
+		brew install sccache
+		sccache --version
+		return
+	fi
+
+	if [[ "$os" != "Linux" ]]; then
+		echo "Unsupported operating system for sccache: $(uname -s)"
+		return 1
+	fi
+
+	local arch triple asset url tmpdir extract_dir cargo_bin
+	case "$(uname -m)" in
+	x86_64 | amd64)
+		triple="x86_64-unknown-linux-musl"
+		;;
+	aarch64 | arm64)
+		triple="aarch64-unknown-linux-musl"
+		;;
+	*)
+		echo "Unsupported architecture for sccache: $(uname -m)"
+		return 1
+		;;
+	esac
+
+	asset="sccache-${version}-${triple}.tar.gz"
+	url="https://github.com/mozilla/sccache/releases/download/${version}/${asset}"
+	tmpdir=$(mktemp -d)
+	if ! curl -fsSL "$url" -o "${tmpdir}/${asset}"; then
+		rm -rf "$tmpdir"
+		echo "Failed to download sccache from ${url}"
+		return 1
+	fi
+
+	if ! tar -xzf "${tmpdir}/${asset}" -C "$tmpdir"; then
+		rm -rf "$tmpdir"
+		echo "Failed to extract sccache archive"
+		return 1
+	fi
+
+	CARGO_HOME="${CARGO_HOME:-${HOME}/.cargo}"
+	cargo_bin="${CARGO_HOME}/bin"
+	mkdir -p "$cargo_bin"
+	extract_dir="${tmpdir}/sccache-${version}-${triple}"
+	if [[ ! -f "${extract_dir}/sccache" ]]; then
+		rm -rf "$tmpdir"
+		echo "sccache binary not found in archive"
+		return 1
+	fi
+
+	install -m 755 "${extract_dir}/sccache" "${cargo_bin}/sccache"
+	rm -rf "$tmpdir"
+
+	sccache --version
+}
+
+function install_cargo_nextest {
+	CARGO_HOME="${CARGO_HOME:-${HOME}/.cargo}"
+	if [[ "$(uname -s)" == "Darwin" ]]; then
+		brew install cargo-nextest
+	else
+		if [[ "$(uname -s)" != "Linux" ]]; then
+			echo "Unsupported operating system for cargo-nextest: $(uname -s)"
+			return 1
+		fi
+		local nextest_url
+		case "$(uname -m)" in
+		x86_64 | amd64)
+			nextest_url="https://get.nexte.st/latest/linux"
+			;;
+		aarch64 | arm64)
+			nextest_url="https://get.nexte.st/latest/linux-arm"
+			;;
+		*)
+			echo "Unsupported architecture for cargo-nextest: $(uname -m)"
+			return 1
+			;;
+		esac
+		mkdir -p "${CARGO_HOME}/bin"
+		curl -LsSf "${nextest_url}" | tar zxf - -C "${CARGO_HOME}/bin"
+	fi
+	cargo nextest --version
+}
+
+function install_taplo_cli {
+	echo "==> installing taplo CLI..."
+	if taplo --version &>/dev/null; then
+		echo "taplo CLI is already installed"
+		return
+	fi
+
+	local os
+	os="$(uname -s)"
+	if [[ "$os" == "Darwin" ]]; then
+		brew install taplo
+		taplo --version
+		return
+	fi
+
+	if [[ "$os" != "Linux" ]]; then
+		echo "Unsupported operating system for taplo CLI: $(uname -s)"
+		return 1
+	fi
+
+	local taplo_bin arch asset url tmpfile
+	CARGO_HOME="${CARGO_HOME:-${HOME}/.cargo}"
+	taplo_bin="${CARGO_HOME}/bin"
+	mkdir -p "$taplo_bin"
+
+	case "$(uname -m)" in
+	x86_64 | amd64)
+		arch="x86_64"
+		;;
+	aarch64 | arm64)
+		arch="aarch64"
+		;;
+	*)
+		echo "Unsupported architecture for taplo CLI: $(uname -m)"
+		return 1
+		;;
+	esac
+
+	asset="taplo-linux-${arch}.gz"
+	url="https://github.com/tamasfe/taplo/releases/latest/download/${asset}"
+
+	tmpfile=$(mktemp)
+	if ! curl -fsSL "$url" | gzip -dc >"$tmpfile"; then
+		rm -f "$tmpfile"
+		echo "Failed to download taplo CLI from ${url}"
+		return 1
+	fi
+
+	chmod +x "$tmpfile"
+	install -m 755 "$tmpfile" "${taplo_bin}/taplo"
+	rm -f "$tmpfile"
+
+	"${taplo_bin}/taplo" --version
+}
+
+function install_typos_cli {
+	echo "==> installing typos CLI..."
+	if typos --version &>/dev/null; then
+		echo "typos CLI is already installed"
+		return
+	fi
+
+	local os
+	os="$(uname -s)"
+	if [[ "$os" == "Darwin" ]]; then
+		brew install typos-cli
+		typos --version
+		return
+	fi
+
+	if [[ "$os" != "Linux" ]]; then
+		echo "Unsupported operating system for typos CLI: $(uname -s)"
+		return 1
+	fi
+
+	local typos_bin arch triple version tag package url tmpdir
+	CARGO_HOME="${CARGO_HOME:-${HOME}/.cargo}"
+	typos_bin="${CARGO_HOME}/bin"
+	mkdir -p "$typos_bin"
+
+	case "$(uname -m)" in
+	x86_64 | amd64)
+		triple="x86_64-unknown-linux-musl"
+		;;
+	aarch64 | arm64)
+		triple="aarch64-unknown-linux-musl"
+		;;
+	*)
+		echo "Unsupported architecture for typos CLI: $(uname -m)"
+		return 1
+		;;
+	esac
+
+	version="1.40.0"
+	tag="v${version}"
+	package="typos-${tag}-${triple}.tar.gz"
+	url="https://github.com/crate-ci/typos/releases/download/${tag}/${package}"
+
+	tmpdir=$(mktemp -d)
+	if ! curl -fsSL "$url" -o "${tmpdir}/${package}"; then
+		rm -rf "$tmpdir"
+		echo "Failed to download typos CLI from ${url}"
+		return 1
+	fi
+
+	if ! tar -xzf "${tmpdir}/${package}" -C "$tmpdir"; then
+		rm -rf "$tmpdir"
+		echo "Failed to extract typos CLI package"
+		return 1
+	fi
+
+	if [[ ! -f "${tmpdir}/typos" ]]; then
+		rm -rf "$tmpdir"
+		echo "typos binary not found in package ${package}"
+		return 1
+	fi
+
+	install -m 755 "${tmpdir}/typos" "${typos_bin}/typos"
+	rm -rf "$tmpdir"
+
+	"${typos_bin}/typos" --version
 }
 
 function usage {
@@ -446,7 +669,8 @@ EOF
 		cat <<EOF
 Check tools (since -c was provided):
   * lcov
-  * tools from rust-tools.txt ( e.g. cargo-audit, cargo-machete, taplo-cli)
+  * taplo CLI
+  * typos CLI
 EOF
 	fi
 
@@ -547,7 +771,6 @@ if [ ! -f rust-toolchain.toml ]; then
 	exit 1
 fi
 RUST_TOOLCHAIN="$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)"
-MUSL_TARGET="$(uname -m)-unknown-linux-musl"
 
 PACKAGE_MANAGER=
 if [[ "$(uname)" == "Linux" ]]; then
@@ -625,43 +848,19 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
 
-	CARGO_HOME="${CARGO_HOME:-${HOME}/.cargo}"
-
-	## install cargo-binstall
-	curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-
-	cargo binstall -y --disable-strategies compile sccache
-	sccache --version
-
-	if [[ "$(uname)" == "Linux" ]]; then
-		if [[ "$(uname -m)" == "x86_64" ]]; then
-			curl -LsSf https://get.nexte.st/latest/linux | tar zxf - -C "${CARGO_HOME}/bin"
-		elif [[ "$(uname -m)" == "aarch64" ]]; then
-			curl -LsSf https://get.nexte.st/latest/linux-arm | tar zxf - -C "${CARGO_HOME}/bin"
-		fi
-	elif [[ "$(uname)" == "Darwin" ]]; then
-		brew install cargo-nextest
-	fi
-	cargo nextest --version
+	install_sccache "v0.12.0"
+	install_cargo_nextest
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
-	if [[ "$(uname)" == "Linux" ]]; then
-		# install musl target to avoid downloading the tools with incompatible GLIBC
-		export CARGO_BUILD_TARGET="${MUSL_TARGET}"
-	fi
-	if [[ -f scripts/setup/rust-tools.txt ]]; then
-		while read -r tool; do
-			cargo binstall -y --disable-strategies compile "$tool"
-		done <scripts/setup/rust-tools.txt
-	fi
-	unset CARGO_BUILD_TARGET
-
 	if [[ "$PACKAGE_MANAGER" == "apk" ]]; then
 		# needed by lcov
 		echo http://nl.alpinelinux.org/alpine/edge/testing >>/etc/apk/repositories
 	fi
 	install_pkg lcov "$PACKAGE_MANAGER"
+
+	install_taplo_cli
+	install_typos_cli
 fi
 
 if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
