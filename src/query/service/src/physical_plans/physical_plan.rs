@@ -850,6 +850,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::type_complexity)]
     fn legacy_typetag_format_can_be_deserialized() {
         let samples: Vec<(PhysicalPlan, &'static str, fn(&PhysicalPlan) -> bool)> = vec![
             (sample_serialized_ref(), "SerializedPhysicalPlanRef", |p| {
