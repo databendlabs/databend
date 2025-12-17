@@ -2,28 +2,28 @@ Limit
 ├── limit: [100]
 ├── offset: [0]
 └── Sort
-    ├── sort keys: [default.customer.c_customer_id (#79) ASC NULLS LAST]
+    ├── sort keys: [customer.c_customer_id (#79) ASC NULLS LAST]
     ├── limit: [100]
     └── Exchange(MergeSort)
         └── Sort
-            ├── sort keys: [default.customer.c_customer_id (#79) ASC NULLS LAST]
+            ├── sort keys: [customer.c_customer_id (#79) ASC NULLS LAST]
             ├── limit: [100]
             └── EvalScalar
-                ├── scalars: [customer.c_customer_id (#79) AS (#79), ctr1.ctr_total_return (#48) AS (#154), scalar_subquery_147 (#147) AS (#155), store.s_store_sk (#49) AS (#156), ctr1.ctr_store_sk (#7) AS (#157), store.s_state (#73) AS (#158), ctr1.ctr_customer_sk (#3) AS (#159), customer.c_customer_sk (#78) AS (#160)]
+                ├── scalars: [customer.c_customer_id (#79) AS (#79), Sum(sr_return_amt) (#48) AS (#154), sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147) AS (#155), store.s_store_sk (#49) AS (#156), store_returns.sr_store_sk (#7) AS (#157), store.s_state (#73) AS (#158), store_returns.sr_customer_sk (#3) AS (#159), customer.c_customer_sk (#78) AS (#160)]
                 └── Join(Inner)
                     ├── build keys: [customer.c_customer_sk (#78)]
-                    ├── probe keys: [ctr1.ctr_customer_sk (#3)]
+                    ├── probe keys: [store_returns.sr_customer_sk (#3)]
                     ├── other filters: []
                     ├── Join(Inner)
-                    │   ├── build keys: [sr_store_sk (#103)]
-                    │   ├── probe keys: [sr_store_sk (#7)]
-                    │   ├── other filters: [gt(ctr1.ctr_total_return (#48), scalar_subquery_147 (#147))]
+                    │   ├── build keys: [store_returns.sr_store_sk (#103)]
+                    │   ├── probe keys: [store_returns.sr_store_sk (#7)]
+                    │   ├── other filters: [gt(Sum(sr_return_amt) (#48), sum(ctr_total_return) / if(count(ctr_total_return) = 0, 1, count(ctr_total_return)) * 1.2 (#147))]
                     │   ├── Aggregate(Final)
                     │   │   ├── group items: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7)]
-                    │   │   ├── aggregate functions: [Sum(sr_return_amt) AS (#48)]
+                    │   │   ├── aggregate functions: [sum(store_returns.sr_return_amt (#11)) AS (#48)]
                     │   │   └── Aggregate(Partial)
                     │   │       ├── group items: [store_returns.sr_customer_sk (#3) AS (#3), store_returns.sr_store_sk (#7) AS (#7)]
-                    │   │       ├── aggregate functions: [Sum(sr_return_amt) AS (#48)]
+                    │   │       ├── aggregate functions: [sum(store_returns.sr_return_amt (#11)) AS (#48)]
                     │   │       └── Exchange(Hash)
                     │   │           ├── Exchange(Hash): keys: [store_returns.sr_customer_sk (#3)]
                     │   │           └── EvalScalar
@@ -45,7 +45,7 @@ Limit
                     │   │                           └── limit: NONE
                     │   └── Exchange(Broadcast)
                     │       └── Join(Inner)
-                    │           ├── build keys: [sr_store_sk (#103)]
+                    │           ├── build keys: [store_returns.sr_store_sk (#103)]
                     │           ├── probe keys: [store.s_store_sk (#49)]
                     │           ├── other filters: []
                     │           ├── Scan
@@ -55,21 +55,21 @@ Limit
                     │           │   └── limit: NONE
                     │           └── Exchange(Broadcast)
                     │               └── EvalScalar
-                    │                   ├── scalars: [outer.sr_store_sk (#103) AS (#103), multiply(divide(sum(ctr_total_return) (#145), if(eq(count(ctr_total_return) (#146), 0), 1, count(ctr_total_return) (#146))), 1.2) AS (#147)]
+                    │                   ├── scalars: [store_returns.sr_store_sk (#103) AS (#103), multiply(divide(sum(ctr_total_return) (#145), if(eq(count(ctr_total_return) (#146), 0), 1, count(ctr_total_return) (#146))), 1.2) AS (#147)]
                     │                   └── Aggregate(Final)
-                    │                       ├── group items: [outer.sr_store_sk (#103) AS (#103)]
-                    │                       ├── aggregate functions: [sum(ctr_total_return) AS (#145), count(ctr_total_return) AS (#146)]
+                    │                       ├── group items: [store_returns.sr_store_sk (#103) AS (#103)]
+                    │                       ├── aggregate functions: [sum(Sum(sr_return_amt) (#144)) AS (#145), count(Sum(sr_return_amt) (#144)) AS (#146)]
                     │                       └── Aggregate(Partial)
-                    │                           ├── group items: [outer.sr_store_sk (#103) AS (#103)]
-                    │                           ├── aggregate functions: [sum(ctr_total_return) AS (#145), count(ctr_total_return) AS (#146)]
+                    │                           ├── group items: [store_returns.sr_store_sk (#103) AS (#103)]
+                    │                           ├── aggregate functions: [sum(Sum(sr_return_amt) (#144)) AS (#145), count(Sum(sr_return_amt) (#144)) AS (#146)]
                     │                           └── Exchange(Hash)
-                    │                               ├── Exchange(Hash): keys: [outer.sr_store_sk (#103)]
+                    │                               ├── Exchange(Hash): keys: [store_returns.sr_store_sk (#103)]
                     │                               └── Aggregate(Final)
                     │                                   ├── group items: [store_returns.sr_customer_sk (#99) AS (#99), store_returns.sr_store_sk (#103) AS (#103)]
-                    │                                   ├── aggregate functions: [Sum(sr_return_amt) AS (#144)]
+                    │                                   ├── aggregate functions: [sum(store_returns.sr_return_amt (#107)) AS (#144)]
                     │                                   └── Aggregate(Partial)
                     │                                       ├── group items: [store_returns.sr_customer_sk (#99) AS (#99), store_returns.sr_store_sk (#103) AS (#103)]
-                    │                                       ├── aggregate functions: [Sum(sr_return_amt) AS (#144)]
+                    │                                       ├── aggregate functions: [sum(store_returns.sr_return_amt (#107)) AS (#144)]
                     │                                       └── Exchange(Hash)
                     │                                           ├── Exchange(Hash): keys: [store_returns.sr_customer_sk (#99)]
                     │                                           └── EvalScalar

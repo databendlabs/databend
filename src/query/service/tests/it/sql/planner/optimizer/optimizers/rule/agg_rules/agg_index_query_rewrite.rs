@@ -15,12 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_base::base::tokio;
-use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
@@ -37,16 +32,15 @@ use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::BindContext;
-use databend_common_sql::Binder;
-use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
-use databend_common_sql::NameResolutionContext;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
+use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
-use parking_lot::RwLock;
+
+use super::test_utils::raw_plan;
 
 #[derive(Default)]
 struct TestSuite {
@@ -427,40 +421,30 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
 }
 
 async fn plan_sql(
-    ctx: Arc<dyn TableContext>,
+    ctx: Arc<QueryContext>,
     sql: &str,
     optimize: bool,
 ) -> Result<(SExpr, Box<BindContext>, MetadataRef)> {
-    let settings = ctx.get_settings();
-    let metadata = Arc::new(RwLock::new(Metadata::default()));
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let binder = Binder::new(
-        ctx.clone(),
-        CatalogManager::instance(),
-        name_resolution_ctx,
-        metadata,
-    );
-    let tokens = tokenize_sql(sql)?;
-    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
-    let plan = binder.bind(&stmt).await?;
-    if let Plan::Query {
+    let plan = raw_plan(&ctx, sql).await?;
+    let Plan::Query {
         s_expr,
         metadata,
         bind_context,
         ..
     } = plan
-    {
-        let s_expr = if optimize {
-            let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
-            RecursiveRuleOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES)
-                .optimize_sync(&s_expr)?
-        } else {
-            *s_expr
-        };
+    else {
+        unreachable!();
+    };
 
-        return Ok((s_expr, bind_context, metadata));
-    }
-    unreachable!()
+    let s_expr = if optimize {
+        let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
+        RecursiveRuleOptimizer::new(opt_ctx.clone(), &DEFAULT_REWRITE_RULES)
+            .optimize_sync(&s_expr)?
+    } else {
+        *s_expr
+    };
+
+    Ok((s_expr, bind_context, metadata))
 }
 
 fn find_push_down_index_info(s_expr: &SExpr) -> Result<&Option<AggIndexInfo>> {

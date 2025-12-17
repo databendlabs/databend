@@ -110,7 +110,7 @@ impl Rule for RulePushDownFilterJoin {
     }
 }
 
-pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(bool, SExpr)> {
+fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(bool, SExpr)> {
     // Extract or predicates from Filter to push down them to join.
     // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
     // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
