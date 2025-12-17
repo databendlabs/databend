@@ -507,10 +507,43 @@ impl Join {
                     + f64::max(right_cardinality, inner_join_cardinality)
                     - inner_join_cardinality
             }
-            JoinType::LeftSemi => f64::min(left_cardinality, inner_join_cardinality),
-            JoinType::RightSemi => f64::min(right_cardinality, inner_join_cardinality),
-            JoinType::LeftSingle | JoinType::RightMark | JoinType::LeftAnti => left_cardinality,
-            JoinType::RightSingle | JoinType::LeftMark | JoinType::RightAnti => right_cardinality,
+            JoinType::LeftSemi => {
+                let left_exprs = self
+                    .equi_conditions
+                    .iter()
+                    .map(|x| &x.left)
+                    .collect::<Vec<_>>();
+
+                self.semi_cardinality(left_cardinality, &left_statistics, &left_exprs)
+            }
+            JoinType::RightSemi => {
+                let right_exprs = self
+                    .equi_conditions
+                    .iter()
+                    .map(|x| &x.right)
+                    .collect::<Vec<_>>();
+
+                self.semi_cardinality(right_cardinality, &right_statistics, &right_exprs)
+            }
+            JoinType::LeftAnti => {
+                let left_exprs = self
+                    .equi_conditions
+                    .iter()
+                    .map(|x| &x.left)
+                    .collect::<Vec<_>>();
+                self.anti_cardinality(left_cardinality, &left_statistics, &left_exprs)
+            }
+            JoinType::RightAnti => {
+                let right_exprs = self
+                    .equi_conditions
+                    .iter()
+                    .map(|x| &x.right)
+                    .collect::<Vec<_>>();
+
+                self.anti_cardinality(right_cardinality, &right_statistics, &right_exprs)
+            }
+            JoinType::LeftSingle | JoinType::RightMark => left_cardinality,
+            JoinType::RightSingle | JoinType::LeftMark => right_cardinality,
         };
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {
@@ -557,6 +590,53 @@ impl Join {
                 .non_equi_conditions
                 .iter()
                 .any(|expr| expr.has_subquery())
+    }
+
+    fn anti_cardinality(
+        &self,
+        cardinality: f64,
+        statistics: &Statistics,
+        exprs: &[&ScalarExpr],
+    ) -> f64 {
+        let mut anti_cardinality = cardinality;
+        for expr in exprs {
+            let mut used_columns = expr.used_columns();
+
+            let (Some(column), None) = (used_columns.pop_first(), used_columns.pop_first()) else {
+                continue;
+            };
+
+            if let Some(column_stat) = statistics.column_stats.get(&column) {
+                let semi_cardinality = cardinality * column_stat.ndv / column_stat.origin_ndv;
+                let column_cardinality = (cardinality - semi_cardinality).max(cardinality * 0.3);
+                anti_cardinality = 1_f64.max(column_cardinality.min(anti_cardinality));
+            }
+        }
+
+        anti_cardinality
+    }
+
+    fn semi_cardinality(
+        &self,
+        cardinality: f64,
+        statistics: &Statistics,
+        exprs: &[&ScalarExpr],
+    ) -> f64 {
+        let mut semi_cardinality = cardinality;
+        for expr in exprs {
+            let mut used_columns = expr.used_columns();
+
+            let (Some(column), None) = (used_columns.pop_first(), used_columns.pop_first()) else {
+                continue;
+            };
+
+            if let Some(column_stat) = statistics.column_stats.get(&column) {
+                let column_cardinality = cardinality * column_stat.ndv / column_stat.origin_ndv;
+                semi_cardinality = 1_f64.max(column_cardinality.min(semi_cardinality));
+            }
+        }
+
+        semi_cardinality
     }
 }
 
