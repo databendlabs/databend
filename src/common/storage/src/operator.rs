@@ -404,7 +404,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         .session_token(&cfg.security_token)
         .role_arn(&cfg.role_arn)
         .external_id(&cfg.external_id)
-        // Don't enable it otherwise we will get Permission in stat unknow files
+        // Don't enable it otherwise we will get Permission in stat unknown files
         // .allow_anonymous()
         // Root.
         .root(&cfg.root);
