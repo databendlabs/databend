@@ -1,2 +1,0 @@
-cargo-audit@0.22.0
-cargo-machete@0.9.1
