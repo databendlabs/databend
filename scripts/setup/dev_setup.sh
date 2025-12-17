@@ -559,155 +559,6 @@ function install_taplo_cli {
 	"${taplo_bin}/taplo" --version
 }
 
-function install_cargo_machete {
-	local version="$1"
-
-	echo "==> installing cargo-machete..."
-	if cargo machete --version &>/dev/null; then
-		echo "cargo-machete is already installed"
-		return
-	fi
-	if [[ -z "$version" ]]; then
-		echo "Missing cargo-machete version"
-		return 1
-	fi
-
-	local os arch triple asset url tmpdir extract_dir cargo_bin
-	os="$(uname -s)"
-	case "$os" in
-	Darwin | Linux) ;;
-	*)
-		echo "Unsupported operating system for cargo-machete: $(uname -s)"
-		return 1
-		;;
-	esac
-
-	case "$(uname -m)" in
-	x86_64 | amd64)
-		arch="x86_64"
-		;;
-	aarch64 | arm64)
-		arch="aarch64"
-		;;
-	*)
-		echo "Unsupported architecture for cargo-machete: $(uname -m)"
-		return 1
-		;;
-	esac
-
-	if [[ "$os" == "Darwin" ]]; then
-		triple="${arch}-apple-darwin"
-	else
-		if [[ "$arch" == "x86_64" ]]; then
-			triple="${arch}-unknown-linux-musl"
-		else
-			triple="${arch}-unknown-linux-gnu"
-		fi
-	fi
-
-	asset="cargo-machete-${version}-${triple}.tar.gz"
-	url="https://github.com/bnjbvr/cargo-machete/releases/download/${version}/${asset}"
-	tmpdir=$(mktemp -d)
-	if ! curl -fsSL "$url" -o "${tmpdir}/${asset}"; then
-		rm -rf "$tmpdir"
-		echo "Failed to download cargo-machete from ${url}"
-		return 1
-	fi
-
-	if ! tar -xzf "${tmpdir}/${asset}" -C "$tmpdir"; then
-		rm -rf "$tmpdir"
-		echo "Failed to extract cargo-machete archive"
-		return 1
-	fi
-
-	CARGO_HOME="${CARGO_HOME:-${HOME}/.cargo}"
-	cargo_bin="${CARGO_HOME}/bin"
-	mkdir -p "$cargo_bin"
-	extract_dir="${tmpdir}/cargo-machete-${version}-${triple}"
-	if [[ ! -f "${extract_dir}/cargo-machete" ]]; then
-		rm -rf "$tmpdir"
-		echo "cargo-machete binary not found in archive"
-		return 1
-	fi
-
-	install -m 755 "${extract_dir}/cargo-machete" "${cargo_bin}/cargo-machete"
-	rm -rf "$tmpdir"
-	cargo machete --version
-}
-function install_cargo_audit {
-	local version="$1"
-
-	echo "==> installing cargo-audit..."
-	if cargo audit --version &>/dev/null; then
-		echo "cargo-audit is already installed"
-		return
-	fi
-
-	local os
-	os="$(uname -s)"
-	if [[ "$os" == "Darwin" ]]; then
-		brew install cargo-audit
-		cargo audit --version
-		return
-	fi
-
-	if [[ "$os" != "Linux" ]]; then
-		echo "Unsupported operating system for cargo-audit: $(uname -s)"
-		return 1
-	fi
-
-	if [[ -z "$version" ]]; then
-		echo "Missing cargo-audit version"
-		return 1
-	fi
-
-	local arch triple asset url tmpdir extract_dir cargo_bin
-	case "$(uname -m)" in
-	x86_64 | amd64)
-		triple="x86_64-unknown-linux-musl"
-		;;
-	aarch64 | arm64)
-		triple="aarch64-unknown-linux-gnu"
-		;;
-	*)
-		echo "Unsupported architecture for cargo-audit: $(uname -m)"
-		return 1
-		;;
-	esac
-
-	local tag
-	tag="cargo-audit%2F${version}"
-	asset="cargo-audit-${triple}-${version}.tgz"
-	url="https://github.com/rustsec/rustsec/releases/download/${tag}/${asset}"
-	tmpdir=$(mktemp -d)
-	if ! curl -fsSL "$url" -o "${tmpdir}/${asset}"; then
-		rm -rf "$tmpdir"
-		echo "Failed to download cargo-audit from ${url}"
-		return 1
-	fi
-
-	if ! tar -xzf "${tmpdir}/${asset}" -C "$tmpdir"; then
-		rm -rf "$tmpdir"
-		echo "Failed to extract cargo-audit archive"
-		return 1
-	fi
-
-	CARGO_HOME="${CARGO_HOME:-${HOME}/.cargo}"
-	cargo_bin="${CARGO_HOME}/bin"
-	mkdir -p "$cargo_bin"
-	extract_dir="${tmpdir}/cargo-audit-${triple}-${version}"
-	if [[ ! -f "${extract_dir}/cargo-audit" ]]; then
-		rm -rf "$tmpdir"
-		echo "cargo-audit binary not found in archive"
-		return 1
-	fi
-
-	install -m 755 "${extract_dir}/cargo-audit" "${cargo_bin}/cargo-audit"
-	rm -rf "$tmpdir"
-
-	cargo audit --version
-}
-
 function install_typos_cli {
 	echo "==> installing typos CLI..."
 	if typos --version &>/dev/null; then
@@ -818,7 +669,6 @@ EOF
 		cat <<EOF
 Check tools (since -c was provided):
   * lcov
-  * cargo-audit, cargo-machete
   * taplo CLI
   * typos CLI
 EOF
@@ -1009,8 +859,6 @@ if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
 	fi
 	install_pkg lcov "$PACKAGE_MANAGER"
 
-	install_cargo_audit "v0.22.0"
-	install_cargo_machete "v0.9.1"
 	install_taplo_cli
 	install_typos_cli
 fi
