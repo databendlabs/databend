@@ -98,38 +98,6 @@ function install_build_essentials {
 	esac
 }
 
-function install_ziglang {
-	PACKAGE_MANAGER=$1
-
-	if zig version; then
-		echo "==> ziglang is already installed"
-		return
-	fi
-	echo "==> installing ziglang..."
-
-	arch=$(uname -m)
-	case "$PACKAGE_MANAGER" in
-	apt-get | yum | dnf | pacman)
-		curl -sSfLo /tmp/zig.tar.xz "https://ziglang.org/download/0.11.0/zig-linux-${arch}-0.11.0.tar.xz"
-		tar -xf /tmp/zig.tar.xz -C /tmp
-		"${PRE_COMMAND[@]}" mv "/tmp/zig-linux-${arch}-0.11.0/zig" /usr/local/bin/
-		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/zig
-		"${PRE_COMMAND[@]}" mv "/tmp/zig-linux-${arch}-0.11.0/lib" /usr/local/lib/zig
-		rm -rf /tmp/zig*
-		;;
-	brew)
-		install_pkg zig "$PACKAGE_MANAGER"
-		;;
-	apk)
-		echo "TODO: install ziglang for alpine"
-		;;
-	*)
-		echo "Unable to install ziglang with package manager: $PACKAGE_MANAGER"
-		exit 1
-		;;
-	esac
-}
-
 function install_python3 {
 	PACKAGE_MANAGER=$1
 
@@ -649,7 +617,6 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_pkg cmake "$PACKAGE_MANAGER"
 	install_pkg clang "$PACKAGE_MANAGER"
 	install_pkg llvm "$PACKAGE_MANAGER"
-	install_ziglang "$PACKAGE_MANAGER"
 	install_python3 "$PACKAGE_MANAGER"
 	install_sqlite3 "$PACKAGE_MANAGER"
 	install_libtiff "$PACKAGE_MANAGER"
