@@ -28,6 +28,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use typetag::serde;
 
@@ -118,6 +119,8 @@ struct FlightJoinRuntimeFilterPacket {
     pub build_rows: usize,
     #[serde(default)]
     pub packets: Option<HashMap<usize, FlightRuntimeFilterPacket>>,
+
+    pub schema: DataSchemaRef,
 }
 
 impl TryInto<DataBlock> for JoinRuntimeFilterPacket {
@@ -183,9 +186,12 @@ impl TryInto<DataBlock> for JoinRuntimeFilterPacket {
             false => DataBlock::new_from_columns(entities),
         };
 
+        let schema = DataSchemaRef::new(data_block.infer_schema());
+
         data_block.add_meta(Some(Box::new(FlightJoinRuntimeFilterPacket {
             build_rows: self.build_rows,
             packets: join_flight_packets,
+            schema,
         })))
     }
 }
@@ -197,6 +203,7 @@ impl TryFrom<DataBlock> for JoinRuntimeFilterPacket {
         if let Some(meta) = block.take_meta() {
             let flight_join_rf = FlightJoinRuntimeFilterPacket::downcast_from(meta)
                 .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+
             let Some(packet) = flight_join_rf.packets else {
                 return Ok(JoinRuntimeFilterPacket {
                     packets: None,
@@ -257,6 +264,10 @@ impl BlockMetaInfo for FlightJoinRuntimeFilterPacket {
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
+    }
+
+    fn override_block_schema(&self) -> Option<DataSchemaRef> {
+        Some(self.schema.clone())
     }
 }
 
