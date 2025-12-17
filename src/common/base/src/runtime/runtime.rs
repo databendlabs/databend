@@ -181,10 +181,10 @@ impl Runtime {
         #[cfg(debug_assertions)]
         {
             // We need to pass the thread name in the unit test, because the thread name is the test name
-            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
-                if let Some(thread_name) = std::thread::current().name() {
-                    runtime_builder.thread_name(thread_name);
-                }
+            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE")
+                && let Some(thread_name) = std::thread::current().name()
+            {
+                runtime_builder.thread_name(thread_name);
             }
 
             runtime_builder.thread_stack_size(20 * 1024 * 1024);
@@ -205,10 +205,10 @@ impl Runtime {
         #[cfg(debug_assertions)]
         {
             // We need to pass the thread name in the unit test, because the thread name is the test name
-            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
-                if let Some(cur_thread_name) = std::thread::current().name() {
-                    thread_name = Some(cur_thread_name.to_string());
-                }
+            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE")
+                && let Some(cur_thread_name) = std::thread::current().name()
+            {
+                thread_name = Some(cur_thread_name.to_string());
             }
 
             runtime_builder.thread_stack_size(20 * 1024 * 1024);
@@ -371,22 +371,22 @@ impl Drop for Dropper {
     fn drop(&mut self) {
         drop_guard(move || {
             // Send a signal to say i am dropping.
-            if let Some(close_sender) = self.close.take() {
-                if close_sender.send(()).is_ok() {
-                    match self.join_handler.take().unwrap().join() {
-                        Err(e) => warn!("Runtime dropper panic, {:?}", e),
-                        Ok(true) => {
-                            // When the runtime shutdown is blocked for more than 3 seconds,
-                            // we will print the backtrace in the warn log, which will help us debug.
-                            warn!(
-                                "Runtime dropper is blocked 3 seconds, runtime name: {:?}, drop backtrace: {:?}",
-                                self.name,
-                                Backtrace::capture()
-                            );
-                        }
-                        _ => {}
-                    };
-                }
+            if let Some(close_sender) = self.close.take()
+                && close_sender.send(()).is_ok()
+            {
+                match self.join_handler.take().unwrap().join() {
+                    Err(e) => warn!("Runtime dropper panic, {:?}", e),
+                    Ok(true) => {
+                        // When the runtime shutdown is blocked for more than 3 seconds,
+                        // we will print the backtrace in the warn log, which will help us debug.
+                        warn!(
+                            "Runtime dropper is blocked 3 seconds, runtime name: {:?}, drop backtrace: {:?}",
+                            self.name,
+                            Backtrace::capture()
+                        );
+                    }
+                    _ => {}
+                };
             }
         })
     }

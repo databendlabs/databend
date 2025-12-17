@@ -269,10 +269,10 @@ fn has_custom_types_in_field(ty: &Type) -> bool {
                 // Check generic arguments
                 if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
                     for arg in &args.args {
-                        if let syn::GenericArgument::Type(inner_type) = arg {
-                            if has_custom_types_in_field(inner_type) {
-                                return true;
-                            }
+                        if let syn::GenericArgument::Type(inner_type) = arg
+                            && has_custom_types_in_field(inner_type)
+                        {
+                            return true;
                         }
                     }
                 }

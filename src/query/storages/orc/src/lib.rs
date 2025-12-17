@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(internal_features)]
+#![allow(clippy::collapsible_if)]
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::useless_asref)]
 #![allow(clippy::diverging_sub_expression)]

@@ -14,6 +14,7 @@
 
 #![feature(box_patterns)]
 #![feature(cursor_split)]
+#![allow(clippy::collapsible_if)]
 
 mod binary;
 mod clickhouse;

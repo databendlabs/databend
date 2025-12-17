@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #![feature(get_mut_unchecked)]
-#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 
 mod connection;
 mod file_format;

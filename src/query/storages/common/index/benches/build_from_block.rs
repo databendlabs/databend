@@ -57,7 +57,10 @@ mod dummy {
         let column = rand_i64_column(1_000_000);
 
         let mut builder = Xor8Builder::create();
-        (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
+        (0..column.len()).for_each(|i| {
+            let value = unsafe { column.index_unchecked(i) };
+            builder.add_key(&value);
+        });
         let filter = builder.build().unwrap();
 
         for i in 0..column.len() {
@@ -66,7 +69,10 @@ mod dummy {
         }
         bencher.bench(|| {
             let mut builder = Xor8Builder::create();
-            (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
+            (0..column.len()).for_each(|i| {
+                let value = unsafe { column.index_unchecked(i) };
+                builder.add_key(&value);
+            });
             let _filter = divan::black_box(builder.build().unwrap());
         });
     }
@@ -76,7 +82,10 @@ mod dummy {
         let column = rand_str_column(1_000_000, 32);
 
         let mut builder = Xor8Builder::create();
-        (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
+        (0..column.len()).for_each(|i| {
+            let value = unsafe { column.index_unchecked(i) };
+            builder.add_key(&value);
+        });
         let filter = builder.build().unwrap();
 
         for i in 0..column.len() {
@@ -86,7 +95,10 @@ mod dummy {
 
         bencher.bench(|| {
             let mut builder = Xor8Builder::create();
-            (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
+            (0..column.len()).for_each(|i| {
+                let value = unsafe { column.index_unchecked(i) };
+                builder.add_key(&value);
+            });
             let _filter = divan::black_box(builder.build().unwrap());
         })
     }

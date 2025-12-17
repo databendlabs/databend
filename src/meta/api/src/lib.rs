@@ -15,6 +15,8 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::type_complexity)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::unnecessary_unwrap)]
 #![feature(try_blocks)]
 
 extern crate databend_common_meta_types;

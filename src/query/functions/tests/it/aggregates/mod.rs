@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::cloned_ref_to_slice_refs)]
+
 mod agg;
 mod agg_hashtable;
 

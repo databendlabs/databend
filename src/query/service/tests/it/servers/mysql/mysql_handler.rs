@@ -205,6 +205,7 @@ async fn create_connection(port: u16, with_tls: bool) -> Result<mysql_async::Con
         .map_err_to_code(ErrorCode::UnknownException, || "Reject connection")
 }
 
+#[allow(dead_code)]
 struct EmptyRow;
 
 impl FromRow for EmptyRow {

@@ -859,16 +859,16 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
         // those digits.  But don't advance last_relevant beyond the last
         // character of the np.number string, which is a hazard if the
         // number got shortened due to precision limitations.
-        if let Some(last_relevant) = np.last_relevant {
-            if np.desc.zero_end > np.out_pre_spaces {
-                // note that np.number cannot be zero-length here
-                let last_zero_pos = np.number.len() - 1;
-                let last_zero_pos = last_zero_pos.min(np.desc.zero_end - np.out_pre_spaces);
+        if let Some(last_relevant) = np.last_relevant
+            && np.desc.zero_end > np.out_pre_spaces
+        {
+            // note that np.number cannot be zero-length here
+            let last_zero_pos = np.number.len() - 1;
+            let last_zero_pos = last_zero_pos.min(np.desc.zero_end - np.out_pre_spaces);
 
-                if last_relevant.1 < last_zero_pos {
-                    let ch = np.number[last_zero_pos];
-                    np.last_relevant = Some((ch, last_zero_pos))
-                }
+            if last_relevant.1 < last_zero_pos {
+                let ch = np.number[last_zero_pos];
+                np.last_relevant = Some((ch, last_zero_pos))
             }
         }
     }

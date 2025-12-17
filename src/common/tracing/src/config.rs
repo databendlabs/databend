@@ -298,16 +298,11 @@ impl FromStr for LogFormat {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum OTLPProtocol {
     Http,
+    #[default]
     Grpc,
-}
-
-impl Default for OTLPProtocol {
-    fn default() -> Self {
-        Self::Grpc
-    }
 }
 
 impl Display for OTLPProtocol {

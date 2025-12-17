@@ -360,11 +360,11 @@ impl QueriesMemoryManager {
                     return Ok(());
                 }
 
-                if let Some(waiting_resource) = state.resources.get(waiting_id) {
-                    if waiting_resource.state.load(Ordering::Acquire) != RUNNING {
-                        // kill by other while in wait
-                        return Ok(());
-                    }
+                if let Some(waiting_resource) = state.resources.get(waiting_id)
+                    && waiting_resource.state.load(Ordering::Acquire) != RUNNING
+                {
+                    // kill by other while in wait
+                    return Ok(());
                 }
 
                 if terminate_state.load(Ordering::Acquire) != KILLED {

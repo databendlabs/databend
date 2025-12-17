@@ -873,13 +873,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             ExprElement::DotAccess { key } => {
                 // `database.table.column` is parsed into [database] [.table] [.column],
                 // so we need to transform it into the right `ColumnRef` form.
-                if let Expr::ColumnRef { column, .. } = &mut lhs {
-                    if let ColumnID::Name(name) = &column.column {
-                        column.database = column.table.take();
-                        column.table = Some(name.clone());
-                        column.column = key.clone();
-                        return Ok(lhs);
-                    }
+                if let Expr::ColumnRef { column, .. } = &mut lhs
+                    && let ColumnID::Name(name) = &column.column
+                {
+                    column.database = column.table.take();
+                    column.table = Some(name.clone());
+                    column.column = key.clone();
+                    return Ok(lhs);
                 }
 
                 match key {
@@ -2519,10 +2519,10 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
 
 fn map_access_dot_number(i: Input) -> IResult<MapAccessor> {
     map_res(rule! { LiteralFloat }, |key| {
-        if key.text().starts_with('.') {
-            if let Ok(key) = (key.text()[1..]).parse::<u64>() {
-                return Ok(MapAccessor::DotNumber { key });
-            }
+        if key.text().starts_with('.')
+            && let Ok(key) = (key.text()[1..]).parse::<u64>()
+        {
+            return Ok(MapAccessor::DotNumber { key });
         }
         Err(nom::Err::Error(ErrorKind::ExpectText(".")))
     })

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::unnecessary_unwrap)]
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
@@ -551,7 +552,7 @@ async fn test_active_sessions() -> Result<()> {
     let mut results = try_join_all(handlers)
         .await?
         .into_iter()
-        .map(|(_status, resp)| (resp.error.map(|e| e.message).unwrap_or_default()))
+        .map(|(_status, resp)| resp.error.map(|e| e.message).unwrap_or_default())
         .collect::<Vec<_>>();
     results.sort();
     let msg = "Failed to upgrade session: Current active sessions (2) has exceeded the max_active_sessions limit (2)";

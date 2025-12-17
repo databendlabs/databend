@@ -57,10 +57,10 @@ impl Thread {
         #[cfg(debug_assertions)]
         {
             // We need to pass the thread name in the unit test, because the thread name is the test name
-            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
-                if let Some(thread_name) = std::thread::current().name() {
-                    name = Some(thread_name.to_string());
-                }
+            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE")
+                && let Some(thread_name) = std::thread::current().name()
+            {
+                name = Some(thread_name.to_string());
             }
 
             thread_builder = thread_builder.stack_size(5 * 1024 * 1024);

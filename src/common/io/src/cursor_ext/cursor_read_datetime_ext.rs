@@ -393,16 +393,19 @@ where T: AsRef<[u8]>
             // only date part
             if need_date {
                 Ok(DateTimeResType::Date(d))
-            } else { match fast_local_to_zoned(tz, &d, 0, 0, 0, 0) { Some(zoned) => {
-                Ok(DateTimeResType::Datetime(zoned))
-            } _ => {
-                let zoned = tz
-                    .to_zoned(d.to_datetime(Time::midnight()))
-                    .map_err_to_code(ErrorCode::BadBytes, || {
-                        format!("Failed to parse date {} as timestamp.", d)
-                    })?;
-                Ok(DateTimeResType::Datetime(zoned))
-            }}}
+            } else {
+                match fast_local_to_zoned(tz, &d, 0, 0, 0, 0) {
+                    Some(zoned) => Ok(DateTimeResType::Datetime(zoned)),
+                    _ => {
+                        let zoned = tz
+                            .to_zoned(d.to_datetime(Time::midnight()))
+                            .map_err_to_code(ErrorCode::BadBytes, || {
+                                format!("Failed to parse date {} as timestamp.", d)
+                            })?;
+                        Ok(DateTimeResType::Datetime(zoned))
+                    }
+                }
+            }
         }
     }
 }
@@ -469,17 +472,17 @@ pub fn unwrap_local_time(
             Ok(t2)
         }
         LocalResult::None => {
-            if enable_dst_hour_fix {
-                if let Some(res2) = naive_datetime.checked_add_signed(Duration::seconds(3600)) {
-                    return match tz.from_local_datetime(&res2) {
-                        MappedLocalTime::Single(t) => Ok(t),
-                        MappedLocalTime::Ambiguous(t1, _) => Ok(t1),
-                        MappedLocalTime::None => Err(ErrorCode::BadArguments(format!(
-                            "Local Time Error: The local time {}, {} can not map to a single unique result with timezone {}",
-                            naive_datetime, res2, tz
-                        ))),
-                    };
-                }
+            if enable_dst_hour_fix
+                && let Some(res2) = naive_datetime.checked_add_signed(Duration::seconds(3600))
+            {
+                return match tz.from_local_datetime(&res2) {
+                    MappedLocalTime::Single(t) => Ok(t),
+                    MappedLocalTime::Ambiguous(t1, _) => Ok(t1),
+                    MappedLocalTime::None => Err(ErrorCode::BadArguments(format!(
+                        "Local Time Error: The local time {}, {} can not map to a single unique result with timezone {}",
+                        naive_datetime, res2, tz
+                    ))),
+                };
             }
             Err(ErrorCode::BadArguments(format!(
                 "The time {} can not map to a single unique result with timezone {}",

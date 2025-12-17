@@ -20,6 +20,8 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(non_local_definitions)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::derivable_impls)]
 
 pub mod app_error;
 pub mod data_id;

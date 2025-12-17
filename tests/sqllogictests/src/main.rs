@@ -308,15 +308,15 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
             if !file_name.ends_with(".test") {
                 continue;
             }
-            if let Some(ref specific_file) = args.file {
-                if !specific_file.split(',').any(|f| f.eq(&file_name)) {
-                    continue;
-                }
+            if let Some(ref specific_file) = args.file
+                && !specific_file.split(',').any(|f| f.eq(&file_name))
+            {
+                continue;
             }
-            if let Some(ref skip_file) = args.skipped_file {
-                if skip_file.split(',').any(|f| f.eq(&file_name)) {
-                    continue;
-                }
+            if let Some(ref skip_file) = args.skipped_file
+                && skip_file.split(',').any(|f| f.eq(&file_name))
+            {
+                continue;
             }
             num_of_tests += parse_file::<ColumnType>(suit_file.as_ref().unwrap().path())
                 .unwrap()

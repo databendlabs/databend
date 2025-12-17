@@ -132,18 +132,17 @@ impl DayEntry {
         let mut offset = self.offset_at_start;
         if let (Some(trans), Some(transition_elapsed)) =
             (self.transition_utc, self.transition_elapsed)
+            && seconds >= trans
         {
-            if seconds >= trans {
-                if transition_elapsed == 0 {
-                    if self.offset_change > 0 {
-                        // Gap at the top of the day: skip the missing span but retain
-                        // the post-transition offset that `offset_at_start` already has.
-                        local_seconds += self.offset_change as i64;
-                    }
-                } else {
+            if transition_elapsed == 0 {
+                if self.offset_change > 0 {
+                    // Gap at the top of the day: skip the missing span but retain
+                    // the post-transition offset that `offset_at_start` already has.
                     local_seconds += self.offset_change as i64;
-                    offset += self.offset_change;
                 }
+            } else {
+                local_seconds += self.offset_change as i64;
+                offset += self.offset_change;
             }
         }
         debug_assert!(local_seconds >= 0);

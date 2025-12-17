@@ -139,7 +139,7 @@ fn plain_identifier(
                 | #non_reserved_keyword(is_reserved_keyword)
             },
             |token| Identifier {
-                span: transform_span(&[token.clone()]),
+                span: transform_span(std::slice::from_ref(token)),
                 name: token.text().to_string(),
                 quote: None,
                 ident_type: IdentifierType::None,
@@ -165,7 +165,7 @@ fn quoted_identifier(i: Input) -> IResult<Identifier> {
                 ))
             })?;
             Ok((i2, Identifier {
-                span: transform_span(&[token.clone()]),
+                span: transform_span(std::slice::from_ref(token)),
                 name: ident,
                 quote: Some(quote),
                 ident_type: IdentifierType::None,
@@ -353,7 +353,7 @@ pub fn column_row(i: Input) -> IResult<ColumnID> {
     // ROW could be a column name for compatibility
     map_res(rule! {ROW}, |token| {
         Ok(ColumnID::Name(Identifier::from_name(
-            transform_span(&[token.clone()]),
+            transform_span(std::slice::from_ref(token)),
             "row",
         )))
     })

@@ -12,7 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+#![allow(
+    clippy::cloned_ref_to_slice_refs,
+    clippy::collapsible_if,
+    clippy::manual_is_multiple_of,
+    clippy::needless_range_loop,
+    clippy::uninlined_format_args
+)]
 #![feature(box_patterns)]
 #![feature(never_type)]
 

@@ -91,12 +91,13 @@ impl MemStatBuffer {
         }
 
         if mem_stat.id != self.cur_mem_stat_id {
-            if let Err(out_of_limit) = self.flush::<false>(0) {
-                if !std::thread::panicking() && !self.unlimited_flag {
-                    let _guard = LimitMemGuard::enter_unlimited();
-                    ThreadTracker::replace_error_message(Some(format!("{:?}", out_of_limit)));
-                    return Err(AllocError);
-                }
+            if let Err(out_of_limit) = self.flush::<false>(0)
+                && !std::thread::panicking()
+                && !self.unlimited_flag
+            {
+                let _guard = LimitMemGuard::enter_unlimited();
+                ThreadTracker::replace_error_message(Some(format!("{:?}", out_of_limit)));
+                return Err(AllocError);
             }
 
             self.cur_mem_stat = Some(mem_stat.clone());

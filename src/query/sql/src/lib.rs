@@ -12,7 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+#![allow(
+    clippy::collapsible_if,
+    clippy::derivable_impls,
+    clippy::iter_kv_map,
+    clippy::let_and_return,
+    clippy::replace_box,
+    clippy::unnecessary_unwrap,
+    clippy::uninlined_format_args
+)]
 #![allow(non_local_definitions)]
 #![feature(box_patterns)]
 #![feature(iterator_try_reduce)]

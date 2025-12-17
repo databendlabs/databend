@@ -17,6 +17,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::vec;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -36,7 +37,6 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnaryOperator;
-use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use derive_visitor::DriveMut;
@@ -238,17 +238,19 @@ impl Compiler {
                     let set = match iterable {
                         IterableItem::Resultset(name) => {
                             // Try to look up as a resultset first, then as a cursor
-                            match self.lookup_set(name) { Ok(set) => {
-                                set
-                            } _ => { match self.lookup_cursor(name) { Ok(cursor_set) => {
-                                cursor_set
-                            } _ => {
-                                return Err(ErrorCode::ScriptSemanticError(format!(
-                                    "`{}` is not a resultset or cursor",
-                                    name.name
-                                ))
-                                .set_span(name.span));
-                            }}}}
+                            match self.lookup_set(name) {
+                                Ok(set) => set,
+                                _ => match self.lookup_cursor(name) {
+                                    Ok(cursor_set) => cursor_set,
+                                    _ => {
+                                        return Err(ErrorCode::ScriptSemanticError(format!(
+                                            "`{}` is not a resultset or cursor",
+                                            name.name
+                                        ))
+                                        .set_span(name.span));
+                                    }
+                                },
+                            }
                         }
                         IterableItem::Cursor(cursor) => {
                             // Explicitly specified as cursor
@@ -1016,10 +1018,10 @@ impl Compiler {
     fn lookup_loop(&self, ident: &Identifier) -> Result<LoopItem> {
         let name = self.normalize_ident(ident);
         for scope in self.scopes.iter().rev() {
-            if let Some(item) = &scope.loop_item {
-                if item.name.as_ref() == Some(&name) {
-                    return Ok(item.clone());
-                }
+            if let Some(item) = &scope.loop_item
+                && item.name.as_ref() == Some(&name)
+            {
+                return Ok(item.clone());
             }
         }
         Err(ErrorCode::ScriptSemanticError(format!("`{name}` is not defined")).set_span(ident.span))

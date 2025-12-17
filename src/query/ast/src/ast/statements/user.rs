@@ -231,20 +231,18 @@ impl Display for AccountMgrSource {
                 if privileges.len() == 1
                     && privileges[0] == UserPrivilegeType::ApplyMaskingPolicy
                     && matches!(level, AccountMgrLevel::MaskingPolicy(_))
+                    && let AccountMgrLevel::MaskingPolicy(policy) = level
                 {
-                    if let AccountMgrLevel::MaskingPolicy(policy) = level {
-                        write!(f, " APPLY ON MASKING POLICY {policy}")?;
-                        return Ok(());
-                    }
+                    write!(f, " APPLY ON MASKING POLICY {policy}")?;
+                    return Ok(());
                 }
                 if privileges.len() == 1
                     && privileges[0] == UserPrivilegeType::ApplyRowAccessPolicy
                     && matches!(level, AccountMgrLevel::RowAccessPolicy(_))
+                    && let AccountMgrLevel::RowAccessPolicy(policy) = level
                 {
-                    if let AccountMgrLevel::RowAccessPolicy(policy) = level {
-                        write!(f, " APPLY ON ROW ACCESS POLICY {policy}")?;
-                        return Ok(());
-                    }
+                    write!(f, " APPLY ON ROW ACCESS POLICY {policy}")?;
+                    return Ok(());
                 }
                 write!(f, " ")?;
                 write_comma_separated_list(f, privileges.iter().map(|p| p.to_string()))?;

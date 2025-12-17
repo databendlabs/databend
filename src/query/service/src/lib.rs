@@ -14,8 +14,18 @@
 
 #![feature(int_roundings)]
 #![allow(internal_features)]
-#![allow(clippy::useless_asref)]
-#![allow(clippy::uninlined_format_args)]
+#![allow(
+    clippy::derivable_impls,
+    clippy::cloned_ref_to_slice_refs,
+    clippy::collapsible_if,
+    clippy::iter_kv_map,
+    clippy::let_and_return,
+    clippy::manual_is_multiple_of,
+    clippy::needless_return,
+    clippy::unnecessary_unwrap,
+    clippy::uninlined_format_args,
+    clippy::useless_asref
+)]
 #![feature(iter_map_windows)]
 #![feature(core_intrinsics)]
 #![feature(arbitrary_self_types)]

@@ -134,7 +134,7 @@ pub fn count_zeros(slice: &[u8], offset: usize, len: usize) -> usize {
         set_count += (slice[0] >> offset).count_ones() as usize;
         slice = &slice[1..];
     }
-    if (offset + len) % 8 != 0 {
+    if !(offset + len).is_multiple_of(8) {
         let end_offset = (offset + len) % 8; // i.e. 3 + 4 = 7
         let last_index = slice.len() - 1;
         // count all ignoring the last `offset` bits

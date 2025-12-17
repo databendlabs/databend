@@ -203,7 +203,7 @@ impl Response {
                 .map(|x| x as &(dyn std::error::Error + 'static))
         }
 
-        let e = match self {
+        match self {
             Response::StreamMGet(res) => to_err(res),
             Response::StreamList(res) => to_err(res),
             Response::Txn(res) => to_err(res),
@@ -215,9 +215,7 @@ impl Response {
             Response::GetClusterStatus(res) => to_err(res),
             Response::GetMemberList(res) => to_err(res),
             Response::GetClientInfo(res) => to_err(res),
-        };
-
-        e
+        }
     }
 }
 

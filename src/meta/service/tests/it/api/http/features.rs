@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::unnecessary_unwrap)]
+
 use std::time::Duration;
 
 use databend_common_base::base::Stoppable;

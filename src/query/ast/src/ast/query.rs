@@ -197,9 +197,9 @@ impl Display for SelectStmt {
         }
 
         // GROUP BY clause
-        if self.group_by.is_some() {
+        if let Some(g) = &self.group_by {
             write!(f, " GROUP BY ")?;
-            write!(f, "{}", self.group_by.as_ref().unwrap())?;
+            write!(f, "{}", g)?;
         }
         // HAVING clause
         if let Some(having) = &self.having {

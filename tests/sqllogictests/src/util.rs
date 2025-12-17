@@ -470,16 +470,16 @@ async fn stop_container(docker: &Docker, container_name: &str) {
         ..Default::default()
     });
     let containers = docker.list_containers(opts).await;
-    if let Ok(containers) = containers {
-        if !containers.is_empty() {
-            println!("==> list containers");
-            for container in containers {
-                if let Some(names) = container.names {
-                    println!(
-                        " -> container name: {:?}, status: {:?}",
-                        names, container.state
-                    );
-                }
+    if let Ok(containers) = containers
+        && !containers.is_empty()
+    {
+        println!("==> list containers");
+        for container in containers {
+            if let Some(names) = container.names {
+                println!(
+                    " -> container name: {:?}, status: {:?}",
+                    names, container.state
+                );
             }
         }
     }

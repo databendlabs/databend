@@ -16,6 +16,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::type_complexity)]
+#![allow(clippy::collapsible_if)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]
 #![feature(try_blocks)]

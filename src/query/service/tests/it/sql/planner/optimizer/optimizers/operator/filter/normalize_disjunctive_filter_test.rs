@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::collapsible_if)]
+
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
@@ -220,7 +222,7 @@ fn test_different_table_columns() -> Result<()> {
     );
 
     // Check if the first expression is t1.a
-    if let ScalarExpr::BoundColumnRef(ref col_ref) = &after[0] {
+    if let ScalarExpr::BoundColumnRef(col_ref) = &after[0] {
         assert_eq!(col_ref.column.column_name, "a");
         assert_eq!(col_ref.column.table_name, Some("t1".to_string()));
     } else {
@@ -228,12 +230,12 @@ fn test_different_table_columns() -> Result<()> {
     }
 
     // Check if the second expression is (t2.b OR t2.c)
-    if let ScalarExpr::FunctionCall(ref func) = &after[1] {
+    if let ScalarExpr::FunctionCall(func) = &after[1] {
         assert_eq!(func.func_name, "or");
         assert_eq!(func.arguments.len(), 2);
 
         // Check t2.b
-        if let ScalarExpr::BoundColumnRef(ref col_ref) = &func.arguments[0] {
+        if let ScalarExpr::BoundColumnRef(col_ref) = &func.arguments[0] {
             assert_eq!(col_ref.column.column_name, "b");
             assert_eq!(col_ref.column.table_name, Some("t2".to_string()));
         } else {
@@ -241,7 +243,7 @@ fn test_different_table_columns() -> Result<()> {
         }
 
         // Check t2.c
-        if let ScalarExpr::BoundColumnRef(ref col_ref) = &func.arguments[1] {
+        if let ScalarExpr::BoundColumnRef(col_ref) = &func.arguments[1] {
             assert_eq!(col_ref.column.column_name, "c");
             assert_eq!(col_ref.column.table_name, Some("t2".to_string()));
         } else {

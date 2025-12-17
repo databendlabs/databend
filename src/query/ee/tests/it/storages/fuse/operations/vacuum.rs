@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::let_and_return)]
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
@@ -297,17 +298,15 @@ mod test_accessor {
     }
 
     impl oio::Delete for MockDeleter {
-        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
+        async fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
             self.size += 1;
             Ok(())
         }
 
-        async fn flush(&mut self) -> opendal::Result<usize> {
+        async fn close(&mut self) -> opendal::Result<()> {
             self.hit_batch.store(true, Ordering::Release);
-
-            let n = self.size;
             self.size = 0;
-            Ok(n)
+            Ok(())
         }
     }
 

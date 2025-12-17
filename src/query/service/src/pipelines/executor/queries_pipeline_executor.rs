@@ -144,84 +144,88 @@ impl QueriesPipelineExecutor {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn execute_single_thread(self: &Arc<Self>, thread_num: usize) -> Result<()> { unsafe {
-        let workers_condvar = self.workers_condvar.clone();
-        let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
+    pub unsafe fn execute_single_thread(self: &Arc<Self>, thread_num: usize) -> Result<()> {
+        unsafe {
+            let workers_condvar = self.workers_condvar.clone();
+            let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
 
-        while !self.global_tasks_queue.is_finished() {
-            // Load tasks from global queue into worker context when context is empty.
-            // When context already contains tasks (new scheduled task triggered
-            // by previously executed processors in this context),
-            // those local tasks take priority and are executed first.
-            while !self.global_tasks_queue.is_finished() && !context.has_task() {
-                // If no tasks are available in the global tasks queue,
-                // this steal_tasks_to_context will block here
-                self.global_tasks_queue
-                    .steal_task_to_context(&mut context, self);
-            }
+            while !self.global_tasks_queue.is_finished() {
+                // Load tasks from global queue into worker context when context is empty.
+                // When context already contains tasks (new scheduled task triggered
+                // by previously executed processors in this context),
+                // those local tasks take priority and are executed first.
+                while !self.global_tasks_queue.is_finished() && !context.has_task() {
+                    // If no tasks are available in the global tasks queue,
+                    // this steal_tasks_to_context will block here
+                    self.global_tasks_queue
+                        .steal_task_to_context(&mut context, self);
+                }
 
-            while !self.global_tasks_queue.is_finished() && context.has_task() {
-                let task_info = context.get_task_info();
-                let execute_res = catch_unwind(|| context.execute_task(Some(self)));
-                match execute_res {
-                    Ok(res) => {
-                        match res {
-                            Ok(Some((executed_pid, graph))) => {
-                                // Not scheduled graph if pipeline is finished.
-                                if !self.global_tasks_queue.is_finished()
-                                    && !graph.is_should_finish()
-                                {
-                                    // We immediately schedule the processor again.
-                                    let schedule_queue_res =
-                                        graph.clone().schedule_queue(executed_pid);
-                                    match schedule_queue_res {
-                                        Ok(schedule_queue) => {
-                                            schedule_queue.schedule_with_condition(
-                                                &self.global_tasks_queue,
-                                                &mut context,
-                                                self,
-                                            );
-                                        }
-                                        Err(cause) => {
-                                            graph.record_node_error(
-                                                executed_pid,
-                                                NodeErrorType::ScheduleEventError(cause.clone()),
-                                            );
-                                            graph.should_finish(Err(cause))?;
+                while !self.global_tasks_queue.is_finished() && context.has_task() {
+                    let task_info = context.get_task_info();
+                    let execute_res = catch_unwind(|| context.execute_task(Some(self)));
+                    match execute_res {
+                        Ok(res) => {
+                            match res {
+                                Ok(Some((executed_pid, graph))) => {
+                                    // Not scheduled graph if pipeline is finished.
+                                    if !self.global_tasks_queue.is_finished()
+                                        && !graph.is_should_finish()
+                                    {
+                                        // We immediately schedule the processor again.
+                                        let schedule_queue_res =
+                                            graph.clone().schedule_queue(executed_pid);
+                                        match schedule_queue_res {
+                                            Ok(schedule_queue) => {
+                                                schedule_queue.schedule_with_condition(
+                                                    &self.global_tasks_queue,
+                                                    &mut context,
+                                                    self,
+                                                );
+                                            }
+                                            Err(cause) => {
+                                                graph.record_node_error(
+                                                    executed_pid,
+                                                    NodeErrorType::ScheduleEventError(
+                                                        cause.clone(),
+                                                    ),
+                                                );
+                                                graph.should_finish(Err(cause))?;
+                                            }
                                         }
                                     }
+                                    if graph.is_all_nodes_finished() {
+                                        graph.should_finish::<()>(Ok(()))?;
+                                    }
                                 }
-                                if graph.is_all_nodes_finished() {
-                                    graph.should_finish::<()>(Ok(()))?;
+                                Err(node_error) => {
+                                    let cause = node_error.get_error_code();
+                                    warn!("Execute task error: {:?}", cause);
+                                    if let Some((graph, node_index)) = task_info {
+                                        graph.record_node_error(node_index, *node_error);
+                                        graph.should_finish(Err(cause.clone()))?;
+                                    }
                                 }
+                                _ => {}
                             }
-                            Err(node_error) => {
-                                let cause = node_error.get_error_code();
-                                warn!("Execute task error: {:?}", cause);
-                                if let Some((graph, node_index)) = task_info {
-                                    graph.record_node_error(node_index, *node_error);
-                                    graph.should_finish(Err(cause.clone()))?;
-                                }
-                            }
-                            _ => {}
                         }
-                    }
-                    Err(panic_error) => {
-                        warn!("Execute task error: {:?}", panic_error);
-                        if let Some((graph, node_index)) = task_info {
-                            graph.record_node_error(
-                                node_index,
-                                NodeErrorType::SyncProcessError(panic_error.clone()),
-                            );
-                            graph.should_finish(Err(panic_error.clone()))?;
+                        Err(panic_error) => {
+                            warn!("Execute task error: {:?}", panic_error);
+                            if let Some((graph, node_index)) = task_info {
+                                graph.record_node_error(
+                                    node_index,
+                                    NodeErrorType::SyncProcessError(panic_error.clone()),
+                                );
+                                graph.should_finish(Err(panic_error.clone()))?;
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Ok(())
-    }}
+            Ok(())
+        }
+    }
 
     pub fn finish(&self, cause: Option<ErrorCode>) {
         if let Some(cause) = cause {

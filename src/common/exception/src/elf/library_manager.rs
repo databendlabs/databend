@@ -111,10 +111,10 @@ impl LibraryManager {
 
     fn find_library_by_build_id(&self, build_id: &Arc<Vec<u8>>) -> Option<&Library> {
         for library in &self.libraries {
-            if let Some(v) = &library.build_id {
-                if v == build_id {
-                    return Some(library);
-                }
+            if let Some(v) = &library.build_id
+                && v == build_id
+            {
+                return Some(library);
             }
         }
 

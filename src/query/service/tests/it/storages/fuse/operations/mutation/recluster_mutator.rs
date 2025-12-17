@@ -224,7 +224,7 @@ async fn test_safety_for_recluster() -> Result<()> {
                 .iter()
                 .rev()
                 .enumerate()
-                .filter(|(_, &num)| num % 4 == 0)
+                .filter(|(_, num)| *num % 4 == 0)
                 .map(|(index, _)| index)
                 .collect();
         }

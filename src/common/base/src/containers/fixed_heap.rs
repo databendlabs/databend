@@ -291,44 +291,48 @@ impl<T: Ord> FixedHeap<T> {
     /// assert_eq!(heap.pop_at(1), Some(1));
     /// ```
     pub fn pop_at(&mut self, index: usize) -> Option<T> {
-        match self.swap_remove(index) { Some(removed_node) => {
-            let mut node_index: usize = index;
-            loop {
-                let lchild_index = (node_index << 1) + 1;
-                let rchild_index = (node_index << 1) + 2;
-                // # Safety
-                // These indices are initialized because they are in `0..high`
-                let node = unsafe { self.data.get_unchecked(node_index).assume_init_ref() };
-                // Determine which child to sift upwards by comparing
-                let swap = if rchild_index < self.high {
-                    let lchild = unsafe { self.data.get_unchecked(lchild_index).assume_init_ref() };
-                    let rchild = unsafe { self.data.get_unchecked(rchild_index).assume_init_ref() };
-                    if lchild > rchild {
+        match self.swap_remove(index) {
+            Some(removed_node) => {
+                let mut node_index: usize = index;
+                loop {
+                    let lchild_index = (node_index << 1) + 1;
+                    let rchild_index = (node_index << 1) + 2;
+                    // # Safety
+                    // These indices are initialized because they are in `0..high`
+                    let node = unsafe { self.data.get_unchecked(node_index).assume_init_ref() };
+                    // Determine which child to sift upwards by comparing
+                    let swap = if rchild_index < self.high {
+                        let lchild =
+                            unsafe { self.data.get_unchecked(lchild_index).assume_init_ref() };
+                        let rchild =
+                            unsafe { self.data.get_unchecked(rchild_index).assume_init_ref() };
+                        if lchild > rchild {
+                            (lchild > node, lchild_index)
+                        } else {
+                            (rchild > node, rchild_index)
+                        }
+                    } else if lchild_index < self.high {
+                        let lchild =
+                            unsafe { self.data.get_unchecked(lchild_index).assume_init_ref() };
                         (lchild > node, lchild_index)
                     } else {
-                        (rchild > node, rchild_index)
+                        (false, 0)
+                    };
+                    // Sift upwards if the `compared_index` is higher priority
+                    if let (true, compared_index) = swap {
+                        unsafe {
+                            self.data.swap_unchecked(node_index, compared_index);
+                        }
+                        node_index = compared_index;
+                    } else {
+                        break;
                     }
-                } else if lchild_index < self.high {
-                    let lchild = unsafe { self.data.get_unchecked(lchild_index).assume_init_ref() };
-                    (lchild > node, lchild_index)
-                } else {
-                    (false, 0)
-                };
-                // Sift upwards if the `compared_index` is higher priority
-                if let (true, compared_index) = swap {
-                    unsafe {
-                        self.data.swap_unchecked(node_index, compared_index);
-                    }
-                    node_index = compared_index;
-                } else {
-                    break;
                 }
-            }
 
-            Some(removed_node)
-        } _ => {
-            None
-        }}
+                Some(removed_node)
+            }
+            _ => None,
+        }
     }
 
     /// Provides immutable access to the backing array of the heap.

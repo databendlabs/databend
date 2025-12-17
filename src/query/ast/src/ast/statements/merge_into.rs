@@ -140,12 +140,12 @@ impl Display for MergeIntoStmt {
                     }
                     write!(f, "THEN INSERT")?;
 
-                    if let Some(columns) = &unmatch_clause.insert_operation.columns {
-                        if !columns.is_empty() {
-                            write!(f, " (")?;
-                            write_comma_separated_list(f, columns)?;
-                            write!(f, ")")?;
-                        }
+                    if let Some(columns) = &unmatch_clause.insert_operation.columns
+                        && !columns.is_empty()
+                    {
+                        write!(f, " (")?;
+                        write_comma_separated_list(f, columns)?;
+                        write!(f, ")")?;
                     }
 
                     if unmatch_clause.insert_operation.is_star {

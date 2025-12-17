@@ -13,7 +13,12 @@
 // limitations under the License.
 
 #![allow(internal_features)]
-#![allow(clippy::uninlined_format_args)]
+#![allow(
+    clippy::collapsible_if,
+    clippy::redundant_iter_cloned,
+    clippy::unnecessary_unwrap,
+    clippy::uninlined_format_args
+)]
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::useless_asref)]
 #![allow(clippy::diverging_sub_expression)]

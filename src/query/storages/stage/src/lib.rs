@@ -17,7 +17,11 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(box_patterns)]
 #![feature(iter_intersperse)]
-#![allow(clippy::uninlined_format_args)]
+#![allow(
+    clippy::collapsible_if,
+    clippy::needless_return,
+    clippy::uninlined_format_args
+)]
 
 mod append;
 mod compression;

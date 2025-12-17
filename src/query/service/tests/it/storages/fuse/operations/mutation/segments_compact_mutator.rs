@@ -735,10 +735,11 @@ impl CompactSegmentTestFixture {
                     } else {
                         cluster_key_id.map(|v| {
                             let val = block.get_by_offset(0);
-                            let left = vec![unsafe { val.value().index_unchecked(0) }.to_owned()];
-                            let right = vec![
-                                unsafe { val.index_unchecked(val.value().len() - 1) }.to_owned(),
-                            ];
+                            let left_value = unsafe { val.index_unchecked(0) }.to_owned();
+                            let right_value =
+                                unsafe { val.index_unchecked(val.value().len() - 1) }.to_owned();
+                            let left = vec![left_value];
+                            let right = vec![right_value];
                             let level = if left.eq(&right)
                                 && block.num_rows() >= thresholds.block_per_segment
                             {

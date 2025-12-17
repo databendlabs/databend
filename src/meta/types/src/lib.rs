@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::collapsible_if)]
 #![allow(non_local_definitions)]
 
 //! This crate defines data types used in meta data storage service.

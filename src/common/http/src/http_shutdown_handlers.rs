@@ -148,22 +148,22 @@ impl HttpShutdownHandler {
             if let Some(abort_handle) = self.abort_handle.take() {
                 let _ = abort_handle.send(());
             }
-            if let Some(join_handle) = self.join_handle.take() {
-                if let Err(error) = join_handle.await {
-                    error!(
-                        "Unexpected error during shutdown Http Server {}. cause {}",
-                        self.service_name, error
-                    );
-                }
+            if let Some(join_handle) = self.join_handle.take()
+                && let Err(error) = join_handle.await
+            {
+                error!(
+                    "Unexpected error during shutdown Http Server {}. cause {}",
+                    self.service_name, error
+                );
             }
 
-            if let Some(join_handle) = self.join_handle.take() {
-                if let Err(_err) = tokio::time::timeout(Duration::from_secs(5), join_handle).await {
-                    error!("Timeout during shutdown Http Server {}", self.service_name);
-                }
+            if let Some(join_handle) = self.join_handle.take()
+                && let Err(_err) = tokio::time::timeout(Duration::from_secs(5), join_handle).await
+            {
+                error!("Timeout during shutdown Http Server {}", self.service_name);
             }
-        } else { match self.join_handle.take() { Some(join_handle) => {
+        } else if let Some(join_handle) = self.join_handle.take() {
             join_handle.abort();
-        } _ => {}}}
+        }
     }
 }

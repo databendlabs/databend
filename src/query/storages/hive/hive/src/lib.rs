@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #![feature(duration_constants)]
-#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 #![allow(clippy::diverging_sub_expression)]
 
 mod converters;

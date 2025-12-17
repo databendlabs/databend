@@ -200,13 +200,13 @@ impl JmpBuffer {
 }
 
 #[cfg(test)]
-extern "C" {
+unsafe extern "C" {
     // https://man7.org/linux/man-pages/man3/sigsetjmp.3p.html
     #[cfg_attr(target_env = "gnu", link_name = "__sigsetjmp")]
-    pub fn sigsetjmp(jb: *mut JmpBuffer, save_mask: i32) -> i32;
+    pub unsafe fn sigsetjmp(jb: *mut JmpBuffer, save_mask: i32) -> i32;
 
     // https://man7.org/linux/man-pages/man3/siglongjmp.3p.html
-    pub fn siglongjmp(jb: *mut JmpBuffer, val: i32) -> !;
+    pub unsafe fn siglongjmp(jb: *mut JmpBuffer, val: i32) -> !;
 }
 
 #[cfg(test)]

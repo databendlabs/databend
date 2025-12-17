@@ -12,7 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+#![allow(
+    clippy::cloned_ref_to_slice_refs,
+    clippy::collapsible_if,
+    clippy::let_and_return,
+    clippy::unnecessary_unwrap,
+    clippy::uninlined_format_args
+)]
 #![allow(clippy::useless_asref)]
 #![feature(type_alias_impl_trait)]
 #![feature(iter_order_by)]
