@@ -31,13 +31,12 @@ use crate::sessions::QueryContext;
 
 #[derive(Debug)]
 pub struct CreateTagInterpreter {
-    _ctx: Arc<QueryContext>,
     plan: CreateTagPlan,
 }
 
 impl CreateTagInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateTagPlan) -> Result<Self> {
-        Ok(Self { _ctx: ctx, plan })
+    pub fn try_create(_ctx: Arc<QueryContext>, plan: CreateTagPlan) -> Result<Self> {
+        Ok(Self { plan })
     }
 }
 
@@ -62,20 +61,29 @@ impl Interpreter for CreateTagInterpreter {
             created_on: Utc::now(),
             updated_on: None,
         };
+        if matches!(self.plan.create_option, CreateOption::CreateOrReplace) {
+            return Err(ErrorCode::InvalidArgument(
+                "Not support create or replace tag",
+            ));
+        }
+
+        let ignore_exists = matches!(self.plan.create_option, CreateOption::CreateIfNotExists);
         let req = CreateTagReq {
-            if_not_exists: match self.plan.create_option {
-                CreateOption::Create => false,
-                CreateOption::CreateIfNotExists => true,
-                CreateOption::CreateOrReplace => {
-                    return Err(ErrorCode::InvalidArgument(
-                        "Not support create or replace tag",
-                    ))
-                }
-            },
             name_ident: TagNameIdent::new(&self.plan.tenant, &self.plan.name),
             meta,
         };
-        meta_client.create_tag(req).await??;
-        Ok(PipelineBuildResult::create())
+        match meta_client.create_tag(req).await? {
+            Ok(_) => Ok(PipelineBuildResult::create()),
+            Err(_exist_err) => {
+                if ignore_exists {
+                    Ok(PipelineBuildResult::create())
+                } else {
+                    Err(ErrorCode::TagAlreadyExists(format!(
+                        "Tag '{}' already exists",
+                        self.plan.name
+                    )))
+                }
+            }
+        }
     }
 }
