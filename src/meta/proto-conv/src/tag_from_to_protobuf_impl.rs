@@ -77,7 +77,6 @@ impl FromToProto for mt::TagRefValue {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(Self {
-            tag_id: p.tag_id,
             value: p.value,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
         })
@@ -87,7 +86,6 @@ impl FromToProto for mt::TagRefValue {
         Ok(Self::PB {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            tag_id: self.tag_id,
             value: self.value.clone(),
             created_on: self.created_on.to_pb()?,
         })

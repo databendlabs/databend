@@ -42,15 +42,13 @@ fn test_decode_v162_tag_meta() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_decode_v162_tag_ref_value() -> anyhow::Result<()> {
+fn test_tag_ref_value() -> anyhow::Result<()> {
     let tag_ref_value_v162 = vec![
-        8, 42, 18, 10, 112, 114, 111, 100, 117, 99, 116, 105, 111, 110, 26, 23, 50, 48, 50, 52, 45,
-        49, 50, 45, 51, 49, 32, 48, 55, 58, 51, 48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 162, 1,
-        168, 6, 24,
+        10, 3, 100, 101, 118, 18, 23, 50, 48, 50, 52, 45, 49, 50, 45, 51, 49, 32, 48, 55, 58, 51,
+        48, 58, 48, 57, 32, 85, 84, 67, 160, 6, 162, 1, 168, 6, 24,
     ];
     let want = || TagRefValue {
-        tag_id: 42,
-        value: "production".to_string(),
+        value: "dev".to_string(),
         created_on: Utc.with_ymd_and_hms(2024, 12, 31, 7, 30, 9).unwrap(),
     };
 

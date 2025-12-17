@@ -181,13 +181,12 @@ impl TaggableObject {
 
 /// Value stored for each tag-to-object binding in the meta store.
 ///
-/// Stored at key [`TagRefIdent`]: `__fd_tag_ref/<tenant>/<object_type>/<object_id>/<tag_name>`.
+/// Stored at key [`TagRefIdent`]: `__fd_object_tag_ref/<tenant>/<object_type>/<object_id>/<tag_id>`.
+/// The `tag_id` is part of the key, so only the value payload and timestamp are stored here.
 ///
 /// [`TagRefIdent`]: crate::schema::TagRefIdent
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TagRefValue {
-    /// The ID of the tag definition this reference points to.
-    pub tag_id: u64,
     /// Payload assigned when tagging an object. When [`TagMeta::allowed_values`]
     /// is present, this string must match one of the configured entries,
     /// otherwise any string (including empty) is allowed.
