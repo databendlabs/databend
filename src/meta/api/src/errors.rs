@@ -90,11 +90,8 @@ impl From<RowAccessPolicyError> for ErrorCode {
 
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
 pub enum TagError {
-    #[error("TAG `{tag_name}` already exists.")]
-    AlreadyExists { tag_name: String },
-
-    #[error("TAG `{tag_name}` does not exist while {context}.")]
-    NotFound { tag_name: String, context: String },
+    #[error("TAG with id {tag_id} does not exist.")]
+    NotFound { tag_id: u64 },
 
     #[error(
         "TAG `{tag_name}` is still referenced by {reference_count} object(s). Remove the references before dropping it."
@@ -104,26 +101,17 @@ pub enum TagError {
         reference_count: usize,
     },
 
-    #[error("Invalid value '{tag_value}' for TAG `{tag_name}`{allowed_values_display}.")]
+    #[error("Invalid value '{tag_value}' for TAG with id {tag_id}{allowed_values_display}.")]
     InvalidValue {
-        tag_name: String,
+        tag_id: u64,
         tag_value: String,
         allowed_values_display: String,
     },
 }
 
 impl TagError {
-    pub fn already_exists(tag_name: impl Into<String>) -> Self {
-        Self::AlreadyExists {
-            tag_name: tag_name.into(),
-        }
-    }
-
-    pub fn not_found(tag_name: impl Into<String>, context: impl Into<String>) -> Self {
-        Self::NotFound {
-            tag_name: tag_name.into(),
-            context: context.into(),
-        }
+    pub fn not_found(tag_id: u64) -> Self {
+        Self::NotFound { tag_id }
     }
 
     pub fn has_references(tag_name: impl Into<String>, reference_count: usize) -> Self {
@@ -134,7 +122,7 @@ impl TagError {
     }
 
     pub fn invalid_value(
-        tag_name: impl Into<String>,
+        tag_id: u64,
         tag_value: impl Into<String>,
         allowed_values: Option<Vec<String>>,
     ) -> Self {
@@ -151,7 +139,7 @@ impl TagError {
         };
 
         Self::InvalidValue {
-            tag_name: tag_name.into(),
+            tag_id,
             tag_value: tag_value.into(),
             allowed_values_display,
         }
@@ -162,7 +150,6 @@ impl From<TagError> for ErrorCode {
     fn from(value: TagError) -> Self {
         let s = value.to_string();
         match value {
-            TagError::AlreadyExists { .. } => ErrorCode::TagAlreadyExists(s),
             TagError::NotFound { .. } => ErrorCode::UnknownTag(s),
             TagError::HasReferences { .. } => ErrorCode::TagHasReferences(s),
             TagError::InvalidValue { .. } => ErrorCode::InvalidTagValue(s),
