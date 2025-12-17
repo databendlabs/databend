@@ -66,7 +66,7 @@ impl FromToProto for mt::TagMeta {
     }
 }
 
-impl FromToProto for mt::TagRefObjectValue {
+impl FromToProto for mt::ObjectToTagValue {
     type PB = pb::TagRefValue;
 
     fn get_pb_ver(p: &Self::PB) -> u64 {
