@@ -117,12 +117,49 @@ pub enum TagObjectType {
 }
 
 impl TagObjectType {
+    pub const fn all() -> [TagObjectType; 4] {
+        [
+            TagObjectType::Database,
+            TagObjectType::Table,
+            TagObjectType::Stage,
+            TagObjectType::Connection,
+        ]
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             TagObjectType::Database => "database",
             TagObjectType::Table => "table",
             TagObjectType::Stage => "stage",
             TagObjectType::Connection => "connection",
+        }
+    }
+
+    /// Construct a dummy object for directory prefix scanning.
+    pub fn dummy_object(&self) -> TagObject {
+        match self {
+            TagObjectType::Database => TagObject::Database { db_id: 0 },
+            TagObjectType::Table => TagObject::Table {
+                db_id: 0,
+                table_id: 0,
+            },
+            TagObjectType::Stage => TagObject::Stage {
+                name: String::new(),
+            },
+            TagObjectType::Connection => TagObject::Connection {
+                name: String::new(),
+            },
+        }
+    }
+
+    /// Directory level for scanning this object type.
+    /// Database/Stage/Connection have 2 levels, Table has 3 (due to db_id/table_id).
+    pub fn dir_level(&self) -> usize {
+        match self {
+            TagObjectType::Database => 2,
+            TagObjectType::Table => 3,
+            TagObjectType::Stage => 2,
+            TagObjectType::Connection => 2,
         }
     }
 }
@@ -152,54 +189,52 @@ impl FromStr for TagObjectType {
 /// Stage/Connection do not expose stable numeric ids, so we persist their names
 /// inside the reference keys instead.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum TaggableObject {
+pub enum TagObject {
     Database { db_id: u64 },
     Table { db_id: u64, table_id: u64 },
     Stage { name: String },
     Connection { name: String },
 }
 
-impl TaggableObject {
+impl TagObject {
     pub fn object_type(&self) -> TagObjectType {
         match self {
-            TaggableObject::Database { .. } => TagObjectType::Database,
-            TaggableObject::Table { .. } => TagObjectType::Table,
-            TaggableObject::Stage { .. } => TagObjectType::Stage,
-            TaggableObject::Connection { .. } => TagObjectType::Connection,
+            TagObject::Database { .. } => TagObjectType::Database,
+            TagObject::Table { .. } => TagObjectType::Table,
+            TagObject::Stage { .. } => TagObjectType::Stage,
+            TagObject::Connection { .. } => TagObjectType::Connection,
         }
     }
 
     pub fn object_id(&self) -> String {
         match self {
-            TaggableObject::Database { db_id } => db_id.to_string(),
-            TaggableObject::Table { db_id, table_id } => format!("{}/{}", db_id, table_id),
-            TaggableObject::Stage { name } => name.clone(),
-            TaggableObject::Connection { name } => name.clone(),
+            TagObject::Database { db_id } => db_id.to_string(),
+            TagObject::Table { db_id, table_id } => format!("{}/{}", db_id, table_id),
+            TagObject::Stage { name } => name.clone(),
+            TagObject::Connection { name } => name.clone(),
         }
     }
 }
 
 /// Value stored for each tag-to-object binding in the meta store.
 ///
-/// Stored at key [`TagRefIdent`]: `__fd_tag_ref/<tenant>/<object_type>/<object_id>/<tag_name>`.
+/// Stored at key [`TagRefIdent`]: `__fd_object_tag_ref/<tenant>/<object_type>/<object_id>/<tag_id>`.
+/// The `tag_id` is part of the key, so only the value payload and timestamp are stored here.
 ///
 /// [`TagRefIdent`]: crate::schema::TagRefIdent
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct TagRefValue {
-    /// The ID of the tag definition this reference points to.
-    pub tag_id: u64,
+pub struct TagRefObjectValue {
     /// Payload assigned when tagging an object. When [`TagMeta::allowed_values`]
     /// is present, this string must match one of the configured entries,
     /// otherwise any string (including empty) is allowed.
     pub value: String,
-    pub created_on: DateTime<Utc>,
 }
 
 /// Binds a set of values to tag names for a single object.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SetObjectTagsReq {
     pub tenant: Tenant,
-    pub object: TaggableObject,
+    pub object: TagObject,
     pub tags: Vec<(String, String)>,
 }
 
@@ -207,7 +242,7 @@ pub struct SetObjectTagsReq {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UnsetObjectTagsReq {
     pub tenant: Tenant,
-    pub object: TaggableObject,
+    pub object: TagObject,
     pub tags: Vec<String>,
 }
 
@@ -215,18 +250,16 @@ pub struct UnsetObjectTagsReq {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct GetObjectTagsReq {
     pub tenant: Tenant,
-    pub object: TaggableObject,
+    pub object: TagObject,
 }
 
 /// Value returned for each tag bound to an object.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectTagValue {
-    pub tag_name: String,
     pub tag_id: u64,
-    /// String payload that was assigned to `tag_name` for this object.
-    /// Mirrors [`TagRefValue::value`] and must respect the tag's allowed values.
+    /// String payload that was assigned to this tag for this object.
+    /// Mirrors [`TagRefObjectValue::value`] and must respect the tag's allowed values.
     pub tag_value: String,
-    pub created_on: DateTime<Utc>,
 }
 
 /// Response carrying all tags and values assigned to the requested object.
@@ -235,22 +268,20 @@ pub struct GetObjectTagsReply {
     pub tags: Vec<ObjectTagValue>,
 }
 
-/// Lists all references for an optional tag/object-type filter.
+/// Lists all references for a tag
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListTagReferencesReq {
     pub tenant: Tenant,
-    pub tag_name: Option<String>,
-    pub object_type: Option<TagObjectType>,
+    pub tag_name: String,
 }
 
 /// Row returned from `list_tag_references`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TagReferenceInfo {
+    pub tag_id: u64,
     pub object_type: TagObjectType,
     pub object_id: String,
-    pub tag_name: String,
     pub tag_value: String,
-    pub created_on: DateTime<Utc>,
 }
 
 /// Response packing the full list of references returned for a query.
