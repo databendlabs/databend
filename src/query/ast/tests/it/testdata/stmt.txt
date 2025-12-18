@@ -15371,9 +15371,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);
+ALTER TABLE t SET OPTIONS(block_per_segment = 500);
 ---------- Output ---------
-ALTER TABLE t SET OPTIONS (block_per_segment = '500', snapshot_location = '1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk')
+ALTER TABLE t SET OPTIONS (block_per_segment = '500')
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -15402,7 +15402,6 @@ AlterTable(
         action: SetOptions {
             set_options: {
                 "block_per_segment": "500",
-                "snapshot_location": "1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk",
             },
         },
     },
