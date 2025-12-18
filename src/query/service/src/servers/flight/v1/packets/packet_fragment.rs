@@ -70,11 +70,18 @@ impl IPhysicalPlan for SerializedPhysicalPlanRef {
     }
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize)]
 struct SerializeQueryFragment {
     pub fragment_id: usize,
     pub data_exchange: Option<DataExchange>,
     pub flatten_plan: VecDeque<PhysicalPlan>,
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
+struct SerializeQueryFragmentJson {
+    pub fragment_id: usize,
+    pub data_exchange: Option<DataExchange>,
+    pub flatten_plan: VecDeque<serde_json::Value>,
 }
 
 impl serde::Serialize for QueryFragment {
@@ -107,7 +114,22 @@ impl serde::Serialize for QueryFragment {
 impl<'de> serde::Deserialize<'de> for QueryFragment {
     #[recursive::recursive]
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let mut fragment = SerializeQueryFragment::deserialize(deserializer)?;
+        let fragment = SerializeQueryFragmentJson::deserialize(deserializer)?;
+
+        // Deserialize PhysicalPlan node-by-node using Value to avoid streaming issues.
+        let flatten_plan: VecDeque<PhysicalPlan> = fragment
+            .flatten_plan
+            .into_iter()
+            .map(|plan| {
+                serde_json::from_value(plan)
+                    .map_err(|e| D::Error::custom(format!("deserialize physical plan: {e}")))
+            })
+            .collect::<Result<_, _>>()?;
+        let mut fragment = SerializeQueryFragment {
+            fragment_id: fragment.fragment_id,
+            data_exchange: fragment.data_exchange,
+            flatten_plan,
+        };
 
         let mut flatten_storage = HashMap::new();
 

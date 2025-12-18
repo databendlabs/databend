@@ -341,11 +341,27 @@ impl serde::Serialize for PhysicalPlan {
 impl<'de> serde::Deserialize<'de> for PhysicalPlan {
     #[recursive::recursive]
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        let envelope = PhysicalPlanEnvelope::deserialize(deserializer)?;
+        // Deserialize to JSON first to avoid the untagged enum backtracking failure
+        // that happens in stacked/streaming deserializers.
+        let value = JsonValue::deserialize(deserializer)?;
 
-        let inner = match envelope {
-            PhysicalPlanEnvelope::V2(plan) => plan,
-            PhysicalPlanEnvelope::V1(LegacyPhysicalPlanImpl(plan)) => plan,
+        let try_v2: std::result::Result<PhysicalPlanImpl, _> =
+            serde_json::from_value(value.clone());
+        let inner = match try_v2 {
+            Ok(plan) => plan,
+            Err(v2_err) => {
+                let try_v1: std::result::Result<LegacyPhysicalPlanImpl, _> =
+                    serde_json::from_value(value);
+
+                match try_v1 {
+                    Ok(LegacyPhysicalPlanImpl(plan)) => plan,
+                    Err(v1_err) => {
+                        return Err(DeError::custom(format!(
+                            "cannot deserialize PhysicalPlan, v2: {v2_err}, v1: {v1_err}"
+                        )))
+                    }
+                }
+            }
         };
 
         Ok(PhysicalPlan {
@@ -355,12 +371,14 @@ impl<'de> serde::Deserialize<'de> for PhysicalPlan {
 }
 
 #[derive(serde::Serialize)]
+#[allow(dead_code, unused)]
 #[serde(untagged)]
 enum PhysicalPlanEnvelopeRef<'a> {
     V2(&'a PhysicalPlanImpl),
 }
 
 #[derive(serde::Deserialize)]
+#[allow(dead_code, unused)]
 #[serde(untagged)]
 enum PhysicalPlanEnvelope {
     V2(PhysicalPlanImpl),
