@@ -710,7 +710,7 @@ impl FromStr for Scheme {
             "gcs" => Ok(Scheme::Gcs),
             "hdfs" => Ok(Scheme::Hdfs),
             "ipfs" => Ok(Scheme::Ipfs),
-            "s3" => Ok(Scheme::S3),
+            "s3" | "s3a" => Ok(Scheme::S3),
             "oss" => Ok(Scheme::Oss),
             "obs" => Ok(Scheme::Obs),
             "cos" => Ok(Scheme::Cos),
