@@ -29,6 +29,7 @@
 #![feature(extend_one)]
 #![feature(if_let_guard)]
 #![feature(iter_next_chunk)]
+#![feature(once_cell_try)]
 
 pub mod evaluator;
 pub mod executor;

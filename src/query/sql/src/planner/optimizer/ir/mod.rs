@@ -25,6 +25,7 @@ pub use expr::Matcher;
 pub use expr::PatternExtractor;
 pub use expr::SExpr;
 pub use expr::SExprVisitor;
+pub use expr::Side;
 pub use expr::VisitAction;
 pub use group::Group;
 pub use group::GroupState;

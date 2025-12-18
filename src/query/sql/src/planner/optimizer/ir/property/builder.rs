@@ -98,12 +98,10 @@ impl<'a> RelExpr<'a> {
     pub fn derive_cardinality(&self) -> Result<Arc<StatInfo>> {
         match self {
             RelExpr::SExpr { expr } => {
-                if let Some(stat_info) = expr.stat_info.lock().unwrap().as_ref() {
-                    return Ok(stat_info.clone());
-                }
-                let stat_info = expr.plan.derive_stats(self)?;
-                *expr.stat_info.lock().unwrap() = Some(stat_info.clone());
-                Ok(stat_info)
+                let stat_info = expr
+                    .stat_info
+                    .get_or_try_init(|| expr.plan.derive_stats(self))?;
+                Ok(stat_info.clone())
             }
             RelExpr::MExpr { expr, .. } => expr.plan.derive_stats(self),
             RelExpr::OptContext { expr, .. } => expr.plan.derive_stats(self),

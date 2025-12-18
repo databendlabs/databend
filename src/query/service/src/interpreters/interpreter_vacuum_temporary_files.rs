@@ -21,6 +21,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::VacuumTemporaryFilesPlan;
+use databend_common_storages_fuse::table_functions::vacuum_inactive_temp_tables;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 
@@ -67,8 +68,17 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
             )
             .await?;
 
+        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
+        let session_limit = self
+            .plan
+            .limit
+            .map(|limit| limit.saturating_sub(removed_files as u64));
+        let cleaned_temp_table_sessions =
+            vacuum_inactive_temp_tables(&table_ctx, session_limit).await? as u64;
+
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             UInt64Type::from_data(vec![removed_files as u64]),
+            UInt64Type::from_data(vec![cleaned_temp_table_sessions]),
         ])])
     }
 }

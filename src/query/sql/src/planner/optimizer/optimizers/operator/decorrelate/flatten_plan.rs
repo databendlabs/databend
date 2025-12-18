@@ -798,14 +798,13 @@ impl SubqueryDecorrelatorOptimizer {
             .map(|child| Ok(self.clone_outer_recursive(child)?.into()))
             .collect::<Result<_>>()?;
 
-        Ok(SExpr {
-            plan: Arc::new(self.clone_outer_plan(outer.plan())?),
+        Ok(SExpr::create(
+            self.clone_outer_plan(outer.plan())?,
             children,
-            original_group: None,
-            rel_prop: Default::default(),
-            stat_info: Default::default(),
-            applied_rules: Default::default(),
-        })
+            None,
+            None,
+            None,
+        ))
     }
 
     fn clone_outer_plan(&mut self, plan: &RelOperator) -> Result<RelOperator> {

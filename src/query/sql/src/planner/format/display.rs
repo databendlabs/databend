@@ -86,14 +86,13 @@ impl IdHumanizer for MetadataIdHumanizer<'_> {
         match column_entry {
             ColumnEntry::BaseTableColumn(column) => {
                 let table = self.metadata.table(column.table_index);
-                let db = table.database();
                 let table = table.name();
                 let column = column.column_name.as_str();
-                format!("{db}.{table}.{column} (#{id})")
+                format!("{table}.{column} (#{id})")
             }
             ColumnEntry::DerivedColumn(column) => {
-                let column = column.alias.as_str();
-                format!("derived.{column} (#{id})")
+                let alias = &column.alias;
+                format!("{alias} (#{id})")
             }
             ColumnEntry::InternalColumn(column) => {
                 let column = column.internal_column.column_name.as_str();

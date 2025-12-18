@@ -46,6 +46,7 @@ use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Scan;
+use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 
@@ -69,11 +70,12 @@ pub async fn execute_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<()> {
 
 /// Get raw plan from SQL
 pub async fn raw_plan(ctx: &Arc<QueryContext>, sql: &str) -> Result<Plan> {
+    let settings = ctx.get_settings();
     let planner = Planner::new(ctx.clone());
     let extras = planner.parse_sql(sql)?;
 
     let metadata = Arc::new(parking_lot::RwLock::new(Metadata::default()));
-    let name_resolution_ctx = NameResolutionContext::default();
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
     let binder = Binder::new(
         ctx.clone(),

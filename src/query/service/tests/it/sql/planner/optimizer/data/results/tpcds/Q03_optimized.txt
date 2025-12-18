@@ -2,28 +2,28 @@ Limit
 ├── limit: [100]
 ├── offset: [0]
 └── Sort
-    ├── sort keys: [default.date_dim.d_year (#6) ASC NULLS LAST, derived.SUM(ss_ext_sales_price) (#73) DESC NULLS LAST, default.item.i_brand_id (#58) ASC NULLS LAST]
+    ├── sort keys: [date_dim.d_year (#6) ASC NULLS LAST, SUM(ss_ext_sales_price) (#73) DESC NULLS LAST, item.i_brand_id (#58) ASC NULLS LAST]
     ├── limit: [100]
     └── Exchange(MergeSort)
         └── Sort
-            ├── sort keys: [default.date_dim.d_year (#6) ASC NULLS LAST, derived.SUM(ss_ext_sales_price) (#73) DESC NULLS LAST, default.item.i_brand_id (#58) ASC NULLS LAST]
+            ├── sort keys: [date_dim.d_year (#6) ASC NULLS LAST, SUM(ss_ext_sales_price) (#73) DESC NULLS LAST, item.i_brand_id (#58) ASC NULLS LAST]
             ├── limit: [100]
             └── Aggregate(Final)
-                ├── group items: [dt.d_year (#6) AS (#6), item.i_brand (#59) AS (#59), item.i_brand_id (#58) AS (#58)]
-                ├── aggregate functions: [SUM(ss_ext_sales_price) AS (#73)]
+                ├── group items: [date_dim.d_year (#6) AS (#6), item.i_brand (#59) AS (#59), item.i_brand_id (#58) AS (#58)]
+                ├── aggregate functions: [sum(store_sales.ss_ext_sales_price (#43)) AS (#73)]
                 └── Aggregate(Partial)
-                    ├── group items: [dt.d_year (#6) AS (#6), item.i_brand (#59) AS (#59), item.i_brand_id (#58) AS (#58)]
-                    ├── aggregate functions: [SUM(ss_ext_sales_price) AS (#73)]
+                    ├── group items: [date_dim.d_year (#6) AS (#6), item.i_brand (#59) AS (#59), item.i_brand_id (#58) AS (#58)]
+                    ├── aggregate functions: [sum(store_sales.ss_ext_sales_price (#43)) AS (#73)]
                     └── Exchange(Hash)
-                        ├── Exchange(Hash): keys: [dt.d_year (#6)]
+                        ├── Exchange(Hash): keys: [date_dim.d_year (#6)]
                         └── EvalScalar
-                            ├── scalars: [dt.d_year (#6) AS (#6), store_sales.ss_ext_sales_price (#43) AS (#43), item.i_brand_id (#58) AS (#58), item.i_brand (#59) AS (#59), dt.d_date_sk (#0) AS (#74), store_sales.ss_sold_date_sk (#28) AS (#75), store_sales.ss_item_sk (#30) AS (#76), item.i_item_sk (#51) AS (#77), item.i_manufact_id (#64) AS (#78), dt.d_moy (#8) AS (#79)]
+                            ├── scalars: [date_dim.d_year (#6) AS (#6), store_sales.ss_ext_sales_price (#43) AS (#43), item.i_brand_id (#58) AS (#58), item.i_brand (#59) AS (#59), date_dim.d_date_sk (#0) AS (#74), store_sales.ss_sold_date_sk (#28) AS (#75), store_sales.ss_item_sk (#30) AS (#76), item.i_item_sk (#51) AS (#77), item.i_manufact_id (#64) AS (#78), date_dim.d_moy (#8) AS (#79)]
                             └── Join(Inner)
                                 ├── build keys: [item.i_item_sk (#51)]
                                 ├── probe keys: [store_sales.ss_item_sk (#30)]
                                 ├── other filters: []
                                 ├── Join(Inner)
-                                │   ├── build keys: [dt.d_date_sk (#0)]
+                                │   ├── build keys: [date_dim.d_date_sk (#0)]
                                 │   ├── probe keys: [store_sales.ss_sold_date_sk (#28)]
                                 │   ├── other filters: []
                                 │   ├── Scan

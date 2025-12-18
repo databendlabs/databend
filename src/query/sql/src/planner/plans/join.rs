@@ -35,6 +35,7 @@ use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
+use crate::optimizer::ir::Side;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::optimizer::ir::UniformSampleSet;
@@ -217,6 +218,15 @@ pub struct JoinEquiCondition {
     pub right: ScalarExpr,
     // Used for "is (not) distinct from" and mark join
     pub is_null_equal: bool,
+}
+
+impl Side {
+    pub fn join_condition(self, cond: &JoinEquiCondition) -> &ScalarExpr {
+        match self {
+            Side::Left => &cond.left,
+            Side::Right => &cond.right,
+        }
+    }
 }
 
 impl JoinEquiCondition {
