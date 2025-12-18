@@ -69,7 +69,7 @@ mod tests {
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_tag_id_ident_roundtrip() {
+    fn test_tag_id_ident() {
         let tenant = Tenant::new_literal("t");
         let ident = TagIdIdent::new_generic(tenant, TagId::new(42));
         let key = ident.to_string_key();

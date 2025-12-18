@@ -17,7 +17,7 @@ use databend_common_meta_kvapi::kvapi::KeyCodec;
 use databend_common_meta_kvapi::kvapi::KeyError;
 use databend_common_meta_kvapi::kvapi::KeyParser;
 
-use super::TagObject;
+use super::TagableObject;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
@@ -25,55 +25,55 @@ use crate::tenant_key::raw::TIdentRaw;
 ///
 /// Here "object" refers to taggable Databend entities: Database, Table, Stage, or Connection.
 ///
-/// Used as the "name" portion of [`ObjectToTagIdent`] keys in the meta store.
+/// Used as the "name" portion of [`ObjectTagIdRefIdent`] keys in the meta store.
 /// The key format is `__fd_object_tag_ref/<tenant>/<object_type>/<object_id>/<tag_id>`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ObjectToTagId {
+pub struct ObjectTagIdRef {
     /// The object this tag is attached to.
-    pub object: TagObject,
+    pub object: TagableObject,
     /// The ID of the tag.
     pub tag_id: u64,
 }
 
-impl ObjectToTagId {
-    pub fn new(object: TagObject, tag_id: u64) -> Self {
+impl ObjectTagIdRef {
+    pub fn new(object: TagableObject, tag_id: u64) -> Self {
         Self { object, tag_id }
     }
 }
 
-impl KeyCodec for ObjectToTagId {
+impl KeyCodec for ObjectTagIdRef {
     fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
         self.object.encode_to_key(b).push_u64(self.tag_id)
     }
 
     fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
     where Self: Sized {
-        let object = TagObject::decode_from_key(parser)?;
+        let object = TagableObject::decode_from_key(parser)?;
         let tag_id = parser.next_u64()?;
         parser.done()?;
         Ok(Self { object, tag_id })
     }
 }
 
-/// Object-to-tag reference key stored in meta-service (indexed by object).
+/// Object -> tag reference key stored in meta-service (indexed by object).
 ///
 /// Key format: `__fd_object_tag_ref/<tenant>/<object_type>/<object_id>/<tag_id>`
-pub type ObjectToTagIdent = TIdent<ObjectToTagResource, ObjectToTagId>;
-pub type ObjectToTagIdentRaw = TIdentRaw<ObjectToTagResource, ObjectToTagId>;
+pub type ObjectTagIdRefIdent = TIdent<Resource, ObjectTagIdRef>;
+pub type ObjectToTagIdentRaw = TIdentRaw<Resource, ObjectTagIdRef>;
 
-pub use kvapi_impl::ObjectToTagResource;
+pub use kvapi_impl::Resource;
 
 /// Composite key component for tag-to-object mapping.
 ///
 /// Key format: `__fd_tag_object_ref/<tenant>/<tag_id>/<object_type>/<object_id>`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TagIdToObject {
+pub struct TagIdObjectRef {
     pub tag_id: u64,
-    pub object: TagObject,
+    pub object: TagableObject,
 }
 
-impl TagIdToObject {
-    pub fn new(tag_id: u64, object: TagObject) -> Self {
+impl TagIdObjectRef {
+    pub fn new(tag_id: u64, object: TagableObject) -> Self {
         Self { tag_id, object }
     }
 
@@ -84,12 +84,12 @@ impl TagIdToObject {
     pub fn prefix(tag_id: u64) -> Self {
         Self {
             tag_id,
-            object: TagObject::Database { db_id: 0 },
+            object: TagableObject::Database { db_id: 0 },
         }
     }
 }
 
-impl KeyCodec for TagIdToObject {
+impl KeyCodec for TagIdObjectRef {
     fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
         self.object.encode_to_key(b.push_u64(self.tag_id))
     }
@@ -97,57 +97,57 @@ impl KeyCodec for TagIdToObject {
     fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
     where Self: Sized {
         let tag_id = parser.next_u64()?;
-        let object = TagObject::decode_from_key(parser)?;
+        let object = TagableObject::decode_from_key(parser)?;
         parser.done()?;
         Ok(Self { tag_id, object })
     }
 }
 
-/// Tag-to-object reference key stored in meta-service (indexed by tag).
+/// Tag -> object reference key stored in meta-service (indexed by tag).
 ///
 /// Key format: `__fd_tag_object_ref/<tenant>/<tag_id>/<object_type>/<object_id>`
-pub type TagIdToObjectIdent = TIdent<TagIdToObjectResource, TagIdToObject>;
-pub type TagIdToObjectIdentRaw = TIdentRaw<TagIdToObjectResource, TagIdToObject>;
+pub type TagIdObjectRefIdent = TIdent<TagIdObjectRefResource, TagIdObjectRef>;
+pub type TagIdObjectRefIdentRaw = TIdentRaw<TagIdObjectRefResource, TagIdObjectRef>;
 
-pub use kvapi_impl::TagIdToObjectResource;
+pub use kvapi_impl::TagIdObjectRefResource;
 
 mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::schema::EmptyProto;
-    use crate::schema::ObjectToTagIdent;
-    use crate::schema::ObjectToTagValue;
-    use crate::schema::TagIdToObjectIdent;
+    use crate::schema::ObjectTagIdRefIdent;
+    use crate::schema::ObjectTagIdRefValue;
+    use crate::schema::TagIdObjectRefIdent;
     use crate::tenant_key::resource::TenantResource;
 
-    /// Resource marker for object-to-tag reference keys.
-    pub struct ObjectToTagResource;
-    impl TenantResource for ObjectToTagResource {
+    /// Resource marker for object -> tag reference keys.
+    pub struct Resource;
+    impl TenantResource for Resource {
         const PREFIX: &'static str = "__fd_object_tag_ref";
-        const TYPE: &'static str = "ObjectToTagIdent";
+        const TYPE: &'static str = "ObjectTagIdRefIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = ObjectToTagValue;
+        type ValueType = ObjectTagIdRefValue;
     }
 
-    impl kvapi::Value for ObjectToTagValue {
-        type KeyType = ObjectToTagIdent;
+    impl kvapi::Value for ObjectTagIdRefValue {
+        type KeyType = ObjectTagIdRefIdent;
 
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }
 
-    /// Resource marker for tag-to-object reference keys.
-    pub struct TagIdToObjectResource;
-    impl TenantResource for TagIdToObjectResource {
+    /// Resource marker for tag -> object reference keys.
+    pub struct TagIdObjectRefResource;
+    impl TenantResource for TagIdObjectRefResource {
         const PREFIX: &'static str = "__fd_tag_object_ref";
-        const TYPE: &'static str = "TagIdToObjectIdent";
+        const TYPE: &'static str = "TagIdObjectRefIdent";
         const HAS_TENANT: bool = true;
         type ValueType = EmptyProto;
     }
 
     impl kvapi::Value for EmptyProto {
-        type KeyType = TagIdToObjectIdent;
+        type KeyType = TagIdObjectRefIdent;
 
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
@@ -159,34 +159,34 @@ mod kvapi_impl {
 mod tests {
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::ObjectToTagId;
-    use super::ObjectToTagIdent;
-    use super::TagIdToObject;
-    use super::TagIdToObjectIdent;
-    use super::TagObject;
+    use super::ObjectTagIdRef;
+    use super::ObjectTagIdRefIdent;
+    use super::TagIdObjectRef;
+    use super::TagIdObjectRefIdent;
+    use super::TagableObject;
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_object_to_tag_ident_roundtrip() {
+    fn test_object_tag_id_ref_ident() {
         let tenant = Tenant::new_literal("tenant_a");
-        let name = ObjectToTagId::new(TagObject::Table { table_id: 22 }, 42);
-        let ident = ObjectToTagIdent::new_generic(tenant, name.clone());
+        let name = ObjectTagIdRef::new(TagableObject::Table { table_id: 22 }, 42);
+        let ident = ObjectTagIdRefIdent::new_generic(tenant, name.clone());
 
         let key = ident.to_string_key();
         assert_eq!("__fd_object_tag_ref/tenant_a/table/22/42", key);
-        assert_eq!(ident, ObjectToTagIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, ObjectTagIdRefIdent::from_str_key(&key).unwrap());
         assert_eq!(name, ident.name().clone());
     }
 
     #[test]
-    fn test_tag_id_to_object_ident_roundtrip() {
+    fn test_tag_id_object_ref_ident() {
         let tenant = Tenant::new_literal("tenant_b");
-        let name = TagIdToObject::new(42, TagObject::Table { table_id: 22 });
-        let ident = TagIdToObjectIdent::new_generic(tenant, name.clone());
+        let name = TagIdObjectRef::new(42, TagableObject::Table { table_id: 22 });
+        let ident = TagIdObjectRefIdent::new_generic(tenant, name.clone());
 
         let key = ident.to_string_key();
         assert_eq!("__fd_tag_object_ref/tenant_b/42/table/22", key);
-        assert_eq!(ident, TagIdToObjectIdent::from_str_key(&key).unwrap());
+        assert_eq!(ident, TagIdObjectRefIdent::from_str_key(&key).unwrap());
         assert_eq!(name, ident.name().clone());
     }
 }
