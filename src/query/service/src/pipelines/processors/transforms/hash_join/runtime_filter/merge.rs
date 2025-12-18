@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::time::Instant;
 
 use databend_common_catalog::sbbf::Sbbf;
 use databend_common_exception::Result;
@@ -27,6 +28,7 @@ use super::packet::SerializableDomain;
 pub fn merge_join_runtime_filter_packets(
     packets: Vec<JoinRuntimeFilterPacket>,
 ) -> Result<JoinRuntimeFilterPacket> {
+    let instant = Instant::now();
     log::info!(
         "RUNTIME-FILTER: merge_join_runtime_filter_packets input: {:?}",
         packets
@@ -56,8 +58,9 @@ pub fn merge_join_runtime_filter_packets(
     }
 
     log::info!(
-        "RUNTIME-FILTER: merge_join_runtime_filter_packets output: {:?}",
-        result
+        "RUNTIME-FILTER: merge_join_runtime_filter_packets output: {:?}, elapsed: {:?}",
+        result,
+        instant.elapsed()
     );
     Ok(JoinRuntimeFilterPacket {
         packets: Some(result),

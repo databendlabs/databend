@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Instant;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -28,6 +30,8 @@ pub async fn get_global_runtime_filter_packet(
     let receiver = ctx.broadcast_sink_receiver(broadcast_id);
     let mut received = vec![];
 
+    let instant = Instant::now();
+
     sender
         .send(local_packet.try_into()?)
         .await
@@ -37,5 +41,11 @@ pub async fn get_global_runtime_filter_packet(
     while let Ok(data_block) = receiver.recv().await {
         received.push(JoinRuntimeFilterPacket::try_from(data_block)?);
     }
+
+    log::info!(
+        "RUNTIME-FILTER: broadcast runtime filter elapsed: {:?}",
+        instant.elapsed()
+    );
+
     merge_join_runtime_filter_packets(received)
 }
