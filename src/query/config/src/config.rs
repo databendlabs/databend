@@ -3316,6 +3316,14 @@ pub struct CacheConfig {
     )]
     pub inverted_index_meta_count: u64,
 
+    /// Max bytes of cached inverted index metadata on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-inverted-index-meta-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_inverted_index_meta_size: u64,
+
     /// Max bytes of cached inverted index filters used. Set it to 0 to disable it.
     #[clap(
         long = "cache-inverted-index-filter-size",
@@ -3323,6 +3331,14 @@ pub struct CacheConfig {
         default_value = "64424509440"
     )]
     pub inverted_index_filter_size: u64,
+
+    /// Max bytes of cached inverted index filters on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-inverted-index-data-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_inverted_index_data_size: u64,
 
     /// Max percentage of in memory inverted index filter cache relative to whole memory. By default it is 0 (disabled).
     #[clap(
@@ -3340,6 +3356,14 @@ pub struct CacheConfig {
     )]
     pub vector_index_meta_count: u64,
 
+    /// Max bytes of cached vector index metadata on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-vector-index-meta-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_vector_index_meta_size: u64,
+
     /// Max bytes of cached vector index filters used. Set it to 0 to disable it.
     #[clap(
         long = "cache-vector-index-filter-size",
@@ -3347,6 +3371,14 @@ pub struct CacheConfig {
         default_value = "64424509440"
     )]
     pub vector_index_filter_size: u64,
+
+    /// Max bytes of cached vector index filters on disk. Set it to 0 to disable it.
+    #[clap(
+        long = "disk-cache-vector-index-data-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub disk_cache_vector_index_data_size: u64,
 
     /// Max percentage of in memory vector index filter cache relative to whole memory. By default it is 0 (disabled).
     #[clap(
@@ -3697,10 +3729,14 @@ mod cache_config_converters {
                 disk_cache_table_bloom_index_data_size: value
                     .disk_cache_table_bloom_index_data_size,
                 inverted_index_meta_count: value.inverted_index_meta_count,
+                disk_cache_inverted_index_meta_size: value.disk_cache_inverted_index_meta_size,
                 inverted_index_filter_size: value.inverted_index_filter_size,
+                disk_cache_inverted_index_data_size: value.disk_cache_inverted_index_data_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
                 vector_index_meta_count: value.vector_index_meta_count,
+                disk_cache_vector_index_meta_size: value.disk_cache_vector_index_meta_size,
                 vector_index_filter_size: value.vector_index_filter_size,
+                disk_cache_vector_index_data_size: value.disk_cache_vector_index_data_size,
                 vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
@@ -3737,10 +3773,14 @@ mod cache_config_converters {
                 disk_cache_table_bloom_index_data_size: value
                     .disk_cache_table_bloom_index_data_size,
                 inverted_index_meta_count: value.inverted_index_meta_count,
+                disk_cache_inverted_index_meta_size: value.disk_cache_inverted_index_meta_size,
                 inverted_index_filter_size: value.inverted_index_filter_size,
+                disk_cache_inverted_index_data_size: value.disk_cache_inverted_index_data_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
                 vector_index_meta_count: value.vector_index_meta_count,
+                disk_cache_vector_index_meta_size: value.disk_cache_vector_index_meta_size,
                 vector_index_filter_size: value.vector_index_filter_size,
+                disk_cache_vector_index_data_size: value.disk_cache_vector_index_data_size,
                 vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
