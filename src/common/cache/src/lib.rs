@@ -18,7 +18,7 @@
 mod cache;
 mod mem_sized;
 
-pub use cache::lru::LruCache;
 pub use cache::Cache;
+pub use cache::lru::LruCache;
 pub use hashbrown::DefaultHashBuilder;
 pub use mem_sized::MemSized;

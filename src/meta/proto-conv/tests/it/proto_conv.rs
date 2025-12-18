@@ -16,17 +16,17 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::vec;
 
-use ce::types::decimal::DecimalSize;
 use ce::types::DecimalDataType;
 use ce::types::NumberDataType;
+use ce::types::decimal::DecimalSize;
 use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_expression as ce;
-use databend_common_expression::types::DataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
@@ -369,13 +369,11 @@ fn test_incompatible() -> anyhow::Result<()> {
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
-        Incompatible::new(
-            format!(
-                "executable ver={} is smaller than the min reader version({}) that can read this message",
-                VER,
-                VER + 1
-            )
-        ),
+        Incompatible::new(format!(
+            "executable ver={} is smaller than the min reader version({}) that can read this message",
+            VER,
+            VER + 1
+        )),
         res.unwrap_err()
     );
 

@@ -23,6 +23,19 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_column::binary::BinaryColumnBuilder;
 use databend_common_exception::Result;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
+use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::types::date::CoreDate;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::empty_array::CoreEmptyArray;
@@ -37,28 +50,10 @@ use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::CoreTimestamp;
 use databend_common_expression::types::zero_size_type::ZeroSizeType;
 use databend_common_expression::types::zero_size_type::ZeroSizeValueType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::AggrStateRegistry;
-use databend_common_expression::AggrStateType;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ColumnView;
-use databend_common_expression::ProjectedBlock;
-use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
-use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_scalar_state::ScalarStateFunc;
-use super::assert_params;
-use super::assert_unary_arguments;
-use super::batch_merge1;
-use super::batch_serialize1;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -68,6 +63,11 @@ use super::AggregateFunctionSortDesc;
 use super::SerializeInfo;
 use super::StateAddr;
 use super::StateSerde;
+use super::aggregate_scalar_state::ScalarStateFunc;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::batch_serialize1;
 
 #[derive(Debug)]
 struct ArrayAggStateAny<T>
@@ -699,7 +699,7 @@ where
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<State>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 

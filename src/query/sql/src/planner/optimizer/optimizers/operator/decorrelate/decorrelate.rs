@@ -18,14 +18,15 @@ use std::sync::Arc;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::common_super_type;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use crate::ColumnSet;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -49,7 +50,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
-use crate::ColumnSet;
 
 impl SubqueryDecorrelatorOptimizer {
     // Try to decorrelate a `CrossApply` into `SemiJoin` or `AntiJoin`.

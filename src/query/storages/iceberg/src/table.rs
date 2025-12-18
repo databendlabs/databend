@@ -628,10 +628,10 @@ impl Table for IcebergTable {
                 }
                 _ => {
                     return Err(ErrorCode::Unimplemented(format!(
-                            "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
-                            self.name(),
-                            self.get_table_info().engine(),
-                        )));
+                        "Time travel operation is not supported for the table '{}', which uses the '{}' engine.",
+                        self.name(),
+                        self.get_table_info().engine(),
+                    )));
                 }
             },
             _ => {

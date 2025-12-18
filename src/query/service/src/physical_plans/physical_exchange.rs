@@ -19,17 +19,17 @@ use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::optimizer::ir::SExpr;
 
+use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::ExchangeFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::PhysicalPlanBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Exchange {

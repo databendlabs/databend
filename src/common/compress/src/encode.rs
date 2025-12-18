@@ -16,6 +16,7 @@ use std::io::Cursor;
 use std::io::Result;
 use std::io::Write;
 
+use async_compression::Level;
 use async_compression::codec::BrotliEncoder;
 use async_compression::codec::BzEncoder;
 use async_compression::codec::DeflateEncoder;
@@ -26,11 +27,10 @@ use async_compression::codec::XzEncoder;
 use async_compression::codec::ZlibEncoder;
 use async_compression::codec::ZstdEncoder;
 use async_compression::util::PartialBuffer;
-use async_compression::Level;
 use brotli::enc::backward_references::BrotliEncoderParams;
 use databend_common_exception::ErrorCode;
-use zip::write::FileOptions;
 use zip::ZipWriter;
+use zip::write::FileOptions;
 
 use crate::CompressAlgorithm;
 

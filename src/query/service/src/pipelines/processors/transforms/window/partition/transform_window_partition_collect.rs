@@ -32,9 +32,9 @@ use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 use either::Either;
 
-use super::window_partition_buffer_v2::WindowPartitionBufferV2;
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
+use super::window_partition_buffer_v2::WindowPartitionBufferV2;
 use crate::pipelines::processors::transforms::DataProcessorStrategy;
 use crate::sessions::QueryContext;
 use crate::spillers::BackpressureSpiller;

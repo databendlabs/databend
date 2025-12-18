@@ -14,10 +14,10 @@
 
 use std::io::Write;
 
-use databend_common_expression::types::Float64Type;
-use databend_common_expression::types::UInt16Type;
-use databend_common_expression::types::UInt8Type;
 use databend_common_expression::FromData;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::UInt8Type;
+use databend_common_expression::types::UInt16Type;
 use goldenfile::Mint;
 
 use super::run_ast;

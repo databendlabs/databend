@@ -17,10 +17,10 @@ use databend_common_http::health_handler;
 use http::Method;
 use http::StatusCode;
 use http::Uri;
-use poem::get;
 use poem::Endpoint;
 use poem::Request;
 use poem::Route;
+use poem::get;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread")]

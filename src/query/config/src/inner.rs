@@ -21,10 +21,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
-use databend_common_base::base::mask_string;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::OrderedFloat;
+use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;

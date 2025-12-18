@@ -15,8 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::span::pretty_print_error;
 use crate::span::Span;
+use crate::span::pretty_print_error;
 
 #[derive(Debug)]
 pub struct ParseError(pub Span, pub String);

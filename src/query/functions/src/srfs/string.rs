@@ -15,11 +15,6 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
@@ -31,6 +26,11 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::string::StringColumnBuilder;
 use regex::RegexBuilder;
 
 pub fn register(registry: &mut FunctionRegistry) {

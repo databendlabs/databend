@@ -12,22 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::Column;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::opaque::OpaqueColumn;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
-use geozero::wkb::Ewkb;
 use geozero::ToJson;
+use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
 
-use crate::field_encoder::helpers::write_json_string;
-use crate::field_encoder::FieldEncoderValues;
 use crate::FileFormatOptionsExt;
 use crate::OutputCommonSettings;
+use crate::field_encoder::FieldEncoderValues;
+use crate::field_encoder::helpers::write_json_string;
 
 pub struct FieldEncoderJSON {
     pub simple: FieldEncoderValues,

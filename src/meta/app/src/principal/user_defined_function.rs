@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
+use databend_common_expression::types::DataType;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LambdaUDF {
@@ -361,7 +361,10 @@ impl Display for UDFDefinition {
                     }
                     write!(f, "{} {}", item.name(), item.data_type())?;
                 }
-                write!(f, " }} RETURNS {return_type} LANGUAGE {language} IMPORTS = {imports:?} PACKAGES = {packages:?} RUNTIME_VERSION = {runtime_version} AS $${code}$$")?;
+                write!(
+                    f,
+                    " }} RETURNS {return_type} LANGUAGE {language} IMPORTS = {imports:?} PACKAGES = {packages:?} RUNTIME_VERSION = {runtime_version} AS $${code}$$"
+                )?;
             }
             UDFDefinition::UDTF(UDTF {
                 arg_types,

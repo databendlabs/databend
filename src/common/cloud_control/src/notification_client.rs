@@ -14,10 +14,9 @@
 
 use std::sync::Arc;
 
-use tonic::transport::Channel;
 use tonic::Request;
+use tonic::transport::Channel;
 
-use crate::pb::notification_service_client::NotificationServiceClient;
 use crate::pb::CreateNotificationRequest;
 use crate::pb::CreateNotificationResponse;
 use crate::pb::DropNotificationRequest;
@@ -26,6 +25,7 @@ use crate::pb::GetNotificationRequest;
 use crate::pb::GetNotificationResponse;
 use crate::pb::ListNotificationRequest;
 use crate::pb::ListNotificationResponse;
+use crate::pb::notification_service_client::NotificationServiceClient;
 
 pub(crate) const NOTIFICATION_CLIENT_VERSION: &str = "v1";
 pub(crate) const NOTIFICATION_CLIENT_VERSION_NAME: &str = "NOTIFICATION_CLIENT_VERSION";

@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
-use crate::interpreters::access::PrivilegeAccess;
 use crate::interpreters::ManagementModeAccess;
+use crate::interpreters::access::PrivilegeAccess;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 

@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_cast;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
@@ -23,6 +22,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::type_check::check_cast;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;

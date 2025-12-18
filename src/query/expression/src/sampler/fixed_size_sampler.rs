@@ -210,8 +210,8 @@ mod reservoir_sampling {
 
     #[cfg(test)]
     mod tests {
-        use rand::rngs::StdRng;
         use rand::SeedableRng;
+        use rand::rngs::StdRng;
 
         use super::*;
 
@@ -244,8 +244,8 @@ mod reservoir_sampling {
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     use super::*;
 

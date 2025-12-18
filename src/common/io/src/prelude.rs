@@ -16,8 +16,8 @@ pub use bytes::BufMut;
 pub use bytes::BytesMut;
 
 pub use crate::binary_read::BinaryRead;
-pub use crate::binary_write::put_uvarint;
 pub use crate::binary_write::BinaryWrite;
+pub use crate::binary_write::put_uvarint;
 pub use crate::bincode_serialization::*;
 pub use crate::borsh_serialization::*;
 pub use crate::format_settings::FormatSettings;

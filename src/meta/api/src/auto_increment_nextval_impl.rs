@@ -18,11 +18,11 @@ use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::tenant::ToTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_types::anyerror::func_name;
-use databend_common_meta_types::protobuf::FetchIncreaseU64Response;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::anyerror::func_name;
+use databend_common_meta_types::protobuf::FetchIncreaseU64Response;
 use log::debug;
 
 use crate::errors::AutoIncrementError;

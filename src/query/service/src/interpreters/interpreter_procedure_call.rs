@@ -18,21 +18,22 @@ use databend_common_ast::ast::DeclareItem;
 use databend_common_ast::ast::DeclareVar;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::ScriptStatement;
+use databend_common_ast::parser::ParseMode;
 use databend_common_ast::parser::run_parser;
 use databend_common_ast::parser::script::script_block;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::ParseMode;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use databend_common_script::compile;
 use databend_common_script::Executor;
 use databend_common_script::ReturnValue;
+use databend_common_script::compile;
 use databend_common_sql::plans::CallProcedurePlan;
 use databend_common_storages_fuse::TableContext;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::interpreter_execute_immediate::ProcedureState;
 use crate::interpreters::util::ScriptClient;
-use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -84,14 +85,15 @@ impl Interpreter for CallProcedureInterpreter {
             }
             let settings = self.ctx.get_settings();
             let sql_dialect = settings.get_sql_dialect()?;
-            let tokens = tokenize_sql(&self.plan.script)?;
+            let tokens = tokenize_sql(&self.plan.script).map_err(ErrorCode::from)?;
             let mut ast = run_parser(
                 &tokens,
                 sql_dialect,
                 ParseMode::Template,
                 false,
                 script_block,
-            )?;
+            )
+            .map_err(ErrorCode::from)?;
 
             for declare in ast.declares {
                 match declare {

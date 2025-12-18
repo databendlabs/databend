@@ -15,12 +15,13 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_number;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::type_check::check_number;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use crate::MetadataRef;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -37,7 +38,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::Window;
 use crate::plans::WindowFuncType;
-use crate::MetadataRef;
 
 /// Input:  Filter
 ///           \

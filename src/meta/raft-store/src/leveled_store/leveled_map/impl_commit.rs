@@ -77,9 +77,9 @@ mod tests {
     use std::cmp::Reverse;
     use std::collections::BTreeMap;
 
+    use map_api::SeqMarked;
     use map_api::mvcc::Commit;
     use map_api::mvcc::Table;
-    use map_api::SeqMarked;
     use seq_marked::InternalSeq;
     use state_machine_api::ExpireKey;
     use state_machine_api::KVMeta;

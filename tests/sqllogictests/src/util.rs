@@ -19,25 +19,25 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use bollard::Docker;
 use bollard::container::ListContainersOptions;
 use bollard::container::RemoveContainerOptions;
-use bollard::Docker;
 use clap::Parser;
 use redis::Commands;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use testcontainers::core::client::docker_client_instance;
-use testcontainers::core::logs::consumer::logging_consumer::LoggingConsumer;
-use testcontainers::core::IntoContainerPort;
-use testcontainers::core::WaitFor;
-use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers::GenericImage;
 use testcontainers::ImageExt;
+use testcontainers::core::IntoContainerPort;
+use testcontainers::core::WaitFor;
+use testcontainers::core::client::docker_client_instance;
+use testcontainers::core::logs::consumer::logging_consumer::LoggingConsumer;
+use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::mysql::Mysql;
-use testcontainers_modules::redis::Redis;
 use testcontainers_modules::redis::REDIS_PORT;
+use testcontainers_modules::redis::Redis;
 use walkdir::DirEntry;
 use walkdir::WalkDir;
 
@@ -49,12 +49,6 @@ use crate::error::Result;
 const CONTAINER_RETRY_TIMES: usize = 3;
 const CONTAINER_STARTUP_TIMEOUT_SECONDS: u64 = 60;
 const CONTAINER_TIMEOUT_SECONDS: u64 = 300;
-
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
-pub struct ServerInfo {
-    pub id: String,
-    pub start_time: String,
-}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HttpSessionConf {
@@ -262,8 +256,8 @@ pub async fn run_ttc_container(
     let image = images.next().unwrap();
     let tag = images.next().unwrap_or("latest");
 
-    use rand::distributions::Alphanumeric;
     use rand::Rng;
+    use rand::distributions::Alphanumeric;
     let rng = rand::thread_rng();
     let x: String = rng
         .sample_iter(&Alphanumeric)
@@ -476,16 +470,16 @@ async fn stop_container(docker: &Docker, container_name: &str) {
         ..Default::default()
     });
     let containers = docker.list_containers(opts).await;
-    if let Ok(containers) = containers {
-        if !containers.is_empty() {
-            println!("==> list containers");
-            for container in containers {
-                if let Some(names) = container.names {
-                    println!(
-                        " -> container name: {:?}, status: {:?}",
-                        names, container.state
-                    );
-                }
+    if let Ok(containers) = containers
+        && !containers.is_empty()
+    {
+        println!("==> list containers");
+        for container in containers {
+            if let Some(names) = container.names {
+                println!(
+                    " -> container name: {:?}, status: {:?}",
+                    names, container.state
+                );
             }
         }
     }

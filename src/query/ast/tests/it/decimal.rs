@@ -19,7 +19,7 @@ use ethnum::i256;
 
 #[test]
 fn test_decimal() {
-    let cases = vec![
+    let cases = [
         ("1.1".to_string(), Literal::Decimal256 {
             value: 11.into(),
             precision: 76,
@@ -52,7 +52,7 @@ fn test_decimal() {
 fn test_decimal_uint() {
     let min_decimal256 = i256::from(u64::MAX) + 1;
     let float_str = "1".to_string() + &vec!["0"; 76].join("");
-    let cases = vec![
+    let cases = [
         ("1".to_string(), Literal::UInt64(1)),
         (u64::MAX.to_string(), Literal::UInt64(u64::MAX)),
         (min_decimal256.to_string(), Literal::Decimal256 {

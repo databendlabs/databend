@@ -17,20 +17,20 @@
 use std::sync::Arc;
 
 use databend_common_meta_client::ClientHandle;
-use databend_common_meta_types::protobuf::WatchRequest;
-use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::WatchResponse;
 use futures::StreamExt;
 use log::debug;
 use log::warn;
+use sub_cache::Source;
 use sub_cache::errors::ConnectionClosed;
 use sub_cache::errors::SubscribeError;
 use sub_cache::errors::Unsupported;
 use sub_cache::event_stream::Change;
 use sub_cache::event_stream::Event;
 use sub_cache::event_stream::EventStream;
-use sub_cache::Source;
 use tonic::Status;
 
 pub struct MetaClientSource {

@@ -21,19 +21,19 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::NumberScalar;
 
-use crate::optimizer::ir::SExpr;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
-use crate::plans::ConstantExpr;
-use crate::plans::Plan;
-use crate::plans::RelOperator;
 use crate::Binder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;
+use crate::optimizer::OptimizerContext;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimize;
+use crate::plans::ConstantExpr;
+use crate::plans::Plan;
+use crate::plans::RelOperator;
 
 #[derive(Debug, Clone)]
 pub struct ReclusterPlan {

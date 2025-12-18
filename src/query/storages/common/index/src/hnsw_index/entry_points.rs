@@ -130,8 +130,8 @@ impl EntryPoints {
 
 #[cfg(test)]
 mod tests {
-    use rand::thread_rng;
     use rand::Rng;
+    use rand::thread_rng;
 
     use super::*;
 

@@ -16,20 +16,20 @@ use std::sync::Arc;
 
 use dashmap::DashMap;
 use databend_common_base::base::GlobalInstance;
-use databend_common_exception::exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
+use databend_common_exception::exception::ErrorCode;
 use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
 use databend_common_license::license::VerifyResult;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_version::DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY;
+use jwt_simple::JWTError;
 use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
 use jwt_simple::prelude::ECDSAP256PublicKeyLike;
-use jwt_simple::JWTError;
 use log::warn;
 
 const LICENSE_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
@@ -50,10 +50,10 @@ pub struct RealLicenseManager {
 impl RealLicenseManager {
     fn parse_license_impl(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
         for public_key in &self.public_keys {
-            let public_key = ES256PublicKey::from_pem(public_key)
-                .map_err_to_code(ErrorCode::LicenseKeyParseError, || {
-                    "[LicenseManager] Public key load failed"
-                })?;
+            let public_key = ES256PublicKey::from_pem(public_key).map_err_to_code(
+                ErrorCode::LicenseKeyParseError,
+                || "[LicenseManager] Public key load failed",
+            )?;
 
             return match public_key.verify_token::<LicenseInfo>(raw, None) {
                 Ok(v) => Ok(v),

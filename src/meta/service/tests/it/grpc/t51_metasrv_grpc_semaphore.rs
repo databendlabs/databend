@@ -611,9 +611,10 @@ async fn test_time_based_connection_closed_error() -> anyhow::Result<()> {
     info!("permit2: {:?}", res);
     println!("permit2: {:?}", res);
     let err = res.unwrap().unwrap().unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("distributed-Semaphore connection closed"));
+    assert!(
+        err.to_string()
+            .contains("distributed-Semaphore connection closed")
+    );
 
     Ok(())
 }

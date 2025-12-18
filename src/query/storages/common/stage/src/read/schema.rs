@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::NumberDataType;
 
 pub fn schema_date_time_to_int(schema: &mut TableSchema) {
     schema

@@ -16,19 +16,16 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::array::ArrayColumnBuilderMut;
-use databend_common_expression::types::*;
-use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
+use databend_common_expression::types::array::ArrayColumnBuilderMut;
+use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_number_mapped_type;
 
-use super::assert_unary_arguments;
-use super::batch_merge1;
-use super::get_levels;
 use super::AggrState;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
@@ -39,6 +36,9 @@ use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
+use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::get_levels;
 use crate::with_simple_no_number_mapped_type;
 
 #[derive(BorshSerialize, BorshDeserialize)]

@@ -22,10 +22,10 @@ use chrono::Utc;
 use databend_common_meta_types::MetaId;
 
 use super::CreateOption;
+use crate::KeyWithTenant;
 use crate::schema::IndexNameIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
-use crate::KeyWithTenant;
 
 #[derive(
     serde::Serialize,

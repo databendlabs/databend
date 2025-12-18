@@ -28,25 +28,25 @@ use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescPtr;
 
 use super::RowGroupReader;
-use crate::parquet_reader::policy::default_policy_builders;
-use crate::parquet_reader::policy::ReadPolicyBuilder;
-use crate::parquet_reader::policy::POLICY_NO_PREFETCH;
-use crate::parquet_reader::policy::POLICY_PREDICATE_AND_TOPK;
-use crate::parquet_reader::policy::POLICY_PREDICATE_ONLY;
-use crate::parquet_reader::policy::POLICY_TOPK_ONLY;
-use crate::parquet_reader::predicate::build_predicate;
-use crate::parquet_reader::predicate::ParquetPredicate;
-use crate::parquet_reader::topk::build_topk;
-use crate::parquet_reader::topk::BuiltTopK;
-use crate::parquet_reader::utils::compute_output_field_paths;
-use crate::parquet_reader::utils::FieldPaths;
+use crate::ParquetPruner;
+use crate::ParquetSourceType;
 use crate::parquet_reader::NoPretchPolicyBuilder;
 use crate::parquet_reader::ParquetWholeFileReader;
 use crate::parquet_reader::PredicateAndTopkPolicyBuilder;
 use crate::parquet_reader::TopkOnlyPolicyBuilder;
+use crate::parquet_reader::policy::POLICY_NO_PREFETCH;
+use crate::parquet_reader::policy::POLICY_PREDICATE_AND_TOPK;
+use crate::parquet_reader::policy::POLICY_PREDICATE_ONLY;
+use crate::parquet_reader::policy::POLICY_TOPK_ONLY;
+use crate::parquet_reader::policy::ReadPolicyBuilder;
+use crate::parquet_reader::policy::default_policy_builders;
+use crate::parquet_reader::predicate::ParquetPredicate;
+use crate::parquet_reader::predicate::build_predicate;
+use crate::parquet_reader::topk::BuiltTopK;
+use crate::parquet_reader::topk::build_topk;
+use crate::parquet_reader::utils::FieldPaths;
+use crate::parquet_reader::utils::compute_output_field_paths;
 use crate::transformer::RecordBatchTransformer;
-use crate::ParquetPruner;
-use crate::ParquetSourceType;
 
 pub struct ParquetReaderBuilder<'a> {
     ctx: Arc<dyn TableContext>,

@@ -23,18 +23,18 @@ use databend_common_hashtable::FastHash;
 use either::Either;
 use ethnum::u256;
 
-use crate::types::binary::BinaryColumn;
-use crate::types::StringColumn;
 use crate::Column;
-use crate::HashMethodKeysU128;
+use crate::HashMethodKeysU8;
 use crate::HashMethodKeysU16;
-use crate::HashMethodKeysU256;
 use crate::HashMethodKeysU32;
 use crate::HashMethodKeysU64;
-use crate::HashMethodKeysU8;
+use crate::HashMethodKeysU128;
+use crate::HashMethodKeysU256;
 use crate::HashMethodSerializer;
 use crate::HashMethodSingleBinary;
 use crate::ProjectedBlock;
+use crate::types::StringColumn;
+use crate::types::binary::BinaryColumn;
 
 #[derive(Debug, Clone)]
 pub enum KeysState {

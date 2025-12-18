@@ -19,22 +19,22 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::VariantType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::VariantType;
 
+use crate::FuseTable;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::sessions::TableContext;
+use crate::table_functions::SimpleTableFunc;
 use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;
-use crate::table_functions::SimpleTableFunc;
-use crate::FuseTable;
 
 pub struct FuseDumpSnapshotsArgs {
     database_name: String,

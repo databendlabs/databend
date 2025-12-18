@@ -47,9 +47,9 @@ impl fmt::Display for WatchRequest {
 mod tests {
     use super::*;
     use crate::protobuf as pb;
-    use crate::protobuf::watch_request::FilterType;
     use crate::protobuf::KvMeta;
     use crate::protobuf::SeqV;
+    use crate::protobuf::watch_request::FilterType;
 
     #[test]
     fn test_watch_response_display() {
@@ -72,10 +72,16 @@ mod tests {
             }),
             is_initialization: false,
         };
-        assert_eq!(watch_response.to_string(), "CHANGE:(test_key: (seq=1 [expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000] 'test_prev') -> (seq=2 [] 'test_current'))");
+        assert_eq!(
+            watch_response.to_string(),
+            "CHANGE:(test_key: (seq=1 [expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000] 'test_prev') -> (seq=2 [] 'test_current'))"
+        );
 
         watch_response.is_initialization = true;
-        assert_eq!(watch_response.to_string(), "INIT:(test_key: (seq=1 [expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000] 'test_prev') -> (seq=2 [] 'test_current'))");
+        assert_eq!(
+            watch_response.to_string(),
+            "INIT:(test_key: (seq=1 [expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000] 'test_prev') -> (seq=2 [] 'test_current'))"
+        );
 
         let watch_response = WatchResponse {
             event: None,

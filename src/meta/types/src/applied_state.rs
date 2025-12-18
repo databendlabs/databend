@@ -15,10 +15,10 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use crate::node::Node;
-use crate::protobuf::RaftReply;
 use crate::Change;
 use crate::TxnReply;
+use crate::node::Node;
+use crate::protobuf::RaftReply;
 
 /// The state of an applied raft log.
 /// Normally it includes two fields: the state before applying and the state after applying the log.
@@ -70,11 +70,8 @@ impl AppliedState {
     /// Whether the state changed
     pub fn changed(&self) -> bool {
         match self {
-            AppliedState::Node {
-                ref prev,
-                ref result,
-            } => prev != result,
-            AppliedState::KV(ref ch) => ch.is_changed(),
+            AppliedState::Node { prev, result } => prev != result,
+            AppliedState::KV(ch) => ch.is_changed(),
             AppliedState::None => false,
             AppliedState::TxnReply(txn) => txn.success,
         }
@@ -98,8 +95,8 @@ impl AppliedState {
 
     pub fn prev_is_none(&self) -> bool {
         match self {
-            AppliedState::Node { ref prev, .. } => prev.is_none(),
-            AppliedState::KV(Change { ref prev, .. }) => prev.is_none(),
+            AppliedState::Node { prev, .. } => prev.is_none(),
+            AppliedState::KV(Change { prev, .. }) => prev.is_none(),
             AppliedState::None => true,
             AppliedState::TxnReply(_txn) => true,
         }
@@ -107,8 +104,8 @@ impl AppliedState {
 
     pub fn result_is_none(&self) -> bool {
         match self {
-            AppliedState::Node { ref result, .. } => result.is_none(),
-            AppliedState::KV(Change { ref result, .. }) => result.is_none(),
+            AppliedState::Node { result, .. } => result.is_none(),
+            AppliedState::KV(Change { result, .. }) => result.is_none(),
             AppliedState::None => true,
             AppliedState::TxnReply(txn) => !txn.success,
         }

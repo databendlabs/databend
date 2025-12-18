@@ -18,9 +18,9 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio::io::AsyncWriteExt;
 use databend_common_base::base::tokio::io::BufWriter;
+use databend_common_base::base::tokio::net::TcpStream;
 use databend_common_base::base::tokio::net::tcp::OwnedReadHalf;
 use databend_common_base::base::tokio::net::tcp::OwnedWriteHalf;
-use databend_common_base::base::tokio::net::TcpStream;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
@@ -33,19 +33,19 @@ use databend_storages_common_session::drop_all_temp_tables;
 use log::error;
 use log::info;
 use log::warn;
-use opensrv_mysql::plain_run_with_options;
-use opensrv_mysql::secure_run_with_options;
 use opensrv_mysql::AsyncMysqlIntermediary;
 use opensrv_mysql::ErrorKind;
 use opensrv_mysql::IntermediaryOptions;
 use opensrv_mysql::ServerHandshakeConfig;
+use opensrv_mysql::plain_run_with_options;
+use opensrv_mysql::secure_run_with_options;
 use rand::RngCore;
 use rustls::ServerConfig;
 use socket2::SockRef;
 use socket2::TcpKeepalive;
 
-use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::servers::mysql::MYSQL_VERSION;
+use crate::servers::mysql::mysql_interactive_worker::InteractiveWorker;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
 
@@ -107,7 +107,7 @@ impl MySQLConnection {
             Err(error) => {
                 return Err(ErrorCode::TokioError(format!(
                     "Handshaking mysql connection failed: {error}"
-                )))
+                )));
             }
         };
 
@@ -278,11 +278,10 @@ impl MySQLConnection {
 
     // TODO: move to ToBlockingStream trait
     fn convert_stream(stream: TcpStream) -> Result<std::net::TcpStream> {
-        let stream = stream
-            .into_std()
-            .map_err_to_code(ErrorCode::TokioError, || {
-                "Cannot to convert Tokio TcpStream to Std TcpStream"
-            })?;
+        let stream = stream.into_std().map_err_to_code(
+            ErrorCode::TokioError,
+            || "Cannot to convert Tokio TcpStream to Std TcpStream",
+        )?;
 
         Ok(stream)
     }

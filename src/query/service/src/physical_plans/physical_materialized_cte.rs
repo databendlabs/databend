@@ -16,19 +16,19 @@ use std::any::Any;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_sql::ColumnBinding;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::ColumnBinding;
 
-use crate::physical_plans::explain::PlanStatsInfo;
-use crate::physical_plans::format::MaterializedCTEFormatter;
-use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanMeta;
-use crate::pipelines::processors::transforms::MaterializedCteSink;
+use crate::physical_plans::explain::PlanStatsInfo;
+use crate::physical_plans::format::MaterializedCTEFormatter;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::MaterializedCteSink;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MaterializedCTE {

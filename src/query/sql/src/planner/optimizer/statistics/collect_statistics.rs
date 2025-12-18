@@ -17,23 +17,23 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::F64;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::F64;
+use databend_common_expression::types::NumberScalar;
 
-use crate::optimizer::ir::SExpr;
+use crate::BaseTableColumn;
+use crate::ColumnEntry;
+use crate::MetadataRef;
+use crate::ScalarExpr;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::ir::SExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::Statistics;
-use crate::BaseTableColumn;
-use crate::ColumnEntry;
-use crate::MetadataRef;
-use crate::ScalarExpr;
 
 // The CollectStatisticsOptimizer will collect statistics for each leaf node in SExpr.
 pub struct CollectStatisticsOptimizer {

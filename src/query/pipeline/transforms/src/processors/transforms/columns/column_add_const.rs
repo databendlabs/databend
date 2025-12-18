@@ -21,8 +21,8 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar as DataScalar;
 use databend_common_sql::evaluator::BlockOperator;
 
-use crate::blocks::CompoundBlockOperator;
 use crate::Transform;
+use crate::blocks::CompoundBlockOperator;
 
 pub struct TransformAddConstColumns {
     expression_transform: CompoundBlockOperator,

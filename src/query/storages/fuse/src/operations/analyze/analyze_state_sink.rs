@@ -39,7 +39,6 @@ use databend_common_storage::Histogram;
 use databend_common_storage::HistogramBucket;
 use databend_common_storage::MetaHLL;
 use databend_storages_common_cache::Partitions;
-use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -47,15 +46,16 @@ use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 
+use crate::FuseLazyPartInfo;
+use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::operations::analyze::AnalyzeCollectNDVSource;
 use crate::operations::analyze::AnalyzeNDVMeta;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reduce_cluster_statistics;
 use crate::statistics::reducers::reduce_virtual_column_statistics;
-use crate::FuseLazyPartInfo;
-use crate::FuseTable;
 
 impl FuseTable {
     pub fn do_analyze(

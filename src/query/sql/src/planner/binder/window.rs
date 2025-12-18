@@ -15,19 +15,23 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::WindowDefinition;
 use databend_common_ast::ast::WindowSpec;
-use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
 use super::select::SelectList;
+use crate::BindContext;
+use crate::Binder;
+use crate::IndexType;
+use crate::MetadataRef;
+use crate::Visibility;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::SExpr;
-use crate::plans::walk_expr_mut;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::BoundColumnRef;
@@ -46,11 +50,7 @@ use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 use crate::plans::WindowPartition;
-use crate::BindContext;
-use crate::Binder;
-use crate::IndexType;
-use crate::MetadataRef;
-use crate::Visibility;
+use crate::plans::walk_expr_mut;
 
 impl Binder {
     pub(super) fn bind_window_function(
@@ -490,7 +490,7 @@ impl<'a> WindowRewriter<'a> {
         }
     }
 
-    pub fn as_window_aggregate_rewriter(&self) -> WindowAggregateRewriter {
+    pub fn as_window_aggregate_rewriter(&self) -> WindowAggregateRewriter<'_> {
         WindowAggregateRewriter {
             bind_context: self.bind_context,
         }
@@ -631,7 +631,8 @@ pub fn bind_window_function_info(
         child
     };
 
-    let default_nulls_first = ctx.get_settings().get_nulls_first();
+    let settings = ctx.get_settings();
+    let default_nulls_first = settings.get_nulls_first();
 
     let mut sort_items: Vec<SortItem> = vec![];
     if !window_plan.partition_by.is_empty() {

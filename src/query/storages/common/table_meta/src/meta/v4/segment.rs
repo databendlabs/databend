@@ -18,25 +18,25 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_frozen_api::frozen_api;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_frozen_api::frozen_api;
 use serde::Deserialize;
 use serde::Serialize;
 
 use super::super::v2;
 use super::super::v3;
-use crate::meta::format::compress;
-use crate::meta::format::decode_segment_header;
-use crate::meta::format::encode;
-use crate::meta::format::read_and_deserialize;
-use crate::meta::format::MetaCompression;
-use crate::meta::format::SegmentHeader;
-use crate::meta::format::MAX_SEGMENT_BLOCK_NUMBER;
-use crate::meta::v2::BlockMeta;
 use crate::meta::FormatVersion;
 use crate::meta::MetaEncoding;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
+use crate::meta::format::MAX_SEGMENT_BLOCK_NUMBER;
+use crate::meta::format::MetaCompression;
+use crate::meta::format::SegmentHeader;
+use crate::meta::format::compress;
+use crate::meta::format::decode_segment_header;
+use crate::meta::format::encode;
+use crate::meta::format::read_and_deserialize;
+use crate::meta::v2::BlockMeta;
 
 /// A segment comprises one or more blocks
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different

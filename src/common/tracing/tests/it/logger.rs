@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_tracing::init_logging;
 use databend_common_tracing::Config;
+use databend_common_tracing::init_logging;
 
 /// Test rolling files logger
 /// generate 30 log files, then check if there are 2 files

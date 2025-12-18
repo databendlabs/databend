@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 
 #[derive(Default)]

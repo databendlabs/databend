@@ -17,9 +17,9 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 
+use crate::FileFormatOptionsExt;
 use crate::field_encoder::FieldEncoderJSON;
 use crate::output_format::OutputFormat;
-use crate::FileFormatOptionsExt;
 
 pub struct NDJSONOutputFormatBase<
     const STRINGS: bool,
@@ -151,13 +151,13 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
 mod test {
 
     use databend_common_exception::Result;
-    use databend_common_expression::types::number::Float32Type;
-    use databend_common_expression::types::number::Int32Type;
-    use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::types::StringType;
     use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::types::number::Float32Type;
+    use databend_common_expression::types::number::Int32Type;
     use pretty_assertions::assert_eq;
 
     use crate::output_format::utils::gen_schema_and_block;

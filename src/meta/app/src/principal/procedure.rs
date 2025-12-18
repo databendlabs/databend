@@ -22,12 +22,12 @@ use chrono::Utc;
 use databend_common_expression::types::DataType;
 use display_more::DisplaySliceExt;
 
+use crate::KeyWithTenant;
+use crate::principal::ProcedureIdentity;
 use crate::principal::procedure_id_ident::ProcedureIdIdent;
 use crate::principal::procedure_name_ident::ProcedureNameIdent;
-use crate::principal::ProcedureIdentity;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
-use crate::KeyWithTenant;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProcedureInfo {

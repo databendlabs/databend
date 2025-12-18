@@ -14,12 +14,12 @@
 
 mod event_ext;
 
-use crate::protobuf as pb;
-use crate::protobuf::watch_request::FilterType;
-use crate::protobuf::WatchRequest;
-use crate::protobuf::WatchResponse;
 use crate::Change;
 use crate::SeqV;
+use crate::protobuf as pb;
+use crate::protobuf::WatchRequest;
+use crate::protobuf::WatchResponse;
+use crate::protobuf::watch_request::FilterType;
 
 impl WatchRequest {
     pub fn new(key: String, key_end: Option<String>) -> Self {

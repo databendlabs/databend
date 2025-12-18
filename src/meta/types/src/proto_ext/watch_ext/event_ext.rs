@@ -132,7 +132,10 @@ mod tests {
                 meta: None,
             }),
         };
-        assert_eq!(event.to_string(), "(test_key: (seq=1 [expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000] 'test_prev') -> (seq=2 [] 'test_current'))");
+        assert_eq!(
+            event.to_string(),
+            "(test_key: (seq=1 [expire=2024-08-08T07:40:19.000, proposed=2024-08-08T07:40:00.000] 'test_prev') -> (seq=2 [] 'test_current'))"
+        );
     }
 
     #[test]

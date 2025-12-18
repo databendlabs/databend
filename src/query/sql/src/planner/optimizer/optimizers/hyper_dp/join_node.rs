@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::IndexType;
+use crate::ScalarExpr;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::hyper_dp::JoinRelation;
@@ -23,8 +25,6 @@ use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
-use crate::IndexType;
-use crate::ScalarExpr;
 
 #[derive(Clone)]
 pub struct JoinNode {

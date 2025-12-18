@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::local_block_meta_serde;
 use enum_as_inner::EnumAsInner;
 pub use sort_broadcast::*;
 pub use sort_collect::*;
@@ -32,8 +32,8 @@ pub use sort_restore::*;
 pub use sort_route::*;
 pub use sort_spill::*;
 
-pub use self::core::utils;
 use self::core::Bounds;
+pub use self::core::utils;
 
 pub mod core;
 mod sort_broadcast;

@@ -14,14 +14,14 @@
 
 use serde::Serialize;
 
+use crate::GrpcHelper;
+use crate::LogEntry;
+use crate::MetaAPIError;
 use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
 use crate::raft_types::AppendEntriesRequest;
 use crate::raft_types::InstallSnapshotRequest;
 use crate::raft_types::VoteRequest;
-use crate::GrpcHelper;
-use crate::LogEntry;
-use crate::MetaAPIError;
 
 impl tonic::IntoRequest<RaftRequest> for LogEntry {
     fn into_request(self) -> tonic::Request<RaftRequest> {

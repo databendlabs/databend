@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use databend_common_config::GlobalConfig;
-use poem::web::Json;
 use poem::IntoResponse;
+use poem::web::Json;
 
 #[poem::handler]
 #[async_backtrace::framed]

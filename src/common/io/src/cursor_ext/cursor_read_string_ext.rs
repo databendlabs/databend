@@ -188,10 +188,10 @@ where T: AsRef<[u8]>
 
 // Check that the pre-calculated position is correct.
 fn check_pos(curr_pos: usize, positions: &mut VecDeque<usize>) -> Result<()> {
-    if let Some(pos) = positions.pop_front() {
-        if curr_pos == pos {
-            return Ok(());
-        }
+    if let Some(pos) = positions.pop_front()
+        && curr_pos == pos
+    {
+        return Ok(());
     }
     Err(std::io::Error::new(
         ErrorKind::InvalidData,

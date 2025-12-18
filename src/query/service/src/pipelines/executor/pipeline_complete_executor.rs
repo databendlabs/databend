@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
-use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
+use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
@@ -101,7 +101,7 @@ impl PipelineCompleteExecutor {
         .flatten()
     }
 
-    fn thread_function(&self) -> impl Fn() -> Result<()> {
+    fn thread_function(&self) -> impl Fn() -> Result<()> + use<> {
         let span = Span::enter_with_local_parent(func_path!());
         let executor = self.executor.clone();
 

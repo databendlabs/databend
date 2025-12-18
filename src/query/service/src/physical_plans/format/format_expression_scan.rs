@@ -17,12 +17,12 @@ use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use crate::physical_plans::format::format_output_columns;
-use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::format::PhysicalFormat;
-use crate::physical_plans::physical_expression_scan::ExpressionScan;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::physical_expression_scan::ExpressionScan;
 
 pub struct ExpressionScanFormatter<'a> {
     inner: &'a ExpressionScan,

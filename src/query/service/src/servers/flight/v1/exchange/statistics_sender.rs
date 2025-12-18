@@ -17,13 +17,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::Sender;
+use databend_common_base::JoinHandle;
 use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,10 +33,10 @@ use futures_util::future::Either;
 use log::warn;
 
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::flight::v1::packets::DataPacket;
-use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::servers::flight::FlightExchange;
 use crate::servers::flight::FlightSender;
+use crate::servers::flight::v1::packets::DataPacket;
+use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsSender {

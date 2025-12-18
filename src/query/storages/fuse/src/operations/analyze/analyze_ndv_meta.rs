@@ -16,10 +16,10 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::ColumnId;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_storage::MetaHLL;
 
 #[derive(Clone)]

@@ -15,11 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::types::StringType;
 use databend_common_sql::plans::DescPasswordPolicyPlan;
-use databend_common_users::UserApiProvider;
 use databend_common_users::DEFAULT_PASSWORD_HISTORY;
 use databend_common_users::DEFAULT_PASSWORD_LOCKOUT_TIME_MINS;
 use databend_common_users::DEFAULT_PASSWORD_MAX_AGE_DAYS;
@@ -29,6 +28,7 @@ use databend_common_users::DEFAULT_PASSWORD_MIN_AGE_DAYS;
 use databend_common_users::DEFAULT_PASSWORD_MIN_CHARS;
 use databend_common_users::DEFAULT_PASSWORD_MIN_LENGTH;
 use databend_common_users::DEFAULT_PASSWORD_MIN_SPECIAL_CHARS;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

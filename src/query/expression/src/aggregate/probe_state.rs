@@ -15,9 +15,9 @@
 use std::ops::Index;
 use std::ops::IndexMut;
 
-use super::row_ptr::RowPtr;
-use super::StateAddr;
 use super::BATCH_SIZE;
+use super::StateAddr;
+use super::row_ptr::RowPtr;
 
 pub type SelectVector = [RowID; BATCH_SIZE];
 

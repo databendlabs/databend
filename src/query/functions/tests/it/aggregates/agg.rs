@@ -15,8 +15,9 @@
 use std::io::Write;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::number::UInt64Type;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
+use databend_common_expression::FromData;
 use databend_common_expression::types::BitmapType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -26,18 +27,17 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
-use databend_common_expression::FromData;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::number::UInt64Type;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_io::HybridBitmap;
 use goldenfile::Mint;
 use itertools::Itertools;
 
+use super::AggregationSimulator;
 use super::eval_aggr_for_test;
 use super::run_agg_ast;
 use super::simulate_two_groups_group_by;
-use super::AggregationSimulator;
 
 fn eval_aggr(
     name: &str,

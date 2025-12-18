@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 #![feature(type_alias_impl_trait)]
 #![feature(impl_trait_in_assoc_type)]
 
@@ -40,8 +40,8 @@ pub use null::NullTable;
 pub use random::{RandomPartInfo, RandomTable};
 // Result cache storage exports
 pub use result_cache::{
-    gen_result_cache_key, gen_result_cache_meta_key, gen_result_cache_prefix,
     ResultCacheMetaManager, ResultCacheReader, ResultScan, WriteResultCacheSink,
+    gen_result_cache_key, gen_result_cache_meta_key, gen_result_cache_prefix,
 };
 // View storage exports
 pub use view::view_table;

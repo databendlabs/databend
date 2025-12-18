@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use crate::MetadataRef;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -24,7 +25,6 @@ use crate::plans::EvalScalar;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Sort;
-use crate::MetadataRef;
 
 /// Input:  Order by
 ///           \

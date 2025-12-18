@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnFilter;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -27,7 +28,6 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -44,21 +44,25 @@ use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use super::AggregateInfo;
+use crate::IndexType;
+use crate::NameResolutionContext;
+use crate::TypeChecker;
+use crate::WindowChecker;
+use crate::binder::ExprContext;
+use crate::binder::Visibility;
 use crate::binder::aggregate::find_replaced_aggregate_function;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
-use crate::binder::window::find_replaced_window_function;
 use crate::binder::window::WindowInfo;
-use crate::binder::ExprContext;
-use crate::binder::Visibility;
+use crate::binder::window::find_replaced_window_function;
 use crate::optimizer::ir::SExpr;
-use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ColumnBinding;
+use crate::planner::binder::scalar::ScalarBinder;
+use crate::planner::semantic::GroupingChecker;
 use crate::planner::semantic::compare_table_name;
 use crate::planner::semantic::normalize_identifier;
-use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::ScalarExpr;
@@ -66,10 +70,6 @@ use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::VisitorMut as _;
-use crate::IndexType;
-use crate::NameResolutionContext;
-use crate::TypeChecker;
-use crate::WindowChecker;
 
 #[derive(VisitorMut)]
 #[visitor(Identifier(enter))]

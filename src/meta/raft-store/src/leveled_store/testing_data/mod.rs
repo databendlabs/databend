@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::raft_types::Membership;
-use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::raft_types::Membership;
+use databend_common_meta_types::raft_types::StoredMembership;
 use map_api::mvcc::ScopedSet;
 use maplit::btreemap;
 use openraft::testing::log_id;

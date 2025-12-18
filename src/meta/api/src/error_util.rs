@@ -22,8 +22,8 @@ use databend_common_meta_app::app_error::TableAlreadyExists;
 use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::app_error::UnknownTable;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 
 use crate::kv_app_error::KVAppError;
 

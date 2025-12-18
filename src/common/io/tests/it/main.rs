@@ -1,4 +1,3 @@
-#![feature(cursor_split)]
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +13,7 @@
 // limitations under the License.
 #![allow(clippy::uninlined_format_args)]
 #![feature(assert_matches)]
+#![feature(cursor_split)]
 
 extern crate core;
 

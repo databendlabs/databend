@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::optimizers::rule::RuleCommuteJoin;
 use crate::optimizer::optimizers::rule::RuleCommuteJoinBaseTable;
 use crate::optimizer::optimizers::rule::RuleDeduplicateSort;
@@ -62,7 +63,6 @@ use crate::optimizer::optimizers::rule::RulePushDownSortScan;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
 use crate::optimizer::optimizers::rule::RuleSplitAggregate;
 use crate::optimizer::optimizers::rule::RuleTryApplyAggIndex;
-use crate::optimizer::OptimizerContext;
 
 pub struct RuleFactory;
 

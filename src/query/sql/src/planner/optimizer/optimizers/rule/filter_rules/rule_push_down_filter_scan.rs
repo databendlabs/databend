@@ -16,6 +16,10 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::ColumnEntry;
+use crate::MetadataRef;
+use crate::ScalarExpr;
+use crate::TableEntry;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
@@ -29,10 +33,6 @@ use crate::plans::RelOp;
 use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
 use crate::plans::VisitorMut;
-use crate::ColumnEntry;
-use crate::MetadataRef;
-use crate::ScalarExpr;
-use crate::TableEntry;
 
 pub struct RulePushDownFilterScan {
     id: RuleID,

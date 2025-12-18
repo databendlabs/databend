@@ -21,21 +21,21 @@ use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use jiff::Zoned;
 use jiff::fmt::strtime;
 use jiff::tz::TimeZone;
-use jiff::Zoned;
 
-use super::number::SimpleDomain;
 use super::ArgType;
 use super::DataType;
 use super::SimpleType;
 use super::SimpleValueType;
+use super::number::SimpleDomain;
+use crate::ColumnBuilder;
+use crate::ScalarRef;
 use crate::property::Domain;
 use crate::utils::date_helper::DateConverter;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
-use crate::ScalarRef;
 
 pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.6f";
 /// Minimum valid timestamp `0001-01-01 00:00:00.000000`, represented by the microsecs offset from 1970-01-01.

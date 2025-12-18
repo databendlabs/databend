@@ -14,10 +14,10 @@
 
 //! Tests for ErrorCodeResultExt trait functionality
 
-use databend_common_exception::error_code_groups;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
+use databend_common_exception::error_code_groups;
 
 fn create_unknown_database_error() -> Result<String> {
     Err(ErrorCode::UnknownDatabase("test_db"))

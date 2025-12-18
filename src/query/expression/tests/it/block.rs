@@ -13,16 +13,6 @@
 // limitations under the License.
 
 use databend_common_column::buffer::Buffer;
-use databend_common_expression::block_debug::box_render;
-use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::ArrayColumn;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::Int64Type;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -30,6 +20,16 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
+use databend_common_expression::block_debug::box_render;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::ArrayColumn;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::string::StringColumnBuilder;
 
 #[test]
 fn test_split_block() {

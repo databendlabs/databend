@@ -19,6 +19,10 @@ use databend_common_base::base::tokio::sync::oneshot::Sender;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
+use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::ExportedChunk;
@@ -26,10 +30,6 @@ use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_meta_types::MetaClientError;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::TxnReply;
-use databend_common_meta_types::TxnRequest;
 use fastrace::Span;
 use tonic::codegen::BoxStream;
 
@@ -203,7 +203,7 @@ impl Response {
                 .map(|x| x as &(dyn std::error::Error + 'static))
         }
 
-        let e = match self {
+        match self {
             Response::StreamMGet(res) => to_err(res),
             Response::StreamList(res) => to_err(res),
             Response::Txn(res) => to_err(res),
@@ -215,9 +215,7 @@ impl Response {
             Response::GetClusterStatus(res) => to_err(res),
             Response::GetMemberList(res) => to_err(res),
             Response::GetClientInfo(res) => to_err(res),
-        };
-
-        e
+        }
     }
 }
 

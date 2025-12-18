@@ -1,7 +1,7 @@
 [package]
 name = "databend-common-storages-hive"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false

@@ -22,13 +22,13 @@ use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::S3StorageClass;
 
-use crate::settings::Settings;
-use crate::settings_default::DefaultSettings;
 use crate::ChangeValue;
 use crate::ReplaceIntoShuffleStrategy;
 use crate::ScopeLevel;
 use crate::SettingMode;
 use crate::SettingScope;
+use crate::settings::Settings;
+use crate::settings_default::DefaultSettings;
 
 #[derive(Clone, Copy)]
 pub enum FlightCompression {
@@ -348,7 +348,7 @@ impl Settings {
 
     /// # Safety
     pub unsafe fn get_disable_join_reorder(&self) -> Result<bool> {
-        Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)
+        Ok(unsafe { self.unchecked_try_get_u64("disable_join_reorder") }? != 0)
     }
 
     pub fn get_max_push_down_limit(&self) -> Result<usize> {
@@ -599,7 +599,7 @@ impl Settings {
 
     /// # Safety
     pub unsafe fn get_deduplicate_label(&self) -> Result<Option<String>> {
-        let deduplicate_label = self.unchecked_try_get_string("deduplicate_label")?;
+        let deduplicate_label = unsafe { self.unchecked_try_get_string("deduplicate_label")? };
         if deduplicate_label.is_empty() {
             Ok(None)
         } else {
@@ -609,7 +609,7 @@ impl Settings {
 
     /// # Safety
     pub unsafe fn set_deduplicate_label(&self, val: String) -> Result<()> {
-        self.unchecked_set_setting("deduplicate_label".to_string(), val)
+        unsafe { self.unchecked_set_setting("deduplicate_label".to_string(), val) }
     }
 
     pub fn get_enable_distributed_copy(&self) -> Result<bool> {
@@ -942,7 +942,7 @@ impl Settings {
 
     /// # Safety
     pub unsafe fn set_warehouse(&self, warehouse: String) -> Result<()> {
-        self.unchecked_set_setting(String::from("warehouse"), warehouse)
+        unsafe { self.unchecked_set_setting(String::from("warehouse"), warehouse) }
     }
 
     pub fn get_hilbert_num_range_ids(&self) -> Result<u64> {

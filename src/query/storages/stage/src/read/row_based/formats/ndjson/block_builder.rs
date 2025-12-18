@@ -215,8 +215,8 @@ fn map_json_error(err: serde_json::Error, data: &[u8], file_full_path: &str) -> 
 
 #[cfg(test)]
 mod test {
-    use super::map_json_error;
     use super::FileParseError;
+    use super::map_json_error;
 
     fn decode_err(data: &str) -> String {
         serde_json::from_slice::<serde_json::Value>(data.as_bytes())

@@ -18,11 +18,11 @@ use std::fmt::Formatter;
 use display_more::DisplaySliceExt;
 use map_api::match_seq::MatchSeq;
 
-use crate::protobuf as pb;
-use crate::time::flexible_timestamp_to_duration;
 use crate::ConditionResult;
 use crate::Operation;
 use crate::UpsertKV;
+use crate::protobuf as pb;
+use crate::time::flexible_timestamp_to_duration;
 
 impl pb::TxnRequest {
     /// Build a transaction request from an upsert operation.
@@ -182,7 +182,7 @@ mod tests {
 
         assert_eq!(
             format!("{}", req),
-           "TxnRequest{{ if:(k1 == seq(1) AND k2 == seq(2)) then:[Put(Put key=k1),Put(Put key=k2)] }, if:[k1 == seq(1),k2 == seq(2)] then:[Put(Put key=k1),Put(Put key=k2)] else:[Put(Put key=k3)]}",
+            "TxnRequest{{ if:(k1 == seq(1) AND k2 == seq(2)) then:[Put(Put key=k1),Put(Put key=k2)] }, if:[k1 == seq(1),k2 == seq(2)] then:[Put(Put key=k1),Put(Put key=k2)] else:[Put(Put key=k3)]}",
         );
     }
 

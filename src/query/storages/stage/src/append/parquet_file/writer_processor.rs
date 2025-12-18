@@ -43,9 +43,9 @@ use parquet::file::properties::WriterVersion;
 use parquet::schema::types::ColumnPath;
 
 use super::block_batch::BlockBatch;
+use crate::append::UnloadOutput;
 use crate::append::output::DataSummary;
 use crate::append::path::unload_path;
-use crate::append::UnloadOutput;
 
 pub struct ParquetFileWriter {
     input: Arc<InputPort>,
@@ -140,7 +140,7 @@ impl ParquetFileWriter {
             _ => {
                 return Err(ErrorCode::Internal(format!(
                     "unexpected compression {compression}"
-                )))
+                )));
             }
         };
         let writer = create_writer(

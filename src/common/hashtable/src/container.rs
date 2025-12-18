@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::handle_alloc_error;
 use std::alloc::Allocator;
 use std::alloc::Layout;
+use std::alloc::handle_alloc_error;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::ptr::null_mut;
 use std::ptr::NonNull;
+use std::ptr::null_mut;
 
 use databend_common_base::runtime::drop_guard;
 
@@ -76,24 +76,27 @@ unsafe impl<T, A: Allocator> Container for HeapContainer<T, A> {
     }
 
     unsafe fn new_zeroed(len: usize, allocator: Self::A) -> Self {
-        Self(Box::new_zeroed_slice_in(len, allocator).assume_init())
+        unsafe { Self(Box::new_zeroed_slice_in(len, allocator).assume_init()) }
     }
 
     unsafe fn grow_zeroed(&mut self, new_len: usize) {
-        debug_assert!(self.len() <= new_len);
-        let old_layout = Layout::array::<T>(self.len()).unwrap();
-        let new_layout = Layout::array::<T>(new_len).unwrap();
-        let old_box = std::ptr::read(&self.0);
-        let (old_raw, allocator) = Box::into_raw_with_allocator(old_box);
-        let old_ptr = NonNull::new(old_raw).unwrap().cast();
-        let grow_res = allocator.grow_zeroed(old_ptr, old_layout, new_layout);
+        unsafe {
+            debug_assert!(self.len() <= new_len);
+            let old_layout = Layout::array::<T>(self.len()).unwrap();
+            let new_layout = Layout::array::<T>(new_len).unwrap();
+            let old_box = std::ptr::read(&self.0);
+            let (old_raw, allocator) = Box::into_raw_with_allocator(old_box);
+            let old_ptr = NonNull::new(old_raw).unwrap().cast();
+            let grow_res = allocator.grow_zeroed(old_ptr, old_layout, new_layout);
 
-        match grow_res {
-            Err(_) => handle_alloc_error(new_layout),
-            Ok(new_ptr) => {
-                let new_raw = std::ptr::slice_from_raw_parts_mut(new_ptr.cast().as_ptr(), new_len);
-                let new_box = Box::from_raw_in(new_raw, allocator);
-                std::ptr::write(self, Self(new_box));
+            match grow_res {
+                Err(_) => handle_alloc_error(new_layout),
+                Ok(new_ptr) => {
+                    let new_raw =
+                        std::ptr::slice_from_raw_parts_mut(new_ptr.cast().as_ptr(), new_len);
+                    let new_box = Box::from_raw_in(new_raw, allocator);
+                    std::ptr::write(self, Self(new_box));
+                }
             }
         }
     }
@@ -183,39 +186,41 @@ unsafe impl<T, const N: usize, A: Allocator + Clone> Container for StackContaine
     }
 
     unsafe fn grow_zeroed(&mut self, new_len: usize) {
-        debug_assert!(self.len <= new_len);
-        if new_len <= N {
-            self.len = new_len;
-        } else if self.ptr.is_null() {
-            let layout = Layout::array::<T>(new_len).unwrap();
-            let allocated_bytes = self.allocator.allocate_zeroed(layout);
+        unsafe {
+            debug_assert!(self.len <= new_len);
+            if new_len <= N {
+                self.len = new_len;
+            } else if self.ptr.is_null() {
+                let layout = Layout::array::<T>(new_len).unwrap();
+                let allocated_bytes = self.allocator.allocate_zeroed(layout);
 
-            match allocated_bytes {
-                Err(_) => handle_alloc_error(layout),
-                Ok(allocated_bytes) => {
-                    self.ptr = allocated_bytes.cast().as_ptr();
-                    std::ptr::copy_nonoverlapping(
-                        self.array.as_ptr() as *mut _,
-                        self.ptr,
-                        self.len,
-                    );
-                    self.len = new_len;
-                }
-            };
-        } else {
-            let old_layout = Layout::array::<T>(self.len).unwrap();
-            let new_layout = Layout::array::<T>(new_len).unwrap();
+                match allocated_bytes {
+                    Err(_) => handle_alloc_error(layout),
+                    Ok(allocated_bytes) => {
+                        self.ptr = allocated_bytes.cast().as_ptr();
+                        std::ptr::copy_nonoverlapping(
+                            self.array.as_ptr() as *mut _,
+                            self.ptr,
+                            self.len,
+                        );
+                        self.len = new_len;
+                    }
+                };
+            } else {
+                let old_layout = Layout::array::<T>(self.len).unwrap();
+                let new_layout = Layout::array::<T>(new_len).unwrap();
 
-            let old_ptr = NonNull::new_unchecked(self.ptr).cast();
-            let reallocated_bytes = self.allocator.grow_zeroed(old_ptr, old_layout, new_layout);
+                let old_ptr = NonNull::new_unchecked(self.ptr).cast();
+                let reallocated_bytes = self.allocator.grow_zeroed(old_ptr, old_layout, new_layout);
 
-            match reallocated_bytes {
-                Err(_) => handle_alloc_error(new_layout),
-                Ok(reallocated_bytes) => {
-                    self.ptr = reallocated_bytes.cast::<T>().as_ptr();
-                    self.len = new_len;
-                }
-            };
+                match reallocated_bytes {
+                    Err(_) => handle_alloc_error(new_layout),
+                    Ok(reallocated_bytes) => {
+                        self.ptr = reallocated_bytes.cast::<T>().as_ptr();
+                        self.len = new_len;
+                    }
+                };
+            }
         }
     }
 }

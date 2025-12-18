@@ -19,13 +19,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
+use super::Task;
 use super::apply_rule::ApplyRuleTask;
 use super::explore_group::ExploreGroupTask;
-use super::Task;
+use crate::IndexType;
+use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
-use crate::optimizer::optimizers::cascades::CascadesOptimizer;
-use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
 pub enum ExploreExprState {

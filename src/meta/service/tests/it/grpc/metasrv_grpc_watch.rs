@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::collapsible_if, clippy::useless_vec)]
+
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -25,15 +27,6 @@ use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::normalize_meta::NormalizeMeta;
-use databend_common_meta_types::protobuf::watch_request::FilterType;
-use databend_common_meta_types::protobuf::Event;
-use databend_common_meta_types::protobuf::KvMeta;
-use databend_common_meta_types::protobuf::SeqV;
-use databend_common_meta_types::protobuf::TxnRequest;
-use databend_common_meta_types::protobuf::WatchRequest;
-use databend_common_meta_types::txn_condition;
-use databend_common_meta_types::txn_op;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
@@ -41,6 +34,15 @@ use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::normalize_meta::NormalizeMeta;
+use databend_common_meta_types::protobuf::Event;
+use databend_common_meta_types::protobuf::KvMeta;
+use databend_common_meta_types::protobuf::SeqV;
+use databend_common_meta_types::protobuf::TxnRequest;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::watch_request::FilterType;
+use databend_common_meta_types::txn_condition;
+use databend_common_meta_types::txn_op;
 use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
 use log::info;

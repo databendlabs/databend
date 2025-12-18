@@ -38,8 +38,8 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::catalog_name_ident::CatalogNameIdentRaw;
     use crate::schema::CatalogIdToNameIdent;
+    use crate::schema::catalog_name_ident::CatalogNameIdentRaw;
     use crate::tenant_key::resource::TenantResource;
 
     // TODO(TIdent): parent should return Some(CatalogIdIdent::new(self.catalog_id).to_string_key())

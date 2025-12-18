@@ -15,11 +15,11 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 
 use crate::plans::Plan;

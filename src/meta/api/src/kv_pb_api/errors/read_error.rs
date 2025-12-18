@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::anyerror::AnyError;
 
 use crate::kv_pb_api::errors::PbDecodeError;
 

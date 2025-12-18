@@ -489,6 +489,7 @@ pub fn visit_expr<Index: ColumnIndex, V: ExprVisitor<Index>>(
 ///
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
 /// up the function registry with the `FunctionID`.
+#[allow(unused, dead_code)]
 #[derive(Debug, Clone, Educe, Serialize, Deserialize, EnumAsInner)]
 #[educe(PartialEq(bound(false)), Eq, Hash(bound(false)))]
 pub enum RemoteExpr<Index: ColumnIndex = usize> {
@@ -821,12 +822,16 @@ impl<Index: ColumnIndex> Expr<Index> {
             ) -> Result<Option<Expr<Index>>, Self::Error> {
                 if call.function.signature.name == self.name {
                     match call.args.as_slice() {
-                        [Expr::ColumnRef(ColumnRef { id, .. }), Expr::Constant(Constant { scalar, .. })] =>
-                        {
+                        [
+                            Expr::ColumnRef(ColumnRef { id, .. }),
+                            Expr::Constant(Constant { scalar, .. }),
+                        ] => {
                             (self.visitor)(id, scalar, true);
                         }
-                        [Expr::Constant(Constant { scalar, .. }), Expr::ColumnRef(ColumnRef { id, .. })] =>
-                        {
+                        [
+                            Expr::Constant(Constant { scalar, .. }),
+                            Expr::ColumnRef(ColumnRef { id, .. }),
+                        ] => {
                             (self.visitor)(id, scalar, false);
                         }
                         _ => {}
@@ -869,12 +874,16 @@ impl<Index: ColumnIndex> Expr<Index> {
             ) -> Result<Option<Expr<Index>>, Self::Error> {
                 if call.function.signature.name == self.name {
                     match call.args.as_slice() {
-                        [Expr::ColumnRef(ColumnRef { id, .. }), Expr::Constant(Constant { scalar, .. })] =>
-                        {
+                        [
+                            Expr::ColumnRef(ColumnRef { id, .. }),
+                            Expr::Constant(Constant { scalar, .. }),
+                        ] => {
                             return Ok((self.visitor)(id, scalar, call));
                         }
-                        [Expr::Constant(Constant { scalar, .. }), Expr::ColumnRef(ColumnRef { id, .. })] =>
-                        {
+                        [
+                            Expr::Constant(Constant { scalar, .. }),
+                            Expr::ColumnRef(ColumnRef { id, .. }),
+                        ] => {
                             return Ok((self.visitor)(id, scalar, call));
                         }
                         _ => {}

@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
-use crate::optimizer::ir::SExpr;
 use crate::optimizer::Optimizer;
+use crate::optimizer::ir::SExpr;
 use crate::plans::RelOperator;
 
 /// Optimizer that removes unused CTEs from the query plan.

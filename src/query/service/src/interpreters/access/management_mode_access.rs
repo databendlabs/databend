@@ -43,7 +43,7 @@ impl AccessChecker for ManagementModeAccess {
                 Plan::Query {rewrite_kind, .. } => {
                     use databend_common_sql::plans::RewriteKind;
                         match rewrite_kind  {
-                            Some(ref v) => matches!(v,
+                            Some( v) => matches!(v,
                             RewriteKind::ShowDatabases
                             | RewriteKind::ShowDropDatabases
                             | RewriteKind::ShowTables(_, _)

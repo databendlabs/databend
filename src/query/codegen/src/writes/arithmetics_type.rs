@@ -267,9 +267,5 @@ fn sum_coercion(a: NumberDataType) -> NumberDataType {
 }
 
 const fn next_bit_width(width: u8) -> u8 {
-    if width < 64 {
-        width * 2
-    } else {
-        64
-    }
+    if width < 64 { width * 2 } else { 64 }
 }

@@ -32,10 +32,10 @@ use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_frozen_api::frozen_api;
 use databend_common_frozen_api::FrozenAPI;
-use databend_common_io::prelude::BinaryRead;
+use databend_common_frozen_api::frozen_api;
 use databend_common_io::HybridBitmap;
+use databend_common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
 use geo::Geometry;
 use geo::Point;
@@ -43,11 +43,11 @@ use geozero::CoordDimensions;
 use geozero::ToWkb;
 use itertools::Itertools;
 use jsonb::RawJsonb;
-use serde::de::Visitor;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
+use serde::de::Visitor;
 use string::StringColumnBuilder;
 
 use crate::property::Domain;
@@ -66,19 +66,19 @@ use crate::types::decimal::DecimalScalar;
 use crate::types::geography::Geography;
 use crate::types::geography::GeographyColumn;
 use crate::types::geography::GeographyRef;
-use crate::types::geometry::compare_geometry;
 use crate::types::geometry::GeometryType;
+use crate::types::geometry::compare_geometry;
 use crate::types::i256;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableColumnVec;
 use crate::types::nullable::NullableDomain;
+use crate::types::number::F32;
+use crate::types::number::F64;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberColumnBuilder;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
-use crate::types::number::F32;
-use crate::types::number::F64;
 use crate::types::opaque::OpaqueColumn;
 use crate::types::opaque::OpaqueColumnBuilder;
 use crate::types::opaque::OpaqueColumnVec;
@@ -87,20 +87,20 @@ use crate::types::opaque::OpaqueScalarRef;
 use crate::types::opaque::OpaqueType;
 use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
-use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp::TIMESTAMP_MAX;
 use crate::types::timestamp::TIMESTAMP_MIN;
+use crate::types::timestamp::clamp_timestamp;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::variant::JSONB_NULL;
 use crate::types::vector::VectorColumn;
 use crate::types::vector::VectorColumnBuilder;
 use crate::types::*;
+use crate::utils::FromData;
 use crate::utils::arrow::append_bitmap;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::utils::arrow::buffer_into_mut;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
-use crate::utils::FromData;
 use crate::values::decimal::DecimalColumnVec;
 use crate::values::map::KvPair;
 use crate::with_decimal_mapped_type;
@@ -181,6 +181,7 @@ pub enum ScalarRef<'a> {
     Opaque(OpaqueScalarRef<'a>),
 }
 
+#[allow(unused, dead_code)]
 #[derive(Clone, EnumAsInner)]
 pub enum Column {
     Null { len: usize },
@@ -252,6 +253,7 @@ pub enum ColumnVec {
     Opaque(OpaqueColumnVec),
 }
 
+#[allow(unused, dead_code)]
 #[derive(Debug, Clone, EnumAsInner)]
 pub enum ColumnBuilder {
     Null { len: usize },
@@ -315,9 +317,11 @@ impl<T: AccessType> Value<T> {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> T::ScalarRef<'_> {
-        match self {
-            Value::Scalar(scalar) => T::to_scalar_ref(scalar),
-            Value::Column(c) => T::index_column_unchecked(c, index),
+        unsafe {
+            match self {
+                Value::Scalar(scalar) => T::to_scalar_ref(scalar),
+                Value::Column(c) => T::index_column_unchecked(c, index),
+            }
         }
     }
 }
@@ -421,7 +425,7 @@ impl Value<AnyType> {
 }
 
 impl Scalar {
-    pub fn as_ref(&self) -> ScalarRef {
+    pub fn as_ref(&self) -> ScalarRef<'_> {
         match self {
             Scalar::Null => ScalarRef::Null,
             Scalar::EmptyArray => ScalarRef::EmptyArray,
@@ -1175,7 +1179,7 @@ impl Column {
         }
     }
 
-    pub fn index(&self, index: usize) -> Option<ScalarRef> {
+    pub fn index(&self, index: usize) -> Option<ScalarRef<'_>> {
         match self {
             Column::Null { .. } => Some(ScalarRef::Null),
             Column::EmptyArray { .. } => Some(ScalarRef::EmptyArray),
@@ -1210,35 +1214,37 @@ impl Column {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
-        match self {
-            Column::Null { .. } => ScalarRef::Null,
-            Column::EmptyArray { .. } => ScalarRef::EmptyArray,
-            Column::EmptyMap { .. } => ScalarRef::EmptyMap,
-            Column::Number(col) => ScalarRef::Number(col.index_unchecked(index)),
-            Column::Decimal(col) => ScalarRef::Decimal(col.index_unchecked(index)),
-            Column::Boolean(col) => ScalarRef::Boolean(col.get_bit_unchecked(index)),
-            Column::Binary(col) => ScalarRef::Binary(col.index_unchecked(index)),
-            Column::String(col) => ScalarRef::String(col.index_unchecked(index)),
-            Column::Timestamp(col) => ScalarRef::Timestamp(*col.get_unchecked(index)),
-            Column::TimestampTz(col) => ScalarRef::TimestampTz(*col.get_unchecked(index)),
-            Column::Date(col) => ScalarRef::Date(*col.get_unchecked(index)),
-            Column::Interval(col) => ScalarRef::Interval(*col.get_unchecked(index)),
-            Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
-            Column::Map(col) => ScalarRef::Map(col.index_unchecked(index)),
-            Column::Bitmap(col) => ScalarRef::Bitmap(col.index_unchecked(index)),
-            Column::Nullable(col) => col.index_unchecked(index).unwrap_or(ScalarRef::Null),
-            Column::Tuple(fields) => ScalarRef::Tuple(
-                fields
-                    .iter()
-                    .map(|field| field.index_unchecked(index))
-                    .collect::<Vec<_>>(),
-            ),
-            Column::Variant(col) => ScalarRef::Variant(col.index_unchecked(index)),
-            Column::Geometry(col) => ScalarRef::Geometry(col.index_unchecked(index)),
-            Column::Geography(col) => ScalarRef::Geography(col.index_unchecked(index)),
-            Column::Vector(col) => ScalarRef::Vector(col.index_unchecked(index)),
-            Column::Opaque(col) => ScalarRef::Opaque(col.index_unchecked(index)),
+    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef<'_> {
+        unsafe {
+            match self {
+                Column::Null { .. } => ScalarRef::Null,
+                Column::EmptyArray { .. } => ScalarRef::EmptyArray,
+                Column::EmptyMap { .. } => ScalarRef::EmptyMap,
+                Column::Number(col) => ScalarRef::Number(col.index_unchecked(index)),
+                Column::Decimal(col) => ScalarRef::Decimal(col.index_unchecked(index)),
+                Column::Boolean(col) => ScalarRef::Boolean(col.get_bit_unchecked(index)),
+                Column::Binary(col) => ScalarRef::Binary(col.index_unchecked(index)),
+                Column::String(col) => ScalarRef::String(col.index_unchecked(index)),
+                Column::Timestamp(col) => ScalarRef::Timestamp(*col.get_unchecked(index)),
+                Column::TimestampTz(col) => ScalarRef::TimestampTz(*col.get_unchecked(index)),
+                Column::Date(col) => ScalarRef::Date(*col.get_unchecked(index)),
+                Column::Interval(col) => ScalarRef::Interval(*col.get_unchecked(index)),
+                Column::Array(col) => ScalarRef::Array(col.index_unchecked(index)),
+                Column::Map(col) => ScalarRef::Map(col.index_unchecked(index)),
+                Column::Bitmap(col) => ScalarRef::Bitmap(col.index_unchecked(index)),
+                Column::Nullable(col) => col.index_unchecked(index).unwrap_or(ScalarRef::Null),
+                Column::Tuple(fields) => ScalarRef::Tuple(
+                    fields
+                        .iter()
+                        .map(|field| field.index_unchecked(index))
+                        .collect::<Vec<_>>(),
+                ),
+                Column::Variant(col) => ScalarRef::Variant(col.index_unchecked(index)),
+                Column::Geometry(col) => ScalarRef::Geometry(col.index_unchecked(index)),
+                Column::Geography(col) => ScalarRef::Geography(col.index_unchecked(index)),
+                Column::Vector(col) => ScalarRef::Vector(col.index_unchecked(index)),
+                Column::Opaque(col) => ScalarRef::Opaque(col.index_unchecked(index)),
+            }
         }
     }
 
@@ -1304,7 +1310,7 @@ impl Column {
         }
     }
 
-    pub fn iter(&self) -> ColumnIterator {
+    pub fn iter(&self) -> ColumnIterator<'_> {
         ColumnIterator {
             column: self,
             index: 0,
@@ -1491,10 +1497,10 @@ impl Column {
     }
 
     pub fn random(ty: &DataType, len: usize, options: Option<RandomOptions>) -> Self {
-        use rand::distributions::Alphanumeric;
-        use rand::rngs::SmallRng;
         use rand::Rng;
         use rand::SeedableRng;
+        use rand::distributions::Alphanumeric;
+        use rand::rngs::SmallRng;
         let mut rng = match &options {
             Some(RandomOptions {
                 seed: Some(seed), ..
@@ -1552,7 +1558,7 @@ impl Column {
                 with_number_mapped_type!(|NUM_TYPE| match num_ty {
                     NumberDataType::NUM_TYPE => {
                         NumberType::<NUM_TYPE>::from_data(
-                            (0..len).map(|_| rng.gen::<NUM_TYPE>()).collect_vec(),
+                            (0..len).map(|_| rng.r#gen::<NUM_TYPE>()).collect_vec(),
                         )
                     }
                 })
@@ -1561,7 +1567,7 @@ impl Column {
                 with_decimal_mapped_type!(|DECIMAL| match DecimalDataType::from(*size) {
                     DecimalDataType::DECIMAL(size) => {
                         let values = (0..len)
-                            .map(|_| DECIMAL::from(rng.gen::<i16>()))
+                            .map(|_| DECIMAL::from(rng.r#gen::<i16>()))
                             .collect::<Vec<DECIMAL>>();
                         <DECIMAL as Decimal>::upcast_column(values.into(), size)
                     }
@@ -1641,7 +1647,7 @@ impl Column {
             DataType::Bitmap => BitmapType::from_data(
                 (0..len)
                     .map(|_| {
-                        let data: [u64; 4] = rng.gen();
+                        let data: [u64; 4] = rng.r#gen();
                         let rb = HybridBitmap::from_iter(data.iter());
                         let mut buf = vec![];
                         rb.serialize_into(&mut buf)
@@ -1668,8 +1674,8 @@ impl Column {
             DataType::Geometry => {
                 let mut data = Vec::with_capacity(len);
                 (0..len).for_each(|_| {
-                    let x = rng.gen::<f64>();
-                    let y = rng.gen::<f64>();
+                    let x = rng.r#gen::<f64>();
+                    let y = rng.r#gen::<f64>();
                     let val = Point::new(x, y);
                     data.push(
                         Geometry::from(val)
@@ -1696,14 +1702,14 @@ impl Column {
                 match vector_ty {
                     VectorDataType::Int8(dimension) => {
                         for _ in 0..len {
-                            let value = (0..*dimension).map(|_| rng.gen::<i8>()).collect_vec();
+                            let value = (0..*dimension).map(|_| rng.r#gen::<i8>()).collect_vec();
                             let scalar = VectorScalarRef::Int8(&value);
                             builder.push(&scalar);
                         }
                     }
                     VectorDataType::Float32(dimension) => {
                         for _ in 0..len {
-                            let value = (0..*dimension).map(|_| rng.gen::<F32>()).collect_vec();
+                            let value = (0..*dimension).map(|_| rng.r#gen::<F32>()).collect_vec();
                             let scalar = VectorScalarRef::Float32(&value);
                             builder.push(&scalar);
                         }
@@ -1719,7 +1725,7 @@ impl Column {
                         for _ in 0..len {
                             let mut value = [0u64; N];
                             for i in 0..N {
-                                value[i] = rng.gen::<u64>();
+                                value[i] = rng.r#gen::<u64>();
                             }
                             builder.push(value);
                         }

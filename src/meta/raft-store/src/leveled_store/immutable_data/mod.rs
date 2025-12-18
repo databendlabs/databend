@@ -22,17 +22,18 @@ use databend_common_meta_types::snapshot_db::DB;
 use display_more::DisplayOptionExt;
 use display_more::DisplaySliceExt;
 use futures_util::StreamExt;
+use map_api::IOResultStream;
+use map_api::MapKey;
 use map_api::mvcc;
 use map_api::mvcc::ViewKey;
 use map_api::mvcc::ViewValue;
 use map_api::util;
-use map_api::IOResultStream;
-use map_api::MapKey;
 use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 
+use crate::leveled_store::ScopedSeqBoundedRead;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level::LevelStat;
@@ -40,7 +41,6 @@ use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::persisted_codec::PersistedCodec;
-use crate::leveled_store::ScopedSeqBoundedRead;
 
 mod compact_into_stream;
 

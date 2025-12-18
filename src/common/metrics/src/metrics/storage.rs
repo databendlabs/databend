@@ -15,14 +15,14 @@
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use databend_common_base::runtime::metrics::register_counter;
-use databend_common_base::runtime::metrics::register_counter_family;
-use databend_common_base::runtime::metrics::register_gauge;
-use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 use databend_common_base::runtime::metrics::Counter;
 use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::metrics::Gauge;
 use databend_common_base::runtime::metrics::Histogram;
+use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::register_gauge;
+use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 use prometheus_client::encoding::EncodeLabelSet;
 
 // Common metrics.

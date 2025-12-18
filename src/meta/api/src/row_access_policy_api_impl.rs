@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
-use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
-use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReply;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
@@ -25,9 +24,10 @@ use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdentRaw;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::MetaError;

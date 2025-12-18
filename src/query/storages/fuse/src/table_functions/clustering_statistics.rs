@@ -19,10 +19,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -32,16 +28,20 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
-use crate::table_functions::parse_db_tb_args;
-use crate::table_functions::string_literal;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
-use crate::FuseTable;
+use crate::table_functions::parse_db_tb_args;
+use crate::table_functions::string_literal;
 
 pub struct ClusteringStatsArgs {
     database_name: String,

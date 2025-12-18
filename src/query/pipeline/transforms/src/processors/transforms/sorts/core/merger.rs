@@ -20,8 +20,8 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 
-use super::algorithm::*;
 use super::Rows;
+use super::algorithm::*;
 
 #[async_trait::async_trait]
 pub trait SortedStream {

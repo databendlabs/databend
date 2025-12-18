@@ -19,10 +19,10 @@ use databend_common_ast::ast::SetType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::cast_scalar;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::cast_scalar;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::Plan;
@@ -127,8 +127,9 @@ impl SetInterpreter {
                     // TODO: we will remove this setting when queries executor is stable.
                     let config = GlobalConfig::instance();
                     if !config.query.enable_queries_executor {
-                        return Err(
-                            ErrorCode::InvalidArgument("This setting is not allowed when queries executor is not enabled in the configuration"));
+                        return Err(ErrorCode::InvalidArgument(
+                            "This setting is not allowed when queries executor is not enabled in the configuration",
+                        ));
                     }
                     if scalar.as_str() == "0" {
                         return Err(ErrorCode::InvalidArgument(

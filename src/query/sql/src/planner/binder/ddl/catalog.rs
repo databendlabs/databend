@@ -27,9 +27,9 @@ use databend_common_ast::ast::UriLocation;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CatalogType;
@@ -41,6 +41,8 @@ use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IcebergStorageCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
 
+use crate::BindContext;
+use crate::Binder;
 use crate::binder::parse_storage_params_from_uri;
 use crate::normalize_identifier;
 use crate::plans::CreateCatalogPlan;
@@ -48,8 +50,6 @@ use crate::plans::DropCatalogPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::ShowCreateCatalogPlan;
-use crate::BindContext;
-use crate::Binder;
 
 impl Binder {
     #[async_backtrace::framed]

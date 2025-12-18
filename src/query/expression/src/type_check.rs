@@ -21,18 +21,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
-use crate::cast_scalar;
-use crate::expr::*;
-use crate::expression::Expr;
-use crate::expression::RawExpr;
-use crate::function::FunctionRegistry;
-use crate::function::FunctionSignature;
-use crate::types::decimal::DecimalSize;
-use crate::types::i256;
-use crate::types::DataType;
-use crate::types::Decimal;
-use crate::types::Number;
-use crate::visit_expr;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
 use crate::ConstantFolder;
@@ -40,6 +28,18 @@ use crate::DynamicCastRules;
 use crate::ExprVisitor;
 use crate::FunctionContext;
 use crate::Scalar;
+use crate::cast_scalar;
+use crate::expr::*;
+use crate::expression::Expr;
+use crate::expression::RawExpr;
+use crate::function::FunctionRegistry;
+use crate::function::FunctionSignature;
+use crate::types::DataType;
+use crate::types::Decimal;
+use crate::types::Number;
+use crate::types::decimal::DecimalSize;
+use crate::types::i256;
+use crate::visit_expr;
 
 #[recursive::recursive]
 pub fn check<Index: ColumnIndex>(
@@ -97,16 +97,22 @@ pub fn check<Index: ColumnIndex>(
             // This may hurt the bloom filter, we should try cast to literal as the datatype of column
             if name == "eq" && args_expr.len() == 2 {
                 match args_expr.as_mut_slice() {
-                    [e, Expr::Constant(Constant {
-                        span,
-                        scalar,
-                        data_type,
-                    })]
-                    | [Expr::Constant(Constant {
-                        span,
-                        scalar,
-                        data_type,
-                    }), e] => {
+                    [
+                        e,
+                        Expr::Constant(Constant {
+                            span,
+                            scalar,
+                            data_type,
+                        }),
+                    ]
+                    | [
+                        Expr::Constant(Constant {
+                            span,
+                            scalar,
+                            data_type,
+                        }),
+                        e,
+                    ] => {
                         let src_ty = data_type.remove_nullable();
                         let dest_ty = e.data_type().remove_nullable();
 
@@ -358,11 +364,7 @@ pub fn check_function<Index: ColumnIndex>(
                         .zip(args_not_const.iter().copied())
                         .map(|(expr, not_const)| {
                             // smaller score win
-                            if not_const && expr.is_cast() {
-                                1
-                            } else {
-                                0
-                            }
+                            if not_const && expr.is_cast() { 1 } else { 0 }
                         })
                         .sum::<usize>()
                 } else {

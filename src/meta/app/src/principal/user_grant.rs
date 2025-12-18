@@ -165,12 +165,12 @@ impl fmt::Display for GrantObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         match self {
             GrantObject::Global => write!(f, "*.*"),
-            GrantObject::Database(ref cat, ref db) => write!(f, "'{}'.'{}'.*", cat, db),
-            GrantObject::DatabaseById(ref cat, ref db) => write!(f, "'{}'.'{}'.*", cat, db),
-            GrantObject::Table(ref cat, ref db, ref table) => {
+            GrantObject::Database(cat, db) => write!(f, "'{}'.'{}'.*", cat, db),
+            GrantObject::DatabaseById(cat, db) => write!(f, "'{}'.'{}'.*", cat, db),
+            GrantObject::Table(cat, db, table) => {
                 write!(f, "'{}'.'{}'.'{}'", cat, db, table)
             }
-            GrantObject::TableById(ref cat, ref db, ref table) => {
+            GrantObject::TableById(cat, db, table) => {
                 write!(f, "'{}'.'{}'.'{}'", cat, db, table)
             }
             GrantObject::UDF(udf) => write!(f, "UDF {udf}"),

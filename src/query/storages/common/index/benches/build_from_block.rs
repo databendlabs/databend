@@ -22,22 +22,22 @@ fn main() {
 mod dummy {
     use std::ops::Deref;
 
-    use databend_common_expression::types::number::NumberColumn;
-    use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_common_expression::Column;
+    use databend_common_expression::FunctionContext;
     use databend_common_expression::types::AccessType;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::UInt64Type;
-    use databend_common_expression::Column;
-    use databend_common_expression::FunctionContext;
+    use databend_common_expression::types::number::NumberColumn;
+    use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_storages_common_index::BloomIndex;
     use databend_storages_common_index::filters::Filter;
     use databend_storages_common_index::filters::FilterBuilder;
     use databend_storages_common_index::filters::Xor8Builder;
-    use databend_storages_common_index::BloomIndex;
-    use rand::prelude::random;
-    use rand::rngs::StdRng;
     use rand::Rng;
     use rand::SeedableRng;
+    use rand::prelude::random;
+    use rand::rngs::StdRng;
 
     /// Benchmark building BlockFilter from DataBlock.
     ///
@@ -57,7 +57,10 @@ mod dummy {
         let column = rand_i64_column(1_000_000);
 
         let mut builder = Xor8Builder::create();
-        (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
+        (0..column.len()).for_each(|i| {
+            let value = unsafe { column.index_unchecked(i) };
+            builder.add_key(&value);
+        });
         let filter = builder.build().unwrap();
 
         for i in 0..column.len() {
@@ -66,7 +69,10 @@ mod dummy {
         }
         bencher.bench(|| {
             let mut builder = Xor8Builder::create();
-            (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
+            (0..column.len()).for_each(|i| {
+                let value = unsafe { column.index_unchecked(i) };
+                builder.add_key(&value);
+            });
             let _filter = divan::black_box(builder.build().unwrap());
         });
     }
@@ -76,7 +82,10 @@ mod dummy {
         let column = rand_str_column(1_000_000, 32);
 
         let mut builder = Xor8Builder::create();
-        (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
+        (0..column.len()).for_each(|i| {
+            let value = unsafe { column.index_unchecked(i) };
+            builder.add_key(&value);
+        });
         let filter = builder.build().unwrap();
 
         for i in 0..column.len() {
@@ -86,7 +95,10 @@ mod dummy {
 
         bencher.bench(|| {
             let mut builder = Xor8Builder::create();
-            (0..column.len()).for_each(|i| builder.add_key(unsafe { &column.index_unchecked(i) }));
+            (0..column.len()).for_each(|i| {
+                let value = unsafe { column.index_unchecked(i) };
+                builder.add_key(&value);
+            });
             let _filter = divan::black_box(builder.build().unwrap());
         })
     }
@@ -171,7 +183,7 @@ mod dummy {
         let seed: u64 = random();
 
         let mut rng = StdRng::seed_from_u64(seed);
-        let keys: Vec<i64> = (0..n).map(|_| rng.gen::<i64>()).collect();
+        let keys: Vec<i64> = (0..n).map(|_| rng.r#gen::<i64>()).collect();
 
         Column::Number(NumberColumn::Int64(keys.into()))
     }

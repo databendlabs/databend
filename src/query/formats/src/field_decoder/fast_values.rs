@@ -27,8 +27,14 @@ use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Scalar;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::MutableBitmap;
+use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::clamp_date;
@@ -39,14 +45,9 @@ use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::vector::VectorColumnBuilder;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::NumberColumnBuilder;
-use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Scalar;
+use databend_common_io::Interval;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
@@ -60,15 +61,14 @@ use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_io::prelude::FormatSettings;
-use databend_common_io::Interval;
 use jsonb::parse_owned_jsonb_with_buf;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
 
-use crate::field_decoder::common::read_timestamp;
-use crate::field_decoder::common::read_timestamp_tz;
 use crate::FieldDecoder;
 use crate::InputCommonSettings;
+use crate::field_decoder::common::read_timestamp;
+use crate::field_decoder::common::read_timestamp_tz;
 
 #[derive(Clone)]
 pub struct FastFieldDecoderValues {
@@ -767,11 +767,11 @@ mod test {
 
     use databend_common_exception::ErrorCode;
     use databend_common_exception::Result;
-    use databend_common_expression::types::DataType;
-    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::DataBlock;
     use databend_common_expression::Scalar;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
     use databend_common_io::prelude::FormatSettings;
     use goldenfile::Mint;
 

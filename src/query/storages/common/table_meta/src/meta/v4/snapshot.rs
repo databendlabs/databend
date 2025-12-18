@@ -23,20 +23,12 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
-use databend_common_frozen_api::frozen_api;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_frozen_api::frozen_api;
 use databend_common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::format::compress;
-use crate::meta::format::encode;
-use crate::meta::format::read_and_deserialize;
-use crate::meta::format::MetaCompression;
-use crate::meta::monotonically_increased_timestamp;
-use crate::meta::uuid_from_date_time;
-use crate::meta::v2;
-use crate::meta::v3;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
@@ -45,6 +37,14 @@ use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::TableMetaTimestamps;
 use crate::meta::Versioned;
+use crate::meta::format::MetaCompression;
+use crate::meta::format::compress;
+use crate::meta::format::encode;
+use crate::meta::format::read_and_deserialize;
+use crate::meta::monotonically_increased_timestamp;
+use crate::meta::uuid_from_date_time;
+use crate::meta::v2;
+use crate::meta::v3;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 
 #[frozen_api("dba4542b")]

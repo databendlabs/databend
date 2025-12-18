@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::TypeID;
 use crate::remove_nullable;
 use crate::types::data_type::DataType;
 use crate::types::data_type::DataTypeImpl;
 use crate::wrap_nullable;
-use crate::TypeID;
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Clone)]
 pub struct DataField {

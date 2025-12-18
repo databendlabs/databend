@@ -20,17 +20,17 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::broadcast;
 use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::tokio::task::JoinHandle;
-use futures::future::Either;
 use futures::FutureExt;
+use futures::future::Either;
 use log::error;
 use log::info;
+use poem::Endpoint;
 use poem::listener::Acceptor;
 use poem::listener::AcceptorExt;
 use poem::listener::IntoTlsConfigStream;
 use poem::listener::Listener;
 use poem::listener::OpensslTlsConfig;
 use poem::listener::TcpListener;
-use poem::Endpoint;
 
 use crate::HttpError;
 
@@ -148,19 +148,19 @@ impl HttpShutdownHandler {
             if let Some(abort_handle) = self.abort_handle.take() {
                 let _ = abort_handle.send(());
             }
-            if let Some(join_handle) = self.join_handle.take() {
-                if let Err(error) = join_handle.await {
-                    error!(
-                        "Unexpected error during shutdown Http Server {}. cause {}",
-                        self.service_name, error
-                    );
-                }
+            if let Some(join_handle) = self.join_handle.take()
+                && let Err(error) = join_handle.await
+            {
+                error!(
+                    "Unexpected error during shutdown Http Server {}. cause {}",
+                    self.service_name, error
+                );
             }
 
-            if let Some(join_handle) = self.join_handle.take() {
-                if let Err(_err) = tokio::time::timeout(Duration::from_secs(5), join_handle).await {
-                    error!("Timeout during shutdown Http Server {}", self.service_name);
-                }
+            if let Some(join_handle) = self.join_handle.take()
+                && let Err(_err) = tokio::time::timeout(Duration::from_secs(5), join_handle).await
+            {
+                error!("Timeout during shutdown Http Server {}", self.service_name);
             }
         } else if let Some(join_handle) = self.join_handle.take() {
             join_handle.abort();

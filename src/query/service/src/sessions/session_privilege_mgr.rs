@@ -25,12 +25,12 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
-use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use databend_common_users::BUILTIN_ROLE_PUBLIC;
 use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::sessions::SessionContext;

@@ -129,7 +129,7 @@ pub fn visit_sexpr<V: SExprVisitor>(visitor: &mut V, expr: &SExpr) -> Result<Opt
             return visitor.post_visit(expr).map(|action| match action {
                 VisitAction::Replace(new_expr) => Some(new_expr),
                 _ => None,
-            })
+            });
         }
         VisitAction::Stop => return Ok(None),
         VisitAction::Replace(new_expr) => return Ok(Some(new_expr)),
@@ -197,7 +197,7 @@ pub async fn visit_sexpr_async<T: AsyncSExprVisitor + Send>(
             return visitor.post_visit(expr).await.map(|action| match action {
                 VisitAction::Replace(new_expr) => Some(new_expr),
                 _ => None,
-            })
+            });
         }
         VisitAction::Stop => return Ok(None),
         VisitAction::Replace(new_expr) => return Ok(Some(new_expr)),

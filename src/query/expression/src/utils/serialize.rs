@@ -15,8 +15,8 @@
 use std::cmp::Ordering;
 use std::result::Result;
 
-use jiff::civil::Date;
 use jiff::Unit;
+use jiff::civil::Date;
 
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalSize;

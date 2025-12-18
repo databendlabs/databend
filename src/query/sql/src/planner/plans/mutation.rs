@@ -17,23 +17,23 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_pipeline::core::LockGuard;
 
-use crate::binder::MutationStrategy;
-use crate::binder::MutationType;
-use crate::plans::Operator;
-use crate::plans::RelOp;
 use crate::BindContext;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::binder::MutationStrategy;
+use crate::binder::MutationType;
+use crate::plans::Operator;
+use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnmatchedEvaluator {
@@ -151,11 +151,7 @@ impl Mutation {
             .iter()
             .filter_map(
                 |(field, include)| {
-                    if *include {
-                        Some(field.clone())
-                    } else {
-                        None
-                    }
+                    if *include { Some(field.clone()) } else { None }
                 },
             )
             .collect();

@@ -14,6 +14,6 @@
 
 mod handler;
 
-pub use handler::get_storage_encryption_handler;
 pub use handler::StorageEncryptionHandler;
 pub use handler::StorageEncryptionHandlerWrapper;
+pub use handler::get_storage_encryption_handler;

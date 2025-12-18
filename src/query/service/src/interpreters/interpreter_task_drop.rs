@@ -17,9 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DropTaskPlan;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::task::TaskInterpreter;
 use crate::interpreters::task::TaskInterpreterManager;
-use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 

@@ -28,13 +28,13 @@ pub fn get_pushdown_without_partition_columns(
     if partition_columns.is_empty() {
         return Ok(pushdown);
     }
-    if let Some(ref mut p) = &mut pushdown.projection {
+    if let Some(p) = &mut pushdown.projection {
         *p = shift_projection(p.clone(), partition_columns)?;
     }
-    if let Some(ref mut p) = &mut pushdown.output_columns {
+    if let Some(p) = &mut pushdown.output_columns {
         *p = shift_projection(p.clone(), partition_columns)?;
     }
-    if let Some(ref mut p) = &mut pushdown.prewhere {
+    if let Some(p) = &mut pushdown.prewhere {
         p.output_columns = shift_projection(p.output_columns.clone(), partition_columns)?;
         p.prewhere_columns = shift_projection(p.prewhere_columns.clone(), partition_columns)?;
         p.remain_columns = shift_projection(p.remain_columns.clone(), partition_columns)?;

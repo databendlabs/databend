@@ -21,20 +21,20 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::number::UInt8Type;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::number::UInt8Type;
+use databend_common_expression::utils::FromData;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 
-use crate::table::SystemTablePart;
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
+use crate::table::SystemTablePart;
 
 pub struct OneTable {
     table_info: TableInfo,

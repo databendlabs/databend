@@ -25,8 +25,8 @@ use crate::storage::load_bendsave_storage;
 use crate::storage::load_meta_config;
 use crate::storage::load_query_config;
 use crate::storage::load_query_storage;
-use crate::utils::storage_copy;
 use crate::utils::DATABEND_META_BACKUP_PATH;
+use crate::utils::storage_copy;
 
 pub async fn restore(from: &str, to_query: &str, to_meta: &str) -> Result<()> {
     let bendsave_storage = load_bendsave_storage(from).await?;

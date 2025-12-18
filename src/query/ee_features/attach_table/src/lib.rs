@@ -14,6 +14,6 @@
 
 mod handler;
 
-pub use handler::get_attach_table_handler;
 pub use handler::AttachTableHandler;
 pub use handler::AttachTableHandlerWrapper;
+pub use handler::get_attach_table_handler;

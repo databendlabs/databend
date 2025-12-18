@@ -16,21 +16,6 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::Number;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::UInt32Type;
-use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::F32;
-use databend_common_expression::types::F64;
-use databend_common_expression::vectorize_with_builder_1_arg;
-use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
@@ -39,6 +24,21 @@ use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
+use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::vectorize_with_builder_1_arg;
+use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::with_integer_mapped_type;
 
 pub fn register_decimal_hash<H: HashFunction>(registry: &mut FunctionRegistry) {
     registry.register_function_factory(
@@ -113,19 +113,23 @@ fn decimal_hash_factory_2_arg<H: HashFunctionWithSeed>(
 ) -> Option<Arc<Function>> {
     let (nullable, size, seed_type) = match args_type {
         [DataType::Null, DataType::Number(number)] => (true, DecimalSize::default_128(), *number),
-        [DataType::Nullable(box DataType::Decimal(size)), DataType::Number(number)] => {
-            (true, *size, *number)
-        }
+        [
+            DataType::Nullable(box DataType::Decimal(size)),
+            DataType::Number(number),
+        ] => (true, *size, *number),
         [DataType::Decimal(size), DataType::Number(number)] => (false, *size, *number),
-        [DataType::Null, DataType::Nullable(box DataType::Number(number))] => {
-            (true, DecimalSize::default_128(), *number)
-        }
-        [DataType::Nullable(box DataType::Decimal(size)), DataType::Nullable(box DataType::Number(number))] => {
-            (true, *size, *number)
-        }
-        [DataType::Decimal(size), DataType::Nullable(box DataType::Number(number))] => {
-            (true, *size, *number)
-        }
+        [
+            DataType::Null,
+            DataType::Nullable(box DataType::Number(number)),
+        ] => (true, DecimalSize::default_128(), *number),
+        [
+            DataType::Nullable(box DataType::Decimal(size)),
+            DataType::Nullable(box DataType::Number(number)),
+        ] => (true, *size, *number),
+        [
+            DataType::Decimal(size),
+            DataType::Nullable(box DataType::Number(number)),
+        ] => (true, *size, *number),
         _ => return None,
     };
 

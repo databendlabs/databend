@@ -18,11 +18,11 @@
 use std::time::Duration;
 
 use databend_common_grpc::ConnectionFactory;
-use databend_common_meta_client::from_digit_ver;
-use databend_common_meta_client::to_digit_ver;
+use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_client::MIN_METASRV_SEMVER;
+use databend_common_meta_client::from_digit_ver;
+use databend_common_meta_client::to_digit_ver;
 use databend_common_version::DATABEND_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use log::debug;

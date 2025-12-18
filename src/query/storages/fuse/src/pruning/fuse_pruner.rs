@@ -24,8 +24,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
+use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::metrics_inc_blocks_topn_pruning_after;
 use databend_common_metrics::storage::metrics_inc_blocks_topn_pruning_before;
@@ -62,7 +62,6 @@ use rand::thread_rng;
 
 use crate::io::BloomIndexRebuilder;
 use crate::operations::DeletedSegmentInfo;
-use crate::pruning::segment_pruner::SegmentPruner;
 use crate::pruning::BlockPruner;
 use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
@@ -73,6 +72,7 @@ use crate::pruning::PruningCostKind;
 use crate::pruning::SegmentLocation;
 use crate::pruning::VectorIndexPruner;
 use crate::pruning::VirtualColumnPruner;
+use crate::pruning::segment_pruner::SegmentPruner;
 
 const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
 

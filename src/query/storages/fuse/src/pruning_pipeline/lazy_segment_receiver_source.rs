@@ -23,8 +23,8 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 
-use crate::pruning_pipeline::LazySegmentMeta;
 use crate::SegmentLocation;
+use crate::pruning_pipeline::LazySegmentMeta;
 
 pub struct LazySegmentReceiverSource {
     pub meta_receiver: Receiver<SegmentLocation>,

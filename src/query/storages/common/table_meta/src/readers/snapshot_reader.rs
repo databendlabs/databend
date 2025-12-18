@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
-use crate::meta::load_json;
 use crate::meta::AdditionalStatsMeta;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
@@ -28,6 +27,7 @@ use crate::meta::Statistics;
 use crate::meta::TableSnapshot;
 use crate::meta::TableSnapshotV2;
 use crate::meta::TableSnapshotV3;
+use crate::meta::load_json;
 use crate::readers::VersionedReader;
 
 impl VersionedReader<TableSnapshot> for SnapshotVersion {

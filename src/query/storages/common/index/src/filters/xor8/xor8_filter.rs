@@ -25,9 +25,9 @@ use databend_common_expression::types::DataType;
 use parquet::data_type::AsBytes;
 use xorfilter::Xor8;
 
+use crate::Index;
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
-use crate::Index;
 
 /// A builder that builds a xor8 filter.
 ///

@@ -14,9 +14,9 @@
 
 use std::io::Write;
 
+use databend_common_expression::FromData;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -122,7 +122,9 @@ fn test_to_binary(file: &mut impl Write, is_try: bool) {
     );
     run_ast(
         file,
-        format!("{prefix}to_binary(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))"),
+        format!(
+            "{prefix}to_binary(st_geometryfromwkb(unhex('0101000020797f000066666666a9cb17411f85ebc19e325641')))"
+        ),
         &[],
     );
     run_ast(

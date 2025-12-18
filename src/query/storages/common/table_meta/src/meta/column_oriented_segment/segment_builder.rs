@@ -17,14 +17,6 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::Int64Type;
-use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::NullableColumn;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::UInt8Type;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -35,13 +27,19 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::MutableBitmap;
+use databend_common_expression::types::NullableColumn;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt8Type;
+use databend_common_expression::types::UInt64Type;
 use databend_common_functions::aggregates::eval_aggr;
 
+use super::AbstractSegment;
 use super::schema::segment_schema;
 use super::segment::ColumnOrientedSegment;
-use super::AbstractSegment;
-use crate::meta::format::encode;
-use crate::meta::supported_stat_type;
 use crate::meta::AdditionalStatsMeta;
 use crate::meta::BlockMeta;
 use crate::meta::ClusterStatistics;
@@ -50,6 +48,8 @@ use crate::meta::Location;
 use crate::meta::MetaEncoding;
 use crate::meta::Statistics;
 use crate::meta::VirtualBlockMeta;
+use crate::meta::format::encode;
+use crate::meta::supported_stat_type;
 
 pub trait SegmentBuilder: Send + Sync + 'static {
     type Segment: AbstractSegment;

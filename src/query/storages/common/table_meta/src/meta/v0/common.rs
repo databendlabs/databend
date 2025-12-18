@@ -18,6 +18,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub struct ColumnStatistics {
     pub min: Scalar,
     pub max: Scalar,
@@ -30,6 +31,7 @@ pub struct ColumnStatistics {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub struct ClusterStatistics {
     #[serde(default = "default_cluster_key_id")]
     pub cluster_key_id: u32,
@@ -40,15 +42,18 @@ pub struct ClusterStatistics {
     pub level: i32,
 }
 
+#[allow(dead_code)]
 fn default_cluster_key_id() -> u32 {
     0
 }
 
+#[allow(dead_code)]
 fn default_level() -> i32 {
     0
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[allow(dead_code)]
 pub struct Statistics {
     pub row_count: u64,
     pub block_count: u64,

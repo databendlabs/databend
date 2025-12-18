@@ -17,12 +17,12 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
-use crate::optimizer::ir::SExpr;
+use crate::ScalarExpr;
 use crate::optimizer::Optimizer;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
-use crate::ScalarExpr;
 
 // The DeduplicateJoinConditionOptimizer uses the Union-Find algorithm to remove duplicate join conditions.
 // For example: SELECT * FROM t1, t2, t3 WHERE t1.id = t2.id AND t2.id = t3.id AND t3.id = t1.id

@@ -29,8 +29,8 @@ pub fn check_referenced_computed_columns(
     for f in schema.fields() {
         if let Some(computed_expr) = f.computed_expr() {
             let expr = match computed_expr {
-                ComputedExpr::Stored(ref expr) => expr,
-                ComputedExpr::Virtual(ref expr) => expr,
+                ComputedExpr::Stored(expr) => expr,
+                ComputedExpr::Virtual(expr) => expr,
             };
             match parse_computed_expr(ctx.clone(), schema.clone(), expr) {
                 Ok(expr) => {

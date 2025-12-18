@@ -17,9 +17,9 @@ use std::fmt;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::TxnRequest;
 use crate::node::Node;
 use crate::raft_types::NodeId;
-use crate::TxnRequest;
 
 mod cmd_context;
 mod io_timing;

@@ -23,22 +23,22 @@ use databend_common_hashtable::FastHash;
 use ethnum::u256;
 use micromarshal::Marshal;
 
-use crate::types::decimal::DecimalColumn;
-use crate::types::i256;
-use crate::types::number::Number;
-use crate::types::number::NumberColumn;
-use crate::types::AccessType;
-use crate::types::ArgType;
-use crate::types::DecimalDataKind;
-use crate::types::DecimalView;
-use crate::types::NumberType;
-use crate::with_decimal_mapped_type;
-use crate::with_number_mapped_type;
 use crate::Column;
 use crate::HashMethod;
 use crate::KeyAccessor;
 use crate::KeysState;
 use crate::ProjectedBlock;
+use crate::types::AccessType;
+use crate::types::ArgType;
+use crate::types::DecimalDataKind;
+use crate::types::DecimalView;
+use crate::types::NumberType;
+use crate::types::decimal::DecimalColumn;
+use crate::types::i256;
+use crate::types::number::Number;
+use crate::types::number::NumberColumn;
+use crate::with_decimal_mapped_type;
+use crate::with_number_mapped_type;
 
 pub type HashMethodKeysU8 = HashMethodFixedKeys<u8>;
 pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
@@ -556,7 +556,7 @@ impl<T: Send + Sync> KeyAccessor for PrimitiveKeyAccessor<T> {
     /// # Safety
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
     unsafe fn key_unchecked(&self, index: usize) -> &Self::Key {
-        self.data.get_unchecked(index)
+        unsafe { self.data.get_unchecked(index) }
     }
 
     fn len(&self) -> usize {

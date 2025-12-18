@@ -265,12 +265,12 @@ mod tests {
     use parquet::data_type::AsBytes;
     use tempfile::TempDir;
 
-    use crate::providers::hybrid_cache::HybridCacheExt;
     use crate::CacheAccessor;
     use crate::CacheValue;
     use crate::DiskCacheBuilder;
     use crate::HybridCache;
     use crate::InMemoryLruCache;
+    use crate::providers::hybrid_cache::HybridCacheExt;
 
     // Custom test data type for serialization/deserialization testing
     #[derive(Clone, Debug, PartialEq)]

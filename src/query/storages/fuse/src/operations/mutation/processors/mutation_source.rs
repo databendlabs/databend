@@ -17,19 +17,19 @@ use std::ops::Not;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
-use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::Value;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::OutputPort;
@@ -39,6 +39,8 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_io::ReadSettings;
 
+use crate::BlockReadResult;
+use crate::FuseStorageFormat;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::operations::common::BlockMetaIndex;
@@ -46,8 +48,6 @@ use crate::operations::mutation::ClusterStatsGenType;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::SerializeBlock;
 use crate::operations::mutation::SerializeDataMeta;
-use crate::BlockReadResult;
-use crate::FuseStorageFormat;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MutationAction {

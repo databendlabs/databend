@@ -21,13 +21,13 @@ use databend_common_ast::ast::NotificationWebhookOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::Binder;
 use crate::plans::AlterNotificationPlan;
 use crate::plans::CreateNotificationPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DropNotificationPlan;
 use crate::plans::NotificationType;
 use crate::plans::Plan;
-use crate::Binder;
 
 fn verify_notification_type(t: &String) -> Result<NotificationType> {
     match t.to_lowercase().as_str() {

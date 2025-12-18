@@ -20,13 +20,6 @@ use std::time::Duration;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::quote::QuotedString;
-use crate::ast::statements::constraint::ConstraintType;
-use crate::ast::statements::show::ShowLimit;
-use crate::ast::write_comma_separated_list;
-use crate::ast::write_comma_separated_string_map;
-use crate::ast::write_dot_separated_list;
-use crate::ast::write_space_separated_string_map;
 use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -36,6 +29,13 @@ use crate::ast::TableReference;
 use crate::ast::TimeTravelPoint;
 use crate::ast::TypeName;
 use crate::ast::UriLocation;
+use crate::ast::quote::QuotedString;
+use crate::ast::statements::constraint::ConstraintType;
+use crate::ast::statements::show::ShowLimit;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_string_map;
+use crate::ast::write_dot_separated_list;
+use crate::ast::write_space_separated_string_map;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowTablesStmt {

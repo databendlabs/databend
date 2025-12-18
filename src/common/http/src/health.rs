@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use poem::web::Json;
 use poem::IntoResponse;
+use poem::web::Json;
 
 #[derive(serde::Serialize)]
 pub struct HealthCheckResponse {

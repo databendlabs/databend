@@ -25,13 +25,13 @@ use jiff::fmt;
 use jiff::tz;
 use jiff::tz::TimeZone;
 
+use super::ArgType;
+use super::DataType;
+use super::SimpleDomain;
 use super::simple_type::SimpleType;
 use super::simple_type::SimpleValueType;
 use super::timestamp::TIMESTAMP_MAX;
 use super::timestamp::TIMESTAMP_MIN;
-use super::ArgType;
-use super::DataType;
-use super::SimpleDomain;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;

@@ -29,9 +29,9 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_types::NodeInfo;
 use databend_common_settings::Settings;
 use log::debug;
+use petgraph::Graph;
 use petgraph::dot::Dot;
 use petgraph::graph::NodeIndex;
-use petgraph::Graph;
 use serde::Deserialize;
 use serde::Serialize;
 

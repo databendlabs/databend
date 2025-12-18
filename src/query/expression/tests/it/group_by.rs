@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::number::*;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::number::*;
 use databend_common_expression::*;
 use ethnum::u256;
 

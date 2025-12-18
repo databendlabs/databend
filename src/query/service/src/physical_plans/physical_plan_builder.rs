@@ -21,11 +21,11 @@ use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_sql::ColumnSet;
+use databend_common_sql::MetadataRef;
 use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::RelOperator;
-use databend_common_sql::ColumnSet;
-use databend_common_sql::MetadataRef;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 

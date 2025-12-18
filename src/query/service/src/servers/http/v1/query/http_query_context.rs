@@ -26,9 +26,9 @@ use poem::Request;
 use poem::RequestBody;
 
 use crate::auth::Credential;
+use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::middleware::session_header::ClientSession;
 use crate::servers::http::middleware::session_header::ClientSessionType;
-use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;

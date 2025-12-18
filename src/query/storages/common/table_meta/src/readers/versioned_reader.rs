@@ -16,11 +16,11 @@ use std::io::Read;
 
 use databend_common_exception::Result;
 
-use crate::meta::load_json;
 use crate::meta::SegmentStatistics;
 use crate::meta::SegmentStatisticsVersion;
 use crate::meta::TableSnapshotStatistics;
 use crate::meta::TableSnapshotStatisticsVersion;
+use crate::meta::load_json;
 
 pub trait VersionedReader<T> {
     type TargetType;

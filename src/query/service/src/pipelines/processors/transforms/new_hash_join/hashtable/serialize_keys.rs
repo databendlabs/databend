@@ -24,15 +24,15 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
-use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
+use databend_common_hashtable::StringRawEntry;
 
+use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::AllUnmatchedProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::EmptyProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
-use crate::pipelines::processors::transforms::SerializerHashJoinHashTable;
 
 impl<const SKIP_DUPLICATES: bool> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
     pub fn new(
@@ -197,7 +197,7 @@ impl<const SKIP_DUPLICATES: bool> SerializerHashJoinHashTable<SKIP_DUPLICATES> {
 pub struct BinaryKeyProbeStream<const MATCHED: bool> {
     key_idx: usize,
     pointers: Vec<u64>,
-    keys: Box<(dyn KeyAccessor<Key = [u8]>)>,
+    keys: Box<dyn KeyAccessor<Key = [u8]>>,
     probe_entry_ptr: u64,
     matched_num_rows: usize,
 }
@@ -297,7 +297,7 @@ impl<const MATCHED: bool> ProbeStream for BinaryKeyProbeStream<MATCHED> {
 pub struct EarlyFilteringProbeStream<'a, const MATCHED: bool> {
     idx: usize,
     pointers: Vec<u64>,
-    keys: Box<(dyn KeyAccessor<Key = [u8]>)>,
+    keys: Box<dyn KeyAccessor<Key = [u8]>>,
     probe_entry_ptr: u64,
     selections: &'a [u32],
     unmatched_selection: &'a [u32],

@@ -19,6 +19,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::ScalarExpr;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -26,13 +29,10 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
-use crate::plans::sort::SortItem;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
-use crate::ColumnSet;
-use crate::IndexType;
-use crate::ScalarExpr;
+use crate::plans::sort::SortItem;
 
 const DEFAULT_AGGREGATE_RATIO: f64 = 1f64 / 3f64;
 const AGGREGATE_COLUMN_CORRELATION_COEFFICIENT: f64 = 0.75_f64;
@@ -96,7 +96,7 @@ impl Aggregate {
                 .collect()
         } else {
             Ok(vec![
-                self.group_items[0].bound_column_expr("_group_item_0".to_string())?
+                self.group_items[0].bound_column_expr("_group_item_0".to_string())?,
             ])
         }
     }

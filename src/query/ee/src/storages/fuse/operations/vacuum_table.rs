@@ -22,12 +22,12 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::RetentionPolicy;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SnapshotLiteExtended;
 use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
-use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::RetentionPolicy;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 

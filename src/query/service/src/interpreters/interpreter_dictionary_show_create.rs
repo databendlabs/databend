@@ -14,19 +14,19 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::ast::quote::QuotedString;
+use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_sql::plans::ShowCreateDictionaryPlan;
 
 use crate::interpreters::Interpreter;

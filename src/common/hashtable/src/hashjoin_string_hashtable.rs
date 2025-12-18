@@ -22,13 +22,13 @@ use databend_common_base::mem_allocator::DefaultAllocator;
 use databend_common_column::bitmap::Bitmap;
 
 use super::traits::HashJoinHashtableLike;
+use crate::RowPtr;
 use crate::hashjoin_hashtable::combine_header;
 use crate::hashjoin_hashtable::early_filtering;
 use crate::hashjoin_hashtable::hash_bits;
 use crate::hashjoin_hashtable::new_header;
 use crate::hashjoin_hashtable::remove_header_tag;
 use crate::traits::hash_join_fast_string_hash;
-use crate::RowPtr;
 
 pub const STRING_EARLY_SIZE: usize = 4;
 pub struct StringRawEntry {

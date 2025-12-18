@@ -24,11 +24,11 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
+use petgraph::Direction;
 use petgraph::graph::EdgeIndex;
 use petgraph::matrix_graph::Zero;
 use petgraph::prelude::StableGraph;
 use petgraph::stable_graph::NodeIndex;
-use petgraph::Direction;
 
 use crate::basic::duplicate_processor::DuplicateProcessor;
 use crate::basic::resize_processor::ResizeProcessor;
@@ -36,8 +36,6 @@ use crate::basic::sequence_group::SequenceGroupProcessor;
 use crate::basic::shuffle_processor::Exchange;
 use crate::basic::shuffle_processor::MergePartitionProcessor;
 use crate::basic::shuffle_processor::PartitionProcessor;
-use crate::core::processor::ProcessorPtr;
-use crate::core::profile::PlanScope;
 use crate::core::Callback;
 use crate::core::ExecutionInfo;
 use crate::core::FinishedCallbackChain;
@@ -49,6 +47,8 @@ use crate::core::PipeItem;
 use crate::core::SinkPipeBuilder;
 use crate::core::SourcePipeBuilder;
 use crate::core::TransformPipeBuilder;
+use crate::core::processor::ProcessorPtr;
+use crate::core::profile::PlanScope;
 
 #[derive(Clone)]
 pub struct Node {

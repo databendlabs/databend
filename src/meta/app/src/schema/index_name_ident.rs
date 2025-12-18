@@ -39,10 +39,10 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::schema::index_id_ident::IndexId;
-    use crate::schema::IndexNameIdent;
-    use crate::tenant_key::resource::TenantResource;
     use crate::KeyWithTenant;
+    use crate::schema::IndexNameIdent;
+    use crate::schema::index_id_ident::IndexId;
+    use crate::tenant_key::resource::TenantResource;
 
     pub struct IndexName;
     impl TenantResource for IndexName {

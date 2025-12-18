@@ -27,22 +27,22 @@ use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use lexical_core::ToLexicalWithOptions;
-use num_traits::float::FloatCore;
 use num_traits::NumCast;
+use num_traits::float::FloatCore;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::decimal::DecimalSize;
 use super::ArgType;
 use super::DataType;
 use super::SimpleType;
 use super::SimpleValueType;
+use super::decimal::DecimalSize;
+use crate::ColumnBuilder;
+use crate::ScalarRef;
 use crate::property::Domain;
 use crate::utils::arrow::buffer_into_mut;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
-use crate::ScalarRef;
 
 pub type F32 = OrderedFloat<f32>;
 pub type F64 = OrderedFloat<f64>;

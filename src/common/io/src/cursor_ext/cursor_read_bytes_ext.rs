@@ -79,11 +79,7 @@ where T: AsRef<[u8]>
 
     fn peek_byte(&self) -> Option<u8> {
         let buf = Cursor::split(self).1;
-        if buf.is_empty() {
-            None
-        } else {
-            Some(buf[0])
-        }
+        if buf.is_empty() { None } else { Some(buf[0]) }
     }
 
     fn eof(&mut self) -> bool {

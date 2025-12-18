@@ -40,11 +40,11 @@ use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
-use http::header::AUTHORIZATION;
 use http::HeaderMap;
 use http::HeaderValue;
 use http::Method;
 use http::StatusCode;
+use http::header::AUTHORIZATION;
 use log::error;
 use log::info;
 use log::warn;
@@ -52,9 +52,6 @@ use opentelemetry::baggage::BaggageExt;
 use opentelemetry::propagation::Extractor;
 use opentelemetry::propagation::TextMapPropagator;
 use opentelemetry_sdk::propagation::BaggagePropagator;
-use poem::error::ResponseError;
-use poem::error::Result as PoemResult;
-use poem::web::Json;
 use poem::Addr;
 use poem::Endpoint;
 use poem::Error;
@@ -62,23 +59,26 @@ use poem::IntoResponse;
 use poem::Middleware;
 use poem::Request;
 use poem::Response;
+use poem::error::ResponseError;
+use poem::error::Result as PoemResult;
+use poem::web::Json;
 use uuid::Uuid;
 
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
 use crate::clusters::ClusterDiscovery;
+use crate::servers::HttpHandlerKind;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
+use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::middleware::session_header::ClientSession;
 use crate::servers::http::middleware::session_header::ClientSessionType;
-use crate::servers::http::middleware::ClientCapabilities;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::SessionClaim;
 use crate::servers::login_history::LoginEventType;
 use crate::servers::login_history::LoginHandler;
 use crate::servers::login_history::LoginHistory;
-use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
@@ -645,7 +645,11 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                             .into());
                         }
                         Ok(None) => {
-                            let msg = format!("Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`. request = {}.", warehouse, get_request_info(req));
+                            let msg = format!(
+                                "Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`. request = {}.",
+                                warehouse,
+                                get_request_info(req)
+                            );
                             warn!("{}", msg);
                             return Err(Error::from(HttpErrorCode::bad_request(
                                 ErrorCode::UnknownWarehouse(msg),

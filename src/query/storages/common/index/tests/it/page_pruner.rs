@@ -16,14 +16,14 @@ use std::io::Write;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDataType;
 use databend_storages_common_index::PageIndex;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use goldenfile::Mint;

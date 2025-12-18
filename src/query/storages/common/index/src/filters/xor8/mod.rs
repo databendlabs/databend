@@ -26,10 +26,10 @@ use databend_common_exception::ErrorCode;
 pub use xor8_filter::Xor8Builder;
 pub use xor8_filter::Xor8Filter;
 
-pub use crate::filters::bloom_filter::BloomBuilder;
-pub use crate::filters::bloom_filter::BloomFilter;
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
+pub use crate::filters::bloom_filter::BloomBuilder;
+pub use crate::filters::bloom_filter::BloomFilter;
 
 #[derive(PartialEq)]
 pub enum FilterImpl {

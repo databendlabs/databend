@@ -21,21 +21,21 @@ use std::sync::LazyLock;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_frozen_api::frozen_api;
 use databend_common_frozen_api::FrozenAPI;
+use databend_common_frozen_api::frozen_api;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::BlockMetaInfo;
+use crate::BlockMetaInfoDowncast;
+use crate::Scalar;
 use crate::display::display_tuple_field_name;
-use crate::types::decimal::DecimalDataType;
 use crate::types::DataType;
 use crate::types::DecimalDataKind;
 use crate::types::NumberDataType;
 use crate::types::VectorDataType;
-use crate::BlockMetaInfo;
-use crate::BlockMetaInfoDowncast;
-use crate::Scalar;
+use crate::types::decimal::DecimalDataType;
 
 // Column id of TableField
 pub type ColumnId = u32;

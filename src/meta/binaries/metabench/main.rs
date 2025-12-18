@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+#![allow(
+    clippy::collapsible_if,
+    clippy::manual_is_multiple_of,
+    clippy::uninlined_format_args
+)]
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -27,11 +31,10 @@ use chrono::Utc;
 use clap::Parser;
 use databend_common_base::base::tokio;
 use databend_common_base::runtime;
-use databend_common_meta_api::serialize_struct;
-use databend_common_meta_api::txn_op_put;
 use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::TableApi;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_api::serialize_struct;
+use databend_common_meta_api::txn_op_put;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -41,20 +44,21 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_client::required;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_client::required;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
-use databend_common_tracing::init_logging;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::LogFormat;
 use databend_common_tracing::StderrConfig;
+use databend_common_tracing::init_logging;
 use databend_common_version::BUILD_INFO;
 use databend_common_version::METASRV_COMMIT_VERSION;
 use futures::TryStreamExt;

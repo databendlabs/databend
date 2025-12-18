@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use parking_lot::Mutex;
 
+use crate::runtime::ThreadTracker;
 use crate::runtime::error_info::NodeErrorType;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::ProfileStatisticsName;
-use crate::runtime::ThreadTracker;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProfileLabel {

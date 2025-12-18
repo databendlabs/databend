@@ -22,17 +22,17 @@ use arrow_data::ArrayData;
 use arrow_data::ArrayDataBuilder;
 use either::Either;
 
+use super::IntoIter;
+use super::MutableBitmap;
 use super::chunk_iter_to_vec;
-use super::utils::count_zeros;
-use super::utils::fmt;
-use super::utils::get_bit;
-use super::utils::get_bit_unchecked;
 use super::utils::BitChunk;
 use super::utils::BitChunks;
 use super::utils::BitmapIter;
 use super::utils::ZipValidity;
-use super::IntoIter;
-use super::MutableBitmap;
+use super::utils::count_zeros;
+use super::utils::fmt;
+use super::utils::get_bit;
+use super::utils::get_bit_unchecked;
 use crate::buffer::Bytes;
 use crate::error::Error;
 
@@ -143,7 +143,7 @@ impl Bitmap {
     }
 
     /// Returns a new iterator of `bool` over this bitmap
-    pub fn iter(&self) -> BitmapIter {
+    pub fn iter(&self) -> BitmapIter<'_> {
         BitmapIter::new(&self.bytes, self.offset, self.length)
     }
 
@@ -158,7 +158,7 @@ impl Bitmap {
     /// Returns an iterator over bits in bit chunks [`BitChunk`].
     ///
     /// This iterator is useful to operate over multiple bits via e.g. bitwise.
-    pub fn chunks<T: BitChunk>(&self) -> BitChunks<T> {
+    pub fn chunks<T: BitChunk>(&self) -> BitChunks<'_, T> {
         BitChunks::new(&self.bytes, self.offset, self.length)
     }
 
@@ -249,8 +249,10 @@ impl Bitmap {
     #[inline]
     #[must_use]
     pub unsafe fn sliced_unchecked(mut self, offset: usize, length: usize) -> Self {
-        self.slice_unchecked(offset, length);
-        self
+        unsafe {
+            self.slice_unchecked(offset, length);
+            self
+        }
     }
 
     /// Returns whether the bit at position `i` is set.
@@ -266,7 +268,7 @@ impl Bitmap {
     /// Unsound iff `i >= self.len()`.
     #[inline]
     pub unsafe fn get_bit_unchecked(&self, i: usize) -> bool {
-        get_bit_unchecked(&self.bytes, self.offset + i)
+        unsafe { get_bit_unchecked(&self.bytes, self.offset + i) }
     }
 
     /// Returns a pointer to the start of this [`Bitmap`] (ignores `offsets`)
@@ -455,7 +457,7 @@ impl Bitmap {
     /// The iterator must report an accurate length.
     #[inline]
     pub unsafe fn from_trusted_len_iter_unchecked<I: Iterator<Item = bool>>(iterator: I) -> Self {
-        MutableBitmap::from_trusted_len_iter_unchecked(iterator).into()
+        unsafe { MutableBitmap::from_trusted_len_iter_unchecked(iterator).into() }
     }
 
     /// Creates a new [`Bitmap`] from an iterator of booleans.

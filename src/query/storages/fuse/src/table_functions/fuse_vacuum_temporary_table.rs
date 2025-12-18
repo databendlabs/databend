@@ -19,8 +19,6 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
@@ -28,6 +26,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::StringType;
 use databend_common_storage::DataOperator;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TEMP_TABLE_STORAGE_PREFIX;
@@ -161,7 +161,7 @@ impl SimpleTableFunc for FuseVacuumTemporaryTable {
                         return Err(ErrorCode::BadArguments(format!(
                             "invalid value {:?} expect to be unsigned integer literal.",
                             args[0]
-                        )))
+                        )));
                     }
                 };
                 Some(limit_val)

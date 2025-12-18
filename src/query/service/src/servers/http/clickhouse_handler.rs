@@ -23,8 +23,8 @@ use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
-use databend_common_expression::infer_table_schema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::infer_table_schema;
 use databend_common_formats::ClickhouseFormatType;
 use databend_common_formats::FileFormatOptionsExt;
 use databend_common_formats::FileFormatTypeExt;
@@ -36,6 +36,11 @@ use http::HeaderMap;
 use http::StatusCode;
 use log::info;
 use naive_cityhash::cityhash128;
+use poem::Body;
+use poem::Endpoint;
+use poem::EndpointExt;
+use poem::IntoResponse;
+use poem::Route;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -43,17 +48,12 @@ use poem::get;
 use poem::post;
 use poem::web::Query;
 use poem::web::WithContentType;
-use poem::Body;
-use poem::Endpoint;
-use poem::EndpointExt;
-use poem::IntoResponse;
-use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
+use crate::interpreters::interpreter_plan_sql;
 use crate::servers::http::middleware::sanitize_request_headers;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
@@ -373,7 +373,7 @@ pub async fn clickhouse_ping_handler() -> String {
     "OK.\n".to_string()
 }
 
-pub fn clickhouse_router() -> impl Endpoint {
+pub fn clickhouse_router() -> impl Endpoint + use<> {
     Route::new()
         .at(
             "/",
@@ -423,9 +423,10 @@ fn get_default_format(
     let name = match &params.default_format {
         None => match headers.get("X-CLICKHOUSE-FORMAT") {
             None => "TSV",
-            Some(v) => v.to_str().map_err_to_code(ErrorCode::BadBytes, || {
-                "value of X-CLICKHOUSE-FORMAT is not string"
-            })?,
+            Some(v) => v.to_str().map_err_to_code(
+                ErrorCode::BadBytes,
+                || "value of X-CLICKHOUSE-FORMAT is not string",
+            )?,
         },
         Some(s) => s,
     };

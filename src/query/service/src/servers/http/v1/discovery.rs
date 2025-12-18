@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_config::GlobalConfig;
+use poem::Request;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
-use poem::Request;
 
 use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterHelper;

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::builder::BinaryColumnBuilder;
 use super::BinaryColumn;
+use super::builder::BinaryColumnBuilder;
 use crate::iterator::ColumnAccessor;
 use crate::iterator::ColumnValuesIter;
 
@@ -22,7 +22,7 @@ unsafe impl<'a> ColumnAccessor<'a> for BinaryColumn {
 
     #[inline]
     unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item {
-        self.index_unchecked(index)
+        unsafe { self.index_unchecked(index) }
     }
 
     #[inline]
@@ -48,7 +48,7 @@ unsafe impl<'a> ColumnAccessor<'a> for BinaryColumnBuilder {
 
     #[inline]
     unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item {
-        self.index_unchecked(index)
+        unsafe { self.index_unchecked(index) }
     }
 
     #[inline]

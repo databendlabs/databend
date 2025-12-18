@@ -20,14 +20,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::SequenceIdent;
 
+use crate::BindContext;
+use crate::Binder;
 use crate::binder::show::get_show_options;
 use crate::plans::CreateSequencePlan;
 use crate::plans::DescSequencePlan;
 use crate::plans::DropSequencePlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
-use crate::BindContext;
-use crate::Binder;
 
 impl Binder {
     #[async_backtrace::framed]

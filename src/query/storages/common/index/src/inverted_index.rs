@@ -54,22 +54,22 @@ use bytes::Bytes;
 use crc32fast::Hasher;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::F32;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
-use databend_storages_common_table_meta::meta::testify_version;
+use databend_common_expression::types::F32;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::testify_version;
+use levenshtein_automata::DFA;
 use levenshtein_automata::Distance;
 use levenshtein_automata::LevenshteinAutomatonBuilder;
-use levenshtein_automata::DFA;
 use log::warn;
 use parquet::format::FileMetaData;
 use roaring::RoaringTreemap;
-use tantivy::directory::error::DeleteError;
-use tantivy::directory::error::OpenReadError;
-use tantivy::directory::error::OpenWriteError;
+use tantivy::Directory;
+use tantivy::Term;
+use tantivy::Version;
 use tantivy::directory::AntiCallToken;
 use tantivy::directory::FileHandle;
 use tantivy::directory::FileSlice;
@@ -78,6 +78,9 @@ use tantivy::directory::TerminatingWrite;
 use tantivy::directory::WatchCallback;
 use tantivy::directory::WatchHandle;
 use tantivy::directory::WritePtr;
+use tantivy::directory::error::DeleteError;
+use tantivy::directory::error::OpenReadError;
+use tantivy::directory::error::OpenWriteError;
 use tantivy::fieldnorm::FieldNormReader;
 use tantivy::positions::PositionReader;
 use tantivy::postings::BlockSegmentPostings;
@@ -98,9 +101,6 @@ use tantivy::query::QueryClone;
 use tantivy::query::TermQuery;
 use tantivy::schema::Field;
 use tantivy::version;
-use tantivy::Directory;
-use tantivy::Term;
-use tantivy::Version;
 use tantivy_common::BinarySerializable;
 use tantivy_common::HasLen;
 use tantivy_common::VInt;
@@ -1570,6 +1570,7 @@ impl Directory for InvertedIndexDirectory {
 
 impl Versioned<0> for InvertedIndexFile {}
 
+#[allow(dead_code)]
 pub enum InvertedIndexFileVersion {
     V0(PhantomData<InvertedIndexFile>),
 }

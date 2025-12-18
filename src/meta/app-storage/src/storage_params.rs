@@ -638,7 +638,6 @@ pub struct StorageMokaConfig {
 }
 
 impl Default for StorageMokaConfig {
-    #[no_sanitize(address)]
     fn default() -> Self {
         Self {
             // Use 1G as default.

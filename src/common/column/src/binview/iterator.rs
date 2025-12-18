@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use super::BinaryViewColumnGeneric;
-use crate::binview::builder::BinaryViewColumnBuilder;
 use crate::binview::ViewType;
+use crate::binview::builder::BinaryViewColumnBuilder;
 use crate::iterator::ColumnAccessor;
 use crate::iterator::ColumnValuesIter;
 
@@ -23,7 +23,7 @@ unsafe impl<'a, T: ViewType + ?Sized> ColumnAccessor<'a> for BinaryViewColumnGen
 
     #[inline]
     unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item {
-        self.value_unchecked(index)
+        unsafe { self.value_unchecked(index) }
     }
 
     #[inline]
@@ -49,7 +49,7 @@ unsafe impl<'a, T: ViewType + ?Sized> ColumnAccessor<'a> for BinaryViewColumnBui
 
     #[inline]
     unsafe fn value_unchecked(&'a self, index: usize) -> Self::Item {
-        self.value_unchecked(index)
+        unsafe { self.value_unchecked(index) }
     }
 
     #[inline]

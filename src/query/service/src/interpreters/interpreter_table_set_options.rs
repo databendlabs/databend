@@ -27,20 +27,20 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
-use databend_common_storages_fuse::io::SegmentsIO;
-use databend_common_storages_fuse::segment_format_from_location;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
-use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
-use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
-use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
-use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
-use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
+use databend_common_storages_fuse::segment_format_from_location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
+use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
+use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -51,6 +51,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 
+use crate::interpreters::Interpreter;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
@@ -59,10 +60,9 @@ use crate::interpreters::common::table_option_validation::is_valid_data_retentio
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
-use crate::interpreters::Interpreter;
+use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
 pub struct SetOptionsInterpreter {

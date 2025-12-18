@@ -18,7 +18,6 @@ use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordPolicy;
 use databend_common_sql::plans::CreatePasswordPolicyPlan;
-use databend_common_users::UserApiProvider;
 use databend_common_users::DEFAULT_PASSWORD_HISTORY;
 use databend_common_users::DEFAULT_PASSWORD_LOCKOUT_TIME_MINS;
 use databend_common_users::DEFAULT_PASSWORD_MAX_AGE_DAYS;
@@ -28,6 +27,7 @@ use databend_common_users::DEFAULT_PASSWORD_MIN_AGE_DAYS;
 use databend_common_users::DEFAULT_PASSWORD_MIN_CHARS;
 use databend_common_users::DEFAULT_PASSWORD_MIN_LENGTH;
 use databend_common_users::DEFAULT_PASSWORD_MIN_SPECIAL_CHARS;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::interpreters::Interpreter;

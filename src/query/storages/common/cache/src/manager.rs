@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_config::CacheConfig;
@@ -26,6 +26,12 @@ use databend_common_exception::Result;
 use log::info;
 use parking_lot::RwLock;
 
+use crate::CacheAccessor;
+use crate::DiskCacheAccessor;
+use crate::DiskCacheBuilder;
+use crate::InMemoryLruCache;
+use crate::SegmentStatisticsCache;
+use crate::Unit;
 use crate::caches::BlockMetaCache;
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
@@ -46,12 +52,6 @@ use crate::caches::VectorIndexFileCache;
 use crate::caches::VectorIndexMetaCache;
 use crate::providers::HybridCache;
 use crate::providers::HybridCacheExt;
-use crate::CacheAccessor;
-use crate::DiskCacheAccessor;
-use crate::DiskCacheBuilder;
-use crate::InMemoryLruCache;
-use crate::SegmentStatisticsCache;
-use crate::Unit;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
 
@@ -891,10 +891,10 @@ mod tests {
     use bytes::Bytes;
     use databend_common_config::CacheConfig;
     use databend_common_config::DiskCacheInnerConfig;
+    use databend_storages_common_index::BloomIndexMeta;
     use databend_storages_common_index::filters::FilterBuilder;
     use databend_storages_common_index::filters::FilterImpl;
     use databend_storages_common_index::filters::Xor8Builder;
-    use databend_storages_common_index::BloomIndexMeta;
     use databend_storages_common_table_meta::meta::BlockMeta;
     use databend_storages_common_table_meta::meta::CompactSegmentInfo;
     use databend_storages_common_table_meta::meta::Compression;
@@ -1189,10 +1189,12 @@ mod tests {
         // ----- VERIFY INITIAL CACHE STATE -----
         // Verify all caches are correctly populated
         assert!(!cache_manager.get_table_data_array_cache().is_empty());
-        assert!(!cache_manager
-            .get_segment_block_metas_cache()
-            .unwrap()
-            .is_empty());
+        assert!(
+            !cache_manager
+                .get_segment_block_metas_cache()
+                .unwrap()
+                .is_empty()
+        );
         assert!(!cache_manager.get_column_data_cache().is_empty());
         assert!(!cache_manager.get_block_meta_cache().is_empty());
         assert!(!cache_manager.get_table_segment_cache().is_empty());
@@ -1207,22 +1209,26 @@ mod tests {
 
         // Verify basic caches are cleared
         assert!(in_memory_table_data_cache.is_empty());
-        assert!(cache_manager
-            .get_segment_block_metas_cache()
-            .unwrap()
-            .is_empty());
+        assert!(
+            cache_manager
+                .get_segment_block_metas_cache()
+                .unwrap()
+                .is_empty()
+        );
         assert!(cache_manager.get_block_meta_cache().is_empty());
 
         // Verify hybrid column data cache behavior:
         // - On-disk cache of table data should remain populated
         assert!(!cache_manager.get_column_data_cache().is_empty());
         // - In-memory cache of table data should be cleared
-        assert!(cache_manager
-            .get_column_data_cache()
-            .unwrap()
-            .in_memory_cache()
-            .unwrap()
-            .is_empty());
+        assert!(
+            cache_manager
+                .get_column_data_cache()
+                .unwrap()
+                .in_memory_cache()
+                .unwrap()
+                .is_empty()
+        );
 
         // Verify extra caches remain intact after Basic clearance
         assert!(!cache_manager.get_table_segment_cache().is_empty());
@@ -1239,20 +1245,24 @@ mod tests {
         assert!(cache_manager.get_table_segment_cache().is_empty());
 
         // Verify in-memory part of hybrid bloom index meta caches are cleared
-        assert!(cache_manager
-            .get_bloom_index_meta_cache()
-            .unwrap()
-            .in_memory_cache()
-            .unwrap()
-            .is_empty());
+        assert!(
+            cache_manager
+                .get_bloom_index_meta_cache()
+                .unwrap()
+                .in_memory_cache()
+                .unwrap()
+                .is_empty()
+        );
 
         // Verify in-memory part of hybrid bloom index filter caches are cleared
-        assert!(cache_manager
-            .get_bloom_index_filter_cache()
-            .unwrap()
-            .in_memory_cache()
-            .unwrap()
-            .is_empty());
+        assert!(
+            cache_manager
+                .get_bloom_index_filter_cache()
+                .unwrap()
+                .in_memory_cache()
+                .unwrap()
+                .is_empty()
+        );
 
         Ok(())
     }

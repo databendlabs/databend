@@ -16,11 +16,11 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
 use super::SelectionBuffers;
+use crate::LikePattern;
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
-use crate::types::string::StringColumn;
 use crate::types::AccessType;
-use crate::LikePattern;
+use crate::types::string::StringColumn;
 
 impl<'a> Selector<'a> {
     // Select indices by comparing scalar and column.

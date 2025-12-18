@@ -27,5 +27,5 @@ pub use optimize_expr::OptimizeExprTask;
 pub use optimize_group::OptimizeGroupTask;
 pub use task::SharedCounter;
 pub use task::Task;
-pub use task_manager::TaskManager;
 pub use task_manager::DEFAULT_TASK_LIMIT;
+pub use task_manager::TaskManager;

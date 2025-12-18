@@ -385,17 +385,17 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::Int32Type;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::Int32Type;
 
     use crate::basic::shuffle_processor::ShuffleProcessor;
-    use crate::core::port::connect;
     use crate::core::Event;
     use crate::core::EventCause;
     use crate::core::InputPort;
     use crate::core::OutputPort;
     use crate::core::Processor;
+    use crate::core::port::connect;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_shuffle_output_finish() -> databend_common_exception::Result<()> {

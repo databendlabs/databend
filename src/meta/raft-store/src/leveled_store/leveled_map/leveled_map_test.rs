@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use futures_util::TryStreamExt;
+use map_api::SeqMarked;
 use map_api::mvcc::ScopedGet;
 use map_api::mvcc::ScopedRange;
 use map_api::mvcc::ScopedSeqBoundedGet;
 use map_api::mvcc::ScopedSeqBoundedRange;
 use map_api::mvcc::ScopedSet;
-use map_api::SeqMarked;
 use state_machine_api::KVMeta;
 use state_machine_api::UserKey;
 

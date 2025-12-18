@@ -19,12 +19,6 @@ use databend_common_exception::Result;
 use itertools::Itertools;
 
 use super::SelectionBuffers;
-use crate::expr::*;
-use crate::filter::select_expr_permutation::FilterPermutation;
-use crate::filter::SelectExpr;
-use crate::filter::SelectOp;
-use crate::types::AnyType;
-use crate::types::DataType;
 use crate::Column;
 use crate::EvalContext;
 use crate::EvaluateOptions;
@@ -33,6 +27,12 @@ use crate::Expr;
 use crate::LikePattern;
 use crate::Scalar;
 use crate::Value;
+use crate::expr::*;
+use crate::filter::SelectExpr;
+use crate::filter::SelectOp;
+use crate::filter::select_expr_permutation::FilterPermutation;
+use crate::types::AnyType;
+use crate::types::DataType;
 
 // SelectStrategy is used to determine the iteration strategy of the index.
 // (1) True: iterate true index in `true_selection`.
@@ -505,13 +505,14 @@ impl<'a> Selector<'a> {
                     .iter()
                     .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
                     .collect::<Result<Vec<_>>>()?;
-                assert!(args
-                    .iter()
-                    .filter_map(|val| match val {
-                        Value::Column(col) => Some(col.len()),
-                        Value::Scalar(_) => None,
-                    })
-                    .all_equal());
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.evaluator.data_block().num_rows(),
@@ -592,13 +593,14 @@ impl<'a> Selector<'a> {
                     .iter()
                     .map(|expr| self.evaluator.partial_run(expr, None, &mut eval_options))
                     .collect::<Result<Vec<_>>>()?;
-                assert!(args
-                    .iter()
-                    .filter_map(|val| match val {
-                        Value::Column(col) => Some(col.len()),
-                        Value::Scalar(_) => None,
-                    })
-                    .all_equal());
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
                 let result =
                     self.evaluator
                         .run_lambda(name, args, data_types, lambda_expr, return_type)?;

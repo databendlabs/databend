@@ -14,15 +14,15 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
-use databend_common_meta_app::schema::catalog_name_ident::CatalogNameIdentRaw;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::ListCatalogReq;
-use databend_common_meta_app::KeyWithTenant;
+use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
+use databend_common_meta_app::schema::catalog_name_ident::CatalogNameIdentRaw;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;

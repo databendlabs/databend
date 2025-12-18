@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use bytes::Bytes;
-use futures_util::future::BoxFuture;
 use futures_util::AsyncRead;
 use futures_util::AsyncReadExt;
 use futures_util::FutureExt;
+use futures_util::future::BoxFuture;
 use opendal::Operator;
 use orc_rust::reader::AsyncChunkReader;
 

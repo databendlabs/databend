@@ -22,19 +22,19 @@ use databend_common_expression::KeyAccessor;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
 
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
+use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
-use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
-use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
 impl HashJoinProbeState {
     pub(crate) fn left_mark_join<'a, H: HashJoinHashtableLike>(
         &self,
         probe_state: &mut ProbeState,
-        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
+        keys: Box<dyn KeyAccessor<Key = H::Key>>,
         hash_table: &H,
     ) -> Result<Vec<DataBlock>>
     where
@@ -128,7 +128,7 @@ impl HashJoinProbeState {
     pub(crate) fn left_mark_join_with_conjunct<'a, H: HashJoinHashtableLike>(
         &self,
         probe_state: &mut ProbeState,
-        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
+        keys: Box<dyn KeyAccessor<Key = H::Key>>,
         hash_table: &H,
     ) -> Result<Vec<DataBlock>>
     where

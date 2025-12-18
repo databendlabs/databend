@@ -23,9 +23,10 @@ use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
 use databend_common_meta_api::txn_op_put;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::TxnRetryMaxTimes;
-use databend_common_meta_app::principal::role_ident;
+use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -33,10 +34,9 @@ use databend_common_meta_app::principal::RoleIdent;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_meta_app::principal::role_ident;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_cache::Cache;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi;
@@ -63,8 +63,8 @@ use log::info;
 use log::warn;
 
 use crate::role::role_api::RoleApi;
-use crate::serde::check_and_upgrade_to_pb;
 use crate::serde::Quota;
+use crate::serde::check_and_upgrade_to_pb;
 use crate::serialize_struct;
 
 static TXN_MAX_RETRY_TIMES: u32 = 60;
@@ -265,14 +265,17 @@ impl RoleApi for RoleMgr {
                 match &kvs {
                     Ok(kvs) => {
                         info!(
-                        "RoleMgr::list_ownerships() returned from cache: {} keys; first key: {:?}; last key: {:?}",
-                        kvs.len(),
-                        kvs.first().map(|(k, _)| k),
-                        kvs.last().map(|(k, _)| k),
-                    );
+                            "RoleMgr::list_ownerships() returned from cache: {} keys; first key: {:?}; last key: {:?}",
+                            kvs.len(),
+                            kvs.first().map(|(k, _)| k),
+                            kvs.last().map(|(k, _)| k),
+                        );
                     }
                     Err(err) => {
-                        warn!("list ownerships from cache failed. err: {}; It is not a functional issue but may be a performance issue with more than 100_000 ownership records", err);
+                        warn!(
+                            "list ownerships from cache failed. err: {}; It is not a functional issue but may be a performance issue with more than 100_000 ownership records",
+                            err
+                        );
                     }
                 }
 

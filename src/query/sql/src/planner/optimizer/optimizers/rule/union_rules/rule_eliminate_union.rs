@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 
+use crate::MetadataRef;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -29,7 +30,6 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::UnionAll;
-use crate::MetadataRef;
 
 pub struct RuleEliminateUnion {
     id: RuleID,

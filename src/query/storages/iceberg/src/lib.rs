@@ -17,7 +17,7 @@
 //! should be managed by ourselves.
 
 #![feature(impl_trait_in_assoc_type)]
-#![allow(clippy::diverging_sub_expression)]
+#![allow(clippy::collapsible_if, clippy::diverging_sub_expression)]
 
 pub(crate) mod cache;
 mod catalog;
@@ -28,8 +28,8 @@ mod predicate;
 mod statistics;
 pub mod table;
 
+pub use catalog::ICEBERG_CATALOG;
 pub use catalog::IcebergMutableCatalog;
 pub use catalog::IcebergMutableCreator;
-pub use catalog::ICEBERG_CATALOG;
 pub use iceberg_inspect::IcebergInspectTable;
 pub use table::IcebergTable;

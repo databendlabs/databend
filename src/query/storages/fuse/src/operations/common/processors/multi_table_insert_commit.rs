@@ -41,13 +41,13 @@ use log::debug;
 use log::error;
 use log::info;
 
-use crate::operations::set_backoff;
-use crate::operations::set_compaction_num_block_hint;
+use crate::FuseTable;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;
 use crate::operations::TransformMergeCommitMeta;
-use crate::FuseTable;
+use crate::operations::set_backoff;
+use crate::operations::set_compaction_num_block_hint;
 
 pub struct CommitMultiTableInsert {
     commit_metas: HashMap<u64, CommitMeta>,

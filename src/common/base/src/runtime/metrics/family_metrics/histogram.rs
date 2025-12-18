@@ -23,6 +23,7 @@ use prometheus_client::encoding::MetricEncoder;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 
+use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::metrics::family::Family;
 use crate::runtime::metrics::family::FamilyLabels;
 use crate::runtime::metrics::family::FamilyMetric;
@@ -31,7 +32,6 @@ use crate::runtime::metrics::registry::MAX_HISTOGRAM_BOUND;
 use crate::runtime::metrics::sample::HistogramCount;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::metrics::sample::MetricValue;
-use crate::runtime::metrics::ScopedRegistry;
 
 /// Histogram is a port of prometheus-client's Histogram. The only difference is that
 /// we can reset the histogram.
@@ -106,7 +106,7 @@ impl<Labels: FamilyLabels> FamilyHistogram<Labels> {
         }
     }
 
-    pub(crate) fn get(&self) -> (f64, u64, MappedRwLockReadGuard<Vec<(f64, u64)>>) {
+    pub(crate) fn get(&self) -> (f64, u64, MappedRwLockReadGuard<'_, Vec<(f64, u64)>>) {
         let inner = self.inner.read();
         let sum = inner.sum;
         let count = inner.count;

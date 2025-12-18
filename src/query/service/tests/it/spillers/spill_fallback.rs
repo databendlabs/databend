@@ -15,17 +15,17 @@
 use databend_common_base::base::tokio;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::Int32Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::types::Int32Type;
 use databend_common_storage::DataOperator;
 use databend_query::spillers::Location;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
 use databend_query::spillers::SpillerDiskConfig;
 use databend_query::spillers::SpillerType;
-use databend_query::test_kits::config_with_spill;
 use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::config_with_spill;
 use databend_storages_common_cache::TempDirManager;
 
 /// ASCII flow of the test (data view):
@@ -104,10 +104,7 @@ async fn test_spill_fallback_to_remote_when_local_full() -> Result<()> {
     assert!(
         saw_remote,
         "should fallback to remote when local quota is exhausted (used_local_bytes={}, limit={}, first_block_bytes={}, attempts={})",
-        used_local_bytes,
-        limit,
-        first_block_bytes,
-        max_attempts
+        used_local_bytes, limit, first_block_bytes, max_attempts
     );
 
     // Cleanup the temp directory for this query.

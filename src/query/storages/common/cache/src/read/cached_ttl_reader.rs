@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -22,9 +22,9 @@ use databend_common_exception::Result;
 use databend_common_metrics::cache::*;
 
 use super::loader::LoadParams;
-use crate::caches::CacheValue;
 use crate::CacheAccessor;
 use crate::Loader;
+use crate::caches::CacheValue;
 
 pub trait TTLValue {
     fn is_expired(&self, ttl: &Duration) -> bool;

@@ -22,8 +22,8 @@ use std::fmt;
 
 pub use http_client::HttpClient;
 pub use mysql_client::MySQLClient;
-use rand::distributions::Alphanumeric;
 use rand::Rng;
+use rand::distributions::Alphanumeric;
 use regex::Regex;
 use sqllogictest::DBOutput;
 pub use ttc_client::TTCClient;

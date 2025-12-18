@@ -16,6 +16,7 @@
 #![feature(associated_type_defaults)]
 #![feature(assert_matches)]
 #![feature(io_const_error)]
+#![allow(clippy::collapsible_if, clippy::let_and_return)]
 
 mod cache;
 mod cache_items;
@@ -28,7 +29,6 @@ mod temp_dir;
 pub use cache::*;
 pub use caches::*;
 pub use manager::CacheManager;
-pub use providers::disk_cache::disk_cache_lru::read_cache_content;
 pub use providers::DiskCacheAccessor;
 pub use providers::DiskCacheBuilder;
 pub use providers::DiskCacheError;
@@ -40,5 +40,6 @@ pub use providers::LruDiskCache;
 pub use providers::LruDiskCacheBuilder;
 pub use providers::LruDiskCacheHolder;
 pub use providers::TableDataCacheKey;
+pub use providers::disk_cache::disk_cache_lru::read_cache_content;
 pub use read::*;
 pub use temp_dir::*;

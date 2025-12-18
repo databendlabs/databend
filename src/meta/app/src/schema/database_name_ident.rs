@@ -38,8 +38,8 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi::Key;
 
     use crate::primitive::Id;
-    use crate::schema::database_name_ident::DatabaseNameIdent;
     use crate::schema::DatabaseId;
+    use crate::schema::database_name_ident::DatabaseNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct DatabaseNameRsc;

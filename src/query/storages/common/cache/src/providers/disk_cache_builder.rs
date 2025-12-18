@@ -27,9 +27,9 @@ use databend_common_metrics::cache::*;
 use log::error;
 use log::info;
 
-use crate::providers::LruDiskCacheHolder;
 use crate::CacheAccessor;
 use crate::LruDiskCacheBuilder;
+use crate::providers::LruDiskCacheHolder;
 
 struct CacheItem {
     key: String,

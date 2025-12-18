@@ -15,8 +15,6 @@
 use std::fmt::Debug;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::*;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -24,6 +22,8 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortField;
+use databend_common_expression::types::*;
+use databend_common_expression::with_number_mapped_type;
 use match_template::match_template;
 
 use super::Rows;
@@ -252,11 +252,7 @@ pub fn order_field_type(
 }
 
 fn null_sentinel(nulls_first: bool) -> u8 {
-    if nulls_first {
-        0
-    } else {
-        0xFF
-    }
+    if nulls_first { 0 } else { 0xFF }
 }
 
 mod fixed;

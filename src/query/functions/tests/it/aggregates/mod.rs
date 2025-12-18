@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::cloned_ref_to_slice_refs)]
+
 mod agg;
 mod agg_hashtable;
 
@@ -21,10 +23,6 @@ use bumpalo::Bump;
 use comfy_table::Table;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
-use databend_common_expression::get_states_layout;
-use databend_common_expression::type_check;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
@@ -38,9 +36,13 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StatesLayout;
 use databend_common_expression::Value;
+use databend_common_expression::get_states_layout;
+use databend_common_expression::type_check;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::scalars::parser;

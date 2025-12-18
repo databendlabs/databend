@@ -50,7 +50,7 @@ impl SnapshotHistoryReader for TableSnapshotReader {
     ) -> TableSnapshotStream {
         let stream = stream::try_unfold(
             (self, location_gen, Some((location, format_version))),
-            |(reader, gen, next)| async move {
+            |(reader, loc_gen, next)| async move {
                 if let Some((loc, ver)) = next {
                     let load_params = LoadParams {
                         location: loc,
@@ -78,13 +78,13 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                             if let Some((prev_id, prev_version)) = snapshot.prev_snapshot_id {
                                 let new_ver = prev_version;
                                 let new_loc =
-                                    gen.snapshot_location_from_uuid(&prev_id, prev_version)?;
+                                    loc_gen.snapshot_location_from_uuid(&prev_id, prev_version)?;
                                 Ok(Some((
                                     (snapshot, ver),
-                                    (reader, gen, Some((new_loc, new_ver))),
+                                    (reader, loc_gen, Some((new_loc, new_ver))),
                                 )))
                             } else {
-                                Ok(Some(((snapshot, ver), (reader, gen, None))))
+                                Ok(Some(((snapshot, ver), (reader, loc_gen, None))))
                             }
                         }
                         Ok(None) => Ok(None),

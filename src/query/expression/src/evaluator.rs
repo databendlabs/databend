@@ -23,21 +23,23 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
+use crate::BlockEntry;
+use crate::FunctionContext;
+use crate::FunctionEval;
+use crate::FunctionRegistry;
+use crate::RemoteExpr;
+use crate::ScalarRef;
 use crate::block::DataBlock;
 use crate::expr::*;
 use crate::expression::Expr;
 use crate::function::EvalContext;
 use crate::type_check::check_function;
 use crate::type_check::get_simple_cast_function;
-use crate::types::any::AnyType;
-use crate::types::array::ArrayColumn;
-use crate::types::boolean;
-use crate::types::nullable::NullableColumn;
-use crate::types::string::StringColumnBuilder;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
+use crate::types::F32;
 use crate::types::NullableType;
 use crate::types::NumberScalar;
 use crate::types::ReturnType;
@@ -47,18 +49,16 @@ use crate::types::VariantType;
 use crate::types::VectorColumn;
 use crate::types::VectorDataType;
 use crate::types::VectorScalar;
-use crate::types::F32;
+use crate::types::any::AnyType;
+use crate::types::array::ArrayColumn;
+use crate::types::boolean;
+use crate::types::nullable::NullableColumn;
+use crate::types::string::StringColumnBuilder;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
 use crate::visitor::ValueVisitor;
-use crate::BlockEntry;
-use crate::FunctionContext;
-use crate::FunctionEval;
-use crate::FunctionRegistry;
-use crate::RemoteExpr;
-use crate::ScalarRef;
 
 pub struct EvaluateOptions<'a> {
     pub selection: Option<&'a [u32]>,
@@ -235,13 +235,14 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|expr| self.partial_run(expr, validity.clone(), options))
                     .collect::<Result<Vec<_>>>()?;
-                assert!(args
-                    .iter()
-                    .filter_map(|val| match val {
-                        Value::Column(col) => Some(col.len()),
-                        Value::Scalar(_) => None,
-                    })
-                    .all_equal());
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
 
                 self.run_lambda(name, args, data_types, lambda_expr, return_type)?
             }
@@ -296,13 +297,14 @@ impl<'a> Evaluator<'a> {
             .map(|expr| self.partial_run(expr, validity.clone(), &mut child_option))
             .collect::<Result<Vec<_>>>()?;
 
-        assert!(args
-            .iter()
-            .filter_map(|val| match val {
-                Value::Column(col) => Some(col.len()),
-                Value::Scalar(_) => None,
-            })
-            .all_equal());
+        assert!(
+            args.iter()
+                .filter_map(|val| match val {
+                    Value::Column(col) => Some(col.len()),
+                    Value::Scalar(_) => None,
+                })
+                .all_equal()
+        );
 
         let errors = if child_suppress_error {
             child_option.errors.take()
@@ -1335,15 +1337,17 @@ impl<'a> Evaluator<'a> {
         let else_result = self.partial_run(&args[args.len() - 1], Some(validity), options)?;
 
         // Assert that all the arguments have the same length.
-        assert!(conds
-            .iter()
-            .chain(results.iter())
-            .chain([&else_result])
-            .filter_map(|val| match val {
-                Value::Column(col) => Some(col.len()),
-                Value::Scalar(_) => None,
-            })
-            .all_equal());
+        assert!(
+            conds
+                .iter()
+                .chain(results.iter())
+                .chain([&else_result])
+                .filter_map(|val| match val {
+                    Value::Column(col) => Some(col.len()),
+                    Value::Scalar(_) => None,
+                })
+                .all_equal()
+        );
 
         // Pick the results from the result branches depending on the condition.
         let mut output_builder = ColumnBuilder::with_capacity(&generics[0], len.unwrap_or(1));
@@ -1866,13 +1870,15 @@ impl<'a> Evaluator<'a> {
             .iter()
             .map(|expr| self.get_select_child(expr, options))
             .collect::<Result<Vec<_>>>()?;
-        assert!(children
-            .iter()
-            .filter_map(|val| match &val.0 {
-                Value::Column(col) => Some(col.len()),
-                Value::Scalar(_) => None,
-            })
-            .all_equal());
+        assert!(
+            children
+                .iter()
+                .filter_map(|val| match &val.0 {
+                    Value::Column(col) => Some(col.len()),
+                    Value::Scalar(_) => None,
+                })
+                .all_equal()
+        );
         Ok(children)
     }
 
@@ -1977,13 +1983,14 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|expr| self.get_select_child(expr, &mut child_option))
                     .collect::<Result<Vec<_>>>()?;
-                assert!(args
-                    .iter()
-                    .filter_map(|val| match &val.0 {
-                        Value::Column(col) => Some(col.len()),
-                        Value::Scalar(_) => None,
-                    })
-                    .all_equal());
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match &val.0 {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
 
                 let args = args.into_iter().map(|(val, _)| val).collect::<Vec<_>>();
 
@@ -2035,13 +2042,14 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|expr| self.partial_run(expr, None, &mut EvaluateOptions::default()))
                     .collect::<Result<Vec<_>>>()?;
-                assert!(args
-                    .iter()
-                    .filter_map(|val| match val {
-                        Value::Column(col) => Some(col.len()),
-                        Value::Scalar(_) => None,
-                    })
-                    .all_equal());
+                assert!(
+                    args.iter()
+                        .filter_map(|val| match val {
+                            Value::Column(col) => Some(col.len()),
+                            Value::Scalar(_) => None,
+                        })
+                        .all_equal()
+                );
 
                 Ok((
                     self.run_lambda(name, args, data_types, lambda_expr, return_type)?,

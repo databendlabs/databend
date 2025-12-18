@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::arithmetics_type::ResultTypeOfBinary;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::types::F64;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::SimpleDomain;
-use databend_common_expression::types::ALL_INTEGER_TYPES;
-use databend_common_expression::types::F64;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_integer_mapped_type;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionRegistry;
 use databend_functions_scalar_numeric_basic_arithmetic::numeric_basic_arithmetic::divide_function;
 use databend_functions_scalar_numeric_basic_arithmetic::register_basic_arithmetic;
 use databend_functions_scalar_numeric_basic_arithmetic::register_divide;

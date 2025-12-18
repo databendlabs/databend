@@ -17,12 +17,12 @@ use std::io;
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KVStream;
-use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::protobuf::StreamItem;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use map_api::mvcc::ScopedGet;

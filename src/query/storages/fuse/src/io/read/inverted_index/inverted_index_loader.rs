@@ -40,14 +40,14 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::table::TableCompression;
 use log::info;
 use opendal::Operator;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::parquet_to_arrow_field_levels;
 
 use crate::index::InvertedIndexFile;
-use crate::io::read::block::parquet::RowGroupImplBuilder;
 use crate::io::MetaReaders;
+use crate::io::read::block::parquet::RowGroupImplBuilder;
 
 const INDEX_COLUMN_NAMES: [&str; 8] = [
     "fast",

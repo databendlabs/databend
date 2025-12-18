@@ -17,6 +17,9 @@ use derive_visitor::VisitorMut;
 use nom::Parser;
 use pretty_assertions::assert_eq;
 
+use crate::ParseError;
+use crate::Range;
+use crate::Result;
 use crate::ast::ExplainKind;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -24,11 +27,12 @@ use crate::ast::Literal;
 use crate::ast::SelectTarget;
 use crate::ast::Statement;
 use crate::ast::StatementWithFormat;
+use crate::parser::Backtrace;
+use crate::parser::common::IResult;
 use crate::parser::common::comma_separated_list0;
 use crate::parser::common::comma_separated_list1;
 use crate::parser::common::ident;
 use crate::parser::common::transform_span;
-use crate::parser::common::IResult;
 use crate::parser::error::display_parser_error;
 use crate::parser::expr::expr;
 use crate::parser::expr::values;
@@ -41,12 +45,8 @@ use crate::parser::statement::statement;
 use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
-use crate::parser::Backtrace;
-use crate::ParseError;
-use crate::Range;
-use crate::Result;
 
-pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
+pub fn tokenize_sql(sql: &str) -> Result<Vec<Token<'_>>> {
     Tokenizer::new(sql).collect::<Result<Vec<_>>>()
 }
 

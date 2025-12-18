@@ -13,6 +13,6 @@
 // limitations under the License.
 
 mod table_statistics;
+pub use table_statistics::TableStatisticsFunc;
 pub use table_statistics::get_fuse_table_snapshot;
 pub use table_statistics::get_fuse_table_statistics;
-pub use table_statistics::TableStatisticsFunc;

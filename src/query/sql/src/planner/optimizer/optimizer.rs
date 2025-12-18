@@ -20,11 +20,16 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
 
-use crate::binder::target_probe;
+use crate::InsertInputSource;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
+use crate::binder::target_probe;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::CTEFilterPushdownOptimizer;
+use crate::optimizer::optimizers::CascadesOptimizer;
+use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
@@ -34,15 +39,11 @@ use crate::optimizer::optimizers::operator::RuleStatsAggregateOptimizer;
 use crate::optimizer::optimizers::operator::SingleToInnerOptimizer;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
+use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
 use crate::optimizer::optimizers::rule::RuleEagerAggregation;
 use crate::optimizer::optimizers::rule::RuleID;
-use crate::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
-use crate::optimizer::optimizers::CTEFilterPushdownOptimizer;
-use crate::optimizer::optimizers::CascadesOptimizer;
-use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::pipeline::OptimizerPipeline;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
-use crate::optimizer::OptimizerContext;
 use crate::plans::ConstantTableScan;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
@@ -55,7 +56,6 @@ use crate::plans::Plan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::SetScalarsOrQuery;
-use crate::InsertInputSource;
 
 #[fastrace::trace]
 #[async_recursion(# [recursive::recursive])]

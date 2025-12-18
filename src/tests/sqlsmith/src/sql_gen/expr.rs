@@ -25,12 +25,12 @@ use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::SubqueryModifier;
 use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::UnaryOperator;
-use databend_common_expression::types::convert_to_type_name;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::convert_to_type_name;
 use ethnum::I256;
-use rand::distributions::Alphanumeric;
 use rand::Rng;
+use rand::distributions::Alphanumeric;
 
 use crate::sql_gen::SqlGenerator;
 

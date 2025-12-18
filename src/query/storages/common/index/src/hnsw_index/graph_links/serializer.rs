@@ -19,17 +19,17 @@ use std::mem::size_of;
 use std::mem::take;
 
 use itertools::Either;
-use zerocopy::little_endian::U64 as LittleU64;
 use zerocopy::IntoBytes as AsBytes;
+use zerocopy::little_endian::U64 as LittleU64;
 
-use super::header::HeaderCompressed;
-use super::header::HeaderPlain;
-use super::header::HEADER_VERSION_COMPRESSED;
 use super::GraphLinks;
 use super::GraphLinksFormat;
+use super::header::HEADER_VERSION_COMPRESSED;
+use super::header::HeaderCompressed;
+use super::header::HeaderPlain;
 use crate::hnsw_index::common::bitpacking::packed_bits;
-use crate::hnsw_index::common::bitpacking_links::pack_links;
 use crate::hnsw_index::common::bitpacking_links::MIN_BITS_PER_VALUE;
+use crate::hnsw_index::common::bitpacking_links::pack_links;
 use crate::hnsw_index::common::bitpacking_ordered;
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::zeros::WriteZerosExt;

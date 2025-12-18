@@ -17,11 +17,11 @@ use databend_common_ast::ast::SecondaryRolesOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::BindContext;
+use crate::Binder;
 use crate::plans::Plan;
 use crate::plans::SetRolePlan;
 use crate::plans::SetSecondaryRolesPlan;
-use crate::BindContext;
-use crate::Binder;
 
 impl Binder {
     #[async_backtrace::framed]

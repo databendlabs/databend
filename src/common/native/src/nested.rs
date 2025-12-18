@@ -14,14 +14,14 @@
 
 use std::ops::Range;
 
+use databend_common_expression::Column;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArrayColumn;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::VectorColumn;
-use databend_common_expression::Column;
-use databend_common_expression::TableDataType;
 
 use crate::error::Result;
 

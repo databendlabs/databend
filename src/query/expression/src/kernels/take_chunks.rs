@@ -21,6 +21,13 @@ use databend_common_hashtable::RowPtr;
 use itertools::Itertools;
 use string::StringColumnBuilder;
 
+use crate::BlockEntry;
+use crate::Column;
+use crate::ColumnBuilder;
+use crate::ColumnVec;
+use crate::DataBlock;
+use crate::Scalar;
+use crate::Value;
 use crate::kernels::take::BIT_MASK;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::binary::BinaryColumn;
@@ -46,13 +53,6 @@ use crate::with_opaque_mapped_type;
 use crate::with_opaque_size;
 use crate::with_opaque_type;
 use crate::with_vector_number_type;
-use crate::BlockEntry;
-use crate::Column;
-use crate::ColumnBuilder;
-use crate::ColumnVec;
-use crate::DataBlock;
-use crate::Scalar;
-use crate::Value;
 
 // Block idx, row idx in the block, repeat times
 pub type BlockRowIndex = (u32, u32, usize);

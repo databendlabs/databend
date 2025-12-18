@@ -14,7 +14,15 @@
 
 #![feature(try_blocks)]
 #![feature(coroutines)]
-#![allow(clippy::uninlined_format_args)]
+#![allow(
+    clippy::collapsible_if,
+    clippy::let_and_return,
+    clippy::manual_is_multiple_of,
+    clippy::redundant_closure,
+    clippy::unnecessary_unwrap,
+    clippy::uninlined_format_args,
+    clippy::useless_vec
+)]
 
 pub mod analysis;
 pub mod api;
