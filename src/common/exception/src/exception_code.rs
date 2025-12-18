@@ -383,6 +383,8 @@ build_exceptions! {
     TagHasReferences(2752),
     /// Invalid value for tag
     InvalidTagValue(2753),
+    /// Tag metadata was modified concurrently
+    TagConcurrentModification(2754),
 }
 
 // Cloud and Integration Errors [1701-1703]

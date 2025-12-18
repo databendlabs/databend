@@ -20,6 +20,7 @@ use databend_common_ast::ast::ShowTagsStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::SelectBuilder;
 use crate::binder::BindContext;
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
@@ -27,7 +28,6 @@ use crate::plans::CreateTagPlan;
 use crate::plans::DropTagPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
-use crate::SelectBuilder;
 
 impl Binder {
     #[async_backtrace::framed]

@@ -18,11 +18,11 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::quote::QuotedString;
-use crate::ast::statements::show::ShowLimit;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Literal;
+use crate::ast::quote::QuotedString;
+use crate::ast::statements::show::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTagStmt {

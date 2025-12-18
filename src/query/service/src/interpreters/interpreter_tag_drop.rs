@@ -52,7 +52,7 @@ impl Interpreter for DropTagInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let meta_client = UserApiProvider::instance().get_meta_store_client();
         match meta_client
-            .drop_tag(TagNameIdent::new(&self.plan.tenant, &self.plan.name))
+            .drop_tag(&TagNameIdent::new(&self.plan.tenant, &self.plan.name))
             .await?
         {
             Ok(Some(_)) => Ok(PipelineBuildResult::create()),

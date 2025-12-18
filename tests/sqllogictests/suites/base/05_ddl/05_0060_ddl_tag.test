@@ -33,3 +33,6 @@ owner_tag NULL owner info
 
 statement ok
 DROP TAG owner_tag
+
+statement ok
+DROP TAG env_tag

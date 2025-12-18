@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod error;
 pub mod id_ident;
 pub mod id_to_name_ident;
 pub mod name_ident;
@@ -23,6 +24,7 @@ use databend_common_meta_kvapi::kvapi::KeyBuilder;
 use databend_common_meta_kvapi::kvapi::KeyError;
 use databend_common_meta_kvapi::kvapi::KeyParser;
 use databend_common_meta_types::SeqV;
+pub use error::TagError;
 pub use id_ident::TagId;
 pub use id_ident::TagIdIdent;
 pub use id_ident::TagIdIdentRaw;
@@ -32,7 +34,7 @@ pub use name_ident::TagNameIdent;
 pub use name_ident::TagNameIdentRaw;
 pub use ref_ident::ObjectTagIdRef;
 pub use ref_ident::ObjectTagIdRefIdent;
-pub use ref_ident::ObjectToTagIdentRaw;
+pub use ref_ident::ObjectTagIdRefIdentRaw;
 pub use ref_ident::TagIdObjectRef;
 pub use ref_ident::TagIdObjectRefIdent;
 pub use ref_ident::TagIdObjectRefIdentRaw;
@@ -90,46 +92,46 @@ pub struct TagInfo {
 
 /// Objects that can be tagged.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum TagableObject {
+pub enum TaggableObject {
     Database { db_id: u64 },
     Table { table_id: u64 },
     Stage { name: String },
     Connection { name: String },
 }
 
-impl TagableObject {
+impl TaggableObject {
     pub fn type_str(&self) -> &'static str {
         match self {
-            TagableObject::Database { .. } => "database",
-            TagableObject::Table { .. } => "table",
-            TagableObject::Stage { .. } => "stage",
-            TagableObject::Connection { .. } => "connection",
+            TaggableObject::Database { .. } => "database",
+            TaggableObject::Table { .. } => "table",
+            TaggableObject::Stage { .. } => "stage",
+            TaggableObject::Connection { .. } => "connection",
         }
     }
 
     fn encode_to_key(&self, b: KeyBuilder) -> KeyBuilder {
         let b = b.push_raw(self.type_str());
         match self {
-            TagableObject::Database { db_id } => b.push_u64(*db_id),
-            TagableObject::Table { table_id } => b.push_u64(*table_id),
-            TagableObject::Stage { name } => b.push_str(name),
-            TagableObject::Connection { name } => b.push_str(name),
+            TaggableObject::Database { db_id } => b.push_u64(*db_id),
+            TaggableObject::Table { table_id } => b.push_u64(*table_id),
+            TaggableObject::Stage { name } => b.push_str(name),
+            TaggableObject::Connection { name } => b.push_str(name),
         }
     }
 
     fn decode_from_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
         let type_str = parser.next_raw()?;
         match type_str {
-            "database" => Ok(TagableObject::Database {
+            "database" => Ok(TaggableObject::Database {
                 db_id: parser.next_u64()?,
             }),
-            "table" => Ok(TagableObject::Table {
+            "table" => Ok(TaggableObject::Table {
                 table_id: parser.next_u64()?,
             }),
-            "stage" => Ok(TagableObject::Stage {
+            "stage" => Ok(TaggableObject::Stage {
                 name: parser.next_str()?,
             }),
-            "connection" => Ok(TagableObject::Connection {
+            "connection" => Ok(TaggableObject::Connection {
                 name: parser.next_str()?,
             }),
             _ => Err(KeyError::InvalidSegment {
@@ -145,7 +147,7 @@ impl TagableObject {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SetObjectTagsReq {
     pub tenant: Tenant,
-    pub object: TagableObject,
+    pub object: TaggableObject,
     /// List of `(tag_id, tag_value)` pairs.
     pub tags: Vec<(u64, String)>,
 }
@@ -154,16 +156,9 @@ pub struct SetObjectTagsReq {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UnsetObjectTagsReq {
     pub tenant: Tenant,
-    pub object: TagableObject,
+    pub object: TaggableObject,
     /// List of tag IDs to remove.
     pub tags: Vec<u64>,
-}
-
-/// Retrieves all tags bound to a single object.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct GetObjectTagsReq {
-    pub tenant: Tenant,
-    pub object: TagableObject,
 }
 
 /// Value stored for each object-to-tag binding in the meta store.
@@ -188,30 +183,11 @@ pub struct ObjectTagValue {
     pub tag_value: SeqV<ObjectTagIdRefValue>,
 }
 
-/// Response carrying all tags and values assigned to the requested object.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GetObjectTagsReply {
-    pub tags: Vec<ObjectTagValue>,
-}
-
-/// Lists all references for a tag by ID.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ListTagReferencesReq {
-    pub tenant: Tenant,
-    pub tag_id: u64,
-}
-
 /// Row returned from `list_tag_references`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TagReferenceInfo {
     pub tag_id: u64,
-    pub object: TagableObject,
+    pub object: TaggableObject,
     /// The tag value with sequence number for optimistic concurrency control.
     pub tag_value: SeqV<ObjectTagIdRefValue>,
-}
-
-/// Response packing the full list of references returned for a query.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ListTagReferencesReply {
-    pub references: Vec<TagReferenceInfo>,
 }
