@@ -155,19 +155,11 @@ impl SyncSystemTable for CachesTable {
         }
 
         if let Some(vector_index_meta_cache) = vector_index_meta_cache {
-            Self::append_rows_of_hybrid_cache(
-                &vector_index_meta_cache,
-                &local_node,
-                &mut columns,
-            );
+            Self::append_rows_of_hybrid_cache(&vector_index_meta_cache, &local_node, &mut columns);
         }
 
         if let Some(vector_index_file_cache) = vector_index_file_cache {
-            Self::append_rows_of_hybrid_cache(
-                &vector_index_file_cache,
-                &local_node,
-                &mut columns,
-            );
+            Self::append_rows_of_hybrid_cache(&vector_index_file_cache, &local_node, &mut columns);
         }
 
         if let Some(prune_partitions_cache) = prune_partitions_cache {
