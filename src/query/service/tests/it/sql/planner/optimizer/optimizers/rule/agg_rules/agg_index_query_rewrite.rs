@@ -15,9 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_ast::parser::Dialect;
-use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::TableDataType;
@@ -27,7 +24,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
-use databend_common_sql::NameResolutionContext;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
