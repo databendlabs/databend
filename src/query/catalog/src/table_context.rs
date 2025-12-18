@@ -359,6 +359,18 @@ pub trait TableContext: Send + Sync {
 
     fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>>;
 
+    /// Set the pushed runtime filter statistics for a scan_id
+    /// Parameters: scan_id, selectivity (0.0-1.0), row count
+    fn set_pushed_runtime_filter_stats(&self, _scan_id: usize, _selectivity: f64, _rows: u64) {
+        unimplemented!()
+    }
+
+    /// Get the pushed runtime filter statistics for a scan_id
+    /// Returns: Option<(selectivity, rows)>
+    fn get_pushed_runtime_filter_stats(&self, _scan_id: usize) -> Option<(f64, u64)> {
+        unimplemented!()
+    }
+
     fn clear_runtime_filter(&self);
     fn assert_no_runtime_filter_state(&self) -> Result<()> {
         unimplemented!()

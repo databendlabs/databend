@@ -21,6 +21,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::sbbf::Sbbf;
 use databend_common_catalog::sbbf::SbbfAtomic;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
@@ -49,74 +50,131 @@ use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
 /// Each runtime filter (identified by packet.id) is built once and then applied to multiple scans.
 /// The probe_targets in RuntimeFilterDesc specify all (probe_key, scan_id) pairs where this filter should be applied.
 pub async fn build_runtime_filter_infos(
+    ctx: Arc<dyn TableContext>,
     packet: JoinRuntimeFilterPacket,
     runtime_filter_descs: HashMap<usize, &RuntimeFilterDesc>,
     selectivity_threshold: u64,
     max_threads: usize,
 ) -> Result<HashMap<usize, RuntimeFilterInfo>> {
-    let total_build_rows = packet.build_rows;
     let Some(packets) = packet.packets else {
         return Ok(HashMap::new());
     };
+    let build_rows = packet.build_rows;
     let mut filters: HashMap<usize, RuntimeFilterInfo> = HashMap::new();
 
-    // Iterate over all runtime filter packets
     for packet in packets.into_values() {
         let desc = runtime_filter_descs.get(&packet.id).unwrap();
-        let enabled = should_enable_runtime_filter(desc, total_build_rows, selectivity_threshold);
+        let enabled = should_enable_runtime_filter(desc, build_rows, selectivity_threshold);
+        let selectivity = calc_selectivity(desc.build_table_rows, build_rows);
 
-        // Apply this single runtime filter to all probe targets (scan_id, probe_key pairs)
-        // This implements the design goal: "one runtime filter built once, pushed down to multiple scans"
-        for (probe_key, scan_id) in &desc.probe_targets {
-            let entry = filters.entry(*scan_id).or_default();
+        // Collect valid targets (not skipped by selectivity check)
+        let valid_targets: Vec<_> = desc
+            .probe_targets
+            .iter()
+            .filter(|(_, scan_id)| {
+                !should_skip_filter(&ctx, enabled, *scan_id, selectivity, build_rows, desc.id)
+            })
+            .collect();
+
+        if valid_targets.is_empty() {
+            continue;
+        }
+
+        // Build bloom filter once (expensive)
+        let bloom_filter = match (enabled, &packet.bloom) {
+            (true, Some(bloom)) => Some(build_sbbf(bloom.clone(), max_threads, desc.id).await?),
+            _ => None,
+        };
+
+        for (probe_key, scan_id) in valid_targets {
+            if enabled {
+                ctx.set_pushed_runtime_filter_stats(*scan_id, selectivity, build_rows as u64);
+            }
+
+            let bloom = bloom_filter
+                .as_ref()
+                .map(|f| build_bloom_filter_from_sbbf(f.clone(), probe_key))
+                .transpose()?;
+
+            let inlist = match (enabled, &packet.inlist) {
+                (true, Some(inlist)) => Some(build_inlist_filter(inlist.clone(), probe_key)?),
+                _ => None,
+            };
+
+            let min_max = match (enabled, &packet.min_max) {
+                (true, Some(min_max)) => Some(build_min_max_filter(
+                    min_max.clone(),
+                    probe_key,
+                    &desc.build_key,
+                )?),
+                _ => None,
+            };
 
             let runtime_entry = RuntimeFilterEntry {
                 id: desc.id,
                 probe_expr: probe_key.clone(),
-                bloom: if enabled {
-                    if let Some(ref bloom) = packet.bloom {
-                        Some(
-                            build_bloom_filter(bloom.clone(), probe_key, max_threads, desc.id)
-                                .await?,
-                        )
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                },
-                inlist: if enabled {
-                    if let Some(ref inlist) = packet.inlist {
-                        Some(build_inlist_filter(inlist.clone(), probe_key)?)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                },
-                min_max: if enabled {
-                    if let Some(ref min_max) = packet.min_max {
-                        Some(build_min_max_filter(
-                            min_max.clone(),
-                            probe_key,
-                            &desc.build_key,
-                        )?)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                },
+                bloom,
+                inlist,
+                min_max,
                 stats: Arc::new(RuntimeFilterStats::new()),
-                build_rows: total_build_rows,
+                build_rows,
                 build_table_rows: desc.build_table_rows,
                 enabled,
             };
 
-            entry.filters.push(runtime_entry);
+            filters
+                .entry(*scan_id)
+                .or_default()
+                .filters
+                .push(runtime_entry);
         }
     }
     Ok(filters)
+}
+
+fn calc_selectivity(build_table_rows: Option<u64>, total_build_rows: usize) -> f64 {
+    build_table_rows
+        .filter(|&rows| rows > 0)
+        .map(|rows| total_build_rows as f64 / rows as f64)
+        .unwrap_or(1.0)
+}
+
+fn should_skip_filter(
+    ctx: &Arc<dyn TableContext>,
+    enabled: bool,
+    scan_id: usize,
+    selectivity: f64,
+    total_build_rows: usize,
+    filter_id: usize,
+) -> bool {
+    if !enabled {
+        return true;
+    }
+
+    let Some((existing_selectivity, existing_rows)) = ctx.get_pushed_runtime_filter_stats(scan_id)
+    else {
+        return false;
+    };
+
+    // Skip if rows increased AND selectivity didn't improve by at least 50%
+    let rows_increased = total_build_rows as u64 >= existing_rows;
+    let selectivity_not_improved = selectivity > existing_selectivity * 0.5;
+
+    if rows_increased && selectivity_not_improved {
+        log::info!(
+            "RUNTIME-FILTER: Skip filter {} for scan_id {} - rows increased ({} > {}) \
+             without significant selectivity improvement ({:.4} vs {:.4})",
+            filter_id,
+            scan_id,
+            total_build_rows,
+            existing_rows,
+            selectivity,
+            existing_selectivity
+        );
+        return true;
+    }
+
+    false
 }
 
 fn build_inlist_filter(inlist: Column, probe_key: &Expr<String>) -> Result<Expr<String>> {
@@ -256,32 +314,15 @@ fn build_min_max_filter(
     Ok(min_max_filter)
 }
 
-async fn build_bloom_filter(
-    bloom: Vec<u64>,
-    probe_key: &Expr<String>,
-    max_threads: usize,
-    filter_id: usize,
-) -> Result<RuntimeFilterBloom> {
-    let probe_key = match probe_key {
-        Expr::ColumnRef(col) => col,
-        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
-        Expr::Cast(cast) => match cast.expr.as_ref() {
-            Expr::ColumnRef(col) => col,
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
-    let column_name = probe_key.id.to_string();
+/// Build the Sbbf filter from bloom data (expensive operation, should be done once per packet)
+async fn build_sbbf(bloom: Vec<u64>, max_threads: usize, filter_id: usize) -> Result<Arc<Sbbf>> {
     let total_items = bloom.len();
 
     if total_items < 3_000_000 {
         let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
             .map_err(|e| ErrorCode::Internal(e.to_string()))?;
         filter.insert_hash_batch(&bloom);
-        return Ok(RuntimeFilterBloom {
-            column_name,
-            filter: Arc::new(filter),
-        });
+        return Ok(Arc::new(filter));
     }
 
     let start = std::time::Instant::now();
@@ -295,10 +336,40 @@ async fn build_bloom_filter(
         start.elapsed()
     );
 
-    Ok(RuntimeFilterBloom {
+    Ok(Arc::new(filter))
+}
+
+/// Build RuntimeFilterBloom from pre-built Sbbf filter (cheap operation, can be done per probe key)
+fn build_bloom_filter_from_sbbf(
+    filter: Arc<Sbbf>,
+    probe_key: &Expr<String>,
+) -> Result<Arc<RuntimeFilterBloom>> {
+    let probe_key = match probe_key {
+        Expr::ColumnRef(col) => col,
+        // Support simple cast that only changes nullability, e.g. CAST(col AS Nullable(T))
+        Expr::Cast(cast) => match cast.expr.as_ref() {
+            Expr::ColumnRef(col) => col,
+            _ => unreachable!(),
+        },
+        _ => unreachable!(),
+    };
+    let column_name = probe_key.id.to_string();
+
+    Ok(Arc::new(RuntimeFilterBloom {
         column_name,
-        filter: Arc::new(filter),
-    })
+        filter,
+    }))
+}
+
+#[allow(dead_code)]
+async fn build_bloom_filter(
+    bloom: Vec<u64>,
+    probe_key: &Expr<String>,
+    max_threads: usize,
+    filter_id: usize,
+) -> Result<Arc<RuntimeFilterBloom>> {
+    let filter = build_sbbf(bloom, max_threads, filter_id).await?;
+    build_bloom_filter_from_sbbf(filter, probe_key)
 }
 
 #[cfg(test)]

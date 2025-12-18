@@ -60,7 +60,7 @@ impl RuntimeFilterInfo {
 pub struct RuntimeFilterEntry {
     pub id: usize,
     pub probe_expr: Expr<String>,
-    pub bloom: Option<RuntimeFilterBloom>,
+    pub bloom: Option<Arc<RuntimeFilterBloom>>,
     pub inlist: Option<Expr<String>>,
     pub min_max: Option<Expr<String>>,
     pub stats: Arc<RuntimeFilterStats>,
@@ -69,7 +69,6 @@ pub struct RuntimeFilterEntry {
     pub enabled: bool,
 }
 
-#[derive(Clone)]
 pub struct RuntimeFilterBloom {
     pub column_name: String,
     pub filter: RuntimeBloomFilter,

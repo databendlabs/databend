@@ -87,6 +87,7 @@ impl RuntimeFiltersDesc {
 
         let runtime_filter_descs = self.filters_desc.iter().map(|r| (r.id, r)).collect();
         let runtime_filter_infos = build_runtime_filter_infos(
+            self.ctx.clone(),
             packet,
             runtime_filter_descs,
             self.selectivity_threshold,

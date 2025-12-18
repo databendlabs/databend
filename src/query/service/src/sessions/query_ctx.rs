@@ -1740,6 +1740,16 @@ impl TableContext for QueryContext {
         }
     }
 
+    fn set_pushed_runtime_filter_stats(&self, scan_id: usize, selectivity: f64, rows: u64) {
+        let mut stats = self.shared.pushed_runtime_filter_stats.write();
+        stats.insert(scan_id, (selectivity, rows));
+    }
+
+    fn get_pushed_runtime_filter_stats(&self, scan_id: usize) -> Option<(f64, u64)> {
+        let stats = self.shared.pushed_runtime_filter_stats.read();
+        stats.get(&scan_id).copied()
+    }
+
     fn get_merge_into_join(&self) -> MergeIntoJoin {
         let merge_into_join = self.shared.merge_into_join.read();
         MergeIntoJoin {
@@ -1760,7 +1770,11 @@ impl TableContext for QueryContext {
     fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, RuntimeBloomFilter)> {
         self.get_runtime_filters(id)
             .into_iter()
-            .filter_map(|entry| entry.bloom.map(|bloom| (bloom.column_name, bloom.filter)))
+            .filter_map(|entry| {
+                entry
+                    .bloom
+                    .map(|bloom| (bloom.column_name.clone(), bloom.filter.clone()))
+            })
             .collect()
     }
 

@@ -50,6 +50,7 @@ pub async fn build_and_push_down_runtime_filter(
     let max_threads = join.ctx.get_settings().get_max_threads()? as usize;
     let build_rows = packet.build_rows;
     let runtime_filter_infos = build_runtime_filter_infos(
+        join.ctx.clone(),
         packet,
         runtime_filter_descs,
         selectivity_threshold,

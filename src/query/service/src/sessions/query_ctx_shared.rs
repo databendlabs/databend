@@ -159,6 +159,10 @@ pub struct QueryContextShared {
 
     pub(super) runtime_filter_ready: Arc<RwLock<HashMap<IndexType, Vec<Arc<RuntimeFilterReady>>>>>,
 
+    /// Tracks pushed down filter statistics for each scan_id
+    /// Key: scan_id, Value: (selectivity, rows)
+    pub(super) pushed_runtime_filter_stats: Arc<RwLock<HashMap<IndexType, (f64, u64)>>>,
+
     pub(super) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
 
     // Records query level data cache metrics
@@ -252,6 +256,7 @@ impl QueryContextShared {
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
             runtime_filter_ready: Default::default(),
+            pushed_runtime_filter_stats: Default::default(),
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),

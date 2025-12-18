@@ -31,6 +31,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::physical_plans::runtime_filter::JoinEquivalenceClasses;
 
 pub struct PhysicalPlanBuilder {
     pub metadata: MetadataRef,
@@ -39,6 +40,9 @@ pub struct PhysicalPlanBuilder {
     pub dry_run: bool,
     // DataMutation info, used to build MergeInto physical plan
     pub mutation_build_info: Option<MutationBuildInfo>,
+    pub runtime_filter_anchors: Vec<Arc<SExpr>>,
+    pub join_equivalence_classes: JoinEquivalenceClasses,
+    pub inited: bool,
 }
 
 impl PhysicalPlanBuilder {
@@ -50,6 +54,9 @@ impl PhysicalPlanBuilder {
             func_ctx,
             dry_run,
             mutation_build_info: None,
+            runtime_filter_anchors: Vec::new(),
+            join_equivalence_classes: JoinEquivalenceClasses::default(),
+            inited: false,
         }
     }
 
@@ -63,6 +70,10 @@ impl PhysicalPlanBuilder {
     }
 
     pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
+        if !self.inited {
+            self.join_equivalence_classes = JoinEquivalenceClasses::build_from_sexpr(s_expr);
+            self.inited = true;
+        }
         let mut plan = self.build_physical_plan(s_expr, required).await?;
         plan.adjust_plan_id(&mut 0);
 
