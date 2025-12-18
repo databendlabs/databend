@@ -51,11 +51,11 @@ pub type BloomIndexFilterCache = HybridCache<FilterImpl>;
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 
-pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
-pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;
+pub type InvertedIndexMetaCache = HybridCache<InvertedIndexMeta>;
+pub type InvertedIndexFileCache = HybridCache<InvertedIndexFile>;
 
-pub type VectorIndexMetaCache = InMemoryLruCache<VectorIndexMeta>;
-pub type VectorIndexFileCache = InMemoryLruCache<VectorIndexFile>;
+pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
+pub type VectorIndexFileCache = HybridCache<VectorIndexFile>;
 
 /// In memory object cache of parquet FileMetaData of external parquet rs files
 pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;

@@ -50,6 +50,7 @@ use std::path::PathBuf;
 use std::result;
 use std::sync::Arc;
 
+use bytes::Bytes;
 use crc32fast::Hasher;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -107,7 +108,6 @@ use tantivy_fst::Automaton;
 use tantivy_fst::IntoStreamer;
 use tantivy_fst::Regex;
 use tantivy_fst::Streamer;
-
 // tantivy version is used to generate the footer data
 
 // The magic byte of the footer to identify corruption
@@ -1236,7 +1236,7 @@ impl DocIdsCollector {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct InvertedIndexMeta {
     pub version: usize,
     pub columns: Vec<(String, SingleColumnMeta)>,
@@ -1297,6 +1297,70 @@ impl InvertedIndexFile {
     pub fn create(name: String, data: Vec<u8>) -> Self {
         let data = OwnedBytes::new(data);
         Self { name, data }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerializableInvertedIndexFile {
+    name: String,
+    data: Vec<u8>,
+}
+
+impl TryFrom<&InvertedIndexFile> for Vec<u8> {
+    type Error = ErrorCode;
+
+    fn try_from(value: &InvertedIndexFile) -> std::result::Result<Self, Self::Error> {
+        let serializable = SerializableInvertedIndexFile {
+            name: value.name.clone(),
+            data: value.data.as_slice().to_vec(),
+        };
+        bincode::serde::encode_to_vec(&serializable, bincode::config::standard()).map_err(|e| {
+            ErrorCode::StorageOther(format!("failed to encode inverted index file {:?}", e))
+        })
+    }
+}
+
+impl TryFrom<Bytes> for InvertedIndexFile {
+    type Error = ErrorCode;
+
+    fn try_from(value: Bytes) -> std::result::Result<Self, Self::Error> {
+        bincode::serde::decode_from_slice(value.as_ref(), bincode::config::standard())
+            .map(|(v, len)| {
+                assert_eq!(len, value.len());
+                v
+            })
+            .map(|v: SerializableInvertedIndexFile| InvertedIndexFile {
+                name: v.name,
+                data: OwnedBytes::new(v.data),
+            })
+            .map_err(|e| {
+                ErrorCode::StorageOther(format!("failed to decode inverted index file {:?}", e))
+            })
+    }
+}
+
+impl TryFrom<&InvertedIndexMeta> for Vec<u8> {
+    type Error = ErrorCode;
+
+    fn try_from(value: &InvertedIndexMeta) -> std::result::Result<Self, Self::Error> {
+        bincode::serde::encode_to_vec(value, bincode::config::standard()).map_err(|e| {
+            ErrorCode::StorageOther(format!("failed to encode inverted index meta {:?}", e))
+        })
+    }
+}
+
+impl TryFrom<Bytes> for InvertedIndexMeta {
+    type Error = ErrorCode;
+
+    fn try_from(value: Bytes) -> std::result::Result<Self, Self::Error> {
+        bincode::serde::decode_from_slice(value.as_ref(), bincode::config::standard())
+            .map(|(v, len)| {
+                assert_eq!(len, value.len());
+                v
+            })
+            .map_err(|e| {
+                ErrorCode::StorageOther(format!("failed to decode inverted index meta {:?}", e))
+            })
     }
 }
 
