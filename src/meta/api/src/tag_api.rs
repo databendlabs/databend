@@ -21,23 +21,20 @@ use databend_common_meta_app::schema::tag::name_ident::TagNameIdent;
 use databend_common_meta_app::schema::CreateTagReply;
 use databend_common_meta_app::schema::CreateTagReq;
 use databend_common_meta_app::schema::EmptyProto;
-use databend_common_meta_app::schema::GetObjectTagsReply;
-use databend_common_meta_app::schema::GetObjectTagsReq;
 use databend_common_meta_app::schema::GetTagReply;
-use databend_common_meta_app::schema::ListTagReferencesReply;
-use databend_common_meta_app::schema::ListTagReferencesReq;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::ObjectTagValue;
 use databend_common_meta_app::schema::SetObjectTagsReq;
+use databend_common_meta_app::schema::TagError;
 use databend_common_meta_app::schema::TagIdIdent;
 use databend_common_meta_app::schema::TagIdObjectRef;
 use databend_common_meta_app::schema::TagIdObjectRefIdent;
 use databend_common_meta_app::schema::TagInfo;
 use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::TagReferenceInfo;
-use databend_common_meta_app::schema::TagableObject;
+use databend_common_meta_app::schema::TaggableObject;
 use databend_common_meta_app::schema::UnsetObjectTagsReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
@@ -51,7 +48,6 @@ use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
 
-use crate::errors::TagError;
 use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
@@ -119,7 +115,7 @@ where
     #[fastrace::trace]
     async fn drop_tag(
         &self,
-        name_ident: TagNameIdent,
+        name_ident: &TagNameIdent,
     ) -> Result<Result<Option<(SeqV<TagId>, SeqV<TagMeta>)>, TagError>, MetaTxnError> {
         debug!(name_ident :? =(&name_ident); "SchemaApi: {}", func_name!());
 
@@ -127,11 +123,8 @@ where
         loop {
             trials.next().unwrap()?.await;
 
-            let Some((id_seqv, meta_seqv)) = self
-                .get_id_value(&name_ident)
-                .await
-                .map_err(MetaTxnError::from)?
-            else {
+            let res = self.get_id_and_value(name_ident).await?;
+            let Some((id_seqv, meta_seqv)) = res else {
                 return Ok(Ok(None));
             };
 
@@ -143,10 +136,7 @@ where
                 TagIdObjectRefIdent::new_generic(tenant.clone(), TagIdObjectRef::prefix(tag_id)),
                 1,
             );
-            let entries = self
-                .list_pb_vec(&refs_dir)
-                .await
-                .map_err(MetaTxnError::from)?;
+            let entries = self.list_pb_vec(&refs_dir).await?;
             let reference_count = entries.len();
 
             if reference_count > 0 {
@@ -160,7 +150,7 @@ where
             let tag_meta_key = id_seqv.data.into_t_ident(name_ident.tenant());
             let id_to_name_key = TagIdToNameIdent::new_generic(name_ident.tenant(), id_seqv.data);
 
-            txn_delete_exact(&mut txn, &name_ident, id_seqv.seq);
+            txn_delete_exact(&mut txn, name_ident, id_seqv.seq);
             txn_delete_exact(&mut txn, &tag_meta_key, meta_seqv.seq);
             txn.if_then.push(txn_op_del(&id_to_name_key));
 
@@ -316,27 +306,24 @@ where
     #[fastrace::trace]
     async fn get_object_tags(
         &self,
-        req: GetObjectTagsReq,
-    ) -> Result<GetObjectTagsReply, MetaError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+        tenant: &Tenant,
+        object: &TaggableObject,
+    ) -> Result<Vec<ObjectTagValue>, MetaError> {
+        debug!(tenant :? =(tenant), object :? =(object); "SchemaApi: {}", func_name!());
 
-        let obj_ref_key = ObjectTagIdRefIdent::new_generic(
-            req.tenant.clone(),
-            ObjectTagIdRef::new(req.object.clone(), 0),
-        );
+        let obj_ref_key =
+            ObjectTagIdRefIdent::new_generic(tenant, ObjectTagIdRef::new(object.clone(), 0));
         let refs_dir = DirName::new(obj_ref_key);
         let stream = self.list_pb(&refs_dir).await?;
         let entries = stream.try_collect::<Vec<_>>().await?;
 
-        let tags = entries
+        Ok(entries
             .into_iter()
             .map(|entry| ObjectTagValue {
                 tag_id: entry.key.name().tag_id,
                 tag_value: entry.seqv,
             })
-            .collect();
-
-        Ok(GetObjectTagsReply { tags })
+            .collect())
     }
 
     /// List all references for a tag by ID.
@@ -344,21 +331,20 @@ where
     #[fastrace::trace]
     async fn list_tag_references(
         &self,
-        req: ListTagReferencesReq,
-    ) -> Result<ListTagReferencesReply, MetaError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-
-        let tag_id = req.tag_id;
+        tenant: &Tenant,
+        tag_id: u64,
+    ) -> Result<Vec<TagReferenceInfo>, MetaError> {
+        debug!(tenant :? =(tenant), tag_id :? =(tag_id); "SchemaApi: {}", func_name!());
 
         // Collect all referenced objects
         let refs_dir = DirName::new_with_level(
-            TagIdObjectRefIdent::new_generic(req.tenant.clone(), TagIdObjectRef::prefix(tag_id)),
+            TagIdObjectRefIdent::new_generic(tenant, TagIdObjectRef::prefix(tag_id)),
             1,
         );
         let stream = self.list_pb(&refs_dir).await?;
         let entries = stream.try_collect::<Vec<_>>().await?;
 
-        let tagged_objects: Vec<TagableObject> = entries
+        let tagged_objects: Vec<TaggableObject> = entries
             .into_iter()
             .map(|entry| entry.key.name().object.clone())
             .collect();
@@ -366,10 +352,7 @@ where
         let value_keys: Vec<ObjectTagIdRefIdent> = tagged_objects
             .iter()
             .map(|obj| {
-                ObjectTagIdRefIdent::new_generic(
-                    req.tenant.clone(),
-                    ObjectTagIdRef::new(obj.clone(), tag_id),
-                )
+                ObjectTagIdRefIdent::new_generic(tenant, ObjectTagIdRef::new(obj.clone(), tag_id))
             })
             .collect();
 
@@ -378,7 +361,7 @@ where
             .await?;
 
         // Combine objects with their values
-        let references = tagged_objects
+        Ok(tagged_objects
             .into_iter()
             .zip(tag_values)
             .filter_map(|(obj, value_opt)| {
@@ -388,8 +371,6 @@ where
                     tag_value: value_seqv,
                 })
             })
-            .collect();
-
-        Ok(ListTagReferencesReply { references })
+            .collect())
     }
 }

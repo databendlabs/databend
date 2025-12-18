@@ -17,7 +17,7 @@ use databend_common_meta_kvapi::kvapi::KeyCodec;
 use databend_common_meta_kvapi::kvapi::KeyError;
 use databend_common_meta_kvapi::kvapi::KeyParser;
 
-use super::TagableObject;
+use super::TaggableObject;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
@@ -30,13 +30,13 @@ use crate::tenant_key::raw::TIdentRaw;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ObjectTagIdRef {
     /// The object this tag is attached to.
-    pub object: TagableObject,
+    pub object: TaggableObject,
     /// The ID of the tag.
     pub tag_id: u64,
 }
 
 impl ObjectTagIdRef {
-    pub fn new(object: TagableObject, tag_id: u64) -> Self {
+    pub fn new(object: TaggableObject, tag_id: u64) -> Self {
         Self { object, tag_id }
     }
 }
@@ -48,7 +48,7 @@ impl KeyCodec for ObjectTagIdRef {
 
     fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
     where Self: Sized {
-        let object = TagableObject::decode_from_key(parser)?;
+        let object = TaggableObject::decode_from_key(parser)?;
         let tag_id = parser.next_u64()?;
         parser.done()?;
         Ok(Self { object, tag_id })
@@ -59,7 +59,7 @@ impl KeyCodec for ObjectTagIdRef {
 ///
 /// Key format: `__fd_object_tag_ref/<tenant>/<object_type>/<object_id>/<tag_id>`
 pub type ObjectTagIdRefIdent = TIdent<Resource, ObjectTagIdRef>;
-pub type ObjectToTagIdentRaw = TIdentRaw<Resource, ObjectTagIdRef>;
+pub type ObjectTagIdRefIdentRaw = TIdentRaw<Resource, ObjectTagIdRef>;
 
 pub use kvapi_impl::Resource;
 
@@ -69,11 +69,11 @@ pub use kvapi_impl::Resource;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TagIdObjectRef {
     pub tag_id: u64,
-    pub object: TagableObject,
+    pub object: TaggableObject,
 }
 
 impl TagIdObjectRef {
-    pub fn new(tag_id: u64, object: TagableObject) -> Self {
+    pub fn new(tag_id: u64, object: TaggableObject) -> Self {
         Self { tag_id, object }
     }
 
@@ -84,7 +84,7 @@ impl TagIdObjectRef {
     pub fn prefix(tag_id: u64) -> Self {
         Self {
             tag_id,
-            object: TagableObject::Database { db_id: 0 },
+            object: TaggableObject::Database { db_id: 0 },
         }
     }
 }
@@ -97,7 +97,7 @@ impl KeyCodec for TagIdObjectRef {
     fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
     where Self: Sized {
         let tag_id = parser.next_u64()?;
-        let object = TagableObject::decode_from_key(parser)?;
+        let object = TaggableObject::decode_from_key(parser)?;
         parser.done()?;
         Ok(Self { tag_id, object })
     }
@@ -163,13 +163,13 @@ mod tests {
     use super::ObjectTagIdRefIdent;
     use super::TagIdObjectRef;
     use super::TagIdObjectRefIdent;
-    use super::TagableObject;
+    use super::TaggableObject;
     use crate::tenant::Tenant;
 
     #[test]
     fn test_object_tag_id_ref_ident() {
         let tenant = Tenant::new_literal("tenant_a");
-        let name = ObjectTagIdRef::new(TagableObject::Table { table_id: 22 }, 42);
+        let name = ObjectTagIdRef::new(TaggableObject::Table { table_id: 22 }, 42);
         let ident = ObjectTagIdRefIdent::new_generic(tenant, name.clone());
 
         let key = ident.to_string_key();
@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn test_tag_id_object_ref_ident() {
         let tenant = Tenant::new_literal("tenant_b");
-        let name = TagIdObjectRef::new(42, TagableObject::Table { table_id: 22 });
+        let name = TagIdObjectRef::new(42, TaggableObject::Table { table_id: 22 });
         let ident = TagIdObjectRefIdent::new_generic(tenant, name.clone());
 
         let key = ident.to_string_key();
