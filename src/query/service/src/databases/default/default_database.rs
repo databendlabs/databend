@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::TableApi;
 use databend_common_meta_app::app_error::AppError;
@@ -46,6 +48,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDatabaseOptionsReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 
@@ -266,6 +269,21 @@ impl Database for DefaultDatabase {
     async fn swap_table(&self, req: SwapTableReq) -> Result<SwapTableReply> {
         let res = self.ctx.meta.swap_table(req).await?;
         Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn update_options(
+        &self,
+        expected_meta_seq: u64,
+        options: BTreeMap<String, String>,
+    ) -> Result<()> {
+        let req = UpdateDatabaseOptionsReq {
+            db_id: self.db_info.database_id.db_id,
+            expected_meta_seq,
+            options,
+        };
+        self.ctx.meta.update_database_options(req).await?;
+        Ok(())
     }
 
     #[async_backtrace::framed]
