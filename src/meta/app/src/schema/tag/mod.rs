@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod error;
 pub mod id_ident;
 pub mod id_to_name_ident;
 pub mod name_ident;
@@ -23,6 +24,7 @@ use databend_common_meta_kvapi::kvapi::KeyBuilder;
 use databend_common_meta_kvapi::kvapi::KeyError;
 use databend_common_meta_kvapi::kvapi::KeyParser;
 use databend_common_meta_types::SeqV;
+pub use error::TagError;
 pub use id_ident::TagId;
 pub use id_ident::TagIdIdent;
 pub use id_ident::TagIdIdentRaw;
@@ -32,7 +34,7 @@ pub use name_ident::TagNameIdent;
 pub use name_ident::TagNameIdentRaw;
 pub use ref_ident::ObjectTagIdRef;
 pub use ref_ident::ObjectTagIdRefIdent;
-pub use ref_ident::ObjectToTagIdentRaw;
+pub use ref_ident::ObjectTagIdRefIdentRaw;
 pub use ref_ident::TagIdObjectRef;
 pub use ref_ident::TagIdObjectRefIdent;
 pub use ref_ident::TagIdObjectRefIdentRaw;

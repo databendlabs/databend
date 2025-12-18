@@ -31,6 +31,7 @@ use databend_common_meta_app::schema::ObjectTagIdRefIdent;
 use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::ObjectTagValue;
 use databend_common_meta_app::schema::SetObjectTagsReq;
+use databend_common_meta_app::schema::TagError;
 use databend_common_meta_app::schema::TagIdIdent;
 use databend_common_meta_app::schema::TagIdObjectRef;
 use databend_common_meta_app::schema::TagIdObjectRefIdent;
@@ -51,7 +52,6 @@ use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
 
-use crate::errors::TagError;
 use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;

@@ -71,6 +71,7 @@ pub use data_mask_api::DatamaskApi;
 pub use data_retention_util::get_retention_boundary;
 pub use data_retention_util::is_drop_time_retainable;
 pub use database_api::DatabaseApi;
+pub use databend_common_meta_app::schema::TagError;
 pub use dictionary_api::DictionaryApi;
 // Re-export from new error_util module for backward compatibility
 pub use error_util::assert_table_exist;
@@ -81,7 +82,6 @@ pub use error_util::table_has_to_not_exist;
 pub use error_util::unknown_database_error;
 pub use errors::MaskingPolicyError;
 pub use errors::RowAccessPolicyError;
-pub use errors::TagError;
 pub use garbage_collection_api::GarbageCollectionApi;
 pub use index_api::IndexApi;
 // Re-export from new kv_fetch_util module for backward compatibility

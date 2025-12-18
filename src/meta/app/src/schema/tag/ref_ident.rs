@@ -59,7 +59,7 @@ impl KeyCodec for ObjectTagIdRef {
 ///
 /// Key format: `__fd_object_tag_ref/<tenant>/<object_type>/<object_id>/<tag_id>`
 pub type ObjectTagIdRefIdent = TIdent<Resource, ObjectTagIdRef>;
-pub type ObjectToTagIdentRaw = TIdentRaw<Resource, ObjectTagIdRef>;
+pub type ObjectTagIdRefIdentRaw = TIdentRaw<Resource, ObjectTagIdRef>;
 
 pub use kvapi_impl::Resource;
 
