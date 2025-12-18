@@ -27,6 +27,7 @@ use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
+use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::BloomPayload;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::SerializableDomain;
@@ -153,7 +154,7 @@ impl SingleFilterBuilder {
             None
         };
 
-        let bloom = self.bloom_hashes.take();
+        let bloom = self.bloom_hashes.take().map(BloomPayload::Hashes);
 
         Ok(RuntimeFilterPacket {
             id: self.id,

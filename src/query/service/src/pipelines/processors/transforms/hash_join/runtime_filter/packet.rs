@@ -23,6 +23,18 @@ use databend_common_expression::Scalar;
 
 use crate::pipelines::processors::transforms::RuntimeFilterDesc;
 
+/// Bloom filter payload used in runtime filter packet.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub enum BloomPayload {
+    Hashes(Vec<u64>),
+    Filter(SerializableBloomFilter),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SerializableBloomFilter {
+    pub data: Vec<u8>,
+}
+
 /// Represents a runtime filter that can be transmitted and merged.
 ///
 /// # Fields
@@ -30,13 +42,13 @@ use crate::pipelines::processors::transforms::RuntimeFilterDesc;
 /// * `id` - Unique identifier for each runtime filter, corresponds one-to-one with `(build key, probe key)` pair
 /// * `inlist` - Deduplicated list of build key column
 /// * `min_max` - The min and max values of the build column
-/// * `bloom` - The deduplicated hashes of the build column
+/// * `bloom` - Bloom filter payload for the build column
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, PartialEq)]
 pub struct RuntimeFilterPacket {
     pub id: usize,
     pub inlist: Option<Column>,
     pub min_max: Option<SerializableDomain>,
-    pub bloom: Option<Vec<u64>>,
+    pub bloom: Option<BloomPayload>,
 }
 
 impl Debug for RuntimeFilterPacket {

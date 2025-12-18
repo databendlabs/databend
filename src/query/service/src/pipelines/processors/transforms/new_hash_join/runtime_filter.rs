@@ -22,6 +22,7 @@ use databend_common_expression::FunctionContext;
 
 use crate::physical_plans::HashJoin;
 use crate::pipelines::processors::transforms::build_runtime_filter_infos;
+use crate::pipelines::processors::transforms::convert_packet_bloom_hashes_to_filter;
 use crate::pipelines::processors::transforms::get_global_runtime_filter_packet;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::RuntimeFilterDesc;
@@ -81,11 +82,19 @@ impl RuntimeFiltersDesc {
     }
 
     pub async fn globalization(&self, mut packet: JoinRuntimeFilterPacket) -> Result<()> {
+        let runtime_filter_descs: std::collections::HashMap<usize, &RuntimeFilterDesc> =
+            self.filters_desc.iter().map(|r| (r.id, r)).collect();
+
         if let Some(broadcast_id) = self.broadcast_id {
+            let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+            // For distributed hash shuffle joins, convert bloom hashes into compact
+            // bloom filters before performing global merge so that only filters are
+            // transmitted between nodes.
+            convert_packet_bloom_hashes_to_filter(&mut packet, &runtime_filter_descs, max_threads)?;
+
             packet = get_global_runtime_filter_packet(broadcast_id, packet, &self.ctx).await?;
         }
 
-        let runtime_filter_descs = self.filters_desc.iter().map(|r| (r.id, r)).collect();
         let runtime_filter_infos = build_runtime_filter_infos(
             packet,
             runtime_filter_descs,
