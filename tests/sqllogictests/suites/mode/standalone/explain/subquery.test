@@ -308,16 +308,16 @@ query T
 explain raw select * from numbers(1) as t where exists (select number as a from numbers(1) where number = t.number)
 ----
 EvalScalar
-├── scalars: [t.number (#0) AS (#0)]
+├── scalars: [numbers.number (#0) AS (#0)]
 └── Filter
-    ├── filters: [SUBQUERY]
+    ├── filters: [SUBQUERY AS (#1)]
     ├── subquerys
     │   └── Subquery (Exists)
-    │       ├── output_column: system.numbers.number (#1)
+    │       ├── output_column: numbers.number (#1)
     │       └── EvalScalar
     │           ├── scalars: [numbers.number (#1) AS (#1)]
     │           └── Filter
-    │               ├── filters: [eq(numbers.number (#1), t.number (#0))]
+    │               ├── filters: [eq(numbers.number (#1), numbers.number (#0))]
     │               └── Scan
     │                   ├── table: system.numbers (#1)
     │                   ├── filters: []
@@ -643,7 +643,7 @@ query T
 explain optimized select i, exists(select * from t where i > 10) from t;
 ----
 EvalScalar
-├── scalars: [t.i (#0) AS (#0), exists_scalar (#4) AS (#2)]
+├── scalars: [t.i (#0) AS (#0), _exists_scalar_subquery (#4) AS (#2)]
 └── Join(Cross)
     ├── build keys: []
     ├── probe keys: []
@@ -657,10 +657,10 @@ EvalScalar
         ├── scalars: [eq(count(*) (#3), 1) AS (#4)]
         └── Aggregate(Final)
             ├── group items: []
-            ├── aggregate functions: [count(*) AS (#3)]
+            ├── aggregate functions: [count() AS (#3)]
             └── Aggregate(Partial)
                 ├── group items: []
-                ├── aggregate functions: [count(*) AS (#3)]
+                ├── aggregate functions: [count() AS (#3)]
                 └── Limit
                     ├── limit: [1]
                     ├── offset: [0]
@@ -677,7 +677,7 @@ query T
 explain decorrelated select i, exists(select * from t where i > 10) from t;
 ----
 EvalScalar
-├── scalars: [t.i (#0) AS (#0), exists_scalar (#4) AS (#2)]
+├── scalars: [t.i (#0) AS (#0), _exists_scalar_subquery (#4) AS (#2)]
 └── Join(Cross)
     ├── build keys: []
     ├── probe keys: []
@@ -691,7 +691,7 @@ EvalScalar
         ├── scalars: [eq(count(*) (#3), 1) AS (#4)]
         └── Aggregate(Initial)
             ├── group items: []
-            ├── aggregate functions: [count(*) AS (#3)]
+            ├── aggregate functions: [count() AS (#3)]
             └── Limit
                 ├── limit: [1]
                 ├── offset: [0]

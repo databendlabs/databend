@@ -644,4 +644,27 @@ impl Plan {
             None
         }
     }
+
+    pub fn replace_query_s_expr(&self, s_expr: SExpr) -> Self {
+        let Plan::Query {
+            metadata,
+            bind_context,
+            rewrite_kind,
+            formatted_ast,
+            ignore_result,
+            ..
+        } = self
+        else {
+            unreachable!()
+        };
+
+        Plan::Query {
+            s_expr: Box::new(s_expr),
+            metadata: metadata.clone(),
+            bind_context: bind_context.clone(),
+            rewrite_kind: rewrite_kind.clone(),
+            formatted_ast: formatted_ast.clone(),
+            ignore_result: *ignore_result,
+        }
+    }
 }

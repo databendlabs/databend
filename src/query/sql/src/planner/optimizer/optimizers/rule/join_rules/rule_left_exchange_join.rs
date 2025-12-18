@@ -210,19 +210,10 @@ impl Rule for RuleLeftExchangeJoin {
             return Ok(());
         }
 
-        let mut result = SExpr::create(
-            Arc::new(join_3.into()),
-            vec![
-                Arc::new(SExpr::create_binary(
-                    Arc::new(join_4.into()),
-                    Arc::new(t1.clone()),
-                    Arc::new(t3.clone()),
-                )),
-                Arc::new(t2.clone()),
-            ],
-            None,
-            None,
-            None,
+        let mut result = SExpr::create_binary(
+            join_3,
+            SExpr::create_binary(join_4, t1.clone(), t3.clone()),
+            t2.clone(),
         );
 
         // Disable the following rules for join 3

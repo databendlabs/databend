@@ -9,9 +9,9 @@ RUN apt-get update -yq && \
     locale-gen && \
     rm -rf /var/lib/apt/lists/*
 
-ENV LANGUAGE en_US
-ENV LANG en_US.UTF-8
-ENV LC_ALL en_US.UTF-8
+ENV LANGUAGE=en_US
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
 COPY rust-toolchain.toml /build/rust-toolchain.toml
 COPY dev_setup.sh /build/scripts/setup/dev_setup.sh
@@ -31,10 +31,10 @@ RUN curl -sSfLo /tmp/mold.tar.gz https://github.com/rui314/mold/releases/downloa
 ENV LIBZ_SYS_STATIC=1
 ENV LZMA_API_STATIC=1
 
-ENV JAVA_HOME /opt/java
-ENV LD_LIBRARY_PATH /opt/java/lib/server
-ENV RUSTUP_HOME /opt/rust/rustup
-ENV CARGO_HOME /opt/rust/cargo
-ENV PATH /opt/rust/cargo/bin:/opt/java/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV JAVA_HOME=/opt/java
+ENV LD_LIBRARY_PATH=/opt/java/lib/server
+ENV RUSTUP_HOME=/opt/rust/rustup
+ENV CARGO_HOME=/opt/rust/cargo
+ENV PATH=/opt/rust/cargo/bin:/opt/java/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 VOLUME [ "/workspace", "/opt/rust/cargo/registry", "/opt/rust/cargo/git" ]
