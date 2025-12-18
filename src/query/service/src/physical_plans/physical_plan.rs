@@ -272,8 +272,6 @@ macro_rules! define_physical_plan_impl {
     ( $( $(#[$meta:meta])? $variant:ident => $path:path ),+ $(,)? ) => {
         #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
         /// static dispatch replacement for typetag-based dynamic dispatch, performance improvement via reduced stack depth
-        ///
-        /// compatibility: [LegacyPhysicalPlanImpl](LegacyPhysicalPlanImpl)
         pub(crate) enum PhysicalPlanImpl {
             $( $(#[$meta])? $variant($path), )+
         }
@@ -283,25 +281,6 @@ macro_rules! define_physical_plan_impl {
                 PhysicalPlanImpl::$variant(v)
             }
         })+
-
-        impl PhysicalPlanImpl {
-            fn try_from_typetag_value<E: serde::de::Error>(
-                type_name: &str,
-                value: JsonValue,
-            ) -> std::result::Result<Option<Self>, E> {
-                $(
-                    $(#[$meta])?
-                    if type_name == std::any::type_name::<$path>()
-                        || type_name == stringify!($variant)
-                    {
-                        let value = serde_json::from_value::<$path>(value).map_err(E::custom)?;
-                        return Ok(Some(PhysicalPlanImpl::$variant(value)));
-                    }
-                )+
-
-                Ok(None)
-            }
-        }
     };
 }
 
@@ -334,86 +313,21 @@ impl Debug for PhysicalPlan {
 impl serde::Serialize for PhysicalPlan {
     #[recursive::recursive]
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        PhysicalPlanEnvelopeRef::V2(self.inner.as_ref()).serialize(serializer)
+        self.inner.serialize(serializer)
     }
 }
 
 impl<'de> serde::Deserialize<'de> for PhysicalPlan {
     #[recursive::recursive]
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        // Deserialize to JSON first to avoid the untagged enum backtracking failure
-        // that happens in stacked/streaming deserializers.
+        // Deserialize to JSON first to avoid backtracking failures in streaming deserializers.
         let value = JsonValue::deserialize(deserializer)?;
-
-        let try_v2: std::result::Result<PhysicalPlanImpl, _> =
-            serde_json::from_value(value.clone());
-        let inner = match try_v2 {
-            Ok(plan) => plan,
-            Err(v2_err) => {
-                let try_v1: std::result::Result<LegacyPhysicalPlanImpl, _> =
-                    serde_json::from_value(value);
-
-                match try_v1 {
-                    Ok(LegacyPhysicalPlanImpl(plan)) => plan,
-                    Err(v1_err) => {
-                        return Err(DeError::custom(format!(
-                            "cannot deserialize PhysicalPlan, v2: {v2_err}, v1: {v1_err}"
-                        )))
-                    }
-                }
-            }
-        };
+        let inner: PhysicalPlanImpl = serde_json::from_value(value).map_err(DeError::custom)?;
 
         Ok(PhysicalPlan {
             inner: Box::new(inner),
         })
     }
-}
-
-#[derive(serde::Serialize)]
-#[allow(dead_code, unused)]
-#[serde(untagged)]
-enum PhysicalPlanEnvelopeRef<'a> {
-    V2(&'a PhysicalPlanImpl),
-}
-
-#[derive(serde::Deserialize)]
-#[allow(dead_code, unused)]
-#[serde(untagged)]
-enum PhysicalPlanEnvelope {
-    V2(PhysicalPlanImpl),
-    V1(LegacyPhysicalPlanImpl),
-}
-
-struct LegacyPhysicalPlanImpl(PhysicalPlanImpl);
-
-impl<'de> serde::Deserialize<'de> for LegacyPhysicalPlanImpl {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        let value = JsonValue::deserialize(deserializer)?;
-        let Some((type_name, rest)) = extract_typetag_value(value) else {
-            return Err(DeError::custom("missing typetag 'type' field"));
-        };
-
-        let Some(plan) = PhysicalPlanImpl::try_from_typetag_value::<D::Error>(&type_name, rest)?
-        else {
-            return Err(DeError::custom(format!(
-                "unknown typetag type: {type_name}"
-            )));
-        };
-
-        Ok(LegacyPhysicalPlanImpl(plan))
-    }
-}
-
-fn extract_typetag_value(value: JsonValue) -> Option<(String, JsonValue)> {
-    let JsonValue::Object(mut map) = value else {
-        return None;
-    };
-
-    let type_value = map.remove("type")?;
-    let type_name = type_value.as_str()?.to_string();
-
-    Some((type_name, JsonValue::Object(map)))
 }
 
 impl PhysicalPlan {
@@ -559,14 +473,9 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use serde::ser::SerializeStruct;
-    use serde_json::json;
-    use serde_json::Value;
     use serde_json::{self};
 
     use super::*;
-    use crate::physical_plans::physical_limit::Limit;
-    use crate::physical_plans::physical_sequence::Sequence;
-    use crate::servers::flight::v1::packets::packet_fragment::SerializedPhysicalPlanRef;
 
     static STACK_DEPTH: AtomicUsize = AtomicUsize::new(0);
     static STACK_DELTA: AtomicUsize = AtomicUsize::new(0);
@@ -659,98 +568,5 @@ mod tests {
                     .is_some_and(|c| c.is_ascii_digit())
             })
             .count()
-    }
-
-    #[test]
-    #[allow(clippy::type_complexity)]
-    fn legacy_typetag_format_can_be_deserialized() {
-        let samples: Vec<(PhysicalPlan, &'static str, fn(&PhysicalPlan) -> bool)> = vec![
-            (sample_serialized_ref(), "SerializedPhysicalPlanRef", |p| {
-                SerializedPhysicalPlanRef::from_physical_plan(p).is_some()
-            }),
-            (sample_limit(), "Limit", |p| {
-                Limit::from_physical_plan(p).is_some()
-            }),
-            (sample_sequence(), "Sequence", |p| {
-                Sequence::from_physical_plan(p).is_some()
-            }),
-        ];
-
-        for (plan, name, matcher) in samples {
-            let new_json = serde_json::to_value(&plan).expect("serialize new format");
-            let legacy_json = convert_to_legacy(&new_json);
-
-            let restored: PhysicalPlan =
-                serde_json::from_value(legacy_json).expect("legacy typetag deserialize");
-            assert!(
-                matcher(&restored),
-                "legacy typetag should deserialize into {name}"
-            );
-        }
-    }
-
-    fn sample_serialized_ref() -> PhysicalPlan {
-        serde_json::from_value(serialized_ref_json()).expect("build SerializedPhysicalPlanRef")
-    }
-
-    fn sample_limit() -> PhysicalPlan {
-        serde_json::from_value(limit_json()).expect("build Limit plan")
-    }
-
-    fn sample_sequence() -> PhysicalPlan {
-        serde_json::from_value(sequence_json()).expect("build Sequence plan")
-    }
-
-    fn serialized_ref_json() -> Value {
-        json!({ "SerializedPhysicalPlanRef": 1 })
-    }
-
-    fn limit_json() -> Value {
-        json!({
-            "Limit": {
-                "meta": { "plan_id": 7, "name": "Limit" },
-                "input": serialized_ref_json(),
-                "limit": 5,
-                "offset": 2,
-                "stat_info": null
-            }
-        })
-    }
-
-    fn sequence_json() -> Value {
-        json!({
-            "Sequence": {
-                "plan_id": 99,
-                "stat_info": null,
-                "left": limit_json(),
-                "right": serialized_ref_json(),
-                "meta": { "plan_id": 8, "name": "Sequence" }
-            }
-        })
-    }
-
-    fn convert_to_legacy(value: &Value) -> Value {
-        match value {
-            Value::Object(map) => {
-                if map.len() == 1 {
-                    if let Some((variant, Value::Object(inner_obj))) = map.iter().next() {
-                        let mut legacy = serde_json::Map::new();
-                        legacy.insert("type".to_string(), Value::String(variant.clone()));
-                        for (k, v) in inner_obj {
-                            legacy.insert(k.clone(), convert_to_legacy(v));
-                        }
-                        return Value::Object(legacy);
-                    }
-                }
-
-                let mut new_map = serde_json::Map::new();
-                for (k, v) in map {
-                    new_map.insert(k.clone(), convert_to_legacy(v));
-                }
-                Value::Object(new_map)
-            }
-            Value::Array(arr) => Value::Array(arr.iter().map(convert_to_legacy).collect()),
-            _ => value.clone(),
-        }
     }
 }
