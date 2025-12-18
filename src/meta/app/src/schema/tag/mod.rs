@@ -30,12 +30,12 @@ pub use id_to_name_ident::TagIdToNameIdent;
 pub use id_to_name_ident::TagIdToNameIdentRaw;
 pub use name_ident::TagNameIdent;
 pub use name_ident::TagNameIdentRaw;
-pub use ref_ident::ObjectToTagId;
-pub use ref_ident::ObjectToTagIdent;
+pub use ref_ident::ObjectTagIdRef;
+pub use ref_ident::ObjectTagIdRefIdent;
 pub use ref_ident::ObjectToTagIdentRaw;
-pub use ref_ident::TagIdToObject;
-pub use ref_ident::TagIdToObjectIdent;
-pub use ref_ident::TagIdToObjectIdentRaw;
+pub use ref_ident::TagIdObjectRef;
+pub use ref_ident::TagIdObjectRefIdent;
+pub use ref_ident::TagIdObjectRefIdentRaw;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -90,46 +90,46 @@ pub struct TagInfo {
 
 /// Objects that can be tagged.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum TagObject {
+pub enum TagableObject {
     Database { db_id: u64 },
     Table { table_id: u64 },
     Stage { name: String },
     Connection { name: String },
 }
 
-impl TagObject {
+impl TagableObject {
     pub fn type_str(&self) -> &'static str {
         match self {
-            TagObject::Database { .. } => "database",
-            TagObject::Table { .. } => "table",
-            TagObject::Stage { .. } => "stage",
-            TagObject::Connection { .. } => "connection",
+            TagableObject::Database { .. } => "database",
+            TagableObject::Table { .. } => "table",
+            TagableObject::Stage { .. } => "stage",
+            TagableObject::Connection { .. } => "connection",
         }
     }
 
     fn encode_to_key(&self, b: KeyBuilder) -> KeyBuilder {
         let b = b.push_raw(self.type_str());
         match self {
-            TagObject::Database { db_id } => b.push_u64(*db_id),
-            TagObject::Table { table_id } => b.push_u64(*table_id),
-            TagObject::Stage { name } => b.push_str(name),
-            TagObject::Connection { name } => b.push_str(name),
+            TagableObject::Database { db_id } => b.push_u64(*db_id),
+            TagableObject::Table { table_id } => b.push_u64(*table_id),
+            TagableObject::Stage { name } => b.push_str(name),
+            TagableObject::Connection { name } => b.push_str(name),
         }
     }
 
     fn decode_from_key(parser: &mut KeyParser) -> Result<Self, KeyError> {
         let type_str = parser.next_raw()?;
         match type_str {
-            "database" => Ok(TagObject::Database {
+            "database" => Ok(TagableObject::Database {
                 db_id: parser.next_u64()?,
             }),
-            "table" => Ok(TagObject::Table {
+            "table" => Ok(TagableObject::Table {
                 table_id: parser.next_u64()?,
             }),
-            "stage" => Ok(TagObject::Stage {
+            "stage" => Ok(TagableObject::Stage {
                 name: parser.next_str()?,
             }),
-            "connection" => Ok(TagObject::Connection {
+            "connection" => Ok(TagableObject::Connection {
                 name: parser.next_str()?,
             }),
             _ => Err(KeyError::InvalidSegment {
@@ -145,7 +145,7 @@ impl TagObject {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SetObjectTagsReq {
     pub tenant: Tenant,
-    pub object: TagObject,
+    pub object: TagableObject,
     /// List of `(tag_id, tag_value)` pairs.
     pub tags: Vec<(u64, String)>,
 }
@@ -154,7 +154,7 @@ pub struct SetObjectTagsReq {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UnsetObjectTagsReq {
     pub tenant: Tenant,
-    pub object: TagObject,
+    pub object: TagableObject,
     /// List of tag IDs to remove.
     pub tags: Vec<u64>,
 }
@@ -163,7 +163,7 @@ pub struct UnsetObjectTagsReq {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct GetObjectTagsReq {
     pub tenant: Tenant,
-    pub object: TagObject,
+    pub object: TagableObject,
 }
 
 /// Value stored for each object-to-tag binding in the meta store.
@@ -171,9 +171,9 @@ pub struct GetObjectTagsReq {
 /// Stored at key [`ObjectToTagIdent`]: `__fd_object_tag_ref/<tenant>/<object_type>/<object_id>/<tag_id>`.
 /// The `tag_id` is part of the key, so only the value payload and timestamp are stored here.
 ///
-/// [`ObjectToTagIdent`]: crate::schema::ObjectToTagIdent
+/// [`ObjectToTagIdent`]: crate::schema::ObjectTagIdRefIdent
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ObjectToTagValue {
+pub struct ObjectTagIdRefValue {
     /// Payload assigned when tagging an object. When [`TagMeta::allowed_values`]
     /// is present, this string must match one of the configured entries,
     /// otherwise any string (including empty) is allowed.
@@ -185,7 +185,7 @@ pub struct ObjectToTagValue {
 pub struct ObjectTagValue {
     pub tag_id: u64,
     /// The tag value with sequence number for optimistic concurrency control.
-    pub tag_value: SeqV<ObjectToTagValue>,
+    pub tag_value: SeqV<ObjectTagIdRefValue>,
 }
 
 /// Response carrying all tags and values assigned to the requested object.
@@ -205,9 +205,9 @@ pub struct ListTagReferencesReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TagReferenceInfo {
     pub tag_id: u64,
-    pub object: TagObject,
+    pub object: TagableObject,
     /// The tag value with sequence number for optimistic concurrency control.
-    pub tag_value: SeqV<ObjectToTagValue>,
+    pub tag_value: SeqV<ObjectTagIdRefValue>,
 }
 
 /// Response packing the full list of references returned for a query.

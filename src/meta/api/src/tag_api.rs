@@ -26,18 +26,18 @@ use databend_common_meta_app::schema::GetObjectTagsReq;
 use databend_common_meta_app::schema::GetTagReply;
 use databend_common_meta_app::schema::ListTagReferencesReply;
 use databend_common_meta_app::schema::ListTagReferencesReq;
+use databend_common_meta_app::schema::ObjectTagIdRef;
+use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::ObjectTagValue;
-use databend_common_meta_app::schema::ObjectToTagId;
-use databend_common_meta_app::schema::ObjectToTagIdent;
-use databend_common_meta_app::schema::ObjectToTagValue;
 use databend_common_meta_app::schema::SetObjectTagsReq;
 use databend_common_meta_app::schema::TagIdIdent;
-use databend_common_meta_app::schema::TagIdToObject;
-use databend_common_meta_app::schema::TagIdToObjectIdent;
+use databend_common_meta_app::schema::TagIdObjectRef;
+use databend_common_meta_app::schema::TagIdObjectRefIdent;
 use databend_common_meta_app::schema::TagInfo;
 use databend_common_meta_app::schema::TagMeta;
-use databend_common_meta_app::schema::TagObject;
 use databend_common_meta_app::schema::TagReferenceInfo;
+use databend_common_meta_app::schema::TagableObject;
 use databend_common_meta_app::schema::UnsetObjectTagsReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
@@ -140,7 +140,7 @@ where
 
             // Check if tag has any references
             let refs_dir = DirName::new_with_level(
-                TagIdToObjectIdent::new_generic(tenant.clone(), TagIdToObject::prefix(tag_id)),
+                TagIdObjectRefIdent::new_generic(tenant.clone(), TagIdObjectRef::prefix(tag_id)),
                 1,
             );
             let entries = self
@@ -259,18 +259,18 @@ where
             // object set value must be occurs in allowed_values if it's not none.
             txn_conditions.push(txn_cond_eq_seq(&tag_meta_key, meta_seqv.seq));
 
-            let obj_ref_key = ObjectToTagIdent::new_generic(
+            let obj_ref_key = ObjectTagIdRefIdent::new_generic(
                 req.tenant.clone(),
-                ObjectToTagId::new(req.object.clone(), *tag_id),
+                ObjectTagIdRef::new(req.object.clone(), *tag_id),
             );
-            let tag_ref_key = TagIdToObjectIdent::new_generic(
+            let tag_ref_key = TagIdObjectRefIdent::new_generic(
                 req.tenant.clone(),
-                TagIdToObject::new(*tag_id, req.object.clone()),
+                TagIdObjectRef::new(*tag_id, req.object.clone()),
             );
 
             txn_ops.push(txn_op_put_pb(
                 &obj_ref_key,
-                &ObjectToTagValue {
+                &ObjectTagIdRefValue {
                     value: tag_value.clone(),
                 },
                 None,
@@ -295,13 +295,13 @@ where
         let mut txn_ops = Vec::with_capacity(req.tags.len() * 2);
 
         for tag_id in &req.tags {
-            let obj_ref_key = ObjectToTagIdent::new_generic(
+            let obj_ref_key = ObjectTagIdRefIdent::new_generic(
                 req.tenant.clone(),
-                ObjectToTagId::new(req.object.clone(), *tag_id),
+                ObjectTagIdRef::new(req.object.clone(), *tag_id),
             );
-            let tag_ref_key = TagIdToObjectIdent::new_generic(
+            let tag_ref_key = TagIdObjectRefIdent::new_generic(
                 req.tenant.clone(),
-                TagIdToObject::new(*tag_id, req.object.clone()),
+                TagIdObjectRef::new(*tag_id, req.object.clone()),
             );
 
             txn_ops.push(txn_op_del(&obj_ref_key));
@@ -320,9 +320,9 @@ where
     ) -> Result<GetObjectTagsReply, MetaError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let obj_ref_key = ObjectToTagIdent::new_generic(
+        let obj_ref_key = ObjectTagIdRefIdent::new_generic(
             req.tenant.clone(),
-            ObjectToTagId::new(req.object.clone(), 0),
+            ObjectTagIdRef::new(req.object.clone(), 0),
         );
         let refs_dir = DirName::new(obj_ref_key);
         let stream = self.list_pb(&refs_dir).await?;
@@ -352,29 +352,29 @@ where
 
         // Collect all referenced objects
         let refs_dir = DirName::new_with_level(
-            TagIdToObjectIdent::new_generic(req.tenant.clone(), TagIdToObject::prefix(tag_id)),
+            TagIdObjectRefIdent::new_generic(req.tenant.clone(), TagIdObjectRef::prefix(tag_id)),
             1,
         );
         let stream = self.list_pb(&refs_dir).await?;
         let entries = stream.try_collect::<Vec<_>>().await?;
 
-        let tagged_objects: Vec<TagObject> = entries
+        let tagged_objects: Vec<TagableObject> = entries
             .into_iter()
             .map(|entry| entry.key.name().object.clone())
             .collect();
 
-        let value_keys: Vec<ObjectToTagIdent> = tagged_objects
+        let value_keys: Vec<ObjectTagIdRefIdent> = tagged_objects
             .iter()
             .map(|obj| {
-                ObjectToTagIdent::new_generic(
+                ObjectTagIdRefIdent::new_generic(
                     req.tenant.clone(),
-                    ObjectToTagId::new(obj.clone(), tag_id),
+                    ObjectTagIdRef::new(obj.clone(), tag_id),
                 )
             })
             .collect();
 
         let tag_values = self
-            .get_pb_values_vec::<ObjectToTagIdent, _>(value_keys)
+            .get_pb_values_vec::<ObjectTagIdRefIdent, _>(value_keys)
             .await?;
 
         // Combine objects with their values
