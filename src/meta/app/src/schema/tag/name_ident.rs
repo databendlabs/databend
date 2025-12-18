@@ -69,7 +69,7 @@ mod tests {
     use crate::tenant::Tenant;
 
     #[test]
-    fn test_tag_name_ident_roundtrip() {
+    fn test_tag_name_ident() {
         let tenant = Tenant::new_literal("tenant_a");
         let ident = TagNameIdent::new(tenant, "pii_flag");
 
