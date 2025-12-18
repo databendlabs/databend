@@ -210,8 +210,19 @@ pub async fn build_runtime_filter(
                 None => continue,
             };
 
+            // First, add the anchor's probe key itself as a probe target
+            if let Some((remote_expr, scan_id, _)) =
+                scalar_to_remote_expr(metadata, anchor_probe_key)?
+            {
+                if is_valid_probe_target(&remote_expr) {
+                    probe_targets.push((remote_expr, scan_id));
+                }
+            }
+
+            // Then search only in the anchor's probe side subtree
+            let anchor_probe_side = anchor.probe_side_child();
             find_probe_targets_in_tree(
-                anchor,
+                anchor_probe_side,
                 anchor_probe_key,
                 join_equivalence_classes,
                 metadata,
