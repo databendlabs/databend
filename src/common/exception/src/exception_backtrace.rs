@@ -77,6 +77,7 @@ pub struct ResolvedStackFrame {
     pub column: Option<u32>,
 }
 
+#[cfg(target_os = "linux")]
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct PhysicalAddr {
     pub physical_addr: usize,
