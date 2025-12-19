@@ -129,7 +129,7 @@ const CATALOG_HIVE: &str = "hive";
 /// It's forbidden to do any breaking changes on this struct.
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct Config {
     // Query engine config.
@@ -3189,7 +3189,7 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct CacheConfig {
     /// The data in meta-service using key `TenantOwnershipObjectIdent`
@@ -3533,7 +3533,7 @@ impl Default for DiskCacheKeyReloadPolicy {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
@@ -3570,11 +3570,81 @@ pub struct DiskCacheConfig {
     )]
     #[serde(default = "bool_true")]
     pub sync_data: bool,
+
+    #[clap(flatten)]
+    #[serde(default)]
+    pub ratios: DiskCacheRatioConfig,
 }
 
 impl Default for DiskCacheConfig {
     fn default() -> Self {
         inner::DiskCacheConfig::default().into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct DiskCacheRatioConfig {
+    /// Weight used to derive on-disk column data cache capacity when no explicit size is provided.
+    #[clap(
+        long = "cache-disk-column-data-ratio",
+        value_name = "VALUE",
+        default_value = "1"
+    )]
+    pub column_data: f64,
+
+    /// Weight used to derive on-disk bloom index filter cache capacity when no explicit size is provided.
+    #[clap(
+        long = "cache-disk-bloom-index-filter-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub bloom_index_filter: f64,
+
+    /// Weight used to derive on-disk bloom index meta cache capacity when no explicit size is provided.
+    #[clap(
+        long = "cache-disk-bloom-index-meta-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub bloom_index_meta: f64,
+
+    /// Weight used to derive on-disk inverted index filter cache capacity when no explicit size is provided.
+    #[clap(
+        long = "cache-disk-inverted-index-filter-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub inverted_index_filter: f64,
+
+    /// Weight used to derive on-disk inverted index meta cache capacity when no explicit size is provided.
+    #[clap(
+        long = "cache-disk-inverted-index-meta-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub inverted_index_meta: f64,
+
+    /// Weight used to derive on-disk vector index filter cache capacity when no explicit size is provided.
+    #[clap(
+        long = "cache-disk-vector-index-filter-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub vector_index_filter: f64,
+
+    /// Weight used to derive on-disk vector index meta cache capacity when no explicit size is provided.
+    #[clap(
+        long = "cache-disk-vector-index-meta-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub vector_index_meta: f64,
+}
+
+impl Default for DiskCacheRatioConfig {
+    fn default() -> Self {
+        inner::DiskCacheRatioConfig::default().into()
     }
 }
 
@@ -3850,6 +3920,7 @@ mod cache_config_converters {
                 max_bytes: value.max_bytes,
                 path: value.path,
                 sync_data: value.sync_data,
+                ratios: value.ratios.into(),
             })
         }
     }
@@ -3860,6 +3931,35 @@ mod cache_config_converters {
                 max_bytes: value.max_bytes,
                 path: value.path,
                 sync_data: value.sync_data,
+                ratios: value.ratios.into(),
+            }
+        }
+    }
+
+    impl From<DiskCacheRatioConfig> for inner::DiskCacheRatioConfig {
+        fn from(value: DiskCacheRatioConfig) -> Self {
+            Self {
+                column_data: value.column_data,
+                bloom_index_filter: value.bloom_index_filter,
+                bloom_index_meta: value.bloom_index_meta,
+                inverted_index_filter: value.inverted_index_filter,
+                inverted_index_meta: value.inverted_index_meta,
+                vector_index_filter: value.vector_index_filter,
+                vector_index_meta: value.vector_index_meta,
+            }
+        }
+    }
+
+    impl From<inner::DiskCacheRatioConfig> for DiskCacheRatioConfig {
+        fn from(value: inner::DiskCacheRatioConfig) -> Self {
+            Self {
+                column_data: value.column_data,
+                bloom_index_filter: value.bloom_index_filter,
+                bloom_index_meta: value.bloom_index_meta,
+                inverted_index_filter: value.inverted_index_filter,
+                inverted_index_meta: value.inverted_index_meta,
+                vector_index_filter: value.vector_index_filter,
+                vector_index_meta: value.vector_index_meta,
             }
         }
     }
