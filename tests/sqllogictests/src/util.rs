@@ -42,7 +42,7 @@ use walkdir::DirEntry;
 use walkdir::WalkDir;
 
 use crate::arg::SqlLogicTestArgs;
-use crate::client::BodyFormat;
+use crate::client::QueryResultFormat;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 
@@ -249,7 +249,7 @@ pub async fn run_ttc_container(
     port: u16,
     http_server_port: u16,
     cs: &mut Vec<ContainerAsync<GenericImage>>,
-    body_format: BodyFormat,
+    query_result_format: QueryResultFormat,
 ) -> Result<()> {
     let docker = &docker_client_instance().await?;
     let mut images = image.split(":");
@@ -271,8 +271,8 @@ pub async fn run_ttc_container(
         "databend://root:@127.0.0.1:{}?sslmode=disable",
         http_server_port
     );
-    if matches!(body_format, BodyFormat::Arrow) {
-        dsn = format!("{dsn}&body_format=arrow");
+    if matches!(query_result_format, QueryResultFormat::Arrow) {
+        dsn = format!("{dsn}&query_result_format=arrow");
     }
 
     let mut i = 1;
