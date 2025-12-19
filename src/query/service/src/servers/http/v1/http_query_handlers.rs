@@ -204,7 +204,7 @@ impl QueryResponse {
                 },
         }: HttpQueryResponseInternal,
         is_final: bool,
-        body_format: BodyFormat,
+        query_result_format: QueryResultFormat,
     ) -> Response {
         let (data, next_uri) = if is_final {
             (Arc::new(BlocksSerializer::empty()), None)
@@ -272,8 +272,8 @@ impl QueryResponse {
             settings: driver_settings,
         };
 
-        match body_format {
-            BodyFormat::Arrow if !schema.fields.is_empty() && !data.is_empty() => {
+        match query_result_format {
+            QueryResultFormat::Arrow if !schema.fields.is_empty() && !data.is_empty() => {
                 let buf: Result<_, ErrorCode> = try {
                     const META_KEY: &str = "response_header";
                     let json_res = serde_json::to_string(&res).map_err(ErrorCode::from)?;
@@ -285,7 +285,7 @@ impl QueryResponse {
                         .header(HEADER_QUERY_ID, id)
                         .header(HEADER_QUERY_STATE, state.to_string())
                         .header(HEADER_QUERY_PAGE_ROWS, rows)
-                        .content_type(body_format.content_type())
+                        .content_type(query_result_format.content_type())
                         .body(buf),
                     Err(err) => Response::builder()
                         .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -368,7 +368,7 @@ impl StateResponse {
 #[poem::handler]
 async fn query_final_handler(
     ctx: &HttpQueryContext,
-    body_format: BodyFormat,
+    query_result_format: QueryResultFormat,
     Path(query_id): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
@@ -401,7 +401,7 @@ async fn query_final_handler(
                     query_id,
                     response,
                     true,
-                    body_format,
+                    query_result_format,
                 ))
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -475,7 +475,7 @@ async fn query_state_handler(
 #[poem::handler]
 async fn query_page_handler(
     ctx: &HttpQueryContext,
-    body_format: BodyFormat,
+    query_result_format: QueryResultFormat,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
     ctx.check_node_id(&query_id)?;
@@ -528,7 +528,7 @@ async fn query_page_handler(
                     query_id,
                     resp,
                     false,
-                    body_format,
+                    query_result_format,
                 ))
             }
         }
@@ -555,7 +555,7 @@ async fn query_page_handler(
 #[async_backtrace::framed]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
-    body_format: BodyFormat,
+    query_result_format: QueryResultFormat,
     Json(mut req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
     let session = ctx.session.clone();
@@ -627,10 +627,13 @@ pub(crate) async fn query_handler(
                 query
                     .update_expire_time(false, resp.is_data_drained())
                     .await;
-                Ok(
-                    QueryResponse::from_internal(query.id.to_string(), resp, false, body_format)
-                        .into_response(),
+                Ok(QueryResponse::from_internal(
+                    query.id.to_string(),
+                    resp,
+                    false,
+                    query_result_format,
                 )
+                .into_response())
             }
         }
     };
@@ -1000,12 +1003,12 @@ pub(crate) fn get_http_tracing_span(
 }
 
 #[derive(Debug, Clone, Copy)]
-enum BodyFormat {
+enum QueryResultFormat {
     Json,
     Arrow,
 }
 
-impl Header for BodyFormat {
+impl Header for QueryResultFormat {
     fn name() -> &'static http::HeaderName {
         &http::header::ACCEPT
     }
@@ -1017,12 +1020,14 @@ impl Header for BodyFormat {
     {
         if let Some(v) = values.next() {
             match v.to_str() {
-                Ok(s) if s == BodyFormat::Arrow.content_type() => return Ok(BodyFormat::Arrow),
+                Ok(s) if s == QueryResultFormat::Arrow.content_type() => {
+                    return Ok(QueryResultFormat::Arrow)
+                }
                 Err(_) => return Err(headers::Error::invalid()),
                 _ => {}
             };
         }
-        Ok(BodyFormat::Json)
+        Ok(QueryResultFormat::Json)
     }
 
     fn encode<E: Extend<HeaderValue>>(&self, values: &mut E) {
@@ -1030,20 +1035,20 @@ impl Header for BodyFormat {
     }
 }
 
-impl BodyFormat {
+impl QueryResultFormat {
     pub const fn content_type(&self) -> &'static str {
         match self {
-            BodyFormat::Json => "application/json",
-            BodyFormat::Arrow => "application/vnd.apache.arrow.stream",
+            QueryResultFormat::Json => "application/json",
+            QueryResultFormat::Arrow => "application/vnd.apache.arrow.stream",
         }
     }
 }
 
-impl<'a> FromRequest<'a> for BodyFormat {
+impl<'a> FromRequest<'a> for QueryResultFormat {
     async fn from_request(req: &'a Request, _body: &mut RequestBody) -> Result<Self, PoemError> {
         Ok(req
             .headers()
             .typed_get::<Self>()
-            .unwrap_or(BodyFormat::Json))
+            .unwrap_or(QueryResultFormat::Json))
     }
 }

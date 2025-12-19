@@ -36,7 +36,7 @@ use testcontainers::GenericImage;
 use testcontainers::Image;
 
 use crate::arg::SqlLogicTestArgs;
-use crate::client::BodyFormat;
+use crate::client::QueryResultFormat;
 use crate::client::Client;
 use crate::client::ClientType;
 use crate::client::HttpClient;
@@ -69,7 +69,7 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
             Box::new(ClientType::Ttc {
                 image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
                 port: TTC_PORT_START,
-                body_format: BodyFormat::Arrow,
+                query_result_format: QueryResultFormat::Arrow,
             }),
             5,
         ),
@@ -77,7 +77,7 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
             Box::new(ClientType::Ttc {
                 image: "ghcr.io/databendlabs/ttc-rust:latest".to_string(),
                 port: TTC_PORT_START + 1,
-                body_format: BodyFormat::Json,
+                query_result_format: QueryResultFormat::Json,
             }),
             5,
         ),
@@ -85,7 +85,7 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
             Box::new(ClientType::Ttc {
                 image: "ghcr.io/databendlabs/ttc-go:latest".to_string(),
                 port: TTC_PORT_START + 2,
-                body_format: BodyFormat::Json,
+                query_result_format: QueryResultFormat::Json,
             }),
             5,
         ),
@@ -154,14 +154,14 @@ pub async fn main() -> Result<()> {
                         TTC_PORT_START,
                         args.port,
                         &mut containers,
-                        BodyFormat::Json,
+                        QueryResultFormat::Json,
                     )
                     .await?;
                 }
                 run_ttc_client(args.clone(), ClientType::Ttc {
                     image: handler.to_string(),
                     port: TTC_PORT_START,
-                    body_format: BodyFormat::Json,
+                    query_result_format: QueryResultFormat::Json,
                 })
                 .await?;
             }
@@ -203,9 +203,9 @@ async fn run_hybrid_client(
             ClientType::Ttc {
                 image,
                 port,
-                body_format,
+                query_result_format,
             } => {
-                run_ttc_container(image, *port, args.port, cs, *body_format).await?;
+                run_ttc_container(image, *port, args.port, cs, *query_result_format).await?;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
         }
@@ -247,7 +247,7 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
         ClientType::Ttc {
             image,
             port,
-            body_format: _,
+            query_result_format: _,
         } => {
             let conn = format!("127.0.0.1:{port}");
             client = Client::Ttc(TTCClient::create(image, &conn).await?);
