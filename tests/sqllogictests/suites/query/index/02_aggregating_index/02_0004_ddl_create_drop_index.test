@@ -57,7 +57,14 @@ statement ok
 DROP AGGREGATING INDEX replace_idx
 
 statement ok
+CREATE AGGREGATING INDEX "Test.agg.idx" AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
+
+statement ok
+DROP AGGREGATING INDEX "Test.agg.idx"
+
+statement ok
 USE default
 
 statement ok
 DROP DATABASE IF EXISTS test_index_db
+
