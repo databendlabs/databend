@@ -245,7 +245,10 @@ where
                 let column = self.id_humanizer.humanize_column_id(*column);
                 let hist = format!(
                     "{{ min: {}, max: {}, ndv: {}, null count: {} }}",
-                    hist.min, hist.max, hist.ndv, hist.null_count
+                    hist.min,
+                    hist.max,
+                    hist.ndv.value(),
+                    hist.null_count
                 );
                 FormatTreeNode::new(format!("{}: {}", column, hist))
             })

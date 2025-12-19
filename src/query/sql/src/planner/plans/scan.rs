@@ -38,6 +38,7 @@ use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::MAX_SELECTIVITY;
+use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -255,8 +256,7 @@ impl Operator for Scan {
             .statistics
             .table_stats
             .as_ref()
-            .map(|s| s.num_rows.unwrap_or(0))
-            .unwrap_or(0);
+            .and_then(|s| s.num_rows);
 
         let mut column_stats: ColumnStatSet = Default::default();
         for (k, v) in &self.statistics.column_stats {
@@ -265,60 +265,60 @@ impl Operator for Scan {
                 continue;
             }
             if let Some(col_stat) = v.clone() {
-                // Safe to unwrap: min, max are all `Some(_)`.
                 let Some(min) = col_stat.min.clone() else {
                     continue;
                 };
                 let Some(max) = col_stat.max.clone() else {
                     continue;
                 };
-                // ndv could be `None`, we will use `num_rows - null_count` as ndv instead.
-                //
+
                 // NOTE: don't touch the original num_rows, since it will be used in other places.
-                let mut ndv = col_stat
-                    .ndv
-                    .unwrap_or_else(|| num_rows.saturating_sub(col_stat.null_count));
+                let ndv = match col_stat.ndv {
+                    Some(ndv) => Ndv::Stat(ndv as f64),
+                    None => Ndv::Max(
+                        num_rows
+                            .and_then(|n| n.checked_sub(col_stat.null_count))
+                            .unwrap_or(u64::MAX) as _,
+                    ),
+                };
 
                 // Alter ndv based on min and max if the datum is uint or int.
-                match (&max, &min) {
-                    (Datum::UInt(m), Datum::UInt(n)) if m >= n => ndv = ndv.min(m - n + 1),
+                let ndv = match (&max, &min) {
+                    (Datum::UInt(m), Datum::UInt(n)) if m >= n => ndv.reduce((m - n + 1) as _),
                     (Datum::Int(m), Datum::Int(n)) if m >= n => {
-                        ndv = ndv.min(m.saturating_add(1).saturating_sub(*n) as u64)
+                        ndv.reduce(m.saturating_add(1).saturating_sub(*n) as _)
                     }
-                    _ => {
-                        if max == min {
-                            ndv = 1
-                        }
-                    }
+                    _ if max == min => Ndv::Stat(1.0),
+                    _ => ndv,
                 };
 
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
                     && histogram.is_some()
                 {
                     histogram.clone()
-                } else {
+                } else if let Some(num_rows) = num_rows {
                     let num_rows = num_rows.saturating_sub(col_stat.null_count);
-                    let ndv = std::cmp::min(num_rows, ndv);
-                    if num_rows != 0 {
+                    if num_rows == 0 {
+                        None
+                    } else {
                         HistogramBuilder::from_ndv(
-                            ndv,
+                            ndv.value() as _,
                             num_rows,
                             Some((min.clone(), max.clone())),
                             DEFAULT_HISTOGRAM_BUCKETS,
                         )
                         .ok()
-                    } else {
-                        None
                     }
+                } else {
+                    None
                 };
-                let column_stat = ColumnStat {
+                column_stats.insert(*k, ColumnStat {
                     min,
                     max,
-                    ndv: ndv as f64,
+                    ndv,
                     null_count: col_stat.null_count,
                     histogram,
-                };
-                column_stats.insert(*k as IndexType, column_stat);
+                });
             }
         }
 
