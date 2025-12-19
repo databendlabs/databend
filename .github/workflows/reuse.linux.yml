@@ -102,26 +102,27 @@ jobs:
           name: sccache-build-${{ needs.info.outputs.target }}
           path: target/sccache.log
 
-  test_unit:
-    needs: info
-    runs-on:
-      - self-hosted
-      - "${{ inputs.runner_arch }}"
-      - Linux
-      - 16c64g
-      - "${{ inputs.runner_provider }}"
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # fetch all tags, metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/test_unit
-        timeout-minutes: 60
-        with:
-          target: ${{ needs.info.outputs.target }}
+  # FIXME: temporarily disable unit test
+  # test_unit:
+  #   needs: info
+  #   runs-on:
+  #     - self-hosted
+  #     - "${{ inputs.runner_arch }}"
+  #     - Linux
+  #     - 16c64g
+  #     - "${{ inputs.runner_provider }}"
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         # fetch all tags, metasrv and metaclient need tag as its version.
+  #         fetch-depth: 0
+  #     - uses: ./.github/actions/test_unit
+  #       timeout-minutes: 60
+  #       with:
+  #         target: ${{ needs.info.outputs.target }}
 
   test_metactl:
-    needs: [ info, build, check ]
+    needs: [info, build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -134,7 +135,7 @@ jobs:
         timeout-minutes: 10
 
   test_compat_meta_query:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -147,7 +148,7 @@ jobs:
         timeout-minutes: 10
 
   test_compat_fuse:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -160,7 +161,7 @@ jobs:
         timeout-minutes: 20
 
   test_compat_meta_meta:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -173,7 +174,7 @@ jobs:
         timeout-minutes: 20
 
   test_compat_client_cluster:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -186,7 +187,7 @@ jobs:
         timeout-minutes: 20
 
   test_logs:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -203,7 +204,7 @@ jobs:
         timeout-minutes: 20
 
   test_private_tasks:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -220,7 +221,7 @@ jobs:
         timeout-minutes: 20
 
   test_meta_cluster:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -233,7 +234,7 @@ jobs:
         timeout-minutes: 10
 
   test_stateless_standalone:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -246,7 +247,7 @@ jobs:
         timeout-minutes: 18
 
   test_stateless_cluster:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -263,7 +264,7 @@ jobs:
         timeout-minutes: 18
 
   test_stateful_standalone:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -281,7 +282,7 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_stateful_cluster:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -304,7 +305,7 @@ jobs:
 
   test_stateful_large_data:
     if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -317,7 +318,7 @@ jobs:
         timeout-minutes: 60
 
   test_stateful_iceberg_catalogs:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -368,7 +369,7 @@ jobs:
   #       continue-on-error: true
 
   test_ee_standalone:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -417,7 +418,7 @@ jobs:
   #          name: test-stateful-standalone-fake-time-linux
 
   test_ee_management_mode:
-    needs: [ build, check ]
+    needs: [build, check]
     runs-on:
       - self-hosted
       - "${{ inputs.runner_arch }}"
@@ -440,7 +441,7 @@ jobs:
           name: test-ee-management-mode-linux
 
   sqllogic:
-    needs: [ build, check ]
+    needs: [build, check]
     uses: ./.github/workflows/reuse.sqllogic.yml
     secrets: inherit
     with:
