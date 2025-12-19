@@ -18,6 +18,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use super::WindowPartition;
+use crate::ColumnSet;
+use crate::IndexType;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -26,8 +28,6 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::ColumnSet;
-use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Sort {

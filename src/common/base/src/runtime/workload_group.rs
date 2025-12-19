@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 
 use tokio::sync::Mutex;

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::Column;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::opaque::OpaqueColumn;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::FALSE_BYTES_NUM;
 use databend_common_io::constants::INF_BYTES_LONG;
@@ -24,14 +24,14 @@ use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
-use geozero::wkb::Ewkb;
 use geozero::ToWkt;
+use geozero::wkb::Ewkb;
 
-use crate::binary::encode_binary;
-use crate::field_encoder::write_tsv_escaped_string;
-use crate::field_encoder::FieldEncoderValues;
 use crate::FileFormatOptionsExt;
 use crate::OutputCommonSettings;
+use crate::binary::encode_binary;
+use crate::field_encoder::FieldEncoderValues;
+use crate::field_encoder::write_tsv_escaped_string;
 
 pub enum StringFormatter {
     Csv { quote_char: u8 },

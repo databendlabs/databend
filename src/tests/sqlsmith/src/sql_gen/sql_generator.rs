@@ -14,9 +14,9 @@
 
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
-use databend_common_expression::types::DataType;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use rand::Rng;
 

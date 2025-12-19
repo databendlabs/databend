@@ -18,13 +18,13 @@ use std::fmt::Display;
 use chrono::DateTime;
 use chrono::Utc;
 
-use crate::schema::catalog::catalog_info::CatalogId;
-use crate::schema::catalog_id_ident;
+use crate::KeyWithTenant;
 use crate::schema::CatalogIdIdent;
 use crate::schema::CatalogNameIdent;
+use crate::schema::catalog::catalog_info::CatalogId;
+use crate::schema::catalog_id_ident;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
-use crate::KeyWithTenant;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum CatalogType {

@@ -19,13 +19,13 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
-use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::plans::OptimizeCompactBlock;
 
-use crate::interpreters::interpreter_optimize_purge::purge;
 use crate::interpreters::Interpreter;
+use crate::interpreters::interpreter_optimize_purge::purge;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;

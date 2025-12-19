@@ -16,9 +16,9 @@ use std::fmt;
 use std::fmt::Display;
 use std::ops;
 
+use enumflags2::BitFlags;
 use enumflags2::bitflags;
 use enumflags2::make_bitflags;
-use enumflags2::BitFlags;
 
 // Note:
 // 1. If add new privilege type, need add forward test

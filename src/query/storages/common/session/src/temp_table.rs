@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -41,14 +41,14 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::SeqV;
-use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
-use databend_storages_common_blocks::memory::InMemoryDataKey;
+use databend_common_storage::init_operator;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
+use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
+use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use log::info;
 use opendal::Operator;
 use parking_lot::Mutex;
@@ -467,8 +467,8 @@ pub async fn drop_all_temp_tables(
     let num_mem_table = mem_tbl_ids.len();
 
     info!(
-        "[TEMP TABLE] session={user_name_session_id} starting cleanup, reason = {reason}, {} fuse table, {} mem table."
-        , num_fuse_table, num_mem_table
+        "[TEMP TABLE] session={user_name_session_id} starting cleanup, reason = {reason}, {} fuse table, {} mem table.",
+        num_fuse_table, num_mem_table
     );
 
     // Clean up each fuse table directory individually with the correct operator

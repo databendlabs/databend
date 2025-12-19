@@ -16,6 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::ColumnBinding;
+use crate::ColumnBindingBuilder;
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::Visibility;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::StatInfo;
@@ -23,11 +28,6 @@ use crate::plans::BoundColumnRef;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::ColumnBinding;
-use crate::ColumnBindingBuilder;
-use crate::ColumnSet;
-use crate::IndexType;
-use crate::Visibility;
 
 /// Evaluate scalar expression
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

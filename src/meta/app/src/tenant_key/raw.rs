@@ -19,10 +19,10 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use crate::KeyWithTenant;
 use crate::tenant::Tenant;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::resource::TenantResource;
-use crate::KeyWithTenant;
 
 /// The storage of [`TIdent`] as raw value, without per-tenant config.
 ///

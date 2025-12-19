@@ -14,6 +14,8 @@
 
 use std::collections::HashMap;
 
+use Expr::TimeSlice;
+use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
@@ -33,16 +35,14 @@ use databend_common_ast::ast::WindowDesc;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
-use databend_common_ast::Span;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
 use derive_visitor::VisitorMut;
 use ethnum::I256;
-use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
-use Expr::TimeSlice;
+use rand::rngs::SmallRng;
 
 const BAD_INT64_VALUES: [i64; 31] = [
     -2,

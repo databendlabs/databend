@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use bytesize::ByteSize;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 
 #[derive(Clone)]
 #[non_exhaustive]

@@ -28,6 +28,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::storage::S3StorageClass;
+use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
+use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::StorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
@@ -40,15 +43,12 @@ use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::storage::StorageWebhdfsConfig;
-use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
-use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
-use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use databend_common_storage::STDIN_FD;
-use log::info;
+use databend_common_storage::Scheme;
 use log::LevelFilter;
+use log::info;
 use opendal::raw::normalize_path;
 use opendal::raw::normalize_root;
-use opendal::Scheme;
 
 /// secure_omission will fix omitted endpoint url schemes into 'https://'
 #[inline]

@@ -19,21 +19,11 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_base::obfuscator::consume;
 use databend_common_base::obfuscator::CodePoint;
 use databend_common_base::obfuscator::NGramHash;
+use databend_common_base::obfuscator::consume;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::MapType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt32Type;
-use databend_common_expression::types::UnaryType;
-use databend_common_expression::types::ValueType;
-use databend_common_expression::types::F64;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
@@ -43,14 +33,24 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::F64;
+use databend_common_expression::types::MapType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UnaryType;
+use databend_common_expression::types::ValueType;
 
-use super::assert_unary_arguments;
-use super::borsh_partial_deserialize;
-use super::extract_number_param;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::StateAddr;
+use super::assert_unary_arguments;
+use super::borsh_partial_deserialize;
+use super::extract_number_param;
 
 pub struct MarkovTarin {
     display_name: String,
@@ -214,7 +214,7 @@ impl AggregateFunction for MarkovTarin {
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<MarkovModel>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 
@@ -371,8 +371,13 @@ pub fn aggregate_markov_train_function_desc() -> AggregateFunctionDescription {
                         ..Default::default()
                     }
                 }
-                [order, frequency_cutoff, num_buckets_cutoff, frequency_add, frequency_desaturate] =>
-                {
+                [
+                    order,
+                    frequency_cutoff,
+                    num_buckets_cutoff,
+                    frequency_add,
+                    frequency_desaturate,
+                ] => {
                     let order = extract_number_param::<u64>(order.clone())? as usize;
                     let frequency_cutoff = extract_number_param(frequency_cutoff.clone())?;
                     let num_buckets_cutoff =
@@ -393,7 +398,7 @@ pub fn aggregate_markov_train_function_desc() -> AggregateFunctionDescription {
                         "{} expect to have 0, 1 or 5 params, but got {}",
                         display_name,
                         params.len()
-                    )))
+                    )));
                 }
             };
 

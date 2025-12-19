@@ -30,15 +30,15 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_pipeline::core::Pipeline;
-use databend_common_storage::init_stage_operator;
 use databend_common_storage::FileStatus;
+use databend_common_storage::init_stage_operator;
 use parquet::file::metadata::FileMetaData;
 
+use crate::ParquetPart;
 use crate::copy_into_table::reader::RowGroupReaderForCopy;
 use crate::copy_into_table::source::ParquetCopySource;
 use crate::meta::read_metas_in_parallel_for_copy;
 use crate::partition::ParquetRowGroupPart;
-use crate::ParquetPart;
 
 pub struct ParquetTableForCopy {}
 

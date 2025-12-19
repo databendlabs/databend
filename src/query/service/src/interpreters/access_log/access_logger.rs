@@ -17,13 +17,13 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_sql::InsertInputSource;
+use databend_common_sql::MetadataRef;
 use databend_common_sql::plans::CopyIntoLocationPlan;
 use databend_common_sql::plans::CopyIntoTablePlan;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::InsertInputSource;
-use databend_common_sql::MetadataRef;
 use log::info;
 
 use crate::interpreters::access_log::log_entry::AccessLogEntry;
@@ -32,8 +32,8 @@ use crate::interpreters::access_log::log_entry::AccessObjectColumn;
 use crate::interpreters::access_log::log_entry::DDLOperationType;
 use crate::interpreters::access_log::log_entry::ModifyByDDLObject;
 use crate::interpreters::access_log::log_entry::ObjectDomain;
-use crate::sessions::convert_query_log_timestamp;
 use crate::sessions::QueryContext;
+use crate::sessions::convert_query_log_timestamp;
 
 pub struct AccessLogger {
     entry: AccessLogEntry,

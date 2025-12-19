@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
@@ -20,7 +21,6 @@ use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::Span;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_with_options::check_with_opt_valid;
 use databend_common_catalog::table_with_options::get_with_opt_consume;
@@ -30,10 +30,10 @@ use databend_common_exception::Result;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
-use crate::binder::util::TableIdentifier;
-use crate::binder::Binder;
-use crate::optimizer::ir::SExpr;
 use crate::BindContext;
+use crate::binder::Binder;
+use crate::binder::util::TableIdentifier;
+use crate::optimizer::ir::SExpr;
 impl Binder {
     /// Bind a base table.
     /// A base table is a table that is not a view or CTE.

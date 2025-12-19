@@ -14,14 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::nullable::NullableDomain;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::GenericType;
-use databend_common_expression::types::NullType;
-use databend_common_expression::types::NullableType;
 use databend_common_expression::Domain;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
@@ -30,6 +22,14 @@ use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Value;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::GenericType;
+use databend_common_expression::types::NullType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::nullable::NullableDomain;
 
 pub fn register(registry: &mut FunctionRegistry) {
     let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {

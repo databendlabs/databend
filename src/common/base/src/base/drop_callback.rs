@@ -43,9 +43,9 @@ impl Drop for DropCallback {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
     use std::sync::atomic::Ordering;
-    use std::sync::Arc;
 
     use super::*;
 

@@ -19,15 +19,15 @@ use batch_read::batch_read_column;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
-pub use deserialize::column_iters;
 pub use deserialize::ColumnIter;
+pub use deserialize::column_iters;
 
 use crate::error::Result;
 pub(crate) mod read_basic;
 use std::io::BufReader;
 
-use super::nested::InitNested;
 use super::PageMeta;
+use super::nested::InitNested;
 pub mod reader;
 
 pub trait NativeReadBuf: std::io::BufRead {

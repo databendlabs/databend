@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::mpsc::channel;
 use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_base::base::tokio::sync::mpsc::Sender;
+use databend_common_base::base::tokio::sync::mpsc::channel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

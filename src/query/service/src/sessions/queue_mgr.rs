@@ -20,9 +20,9 @@ use std::fmt::Display;
 use std::future::Future;
 use std::hash::Hash;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
@@ -31,14 +31,14 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use databend_common_ast::ast::ExplainKind;
-use databend_common_base::base::escape_for_key;
-use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::WatchNotify;
-use databend_common_base::runtime::workload_group::QuotaValue;
+use databend_common_base::base::escape_for_key;
+use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
-use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -56,10 +56,10 @@ use databend_common_metrics::session::incr_session_queue_acquire_error_count;
 use databend_common_metrics::session::incr_session_queue_acquire_timeout_count;
 use databend_common_metrics::session::record_session_queue_acquire_duration_ms;
 use databend_common_metrics::session::set_session_queued_queries;
+use databend_common_sql::PlanExtras;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::PlanExtras;
 use futures_util::future::Either;
 use log::info;
 use parking_lot::Mutex;
@@ -246,7 +246,11 @@ impl<Data: QueueData> QueueManager<Data> {
                 let current_used_after = permits.saturating_sub(available_permits_after);
                 info!(
                     "[ACQUIRED] Workload group '{}' local (max_concurrency={}): {}/{} slots used (waited {:.2}s)",
-                    workload_group.meta.name, permits, current_used_after, permits, instant.elapsed().as_secs_f64()
+                    workload_group.meta.name,
+                    permits,
+                    current_used_after,
+                    permits,
+                    instant.elapsed().as_secs_f64()
                 );
 
                 timeout -= instant.elapsed();
@@ -376,7 +380,11 @@ impl<Data: QueueData> QueueManager<Data> {
                 let used_slots = self.permits - self.semaphore.available_permits();
                 info!(
                     "[ACQUIRED] Warehouse resource (max_running_queries={}): {}/{} slots used, {} queries waiting (waited {:.2}s)",
-                    self.permits, used_slots, self.permits, queue_length, instant.elapsed().as_secs_f64()
+                    self.permits,
+                    used_slots,
+                    self.permits,
+                    queue_length,
+                    instant.elapsed().as_secs_f64()
                 );
 
                 Ok(guards)

@@ -14,10 +14,10 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;

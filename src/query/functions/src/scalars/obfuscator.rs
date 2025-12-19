@@ -14,20 +14,20 @@
 
 use std::hash::Hasher;
 
-use databend_common_base::obfuscator::generate;
 use databend_common_base::obfuscator::CodePoint;
 use databend_common_base::obfuscator::Histogram;
 use databend_common_base::obfuscator::NGramHash;
 use databend_common_base::obfuscator::Table;
+use databend_common_base::obfuscator::generate;
 use databend_common_column::buffer::Buffer;
-use databend_common_expression::types::map::KvPair;
-use databend_common_expression::types::*;
-use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::with_signed_integer_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
+use databend_common_expression::types::map::KvPair;
+use databend_common_expression::types::*;
+use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::with_signed_integer_mapped_type;
 
 struct ColumnHistogram {
     total: u32,

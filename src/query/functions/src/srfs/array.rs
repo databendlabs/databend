@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionEval;
@@ -27,6 +25,8 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::nullable::NullableColumn;
 
 use crate::srfs::variant::unnest_variant_array;
 
@@ -38,11 +38,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     let unnest = FunctionFactory::Closure(Box::new(|_, arg_types: &[DataType]| {
         match arg_types {
-            [ty @ (DataType::Null
-            | DataType::EmptyArray
-            | DataType::Nullable(_)
-            | DataType::Array(_)
-            | DataType::Variant)] => Some(build_unnest(ty, Box::new(|ty| ty))),
+            [
+                ty @ (DataType::Null
+                | DataType::EmptyArray
+                | DataType::Nullable(_)
+                | DataType::Array(_)
+                | DataType::Variant),
+            ] => Some(build_unnest(ty, Box::new(|ty| ty))),
             _ => {
                 // Generate a fake function with signature `unset(Array(T0 NULL))` to have a better error message.
                 Some(build_unnest(

@@ -18,10 +18,10 @@ use databend_query::test_kits::*;
 use http::Method;
 use http::StatusCode;
 use http::Uri;
-use poem::get;
 use poem::Endpoint;
 use poem::Request;
 use poem::Route;
+use poem::get;
 use pretty_assertions::assert_eq; // for `app.oneshot()`
 
 #[tokio::test(flavor = "multi_thread")]

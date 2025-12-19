@@ -17,12 +17,12 @@ use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
-use databend_common_expression::types::decimal::DecimalSize;
-use databend_common_expression::types::DecimalDataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_meta_app::schema as mt;
 use fastrace::func_name;
 use maplit::btreemap;

@@ -26,9 +26,9 @@ pub use builder::BinaryColumnBuilder;
 pub use iterator::BinaryColumnBuilderIter;
 pub use iterator::BinaryColumnIter;
 
+use crate::bitmap::Bitmap;
 use crate::bitmap::utils::BitmapIter;
 use crate::bitmap::utils::ZipValidity;
-use crate::bitmap::Bitmap;
 use crate::buffer::Buffer;
 use crate::error::Error;
 use crate::error::Result;
@@ -89,15 +89,17 @@ impl BinaryColumn {
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     #[inline]
     pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
-        let start = *self.offsets.get_unchecked(index) as usize;
-        let end = *self.offsets.get_unchecked(index + 1) as usize;
-        // here we use checked slice to avoid UB
-        // Less  regressed perfs:
-        // bench_kernels/binary_sum_len_unchecked/20
-        //                     time:   [45.234 µs 45.278 µs 45.312 µs]
-        //                     change: [+1.4430% +1.5796% +1.7344%] (p = 0.00 < 0.05)
-        //                     Performance has regressed.
-        &self.data[start..end]
+        unsafe {
+            let start = *self.offsets.get_unchecked(index) as usize;
+            let end = *self.offsets.get_unchecked(index + 1) as usize;
+            // here we use checked slice to avoid UB
+            // Less  regressed perfs:
+            // bench_kernels/binary_sum_len_unchecked/20
+            //                     time:   [45.234 µs 45.278 µs 45.312 µs]
+            //                     change: [+1.4430% +1.5796% +1.7344%] (p = 0.00 < 0.05)
+            //                     Performance has regressed.
+            &self.data[start..end]
+        }
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
@@ -111,7 +113,7 @@ impl BinaryColumn {
         }
     }
 
-    pub fn iter(&self) -> BinaryColumnIter {
+    pub fn iter(&self) -> BinaryColumnIter<'_> {
         BinaryColumnIter::new(self)
     }
 

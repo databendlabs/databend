@@ -17,10 +17,10 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
-use databend_common_base::runtime::metrics::register_counter;
-use databend_common_base::runtime::metrics::register_gauge;
 use databend_common_base::runtime::metrics::Counter;
 use databend_common_base::runtime::metrics::Gauge;
+use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_gauge;
 use databend_common_exception::Result as DatabendResult;
 use databend_common_meta_app::storage::StorageParams;
 use log::debug;

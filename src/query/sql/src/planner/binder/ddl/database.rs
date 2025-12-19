@@ -28,12 +28,14 @@ use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::UndropDatabaseStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::DatabaseMeta;
 use log::debug;
 
+use crate::BindContext;
+use crate::SelectBuilder;
 use crate::binder::Binder;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::CreateDatabasePlan;
@@ -45,8 +47,6 @@ use crate::plans::RenameDatabasePlan;
 use crate::plans::RewriteKind;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::UndropDatabasePlan;
-use crate::BindContext;
-use crate::SelectBuilder;
 
 impl Binder {
     #[async_backtrace::framed]

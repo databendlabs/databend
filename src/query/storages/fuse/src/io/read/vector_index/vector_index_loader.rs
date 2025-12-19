@@ -36,14 +36,14 @@ use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::parquet_to_arrow_field_levels;
 
 use crate::index::VectorIndexFile;
-use crate::io::read::block::parquet::RowGroupImplBuilder;
 use crate::io::MetaReaders;
+use crate::io::read::block::parquet::RowGroupImplBuilder;
 
 #[async_trait::async_trait]
 trait InRuntime

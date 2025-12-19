@@ -18,15 +18,15 @@ use std::time::Duration;
 use databend_common_base::base::tokio;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_meta_client::ClientHandle;
+use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_client::MetaChannelManager;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_client::Streamed;
-use databend_common_meta_client::MIN_METASRV_SEMVER;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
-use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::protobuf::StreamItem;
 use futures::StreamExt;
 use log::info;
 use tonic::codegen::BoxStream;
@@ -78,8 +78,7 @@ async fn test_grpc_client_handshake_timeout() {
             MetaGrpcClient::handshake(&mut client, &MIN_METASRV_SEMVER, &[], "root", "xxx").await;
 
         let got = res.unwrap_err();
-        let expect =
-            "HandshakeError with databend-meta: Connection Failure; cause: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }; source: transport error; source: Timeout expired";
+        let expect = "HandshakeError with databend-meta: Connection Failure; cause: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }; source: transport error; source: Timeout expired";
 
         assert_eq!(got.to_string(), expect);
     }

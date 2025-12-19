@@ -15,11 +15,6 @@
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
-use databend_common_expression::arrow::or_validities;
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::NullableType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -28,12 +23,17 @@ use databend_common_expression::Expr;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::arrow::or_validities;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use super::HashJoinState;
 use super::desc::MARKER_KIND_FALSE;
 use super::desc::MARKER_KIND_NULL;
 use super::desc::MARKER_KIND_TRUE;
-use super::HashJoinState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 
 /// Some common methods for hash join.

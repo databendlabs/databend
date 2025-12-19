@@ -21,10 +21,10 @@ use std::ptr;
 use databend_common_base::runtime::drop_guard;
 use databend_common_column::bitmap::MutableBitmap;
 
-use crate::types::*;
-use crate::with_number_mapped_type;
 use crate::Column;
 use crate::Scalar;
+use crate::types::*;
+use crate::with_number_mapped_type;
 
 #[derive(Clone)]
 pub struct TopKSorter {
@@ -202,11 +202,7 @@ impl TopKSorter {
     }
 
     fn ordering(&self) -> Ordering {
-        if self.asc {
-            Less
-        } else {
-            Less.reverse()
-        }
+        if self.asc { Less } else { Less.reverse() }
     }
 }
 

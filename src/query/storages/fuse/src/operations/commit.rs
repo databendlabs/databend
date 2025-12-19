@@ -42,8 +42,6 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_table_meta::meta::decode_column_hll;
-use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -53,6 +51,8 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::decode_column_hll;
+use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -61,21 +61,21 @@ use log::debug;
 use log::info;
 use opendal::Operator;
 
+use super::TableMutationAggregator;
 use super::decorate_snapshot;
 use super::new_serialize_segment_processor;
-use super::TableMutationAggregator;
+use crate::FuseTable;
 use crate::io::MetaReaders;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::SnapshotHintWriter;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::set_backoff;
-use crate::operations::SnapshotHintWriter;
-use crate::statistics::merge_statistics;
 use crate::statistics::TableStatsGenerator;
-use crate::FuseTable;
+use crate::statistics::merge_statistics;
 
 impl FuseTable {
     #[async_backtrace::framed]

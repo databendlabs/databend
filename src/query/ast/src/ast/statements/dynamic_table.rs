@@ -19,14 +19,14 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_dot_separated_list;
-use crate::ast::write_space_separated_string_map;
 use crate::ast::ClusterOption;
 use crate::ast::CreateOption;
 use crate::ast::CreateTableSource;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::WarehouseOptions;
+use crate::ast::write_dot_separated_list;
+use crate::ast::write_space_separated_string_map;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TargetLag {

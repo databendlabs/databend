@@ -17,12 +17,12 @@ use databend_common_ast::ast::ShowLimit;
 use databend_common_exception::Result;
 use log::debug;
 
-use crate::normalize_identifier;
-use crate::plans::Plan;
-use crate::plans::RewriteKind;
 use crate::BindContext;
 use crate::Binder;
 use crate::SelectBuilder;
+use crate::normalize_identifier;
+use crate::plans::Plan;
+use crate::plans::RewriteKind;
 
 impl Binder {
     #[async_backtrace::framed]

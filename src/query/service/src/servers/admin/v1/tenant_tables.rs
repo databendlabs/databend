@@ -21,9 +21,9 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use fastrace::func_name;
+use poem::IntoResponse;
 use poem::web::Json;
 use poem::web::Path;
-use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 

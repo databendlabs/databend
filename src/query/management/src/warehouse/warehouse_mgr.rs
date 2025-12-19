@@ -12,24 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::time::Duration;
 
+use databend_common_base::base::BuildInfoRef;
+use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::escape_for_key;
 use databend_common_base::base::tokio;
 use databend_common_base::base::unescape_for_key;
-use databend_common_base::base::BuildInfoRef;
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::vec_ext::VecExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::anyerror::AnyError;
-use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MatchSeq;
@@ -44,14 +42,16 @@ use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::anyerror::AnyError;
+use databend_common_meta_types::txn_op_response::Response;
 use log::error;
 use log::info;
 
+use crate::warehouse::WarehouseApi;
 use crate::warehouse::warehouse_api::SelectedNode;
 use crate::warehouse::warehouse_api::SystemManagedCluster;
 use crate::warehouse::warehouse_api::SystemManagedWarehouse;
 use crate::warehouse::warehouse_api::WarehouseInfo;
-use crate::warehouse::WarehouseApi;
 
 static DEFAULT_CLUSTER_ID: &str = "default";
 
@@ -268,7 +268,7 @@ impl WarehouseMgr {
                         WarehouseInfo::SystemManaged(_) => {
                             return Err(ErrorCode::WarehouseAlreadyExists(
                                 "Already exists same name system-managed warehouse.",
-                            ))
+                            ));
                         }
                         WarehouseInfo::SelfManaged(_) => {
                             // Safe to retry with the updated seq of warehouse
@@ -447,7 +447,10 @@ impl WarehouseMgr {
 
             let WarehouseInfo::SystemManaged(wh) = warehouse_snapshot.warehouse_info else {
                 // The warehouse may have been dropped and started self-managed warehouse with same name.
-                log::warn!("The warehouse({}) may have been dropped and started self-managed warehouse with same name.", warehouse);
+                log::warn!(
+                    "The warehouse({}) may have been dropped and started self-managed warehouse with same name.",
+                    warehouse
+                );
                 continue;
             };
 
@@ -1319,7 +1322,10 @@ impl WarehouseApi for WarehouseMgr {
                 )),
                 WarehouseInfo::SystemManaged(warehouse) => {
                     if warehouse.status.to_uppercase() != "RUNNING" {
-                        return Err(ErrorCode::InvalidWarehouse(format!("Cannot suspend warehouse {:?}, because warehouse state is not running.", warehouse.id)));
+                        return Err(ErrorCode::InvalidWarehouse(format!(
+                            "Cannot suspend warehouse {:?}, because warehouse state is not running.",
+                            warehouse.id
+                        )));
                     }
 
                     Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
@@ -1781,11 +1787,20 @@ impl WarehouseApi for WarehouseMgr {
             let mut warehouse_snapshot = self.warehouse_snapshot(&warehouse).await?;
 
             warehouse_snapshot.warehouse_info = match warehouse_snapshot.warehouse_info {
-                WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(format!("Cannot rename cluster for warehouse {:?}, because it's self-managed warehouse.", warehouse))),
+                WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(format!(
+                    "Cannot rename cluster for warehouse {:?}, because it's self-managed warehouse.",
+                    warehouse
+                ))),
                 WarehouseInfo::SystemManaged(mut info) => match info.clusters.contains_key(&cur) {
-                    false => Err(ErrorCode::WarehouseClusterNotExists(format!("Warehouse cluster {:?}.{:?} not exists", warehouse, cur))),
+                    false => Err(ErrorCode::WarehouseClusterNotExists(format!(
+                        "Warehouse cluster {:?}.{:?} not exists",
+                        warehouse, cur
+                    ))),
                     true => match info.clusters.contains_key(&to) {
-                        true => Err(ErrorCode::WarehouseClusterAlreadyExists(format!("Warehouse cluster {:?}.{:?} already exists", warehouse, to))),
+                        true => Err(ErrorCode::WarehouseClusterAlreadyExists(format!(
+                            "Warehouse cluster {:?}.{:?} already exists",
+                            warehouse, to
+                        ))),
                         false => {
                             let cluster_info = info.clusters.remove(&cur);
                             info.clusters.insert(to.clone(), cluster_info.unwrap());
@@ -1796,8 +1811,8 @@ impl WarehouseApi for WarehouseMgr {
                                 clusters: info.clusters,
                             }))
                         }
-                    }
-                }
+                    },
+                },
             }?;
 
             let warehouse_info_key = self.warehouse_info_key(&warehouse)?;
@@ -2039,9 +2054,12 @@ impl WarehouseApi for WarehouseMgr {
                             )));
                         }
 
-                        removed_nodes = info.remove_nodes(cluster_id, nodes, &warehouse_snapshot.snapshot_nodes)?;
+                        removed_nodes = info.remove_nodes(
+                            cluster_id,
+                            nodes,
+                            &warehouse_snapshot.snapshot_nodes,
+                        )?;
                     }
-
 
                     Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
                         role_id: info.role_id,

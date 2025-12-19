@@ -20,8 +20,8 @@ mod iterator;
 
 use std::ops::Deref;
 
-pub use immutable::buffer_to_array_data;
 pub use immutable::Buffer;
+pub use immutable::buffer_to_array_data;
 
 #[allow(dead_code)]
 pub(crate) enum BytesAllocator {
@@ -44,7 +44,7 @@ impl<T> Bytes<T> {
     /// the region `[ptr, ptr+length[` when dropped.
     #[inline]
     pub(crate) unsafe fn from_foreign(ptr: *const T, length: usize, owner: BytesAllocator) -> Self {
-        Self(BytesInner::from_foreign(ptr, length, owner))
+        unsafe { Self(BytesInner::from_foreign(ptr, length, owner)) }
     }
 
     /// Returns a `Some` mutable reference of [`Vec<T>`] iff this was initialized

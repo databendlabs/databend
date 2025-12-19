@@ -21,17 +21,6 @@ use std::future::ready;
 use std::io;
 use std::time::Duration;
 
-use databend_common_meta_types::node::Node;
-use databend_common_meta_types::protobuf as pb;
-use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
-use databend_common_meta_types::protobuf::BooleanExpression;
-use databend_common_meta_types::protobuf::FetchIncreaseU64;
-use databend_common_meta_types::raft_types::Entry;
-use databend_common_meta_types::raft_types::EntryPayload;
-use databend_common_meta_types::raft_types::StoredMembership;
-use databend_common_meta_types::sys_data::SysData;
-use databend_common_meta_types::txn_condition::Target;
-use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::Cmd;
@@ -54,11 +43,22 @@ use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
+use databend_common_meta_types::node::Node;
+use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::protobuf::BooleanExpression;
+use databend_common_meta_types::protobuf::FetchIncreaseU64;
+use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::EntryPayload;
+use databend_common_meta_types::raft_types::StoredMembership;
+use databend_common_meta_types::sys_data::SysData;
+use databend_common_meta_types::txn_condition::Target;
+use databend_common_meta_types::txn_op::Request;
 use display_more::DisplayUnixTimeStampExt;
 use fastrace::func_name;
 use futures::stream::TryStreamExt;
-use futures_util::future::BoxFuture;
 use futures_util::StreamExt;
+use futures_util::future::BoxFuture;
 use log::debug;
 use log::error;
 use log::info;
@@ -125,18 +125,18 @@ where SM: StateMachineApi<SysData> + 'static
             *sys_data.last_applied_mut() = Some(*log_id);
         });
 
-        let applied_state = match entry.payload {
+        let applied_state = match &entry.payload {
             EntryPayload::Blank => {
                 info!("apply: blank: {}", log_id);
 
                 AppliedState::None
             }
-            EntryPayload::Normal(ref data) => {
+            EntryPayload::Normal(data) => {
                 info!("apply: normal: {} {}", log_id, data);
 
                 self.apply_cmd(&data.cmd).await?
             }
-            EntryPayload::Membership(ref mem) => {
+            EntryPayload::Membership(mem) => {
                 info!("apply: membership: {} {:?}", log_id, mem);
 
                 let membership = StoredMembership::new(Some(*log_id), mem.clone());
@@ -217,11 +217,11 @@ where SM: StateMachineApi<SysData> + 'static
                 res
             }
 
-            Cmd::RemoveNode { ref node_id } => self.apply_remove_node(node_id),
+            Cmd::RemoveNode { node_id } => self.apply_remove_node(node_id),
 
             Cmd::SetFeature { feature, enable } => self.apply_set_feature(feature, *enable),
 
-            Cmd::UpsertKV(ref upsert_kv) => self.apply_upsert_kv(upsert_kv).await?,
+            Cmd::UpsertKV(upsert_kv) => self.apply_upsert_kv(upsert_kv).await?,
 
             Cmd::Transaction(txn) => self.apply_txn(txn).await?,
         };
@@ -735,7 +735,7 @@ where SM: StateMachineApi<SysData> + 'static
         let to_clean = {
             let _timer = self.cmd_ctx.start_io_timer("expire_scan", "expired_keys");
             let mut to_clean = vec![];
-            let mut strm = self.sm.list_expire_index(log_time_ms).await?;
+            let strm = self.sm.list_expire_index(log_time_ms).await?;
 
             // Save the log time for next cleaning.
             // Avoid listing tombstone records.

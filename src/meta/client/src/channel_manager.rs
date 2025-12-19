@@ -21,23 +21,23 @@ use databend_common_base::containers::ItemManager;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_grpc::GrpcConnectionError;
 use databend_common_grpc::RpcClientTlsConfig;
-use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use databend_common_meta_types::ConnectionError;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaClientError;
 use databend_common_meta_types::MetaNetworkError;
+use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use log::info;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use tonic::async_trait;
 use tonic::transport::Channel;
 
+use crate::FeatureSpec;
+use crate::MetaGrpcClient;
 use crate::endpoints::Endpoints;
 use crate::established_client::EstablishedClient;
 use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
-use crate::FeatureSpec;
-use crate::MetaGrpcClient;
 
 #[derive(Debug)]
 pub struct MetaChannelManager {

@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use super::DictionaryIdentity;
+use crate::KeyWithTenant;
 use crate::tenant::ToTenant;
 use crate::tenant_key::ident::TIdent;
-use crate::KeyWithTenant;
 
 /// A dictionary identity belonging to a tenant.
 pub type DictionaryNameIdent = TIdent<DictionaryNameRsc, DictionaryIdentity>;

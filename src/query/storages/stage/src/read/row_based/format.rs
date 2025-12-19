@@ -33,7 +33,7 @@ pub trait SeparatorState: Send + Sync {
 
 pub trait RowDecoder: Send + Sync {
     fn add(&self, block_builder: &mut BlockBuilderState, batch: RowBatchWithPosition)
-        -> Result<()>;
+    -> Result<()>;
 
     fn flush(&self, columns: Vec<Column>, _num_rows: usize) -> Vec<Column> {
         columns

@@ -15,8 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::protobuf as pb;
 use crate::SeqV;
+use crate::protobuf as pb;
 
 impl pb::FetchIncreaseU64Response {
     pub fn new(key: impl ToString, before: SeqV<u64>, after: SeqV<u64>) -> Self {

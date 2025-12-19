@@ -15,11 +15,11 @@
 use std::cmp::Ordering;
 
 use databend_common_exception::Result;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ColumnView;
 
 use super::StateSerde;
 

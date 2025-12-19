@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fs::create_dir_all;
 use std::fs::File;
+use std::fs::create_dir_all;
 use std::future::Future;
 use std::io::BufWriter;
 use std::io::Write;
@@ -26,21 +26,21 @@ use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::DropViewStmt;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_exception::Result;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::TableField;
-use databend_common_expression::TableSchemaRefExt;
 use databend_common_sql::resolve_type_name;
-use jiff::fmt::strtime;
 use jiff::Zoned;
-use rand::rngs::SmallRng;
+use jiff::fmt::strtime;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::rngs::SmallRng;
 
 use crate::http_client::HttpClient;
 use crate::query_fuzzer::QueryFuzzer;

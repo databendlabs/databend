@@ -277,8 +277,11 @@ impl SampleSet for UniformSampleSet {
 
             _ => Err(format!(
                 "Unsupported datum type for histogram calculation: {} (type: {}), {} (type: {}). Only numeric types are supported.",
-                self.min, self.min.type_name(), self.max, self.max.type_name()
-            ))
+                self.min,
+                self.min.type_name(),
+                self.max,
+                self.max.type_name()
+            )),
         }
     }
 }

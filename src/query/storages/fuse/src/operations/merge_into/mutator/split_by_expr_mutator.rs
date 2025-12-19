@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::eval_function;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::eval_function;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 

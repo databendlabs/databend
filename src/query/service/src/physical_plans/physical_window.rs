@@ -18,10 +18,6 @@ use std::fmt::Display;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check;
-use databend_common_expression::type_check::common_super_type;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -30,9 +26,17 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
+use databend_common_expression::type_check;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_sql::ColumnSet;
+use databend_common_sql::IndexType;
+use databend_common_sql::ScalarExpr;
+use databend_common_sql::TypeCheck;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
@@ -41,23 +45,19 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::WindowFuncFrame;
 use databend_common_sql::plans::WindowFuncFrameBound;
 use databend_common_sql::plans::WindowFuncType;
-use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
-use databend_common_sql::ScalarExpr;
-use databend_common_sql::TypeCheck;
 
+use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::WindowFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
 use crate::pipelines::processors::transforms::WindowSortDesc;
-use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Window {
@@ -372,7 +372,10 @@ impl PhysicalPlanBuilder {
                 for scalar in start.iter_mut().chain(end.iter_mut()) {
                     let scalar_ty = scalar.as_ref().infer_data_type();
                     if !scalar_ty.is_interval() {
-                        return Err(ErrorCode::IllegalDataType(format!("when the type of the order by in window func is Timestamp, Preceding and Following can only be INTERVAL types, but get {}", scalar_ty)));
+                        return Err(ErrorCode::IllegalDataType(format!(
+                            "when the type of the order by in window func is Timestamp, Preceding and Following can only be INTERVAL types, but get {}",
+                            scalar_ty
+                        )));
                     }
                 }
             } else if common_ty.remove_nullable().is_date() {
@@ -380,13 +383,20 @@ impl PhysicalPlanBuilder {
                 for scalar in start.iter_mut().chain(end.iter_mut()) {
                     let scalar_ty = scalar.as_ref().infer_data_type();
                     if !scalar_ty.is_interval() && !scalar_ty.is_unsigned_numeric() {
-                        return Err(ErrorCode::IllegalDataType(format!("when the type of the order by in window func is Date, Preceding and Following can only be INTERVAL or Unsigned Integer types, but get {}", scalar_ty)));
+                        return Err(ErrorCode::IllegalDataType(format!(
+                            "when the type of the order by in window func is Date, Preceding and Following can only be INTERVAL or Unsigned Integer types, but get {}",
+                            scalar_ty
+                        )));
                     }
                     if last_ty.as_ref().is_none_or(|ty| ty == &scalar_ty) {
                         last_ty = Some(scalar_ty);
                         continue;
                     }
-                    return Err(ErrorCode::IllegalDataType(format!("when the type of the order by in window func is Date, Preceding and Following can only be of the same type, but get {} and {}", last_ty.unwrap(), scalar_ty)));
+                    return Err(ErrorCode::IllegalDataType(format!(
+                        "when the type of the order by in window func is Date, Preceding and Following can only be of the same type, but get {} and {}",
+                        last_ty.unwrap(),
+                        scalar_ty
+                    )));
                 }
             } else {
                 for scalar in start.iter_mut().chain(end.iter_mut()) {
@@ -439,7 +449,8 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
+        let settings = self.ctx.get_settings();
+        let default_nulls_first = settings.get_nulls_first();
 
         let order_by_items = w
             .order_by

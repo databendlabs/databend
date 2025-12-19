@@ -20,11 +20,11 @@ use databend_common_storage::MetaHLL12;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::v1;
-use crate::meta::v2;
 use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
+use crate::meta::v1;
+use crate::meta::v2;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshotStatistics {

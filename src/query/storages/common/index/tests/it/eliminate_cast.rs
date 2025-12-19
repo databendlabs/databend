@@ -14,15 +14,15 @@
 
 use std::io::Write;
 
+use databend_common_expression::Domain;
+use databend_common_expression::Expr;
+use databend_common_expression::Scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
-use databend_common_expression::Domain;
-use databend_common_expression::Expr;
-use databend_common_expression::Scalar;
-use databend_common_functions::test_utils::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::test_utils::parse_raw_expr;
 use databend_storages_common_index::eliminate_cast;
 use goldenfile::Mint;
 

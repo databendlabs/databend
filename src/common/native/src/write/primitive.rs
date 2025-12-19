@@ -16,9 +16,9 @@ use std::io::Write;
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
-use databend_common_column::types::i256;
 use databend_common_column::types::NativeType;
 use databend_common_column::types::PrimitiveType;
+use databend_common_column::types::i256;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::F64;
 

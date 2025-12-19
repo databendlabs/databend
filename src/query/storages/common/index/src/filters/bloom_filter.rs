@@ -23,9 +23,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::types::DataType;
 use databend_common_functions::scalars::CityHasher64;
 
+use crate::Index;
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
-use crate::Index;
 
 type UnderType = u64;
 

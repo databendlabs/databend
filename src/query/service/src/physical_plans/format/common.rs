@@ -20,14 +20,14 @@ use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_expression::DataSchemaRef;
-use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
+use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 
-use crate::physical_plans::explain::PlanStatsInfo;
-use crate::physical_plans::format::physical_format::PhysicalFormat;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalRuntimeFilter;
+use crate::physical_plans::explain::PlanStatsInfo;
+use crate::physical_plans::format::physical_format::PhysicalFormat;
 
 pub struct FormatContext<'a> {
     pub metadata: &'a Metadata,

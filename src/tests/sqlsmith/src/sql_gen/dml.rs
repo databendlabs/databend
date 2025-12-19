@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use chrono_tz::Tz;
+use databend_common_ast::Span;
 use databend_common_ast::ast::AddColumnOption;
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
@@ -37,13 +38,12 @@ use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_ast::ast::UpdateStmt;
-use databend_common_ast::Span;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableField;
-use databend_common_formats::field_encoder::FieldEncoderValues;
+use databend_common_expression::types::DataType;
 use databend_common_formats::OutputCommonSettings;
+use databend_common_formats::field_encoder::FieldEncoderValues;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::INF_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;

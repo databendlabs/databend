@@ -15,16 +15,16 @@
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::NumberType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::NumberType;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
@@ -258,9 +258,9 @@ impl Trim for Scalar {
 mod tests {
     use databend_common_expression::Scalar;
 
-    use crate::statistics::Trim;
     use crate::statistics::END_OF_UNICODE_RANGE;
     use crate::statistics::STATS_STRING_PREFIX_LEN;
+    use crate::statistics::Trim;
 
     #[test]
     fn test_trim_max() {

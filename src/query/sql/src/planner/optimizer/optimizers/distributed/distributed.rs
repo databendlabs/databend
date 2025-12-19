@@ -18,12 +18,12 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use super::sort_and_limit::SortAndLimitPushDownOptimizer;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PropertyEnforcer;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::OptimizerContext;
 use crate::plans::Exchange;
 
 /// DistributedOptimizer optimizes a query plan for distributed execution.

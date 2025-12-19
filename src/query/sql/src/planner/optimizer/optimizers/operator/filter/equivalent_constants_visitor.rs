@@ -16,13 +16,13 @@ use std::collections::HashMap;
 
 use databend_common_exception::Result;
 
+use crate::ScalarExpr;
 use crate::optimizer::optimizers::operator::filter::remove_trivial_type_cast;
-use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::VisitorMut;
-use crate::ScalarExpr;
+use crate::plans::walk_expr_mut;
 
 // EquivalentConstantsVisitor is used to collect the equivalent relationship between Column and Scalar from the bottom to the bottom,
 // replacing the Column in the upper expression with Scalar to make the Predicate easier to push down

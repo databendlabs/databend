@@ -17,9 +17,6 @@ use std::ops::Range;
 
 use databend_common_exception::Result;
 
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::ArgType;
 use super::BuilderMut;
@@ -28,10 +25,13 @@ use super::GenericMap;
 use super::ReturnType;
 use super::ScalarRef;
 use super::ValueType;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
+use crate::ColumnBuilder;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
 
 pub type BinaryColumn = databend_common_column::binary::BinaryColumn;
 pub type BinaryColumnBuilder = databend_common_column::binary::BinaryColumnBuilder;
@@ -85,7 +85,7 @@ impl AccessType for BinaryType {
     }
 
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        col.index_unchecked(index)
+        unsafe { col.index_unchecked(index) }
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {

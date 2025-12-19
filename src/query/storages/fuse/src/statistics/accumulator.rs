@@ -27,9 +27,6 @@ use databend_common_expression::VirtualDataField;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_storages_common_table_meta::meta::column_oriented_segment::*;
-use databend_storages_common_table_meta::meta::encode_column_hll;
-use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockHLL;
 use databend_storages_common_table_meta::meta::BlockHLLState;
@@ -39,6 +36,9 @@ use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
+use databend_storages_common_table_meta::meta::column_oriented_segment::*;
+use databend_storages_common_table_meta::meta::encode_column_hll;
+use databend_storages_common_table_meta::meta::merge_column_hll_mut;
 
 #[derive(Default)]
 pub struct RowOrientedSegmentBuilder {

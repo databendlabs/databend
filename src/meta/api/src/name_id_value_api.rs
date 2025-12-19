@@ -14,12 +14,12 @@
 
 use std::future::Future;
 
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -401,19 +401,19 @@ mod tests {
     use std::collections::BTreeMap;
 
     use async_trait::async_trait;
-    use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
     use databend_common_meta_app::schema::DatabaseId;
     use databend_common_meta_app::schema::DatabaseMeta;
+    use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_kvapi::kvapi::KVStream;
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-    use databend_common_meta_types::protobuf::StreamItem;
     use databend_common_meta_types::MetaError;
     use databend_common_meta_types::SeqV;
     use databend_common_meta_types::TxnReply;
     use databend_common_meta_types::TxnRequest;
     use databend_common_meta_types::UpsertKV;
+    use databend_common_meta_types::protobuf::StreamItem;
     use databend_common_proto_conv::FromToProto;
     use futures::StreamExt;
     use prost::Message;

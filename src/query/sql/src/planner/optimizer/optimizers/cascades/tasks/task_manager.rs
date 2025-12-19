@@ -18,8 +18,8 @@ use std::time::Duration;
 use databend_common_exception::Result;
 use log::info;
 
-use crate::optimizer::optimizers::cascades::tasks::Task;
 use crate::optimizer::optimizers::CascadesOptimizer;
+use crate::optimizer::optimizers::cascades::tasks::Task;
 
 /// It will cost about 4000ns to execute a task in average,
 /// so the default task limit is 1,250,000 which means the

@@ -14,9 +14,9 @@
 
 use std::time::Duration;
 
-use map_api::match_seq::errors::ConflictSeq;
 use map_api::match_seq::MatchSeq;
 use map_api::match_seq::MatchSeqExt;
+use map_api::match_seq::errors::ConflictSeq;
 use state_machine_api::KVMeta;
 use state_machine_api::SeqV;
 
@@ -74,7 +74,7 @@ impl pb::KvMeta {
         let a = a.as_micros() as u64;
         let b = b.as_micros() as u64;
 
-        let diff = if a > b { a - b } else { b - a };
+        let diff = a.abs_diff(b);
         diff <= tolerance.as_micros() as u64
     }
 }

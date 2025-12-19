@@ -14,6 +14,6 @@
 
 pub mod virtual_column;
 
-pub use virtual_column::get_virtual_column_handler;
 pub use virtual_column::VirtualColumnHandler;
 pub use virtual_column::VirtualColumnHandlerWrapper;
+pub use virtual_column::get_virtual_column_handler;

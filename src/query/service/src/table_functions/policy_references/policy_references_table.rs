@@ -21,13 +21,12 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_args::string_value;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::string_value;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
@@ -36,23 +35,24 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::StringType;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
 use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
-use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_pipeline::core::processor::ProcessorPtr;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::core::processor::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_users::UserApiProvider;
@@ -289,7 +289,7 @@ async fn collect_policy_reference_rows(
                         return Err(ErrorCode::BadArguments(format!(
                             "Invalid REF_ENTITY_DOMAIN '{}'. Expected TABLE or VIEW",
                             raw
-                        )))
+                        )));
                     }
                 }
             }

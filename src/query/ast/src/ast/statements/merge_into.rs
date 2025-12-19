@@ -18,8 +18,6 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_list;
-use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
@@ -27,6 +25,8 @@ use crate::ast::Query;
 use crate::ast::TableAlias;
 use crate::ast::TableReference;
 use crate::ast::WithOptions;
+use crate::ast::write_comma_separated_list;
+use crate::ast::write_dot_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct MutationUpdateExpr {
@@ -140,12 +140,12 @@ impl Display for MergeIntoStmt {
                     }
                     write!(f, "THEN INSERT")?;
 
-                    if let Some(columns) = &unmatch_clause.insert_operation.columns {
-                        if !columns.is_empty() {
-                            write!(f, " (")?;
-                            write_comma_separated_list(f, columns)?;
-                            write!(f, ")")?;
-                        }
+                    if let Some(columns) = &unmatch_clause.insert_operation.columns
+                        && !columns.is_empty()
+                    {
+                        write!(f, " (")?;
+                        write_comma_separated_list(f, columns)?;
+                        write!(f, ")")?;
                     }
 
                     if unmatch_clause.insert_operation.is_star {

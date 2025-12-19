@@ -171,7 +171,13 @@ impl ReceiverV003 {
 
             info!(
                 "snapshot from {} is completely received, format: {}, vote: {:?}, meta: {:?}, size: {}; path: {}/{}",
-                self.remote_addr, format, vote, snapshot_meta, self.size_received, self.storage_path, self.temp_rel_path
+                self.remote_addr,
+                format,
+                vote,
+                snapshot_meta,
+                self.size_received,
+                self.storage_path,
+                self.temp_rel_path
             );
 
             if format != "rotbl::v001" {

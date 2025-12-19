@@ -19,14 +19,14 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::WatchNotify;
+use databend_common_base::base::tokio::sync::Mutex;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::WorkloadGroup;
 use databend_common_base::runtime::workload_group::WorkloadGroupResource;
-use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
-use databend_common_base::runtime::MemStat;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -436,7 +436,7 @@ async fn test_heavy_actions() -> Result<()> {
         Query {
             sql: "CREATE TABLE test_heavy_create AS SELECT 1",
             add_to_queue: true,
-        }
+        },
     ];
 
     let fixture = TestFixture::setup().await?;

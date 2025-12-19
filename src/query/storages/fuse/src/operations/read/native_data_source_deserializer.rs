@@ -32,10 +32,6 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::filter_helper::FilterHelpers;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
@@ -51,6 +47,10 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TopKSorter;
 use databend_common_expression::Value;
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
 use databend_common_native::read::ColumnIter;
@@ -64,12 +64,12 @@ use roaring::RoaringTreemap;
 use super::native_data_source::NativeDataSource;
 use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
+use crate::DEFAULT_ROW_PER_PAGE;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprBloomFilter;
-use crate::DEFAULT_ROW_PER_PAGE;
 
 /// A helper struct to store the intermediate state while reading a native partition.
 #[derive(Default)]

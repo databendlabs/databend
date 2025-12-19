@@ -13,6 +13,7 @@ extend-ignore-re = [
 Nd = "Nd"
 typ = "typ"
 aranges = "aranges"
+pendings = "pendings"
 
 [default.extend-identifiers]
 

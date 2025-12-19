@@ -25,16 +25,19 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_storages_common_table_meta::table::ChangeType;
 
 use super::ScalarItem;
+use crate::ColumnSet;
+use crate::IndexType;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
+use crate::optimizer::ir::MAX_SELECTIVITY;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -42,13 +45,10 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SelectivityEstimator;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics as OpStatistics;
-use crate::optimizer::ir::MAX_SELECTIVITY;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SortItem;
-use crate::ColumnSet;
-use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Prewhere {
@@ -329,7 +329,7 @@ impl Operator for Scan {
             .and_then(|stat| stat.num_rows);
 
         let cardinality = match (precise_cardinality, &self.prewhere) {
-            (Some(precise_cardinality), Some(ref prewhere)) => {
+            (Some(precise_cardinality), Some(prewhere)) => {
                 let mut statistics = OpStatistics {
                     precise_cardinality: Some(precise_cardinality),
                     column_stats,

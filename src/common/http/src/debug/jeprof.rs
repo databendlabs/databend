@@ -15,10 +15,10 @@
 use databend_common_base::mem_allocator::dump_profile;
 use databend_common_exception::ErrorCode;
 use http::StatusCode;
+use poem::Error;
 use poem::error::InternalServerError;
 use poem::web::IntoResponse;
 use poem::web::Query;
-use poem::Error;
 use tempfile::Builder;
 
 #[poem::handler]

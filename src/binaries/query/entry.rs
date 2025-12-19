@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::collapsible_if)]
+
 use std::env;
 use std::time::Duration;
 
 use databend_common_base::mem_allocator::TrackingGlobalAllocator;
-use databend_common_base::runtime::set_alloc_error_hook;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_base::runtime::set_alloc_error_hook;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,11 +33,9 @@ use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::DATABEND_SEMVER;
 use databend_common_version::VERGEN_GIT_SHA;
+use databend_query::GlobalServices;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::history_tables::GlobalHistoryLog;
-use databend_query::servers::admin::AdminService;
-use databend_query::servers::flight::FlightService;
-use databend_query::servers::metrics::MetricService;
 use databend_query::servers::FlightSQLServer;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
@@ -43,8 +43,10 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::MySQLTlsConfig;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
+use databend_query::servers::admin::AdminService;
+use databend_query::servers::flight::FlightService;
+use databend_query::servers::metrics::MetricService;
 use databend_query::task::TaskService;
-use databend_query::GlobalServices;
 use log::info;
 
 use super::cmd::Cmd;

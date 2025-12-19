@@ -20,12 +20,6 @@ use geozero::wkb::FromWkb;
 use geozero::wkb::WkbDialect;
 use geozero::wkt::Ewkt;
 
-use super::binary::BinaryColumn;
-use super::binary::BinaryColumnBuilder;
-use super::binary::BinaryColumnIter;
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::ArgType;
 use super::BuilderMut;
@@ -35,9 +29,15 @@ use super::ReturnType;
 use super::Scalar;
 use super::ScalarRef;
 use super::ValueType;
+use super::binary::BinaryColumn;
+use super::binary::BinaryColumnBuilder;
+use super::binary::BinaryColumnIter;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
+use crate::ColumnBuilder;
 use crate::property::Domain;
 use crate::values::Column;
-use crate::ColumnBuilder;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeometryType;
@@ -88,7 +88,7 @@ impl AccessType for GeometryType {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        col.index_unchecked(index)
+        unsafe { col.index_unchecked(index) }
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {

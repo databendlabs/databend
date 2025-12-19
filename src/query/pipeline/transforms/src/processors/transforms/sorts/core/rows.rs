@@ -16,10 +16,10 @@ use std::fmt::Debug;
 use std::ops::Range;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
 
 /// Rows can be compared.
 pub trait Rows

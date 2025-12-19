@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnRef;
@@ -24,26 +24,28 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::Scalar;
 use indexmap::Equivalent;
 use itertools::Itertools;
 
-use super::prune_by_children;
 use super::ExprContext;
 use super::Finder;
-use crate::binder::project_set::SetReturningAnalyzer;
-use crate::binder::scalar::ScalarBinder;
-use crate::binder::select::SelectList;
+use super::prune_by_children;
+use crate::BindContext;
+use crate::IndexType;
+use crate::MetadataRef;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
+use crate::binder::project_set::SetReturningAnalyzer;
+use crate::binder::scalar::ScalarBinder;
+use crate::binder::select::SelectList;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
-use crate::plans::walk_expr_mut;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
@@ -57,9 +59,7 @@ use crate::plans::ScalarItem;
 use crate::plans::UDAFCall;
 use crate::plans::Visitor;
 use crate::plans::VisitorMut;
-use crate::BindContext;
-use crate::IndexType;
-use crate::MetadataRef;
+use crate::plans::walk_expr_mut;
 
 /// Information for `GROUPING SETS`.
 ///

@@ -40,9 +40,9 @@ mod dummy {
     use databend_common_expression::TableSchema;
     use databend_common_expression::TableSchemaRef;
     use databend_common_native::read::NativeColumnsReader;
-    use databend_common_storages_fuse::io::serialize_block;
-    use databend_common_storages_fuse::io::WriteSettings;
     use databend_common_storages_fuse::FuseStorageFormat;
+    use databend_common_storages_fuse::io::WriteSettings;
+    use databend_common_storages_fuse::io::serialize_block;
     use databend_storages_common_table_meta::table::TableCompression;
     use divan::counter::BytesCount;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -119,9 +119,9 @@ mod dummy {
                     let bs =
                         a.slice(meta.offset as usize..(meta.offset + meta.total_len()) as usize);
                     let col = reader
-                        .batch_read_column(vec![bs.as_ref()], f.data_type.clone(), vec![meta
-                            .pages
-                            .clone()])
+                        .batch_read_column(vec![bs.as_ref()], f.data_type.clone(), vec![
+                            meta.pages.clone(),
+                        ])
                         .unwrap();
 
                     columns.push(col);

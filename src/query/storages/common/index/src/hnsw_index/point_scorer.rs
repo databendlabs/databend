@@ -13,18 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::types::VectorScalarRef;
-use databend_common_expression::types::F32;
 use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::VectorScalarRef;
 
+use crate::DistanceType;
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoreType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
-use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
 use crate::hnsw_index::quantization::EncodedQueryU8;
 use crate::hnsw_index::quantization::EncodedVectorsU8;
-use crate::DistanceType;
+use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
 
 pub enum RawScorer<'a> {
     Original(OriginalRawScorer<'a>),

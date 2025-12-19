@@ -24,17 +24,17 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserIdentity;
-use futures::stream;
 use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use futures::stream;
 use opendal::EntryMode;
 use opendal::Metadata;
 use opendal::Operator;
 use regex::Regex;
 
-use crate::init_operator;
 use crate::DataOperator;
+use crate::init_operator;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum StageFileStatus {
@@ -59,7 +59,10 @@ impl StageFileInfo {
             path,
             size: meta.content_length(),
             md5: meta.content_md5().map(str::to_string),
-            last_modified: meta.last_modified(),
+            last_modified: meta.last_modified().map(|m| {
+                let ns = m.into_inner().as_nanosecond();
+                DateTime::from_timestamp_nanos(ns as i64)
+            }),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
             creator: None,

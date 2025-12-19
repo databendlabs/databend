@@ -18,8 +18,6 @@ use std::time::Instant;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::Result;
-use databend_common_expression::type_check;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -27,6 +25,8 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::type_check;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::packet::JoinRuntimeFilterPacket;
@@ -109,7 +109,12 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
 
         log::info!(
             "RUNTIME-FILTER: Built filter {} - total: {:?}, min_max: {:?}, inlist: {:?}, bloom: {:?}, rows: {}",
-            desc.id, total_time, min_max_time, inlist_time, bloom_time, self.build_key_column.len()
+            desc.id,
+            total_time,
+            min_max_time,
+            inlist_time,
+            bloom_time,
+            self.build_key_column.len()
         );
 
         Ok(RuntimeFilterPacket {

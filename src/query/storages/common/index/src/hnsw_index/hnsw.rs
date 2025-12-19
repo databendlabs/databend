@@ -17,23 +17,23 @@ use std::sync::atomic::AtomicBool;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::Buffer;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::VectorColumn;
-use databend_common_expression::types::VectorColumnBuilder;
-use databend_common_expression::types::VectorScalar;
-use databend_common_expression::types::F32;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::types::Buffer;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::VectorColumn;
+use databend_common_expression::types::VectorColumnBuilder;
+use databend_common_expression::types::VectorScalar;
 use log::error;
 use rand::thread_rng;
+use rayon::ThreadPoolBuilder;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
-use rayon::ThreadPoolBuilder;
 
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
@@ -45,10 +45,10 @@ use crate::hnsw_index::point_scorer::FilteredScorer;
 use crate::hnsw_index::point_scorer::OriginalRawScorer;
 use crate::hnsw_index::point_scorer::QuantizedRawScorer;
 use crate::hnsw_index::point_scorer::RawScorer;
-use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
 use crate::hnsw_index::quantization::DistanceType;
 use crate::hnsw_index::quantization::EncodedVectorsU8;
 use crate::hnsw_index::quantization::VectorParameters;
+use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
 
 pub const SINGLE_THREADED_HNSW_BUILD_THRESHOLD: usize = 256;
 

@@ -17,11 +17,6 @@
 #![allow(unused_parens)]
 #![allow(unused_variables)]
 #![allow(clippy::redundant_closure)]
-use crate::property::Domain;
-use crate::register_vectorize::*;
-use crate::types::nullable::NullableDomain;
-use crate::types::*;
-use crate::values::Value;
 use crate::EvalContext;
 use crate::Function;
 use crate::FunctionContext;
@@ -29,6 +24,11 @@ use crate::FunctionDomain;
 use crate::FunctionEval;
 use crate::FunctionRegistry;
 use crate::FunctionSignature;
+use crate::property::Domain;
+use crate::register_vectorize::*;
+use crate::types::nullable::NullableDomain;
+use crate::types::*;
+use crate::values::Value;
 
 impl FunctionRegistry {
     pub fn register_1_arg<I1: ArgType, O: ArgType, F, G>(

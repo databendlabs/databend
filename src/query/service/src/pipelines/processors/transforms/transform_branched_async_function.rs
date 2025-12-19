@@ -24,10 +24,10 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_sql::binder::AsyncFunctionDesc;
 
+use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::processors::transforms::transform_async_function::AutoIncrementNextValFetcher;
 use crate::pipelines::processors::transforms::transform_async_function::SequenceCounters;
 use crate::pipelines::processors::transforms::transform_async_function::SequenceNextValFetcher;
-use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::sessions::QueryContext;
 use crate::sql::plans::AsyncFunctionArgument;
 

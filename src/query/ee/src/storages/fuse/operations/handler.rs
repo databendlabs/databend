@@ -19,10 +19,10 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
-use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_enterprise_vacuum_handler::VacuumHandler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 
 use crate::storages::fuse::do_vacuum;
 use crate::storages::fuse::operations::vacuum_table_v2::do_vacuum2;

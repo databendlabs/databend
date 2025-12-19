@@ -21,11 +21,11 @@ use byteorder::ReadBytesExt;
 use databend_common_column::buffer::Buffer;
 use roaring::RoaringBitmap;
 
-use super::compress_integer;
-use super::decompress_integer;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
+use super::compress_integer;
+use super::decompress_integer;
 use crate::compression::Compression;
 use crate::error::Result;
 use crate::write::WriteOptions;

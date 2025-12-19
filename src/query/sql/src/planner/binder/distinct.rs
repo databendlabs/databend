@@ -18,6 +18,9 @@ use std::sync::Arc;
 use databend_common_ast::Span;
 use databend_common_exception::Result;
 
+use crate::BindContext;
+use crate::IndexType;
+use crate::WindowChecker;
 use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::optimizer::ir::SExpr;
@@ -29,9 +32,6 @@ use crate::plans::EvalScalar;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut as _;
-use crate::BindContext;
-use crate::IndexType;
-use crate::WindowChecker;
 
 impl Binder {
     pub fn bind_distinct(

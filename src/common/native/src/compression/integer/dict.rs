@@ -19,11 +19,11 @@ use byteorder::ReadBytesExt;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::NativeType;
 
-use super::compress_integer;
-use super::decompress_integer;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
+use super::compress_integer;
+use super::decompress_integer;
 use crate::error::Error;
 use crate::error::Result;
 
@@ -168,12 +168,11 @@ where T: AsBytes + PartialEq + Clone
     }
 }
 
-use hashbrown_v0_14::hash_map::RawEntryMut;
 use hashbrown_v0_14::HashMap;
+use hashbrown_v0_14::hash_map::RawEntryMut;
 
-use crate::compression::get_bits_needed;
 use crate::compression::Compression;
-use crate::general_err;
+use crate::compression::get_bits_needed;
 use crate::util::AsBytes;
 use crate::write::WriteOptions;
 

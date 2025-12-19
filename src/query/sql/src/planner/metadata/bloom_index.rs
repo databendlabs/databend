@@ -15,17 +15,17 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_comma_separated_idents;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::is_stream_column_id;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::is_stream_column_id;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 

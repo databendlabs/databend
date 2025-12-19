@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
-use databend_common_ast::ast::Expr;
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -34,7 +34,7 @@ pub trait Client {
     async fn query(&self, query: &str) -> Result<Self::Set>;
     fn var_to_ast(&self, scalar: &Self::Var) -> Result<Expr>;
     fn read_from_set(&self, block: &Self::Set, row: usize, col: &ColumnAccess)
-        -> Result<Self::Var>;
+    -> Result<Self::Var>;
     fn num_rows(&self, block: &Self::Set) -> usize;
     fn is_true(&self, scalar: &Self::Var) -> Result<bool>;
     fn format_error(&self, value: &Self::Var) -> Result<String>;

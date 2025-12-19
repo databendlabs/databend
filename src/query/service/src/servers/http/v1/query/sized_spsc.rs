@@ -20,9 +20,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
 
+use databend_common_base::base::WatchNotify;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Notify;
-use databend_common_base::base::WatchNotify;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -552,10 +552,10 @@ mod tests {
     use std::time::Duration;
 
     use databend_common_exception::ErrorCode;
+    use databend_common_expression::FromData;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::Number;
     use databend_common_expression::types::NumberType;
-    use databend_common_expression::FromData;
     use databend_common_io::prelude::FormatSettings;
     use databend_common_pipeline_transforms::traits::DataBlockSpill;
     use databend_common_pipeline_transforms::traits::Location;

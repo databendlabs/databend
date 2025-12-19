@@ -19,18 +19,18 @@ use databend_common_column::types::Index;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::types::decimal::Decimal;
-use crate::types::*;
-use crate::visitor::ValueVisitor;
-use crate::with_decimal_mapped_type;
-use crate::with_number_mapped_type;
-use crate::with_number_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ProjectedBlock;
 use crate::Scalar;
 use crate::ScalarRef;
 use crate::Value;
+use crate::types::decimal::Decimal;
+use crate::types::*;
+use crate::visitor::ValueVisitor;
+use crate::with_decimal_mapped_type;
+use crate::with_number_mapped_type;
+use crate::with_number_type;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
@@ -630,7 +630,11 @@ mod tests {
     use databend_common_column::types::timestamp_tz;
 
     use super::*;
-    use crate::types::geography::Geography;
+    use crate::BlockEntry;
+    use crate::DataBlock;
+    use crate::FromData;
+    use crate::ProjectedBlock;
+    use crate::Value;
     use crate::types::ArgType;
     use crate::types::DecimalSize;
     use crate::types::NullableColumn;
@@ -638,11 +642,7 @@ mod tests {
     use crate::types::OpaqueScalar;
     use crate::types::VectorDataType;
     use crate::types::VectorScalar;
-    use crate::BlockEntry;
-    use crate::DataBlock;
-    use crate::FromData;
-    use crate::ProjectedBlock;
-    use crate::Value;
+    use crate::types::geography::Geography;
 
     fn merge_hash_slice(ls: &[u64]) -> u64 {
         ls.iter().cloned().reduce(merge_hash).unwrap()

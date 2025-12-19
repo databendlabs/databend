@@ -15,18 +15,18 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::ops::DerefMut;
-use std::sync::atomic::AtomicU32;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
-use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
+use databend_common_base::base::tokio;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::LimitMemGuard;
+use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::ProcessInfoState;
 use databend_common_config::GlobalConfig;
@@ -37,16 +37,16 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_metrics::session::*;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
-use futures::future::Either;
 use futures::StreamExt;
+use futures::future::Either;
 use log::info;
 use parking_lot::RwLock;
 
-use crate::sessions::session::Session;
-use crate::sessions::session_mgr_metrics::SessionManagerMetricsCollector;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
+use crate::sessions::session::Session;
+use crate::sessions::session_mgr_metrics::SessionManagerMetricsCollector;
 
 pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,

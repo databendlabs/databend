@@ -15,14 +15,14 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::binder::ColumnBindingBuilder;
-use crate::plans::walk_expr_mut;
-use crate::plans::BoundColumnRef;
-use crate::plans::SubqueryExpr;
-use crate::plans::VisitorMut;
 use crate::BindContext;
 use crate::ScalarExpr;
 use crate::Visibility;
+use crate::binder::ColumnBindingBuilder;
+use crate::plans::BoundColumnRef;
+use crate::plans::SubqueryExpr;
+use crate::plans::VisitorMut;
+use crate::plans::walk_expr_mut;
 
 pub struct WindowChecker<'a> {
     bind_context: &'a BindContext,

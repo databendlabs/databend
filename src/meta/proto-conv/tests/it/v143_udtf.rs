@@ -16,8 +16,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::UDFDefinition;
-use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::principal::UDTF;
+use databend_common_meta_app::principal::UserDefinedFunction;
 use fastrace::func_name;
 
 use crate::common;

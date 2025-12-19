@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
-use databend_common_base::base::escape_for_key;
 use databend_common_base::base::GlobalUniqName;
+use databend_common_base::base::escape_for_key;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::WorkloadGroup;
 use databend_common_exception::ErrorCode;

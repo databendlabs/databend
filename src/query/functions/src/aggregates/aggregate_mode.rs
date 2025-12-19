@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::hash::Hash;
 use std::ops::AddAssign;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
-use databend_common_expression::types::*;
-use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggregateFunctionRef;
@@ -30,10 +27,10 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
+use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_number_mapped_type;
 
-use super::assert_params;
-use super::assert_unary_arguments;
-use super::batch_merge1;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
@@ -41,6 +38,9 @@ use super::SerializeInfo;
 use super::StateSerde;
 use super::StateSerdeItem;
 use super::UnaryState;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::batch_merge1;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct ModeState<T>

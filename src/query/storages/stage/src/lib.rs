@@ -17,7 +17,11 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(box_patterns)]
 #![feature(iter_intersperse)]
-#![allow(clippy::uninlined_format_args)]
+#![allow(
+    clippy::collapsible_if,
+    clippy::needless_return,
+    clippy::uninlined_format_args
+)]
 
 mod append;
 mod compression;
@@ -30,9 +34,9 @@ mod transform_generating;
 pub use append::StageSinkTable;
 pub use compression::get_compression_with_path;
 pub use infer_schema::InferSchemaPartInfo;
+pub use read::LoadContext;
 pub use read::row_based::BytesBatch;
 pub use read::row_based::BytesReader;
 pub use read::row_based::Decompressor;
-pub use read::LoadContext;
 pub use stage_table::StageTable;
 pub use streaming_load::build_streaming_load_pipeline;

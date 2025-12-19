@@ -23,8 +23,8 @@ use databend_common_exception::Result;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::IndexType;
+use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -34,12 +34,12 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_sort::SortStep;
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::SortStrategy;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
 use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
-use crate::pipelines::PipelineBuilder;
 use crate::spillers::SpillerDiskConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

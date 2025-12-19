@@ -14,30 +14,30 @@
 
 use std::sync::Arc;
 
-use apache_avro::schema::UnionSchema;
-use apache_avro::types::Value;
 use apache_avro::Reader;
 use apache_avro::Schema;
-use databend_common_base::base::uuid;
+use apache_avro::schema::UnionSchema;
+use apache_avro::types::Value;
 use databend_common_base::base::OrderedFloat;
+use databend_common_base::base::uuid;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::array::ArrayColumnBuilder;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Decimal;
 use databend_common_expression::types::DecimalColumnBuilder;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::AvroFileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_storage::FileParseError;
@@ -634,22 +634,22 @@ mod test {
     use std::str::FromStr;
     use std::sync::Arc;
 
-    use apache_avro::types::Value;
     use apache_avro::BigDecimal;
     use apache_avro::Decimal;
     use apache_avro::Schema;
     use apache_avro::Writer;
-    use databend_common_expression::types::DecimalDataType;
-    use databend_common_expression::types::DecimalScalar;
-    use databend_common_expression::types::DecimalSize;
-    use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::types::NumberScalar;
+    use apache_avro::types::Value;
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::ScalarRef;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
     use databend_common_expression::TableSchemaRef;
+    use databend_common_expression::types::DecimalDataType;
+    use databend_common_expression::types::DecimalScalar;
+    use databend_common_expression::types::DecimalSize;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
     use num_bigint::BigInt;
     use serde_json::json;
 
@@ -819,37 +819,45 @@ mod test {
     fn test_union() -> Result<(), String> {
         let int64 = TableDataType::Number(NumberDataType::Int64);
         let int64_nullable = TableDataType::Nullable(Box::new(int64.clone()));
-        assert!(test_single_field(
-            int64.clone(),
-            json!(["null", "int"]),
-            Value::Union(0, Box::new(Value::Null)),
-            ScalarRef::Null
-        )
-        .is_err());
+        assert!(
+            test_single_field(
+                int64.clone(),
+                json!(["null", "int"]),
+                Value::Union(0, Box::new(Value::Null)),
+                ScalarRef::Null
+            )
+            .is_err()
+        );
 
-        assert!(test_single_field(
-            int64.clone(),
-            json!(["long", "int"]),
-            Value::Union(1, Box::new(Value::Int(100))),
-            ScalarRef::Number(NumberScalar::Int64(100))
-        )
-        .is_err());
+        assert!(
+            test_single_field(
+                int64.clone(),
+                json!(["long", "int"]),
+                Value::Union(1, Box::new(Value::Int(100))),
+                ScalarRef::Number(NumberScalar::Int64(100))
+            )
+            .is_err()
+        );
 
-        assert!(test_single_field(
-            int64_nullable.clone(),
-            json!(["null", "int"]),
-            Value::Union(0, Box::new(Value::Null)),
-            ScalarRef::Null
-        )
-        .is_ok());
+        assert!(
+            test_single_field(
+                int64_nullable.clone(),
+                json!(["null", "int"]),
+                Value::Union(0, Box::new(Value::Null)),
+                ScalarRef::Null
+            )
+            .is_ok()
+        );
 
-        assert!(test_single_field(
-            int64_nullable.clone(),
-            json!(["null", "int"]),
-            Value::Union(1, Box::new(Value::Int(100))),
-            ScalarRef::Number(NumberScalar::Int64(100))
-        )
-        .is_ok());
+        assert!(
+            test_single_field(
+                int64_nullable.clone(),
+                json!(["null", "int"]),
+                Value::Union(1, Box::new(Value::Int(100))),
+                ScalarRef::Number(NumberScalar::Int64(100))
+            )
+            .is_ok()
+        );
         Ok(())
     }
 }

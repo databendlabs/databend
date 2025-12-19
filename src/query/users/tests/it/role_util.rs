@@ -17,8 +17,8 @@ use std::collections::HashMap;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_users::role_util::find_all_related_roles;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use databend_common_users::role_util::find_all_related_roles;
 use databend_common_version::BUILD_INFO;
 
 #[test]

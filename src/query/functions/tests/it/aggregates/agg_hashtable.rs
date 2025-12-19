@@ -26,28 +26,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::cloned_ref_to_slice_refs)]
+
 use std::alloc::Layout;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_expression::block_debug::assert_block_value_sort_eq;
-use databend_common_expression::get_states_layout;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalSize;
-use databend_common_expression::types::Float32Type;
-use databend_common_expression::types::Float64Type;
-use databend_common_expression::types::Int16Type;
-use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::Int64Type;
-use databend_common_expression::types::Int8Type;
-use databend_common_expression::types::NullableType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::F32;
-use databend_common_expression::types::F64;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -55,6 +39,24 @@ use databend_common_expression::FromData;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
+use databend_common_expression::block_debug::assert_block_value_sort_eq;
+use databend_common_expression::get_states_layout;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::F32;
+use databend_common_expression::types::F64;
+use databend_common_expression::types::Float32Type;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int8Type;
+use databend_common_expression::types::Int16Type;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::i256;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::DecimalSumState;
 use itertools::Itertools;

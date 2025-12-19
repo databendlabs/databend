@@ -18,9 +18,9 @@ use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
-use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeHashStatistics;
 use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeHashStatistics;
+use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbedRows;
 
 pub struct PerformanceContext {
     pub probe_result: ProbedRows,

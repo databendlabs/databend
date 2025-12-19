@@ -15,8 +15,8 @@
 
 use std::iter::TrustedLen;
 
-use crate::bitmap::utils::BitmapIter;
 use crate::bitmap::Bitmap;
+use crate::bitmap::utils::BitmapIter;
 
 /// An [`Iterator`] over validity and values.
 #[derive(Debug, Clone)]

@@ -21,20 +21,14 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
 use databend_common_io::geography::*;
+pub use databend_common_io::wkb::WkbInfo;
 use databend_common_io::wkb::make_point;
 use databend_common_io::wkb::read_wkb_header;
-pub use databend_common_io::wkb::WkbInfo;
-use geozero::wkb::Ewkb;
 use geozero::ToWkt;
+use geozero::wkb::Ewkb;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::binary::BinaryColumn;
-use super::binary::BinaryColumnBuilder;
-use super::binary::BinaryColumnIter;
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::ArgType;
 use super::BuilderMut;
@@ -42,11 +36,17 @@ use super::DataType;
 use super::GenericMap;
 use super::ReturnType;
 use super::ValueType;
+use super::binary::BinaryColumn;
+use super::binary::BinaryColumnBuilder;
+use super::binary::BinaryColumnIter;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
+use crate::ColumnBuilder;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
-use crate::ColumnBuilder;
 
 #[derive(
     Clone,
@@ -160,7 +160,7 @@ impl AccessType for GeographyType {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        col.index_unchecked(index)
+        unsafe { col.index_unchecked(index) }
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
@@ -301,7 +301,7 @@ impl GeographyColumn {
         self.0.memory_size()
     }
 
-    pub fn index(&self, index: usize) -> Option<GeographyRef> {
+    pub fn index(&self, index: usize) -> Option<GeographyRef<'_>> {
         self.0.index(index).map(GeographyRef)
     }
 
@@ -310,7 +310,7 @@ impl GeographyColumn {
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     #[inline]
     pub unsafe fn index_unchecked(&self, index: usize) -> GeographyRef<'_> {
-        GeographyRef(self.0.index_unchecked(index))
+        unsafe { GeographyRef(self.0.index_unchecked(index)) }
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {

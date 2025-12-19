@@ -15,9 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -26,25 +23,28 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
-use databend_common_storages_fuse::io::read::read_column_oriented_segment;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::io::read::read_column_oriented_segment;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reduce_block_metas;
-use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::test_kits::BlockWriter;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
-use databend_storages_common_table_meta::meta::column_oriented_segment::*;
-use databend_storages_common_table_meta::meta::decode;
-use databend_storages_common_table_meta::meta::testing::MetaEncoding;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::column_oriented_segment::*;
+use databend_storages_common_table_meta::meta::decode;
+use databend_storages_common_table_meta::meta::testing::MetaEncoding;
 use opendal::Operator;
 
-async fn generate_column_oriented_segment(
-) -> Result<(ColumnOrientedSegment, Vec<BlockMeta>, TableSchemaRef)> {
+async fn generate_column_oriented_segment()
+-> Result<(ColumnOrientedSegment, Vec<BlockMeta>, TableSchemaRef)> {
     let field_1 = TableField::new("u64", TableDataType::Number(NumberDataType::UInt64));
     let field_2 = TableField::new(
         "nullable_u64",

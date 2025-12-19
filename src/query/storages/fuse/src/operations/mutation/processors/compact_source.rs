@@ -28,13 +28,13 @@ use databend_common_pipeline_transforms::processors::UnknownMode;
 use databend_common_sql::StreamContext;
 use databend_storages_common_io::ReadSettings;
 
+use crate::FuseStorageFormat;
 use crate::io::BlockReader;
 use crate::operations::ClusterStatsGenType;
 use crate::operations::CompactBlockPartInfo;
 use crate::operations::CompactSourceMeta;
 use crate::operations::SerializeBlock;
 use crate::operations::SerializeDataMeta;
-use crate::FuseStorageFormat;
 
 pub struct CompactSource {
     ctx: Arc<dyn TableContext>,

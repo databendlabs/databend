@@ -13,10 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::ErrorCode;
-use databend_common_expression::type_check::check_cast;
-use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
 use databend_common_expression::Expr;
@@ -25,6 +21,10 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::type_check::check_cast;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileFormatType;
@@ -195,7 +195,9 @@ pub fn project_columnar(
                         match &default_exprs[i] {
                             RemoteDefaultExpr::RemoteExpr(expr) => expr.as_expr(&BUILTIN_FUNCTIONS),
                             RemoteDefaultExpr::Sequence(_) => {
-                                return Err(ErrorCode::BadDataValueType("not supported yet: fill missing column with sequence as default"));
+                                return Err(ErrorCode::BadDataValueType(
+                                    "not supported yet: fill missing column with sequence as default",
+                                ));
                             }
                         }
                     }

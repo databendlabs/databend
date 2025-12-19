@@ -15,6 +15,6 @@
 mod numbers_part;
 mod numbers_table;
 
-pub use numbers_part::generate_numbers_parts;
 pub use numbers_part::NumbersPartInfo;
+pub use numbers_part::generate_numbers_parts;
 pub use numbers_table::NumbersTable;

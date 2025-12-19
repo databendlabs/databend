@@ -35,31 +35,28 @@ use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::columns::TransformAddInternalColumns;
-use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
-use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::executor::cast_expr_to_non_null_boolean;
-use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::BaseTableColumn;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::DUMMY_COLUMN_INDEX;
+use databend_common_sql::DUMMY_TABLE_INDEX;
 use databend_common_sql::DerivedColumn;
 use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
@@ -67,22 +64,25 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::TableInternalColumn;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::VirtualColumn;
-use databend_common_sql::DUMMY_COLUMN_INDEX;
-use databend_common_sql::DUMMY_TABLE_INDEX;
+use databend_common_sql::binder::INTERNAL_COLUMN_FACTORY;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_common_sql::plans::FunctionCall;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::thread_rng;
 
+use crate::physical_plans::AddStreamColumn;
+use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::TableScanFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::AddStreamColumn;
-use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -182,11 +182,9 @@ impl IPhysicalPlan for TableScan {
                 ),
                 self.name_mapping.keys().cloned().collect(),
             ),
-            (String::from("Total partitions"), vec![self
-                .source
-                .statistics
-                .partitions_total
-                .to_string()]),
+            (String::from("Total partitions"), vec![
+                self.source.statistics.partitions_total.to_string(),
+            ]),
         ]))
     }
 

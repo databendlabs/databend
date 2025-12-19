@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::unnecessary_unwrap)]
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
@@ -27,27 +28,27 @@ use databend_common_config::UserConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
-use databend_common_users::CustomClaims;
-use databend_common_users::EnsureUser;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
+use databend_common_users::CustomClaims;
+use databend_common_users::EnsureUser;
 use databend_common_version::DATABEND_SEMVER;
-use databend_query::servers::admin::v1::instance_status::instance_status_handler;
+use databend_query::servers::HttpHandler;
+use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::admin::v1::instance_status::InstanceStatus;
+use databend_query::servers::admin::v1::instance_status::instance_status_handler;
 use databend_query::servers::http::error::QueryError;
 use databend_query::servers::http::middleware::json_response;
+use databend_query::servers::http::v1::ExecuteStateKind;
+use databend_query::servers::http::v1::HttpSessionConf;
+use databend_query::servers::http::v1::QueryResponseField;
+use databend_query::servers::http::v1::QueryStats;
 use databend_query::servers::http::v1::catalog;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::roles::ListRolesResponse;
 use databend_query::servers::http::v1::users::CreateUserRequest;
 use databend_query::servers::http::v1::users::ListUsersResponse;
-use databend_query::servers::http::v1::ExecuteStateKind;
-use databend_query::servers::http::v1::HttpSessionConf;
-use databend_query::servers::http::v1::QueryResponseField;
-use databend_query::servers::http::v1::QueryStats;
-use databend_query::servers::HttpHandler;
-use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
@@ -55,30 +56,30 @@ use databend_storages_common_session::TxnState;
 use futures_util::future::try_join_all;
 use headers::Header;
 use headers::HeaderMapExt;
-use http::header;
 use http::HeaderMap;
 use http::HeaderValue;
 use http::Method;
 use http::StatusCode;
+use http::header;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::claims::NoCustomClaims;
 use jwt_simple::prelude::Clock;
-use poem::get;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Request;
 use poem::Response;
 use poem::Route;
+use poem::get;
 use pretty_assertions::assert_eq;
 use serde::Deserialize;
 use tokio::time::sleep;
-use wiremock::matchers::method;
-use wiremock::matchers::path;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 use crate::tests::tls_constants::*;
 
@@ -551,7 +552,7 @@ async fn test_active_sessions() -> Result<()> {
     let mut results = try_join_all(handlers)
         .await?
         .into_iter()
-        .map(|(_status, resp)| (resp.error.map(|e| e.message).unwrap_or_default()))
+        .map(|(_status, resp)| resp.error.map(|e| e.message).unwrap_or_default())
         .collect::<Vec<_>>();
     results.sort();
     let msg = "Failed to upgrade session: Current active sessions (2) has exceeded the max_active_sessions limit (2)";

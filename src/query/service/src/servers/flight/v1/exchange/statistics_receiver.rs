@@ -13,22 +13,22 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
-use databend_common_base::base::tokio::sync::broadcast::channel;
+use databend_common_base::JoinHandle;
 use databend_common_base::base::tokio::sync::broadcast::Sender;
+use databend_common_base::base::tokio::sync::broadcast::channel;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use futures_util::future::select;
 use futures_util::future::Either;
+use futures_util::future::select;
 
+use crate::servers::flight::FlightExchange;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
-use crate::servers::flight::FlightExchange;
 use crate::sessions::MemoryUpdater;
 use crate::sessions::QueryContext;
 

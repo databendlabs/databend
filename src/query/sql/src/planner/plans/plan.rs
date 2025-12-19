@@ -18,11 +18,11 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_catalog::query_kind::QueryKind;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::types::DataType;
 use educe::Educe;
 
 use super::CreateDictionaryPlan;
@@ -30,10 +30,10 @@ use super::DropDictionaryPlan;
 use super::ModifyTableConnectionPlan;
 use super::RenameDictionaryPlan;
 use super::ShowCreateDictionaryPlan;
+use crate::BindContext;
+use crate::MetadataRef;
 use crate::binder::ExplainConfig;
 use crate::optimizer::ir::SExpr;
-use crate::plans::copy_into_location::CopyIntoLocationPlan;
-use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AddTableConstraintPlan;
 use crate::plans::AddTableRowAccessPolicyPlan;
@@ -179,8 +179,8 @@ use crate::plans::UseWarehousePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
-use crate::BindContext;
-use crate::MetadataRef;
+use crate::plans::copy_into_location::CopyIntoLocationPlan;
+use crate::plans::row_access_policy::CreateRowAccessPolicyPlan;
 
 #[derive(Educe)]
 #[educe(

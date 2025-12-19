@@ -14,21 +14,21 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_expression::converts::datavalues::from_schema;
 use databend_common_expression::TableSchema;
+use databend_common_expression::converts::datavalues::from_schema;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::monotonically_increased_timestamp;
-use crate::meta::trim_timestamp_to_milli_second;
-use crate::meta::v0;
-use crate::meta::v1;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
+use crate::meta::monotonically_increased_timestamp;
+use crate::meta::trim_timestamp_to_milli_second;
+use crate::meta::v0;
+use crate::meta::v1;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {

@@ -17,12 +17,12 @@ use databend_common_ast::ast::PresignLocation;
 use databend_common_ast::ast::PresignStmt;
 use databend_common_exception::Result;
 
-use crate::binder::resolve_stage_location;
+use crate::BindContext;
 use crate::binder::Binder;
+use crate::binder::resolve_stage_location;
 use crate::plans::Plan;
 use crate::plans::PresignAction;
 use crate::plans::PresignPlan;
-use crate::BindContext;
 
 impl Binder {
     #[async_backtrace::framed]

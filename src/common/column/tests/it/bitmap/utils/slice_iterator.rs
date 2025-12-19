@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_column::bitmap::utils::SlicesIterator;
 use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::utils::SlicesIterator;
 use proptest::prelude::*;
 
 use crate::bitmap::bitmap_strategy;

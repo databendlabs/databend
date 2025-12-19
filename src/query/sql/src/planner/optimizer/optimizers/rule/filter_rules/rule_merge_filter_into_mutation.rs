@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
+use crate::MetadataRef;
 use crate::binder::MutationType;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
@@ -27,7 +28,6 @@ use crate::plans::Filter;
 use crate::plans::MutationSource;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-use crate::MetadataRef;
 
 pub struct RuleMergeFilterIntoMutation {
     id: RuleID,

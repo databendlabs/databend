@@ -15,9 +15,9 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -45,19 +45,13 @@ use log::error;
 use log::info;
 use log::warn;
 use parking_lot::Mutex;
-use poem::web::Json;
 use poem::IntoResponse;
+use poem::web::Json;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
-use super::blocks_serializer::BlocksSerializer;
-use super::execute_state::ExecuteStarting;
-use super::execute_state::ExecuteStopped;
-use super::execute_state::ExecutionError;
-use super::execute_state::ExecutorSessionState;
-use super::execute_state::Progresses;
 use super::CloseReason;
 use super::ExecuteState;
 use super::ExecuteStateKind;
@@ -66,12 +60,18 @@ use super::HttpQueryContext;
 use super::PageManager;
 use super::ResponseData;
 use super::Wait;
+use super::blocks_serializer::BlocksSerializer;
+use super::execute_state::ExecuteStarting;
+use super::execute_state::ExecuteStopped;
+use super::execute_state::ExecutionError;
+use super::execute_state::ExecutorSessionState;
+use super::execute_state::Progresses;
 use crate::servers::http::error::QueryError;
-use crate::servers::http::v1::http_query_handlers::ResultFormatSettings;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
+use crate::servers::http::v1::http_query_handlers::ResultFormatSettings;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
 
@@ -438,7 +438,9 @@ impl HttpSessionConf {
                             return Err(ErrorCode::SessionLost(format!(
                                 "Temp table lost due to server restart (at {}) or route error: node_id={} (expected {}); session_id={}, query_id={}, is_sticky_node={}",
                                 http_query_manager.server_info.start_time,
-                                http_query_manager.server_info.id, id, http_ctx.client_session_id.as_deref().unwrap_or("None"),
+                                http_query_manager.server_info.id,
+                                id,
+                                http_ctx.client_session_id.as_deref().unwrap_or("None"),
                                 query_id,
                                 http_ctx.is_sticky_node
                             )));
@@ -457,9 +459,11 @@ impl HttpSessionConf {
                             ));
                         }
                         Some(s) => {
-                            return    Err(ErrorCode::SessionTimeout(format!(
+                            return Err(ErrorCode::SessionTimeout(format!(
                                 "temporary tables in session {} expired after idle for more than {} seconds, when starting query {}",
-                                s.header.id, ClientSessionManager::instance().max_idle_time.as_secs(), query_id,
+                                s.header.id,
+                                ClientSessionManager::instance().max_idle_time.as_secs(),
+                                query_id,
                             )));
                         }
                     }

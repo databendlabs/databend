@@ -20,13 +20,13 @@ use databend_common_ast::ast::ShowWorkloadGroupsStmt;
 use databend_common_ast::ast::UnsetWorkloadGroupQuotasStmt;
 use databend_common_exception::Result;
 
+use crate::Binder;
 use crate::plans::CreateWorkloadGroupPlan;
 use crate::plans::DropWorkloadGroupPlan;
 use crate::plans::Plan;
 use crate::plans::RenameWorkloadGroupPlan;
 use crate::plans::SetWorkloadGroupQuotasPlan;
 use crate::plans::UnsetWorkloadGroupQuotasPlan;
-use crate::Binder;
 
 impl Binder {
     pub(in crate::planner::binder) fn bind_show_workload_groups(

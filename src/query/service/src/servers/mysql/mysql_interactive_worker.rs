@@ -16,10 +16,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::base::tokio::io::AsyncWrite;
-use databend_common_base::base::BuildInfoRef;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
@@ -46,23 +46,23 @@ use opensrv_mysql::InitWriter;
 use opensrv_mysql::ParamParser;
 use opensrv_mysql::QueryResultWriter;
 use opensrv_mysql::StatementMetaWriter;
-use rand::thread_rng;
 use rand::Rng as _;
+use rand::thread_rng;
 use uuid::Uuid;
 
 use crate::auth::CredentialType;
-use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::interpreter_plan_sql;
 use crate::servers::login_history::LoginEventType;
 use crate::servers::login_history::LoginHandler;
 use crate::servers::login_history::LoginHistory;
+use crate::servers::mysql::MYSQL_VERSION;
+use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
-use crate::servers::mysql::MySQLFederated;
-use crate::servers::mysql::MYSQL_VERSION;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
@@ -481,11 +481,10 @@ impl InteractiveWorkerBase {
             None,
         )?;
 
-        let query_result = query_result
-            .await
-            .map_err_to_code(ErrorCode::TokioError, || {
-                "Cannot join handle from context's runtime"
-            })?;
+        let query_result = query_result.await.map_err_to_code(
+            ErrorCode::TokioError,
+            || "Cannot join handle from context's runtime",
+        )?;
         let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
             as Box<dyn ProgressReporter + Send>;
         query_result.map(|data| (data, Some(reporter)))

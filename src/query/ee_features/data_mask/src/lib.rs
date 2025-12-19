@@ -14,6 +14,6 @@
 
 pub mod data_mask_handler;
 
-pub use data_mask_handler::get_datamask_handler;
 pub use data_mask_handler::DatamaskHandler;
 pub use data_mask_handler::DatamaskHandlerWrapper;
+pub use data_mask_handler::get_datamask_handler;

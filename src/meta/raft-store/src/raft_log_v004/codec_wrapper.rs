@@ -99,8 +99,8 @@ impl<T: 'static> Cw<T> {
 mod tests {
     use std::io;
 
-    use databend_common_meta_types::raft_types::new_log_id;
     use databend_common_meta_types::raft_types::LogId;
+    use databend_common_meta_types::raft_types::new_log_id;
     use raft_log::codeq::Decode;
     use raft_log::codeq::Encode;
 

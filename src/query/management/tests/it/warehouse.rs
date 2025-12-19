@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::collapsible_if)]
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Barrier;
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;

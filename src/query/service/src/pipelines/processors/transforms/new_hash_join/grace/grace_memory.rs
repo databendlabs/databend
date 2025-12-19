@@ -14,11 +14,11 @@
 
 use std::sync::PoisonError;
 
-use crate::pipelines::processors::transforms::memory::outer_left_join::OuterLeftHashJoin;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::InnerHashJoin;
 use crate::pipelines::processors::transforms::Join;
+use crate::pipelines::processors::transforms::memory::outer_left_join::OuterLeftHashJoin;
 
 pub trait GraceMemoryJoin: Join {
     fn reset_memory(&mut self);

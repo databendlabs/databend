@@ -15,9 +15,9 @@
 use std::fmt;
 use std::time::Duration;
 
-use display_more::display_unix_epoch::DisplayUnixTimeStamp;
 use display_more::DisplayOptionExt;
 use display_more::DisplayUnixTimeStampExt;
+use display_more::display_unix_epoch::DisplayUnixTimeStamp;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::coarsetime;
 
@@ -52,13 +52,13 @@ where T: fmt::Display
 
 /// Add `display_jwt_claims` method to `JWTClaims<T>` if `T` is Display.
 pub trait DisplayJWTClaimsExt<T> {
-    fn display_jwt_claims(&self) -> DisplayJWTClaims<T>;
+    fn display_jwt_claims(&self) -> DisplayJWTClaims<'_, T>;
 }
 
 impl<T> DisplayJWTClaimsExt<T> for JWTClaims<T>
 where T: fmt::Display
 {
-    fn display_jwt_claims(&self) -> DisplayJWTClaims<T> {
+    fn display_jwt_claims(&self) -> DisplayJWTClaims<'_, T> {
         DisplayJWTClaims { claims: self }
     }
 }

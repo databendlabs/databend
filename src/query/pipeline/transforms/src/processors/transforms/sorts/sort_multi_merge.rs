@@ -30,15 +30,15 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 
-use super::core::algorithm::HeapSort;
-use super::core::algorithm::LoserTreeSort;
-use super::core::algorithm::SortAlgorithm;
-use super::core::select_row_type;
 use super::core::Merger;
 use super::core::RowConverter;
 use super::core::Rows;
 use super::core::RowsTypeVisitor;
 use super::core::SortedStream;
+use super::core::algorithm::HeapSort;
+use super::core::algorithm::LoserTreeSort;
+use super::core::algorithm::SortAlgorithm;
+use super::core::select_row_type;
 use super::utils::ORDER_COL_NAME;
 
 pub fn try_add_multi_sort_merge(

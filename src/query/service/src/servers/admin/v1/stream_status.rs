@@ -20,10 +20,10 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_stream::stream_table::StreamTable;
 use fastrace::func_name;
 use log::debug;
+use poem::IntoResponse;
 use poem::web::Json;
 use poem::web::Path;
 use poem::web::Query;
-use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 

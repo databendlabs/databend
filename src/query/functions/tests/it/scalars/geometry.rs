@@ -14,10 +14,10 @@
 
 use std::io::Write;
 
+use databend_common_expression::FromData;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
-use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use crate::scalars::run_ast;

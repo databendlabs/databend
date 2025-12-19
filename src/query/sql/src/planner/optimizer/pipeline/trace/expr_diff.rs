@@ -16,10 +16,10 @@ use databend_common_exception::Result;
 use similar::ChangeTag;
 use similar::TextDiff;
 
+use crate::Metadata;
 use crate::optimizer::ir::SExpr;
 use crate::planner::format::FormatOptions;
 use crate::planner::format::MetadataIdHumanizer;
-use crate::Metadata;
 
 impl SExpr {
     /// Compares this SExpr with another SExpr and returns a diff of their string representations.

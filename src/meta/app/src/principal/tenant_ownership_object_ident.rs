@@ -108,10 +108,10 @@ mod tests {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
+    use crate::KeyWithTenant;
     use crate::principal::OwnershipObject;
     use crate::principal::TenantOwnershipObjectIdent;
     use crate::tenant::Tenant;
-    use crate::KeyWithTenant;
 
     #[test]
     fn test_tenant_ownership_object_tenant_prefix() {

@@ -19,24 +19,24 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use fastrace::future::FutureExt;
 use fastrace::Span;
+use fastrace::future::FutureExt;
 use petgraph::prelude::NodeIndex;
 
-use crate::pipelines::executor::executor_graph::ProcessorWrapper;
-use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 use crate::pipelines::executor::ProcessorAsyncTask;
 use crate::pipelines::executor::QueriesExecutorTasksQueue;
 use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::RunningGraph;
 use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 
 pub enum ExecutorTask {
     None,
@@ -126,34 +126,36 @@ impl ExecutorWorkerContext {
         &mut self,
         executor: Option<&Arc<QueriesPipelineExecutor>>,
     ) -> std::result::Result<Option<(NodeIndex, Arc<RunningGraph>)>, Box<NodeErrorType>> {
-        match std::mem::replace(&mut self.task, ExecutorTask::None) {
-            ExecutorTask::None => Err(Box::new(NodeErrorType::LocalError(ErrorCode::Internal(
-                "Execute none task.",
-            )))),
-            ExecutorTask::Sync(processor) => match self.execute_sync_task(processor) {
-                Ok(res) => Ok(res),
-                Err(cause) => Err(Box::new(NodeErrorType::SyncProcessError(cause))),
-            },
-            ExecutorTask::Async(processor) => {
-                if let Some(executor) = executor {
-                    match self.execute_async_task(
-                        processor,
-                        executor,
-                        executor.global_tasks_queue.clone(),
-                    ) {
-                        Ok(res) => Ok(res),
-                        Err(cause) => Err(Box::new(NodeErrorType::AsyncProcessError(cause))),
+        unsafe {
+            match std::mem::replace(&mut self.task, ExecutorTask::None) {
+                ExecutorTask::None => Err(Box::new(NodeErrorType::LocalError(
+                    ErrorCode::Internal("Execute none task."),
+                ))),
+                ExecutorTask::Sync(processor) => match self.execute_sync_task(processor) {
+                    Ok(res) => Ok(res),
+                    Err(cause) => Err(Box::new(NodeErrorType::SyncProcessError(cause))),
+                },
+                ExecutorTask::Async(processor) => {
+                    if let Some(executor) = executor {
+                        match self.execute_async_task(
+                            processor,
+                            executor,
+                            executor.global_tasks_queue.clone(),
+                        ) {
+                            Ok(res) => Ok(res),
+                            Err(cause) => Err(Box::new(NodeErrorType::AsyncProcessError(cause))),
+                        }
+                    } else {
+                        Err(Box::new(NodeErrorType::LocalError(ErrorCode::Internal(
+                            "Async task should only be executed on queries executor",
+                        ))))
                     }
-                } else {
-                    Err(Box::new(NodeErrorType::LocalError(ErrorCode::Internal(
-                        "Async task should only be executed on queries executor",
-                    ))))
                 }
+                ExecutorTask::AsyncCompleted(task) => match task.res {
+                    Ok(_) => Ok(Some((task.id, task.graph))),
+                    Err(cause) => Err(Box::new(NodeErrorType::AsyncProcessError(cause))),
+                },
             }
-            ExecutorTask::AsyncCompleted(task) => match task.res {
-                Ok(_) => Ok(Some((task.id, task.graph))),
-                Err(cause) => Err(Box::new(NodeErrorType::AsyncProcessError(cause))),
-            },
         }
     }
 
@@ -162,24 +164,26 @@ impl ExecutorWorkerContext {
         &mut self,
         proc: ProcessorWrapper,
     ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
-        let payload = proc.graph.get_node_tracking_payload(proc.processor.id());
-        let guard = ThreadTracker::tracking(payload.clone());
-        let begin = SystemTime::now();
-        let instant = Instant::now();
+        unsafe {
+            let payload = proc.graph.get_node_tracking_payload(proc.processor.id());
+            let guard = ThreadTracker::tracking(payload.clone());
+            let begin = SystemTime::now();
+            let instant = Instant::now();
 
-        proc.processor.process()?;
-        let nanos = instant.elapsed().as_nanos();
-        assume(nanos < 18446744073709551615_u128);
-        Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
-        let process_rows = proc.process_rows;
-        proc.graph
-            .record_process(begin, nanos as usize / 1_000, process_rows);
+            proc.processor.process()?;
+            let nanos = instant.elapsed().as_nanos();
+            assume(nanos < 18446744073709551615_u128);
+            Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
+            let process_rows = proc.process_rows;
+            proc.graph
+                .record_process(begin, nanos as usize / 1_000, process_rows);
 
-        if let Err(out_of_limit) = guard.flush() {
-            return Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)));
+            if let Err(out_of_limit) = guard.flush() {
+                return Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)));
+            }
+
+            Ok(Some((proc.processor.id(), proc.graph)))
         }
-
-        Ok(Some((proc.processor.id(), proc.graph)))
     }
 
     pub fn execute_async_task(

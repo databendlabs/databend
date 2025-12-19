@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::type_check;
-use databend_common_expression::types::*;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
+use databend_common_expression::type_check;
+use databend_common_expression::types::*;
 
 #[test]
 fn test_fmt_expr() {
@@ -54,5 +54,8 @@ fn test_fmt_expr() {
         "test_fn<String, String>(CAST<Boolean>(aaa AS String), CAST<Boolean>(aaa AS String))",
         format!("{expr}")
     );
-    assert_eq!("test_fn<String, String>(CAST<Boolean>(aaa (#1) AS String), CAST<Boolean>(aaa (#1) AS String))",format!("{}",expr.fmt_with_options(true)));
+    assert_eq!(
+        "test_fn<String, String>(CAST<Boolean>(aaa (#1) AS String), CAST<Boolean>(aaa (#1) AS String))",
+        format!("{}", expr.fmt_with_options(true))
+    );
 }

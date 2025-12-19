@@ -24,8 +24,8 @@ use databend_common_management::SelectedNode;
 use databend_common_sql::plans::UnassignWarehouseNodesPlan;
 use databend_enterprise_resources_management::ResourcesManagement;
 
-use crate::interpreters::util::AuditElement;
 use crate::interpreters::Interpreter;
+use crate::interpreters::util::AuditElement;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 

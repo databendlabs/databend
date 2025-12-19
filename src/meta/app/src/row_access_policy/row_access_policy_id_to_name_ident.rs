@@ -39,8 +39,8 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::row_access_policy::row_access_policy_id_to_name_ident::RowAccessPolicyIdToNameIdent;
     use crate::row_access_policy::RowAccessPolicyNameIdentRaw;
+    use crate::row_access_policy::row_access_policy_id_to_name_ident::RowAccessPolicyIdToNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;

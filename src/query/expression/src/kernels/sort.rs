@@ -14,14 +14,14 @@
 
 use databend_common_exception::Result;
 
-use crate::types::DataType;
-use crate::visitor::ValueVisitor;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
 use crate::SortCompare;
 use crate::Value;
+use crate::types::DataType;
+use crate::visitor::ValueVisitor;
 
 #[derive(Clone, Debug)]
 pub struct SortColumnDescription {

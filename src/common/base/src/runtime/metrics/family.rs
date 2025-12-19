@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::fmt::Error;
 use std::fmt::Formatter;
@@ -30,13 +30,13 @@ use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 use prometheus_client::registry::Registry;
 
+use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::metrics::family_metrics::FamilyCounter;
 use crate::runtime::metrics::family_metrics::FamilyGauge;
 use crate::runtime::metrics::family_metrics::FamilyHistogram;
 use crate::runtime::metrics::registry::DatabendMetric;
 use crate::runtime::metrics::registry::Metric;
 use crate::runtime::metrics::sample::MetricSample;
-use crate::runtime::metrics::ScopedRegistry;
 
 pub trait FamilyMetric: Metric + TypedMetric {}
 
@@ -196,10 +196,10 @@ mod prometheus_parse {
     use prometheus_parse::LineInfo;
     use prometheus_parse::SampleType;
 
-    use crate::runtime::metrics::sample::SummaryCount;
     use crate::runtime::metrics::HistogramCount;
     use crate::runtime::metrics::MetricSample;
     use crate::runtime::metrics::MetricValue;
+    use crate::runtime::metrics::sample::SummaryCount;
 
     fn parse_golang_float(s: &str) -> Result<f64, <f64 as std::str::FromStr>::Err> {
         match s.to_lowercase().as_str() {

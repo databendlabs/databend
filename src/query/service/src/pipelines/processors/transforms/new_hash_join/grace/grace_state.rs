@@ -19,8 +19,8 @@ use std::sync::Mutex;
 
 use parquet::file::metadata::RowGroupMetaData;
 
-use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 use crate::pipelines::processors::transforms::HashJoinFactory;
+use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]

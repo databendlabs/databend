@@ -15,9 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
+use databend_common_expression::types::DataType;
 
 pub struct BuildState {
     // The `generation_state` is used to generate build side `DataBlock`.

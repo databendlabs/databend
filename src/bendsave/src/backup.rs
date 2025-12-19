@@ -25,8 +25,8 @@ use crate::storage::load_databend_meta;
 use crate::storage::load_query_config;
 use crate::storage::load_query_storage;
 use crate::storage::verify_query_license;
-use crate::utils::storage_copy;
 use crate::utils::DATABEND_META_BACKUP_PATH;
+use crate::utils::storage_copy;
 
 pub async fn backup(from: &str, to: &str) -> Result<()> {
     let query_cfg = load_query_config(from)?;

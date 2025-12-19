@@ -24,30 +24,6 @@ use bytes::Bytes;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::converts::datavalues::scalar_to_datavalue;
-use databend_common_expression::eval_function;
-use databend_common_expression::expr::*;
-use databend_common_expression::generate_like_pattern;
-use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::nullable::NullableDomain;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::Buffer;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::DateType;
-use databend_common_expression::types::MapType;
-use databend_common_expression::types::NullableType;
-use databend_common_expression::types::Number;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::ValueType;
-use databend_common_expression::visit_expr;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -67,9 +43,33 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
+use databend_common_expression::converts::datavalues::scalar_to_datavalue;
+use databend_common_expression::eval_function;
+use databend_common_expression::expr::*;
+use databend_common_expression::generate_like_pattern;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::MapType;
+use databend_common_expression::types::NullableType;
+use databend_common_expression::types::Number;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::visit_expr;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::scalars::CityHasher64;
 use databend_common_functions::scalars::DFHash;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -79,6 +79,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::eliminate_cast::is_injective_cast;
+use crate::Index;
 use crate::eliminate_cast::cast_const;
 use crate::filters::BlockBloomFilterIndexVersion;
 use crate::filters::BlockFilter;
@@ -91,7 +92,6 @@ use crate::filters::V2BloomBlock;
 use crate::filters::Xor8Builder;
 use crate::filters::Xor8Filter;
 use crate::statistics_to_domain;
-use crate::Index;
 
 const NGRAM_HASH_SEED: u64 = 1575457558;
 
@@ -900,11 +900,14 @@ where T: EqVisitor
 
         if id.name() == "like" {
             // patterns like `Column like <constant>`
-            if let [Expr::ColumnRef(ColumnRef {
-                id,
-                data_type: column_type,
-                ..
-            }), Expr::Constant(Constant { scalar, .. })] = args.as_slice()
+            if let [
+                Expr::ColumnRef(ColumnRef {
+                    id,
+                    data_type: column_type,
+                    ..
+                }),
+                Expr::Constant(Constant { scalar, .. }),
+            ] = args.as_slice()
             {
                 if let Some(pattern) = scalar.as_string() {
                     match generate_like_pattern(pattern.as_bytes(), 1) {
@@ -939,24 +942,30 @@ where T: EqVisitor
         } else {
             result = match args.as_slice() {
                 // patterns like `Column = <constant>`, `<constant> = Column`
-                [Expr::ColumnRef(ColumnRef {
-                    id,
-                    data_type: column_type,
-                    ..
-                }), Expr::Constant(Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                })]
-                | [Expr::Constant(Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                }), Expr::ColumnRef(ColumnRef {
-                    id,
-                    data_type: column_type,
-                    ..
-                })] => {
+                [
+                    Expr::ColumnRef(ColumnRef {
+                        id,
+                        data_type: column_type,
+                        ..
+                    }),
+                    Expr::Constant(Constant {
+                        scalar,
+                        data_type: scalar_type,
+                        ..
+                    }),
+                ]
+                | [
+                    Expr::Constant(Constant {
+                        scalar,
+                        data_type: scalar_type,
+                        ..
+                    }),
+                    Expr::ColumnRef(ColumnRef {
+                        id,
+                        data_type: column_type,
+                        ..
+                    }),
+                ] => {
                     // decimal don't respect datatype equal
                     // debug_assert_eq!(scalar_type, column_type);
                     // If the visitor returns a new expression, then replace with the current expression.
@@ -968,52 +977,62 @@ where T: EqVisitor
                     }
                 }
                 // patterns like `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
-                [Expr::FunctionCall(FunctionCall { id, args, .. }), Expr::Constant(Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                })]
-                | [Expr::Constant(Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                }), Expr::FunctionCall(FunctionCall { id, args, .. })]
-                    if id.name() == "get" =>
-                {
+                [
+                    Expr::FunctionCall(FunctionCall { id, args, .. }),
+                    Expr::Constant(Constant {
+                        scalar,
+                        data_type: scalar_type,
+                        ..
+                    }),
+                ]
+                | [
+                    Expr::Constant(Constant {
+                        scalar,
+                        data_type: scalar_type,
+                        ..
+                    }),
+                    Expr::FunctionCall(FunctionCall { id, args, .. }),
+                ] if id.name() == "get" => {
                     self.0
                         .enter_map_column(*span, args, scalar, scalar_type, return_type, false)?
                 }
                 // patterns like `CAST(MapColumn[<key>] as X) = <constant>`, `<constant> = CAST(MapColumn[<key>] as X)`
-                [Expr::Cast(Cast {
-                    expr:
-                        box Expr::FunctionCall(FunctionCall {
-                            id,
-                            args,
-                            return_type,
-                            ..
-                        }),
-                    dest_type,
-                    ..
-                }), Expr::Constant(Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                })]
-                | [Expr::Constant(Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                }), Expr::Cast(Cast {
-                    expr:
-                        box Expr::FunctionCall(FunctionCall {
-                            id,
-                            args,
-                            return_type,
-                            ..
-                        }),
-                    dest_type,
-                    ..
-                })] if id.name() == "get" => {
+                [
+                    Expr::Cast(Cast {
+                        expr:
+                            box Expr::FunctionCall(FunctionCall {
+                                id,
+                                args,
+                                return_type,
+                                ..
+                            }),
+                        dest_type,
+                        ..
+                    }),
+                    Expr::Constant(Constant {
+                        scalar,
+                        data_type: scalar_type,
+                        ..
+                    }),
+                ]
+                | [
+                    Expr::Constant(Constant {
+                        scalar,
+                        data_type: scalar_type,
+                        ..
+                    }),
+                    Expr::Cast(Cast {
+                        expr:
+                            box Expr::FunctionCall(FunctionCall {
+                                id,
+                                args,
+                                return_type,
+                                ..
+                            }),
+                        dest_type,
+                        ..
+                    }),
+                ] if id.name() == "get" => {
                     // Only support cast variant value in map to string value
                     if return_type.remove_nullable() != DataType::Variant
                         || dest_type.remove_nullable() != DataType::String
@@ -1035,18 +1054,24 @@ where T: EqVisitor
                     self.0.enter_cast(cast, constant, false)?
                 }
 
-                [func @ Expr::FunctionCall(FunctionCall {
-                    id,
-                    args,
-                    return_type: dest_type,
-                    ..
-                }), Expr::Constant(constant)]
-                | [Expr::Constant(constant), func @ Expr::FunctionCall(FunctionCall {
-                    id,
-                    args,
-                    return_type: dest_type,
-                    ..
-                })] if id.name().starts_with("to_")
+                [
+                    func @ Expr::FunctionCall(FunctionCall {
+                        id,
+                        args,
+                        return_type: dest_type,
+                        ..
+                    }),
+                    Expr::Constant(constant),
+                ]
+                | [
+                    Expr::Constant(constant),
+                    func @ Expr::FunctionCall(FunctionCall {
+                        id,
+                        args,
+                        return_type: dest_type,
+                        ..
+                    }),
+                ] if id.name().starts_with("to_")
                     && args.len() == 1
                     && func.contains_column_ref() =>
                 {

@@ -16,8 +16,8 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
-use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::parser::expr::*;
 use databend_common_ast::parser::query::*;
 use databend_common_ast::parser::script::script_block;

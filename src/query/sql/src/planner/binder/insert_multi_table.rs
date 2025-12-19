@@ -21,18 +21,18 @@ use databend_common_ast::ast::SourceExpr;
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::DataType;
 
+use crate::BindContext;
+use crate::Binder;
 use crate::binder::ScalarBinder;
 use crate::plans::Else;
 use crate::plans::InsertMultiTable;
 use crate::plans::Into;
 use crate::plans::Plan;
 use crate::plans::When;
-use crate::BindContext;
-use crate::Binder;
 impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_insert_multi_table(

@@ -24,9 +24,9 @@ use either::Either;
 use num_traits::Zero;
 
 use super::Bytes;
+use crate::bitmap::Bitmap;
 use crate::bitmap::utils::BitmapIter;
 use crate::bitmap::utils::ZipValidity;
-use crate::bitmap::Bitmap;
 use crate::types::NativeType;
 
 /// [`Buffer`] is a contiguous memory region that can be shared across
@@ -174,8 +174,10 @@ impl<T> Buffer<T> {
     #[inline]
     #[must_use]
     pub unsafe fn sliced_unchecked(mut self, offset: usize, length: usize) -> Self {
-        self.slice_unchecked(offset, length);
-        self
+        unsafe {
+            self.slice_unchecked(offset, length);
+            self
+        }
     }
 
     /// Slices this buffer starting at `offset`.
@@ -183,8 +185,10 @@ impl<T> Buffer<T> {
     /// The caller must ensure `offset + length <= self.len()`
     #[inline]
     pub unsafe fn slice_unchecked(&mut self, offset: usize, length: usize) {
-        self.ptr = self.ptr.add(offset);
-        self.length = length;
+        unsafe {
+            self.ptr = self.ptr.add(offset);
+            self.length = length;
+        }
     }
 
     /// Returns a pointer to the start of this buffer.
@@ -266,8 +270,10 @@ impl<T> Buffer<T> {
     /// # Safety
     /// Callers must ensure all invariants of this struct are upheld.
     pub unsafe fn from_inner_unchecked(data: Arc<Bytes<T>>, offset: usize, length: usize) -> Self {
-        let ptr = data.as_ptr().add(offset);
-        Self { data, ptr, length }
+        unsafe {
+            let ptr = data.as_ptr().add(offset);
+            Self { data, ptr, length }
+        }
     }
 }
 

@@ -16,11 +16,15 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::is_internal_column;
-use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
+use databend_common_expression::TableSchemaRef;
+use databend_common_expression::is_internal_column;
 
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::MetadataRef;
+use crate::Visibility;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
@@ -33,10 +37,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
-use crate::ColumnSet;
-use crate::IndexType;
-use crate::MetadataRef;
-use crate::Visibility;
 
 /// Input:  Filter
 ///           \

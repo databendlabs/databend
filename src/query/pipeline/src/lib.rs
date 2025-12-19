@@ -14,6 +14,7 @@
 
 #![feature(variant_count)]
 #![feature(get_mut_unchecked)]
+#![allow(clippy::collapsible_if)]
 
 pub mod basic;
 pub mod core;

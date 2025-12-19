@@ -27,9 +27,9 @@ use log::info;
 
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotGenerator;
+use crate::statistics::TableStatsGenerator;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics_mut;
-use crate::statistics::TableStatsGenerator;
 
 #[derive(Clone)]
 pub struct MutationGenerator {

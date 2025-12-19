@@ -16,14 +16,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
-use databend_common_expression::types::number::NumberDataType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::number::NumberDataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
-use crate::binder::wrap_cast;
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::MetadataRef;
+use crate::ScalarExpr;
+use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
+use crate::binder::wrap_cast;
+use crate::optimizer::Optimizer;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::SExprVisitor;
@@ -32,7 +38,6 @@ use crate::optimizer::ir::VisitAction;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::optimizer::Optimizer;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -42,11 +47,6 @@ use crate::plans::FunctionCall;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
-use crate::ColumnSet;
-use crate::IndexType;
-use crate::MetadataRef;
-use crate::ScalarExpr;
-use crate::Visibility;
 
 /// Rule to push aggregation past a join to reduces the number of input rows to the join.
 /// Read the paper "Eager aggregation and lazy aggregation" for more details.

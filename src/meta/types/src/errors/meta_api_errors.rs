@@ -19,15 +19,15 @@ use anyerror::AnyError;
 use databend_common_exception::ErrorCode;
 use tonic::Status;
 
+use crate::InvalidArgument;
+use crate::InvalidReply;
+use crate::MetaNetworkError;
 use crate::errors;
 use crate::raft_types::ChangeMembershipError;
 use crate::raft_types::ClientWriteError;
 use crate::raft_types::Fatal;
 use crate::raft_types::ForwardToLeader;
 use crate::raft_types::RaftError;
-use crate::InvalidArgument;
-use crate::InvalidReply;
-use crate::MetaNetworkError;
 
 /// Errors raised when meta-service handling a request.
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]

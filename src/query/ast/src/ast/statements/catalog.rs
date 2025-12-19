@@ -19,10 +19,10 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_string_map;
 use crate::ast::CatalogType;
 use crate::ast::Identifier;
 use crate::ast::ShowLimit;
+use crate::ast::write_comma_separated_string_map;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowCatalogsStmt {

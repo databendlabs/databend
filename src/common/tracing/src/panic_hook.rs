@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::panic::PanicHookInfo;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use backtrace::Backtrace;
 use backtrace::BacktraceFrame;

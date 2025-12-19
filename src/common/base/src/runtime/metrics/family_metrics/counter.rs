@@ -13,22 +13,22 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use prometheus_client::encoding::EncodeMetric;
 use prometheus_client::encoding::MetricEncoder;
 use prometheus_client::metrics::MetricType;
 use prometheus_client::metrics::TypedMetric;
 
+use crate::runtime::metrics::MetricSample;
+use crate::runtime::metrics::MetricValue;
+use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::metrics::family::Family;
 use crate::runtime::metrics::family::FamilyLabels;
 use crate::runtime::metrics::family::FamilyMetric;
 use crate::runtime::metrics::registry::DatabendMetric;
-use crate::runtime::metrics::MetricSample;
-use crate::runtime::metrics::MetricValue;
-use crate::runtime::metrics::ScopedRegistry;
 
 #[derive(Debug)]
 pub struct FamilyCounter<Labels: FamilyLabels> {

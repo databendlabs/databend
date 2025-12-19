@@ -18,15 +18,15 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::DUMMY_TABLE_INDEX;
 use itertools::Itertools;
 
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::TableScan;
+use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::append_output_rows_info;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::part_stats_info_to_format_tree;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
-use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::format::PhysicalFormat;
-use crate::physical_plans::IPhysicalPlan;
-use crate::physical_plans::PhysicalPlanMeta;
-use crate::physical_plans::TableScan;
 
 pub struct TableScanFormatter<'a> {
     inner: &'a TableScan,

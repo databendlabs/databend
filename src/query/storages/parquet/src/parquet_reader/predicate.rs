@@ -19,8 +19,6 @@ use arrow_array::RecordBatch;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::Result;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -29,15 +27,17 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
+use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::schema::types::SchemaDescriptor;
 
+use super::utils::FieldPaths;
 use super::utils::bitmap_to_boolean_array;
 use super::utils::transform_record_batch;
-use super::utils::FieldPaths;
 use crate::parquet_reader::utils::compute_output_field_paths;
 
 #[derive(Debug)]

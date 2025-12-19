@@ -25,17 +25,17 @@ use pratt::Associativity;
 
 use super::ColumnRef;
 use super::OrderByExpr;
+use crate::ParseError;
+use crate::Result;
+use crate::Span;
+use crate::ast::Identifier;
+use crate::ast::Indirection;
+use crate::ast::Query;
 use crate::ast::display_decimal_256;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
-use crate::ast::Identifier;
-use crate::ast::Indirection;
-use crate::ast::Query;
 use crate::span::merge_span;
-use crate::ParseError;
-use crate::Result;
-use crate::Span;
 
 #[derive(Educe, Drive, DriveMut)]
 #[educe(

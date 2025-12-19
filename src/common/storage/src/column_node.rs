@@ -137,7 +137,7 @@ impl ColumnNodes {
         let column_node = &column_nodes[path[0]];
         if path.len() > 1 {
             return match &column_node.children {
-                Some(ref children) => Self::traverse_path(children, &path[1..]),
+                Some(children) => Self::traverse_path(children, &path[1..]),
                 None => Err(ErrorCode::Internal(format!(
                     "Cannot get column_node by path: {:?}",
                     path
@@ -156,9 +156,7 @@ impl ColumnNodes {
         let is_nested = is_nested || column_node.children.is_some();
         if path.len() > 1 {
             return match &column_node.children {
-                Some(ref children) => {
-                    Self::traverse_path_nested_aware(children, &path[1..], is_nested)
-                }
+                Some(children) => Self::traverse_path_nested_aware(children, &path[1..], is_nested),
                 None => Err(ErrorCode::Internal(format!(
                     "Cannot get column_node by path: {:?}",
                     path

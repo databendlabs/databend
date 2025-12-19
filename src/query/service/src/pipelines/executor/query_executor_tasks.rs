@@ -13,19 +13,19 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-use crate::pipelines::executor::executor_graph::ProcessorWrapper;
-use crate::pipelines::executor::executor_worker_context::CompletedAsyncTask;
 use crate::pipelines::executor::ExecutorTask;
 use crate::pipelines::executor::ExecutorWorkerContext;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::executor::WorkersWaitingStatus;
+use crate::pipelines::executor::executor_graph::ProcessorWrapper;
+use crate::pipelines::executor::executor_worker_context::CompletedAsyncTask;
 
 pub struct QueryExecutorTasksQueue {
     finished: Arc<AtomicBool>,
@@ -130,7 +130,7 @@ impl QueryExecutorTasksQueue {
         }
     }
 
-    #[allow(unused_assignments)]
+    #[allow(unused)]
     pub fn push_tasks(&self, ctx: &mut ExecutorWorkerContext, mut tasks: VecDeque<ExecutorTask>) {
         let mut workers_tasks = self.workers_tasks.lock();
 

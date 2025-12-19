@@ -127,7 +127,7 @@ impl MetaEventSubscriber {
     pub(crate) async fn process_meta_event_loop(
         &mut self,
         mut strm: impl Stream<Item = Result<WatchResponse, Status>> + Send + Unpin + 'static,
-        mut cancel: impl Future<Output = ()> + Send,
+        cancel: impl Future<Output = ()> + Send,
     ) -> Result<(), ProcessorError> {
         //
         let mut c = std::pin::pin!(cancel);

@@ -24,11 +24,6 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::compare_scalars;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::VariantType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
@@ -41,6 +36,11 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::compare_scalars;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::VariantType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::analyze_cluster_keys;
 use databend_storages_common_index::statistics_to_domain;
@@ -52,14 +52,14 @@ use jsonb::Value as JsonbValue;
 use log::warn;
 use serde::Serialize;
 
-use crate::io::SegmentsIO;
-use crate::sessions::TableContext;
-use crate::table_functions::parse_db_tb_opt_args;
-use crate::table_functions::string_literal;
-use crate::table_functions::SimpleArgFunc;
-use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
 use crate::Table;
+use crate::io::SegmentsIO;
+use crate::sessions::TableContext;
+use crate::table_functions::SimpleArgFunc;
+use crate::table_functions::SimpleArgFuncTemplate;
+use crate::table_functions::parse_db_tb_opt_args;
+use crate::table_functions::string_literal;
 
 pub struct ClusteringInformationArgs {
     database_name: String,

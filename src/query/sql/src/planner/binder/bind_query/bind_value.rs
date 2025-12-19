@@ -16,21 +16,31 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::Expr as AExpr;
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr as AExpr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::common_super_type;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Evaluator;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use crate::BindContext;
+use crate::Binder;
+use crate::ColumnBinding;
+use crate::ColumnBindingBuilder;
+use crate::ColumnSet;
+use crate::MetadataRef;
+use crate::NameResolutionContext;
+use crate::ScalarBinder;
+use crate::ScalarExpr;
+use crate::Visibility;
 use crate::binder::wrap_cast;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
@@ -43,16 +53,6 @@ use crate::plans::ExpressionScan;
 use crate::plans::HashJoinBuildCacheInfo;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
-use crate::BindContext;
-use crate::Binder;
-use crate::ColumnBinding;
-use crate::ColumnBindingBuilder;
-use crate::ColumnSet;
-use crate::MetadataRef;
-use crate::NameResolutionContext;
-use crate::ScalarBinder;
-use crate::ScalarExpr;
-use crate::Visibility;
 
 // The `ExpressionScanContext` is used to store the information of
 // expression scan and hash join build cache.

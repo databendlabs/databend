@@ -16,10 +16,11 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use databend_common_expression::types::i256;
-use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::number::F32;
-use databend_common_expression::types::number::F64;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Scalar;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::types::ALL_NUMBER_CLASSES;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BitmapType;
 use databend_common_expression::types::BooleanType;
@@ -31,19 +32,18 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
-use databend_common_expression::types::ALL_INTEGER_TYPES;
-use databend_common_expression::types::ALL_NUMBER_CLASSES;
+use databend_common_expression::types::i256;
+use databend_common_expression::types::number::F32;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionRegistry;
-use databend_common_expression::Scalar;
-use databend_functions_scalar_decimal::register_decimal_hash;
-use databend_functions_scalar_decimal::register_decimal_hash_with_seed;
 use databend_functions_scalar_decimal::HashFunction;
 use databend_functions_scalar_decimal::HashFunctionWithSeed;
+use databend_functions_scalar_decimal::register_decimal_hash;
+use databend_functions_scalar_decimal::register_decimal_hash_with_seed;
 use md5::Digest;
 use md5::Md5 as Md5Hasher;
 use naive_cityhash::cityhash64_with_seed;
@@ -349,7 +349,7 @@ for_all_integer_types! { integer_impl }
 impl DFHash for i256 {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        Hash::hash(self.0 .0.as_slice(), state);
+        Hash::hash(self.0.0.as_slice(), state);
     }
 }
 

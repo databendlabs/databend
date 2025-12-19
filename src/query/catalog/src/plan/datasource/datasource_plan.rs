@@ -18,11 +18,11 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 
-use crate::plan::datasource::datasource_info::DataSourceInfo;
 use crate::plan::InternalColumn;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
+use crate::plan::datasource::datasource_info::DataSourceInfo;
 use crate::table_args::TableArgs;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

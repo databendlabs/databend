@@ -22,8 +22,8 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::ResumeWarehousePlan;
 use databend_enterprise_resources_management::ResourcesManagement;
 
-use crate::interpreters::util::AuditElement;
 use crate::interpreters::Interpreter;
+use crate::interpreters::util::AuditElement;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 

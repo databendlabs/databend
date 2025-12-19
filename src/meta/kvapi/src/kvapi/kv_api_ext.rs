@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-use databend_common_meta_types::errors;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::errors;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::debug;

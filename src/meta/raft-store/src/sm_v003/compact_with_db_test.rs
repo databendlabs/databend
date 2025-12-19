@@ -15,11 +15,11 @@
 use std::io;
 use std::sync::Arc;
 
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
-use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use map_api::mvcc;
 use map_api::mvcc::ScopedSeqBoundedGet;
@@ -33,12 +33,12 @@ use state_machine_api::ExpireKey;
 use state_machine_api::KVMeta;
 use state_machine_api::UserKey;
 
+use crate::leveled_store::ScopedSeqBoundedRead;
 use crate::leveled_store::db_builder::DBBuilder;
 use crate::leveled_store::immutable_data::ImmutableData;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
-use crate::leveled_store::ScopedSeqBoundedRead;
 use crate::sm_v003::sm_v003::SMV003;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]

@@ -56,7 +56,11 @@ impl AsyncAccumulatingTransform for TransformConstraintVerify {
             match evaluator.run(expr)? {
                 Value::Scalar(scalar) => {
                     if !matches!(scalar.as_boolean(), Some(true)) {
-                        return Err(ErrorCode::ConstraintError(format!("CHECK constraint failed on table {} with constraint {name} expression {}", self.table_name, expr.sql_display())));
+                        return Err(ErrorCode::ConstraintError(format!(
+                            "CHECK constraint failed on table {} with constraint {name} expression {}",
+                            self.table_name,
+                            expr.sql_display()
+                        )));
                     }
                 }
                 Value::Column(column) => {
@@ -64,7 +68,11 @@ impl AsyncAccumulatingTransform for TransformConstraintVerify {
                         .iter()
                         .any(|scalar| !matches!(scalar.as_boolean(), Some(true)))
                     {
-                        return Err(ErrorCode::ConstraintError(format!("CHECK constraint failed on table {} with constraint {name} expression {}", self.table_name, expr.sql_display())));
+                        return Err(ErrorCode::ConstraintError(format!(
+                            "CHECK constraint failed on table {} with constraint {name} expression {}",
+                            self.table_name,
+                            expr.sql_display()
+                        )));
                     }
                 }
             }

@@ -16,16 +16,16 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::mpsc::channel;
 use databend_common_base::base::tokio::sync::mpsc::Receiver;
+use databend_common_base::base::tokio::sync::mpsc::channel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::Int32Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::types::Int32Type;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
@@ -38,8 +38,8 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
-use rand::rngs::ThreadRng;
 use rand::Rng;
+use rand::rngs::ThreadRng;
 
 fn create_source_pipe(ctx: Arc<QueryContext>, data: Vec<Vec<DataBlock>>) -> Result<Pipe> {
     use std::sync::Mutex;

@@ -18,17 +18,17 @@ use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UDFArgs;
 use databend_common_ast::ast::UDFDefinition;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_config::UDFConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_sql::NameResolutionContext;
 use databend_common_sql::normalize_identifier;
 use databend_common_sql::resolve_type_name_udf;
-use databend_common_sql::NameResolutionContext;
 use log::error;
 
 pub struct BuiltinUDFs {

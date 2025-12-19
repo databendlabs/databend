@@ -13,18 +13,18 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
-use std::sync::Arc;
 
 use log::info;
 use serde::Serialize;
 
+use crate::runtime::ThreadTracker;
+use crate::runtime::TimeSeriesProfileDesc;
 use crate::runtime::get_time_series_profile_desc;
 use crate::runtime::time_series::profile::TimeSeriesProfileName;
 use crate::runtime::time_series::profile::TimeSeriesProfiles;
-use crate::runtime::ThreadTracker;
-use crate::runtime::TimeSeriesProfileDesc;
 
 const DEFAULT_BATCH_SIZE: usize = 1024;
 
@@ -40,14 +40,13 @@ impl QueryTimeSeriesProfile {
             |x| match x.borrow().payload.local_time_series_profile.as_ref() {
                 None => {}
                 Some(profile) => {
-                    if profile.record(name, value) {
-                        if let Some(global_profile) =
+                    if profile.record(name, value)
+                        && let Some(global_profile) =
                             x.borrow().payload.time_series_profile.as_ref()
-                        {
-                            let should_flush = Self::should_flush(&global_profile.global_count);
-                            if should_flush {
-                                global_profile.flush(false);
-                            }
+                    {
+                        let should_flush = Self::should_flush(&global_profile.global_count);
+                        if should_flush {
+                            global_profile.flush(false);
                         }
                     }
                 }

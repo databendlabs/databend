@@ -16,10 +16,10 @@ use std::fmt::Write;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
 use databend_common_sql::plans::ShowCreateDatabasePlan;
 
 use crate::interpreters::Interpreter;

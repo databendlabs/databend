@@ -23,11 +23,8 @@ disallowed-methods = [
 
 disallowed-types = [
     { path = "once_cell::sync::Lazy", reason = "Please use `std::sync::LazyLock` instead." },
-
-    { path = "tokio::task::Builder", reason = "Disallowed types, please remove it." },
     { path = "tokio::task::LocalSet", reason = "Disallowed types, please remove it." },
     { path = "tokio::task::join_set::JoinSet", reason = "Disallowed types, please remove it." },
-    { path = "tokio::task::join_set::Builder", reason = "Disallowed types, please remove it." },
 ]
 
 disallowed-macros = [

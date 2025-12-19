@@ -30,11 +30,11 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::Result;
-use databend_common_meta_app::data_mask::data_mask_name_ident::Resource;
 use databend_common_meta_app::data_mask::CreateDatamaskReply;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DatamaskMeta;
 use databend_common_meta_app::data_mask::DropDatamaskReq;
+use databend_common_meta_app::data_mask::data_mask_name_ident::Resource;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_store::MetaStore;

@@ -18,10 +18,10 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 
-use crate::field_encoder::helpers::write_tsv_escaped_string;
-use crate::field_encoder::FieldEncoderCSV;
-use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
+use crate::field_encoder::FieldEncoderCSV;
+use crate::field_encoder::helpers::write_tsv_escaped_string;
+use crate::output_format::OutputFormat;
 
 pub type TSVOutputFormat = TSVOutputFormatBase<false, false>;
 pub type TSVWithNamesOutputFormat = TSVOutputFormatBase<true, false>;
@@ -127,21 +127,21 @@ mod test {
     use std::collections::BTreeMap;
 
     use databend_common_exception::Result;
-    use databend_common_expression::types::number::Int32Type;
-    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::number::Int32Type;
     use databend_common_meta_app::principal::FileFormatOptionsReader;
     use databend_common_meta_app::principal::FileFormatParams;
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_settings::Settings;
     use pretty_assertions::assert_eq;
 
+    use crate::FileFormatOptionsExt;
     use crate::output_format::utils::gen_schema_and_block;
     use crate::output_format::utils::get_output_format_clickhouse;
     use crate::output_format::utils::get_simple_block;
-    use crate::FileFormatOptionsExt;
 
     fn test_data_block(is_nullable: bool) -> Result<()> {
         let (schema, block) = get_simple_block(is_nullable);

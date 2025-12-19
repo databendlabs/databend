@@ -13,25 +13,25 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::sync::Weak;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
-use databend_common_base::runtime::workload_group::QuotaValue;
-use databend_common_base::runtime::workload_group::WorkloadGroupResource;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::MEMORY_QUOTA_KEY;
-use databend_common_base::runtime::MemStat;
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_base::runtime::workload_group::QuotaValue;
+use databend_common_base::runtime::workload_group::WorkloadGroupResource;
 use databend_common_exception::Result;
 use tokio::sync::Semaphore;
 
-use crate::workload::workload_mgr::WorkloadMgr;
 use crate::WorkloadApi;
+use crate::workload::workload_mgr::WorkloadMgr;
 
 #[derive(Debug, Default)]
 pub struct PercentNormalizer {
@@ -326,8 +326,8 @@ impl WorkloadGroupResourceManager {
 #[cfg(test)]
 mod tests {
     use databend_common_base::base::tokio;
-    use databend_common_base::runtime::workload_group::WorkloadGroup;
     use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
+    use databend_common_base::runtime::workload_group::WorkloadGroup;
     use databend_common_meta_store::MetaStore;
 
     use super::*;

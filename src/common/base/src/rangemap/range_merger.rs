@@ -64,15 +64,15 @@ impl RangeMerger {
             ranges: Vec::with_capacity(raw_ranges.len()),
         };
 
-        if let Some(whole_read_size) = whole_read_size {
-            if !raw_ranges.is_empty() {
-                let max_end = raw_ranges.iter().map(|r| r.end).max().unwrap_or(0);
+        if let Some(whole_read_size) = whole_read_size
+            && !raw_ranges.is_empty()
+        {
+            let max_end = raw_ranges.iter().map(|r| r.end).max().unwrap_or(0);
 
-                if max_end - raw_ranges[0].start <= whole_read_size {
-                    let r = raw_ranges.first().unwrap().start..max_end;
-                    rs.ranges = vec![r];
-                    return rs;
-                }
+            if max_end - raw_ranges[0].start <= whole_read_size {
+                let r = raw_ranges.first().unwrap().start..max_end;
+                rs.ranges = vec![r];
+                return rs;
             }
         }
 
@@ -99,11 +99,11 @@ impl RangeMerger {
     }
 
     fn add(&mut self, range: &Range<u64>) {
-        if let Some(last) = self.ranges.last_mut() {
-            if overlaps(last, range, self.max_gap_size, self.max_range_size) {
-                merge(last, range);
-                return;
-            }
+        if let Some(last) = self.ranges.last_mut()
+            && overlaps(last, range, self.max_gap_size, self.max_range_size)
+        {
+            merge(last, range);
+            return;
         }
 
         self.ranges.push(range.clone());

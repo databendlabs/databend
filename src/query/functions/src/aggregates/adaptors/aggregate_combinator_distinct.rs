@@ -18,11 +18,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::number::NumberColumnBuilder;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -30,14 +25,12 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::number::NumberColumnBuilder;
+use databend_common_expression::with_number_mapped_type;
 
-use super::aggregate_distinct_state::AggregateDistinctNumberState;
-use super::aggregate_distinct_state::AggregateDistinctState;
-use super::aggregate_distinct_state::AggregateDistinctStringState;
-use super::aggregate_distinct_state::AggregateUniqStringState;
-use super::aggregate_distinct_state::DistinctStateFunc;
-use super::aggregate_null_result::AggregateNullResultFunction;
-use super::assert_variadic_arguments;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateCountFunction;
@@ -49,6 +42,13 @@ use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::CombinatorDescription;
 use super::StateAddr;
+use super::aggregate_distinct_state::AggregateDistinctNumberState;
+use super::aggregate_distinct_state::AggregateDistinctState;
+use super::aggregate_distinct_state::AggregateDistinctStringState;
+use super::aggregate_distinct_state::AggregateUniqStringState;
+use super::aggregate_distinct_state::DistinctStateFunc;
+use super::aggregate_null_result::AggregateNullResultFunction;
+use super::assert_variadic_arguments;
 
 pub struct AggregateDistinctCombinator<State> {
     name: String,
@@ -76,7 +76,7 @@ impl<State> Clone for AggregateDistinctCombinator<State> {
 impl<State> AggregateDistinctCombinator<State>
 where State: Send + 'static
 {
-    fn get_state(place: AggrState) -> &mut State {
+    fn get_state(place: AggrState<'_>) -> &mut State {
         place
             .addr
             .next(place.loc[0].into_custom().unwrap().1)
@@ -193,10 +193,10 @@ where State: DistinctStateFunc
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = Self::get_state(place);
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
 
         if self.nested.need_manual_drop_state() {
-            self.nested.drop_state(place.remove_first_loc());
+            unsafe { self.nested.drop_state(place.remove_first_loc()) };
         }
     }
 

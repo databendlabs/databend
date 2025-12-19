@@ -20,13 +20,13 @@ use byteorder::ReadBytesExt;
 use databend_common_column::buffer::Buffer;
 use roaring::RoaringBitmap;
 
-use super::compress_double;
 use super::DoubleCompression;
 use super::DoubleStats;
 use super::DoubleType;
+use super::compress_double;
+use crate::compression::Compression;
 use crate::compression::double::decompress_double;
 use crate::compression::integer::Freq;
-use crate::compression::Compression;
 use crate::error::Result;
 use crate::write::WriteOptions;
 

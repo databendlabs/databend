@@ -16,13 +16,15 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::NumberScalar;
 
-use crate::binder::bind_window_function_info;
-use crate::binder::window::WindowRewriter;
+use crate::BindContext;
+use crate::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
+use crate::binder::bind_window_function_info;
+use crate::binder::window::WindowRewriter;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::Binder;
@@ -38,8 +40,6 @@ use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
-use crate::BindContext;
-use crate::ColumnBindingBuilder;
 
 const GT: &str = "gt";
 const GTE: &str = "gte";

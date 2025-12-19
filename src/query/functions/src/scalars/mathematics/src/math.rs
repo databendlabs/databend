@@ -18,21 +18,21 @@ use std::f64::consts::PI;
 use std::marker::PhantomData;
 
 use databend_common_base::base::OrderedFloat;
-use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::number::SimpleDomain;
-use databend_common_expression::types::number::F64;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Value;
+use databend_common_expression::types::ALL_FLOAT_TYPES;
+use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::ALL_FLOAT_TYPES;
-use databend_common_expression::types::ALL_INTEGER_TYPES;
-use databend_common_expression::types::ALL_NUMERICS_TYPES;
+use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionRegistry;
-use databend_common_expression::Value;
 use databend_functions_scalar_decimal::register_decimal_math;
 use num_traits::AsPrimitive;
 use num_traits::Float;
@@ -509,9 +509,5 @@ type Log10Function = GenericLogFunction<TenBase>;
 type Log2Function = GenericLogFunction<TwoBase>;
 
 fn factorial(n: i64) -> i64 {
-    if n <= 0 {
-        1
-    } else {
-        n * factorial(n - 1)
-    }
+    if n <= 0 { 1 } else { n * factorial(n - 1) }
 }

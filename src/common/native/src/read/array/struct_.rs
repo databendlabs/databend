@@ -16,8 +16,8 @@ use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
 use crate::error::Result;
-use crate::nested::create_struct;
 use crate::nested::NestedState;
+use crate::nested::create_struct;
 use crate::read::deserialize::NestedIters;
 
 type StructValues = Vec<Option<Result<(NestedState, Column)>>>;

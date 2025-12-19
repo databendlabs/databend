@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::utils::BitmapIter;
 use databend_common_column::bitmap::utils::ZipValidity;
-use databend_common_column::bitmap::Bitmap;
 
 #[test]
 fn basic() {

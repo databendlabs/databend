@@ -72,11 +72,9 @@ fn build_proto() -> Result<()> {
 
     // Version before 3.12 doesn't support allow_proto3_optional
     if version < Version::new(3, 12, 0) {
-        return Err(Error::other(
-            format!(
-                "protoc version is outdated, expect: >= 3.12.0, actual: {version}, reason: need feature --experimental_allow_proto3_optional"
-            ),
-        ));
+        return Err(Error::other(format!(
+            "protoc version is outdated, expect: >= 3.12.0, actual: {version}, reason: need feature --experimental_allow_proto3_optional"
+        )));
     }
     // allow_proto3_optional has been enabled by default since 3.15.0
     if version < Version::new(3, 15, 0) {

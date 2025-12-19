@@ -18,7 +18,6 @@
 #![feature(allocator_api)]
 #![feature(arbitrary_self_types)]
 #![feature(ptr_metadata)]
-#![feature(maybe_uninit_slice)]
 #![feature(trusted_len)]
 
 extern crate core;
@@ -43,7 +42,6 @@ pub mod traits;
 mod utils;
 
 pub use table0::Entry as HashtableEntry;
-pub use traits::hash_join_fast_string_hash;
 pub use traits::BloomHash;
 pub use traits::EntryMutRefLike as HashtableEntryMutRefLike;
 pub use traits::EntryRefLike as HashtableEntryRefLike;
@@ -51,6 +49,7 @@ pub use traits::FastHash;
 pub use traits::HashtableLike;
 pub use traits::Keyable as HashtableKeyable;
 pub use traits::UnsizedKeyable as HashtableUnsizedKeyable;
+pub use traits::hash_join_fast_string_hash;
 
 use crate::lookup_hashtable::LookupHashtable;
 use crate::lookup_hashtable::LookupTableIter;
@@ -108,8 +107,8 @@ pub type LookupHashMapIterMut<'a, K, const CAPACITY: usize, V> =
 
 pub use hashjoin_hashtable::RawEntry;
 pub use hashjoin_hashtable::RowPtr;
-pub use hashjoin_string_hashtable::StringRawEntry;
 pub use hashjoin_string_hashtable::STRING_EARLY_SIZE;
+pub use hashjoin_string_hashtable::StringRawEntry;
 pub use keys_ref::KeysRef;
 pub use partitioned_hashtable::hash2bucket;
 pub type HashJoinHashMap<K, const SKIP_DUPLICATES: bool = false> =
@@ -117,6 +116,6 @@ pub type HashJoinHashMap<K, const SKIP_DUPLICATES: bool = false> =
 pub type BinaryHashJoinHashMap<const SKIP_DUPLICATES: bool = false> =
     hashjoin_string_hashtable::HashJoinStringHashTable<SKIP_DUPLICATES>;
 pub use traits::HashJoinHashtableLike;
-pub use utils::fast_memcmp;
 pub use utils::Interval;
 pub use utils::MergeIntoBlockInfoIndex;
+pub use utils::fast_memcmp;

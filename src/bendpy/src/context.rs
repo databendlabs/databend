@@ -23,10 +23,10 @@ use databend_query::sessions::Session;
 use databend_query::sql::Planner;
 use pyo3::prelude::*;
 
-use crate::dataframe::default_box_size;
 use crate::dataframe::PyDataFrame;
-use crate::utils::wait_for_future;
+use crate::dataframe::default_box_size;
 use crate::utils::RUNTIME;
+use crate::utils::wait_for_future;
 
 #[pyclass(name = "SessionContext", module = "databend", subclass)]
 #[derive(Clone)]
@@ -223,7 +223,7 @@ impl PySessionContext {
             .map(|r| format!(" region = '{}'", r))
             .unwrap_or_default();
         let sql = format!(
-            "CREATE OR REPLACE CONNECTION {} STORAGE_TYPE = 'S3' access_key_id = '{}' secret_access_key = '{}'{}{}", 
+            "CREATE OR REPLACE CONNECTION {} STORAGE_TYPE = 'S3' access_key_id = '{}' secret_access_key = '{}'{}{}",
             name, access_key_id, secret_access_key, endpoint_clause, region_clause
         );
         let _ = self.sql(&sql, py)?.collect(py)?;

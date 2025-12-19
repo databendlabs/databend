@@ -22,9 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UDTFServer;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -112,6 +109,9 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
@@ -418,7 +418,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             Err(failed_tables) => {
                 let err_msg = format!(
                     "Due to concurrent transactions, transaction commit failed. Conflicting table IDs: {:?}",
-                    failed_tables.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
+                    failed_tables
+                        .iter()
+                        .map(|(tid, _, _)| tid)
+                        .collect::<Vec<_>>()
                 );
                 info!(
                     "Due to concurrent transactions, transaction commit failed. Conflicting tables: {:?}",

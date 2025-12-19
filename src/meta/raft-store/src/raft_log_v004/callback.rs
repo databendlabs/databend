@@ -21,8 +21,8 @@ use log::info;
 use log::warn;
 use tokio::sync::oneshot;
 
-use crate::raft_log_v004::callback_data::CallbackData;
 use crate::raft_log_v004::IODesc;
+use crate::raft_log_v004::callback_data::CallbackData;
 
 /// The callback to be called when the IO is completed.
 ///

@@ -14,11 +14,11 @@
 
 use std::collections::HashSet;
 
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::NumberDataType;
 
 use crate::meta::supported_stat_type;
 pub const ROW_COUNT: &str = "row_count";

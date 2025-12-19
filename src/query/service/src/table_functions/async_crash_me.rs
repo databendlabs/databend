@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 
 use chrono::DateTime;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -38,7 +35,6 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
-use futures::Stream;
 
 use crate::sessions::TableContext;
 use crate::storages::Table;
@@ -170,20 +166,5 @@ impl TableFunction for AsyncCrashMeTable {
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
     where Self: 'a {
         self
-    }
-}
-
-struct AsyncCrashMeStream {
-    message: Option<String>,
-}
-
-impl Stream for AsyncCrashMeStream {
-    type Item = Result<DataBlock>;
-
-    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match &self.message {
-            None => panic!("async crash me panic"),
-            Some(message) => panic!("{}", message),
-        }
     }
 }

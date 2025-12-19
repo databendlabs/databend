@@ -15,12 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::number::NumberScalar;
 use databend_common_sql::plans::ExistsTablePlan;
 
 use crate::interpreters::Interpreter;

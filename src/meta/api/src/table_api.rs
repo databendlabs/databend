@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
@@ -42,9 +43,6 @@ use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::principal::AutoIncrementKey;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
-use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -89,14 +87,13 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_app::KeyWithTenant;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::KvApiExt;
-use databend_common_meta_types::protobuf as pb;
-use databend_common_meta_types::txn_op::Request;
-use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
@@ -106,20 +103,24 @@ use databend_common_meta_types::TxnGetRequest;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::protobuf as pb;
+use databend_common_meta_types::txn_op::Request;
+use databend_common_meta_types::txn_op_response::Response;
 use fastrace::func_name;
 use log::debug;
 use log::error;
 use log::info;
 use seq_marked::SeqValue;
 
+use crate::DEFAULT_MGET_SIZE;
 use crate::assert_table_exist;
 use crate::database_api::DatabaseApi;
 use crate::database_util::get_db_or_err;
 use crate::deserialize_struct;
 use crate::error_util::table_has_to_not_exist;
 use crate::fetch_id;
-use crate::garbage_collection_api::get_history_tables_for_gc;
 use crate::garbage_collection_api::ORPHAN_POSTFIX;
+use crate::garbage_collection_api::get_history_tables_for_gc;
 use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_fetch_util::deserialize_id_get_response;
@@ -146,7 +147,6 @@ use crate::txn_op_put;
 use crate::txn_put_pb;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
-use crate::DEFAULT_MGET_SIZE;
 
 /// TableApi defines APIs for table lifecycle and metadata management.
 ///
@@ -1143,7 +1143,10 @@ where
                 let succ = match txn_response {
                     IdempotentKVTxnResponse::Success(_) => true,
                     IdempotentKVTxnResponse::AlreadyCommitted => {
-                        info!( "Transaction ID {} exists, the corresponding commit_table_meta transaction has been executed successfully", txn_sender.get_txn_id() );
+                        info!(
+                            "Transaction ID {} exists, the corresponding commit_table_meta transaction has been executed successfully",
+                            txn_sender.get_txn_id()
+                        );
                         true
                     }
                     IdempotentKVTxnResponse::Failed(_) => false,

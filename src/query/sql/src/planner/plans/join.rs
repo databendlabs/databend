@@ -21,10 +21,12 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::F64;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
+use crate::ColumnSet;
+use crate::IndexType;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
@@ -40,8 +42,6 @@ use crate::optimizer::ir::UniformSampleSet;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
-use crate::ColumnSet;
-use crate::IndexType;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {

@@ -38,8 +38,8 @@ use databend_common_exception::Result;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use enum_as_inner::EnumAsInner;
-use ethnum::u256;
 use ethnum::AsI256;
+use ethnum::u256;
 use itertools::Itertools;
 use micromarshal::Marshal;
 use num_bigint::BigInt;
@@ -49,29 +49,29 @@ use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::column_type_error;
-use super::compute_view::Compute;
-use super::compute_view::ComputeView;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::AnyType;
 use super::DataType;
+use super::F64;
 use super::NumberType;
 use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
 use super::ValueType;
-use super::F64;
-use crate::utils::arrow::buffer_into_mut;
-use crate::with_decimal_mapped_type;
-use crate::with_decimal_type;
+use super::column_type_error;
+use super::compute_view::Compute;
+use super::compute_view::ComputeView;
+use super::domain_type_error;
+use super::scalar_type_error;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
 use crate::Scalar;
 use crate::ScalarRef;
 use crate::Value;
+use crate::utils::arrow::buffer_into_mut;
+use crate::with_decimal_mapped_type;
+use crate::with_decimal_type;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreDecimal<T: Decimal>(PhantomData<T>);
@@ -130,7 +130,7 @@ impl<Num: Decimal> AccessType for CoreDecimal<Num> {
     }
 
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        *col.get_unchecked(index)
+        unsafe { *col.get_unchecked(index) }
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
@@ -270,7 +270,7 @@ impl<Num: Decimal> AccessType for CoreScalarDecimal<Num> {
     }
 
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        *col.get_unchecked(index)
+        unsafe { *col.get_unchecked(index) }
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
@@ -709,7 +709,7 @@ impl Decimal for i64 {
     fn e(n: u8) -> Self {
         const L: usize = i64::MAX_PRECISION as usize + 1;
         const TAB: [i64; L] = {
-            const fn gen() -> [i64; L] {
+            const fn generate_array() -> [i64; L] {
                 let mut arr = [0; L];
                 let mut i = 0;
                 loop {
@@ -721,7 +721,7 @@ impl Decimal for i64 {
                 }
                 arr
             }
-            gen()
+            generate_array()
         };
         TAB.get(n as usize)
             .copied()
@@ -974,7 +974,7 @@ impl Decimal for i128 {
     fn e(n: u8) -> Self {
         const L: usize = i128::MAX_PRECISION as usize + 1;
         const TAB: [i128; L] = {
-            const fn gen() -> [i128; L] {
+            const fn generate_array() -> [i128; L] {
                 let mut arr = [0; L];
                 let mut i = 0;
                 loop {
@@ -986,7 +986,7 @@ impl Decimal for i128 {
                 }
                 arr
             }
-            gen()
+            generate_array()
         };
         TAB.get(n as usize)
             .copied()
@@ -1066,7 +1066,7 @@ impl Decimal for i128 {
         /// `MIN_DECIMAL_FOR_EACH_PRECISION[p]` holds the minimum `i128` value that can
         /// be stored in a [arrow_schema::DataType::Decimal128] value of precision `p`
         const MIN_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = {
-            const fn gen() -> [i128; 38] {
+            const fn generate_array() -> [i128; 38] {
                 let mut arr = [0; 38];
                 let mut i = 0;
                 loop {
@@ -1078,7 +1078,7 @@ impl Decimal for i128 {
                 }
                 arr
             }
-            gen()
+            generate_array()
         };
 
         MIN_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
@@ -1088,7 +1088,7 @@ impl Decimal for i128 {
         /// `MAX_DECIMAL_FOR_EACH_PRECISION[p]` holds the maximum `i128` value that can
         /// be stored in [arrow_schema::DataType::Decimal128] value of precision `p`
         const MAX_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = {
-            const fn gen() -> [i128; 38] {
+            const fn generate_array() -> [i128; 38] {
                 let mut arr = [0; 38];
                 let mut i = 0;
                 loop {
@@ -1100,7 +1100,7 @@ impl Decimal for i128 {
                 }
                 arr
             }
-            gen()
+            generate_array()
         };
         MAX_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
@@ -3008,7 +3008,7 @@ impl TryFrom<u256> for i256 {
 
 impl BorshSerialize for i256 {
     fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
-        BorshSerialize::serialize(&self.0 .0, writer)
+        BorshSerialize::serialize(&self.0.0, writer)
     }
 }
 

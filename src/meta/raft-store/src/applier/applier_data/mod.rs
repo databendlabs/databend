@@ -17,8 +17,8 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::leveled_store::view::StateMachineView;
-use crate::sm_v003::writer_acquirer::WriterPermit;
 use crate::sm_v003::OnChange;
+use crate::sm_v003::writer_acquirer::WriterPermit;
 
 pub(crate) struct ApplierData {
     /// Hold a unique permit to serialize all apply operations to the state machine.

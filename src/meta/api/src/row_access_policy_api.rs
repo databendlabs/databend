@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReply;
 use databend_common_meta_app::row_access_policy::CreateRowAccessPolicyReq;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyMeta;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
+use databend_common_meta_app::row_access_policy::row_access_policy_name_ident;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_types::MetaError;

@@ -22,16 +22,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
-use crate::types::array::ArrayColumnBuilder;
-use crate::types::decimal::Decimal;
-use crate::types::decimal::DecimalColumn;
-use crate::types::i256;
-use crate::types::map::KvColumnBuilder;
-use crate::types::nullable::NullableColumn;
-use crate::types::number::NumberColumn;
-use crate::types::opaque::OpaqueType;
-use crate::types::timestamp_tz::TimestampTzType;
-use crate::types::vector::VectorColumnBuilder;
+use crate::BlockEntry;
+use crate::Column;
+use crate::ColumnBuilder;
+use crate::DataBlock;
+use crate::Value;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::ArgType;
@@ -46,15 +41,20 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VectorColumn;
 use crate::types::VectorDataType;
+use crate::types::array::ArrayColumnBuilder;
+use crate::types::decimal::Decimal;
+use crate::types::decimal::DecimalColumn;
+use crate::types::i256;
+use crate::types::map::KvColumnBuilder;
+use crate::types::nullable::NullableColumn;
+use crate::types::number::NumberColumn;
+use crate::types::opaque::OpaqueType;
+use crate::types::timestamp_tz::TimestampTzType;
+use crate::types::vector::VectorColumnBuilder;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::with_opaque_size;
 use crate::with_vector_number_type;
-use crate::BlockEntry;
-use crate::Column;
-use crate::ColumnBuilder;
-use crate::DataBlock;
-use crate::Value;
 
 impl DataBlock {
     pub fn concat(blocks: &[DataBlock]) -> Result<DataBlock> {

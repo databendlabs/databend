@@ -15,14 +15,14 @@
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_storage::read_parquet_schema_async_rs;
-use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_common_storages_fuse::io::MetaReaders;
 use databend_enterprise_query::storages::fuse::operations::virtual_columns::do_refresh_virtual_column;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_query::pipelines::PipelineBuildResult;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
-use databend_query::pipelines::PipelineBuildResult;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 

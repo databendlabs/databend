@@ -16,17 +16,17 @@ use std::collections::BTreeMap;
 use std::io::Error;
 use std::ops::RangeBounds;
 
+use databend_common_meta_types::Node;
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::sys_data::SysData;
-use databend_common_meta_types::Node;
 use futures_util::StreamExt;
+use map_api::IOResultStream;
 use map_api::mvcc;
 use map_api::mvcc::ScopedSeqBoundedRangeIter;
 use map_api::mvcc::ViewKey;
 use map_api::mvcc::ViewValue;
-use map_api::IOResultStream;
 use seq_marked::InternalSeq;
 use seq_marked::SeqMarked;
 use state_machine_api::ExpireKey;
@@ -259,7 +259,7 @@ mod tests {
 
             let mut want = Level::default();
             want.with_sys_data(|s| s.update_seq(200)); // Higher seq wins
-                                                       // Insert in sequence order: 10, 15, 20, 30
+            // Insert in sequence order: 10, 15, 20, 30
             want.kv.insert(k1(), 10, v1()).unwrap();
             want.kv.insert(k2(), 15, v3()).unwrap();
             want.kv.insert(k1(), 20, v2()).unwrap();
@@ -302,7 +302,7 @@ mod tests {
 
             let mut want = Level::default();
             want.with_sys_data(|s| s.update_seq(200)); // Same higher seq
-                                                       // Insert in sequence order: 10, 15, 20, 30
+            // Insert in sequence order: 10, 15, 20, 30
             want.kv.insert(k1(), 10, v1()).unwrap();
             want.kv.insert(k2(), 15, v3()).unwrap();
             want.kv.insert(k1(), 20, v2()).unwrap();
@@ -349,7 +349,7 @@ mod tests {
 
             let mut want = Level::default();
             want.with_sys_data(|s| s.update_seq(200)); // Higher seq wins
-                                                       // Insert in sequence order: 10, 15, 20, 30
+            // Insert in sequence order: 10, 15, 20, 30
             want.expire.insert(ek1(), 10, ev1()).unwrap();
             want.expire.insert(ek2(), 15, ev3()).unwrap();
             want.expire.insert(ek1(), 20, ev2()).unwrap();
@@ -391,7 +391,7 @@ mod tests {
 
             let mut want = Level::default();
             want.with_sys_data(|s| s.update_seq(200)); // Same higher seq
-                                                       // Insert in sequence order: 10, 15, 20, 30
+            // Insert in sequence order: 10, 15, 20, 30
             want.expire.insert(ek1(), 10, ev1()).unwrap();
             want.expire.insert(ek2(), 15, ev3()).unwrap();
             want.expire.insert(ek1(), 20, ev2()).unwrap();

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #![feature(stmt_expr_attributes)]
-#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 mod entry;
 mod kvapi;
 

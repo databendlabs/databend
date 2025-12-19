@@ -20,15 +20,20 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::infer_schema_type;
-use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::infer_schema_type;
+use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use itertools::Itertools;
 use log::info;
 
+use crate::ColumnBinding;
+use crate::ColumnEntry;
+use crate::IndexType;
+use crate::ScalarExpr;
+use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AggIndexInfo;
@@ -40,11 +45,6 @@ use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::SortItem;
-use crate::ColumnBinding;
-use crate::ColumnEntry;
-use crate::IndexType;
-use crate::ScalarExpr;
-use crate::Visibility;
 
 pub fn try_rewrite(
     table_index: IndexType,

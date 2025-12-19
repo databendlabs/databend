@@ -20,12 +20,12 @@ use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalSequence;
 use databend_common_base::base::Stoppable;
-use databend_common_meta_client::errors::CreationError;
+use databend_common_base::base::tokio;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::raft_types::NodeId;

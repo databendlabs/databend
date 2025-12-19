@@ -14,6 +14,6 @@
 
 pub mod row_access_policy_handler;
 
-pub use row_access_policy_handler::get_row_access_policy_handler;
 pub use row_access_policy_handler::RowAccessPolicyHandler;
 pub use row_access_policy_handler::RowAccessPolicyHandlerWrapper;
+pub use row_access_policy_handler::get_row_access_policy_handler;

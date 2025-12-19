@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
+use crate::ScalarExpr;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -24,7 +25,6 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Sequence;

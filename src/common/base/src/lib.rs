@@ -17,7 +17,6 @@
 #![feature(allocator_api)]
 #![feature(thread_local)]
 #![feature(ptr_metadata)]
-#![feature(result_flattening)]
 #![feature(try_trait_v2)]
 #![feature(thread_id_value)]
 #![feature(backtrace_frames)]
@@ -25,10 +24,8 @@
 #![feature(slice_swap_unchecked)]
 #![feature(variant_count)]
 #![feature(ptr_alignment_type)]
-#![feature(vec_into_raw_parts)]
 #![feature(slice_ptr_get)]
 #![feature(alloc_layout_extra)]
-#![feature(let_chains)]
 
 pub mod base;
 pub mod containers;
@@ -42,9 +39,9 @@ pub mod rangemap;
 pub mod runtime;
 pub mod vec_ext;
 
+pub use runtime::AsyncTaskItem;
+pub use runtime::GLOBAL_TASK;
+pub use runtime::JoinHandle;
 pub use runtime::dump_backtrace;
 pub use runtime::get_all_tasks;
 pub use runtime::set_alloc_error_hook;
-pub use runtime::AsyncTaskItem;
-pub use runtime::JoinHandle;
-pub use runtime::GLOBAL_TASK;

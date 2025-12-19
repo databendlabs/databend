@@ -16,9 +16,9 @@
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::txn_condition::Target;
 
 /// Build a TxnCondition that compares the seq of a record.
 pub fn txn_cond_eq_seq(key: &impl kvapi::Key, seq: u64) -> TxnCondition {

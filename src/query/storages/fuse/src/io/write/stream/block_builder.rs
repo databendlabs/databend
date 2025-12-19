@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::mem;
 use std::sync::Arc;
 
@@ -25,7 +25,6 @@ use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
@@ -35,13 +34,14 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
 use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_blocks::NdvProvider;
+use databend_storages_common_blocks::build_parquet_writer_properties;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::Index;
@@ -55,13 +55,8 @@ use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
 use parquet::format::FileMetaData;
 
-use crate::io::create_inverted_index_builders;
-use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
-use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
-use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
-use crate::io::write::stream::ColumnStatisticsState;
-use crate::io::write::BlockStatsBuilder;
-use crate::io::write::InvertedIndexState;
+use crate::FuseStorageFormat;
+use crate::FuseTable;
 use crate::io::BlockSerialization;
 use crate::io::BloomIndexState;
 use crate::io::InvertedIndexBuilder;
@@ -70,9 +65,14 @@ use crate::io::TableMetaLocationGenerator;
 use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::io::WriteSettings;
+use crate::io::create_inverted_index_builders;
+use crate::io::write::BlockStatsBuilder;
+use crate::io::write::InvertedIndexState;
+use crate::io::write::stream::ColumnStatisticsState;
+use crate::io::write::stream::block_builder::ArrowParquetWriter::Initialized;
+use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
+use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
 use crate::operations::column_parquet_metas;
-use crate::FuseStorageFormat;
-use crate::FuseTable;
 
 pub struct UninitializedArrowWriter {
     write_settings: WriteSettings,

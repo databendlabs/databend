@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use databend_common_base::dump_backtrace;
-use poem::web::Query;
 use poem::IntoResponse;
+use poem::web::Query;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct DumpStackRequest {
