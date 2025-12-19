@@ -12,6 +12,18 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: resolve toolchain
+      id: toolchain
+      shell: bash
+      run: |
+        TOOLCHAIN_VERSION=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
+        if [[ -z "${TOOLCHAIN_VERSION}" ]]; then
+          echo "::error title=Missing toolchain version::Failed to read toolchain.channel from rust-toolchain.toml"
+          exit 1
+        fi
+
+        echo "TOOLCHAIN_VERSION=${TOOLCHAIN_VERSION}" >> "${GITHUB_OUTPUT}"
+
     - name: clean the existing toolchain
       shell: bash
       run: |
@@ -46,7 +58,7 @@ runs:
         export SCCACHE_IDLE_TIMEOUT=0
         export SCCACHE_BUCKET=databend-ci
         export SCCACHE_REGION=us-east-2
-        export SCCACHE_S3_KEY_PREFIX="cache/sccache/"
+        export SCCACHE_S3_KEY_PREFIX="sccache/${{ steps.toolchain.outputs.TOOLCHAIN_VERSION }}/"
         export SCCACHE_S3_USE_SSL="true"
         export SCCACHE_ERROR_LOG=/workspace/target/sccache.log
         export SCCACHE_LOG=info
@@ -60,7 +72,7 @@ runs:
         export SCCACHE_IDLE_TIMEOUT=0
         export SCCACHE_GCS_RW_MODE=READ_WRITE
         export SCCACHE_GCS_BUCKET=databend-ci
-        export SCCACHE_GCS_KEY_PREFIX="cache/sccache/"
+        export SCCACHE_GCS_KEY_PREFIX="sccache/${{ steps.toolchain.outputs.TOOLCHAIN_VERSION }}/"
         export SCCACHE_ERROR_LOG=/workspace/target/sccache.log
         export SCCACHE_LOG=info
         EOF
@@ -108,19 +120,19 @@ runs:
         cat /proc/cpuinfo
         free -h
 
-    # - uses: everpcpc/actions-cache@v1
-    #   if: env.RUNNER_PROVIDER == 'aws'
-    #   env:
-    #     AWS_REGION: us-east-2
-    #   with:
-    #     bucket: "databend-ci"
-    #     root: "cache/cargo"
-    #     path: |
-    #       ~/.cargo/registry/cache
-    #       ~/.cargo/registry/index
-    #       ~/.cargo/git/db
-    #     key: |
-    #       ${{ runner.os }}/${{ inputs.target }}/${{ hashFiles('**/Cargo.lock') }}
-    #     restore-keys: |
-    #       ${{ runner.os }}/${{ inputs.target }}/
-    #       ${{ runner.os }}/
+    - uses: everpcpc/actions-cache@v2
+      if: env.RUNNER_PROVIDER == 'aws'
+      env:
+        AWS_REGION: us-east-2
+      with:
+        bucket: "databend-ci"
+        root: "cache/cargo"
+        path: |
+          ~/.cargo/registry/cache
+          ~/.cargo/registry/index
+          ~/.cargo/git/db
+        key: |
+          ${{ runner.os }}/${{ inputs.target }}/${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}/${{ inputs.target }}/
+          ${{ runner.os }}/
