@@ -596,6 +596,13 @@ overflow-checks = true
 incremental = false
 debug-assertions = true
 
+[profile.unit-test]
+inherits = "test"
+opt-level = 1
+codegen-units = 8
+lto = false
+debug = true
+
 # [profile.release.package]
 # databend-query = { codegen-units = 4 }
 # databend-binaries = { codegen-units = 4 }

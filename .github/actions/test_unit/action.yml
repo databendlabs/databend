@@ -18,7 +18,7 @@ runs:
 
     - shell: bash
       run: |
-        cargo nextest run --profile ci --no-fail-fast --hide-progress-bar
+        cargo nextest run --profile unit-test --no-fail-fast --hide-progress-bar
         grep ' Compiled in ' target/sccache.log || true
       env:
         RUST_LOG: ERROR
