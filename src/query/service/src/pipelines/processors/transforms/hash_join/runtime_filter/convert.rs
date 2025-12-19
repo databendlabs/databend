@@ -129,41 +129,41 @@ pub fn convert_packet_bloom_hashes_to_filter(
     runtime_filter_descs: &HashMap<usize, &RuntimeFilterDesc>,
     max_threads: usize,
 ) -> Result<()> {
-    let Some(ref mut map) = packet.packets else {
-        return Ok(());
-    };
-
-    for (id, rf) in map.iter_mut() {
-        let desc = match runtime_filter_descs.get(id) {
-            Some(d) => *d,
-            None => continue,
-        };
-
-        // If we don't have global build table statistics, we cannot guarantee
-        // consistent bloom filter size across nodes. Disable bloom for this
-        // runtime filter in distributed mode.
-        if desc.build_table_rows.is_none() {
-            rf.bloom = None;
-            continue;
-        }
-
-        if let Some(bloom) = rf.bloom.take() {
-            rf.bloom = Some(match bloom {
-                BloomPayload::Hashes(hashes) => {
-                    // If there are no hashes, keep bloom disabled.
-                    if hashes.is_empty() {
-                        continue;
-                    }
-
-                    let filter = build_sbbf_from_hashes(hashes, max_threads, rf.id, true)?;
-                    BloomPayload::Filter(SerializableBloomFilter {
-                        data: filter.to_bytes(),
-                    })
-                }
-                BloomPayload::Filter(filter) => BloomPayload::Filter(filter),
-            });
-        }
-    }
+    // let Some(ref mut map) = packet.packets else {
+    //     return Ok(());
+    // };
+    //
+    // for (id, rf) in map.iter_mut() {
+    //     let desc = match runtime_filter_descs.get(id) {
+    //         Some(d) => *d,
+    //         None => continue,
+    //     };
+    //
+    //     // If we don't have global build table statistics, we cannot guarantee
+    //     // consistent bloom filter size across nodes. Disable bloom for this
+    //     // runtime filter in distributed mode.
+    //     if desc.build_table_rows.is_none() {
+    //         rf.bloom = None;
+    //         continue;
+    //     }
+    //
+    //     if let Some(bloom) = rf.bloom.take() {
+    //         rf.bloom = Some(match bloom {
+    //             BloomPayload::Hashes(hashes) => {
+    //                 // If there are no hashes, keep bloom disabled.
+    //                 if hashes.is_empty() {
+    //                     continue;
+    //                 }
+    //
+    //                 let filter = build_sbbf_from_hashes(hashes, max_threads, rf.id, true)?;
+    //                 BloomPayload::Filter(SerializableBloomFilter {
+    //                     data: filter.to_bytes(),
+    //                 })
+    //             }
+    //             BloomPayload::Filter(filter) => BloomPayload::Filter(filter),
+    //         });
+    //     }
+    // }
     Ok(())
 }
 
