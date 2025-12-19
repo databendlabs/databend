@@ -2,8 +2,8 @@
 serial-integration = { max-threads = 1 }
 
 [profile.ci]
-build-threads = 8
-run-threads = 4
+build-threads = 4
+run-threads = 2
 
 [[profile.default.overrides]]
 filter = 'package(databend-meta)'
