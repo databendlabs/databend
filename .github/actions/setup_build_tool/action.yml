@@ -54,7 +54,7 @@ runs:
           aws)
             echo "setting up sccache for AWS S3..."
             cat <<EOF >>$BIN_LOCAL/build-tool
-        export ENABLE_SCCACHE=true
+        export ENABLE_SCCACHE=false
         export SCCACHE_IDLE_TIMEOUT=0
         export SCCACHE_BUCKET=databend-ci
         export SCCACHE_REGION=us-east-2
@@ -68,7 +68,7 @@ runs:
           gcp)
             echo "setting up sccache for Google Cloud Storage..."
             cat <<EOF >>$BIN_LOCAL/build-tool
-        export ENABLE_SCCACHE=true
+        export ENABLE_SCCACHE=false
         export SCCACHE_IDLE_TIMEOUT=0
         export SCCACHE_GCS_RW_MODE=READ_WRITE
         export SCCACHE_GCS_BUCKET=databend-ci
