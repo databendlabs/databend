@@ -18,7 +18,7 @@ runs:
 
     - shell: bash
       run: |
-        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps nextest run --no-fail-fast --hide-progress-bar
+        cargo nextest run --profile ci --no-fail-fast --hide-progress-bar
         grep ' Compiled in ' target/sccache.log || true
       env:
         RUST_TEST_THREADS: 4

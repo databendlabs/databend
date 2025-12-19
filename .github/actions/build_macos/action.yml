@@ -45,10 +45,10 @@ runs:
       run: |
         artifacts="${{ inputs.artifacts }}"
         echo "==> building libs ..."
-        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --profile ${{ env.BUILD_PROFILE }} --lib
+        cargo build --target ${{ inputs.target }} --profile ${{ env.BUILD_PROFILE }} --lib
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
+          cargo build --target ${{ inputs.target }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
         done
 
     - name: Upload artifact

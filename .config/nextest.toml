@@ -1,8 +1,14 @@
 [test-groups]
 serial-integration = { max-threads = 1 }
 
+[profile.ci]
+build-threads = 8
+run-threads = 4
 
 [[profile.default.overrides]]
 filter = 'package(databend-meta)'
 test-group = 'serial-integration'
 
+[[profile.ci.overrides]]
+filter = 'package(databend-meta)'
+test-group = 'serial-integration'
