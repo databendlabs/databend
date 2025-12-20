@@ -73,7 +73,7 @@ if [[ $ENABLE_SCCACHE == "true" ]]; then
 	env | grep -E "^SCCACHE_" >"${CARGO_HOME}/sccache.env"
 	EXTRA_ARGS="${EXTRA_ARGS} --env RUSTC_WRAPPER=sccache --env-file ${CARGO_HOME}/sccache.env"
 	if [[ $COMMAND == "cargo" ]]; then
-		COMMAND_ARGS="mold -run ${COMMAND_ARGS} && sccache --show-adv-stats"
+		COMMAND_ARGS="${COMMAND_ARGS} && sccache --show-adv-stats"
 	fi
 fi
 

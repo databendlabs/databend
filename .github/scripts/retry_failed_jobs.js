@@ -317,44 +317,19 @@ async function findExistingRetryComment(github, context, core, pr) {
     }
 }
 
-async function getRetryCountFromAPI(github, context, core, workflowRun) {
-    try {
-        // Get workflow runs for the same branch/commit
-        const { data: workflowRuns } = await github.rest.actions.listWorkflowRuns({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            workflow_id: workflowRun.workflow_id,
-            branch: workflowRun.head_branch,
-            per_page: 100
-        });
-
-        // Count runs that were retries (have the same head_sha)
-        let retryCount = 0;
-        const currentSha = workflowRun.head_sha;
-
-        for (const run of workflowRuns.workflow_runs) {
-            if (run.head_sha === currentSha && run.id !== workflowRun.id) {
-                // This is a previous run with the same commit SHA
-                retryCount++;
-            }
-        }
-
-        core.info(`Found ${retryCount} previous workflow runs for the same commit`);
-        return retryCount;
-    } catch (error) {
-        core.warning(`Failed to get retry count from API: ${error.message}`);
+function getCurrentRetryCount(workflowRun) {
+    if (!workflowRun || typeof workflowRun.run_attempt !== 'number') {
         return 0;
     }
+    return Math.max(0, workflowRun.run_attempt - 1);
 }
 
-async function addCommentToPR(github, context, core, runID, runURL, jobData, priorityCancelled, maxRetriesReached = false) {
+async function addCommentToPR(github, context, core, workflowRun, runURL, jobData, priorityCancelled, maxRetriesReached = false) {
     try {
-        // Get workflow run to find the branch
-        const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            run_id: runID
-        });
+        const runID = workflowRun.id;
+        const currentRetryCount = getCurrentRetryCount(workflowRun);
+        const newRetryCount = jobData.retryableJobsCount > 0 ? currentRetryCount + 1 : currentRetryCount;
+        const displayRunURL = runURL || workflowRun.html_url;
 
         // Find related PR
         const pr = await findRelatedPR(github, context, core, workflowRun);
@@ -366,10 +341,6 @@ async function addCommentToPR(github, context, core, runID, runURL, jobData, pri
 
         // Try to find existing retry comment
         const existingComment = await findExistingRetryComment(github, context, core, pr);
-
-        // Get current retry count from API
-        const currentRetryCount = await getRetryCountFromAPI(github, context, core, workflowRun);
-        const newRetryCount = jobData.retryableJobsCount > 0 ? currentRetryCount + 1 : currentRetryCount;
 
         // Build title with retry count
         const titleSuffix = newRetryCount > 0 ? ` (Retry ${newRetryCount})` : '';
@@ -383,17 +354,17 @@ async function addCommentToPR(github, context, core, runID, runURL, jobData, pri
             // Simplified comment for priority cancelled workflow
             comment = `${TITLE}${titleSuffix}
 
-> **Workflow:** [\`${runID}\`](${runURL})
+> **Workflow:** [\`${runID}\`](${displayRunURL})
 
 ### ⛔️ **CANCELLED**
 Higher priority request detected - retry cancelled to avoid conflicts.
 
-[View Workflow](${runURL})`;
+[View Workflow](${displayRunURL})`;
         } else if (maxRetriesReached) {
             // Comment for when max retries reached
             comment = `${TITLE}${titleSuffix}
 
-> **Workflow:** [\`${runID}\`](${runURL})
+> **Workflow:** [\`${runID}\`](${displayRunURL})
 
 ### 📊 Summary
 - **Total Jobs:** ${jobData.totalJobs}
@@ -404,7 +375,7 @@ Higher priority request detected - retry cancelled to avoid conflicts.
 ### 🚫 **MAX RETRIES REACHED**
 Maximum retry count (3) has been reached. Manual intervention required.
 
-[View Workflow](${runURL})`;
+[View Workflow](${displayRunURL})`;
 
             comment += `
 
@@ -440,7 +411,7 @@ Automated analysis using job annotations to distinguish infrastructure issues (a
             // Full comment for normal analysis
             comment = `${TITLE}${titleSuffix}
 
-> **Workflow:** [\`${runID}\`](${runURL})
+> **Workflow:** [\`${runID}\`](${displayRunURL})
 
 ### 📊 Summary
 - **Total Jobs:** ${jobData.totalJobs}
@@ -454,7 +425,7 @@ Automated analysis using job annotations to distinguish infrastructure issues (a
 ### ✅ **AUTO-RETRY INITIATED**
 **${jobData.retryableJobsCount} job(s)** retried due to infrastructure issues (runner failures, timeouts, etc.)
 
-[View Progress](${runURL})`;
+[View Progress](${displayRunURL})`;
             } else {
                 comment += `
 
@@ -579,24 +550,25 @@ module.exports = async ({ github, context, core }) => {
     // Handle priority cancellation
     if (priorityCancelled) {
         core.info('Cancelling retry since a higher priority request was made');
-        await addCommentToPR(github, context, core, runID, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, true);
+        await addCommentToPR(github, context, core, workflowRun, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, true);
         return;
     }
 
     // Check retry count limit (max 3 retries)
-    const currentRetryCount = await getRetryCountFromAPI(github, context, core, workflowRun);
+    const currentRetryCount = getCurrentRetryCount(workflowRun);
+    core.info(`Current retry attempt: ${workflowRun.run_attempt || 1} (previous retries: ${currentRetryCount})`);
     const maxRetries = 3;
 
     if (currentRetryCount >= maxRetries) {
         core.info(`Maximum retry count (${maxRetries}) reached. Skipping retry.`);
-        await addCommentToPR(github, context, core, runID, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, false, true);
+        await addCommentToPR(github, context, core, workflowRun, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, false, true);
         return;
     }
 
     // Handle no retryable jobs
     if (jobsToRetry.length === 0) {
         core.info('No jobs found with retryable errors. Skipping retry.');
-        await addCommentToPR(github, context, core, runID, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, false);
+        await addCommentToPR(github, context, core, workflowRun, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, false);
         return;
     }
 
@@ -604,7 +576,7 @@ module.exports = async ({ github, context, core }) => {
     await retryFailedJobs(github, context, core, runID, jobsToRetry);
 
     // Add comment to PR
-    await addCommentToPR(github, context, core, runID, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: jobsToRetry.length }, false);
+    await addCommentToPR(github, context, core, workflowRun, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: jobsToRetry.length }, false);
 
     core.info('Retry process completed');
 };
