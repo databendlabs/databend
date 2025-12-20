@@ -13,12 +13,12 @@ create table t(c int) storage_format = 'native' compression = 'lz4';
 statement ok
 insert into t select number from numbers(2048);
 
-query III
-select * from fuse_encoding('db_09_0027');
+query TTTTIIITT
+select * exclude(block_location) from fuse_encoding('db_09_0027');
 ----
-t c INT NULL 2048 2592 8192 DeltaBitpack NULL
+t Native c INT NULL 2048 2592 8192 DeltaBitpack NULL
 
-query III
+query TTI
 select level_one,level_two,count(*) from fuse_encoding('db_09_0027') group by level_one,level_two;
 ----
 DeltaBitpack NULL 1
@@ -26,13 +26,13 @@ DeltaBitpack NULL 1
 statement ok
 insert into t select 1 from t limit 2048;
 
-query III
+query TTI
 select level_one,level_two,count(*) from fuse_encoding('db_09_0027') group by level_one,level_two order by level_one;
 ----
 DeltaBitpack NULL 1
 OneValue NULL 1
 
-query III
+query TTI
 select level_one,level_two,count(*) from fuse_encoding('db_09_0027') where level_one='DeltaBitpack' group by level_one,level_two order by level_one;
 ----
 DeltaBitpack NULL 1
@@ -46,7 +46,7 @@ insert into t2 select 'a' as a from numbers(10) limit 10;
 statement ok
 insert into t2 select 'b' as a from numbers(10) limit 10;
 
-query III
+query TTI
 select level_one,level_two,count(*) from fuse_encoding('db_09_0027') where table_name='t2' group by level_one,level_two order by level_one;
 ----
 OneValue NULL 2
@@ -54,21 +54,39 @@ OneValue NULL 2
 statement ok
 optimize table t2 compact;
 
-query III
+query TTI
 select level_one,level_two,count(*) from fuse_encoding('db_09_0027') where table_name='t2' group by level_one,level_two order by level_one;
 ----
 Dict Rle 1
 
-query III
+query TTI
 select level_one,level_two,count(*) from fuse_encoding('db_09_0027') where column_name='d' group by level_one,level_two order by level_one;
 ----
 Dict Rle 1
 
-query III
+query TTI
 select level_one,level_two,count(*) from fuse_encoding('db_09_0027') where column_type like '%INT%' group by level_one,level_two order by level_one;
 ----
 DeltaBitpack NULL 1
 OneValue NULL 1
+
+
+statement ok
+create table t_parquet(c1 int, c2 int) storage_format='parquet';
+
+statement ok
+insert into t_parquet(c1, c2) select 1, number from numbers(100);
+
+query TTTTIIITT
+select * exclude(block_location) from fuse_encoding('db_09_0027', 't_parquet') order by column_name;
+----
+t_parquet Parquet c1 INT NULL (INT32) NULL 57 48 plain,rle,rle_dictionary zstd
+t_parquet Parquet c2 INT NULL (INT32) NULL 202 429 plain,rle zstd
+
+query TTTTIIITT
+select * exclude(block_location) from fuse_encoding('db_09_0027', 't_parquet', 'c2');
+----
+t_parquet Parquet c2 INT NULL (INT32) NULL 202 429 plain,rle zstd
 
 statement ok
 DROP DATABASE db_09_0027
