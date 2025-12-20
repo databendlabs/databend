@@ -77,7 +77,7 @@ runs:
         for artifact in ${artifacts//,/ }; do
           binaries="${binaries} --bin databend-$artifact"
         done
-        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
+        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Build Release for specific artifacts
@@ -87,7 +87,7 @@ runs:
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
+          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
           ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 
