@@ -272,13 +272,13 @@ macro_rules! define_physical_plan_impl {
     ( $( $(#[$meta:meta])? $variant:ident => $path:path ),+ $(,)? ) => {
         #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
         /// static dispatch replacement for typetag-based dynamic dispatch, performance improvement via reduced stack depth
-        pub(crate) enum PhysicalPlanImpl {
+        pub(crate) enum PhysicalPlanSerde {
             $( $(#[$meta])? $variant($path), )+
         }
 
-        $( $(#[$meta])? impl From<$path> for PhysicalPlanImpl {
+        $( $(#[$meta])? impl From<$path> for PhysicalPlanSerde {
             fn from(v: $path) -> Self {
-                PhysicalPlanImpl::$variant(v)
+                PhysicalPlanSerde::$variant(v)
             }
         })+
     };
@@ -289,7 +289,7 @@ include!(concat!(env!("OUT_DIR"), "/physical_plan_impls.rs"));
 include!(concat!(env!("OUT_DIR"), "/physical_plan_dispatch.rs"));
 
 pub struct PhysicalPlan {
-    inner: Box<PhysicalPlanImpl>,
+    inner: Box<PhysicalPlanSerde>,
 }
 
 dyn_clone::clone_trait_object!(IPhysicalPlan);
@@ -322,7 +322,7 @@ impl<'de> serde::Deserialize<'de> for PhysicalPlan {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         // Deserialize to JSON first to avoid backtracking failures in streaming deserializers.
         let value = JsonValue::deserialize(deserializer)?;
-        let inner: PhysicalPlanImpl = serde_json::from_value(value).map_err(DeError::custom)?;
+        let inner: PhysicalPlanSerde = serde_json::from_value(value).map_err(DeError::custom)?;
 
         Ok(PhysicalPlan {
             inner: Box::new(inner),
@@ -333,7 +333,7 @@ impl<'de> serde::Deserialize<'de> for PhysicalPlan {
 impl PhysicalPlan {
     #[allow(private_bounds)]
     pub fn new<T>(inner: T) -> PhysicalPlan
-    where PhysicalPlanImpl: From<T> {
+    where PhysicalPlanSerde: From<T> {
         PhysicalPlan {
             inner: Box::new(inner.into()),
         }
