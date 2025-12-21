@@ -29,9 +29,9 @@ use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::PlanScope;
 use databend_common_sql::Metadata;
 use dyn_clone::DynClone;
-use serde::de::Error as DeError;
 use serde::Deserializer;
 use serde::Serializer;
+use serde::de::Error as DeError;
 use serde_json::Value as JsonValue;
 
 use crate::physical_plans::format::FormatContext;
