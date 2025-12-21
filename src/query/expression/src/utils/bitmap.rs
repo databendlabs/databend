@@ -16,11 +16,11 @@ use std::borrow::Cow;
 
 use databend_common_column::binary::BinaryColumn;
 use databend_common_column::binary::BinaryColumnBuilder;
-use databend_common_io::deserialize_bitmap;
 use databend_common_io::HYBRID_KIND_LARGE;
 use databend_common_io::HYBRID_KIND_SMALL;
 use databend_common_io::HYBRID_MAGIC;
 use databend_common_io::HYBRID_VERSION;
+use databend_common_io::deserialize_bitmap;
 #[inline]
 pub fn is_hybrid_encoding(bytes: &[u8]) -> bool {
     if bytes.is_empty() {

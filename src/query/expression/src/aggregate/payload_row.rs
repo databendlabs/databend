@@ -16,7 +16,6 @@ use bumpalo::Bump;
 use databend_common_base::hints::assume;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_io::deserialize_bitmap;
-use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 
@@ -148,13 +147,17 @@ pub(super) unsafe fn serialize_column_to_rowformat(
                     }
                 };
                 let data = arena.alloc_slice_copy(normalized);
-                address[index].write_bytes(offset, data);
+                unsafe {
+                    address[index].write_bytes(offset, data);
+                }
             }
         }
         Column::Binary(v) | Column::Variant(v) | Column::Geometry(v) => {
             for &index in select_vector {
                 let data = arena.alloc_slice_copy(unsafe { v.index_unchecked(index.to_usize()) });
-                address[index].write_bytes(offset, data);
+                unsafe {
+                    address[index].write_bytes(offset, data);
+                }
             }
         }
         Column::String(v) => {
@@ -595,8 +598,8 @@ impl<'s> CompareState<'s> {
 #[cfg(test)]
 mod tests {
     use databend_common_column::binary::BinaryColumnBuilder;
-    use databend_common_io::deserialize_bitmap;
     use databend_common_io::HybridBitmap;
+    use databend_common_io::deserialize_bitmap;
     use roaring::RoaringTreemap;
 
     use super::*;

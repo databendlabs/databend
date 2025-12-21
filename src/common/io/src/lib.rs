@@ -46,15 +46,15 @@ mod stat_buffer;
 pub mod interval;
 pub mod wkb;
 
-pub use bitmap::deserialize_bitmap;
-pub use bitmap::parse_bitmap;
-pub use bitmap::HybridBitmap;
 pub use bitmap::HYBRID_HEADER_LEN;
 pub use bitmap::HYBRID_KIND_LARGE;
 pub use bitmap::HYBRID_KIND_SMALL;
 pub use bitmap::HYBRID_MAGIC;
 pub use bitmap::HYBRID_VERSION;
+pub use bitmap::HybridBitmap;
 pub use bitmap::LARGE_THRESHOLD;
+pub use bitmap::deserialize_bitmap;
+pub use bitmap::parse_bitmap;
 pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;
 pub use escape::escape_string;
