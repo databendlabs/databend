@@ -296,9 +296,10 @@ impl Binder {
     ) -> Result<Plan> {
         let DropIndexStmt { if_exists, index } = stmt;
 
+        let index_name = self.normalize_object_identifier(index);
         let plan = DropIndexPlan {
             if_exists: *if_exists,
-            index: index.to_string(),
+            index: index_name,
         };
         Ok(Plan::DropIndex(Box::new(plan)))
     }
