@@ -151,7 +151,7 @@ fn write_dispatch(out_path: &Path, entries: &[(Option<String>, String, String)])
             out.push_str(meta);
             out.push('\n');
         }
-        out.push_str("            PhysicalPlanImpl::");
+        out.push_str("            PhysicalPlanSerde::");
         out.push_str(variant);
         out.push_str("($plan) => $body,\n");
     }
@@ -168,7 +168,7 @@ fn write_dispatch(out_path: &Path, entries: &[(Option<String>, String, String)])
             out.push_str(meta);
             out.push('\n');
         }
-        out.push_str("            PhysicalPlanImpl::");
+        out.push_str("            PhysicalPlanSerde::");
         out.push_str(variant);
         out.push_str("($plan) => $body,\n");
     }
