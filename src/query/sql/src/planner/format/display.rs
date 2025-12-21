@@ -190,12 +190,19 @@ where
             ));
         }
 
-        let children = s_expr
-            .children()
-            .map(|s_expr| self.humanize_s_expr(s_expr))
-            .collect::<Result<Vec<_>>>()?;
+        if s_expr.plan.is_join() {
+            tree.children
+                .push(self.humanize_s_expr(s_expr.build_side_child())?);
+            tree.children
+                .push(self.humanize_s_expr(s_expr.probe_side_child())?);
+        } else {
+            let children = s_expr
+                .children()
+                .map(|s_expr| self.humanize_s_expr(s_expr))
+                .collect::<Result<Vec<_>>>()?;
+            tree.children.extend(children);
+        };
 
-        tree.children.extend(children);
         Ok(tree)
     }
 
