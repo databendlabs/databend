@@ -15,6 +15,8 @@
 use bumpalo::Bump;
 use databend_common_base::hints::assume;
 use databend_common_column::bitmap::Bitmap;
+use databend_common_io::deserialize_bitmap;
+use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::bincode_serialize_into_buf;
 
@@ -42,7 +44,7 @@ use crate::types::TimestampType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::i256;
-use crate::utils::bitmap::normalize_bitmap_column;
+use crate::utils::bitmap::is_hybrid_encoding;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 
@@ -130,10 +132,22 @@ pub(super) unsafe fn serialize_column_to_rowformat(
             }
         }
         Column::Bitmap(v) => {
-            let normalized = normalize_bitmap_column(v);
-            let col = normalized.as_ref();
             for &index in select_vector {
-                let data = arena.alloc_slice_copy(unsafe { col.index_unchecked(index.to_usize()) });
+                let value = unsafe { v.index_unchecked(index.to_usize()) };
+                let normalized = if is_hybrid_encoding(value) {
+                    value
+                } else {
+                    match deserialize_bitmap(value) {
+                        Ok(bitmap) => {
+                            scratch.clear();
+                            // Safe unwrap: serialize_into writes into Vec<u8>.
+                            bitmap.serialize_into(&mut *scratch).unwrap();
+                            scratch.as_slice()
+                        }
+                        Err(_) => value,
+                    }
+                };
+                let data = arena.alloc_slice_copy(normalized);
                 address[index].write_bytes(offset, data);
             }
         }
