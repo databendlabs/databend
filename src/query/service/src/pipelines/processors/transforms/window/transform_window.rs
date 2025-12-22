@@ -25,7 +25,6 @@ use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
@@ -38,6 +37,7 @@ use databend_common_expression::date_helper::calc_date_to_timestamp;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -77,14 +77,19 @@ impl From<WindowSortDesc> for SortColumnDescription {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 struct RowPtr {
-    pub block: usize,
-    pub row: usize,
+    block: usize,
+    row: usize,
 }
 
 impl RowPtr {
-    #[inline(always)]
-    pub fn new(block: usize, row: usize) -> Self {
+    fn new(block: usize, row: usize) -> Self {
         Self { block, row }
+    }
+
+    fn update(&mut self, other: Self) -> bool {
+        let update_block = self.block != other.block;
+        *self = other;
+        update_block
     }
 }
 
@@ -172,27 +177,20 @@ pub struct TransformWindow {
 }
 
 impl TransformWindow {
-    #[inline(always)]
     fn blocks_end(&self) -> RowPtr {
         RowPtr::new(self.first_block + self.blocks.len(), 0)
     }
 
-    #[inline(always)]
     fn block_rows(&self, index: &RowPtr) -> usize {
         self.block_at(index).num_rows()
     }
 
-    #[inline(always)]
     fn block_at(&self, index: &RowPtr) -> &DataBlock {
         &self.blocks[index.block - self.first_block].block
     }
 
-    #[inline(always)]
-    fn column_at(&self, index: &RowPtr, column_index: usize) -> &Column {
-        self.block_at(index)
-            .get_by_offset(column_index)
-            .as_column()
-            .unwrap()
+    fn entry_at(&self, index: &RowPtr, column_index: usize) -> &BlockEntry {
+        self.block_at(index).get_by_offset(column_index)
     }
 
     fn add_rows_within_partition(&self, mut cur: RowPtr, mut n: usize) -> RowPtr {
@@ -255,8 +253,8 @@ impl TransformWindow {
                 } else {
                     &self.prev_frame_start
                 };
-                let start_column = self.column_at(index, self.partition_indices[i]);
-                let compare_column = self.column_at(&self.partition_end, self.partition_indices[i]);
+                let start_column = self.entry_at(index, self.partition_indices[i]);
+                let compare_column = self.entry_at(&self.partition_end, self.partition_indices[i]);
 
                 if unsafe {
                     start_column.index_unchecked(index.row)
@@ -434,19 +432,13 @@ impl TransformWindow {
             return false;
         }
 
-        if self.order_by.is_empty() {
-            return true;
-        }
-
-        let mut i = 0;
-        while i < self.order_by.len() {
-            let lhs_col = self.column_at(lhs, self.order_by[i].offset);
-            let rhs_col = self.column_at(rhs, self.order_by[i].offset);
+        for desc in &self.order_by {
+            let lhs_col = self.entry_at(lhs, desc.offset);
+            let rhs_col = self.entry_at(rhs, desc.offset);
 
             if unsafe { lhs_col.index_unchecked(lhs.row) != rhs_col.index_unchecked(rhs.row) } {
                 return false;
             }
-            i += 1;
         }
         true
     }
@@ -670,7 +662,7 @@ impl TransformWindow {
         // Only RANGE frame could be null frame.
         debug_assert!(self.frame_unit.is_range());
         debug_assert!(self.order_by.len() == 1);
-        let col = self.column_at(&self.current_row, self.order_by[0].offset);
+        let col = self.entry_at(&self.current_row, self.order_by[0].offset);
         let value = unsafe { col.index_unchecked(self.current_row.row) };
         if value.is_null() {
             return true;
@@ -897,122 +889,6 @@ impl TransformWindow {
         })
     }
 
-    fn timestamp_sub(a: i64, b: &months_days_micros, func_ctx: FunctionContext) -> Result<i64> {
-        let ts = a
-            .wrapping_sub(b.microseconds())
-            .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
-        Ok(EvalMonthsImpl::eval_timestamp(
-            ts,
-            &func_ctx.tz,
-            -b.months(),
-            false,
-        )?)
-    }
-
-    fn timestamp_add(a: i64, b: &months_days_micros, func_ctx: FunctionContext) -> Result<i64> {
-        let ts = a
-            .wrapping_add(b.microseconds())
-            .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
-        Ok(EvalMonthsImpl::eval_timestamp(
-            ts,
-            &func_ctx.tz,
-            b.months(),
-            false,
-        )?)
-    }
-
-    /// Used for `RANGE` frame to compare the value of the column at `cmp_row` with the value of the column at `ref_row` add/sub `offset`.
-    ///
-    /// Returns the ordering of the value at `cmp_row` with the value at `ref_row` add/sub `offset`.
-    #[inline]
-    fn compare_value_with_offset<T: Number + ResultTypeOfUnary>(
-        cmp_v: ScalarRef,
-        ref_v: ScalarRef,
-        offset: ScalarRef,
-        is_preceding: bool,
-        data_type: &DataType,
-    ) -> Result<Ordering> {
-        let ordering = match data_type {
-            DataType::Number(_) => {
-                let cmp_v = NumberType::<T>::try_downcast_scalar(&cmp_v).unwrap();
-                let ref_v = NumberType::<T>::try_downcast_scalar(&ref_v).unwrap();
-                let offset = NumberType::<T>::try_downcast_scalar(&offset).unwrap();
-                let res = if is_preceding {
-                    ref_v.checked_sub(offset)
-                } else {
-                    ref_v.checked_add(offset)
-                };
-
-                if let Some(res) = res {
-                    // Not overflow
-                    cmp_v.cmp(&res)
-                } else if is_preceding {
-                    Ordering::Greater
-                } else {
-                    Ordering::Less
-                }
-            }
-            DataType::Date => {
-                let cmp_v = DateType::try_downcast_scalar(&cmp_v).unwrap();
-                let ref_v = DateType::try_downcast_scalar(&ref_v).unwrap();
-
-                if let Some(n) = offset.get_i64() {
-                    let res = if is_preceding {
-                        (ref_v as i64).checked_sub(n)
-                    } else {
-                        (ref_v as i64).checked_add(n)
-                    };
-                    if let Some(res) = res {
-                        // Not overflow
-                        (cmp_v as i64).cmp(&res)
-                    } else if is_preceding {
-                        Ordering::Greater
-                    } else {
-                        Ordering::Less
-                    }
-                } else if let Some(n) = offset.as_interval() {
-                    let func_ctx = FunctionContext::default();
-                    let tz = &func_ctx.tz;
-                    let cmp_v_timestamp = calc_date_to_timestamp(cmp_v, tz)?;
-                    let ref_v_timestamp = calc_date_to_timestamp(ref_v, tz)?;
-                    let ref_v_timestamp = if is_preceding {
-                        Self::timestamp_sub(ref_v_timestamp, n, func_ctx)?
-                    } else {
-                        Self::timestamp_add(ref_v_timestamp, n, func_ctx)?
-                    };
-                    cmp_v_timestamp.cmp(&ref_v_timestamp)
-                } else {
-                    return Err(ErrorCode::IllegalDataType(
-                        "window function `RANGE BETWEEN` for DATE `ORDER BY` must use numeric or interval",
-                    ));
-                }
-            }
-            DataType::Timestamp => {
-                let cmp_v = TimestampType::try_downcast_scalar(&cmp_v).unwrap();
-                let ref_v = TimestampType::try_downcast_scalar(&ref_v).unwrap();
-
-                let Some(n) = offset.as_interval() else {
-                    return Err(ErrorCode::IllegalDataType(
-                        "window function `RANGE BETWEEN` for DATE `ORDER BY` must use interval",
-                    ));
-                };
-                let func_ctx = FunctionContext::default();
-                let ref_v = if is_preceding {
-                    Self::timestamp_sub(ref_v, n, func_ctx)?
-                } else {
-                    Self::timestamp_add(ref_v, n, func_ctx)?
-                };
-                cmp_v.cmp(&ref_v)
-            }
-            _ => {
-                return Err(ErrorCode::IllegalDataType(
-                    "window function `ORDER BY` must be of numeric, date, or timestamp type when `RANGE BETWEEN`",
-                ));
-            }
-        };
-        Ok(ordering)
-    }
-
     fn advance_frame_start(&mut self) -> Result<()> {
         if self.frame_started {
             return Ok(());
@@ -1039,9 +915,9 @@ impl TransformWindow {
                 } else if self.frame_unit.is_rows() {
                     self.advance_frame_start_rows_preceding(self.rows_start_bound);
                 } else if self.order_by[0].is_nullable {
-                    self.advance_frame_start_nullable_range(n.clone(), true)?;
+                    self.advance_frame_nullable_range::<FrameStart>(n.clone(), true)?;
                 } else {
-                    self.advance_frame_start_range(n.clone(), true)?;
+                    self.advance_frame_range::<FrameStart>(n.clone(), true)?;
                 }
             }
             FrameBound::Preceding(_) => {
@@ -1056,9 +932,9 @@ impl TransformWindow {
                 } else if self.frame_unit.is_rows() {
                     self.advance_frame_start_rows_following(self.rows_start_bound);
                 } else if self.order_by[0].is_nullable {
-                    self.advance_frame_start_nullable_range(n.clone(), false)?;
+                    self.advance_frame_nullable_range::<FrameStart>(n.clone(), false)?;
                 } else {
-                    self.advance_frame_start_range(n.clone(), false)?;
+                    self.advance_frame_range::<FrameStart>(n.clone(), false)?;
                 }
             }
             FrameBound::Following(_) => {
@@ -1083,9 +959,9 @@ impl TransformWindow {
                 } else if self.frame_unit.is_rows() {
                     self.advance_frame_end_rows_preceding(self.rows_end_bound);
                 } else if self.order_by[0].is_nullable {
-                    self.advance_frame_end_nullable_range(n.clone(), true)?;
+                    self.advance_frame_nullable_range::<FrameEnd>(n.clone(), true)?;
                 } else {
-                    self.advance_frame_end_range(n.clone(), true)?
+                    self.advance_frame_range::<FrameEnd>(n.clone(), true)?
                 }
             }
             FrameBound::Preceding(_) => {
@@ -1099,9 +975,9 @@ impl TransformWindow {
                 } else if self.frame_unit.is_rows() {
                     self.advance_frame_end_rows_following(self.rows_end_bound);
                 } else if self.order_by[0].is_nullable {
-                    self.advance_frame_end_nullable_range(n.clone(), false)?;
+                    self.advance_frame_nullable_range::<FrameEnd>(n.clone(), false)?;
                 } else {
-                    self.advance_frame_end_range(n.clone(), false)?;
+                    self.advance_frame_range::<FrameEnd>(n.clone(), false)?;
                 }
             }
             FrameBound::Following(_) => {
@@ -1128,14 +1004,13 @@ impl TransformWindow {
     ///
     /// Once collect all the results of one input [`DataBlock`], attach the corresponding result column to the input as output.
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        if let Some(data) = data {
-            let num_rows = data.num_rows();
-            if num_rows != 0 {
-                self.blocks.push_back(WindowBlock {
-                    block: data.consume_convert_to_full(),
-                    builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
-                });
-            }
+        if let Some(block) = data
+            && !block.is_empty()
+        {
+            self.blocks.push_back(WindowBlock {
+                builder: ColumnBuilder::with_capacity(&self.func.return_type()?, block.num_rows()),
+                block,
+            });
         }
 
         // Each loop will do:
@@ -1281,125 +1156,377 @@ impl TransformWindow {
     }
 }
 
-macro_rules! impl_advance_frame_bound_method {
-    ($bound: ident, $op: ident) => {
-        paste::paste! {
-            impl TransformWindow {
-                fn [<advance_frame_ $bound _range>](&mut self, n_scalar: Scalar, is_preceding: bool) -> Result<()> {
-                    let WindowSortDesc {
-                        offset,
-                        asc,
-                        ..
-                    } = self.order_by[0];
-
-                    let preceding = asc == is_preceding;
-                    let ref_col = self
-                        .column_at(&self.current_row, offset)
-                        .clone();
-                    let data_type = ref_col.data_type().remove_nullable();
-                    let ref_v = unsafe { ref_col.index_unchecked(self.current_row.row) };
-                    while self.[<frame_ $bound>] < self.partition_end {
-                        let cmp_col = self
-                            .column_at(&self.[<frame_ $bound>], offset);
-                        let cmp_v = unsafe { cmp_col.index_unchecked(self.[<frame_ $bound>].row) };
-                        let mut ordering = with_number_mapped_type!(|NUM_TYPE| match &data_type {
-                            DataType::Number(NumberDataType::NUM_TYPE) => {
-                                Self::compare_value_with_offset::<NUM_TYPE>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
-                            }
-                            DataType::Date | DataType::Timestamp => {
-                                Self::compare_value_with_offset::<u8>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
-                            }
-                            _ => return Err(ErrorCode::IllegalDataType(
-                                "window function `ORDER BY` must use numeric or Date, Timestamp"
-                            )),
-                        });
-                        if !asc {
-                            ordering = ordering.reverse();
-                        }
-
-                        if ordering.$op() {
-                            // `self.frame_end` is excluded when aggregating.
-                            self.[<frame_ $bound ed>] = true;
-                            return Ok(());
-                        }
-
-                        self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
-                    }
-                    self.[<frame_ $bound ed>] = self.partition_ended;
-                    Ok(())
-                }
-
-                fn [<advance_frame_ $bound _nullable_range>](&mut self, n_scalar: Scalar, is_preceding: bool) -> Result<()> {
-                    let WindowSortDesc {
-                        offset: ref_idx,
-                        asc,
-                        nulls_first,
-                        ..
-                    } = self.order_by[0];
-
-                    let preceding = asc == is_preceding;
-                    // Current row should not be in the null frame.
-                    let ref_col = self
-                        .column_at(&self.current_row, ref_idx)
-                        .as_nullable()
-                        .unwrap()
-                        .column
-                        .clone();
-                    let data_type = ref_col.data_type().remove_nullable();
-                    let ref_v = unsafe { ref_col.index_unchecked(self.current_row.row) };
-                    while self.[<frame_ $bound>] < self.partition_end {
-                        let col = self
-                            .column_at(&self.[<frame_ $bound>], ref_idx)
-                            .as_nullable()
-                            .unwrap();
-                        let validity = &col.validity;
-                        if unsafe { !validity.get_bit_unchecked(self.[<frame_ $bound>].row) } {
-                            // Need to skip null rows.
-                            if nulls_first {
-                                // The null rows are at front.
-                                self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
-                                continue;
-                            } else {
-                                // The null rows are at back.
-                                self.[<frame_ $bound ed>] = true;
-                                return Ok(());
-                            }
-                        }
-                        let cmp_col = &col.column;
-                        let cmp_v = unsafe { cmp_col.index_unchecked(self.[<frame_ $bound>].row) };
-
-                        let mut ordering = with_number_mapped_type!(|NUM_TYPE| match &data_type {
-                            DataType::Number(NumberDataType::NUM_TYPE) => {
-                                Self::compare_value_with_offset::<NUM_TYPE>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
-                            }
-                            DataType::Date | DataType::Timestamp => {
-                                Self::compare_value_with_offset::<u8>(cmp_v, ref_v.clone(), n_scalar.as_ref(), preceding, &data_type)?
-                            }
-                            _ => return Err(ErrorCode::IllegalDataType(
-                                "window function `ORDER BY` must use numeric or Date, Timestamp"
-                            )),
-                        });
-                        if !asc {
-                            ordering = ordering.reverse();
-                        }
-
-                        if ordering.$op() {
-                            self.[<frame_ $bound ed>] = true;
-                            return Ok(());
-                        }
-
-                        self.[<frame_ $bound>] = self.advance_row(self.[<frame_ $bound>]);
-                    }
-                    self.[<frame_ $bound ed>] = self.partition_ended;
-                    Ok(())
-                }
-            }
-        }
+/// Used for `RANGE` frame to compare the value of the column at `cmp_row` with the value of the column at `ref_row` add/sub `offset`.
+///
+/// Returns the ordering of the value at `cmp_row` with the value at `ref_row` add/sub `offset`.
+fn compare_number<T: Number + ResultTypeOfUnary>(
+    cmp_v: T,
+    ref_v: T,
+    offset: T,
+    is_preceding: bool,
+) -> Result<Ordering> {
+    let res = if is_preceding {
+        ref_v.checked_sub(offset)
+    } else {
+        ref_v.checked_add(offset)
     };
+
+    let ordering = if let Some(res) = res {
+        // Not overflow
+        cmp_v.cmp(&res)
+    } else if is_preceding {
+        Ordering::Greater
+    } else {
+        Ordering::Less
+    };
+    Ok(ordering)
 }
 
-impl_advance_frame_bound_method!(start, is_ge);
-impl_advance_frame_bound_method!(end, is_gt);
+enum DateOffset {
+    Days(i64),
+    Interval(months_days_micros),
+}
+
+fn prepare_date_offset(offset: ScalarRef) -> Result<DateOffset> {
+    if let Some(n) = offset.get_i64() {
+        Ok(DateOffset::Days(n))
+    } else if let Some(n) = offset.as_interval() {
+        Ok(DateOffset::Interval(*n))
+    } else {
+        Err(ErrorCode::IllegalDataType(
+            "window function `RANGE BETWEEN` for DATE `ORDER BY` must use numeric or interval",
+        ))
+    }
+}
+
+fn compare_date(
+    cmp_v: i32,
+    ref_v: i32,
+    offset: &DateOffset,
+    is_preceding: bool,
+) -> Result<Ordering> {
+    match offset {
+        DateOffset::Days(n) => {
+            let res = if is_preceding {
+                (ref_v as i64).checked_sub(*n)
+            } else {
+                (ref_v as i64).checked_add(*n)
+            };
+            let ordering = if let Some(res) = res {
+                (cmp_v as i64).cmp(&res)
+            } else if is_preceding {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            };
+            Ok(ordering)
+        }
+        DateOffset::Interval(n) => {
+            let func_ctx = FunctionContext::default();
+            let tz = &func_ctx.tz;
+            let cmp_v_timestamp = calc_date_to_timestamp(cmp_v, tz)?;
+            let ref_v_timestamp = calc_date_to_timestamp(ref_v, tz)?;
+            let ref_v_timestamp = if is_preceding {
+                timestamp_sub(ref_v_timestamp, n, func_ctx)?
+            } else {
+                timestamp_add(ref_v_timestamp, n, func_ctx)?
+            };
+            Ok(cmp_v_timestamp.cmp(&ref_v_timestamp))
+        }
+    }
+}
+
+fn prepare_timestamp_offset(offset: ScalarRef) -> Result<months_days_micros> {
+    if let Some(n) = offset.as_interval() {
+        Ok(*n)
+    } else {
+        Err(ErrorCode::IllegalDataType(
+            "window function `RANGE BETWEEN` for DATE `ORDER BY` must use interval",
+        ))
+    }
+}
+
+fn compare_timestamp(
+    cmp_v: i64,
+    ref_v: i64,
+    offset: &months_days_micros,
+    is_preceding: bool,
+) -> Result<Ordering> {
+    let func_ctx = FunctionContext::default();
+    let ref_v = if is_preceding {
+        timestamp_sub(ref_v, offset, func_ctx)?
+    } else {
+        timestamp_add(ref_v, offset, func_ctx)?
+    };
+    Ok(cmp_v.cmp(&ref_v))
+}
+
+fn timestamp_add(a: i64, b: &months_days_micros, func_ctx: FunctionContext) -> Result<i64> {
+    let ts = a
+        .wrapping_add(b.microseconds())
+        .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
+    Ok(EvalMonthsImpl::eval_timestamp(
+        ts,
+        &func_ctx.tz,
+        b.months(),
+        false,
+    )?)
+}
+
+fn timestamp_sub(a: i64, b: &months_days_micros, func_ctx: FunctionContext) -> Result<i64> {
+    let ts = a
+        .wrapping_sub(b.microseconds())
+        .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
+    Ok(EvalMonthsImpl::eval_timestamp(
+        ts,
+        &func_ctx.tz,
+        -b.months(),
+        false,
+    )?)
+}
+
+trait FrameBoundIndex {
+    fn bound(window: &TransformWindow) -> RowPtr;
+    fn set_bound(window: &mut TransformWindow, bound: RowPtr);
+    fn store_state(window: &mut TransformWindow, value: bool);
+    fn is_finish(ordering: Ordering, asc: bool) -> bool;
+}
+
+struct FrameStart;
+
+impl FrameBoundIndex for FrameStart {
+    fn bound(window: &TransformWindow) -> RowPtr {
+        window.frame_start
+    }
+
+    fn set_bound(window: &mut TransformWindow, bound: RowPtr) {
+        window.frame_start = bound;
+    }
+
+    fn store_state(window: &mut TransformWindow, value: bool) {
+        window.frame_started = value;
+    }
+
+    fn is_finish(ordering: Ordering, asc: bool) -> bool {
+        if !asc { ordering.reverse() } else { ordering }.is_ge()
+    }
+}
+
+struct FrameEnd;
+
+impl FrameBoundIndex for FrameEnd {
+    fn bound(window: &TransformWindow) -> RowPtr {
+        window.frame_end
+    }
+
+    fn set_bound(window: &mut TransformWindow, bound: RowPtr) {
+        window.frame_end = bound;
+    }
+
+    fn store_state(window: &mut TransformWindow, value: bool) {
+        window.frame_ended = value;
+    }
+
+    fn is_finish(ordering: Ordering, asc: bool) -> bool {
+        if !asc { ordering.reverse() } else { ordering }.is_gt()
+    }
+}
+
+impl TransformWindow {
+    fn advance_frame_range<I: FrameBoundIndex>(
+        &mut self,
+        n_scalar: Scalar,
+        is_preceding: bool,
+    ) -> Result<()> {
+        let WindowSortDesc { offset, asc, .. } = self.order_by[0];
+
+        let preceding = asc == is_preceding;
+        let ref_entry = self.entry_at(&self.current_row, offset).clone();
+        let data_type = ref_entry.data_type().remove_nullable();
+
+        with_number_mapped_type!(|NUM_TYPE| match &data_type {
+            DataType::Number(NumberDataType::NUM_TYPE) => {
+                let view = ref_entry.downcast::<NumberType<NUM_TYPE>>().unwrap();
+                let ref_v = unsafe { view.index_unchecked(self.current_row.row) };
+                let n_scalar =
+                    NumberType::<NUM_TYPE>::try_downcast_scalar(&n_scalar.as_ref()).unwrap();
+                self.advance_frame_range_loop::<I, NumberType<NUM_TYPE>, _>(offset, asc, |cmp_v| {
+                    compare_number::<NUM_TYPE>(cmp_v, ref_v, n_scalar, preceding)
+                })
+            }
+            DataType::Date => {
+                let view = ref_entry.downcast::<DateType>().unwrap();
+                let ref_v = unsafe { view.index_unchecked(self.current_row.row) };
+                let date_offset = prepare_date_offset(n_scalar.as_ref())?;
+                self.advance_frame_range_loop::<I, DateType, _>(offset, asc, |cmp_v| {
+                    compare_date(cmp_v, ref_v, &date_offset, preceding)
+                })
+            }
+            DataType::Timestamp => {
+                let view = ref_entry.downcast::<TimestampType>().unwrap();
+                let ref_v = unsafe { view.index_unchecked(self.current_row.row) };
+                let timestamp_offset = prepare_timestamp_offset(n_scalar.as_ref())?;
+                self.advance_frame_range_loop::<I, TimestampType, _>(offset, asc, |cmp_v| {
+                    compare_timestamp(cmp_v, ref_v, &timestamp_offset, preceding)
+                })
+            }
+            _ => Err(ErrorCode::IllegalDataType(
+                "window function `ORDER BY` must use numeric or Date, Timestamp",
+            )),
+        })
+    }
+
+    fn advance_frame_range_loop<I, A, F>(
+        &mut self,
+        offset: usize,
+        asc: bool,
+        compare: F,
+    ) -> Result<()>
+    where
+        I: FrameBoundIndex,
+        A: AccessType,
+        F: Fn(A::ScalarRef<'_>) -> Result<Ordering>,
+    {
+        let mut bound = I::bound(self);
+        let mut finished = false;
+        let mut cur_column = None;
+        while bound < self.partition_end {
+            let cmp_col = cur_column.get_or_insert_with(|| {
+                let entry = self.entry_at(&bound, offset);
+                entry.downcast::<A>().unwrap()
+            });
+            let cmp_v = unsafe { cmp_col.index_unchecked(bound.row) };
+            if I::is_finish(compare(cmp_v)?, asc) {
+                finished = true;
+                break;
+            }
+
+            if bound.update(self.advance_row(bound)) {
+                cur_column = None
+            }
+        }
+        I::set_bound(self, bound);
+        I::store_state(self, if finished { true } else { self.partition_ended });
+        Ok(())
+    }
+
+    fn advance_frame_nullable_range<I: FrameBoundIndex>(
+        &mut self,
+        n_scalar: Scalar,
+        is_preceding: bool,
+    ) -> Result<()> {
+        let WindowSortDesc {
+            offset,
+            asc,
+            nulls_first,
+            ..
+        } = self.order_by[0];
+
+        let preceding = asc == is_preceding;
+        // Current row should not be in the null frame.
+        let ref_entry = self
+            .entry_at(&self.current_row, offset)
+            .clone()
+            .remove_nullable();
+        with_number_mapped_type!(|NUM_TYPE| match &ref_entry.data_type() {
+            DataType::Number(NumberDataType::NUM_TYPE) => {
+                let ref_v = unsafe {
+                    ref_entry
+                        .downcast::<NumberType<NUM_TYPE>>()
+                        .unwrap()
+                        .index_unchecked(self.current_row.row)
+                };
+                let n_scalar =
+                    NumberType::<NUM_TYPE>::try_downcast_scalar(&n_scalar.as_ref()).unwrap();
+                self.advance_frame_nullable_range_loop::<I, NumberType<NUM_TYPE>, _>(
+                    offset,
+                    asc,
+                    nulls_first,
+                    |cmp_v| compare_number::<NUM_TYPE>(cmp_v, ref_v, n_scalar, preceding),
+                )
+            }
+            DataType::Date => {
+                let ref_v = unsafe {
+                    ref_entry
+                        .downcast::<DateType>()
+                        .unwrap()
+                        .index_unchecked(self.current_row.row)
+                };
+                let date_offset = prepare_date_offset(n_scalar.as_ref())?;
+                self.advance_frame_nullable_range_loop::<I, DateType, _>(
+                    offset,
+                    asc,
+                    nulls_first,
+                    |cmp_v| compare_date(cmp_v, ref_v, &date_offset, preceding),
+                )
+            }
+            DataType::Timestamp => {
+                let ref_v = unsafe {
+                    ref_entry
+                        .downcast::<TimestampType>()
+                        .unwrap()
+                        .index_unchecked(self.current_row.row)
+                };
+                let timestamp_offset = prepare_timestamp_offset(n_scalar.as_ref())?;
+                self.advance_frame_nullable_range_loop::<I, TimestampType, _>(
+                    offset,
+                    asc,
+                    nulls_first,
+                    |cmp_v| compare_timestamp(cmp_v, ref_v, &timestamp_offset, preceding),
+                )
+            }
+            _ => Err(ErrorCode::IllegalDataType(
+                "window function `ORDER BY` must use numeric or Date, Timestamp",
+            )),
+        })
+    }
+
+    fn advance_frame_nullable_range_loop<I, A, F>(
+        &mut self,
+        offset: usize,
+        asc: bool,
+        nulls_first: bool,
+        compare: F,
+    ) -> Result<()>
+    where
+        I: FrameBoundIndex,
+        A: AccessType,
+        F: Fn(A::ScalarRef<'_>) -> Result<Ordering>,
+    {
+        let mut bound = I::bound(self);
+        let mut finished = false;
+        let mut cur_column = None;
+        while bound < self.partition_end {
+            let cmp_col = cur_column.get_or_insert_with(|| {
+                self.entry_at(&bound, offset)
+                    .downcast::<NullableType<A>>()
+                    .unwrap()
+            });
+
+            if let Some(cmp_v) = unsafe { cmp_col.index_unchecked(bound.row) } {
+                if I::is_finish(compare(cmp_v)?, asc) {
+                    finished = true;
+                    break;
+                }
+            } else if nulls_first {
+                if bound.update(self.advance_row(bound)) {
+                    cur_column = None
+                }
+                continue;
+            } else {
+                finished = true;
+                break;
+            }
+
+            if bound.update(self.advance_row(bound)) {
+                cur_column = None
+            }
+        }
+        I::set_bound(self, bound);
+        I::store_state(self, if finished { true } else { self.partition_ended });
+        Ok(())
+    }
+}
 
 enum ProcessorState {
     Consume,
@@ -1427,12 +1554,10 @@ impl Processor for TransformWindow {
             return Ok(Event::NeedConsume);
         }
 
-        let input_is_finished = self.input.is_finished();
         match self.state {
             ProcessorState::Consume => {
                 self.input.set_need_data();
-                let has_data = self.input.has_data();
-                match (input_is_finished, has_data) {
+                match (self.input.is_finished(), self.input.has_data()) {
                     (_, true) => {
                         let data = self.input.pull_data().transpose()?;
                         self.state = ProcessorState::AddBlock(data);
