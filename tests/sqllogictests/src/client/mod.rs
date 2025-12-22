@@ -32,7 +32,7 @@ use crate::error::Result;
 use crate::util::ColumnType;
 
 #[derive(Debug, Clone, Copy)]
-pub enum BodyFormat {
+pub enum QueryResultFormat {
     Json,
     Arrow,
 }
@@ -45,7 +45,7 @@ pub enum ClientType {
     Ttc {
         image: String,
         port: u16,
-        body_format: BodyFormat,
+        query_result_format: QueryResultFormat,
     },
     Hybird,
 }
