@@ -16,8 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::ops::Deref;
-use std::ops::DerefMut;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
@@ -31,10 +29,10 @@ use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::PlanScope;
 use databend_common_sql::Metadata;
 use dyn_clone::DynClone;
-use serde::de::Error as DeError;
-use serde::ser::Error as SerError;
 use serde::Deserializer;
 use serde::Serializer;
+use serde::de::Error as DeError;
+use serde::ser::Error as SerError;
 use serde_json::Value as JsonValue;
 
 use crate::physical_plans::ExchangeSink;
@@ -403,20 +401,6 @@ impl Debug for PhysicalPlan {
     }
 }
 
-impl Deref for PhysicalPlan {
-    type Target = dyn IPhysicalPlan;
-
-    fn deref(&self) -> &Self::Target {
-        self.inner.as_ref()
-    }
-}
-
-impl DerefMut for PhysicalPlan {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner.as_mut()
-    }
-}
-
 impl serde::Serialize for PhysicalPlan {
     #[recursive::recursive]
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
@@ -448,7 +432,7 @@ impl PhysicalPlan {
     pub fn new<T>(inner: T) -> PhysicalPlan
     where PhysicalPlanSerde: From<T> {
         PhysicalPlan {
-            inner: Box::new(inner.into()),
+            inner: Box::<PhysicalPlanSerde>::new(inner.into()),
         }
     }
 
