@@ -72,7 +72,7 @@ OneValue NULL 1
 
 
 statement ok
-create table t_parquet(c1 int, c2 int) storage_format='parquet';
+create table t_parquet(c1 int, c2 int) storage_format='parquet' compression = 'zstd';
 
 statement ok
 insert into t_parquet(c1, c2) select 1, number from numbers(100);
