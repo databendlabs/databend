@@ -23,7 +23,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::frozen;
-use crate::meta::format::read_and_deserialize;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
@@ -31,6 +30,7 @@ use crate::meta::MetaCompression;
 use crate::meta::MetaEncoding;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
+use crate::meta::format::read_and_deserialize;
 
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize)]

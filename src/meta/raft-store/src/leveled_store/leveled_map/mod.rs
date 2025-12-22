@@ -17,12 +17,12 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use compactor::Compactor;
+use databend_common_meta_types::Node;
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
-use databend_common_meta_types::Node;
 use display_more::DisplayOptionExt;
 use display_more::DisplaySliceExt;
 use log::info;

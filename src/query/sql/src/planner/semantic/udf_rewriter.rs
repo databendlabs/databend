@@ -19,13 +19,16 @@ use std::sync::Arc;
 use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::convert_to_type_name;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::convert_to_type_name;
 use derive_visitor::VisitorMut as StatementVisitorMut;
 use itertools::Itertools;
 
+use crate::ColumnBindingBuilder;
+use crate::IndexType;
+use crate::MetadataRef;
+use crate::Visibility;
 use crate::optimizer::ir::SExpr;
-use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
@@ -34,10 +37,7 @@ use crate::plans::ScalarItem;
 use crate::plans::UDFCall;
 use crate::plans::Udf;
 use crate::plans::VisitorMut;
-use crate::ColumnBindingBuilder;
-use crate::IndexType;
-use crate::MetadataRef;
-use crate::Visibility;
+use crate::plans::walk_expr_mut;
 
 pub(crate) struct UdfRewriter {
     metadata: MetadataRef,
@@ -176,7 +176,7 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
         for (i, arg) in udf.arguments.iter_mut().enumerate() {
             self.visit(arg)?;
 
-            let new_column_ref = if let ScalarExpr::BoundColumnRef(ref column_ref) = &arg {
+            let new_column_ref = if let ScalarExpr::BoundColumnRef(column_ref) = &arg {
                 column_ref.clone()
             } else {
                 let name = format!("{}_arg_{}", &udf.display_name, i);

@@ -22,10 +22,10 @@ pub mod session_header;
 pub(crate) use client_capabilities::ClientCapabilities;
 pub(crate) use metrics::MetricsMiddleware;
 pub(crate) use panic_handler::PanicHandler;
-pub(crate) use session::forward_request_with_body;
-pub use session::json_response;
-pub(crate) use session::sanitize_request_headers;
 pub use session::EndpointKind;
 // for it tests only
 pub use session::HTTPSessionEndpoint;
 pub use session::HTTPSessionMiddleware;
+pub(crate) use session::forward_request_with_body;
+pub use session::json_response;
+pub(crate) use session::sanitize_request_headers;

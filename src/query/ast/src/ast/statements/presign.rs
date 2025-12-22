@@ -21,16 +21,11 @@ use derive_visitor::DriveMut;
 
 use crate::ast::quote::AtString;
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Default)]
 pub enum PresignAction {
+    #[default]
     Download,
     Upload,
-}
-
-impl Default for PresignAction {
-    fn default() -> Self {
-        Self::Download
-    }
 }
 
 impl Display for PresignAction {

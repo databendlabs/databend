@@ -19,6 +19,9 @@ use databend_common_exception::Result;
 use log::debug;
 use log::info;
 
+use crate::IndexType;
+use crate::optimizer::Optimizer;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::cost::CostModel;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::Memo;
@@ -27,18 +30,15 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::cascades::cost::DefaultCostModel;
 use crate::optimizer::optimizers::cascades::rule::StrategyFactory;
+use crate::optimizer::optimizers::cascades::tasks::DEFAULT_TASK_LIMIT;
 use crate::optimizer::optimizers::cascades::tasks::OptimizeGroupTask;
 use crate::optimizer::optimizers::cascades::tasks::Task;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
-use crate::optimizer::optimizers::cascades::tasks::DEFAULT_TASK_LIMIT;
 use crate::optimizer::optimizers::distributed::DistributedOptimizer;
 use crate::optimizer::optimizers::distributed::SortAndLimitPushDownOptimizer;
 use crate::optimizer::optimizers::rule::RuleSet;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::optimizer::Optimizer;
-use crate::optimizer::OptimizerContext;
 use crate::plans::RelOperator;
-use crate::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.

@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 
 use clap::Parser;
-use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
+use databend_common_tracing::init_logging;
 use serde::Deserialize;
 use serde::Serialize;
 

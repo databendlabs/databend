@@ -20,9 +20,9 @@ use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::Scalar;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -30,6 +30,9 @@ use serde::Serialize;
 
 use super::AggregateFunction;
 use super::NthValueFunction;
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::ScalarExpr;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::RelExpr;
@@ -41,9 +44,6 @@ use crate::plans::NtileFunction;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
-use crate::ColumnSet;
-use crate::IndexType;
-use crate::ScalarExpr;
 
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]

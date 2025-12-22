@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::ColumnSet;
 use crate::binder::JoinPredicate;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
@@ -27,7 +28,6 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-use crate::ColumnSet;
 
 /// Push `Left/Right Semi|Anti` join closer to the base table that participates
 /// in the predicate so that fewer rows stay in the join tree.

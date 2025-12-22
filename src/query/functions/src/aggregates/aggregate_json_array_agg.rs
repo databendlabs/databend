@@ -22,12 +22,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::variant::cast_scalar_to_variant;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::ValueType;
-use databend_common_expression::types::*;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -38,14 +32,16 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::types::variant::cast_scalar_to_variant;
+use databend_common_expression::types::*;
 use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
-use super::aggregate_scalar_state::ScalarStateFunc;
-use super::assert_params;
-use super::assert_unary_arguments;
-use super::batch_merge1;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -54,6 +50,10 @@ use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateSerde;
+use super::aggregate_scalar_state::ScalarStateFunc;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::batch_merge1;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct JsonArrayAggState<T>
@@ -320,7 +320,7 @@ where
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<JsonArrayAggState<T>>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 

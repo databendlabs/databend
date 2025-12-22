@@ -16,9 +16,9 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
+use databend_common_expression::local_block_meta_serde;
 use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::SegmentLocation;

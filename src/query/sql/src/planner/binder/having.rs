@@ -19,18 +19,18 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::Finder;
-use crate::binder::aggregate::AggregateRewriter;
-use crate::binder::split_conjunctions;
+use crate::BindContext;
+use crate::Binder;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
+use crate::binder::aggregate::AggregateRewriter;
+use crate::binder::split_conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::Filter;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 use crate::plans::VisitorMut as _;
-use crate::BindContext;
-use crate::Binder;
 
 impl Binder {
     /// Analyze aggregates in having clause, this will rewrite aggregate functions.

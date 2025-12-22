@@ -14,14 +14,14 @@
 
 use std::io::BufRead;
 
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::types::NumberDataType;
 
+use crate::CommonCompression;
 use crate::compression::Compression;
 use crate::error::Result;
 use crate::read::PageIterator;
-use crate::CommonCompression;
 
 #[derive(Debug)]
 pub struct ColumnInfo {
@@ -187,15 +187,16 @@ mod test {
     use std::io::BufRead;
 
     use databend_common_column::binary::BinaryColumn;
-    use databend_common_expression::infer_schema_type;
-    use databend_common_expression::types::Int64Type;
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::infer_schema_type;
+    use databend_common_expression::types::Int64Type;
 
-    use super::stat_simple;
     use super::ColumnInfo;
+    use super::stat_simple;
+    use crate::CommonCompression;
     use crate::read::reader::NativeReader;
     use crate::stat::PageBody;
     use crate::util::env::remove_all_env;
@@ -203,7 +204,6 @@ mod test {
     use crate::util::env::set_freq_env;
     use crate::write::NativeWriter;
     use crate::write::WriteOptions;
-    use crate::CommonCompression;
 
     const PAGE_SIZE: usize = 2048;
     const PAGE_PER_COLUMN: usize = 10;

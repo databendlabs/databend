@@ -19,13 +19,13 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use crate::KeyWithTenant;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
 use crate::tenant_key::raw::TIdentRaw;
 use crate::tenant_key::resource::TenantResource;
-use crate::KeyWithTenant;
 
 /// `[T]enant[Ident]` is a common meta-service key structure in form of `<PREFIX>/<TENANT>/<NAME>`.
 pub struct TIdent<R, N = String> {
@@ -199,10 +199,10 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi::KeyCodec;
     use databend_common_meta_kvapi::kvapi::KeyError;
 
+    use crate::KeyWithTenant;
     use crate::tenant::Tenant;
     use crate::tenant_key::ident::TIdent;
     use crate::tenant_key::resource::TenantResource;
-    use crate::KeyWithTenant;
 
     impl<R, N> kvapi::KeyCodec for TIdent<R, N>
     where

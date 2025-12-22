@@ -29,9 +29,9 @@ use tonic::Code;
 use tonic::Response;
 use tonic::Status;
 
-use crate::established_client::EstablishedClient;
 use crate::FeatureSpec;
 use crate::MetaGrpcClient;
+use crate::established_client::EstablishedClient;
 
 /// Represents the action to take after processing an RPC response.
 ///
@@ -183,11 +183,7 @@ impl<'a> RpcHandler<'a> {
 
             warn!(
                 "MetaGrpcClient::{} retryable error: elapsed: {:?}; error: {:?}; with {}; request: {:?}",
-                self.required_feature.0,
-                elapsed,
-                status,
-                client_display,
-                request
+                self.required_feature.0, elapsed, status, client_display, request
             );
 
             self.rpc_failures.push((client_display, status));
@@ -198,11 +194,7 @@ impl<'a> RpcHandler<'a> {
         } else {
             warn!(
                 "MetaGrpcClient::{} non-retryable error: elapsed: {:?}; error: {:?}; with {}; request: {:?}",
-                self.required_feature.0,
-                elapsed,
-                status,
-                established_client,
-                request
+                self.required_feature.0, elapsed, status, established_client, request
             );
 
             Err(status)

@@ -27,8 +27,8 @@ impl LeastVisibleTimeIdent {
 mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::least_visible_time_ident::LeastVisibleTimeIdent;
     use crate::schema::LeastVisibleTime;
+    use crate::schema::least_visible_time_ident::LeastVisibleTimeIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct LeastVisibleTimeRsc;

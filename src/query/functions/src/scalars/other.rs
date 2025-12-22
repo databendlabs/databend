@@ -17,20 +17,23 @@ use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_base::base::uuid::Uuid;
-use databend_common_base::base::OrderedFloat;
+use databend_common_expression::Column;
+use databend_common_expression::Domain;
+use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
+use databend_common_expression::FunctionProperty;
+use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
 use databend_common_expression::error_to_null;
-use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::number::Float32Type;
-use databend_common_expression::types::number::Float64Type;
-use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::number::UInt32Type;
-use databend_common_expression::types::number::UInt8Type;
-use databend_common_expression::types::number::F64;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -46,21 +49,18 @@ use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::types::boolean::BooleanDomain;
+use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::number::Float32Type;
+use databend_common_expression::types::number::Float64Type;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::number::UInt8Type;
+use databend_common_expression::types::number::UInt32Type;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::Column;
-use databend_common_expression::Domain;
-use databend_common_expression::EvalContext;
-use databend_common_expression::Function;
-use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionEval;
-use databend_common_expression::FunctionFactory;
-use databend_common_expression::FunctionProperty;
-use databend_common_expression::FunctionRegistry;
-use databend_common_expression::FunctionSignature;
-use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_io::number::FmtCacheEntry;
 use rand::Rng;
 use rand::SeedableRng;
@@ -153,7 +153,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 rand::rngs::SmallRng::from_entropy()
             };
             let rand_nums = (0..ctx.num_rows)
-                .map(|_| rng.gen::<F64>())
+                .map(|_| rng.r#gen::<F64>())
                 .collect::<Vec<_>>();
             Value::Column(rand_nums.into())
         },
@@ -169,7 +169,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |val, _| {
             let mut rng = rand::rngs::SmallRng::seed_from_u64(val);
-            rng.gen::<F64>()
+            rng.r#gen::<F64>()
         },
     );
 

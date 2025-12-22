@@ -15,27 +15,27 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
-use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_common_meta_app::principal::UserInfo;
+use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
-use databend_common_script::ir::ColumnAccess;
+use databend_common_meta_app::principal::UserInfo;
 use databend_common_script::Client;
+use databend_common_script::ir::ColumnAccess;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
 
-use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::sessions::QueryContext;
 
 pub fn check_system_history(

@@ -24,19 +24,27 @@ use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchema;
 use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::TableSchema;
 
-use crate::binder::split_conjunctions;
-use crate::binder::util::TableIdentifier;
+use crate::BindContext;
+use crate::ColumnBinding;
+use crate::ColumnBindingBuilder;
+use crate::ColumnSet;
+use crate::DUMMY_COLUMN_INDEX;
+use crate::ScalarBinder;
+use crate::ScalarExpr;
+use crate::Visibility;
 use crate::binder::Binder;
 use crate::binder::Finder;
 use crate::binder::InternalColumnBinding;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
+use crate::binder::split_conjunctions;
+use crate::binder::util::TableIdentifier;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
-use crate::optimizer::OptimizerContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::Join;
@@ -45,14 +53,6 @@ use crate::plans::MutationSource;
 use crate::plans::RelOperator;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
-use crate::BindContext;
-use crate::ColumnBinding;
-use crate::ColumnBindingBuilder;
-use crate::ColumnSet;
-use crate::ScalarBinder;
-use crate::ScalarExpr;
-use crate::Visibility;
-use crate::DUMMY_COLUMN_INDEX;
 
 pub enum MutationExpression {
     Merge {
@@ -591,7 +591,7 @@ pub fn target_probe(s_expr: &SExpr, target_table_index: usize) -> Result<bool> {
     }
 
     fn contains_target_table(s_expr: &SExpr, target_table_index: usize) -> bool {
-        if let RelOperator::Scan(ref scan) = s_expr.plan() {
+        if let RelOperator::Scan(scan) = s_expr.plan() {
             scan.table_index == target_table_index
         } else {
             s_expr

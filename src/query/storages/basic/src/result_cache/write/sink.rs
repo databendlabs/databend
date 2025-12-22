@@ -30,9 +30,9 @@ use databend_common_storage::DataOperator;
 use tokio::time::Instant;
 
 use super::writer::ResultCacheWriter;
+use crate::result_cache::common::ResultCacheValue;
 use crate::result_cache::common::gen_result_cache_dir;
 use crate::result_cache::common::gen_result_cache_meta_key;
-use crate::result_cache::common::ResultCacheValue;
 use crate::result_cache::meta_manager::ResultCacheMetaManager;
 
 pub struct WriteResultCacheSink {

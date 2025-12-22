@@ -14,9 +14,9 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::types::StringType;
 use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_sql::plans::DescProcedurePlan;
 use databend_common_users::UserApiProvider;

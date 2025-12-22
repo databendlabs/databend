@@ -80,17 +80,17 @@ impl<R: Reader> SubroutineAttrs<R> {
                 }
             }
             gimli::DW_AT_abstract_origin | gimli::DW_AT_specification => {
-                if self.name.is_none() {
-                    if let Ok(Some(v)) = unit.name_attr(attr.value(), 16) {
-                        self.name = Some(v);
-                    }
+                if self.name.is_none()
+                    && let Ok(Some(v)) = unit.name_attr(attr.value(), 16)
+                {
+                    self.name = Some(v);
                 }
             }
             gimli::DW_AT_call_file => {
-                if let AttributeValue::FileIndex(idx) = attr.value() {
-                    if let Ok(filename) = unit.find_file(idx) {
-                        self.file = filename;
-                    }
+                if let AttributeValue::FileIndex(idx) = attr.value()
+                    && let Ok(filename) = unit.find_file(idx)
+                {
+                    self.file = filename;
                 }
             }
             gimli::DW_AT_call_line => {

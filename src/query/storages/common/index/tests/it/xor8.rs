@@ -13,16 +13,16 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::types::number::NumberScalar;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::FilterBuilder;
 use databend_storages_common_index::filters::Xor8Builder;
 use databend_storages_common_index::filters::Xor8Filter;
-use rand::prelude::random;
-use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::prelude::random;
+use rand::rngs::StdRng;
 
 #[test]
 fn test_xor_bitmap_u64() -> Result<()> {
@@ -31,7 +31,7 @@ fn test_xor_bitmap_u64() -> Result<()> {
 
     let size = 8 * numbers;
     let mut rng = StdRng::seed_from_u64(seed);
-    let keys: Vec<u64> = (0..numbers).map(|_| rng.gen::<u64>()).collect();
+    let keys: Vec<u64> = (0..numbers).map(|_| rng.r#gen::<u64>()).collect();
 
     let mut builder = Xor8Builder::create();
     builder.add_keys(&keys);
@@ -66,7 +66,7 @@ fn test_xor_bitmap_bool() -> Result<()> {
 
     let size = numbers;
     let mut rng = StdRng::seed_from_u64(seed);
-    let keys: Vec<bool> = (0..numbers).map(|_| rng.gen::<u64>() % 2 == 0).collect();
+    let keys: Vec<bool> = (0..numbers).map(|_| rng.r#gen::<u64>() % 2 == 0).collect();
 
     let mut builder = Xor8Builder::create();
     builder.add_keys(&keys);
@@ -184,7 +184,7 @@ fn test_xor_bitmap_data_block() -> Result<()> {
     let size = 8 * numbers;
 
     let mut rng = StdRng::seed_from_u64(seed);
-    let keys: Vec<i64> = (0..numbers).map(|_| rng.gen::<i64>()).collect();
+    let keys: Vec<i64> = (0..numbers).map(|_| rng.r#gen::<i64>()).collect();
 
     let mut builder = Xor8Builder::create();
     keys.iter()

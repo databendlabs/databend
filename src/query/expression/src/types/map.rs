@@ -19,11 +19,6 @@ use std::ops::Range;
 
 use databend_common_exception::Result;
 
-use super::array::ArrayColumn;
-use super::array::ArrayColumnBuilderMut;
-use super::column_type_error;
-use super::domain_type_error;
-use super::scalar_type_error;
 use super::AccessType;
 use super::ArgType;
 use super::ArrayType;
@@ -34,9 +29,14 @@ use super::ReturnType;
 use super::Scalar;
 use super::ScalarRef;
 use super::ValueType;
+use super::array::ArrayColumn;
+use super::array::ArrayColumnBuilderMut;
+use super::column_type_error;
+use super::domain_type_error;
+use super::scalar_type_error;
+use crate::ColumnBuilder;
 use crate::property::Domain;
 use crate::values::Column;
-use crate::ColumnBuilder;
 
 // Structurally equals to `Tuple(K, V)`
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,7 +96,7 @@ impl<K: AccessType, V: AccessType> AccessType for KvPair<K, V> {
     }
 
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        col.index_unchecked(index)
+        unsafe { col.index_unchecked(index) }
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
@@ -269,10 +269,12 @@ impl<K: AccessType, V: AccessType> KvColumn<K, V> {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> (K::ScalarRef<'_>, V::ScalarRef<'_>) {
-        (
-            K::index_column_unchecked(&self.keys, index),
-            V::index_column_unchecked(&self.values, index),
-        )
+        unsafe {
+            (
+                K::index_column_unchecked(&self.keys, index),
+                V::index_column_unchecked(&self.values, index),
+            )
+        }
     }
 
     fn slice(&self, range: Range<usize>) -> Self {
@@ -282,7 +284,7 @@ impl<K: AccessType, V: AccessType> KvColumn<K, V> {
         }
     }
 
-    pub fn iter(&self) -> KvIterator<K, V> {
+    pub fn iter(&self) -> KvIterator<'_, K, V> {
         KvIterator {
             keys: K::iter_column(&self.keys),
             values: V::iter_column(&self.values),
@@ -486,7 +488,7 @@ impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
 
     #[inline(always)]
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        MapInternal::<K, V>::index_column_unchecked(col, index)
+        unsafe { MapInternal::<K, V>::index_column_unchecked(col, index) }
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {

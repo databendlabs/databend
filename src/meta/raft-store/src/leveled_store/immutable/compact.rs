@@ -124,7 +124,7 @@ mod tests {
 
             let mut want_level = Level::default();
             want_level.with_sys_data(|s| s.update_seq(200)); // Higher seq wins
-                                                             // Insert in sequence order: 10, 15, 20, 30
+            // Insert in sequence order: 10, 15, 20, 30
             want_level.kv.insert(k1(), 10, v1()).unwrap();
             want_level.kv.insert(k2(), 15, v3()).unwrap();
             want_level.kv.insert(k1(), 20, v2()).unwrap();
@@ -140,7 +140,7 @@ mod tests {
 
             let mut want_level = Level::default();
             want_level.with_sys_data(|s| s.update_seq(200)); // Higher seq wins
-                                                             // Based on actual compact behavior: seq 10 cleaned up, seq 20 preserved, seq 30 preserved
+            // Based on actual compact behavior: seq 10 cleaned up, seq 20 preserved, seq 30 preserved
             want_level.kv.insert(k2(), 15, v3()).unwrap(); // k2 seq 15 preserved
             want_level.kv.insert(k1(), 20, v2()).unwrap(); // k1 seq 20 preserved
             want_level.kv.insert_tombstone(k1(), 30).unwrap(); // k1 tombstone at seq 30
@@ -166,7 +166,7 @@ mod tests {
 
             let mut want_level = Level::default();
             want_level.with_sys_data(|s| s.update_seq(200)); // Higher seq wins
-                                                             // Insert in sequence order: 10, 15, 20, 30 (same result as Test 1)
+            // Insert in sequence order: 10, 15, 20, 30 (same result as Test 1)
             want_level.kv.insert(k1(), 10, v1()).unwrap();
             want_level.kv.insert(k2(), 15, v3()).unwrap();
             want_level.kv.insert(k1(), 20, v2()).unwrap();

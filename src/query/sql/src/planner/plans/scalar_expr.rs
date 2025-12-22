@@ -22,23 +22,23 @@ use std::hash::Hasher;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::Range;
 use databend_common_ast::Span;
+use databend_common_ast::ast::BinaryOperator;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::Scalar;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
+use databend_common_expression::Scalar;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
@@ -52,11 +52,11 @@ use itertools::Itertools;
 
 use super::WindowFuncFrame;
 use super::WindowFuncType;
-use crate::binder::ColumnBinding;
-use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::binder::ColumnBinding;
+use crate::optimizer::ir::SExpr;
 
 #[derive(Debug)]
 pub enum ScalarExpr {
@@ -1260,7 +1260,10 @@ impl AsyncFunctionCall {
             AsyncFunctionArgument::SequenceFunction(sequence_name) => {
                 if let Some(visibility_checker) = &visibility_checker {
                     if !visibility_checker.check_seq_visibility(sequence_name) {
-                        return Err(ErrorCode::PermissionDenied(format!("Permission denied: privilege ACCESS SEQUENCE is required on sequence {}", sequence_name)));
+                        return Err(ErrorCode::PermissionDenied(format!(
+                            "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
+                            sequence_name
+                        )));
                     }
                 }
                 let req = GetSequenceNextValueReq {

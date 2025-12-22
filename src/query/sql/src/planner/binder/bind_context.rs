@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::btree_map;
 use std::hash::Hash;
 
 use dashmap::DashMap;
+use databend_common_ast::Span;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::WindowSpec;
-use databend_common_ast::Span;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::VectorIndexInfo;
@@ -38,17 +38,17 @@ use itertools::Itertools;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
-use crate::binder::column_binding::ColumnBinding;
-use crate::binder::project_set::SetReturningInfo;
-use crate::binder::window::WindowInfo;
-use crate::binder::ColumnBindingBuilder;
-use crate::normalize_identifier;
-use crate::optimizer::ir::SExpr;
-use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::binder::ColumnBindingBuilder;
+use crate::binder::column_binding::ColumnBinding;
+use crate::binder::project_set::SetReturningInfo;
+use crate::binder::window::WindowInfo;
+use crate::normalize_identifier;
+use crate::optimizer::ir::SExpr;
+use crate::plans::ScalarExpr;
 
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
@@ -366,7 +366,6 @@ impl BindContext {
                             alias: alias.clone(),
                             scalar: scalar.clone(),
                         });
-                        alias_match_count += 1;
                     }
                 }
             }

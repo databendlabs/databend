@@ -14,8 +14,8 @@
 
 use std::io::Write;
 
-use databend_common_expression::types::*;
 use databend_common_expression::FromData;
+use databend_common_expression::types::*;
 use goldenfile::Mint;
 
 use crate::scalars::run_ast;

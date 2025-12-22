@@ -38,6 +38,9 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(try_blocks)]
 #![allow(clippy::diverging_sub_expression)]
+#![allow(clippy::let_and_return)]
+#![allow(clippy::manual_is_multiple_of)]
+#![allow(clippy::collapsible_if)]
 
 pub mod applier;
 pub mod config;

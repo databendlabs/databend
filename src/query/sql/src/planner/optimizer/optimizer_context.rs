@@ -22,9 +22,9 @@ use databend_common_settings::Settings;
 use educe::Educe;
 use parking_lot::RwLock;
 
+use crate::MetadataRef;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::planner::QueryExecutor;
-use crate::MetadataRef;
 
 #[derive(Educe)]
 #[educe(Debug)]

@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
 
+use crate::CacheAccessor;
+use crate::InMemoryLruCache;
 pub use crate::cache_items::*;
 use crate::manager::CacheManager;
 use crate::providers::HybridCache;
-use crate::CacheAccessor;
-use crate::InMemoryLruCache;
 
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
@@ -51,11 +51,11 @@ pub type BloomIndexFilterCache = HybridCache<FilterImpl>;
 /// In memory object cache of parquet FileMetaData of bloom index data
 pub type BloomIndexMetaCache = HybridCache<BloomIndexMeta>;
 
-pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
-pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;
+pub type InvertedIndexMetaCache = HybridCache<InvertedIndexMeta>;
+pub type InvertedIndexFileCache = HybridCache<InvertedIndexFile>;
 
-pub type VectorIndexMetaCache = InMemoryLruCache<VectorIndexMeta>;
-pub type VectorIndexFileCache = InMemoryLruCache<VectorIndexFile>;
+pub type VectorIndexMetaCache = HybridCache<VectorIndexMeta>;
+pub type VectorIndexFileCache = HybridCache<VectorIndexFile>;
 
 /// In memory object cache of parquet FileMetaData of external parquet rs files
 pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;

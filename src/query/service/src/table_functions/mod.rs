@@ -35,15 +35,15 @@ mod temporary_tables_table;
 mod udf_table;
 
 pub use copy_history::CopyHistoryTable;
-pub use numbers::generate_numbers_parts;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
+pub use numbers::generate_numbers_parts;
 pub use others::LicenseInfoTable;
 pub use others::TenantQuotaTable;
 pub use policy_references::PolicyReferencesTable;
+pub use system::TableStatisticsFunc;
 pub use system::get_fuse_table_snapshot;
 pub use system::get_fuse_table_statistics;
-pub use system::TableStatisticsFunc;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableFunctionFactory;
 pub use temporary_tables_table::TemporaryTablesTable;

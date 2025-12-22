@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::collapsible_if)]
 #![allow(non_local_definitions)]
-#![feature(no_sanitize)]
 
 //! This crate defines data types used in meta data storage service.
 
@@ -77,9 +77,9 @@ pub use grpc_config::GrpcConfig;
 pub use log_entry::LogEntry;
 pub use map_api::Expirable;
 pub mod match_seq {
-    pub use map_api::match_seq::errors::ConflictSeq;
     pub use map_api::match_seq::MatchSeq;
     pub use map_api::match_seq::MatchSeqExt;
+    pub use map_api::match_seq::errors::ConflictSeq;
 }
 pub use match_seq::ConflictSeq;
 pub use match_seq::MatchSeq;
@@ -87,10 +87,6 @@ pub use match_seq::MatchSeqExt;
 pub use node::Node;
 pub use operation::MetaId;
 pub use operation::Operation;
-pub use protobuf::txn_condition;
-pub use protobuf::txn_condition::ConditionResult;
-pub use protobuf::txn_op;
-pub use protobuf::txn_op_response;
 pub use protobuf::TxnCondition;
 pub use protobuf::TxnDeleteByPrefixRequest;
 pub use protobuf::TxnDeleteByPrefixResponse;
@@ -104,6 +100,10 @@ pub use protobuf::TxnPutRequest;
 pub use protobuf::TxnPutResponse;
 pub use protobuf::TxnReply;
 pub use protobuf::TxnRequest;
+pub use protobuf::txn_condition;
+pub use protobuf::txn_condition::ConditionResult;
+pub use protobuf::txn_op;
+pub use protobuf::txn_op_response;
 pub use seq_num::SeqNum;
 pub use state_machine_api::SeqV;
 pub use time::Interval;

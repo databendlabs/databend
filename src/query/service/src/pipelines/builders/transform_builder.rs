@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -34,28 +34,28 @@ use databend_common_pipeline_transforms::processors::BlockCompactBuilder;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformDummy;
+use databend_common_sql::ColumnSet;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::ColumnSet;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::operations::new_serialize_segment_processor;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::operations::new_serialize_segment_processor;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
-use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::Statistics;
 use meta::TableMetaTimestamps;
 
-use crate::pipelines::processors::transforms::TransformResortAddOn;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformResortAddOn;
 
 impl PipelineBuilder {
     pub(crate) fn filter_transform_builder(
         &self,
         predicates: &[RemoteExpr],
         projections: ColumnSet,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         let predicate = predicates
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
@@ -86,14 +86,14 @@ impl PipelineBuilder {
 
     pub(crate) fn dummy_transform_builder(
         &self,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         Ok(|input, output| Ok(TransformDummy::create(input, output)))
     }
 
     pub(crate) fn block_compact_task_builder(
         &self,
         block_thresholds: BlockThresholds,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         Ok(move |transform_input_port, transform_output_port| {
             Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                 transform_input_port,
@@ -105,7 +105,7 @@ impl PipelineBuilder {
 
     pub(crate) fn block_compact_transform_builder(
         &self,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         Ok(move |transform_input_port, transform_output_port| {
             Ok(ProcessorPtr::create(BlockMetaTransformer::create(
                 transform_input_port,
@@ -120,7 +120,7 @@ impl PipelineBuilder {
         table: Arc<dyn Table>,
         cluster_stats_gen: ClusterStatsGenerator,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -142,7 +142,7 @@ impl PipelineBuilder {
         table: Arc<dyn Table>,
         block_thresholds: BlockThresholds,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -161,7 +161,7 @@ impl PipelineBuilder {
         &self,
         table: Arc<dyn Table>,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -186,7 +186,7 @@ impl PipelineBuilder {
         num_input_columns: usize,
         remote_exprs: Vec<RemoteExpr>,
         projections: Option<ColumnSet>,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         let func_ctx = self.func_ctx.clone();
         let exprs = remote_exprs
             .iter()
@@ -210,7 +210,7 @@ impl PipelineBuilder {
         &self,
         source_schema: DataSchemaRef,
         target_schema: DataSchemaRef,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         let func_ctx = self.func_ctx.clone();
         Ok(move |transform_input_port, transform_output_port| {
             TransformCastSchema::try_create(
@@ -227,7 +227,7 @@ impl PipelineBuilder {
         &self,
         table: Arc<dyn Table>,
         source_schema: DataSchemaRef,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
         let ctx = self.ctx.clone();
         Ok(move |transform_input_port, transform_output_port| {
             TransformResortAddOn::try_create(

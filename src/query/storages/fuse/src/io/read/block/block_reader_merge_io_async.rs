@@ -28,8 +28,8 @@ use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 
-use crate::io::BlockReader;
 use crate::BlockReadResult;
+use crate::io::BlockReader;
 
 impl BlockReader {
     #[async_backtrace::framed]

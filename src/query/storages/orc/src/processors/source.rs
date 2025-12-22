@@ -30,9 +30,9 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storage::OperatorRegistry;
 use databend_storages_common_stage::SingleFilePartition;
+use orc_rust::ArrowReaderBuilder;
 use orc_rust::async_arrow_reader::StripeFactory;
 use orc_rust::projection::ProjectionMask;
-use orc_rust::ArrowReaderBuilder;
 
 use crate::chunk_reader_impl::OrcChunkReader;
 use crate::hashable_schema::HashableSchema;

@@ -24,8 +24,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::AlterNotificationPlan;
 
-use crate::interpreters::common::get_notification_client_config;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::get_notification_client_config;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 

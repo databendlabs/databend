@@ -18,13 +18,13 @@ use std::time::Instant;
 
 use databend_common_exception::Result;
 
+use crate::optimizer::Optimizer;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::RuleFactory;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::optimizer::pipeline::OptimizerTraceCollector;
-use crate::optimizer::Optimizer;
-use crate::optimizer::OptimizerContext;
 
 /// Optimizer that recursively applies a set of transformation rules
 #[derive(Clone)]

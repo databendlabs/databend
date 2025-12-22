@@ -19,18 +19,18 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Either;
 use itertools::Itertools as _;
-use zerocopy::native_endian::U64 as NativeU64;
 use zerocopy::FromBytes;
 use zerocopy::Immutable;
+use zerocopy::native_endian::U64 as NativeU64;
 
+use super::GraphLinksFormat;
+use super::header::HEADER_VERSION_COMPRESSED;
 use super::header::HeaderCompressed;
 use super::header::HeaderPlain;
-use super::header::HEADER_VERSION_COMPRESSED;
-use super::GraphLinksFormat;
 use crate::hnsw_index::common::bitpacking::packed_bits;
-use crate::hnsw_index::common::bitpacking_links::iterate_packed_links;
-use crate::hnsw_index::common::bitpacking_links::PackedLinksIterator;
 use crate::hnsw_index::common::bitpacking_links::MIN_BITS_PER_VALUE;
+use crate::hnsw_index::common::bitpacking_links::PackedLinksIterator;
+use crate::hnsw_index::common::bitpacking_links::iterate_packed_links;
 use crate::hnsw_index::common::bitpacking_ordered;
 use crate::hnsw_index::common::types::PointOffsetType;
 
@@ -66,14 +66,14 @@ pub(super) enum CompressionInfo<'a> {
 }
 
 impl GraphLinksView<'_> {
-    pub(super) fn load(data: &[u8], format: GraphLinksFormat) -> Result<GraphLinksView> {
+    pub(super) fn load(data: &[u8], format: GraphLinksFormat) -> Result<GraphLinksView<'_>> {
         match format {
             GraphLinksFormat::Compressed => Self::load_compressed(data),
             GraphLinksFormat::Plain => Self::load_plain(data),
         }
     }
 
-    fn load_plain(data: &[u8]) -> Result<GraphLinksView> {
+    fn load_plain(data: &[u8]) -> Result<GraphLinksView<'_>> {
         let (header, data) =
             HeaderPlain::ref_from_prefix(data).map_err(|_| error_unsufficent_size())?;
         let (level_offsets, data) =
@@ -89,7 +89,7 @@ impl GraphLinksView<'_> {
         })
     }
 
-    fn load_compressed(data: &[u8]) -> Result<GraphLinksView> {
+    fn load_compressed(data: &[u8]) -> Result<GraphLinksView<'_>> {
         let (header, data) =
             HeaderCompressed::ref_from_prefix(data).map_err(|_| error_unsufficent_size())?;
         debug_assert_eq!(header.version.get(), HEADER_VERSION_COMPRESSED);
@@ -118,7 +118,7 @@ impl GraphLinksView<'_> {
         })
     }
 
-    pub(super) fn links(&self, point_id: PointOffsetType, level: usize) -> LinksIterator {
+    pub(super) fn links(&self, point_id: PointOffsetType, level: usize) -> LinksIterator<'_> {
         let idx = if level == 0 {
             point_id as usize
         } else {

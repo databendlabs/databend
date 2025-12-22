@@ -18,30 +18,30 @@ use std::sync::Arc;
 use async_channel::Sender;
 use chrono::DateTime;
 use databend_common_base::base::tokio::sync::OwnedSemaphorePermit;
-use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnMetaV0;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use futures_util::future;
 
 use super::PrunedColumnOrientedSegmentMeta;
-use crate::pruning::BlockPruner;
 use crate::FuseBlockPartInfo;
+use crate::pruning::BlockPruner;
 
 pub struct ColumnOrientedBlockPruneSink {
     block_pruner: Arc<BlockPruner>,

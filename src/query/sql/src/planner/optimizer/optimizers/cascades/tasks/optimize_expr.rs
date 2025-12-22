@@ -19,8 +19,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
 
-use super::optimize_group::OptimizeGroupTask;
 use super::Task;
+use super::optimize_group::OptimizeGroupTask;
+use crate::IndexType;
 use crate::optimizer::cost::Cost;
 use crate::optimizer::cost::CostContext;
 use crate::optimizer::ir::Distribution;
@@ -31,11 +32,10 @@ use crate::optimizer::ir::PatternExtractor;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
-use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::plans::RelOperator;
-use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
 pub enum OptimizeExprState {

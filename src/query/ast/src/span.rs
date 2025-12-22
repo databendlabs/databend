@@ -90,9 +90,9 @@ pub fn pretty_print_error(source: &str, labels: Vec<(Range, String)>) -> String 
     use rspack_codespan_reporting::diagnostic::Label;
     use rspack_codespan_reporting::files::SimpleFile;
     use rspack_codespan_reporting::term;
-    use rspack_codespan_reporting::term::termcolor::Buffer;
     use rspack_codespan_reporting::term::Chars;
     use rspack_codespan_reporting::term::Config;
+    use rspack_codespan_reporting::term::termcolor::Buffer;
 
     let mut writer = Buffer::no_color();
     let file = SimpleFile::new("SQL", source);

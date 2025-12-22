@@ -170,7 +170,10 @@ mod tests {
         let cond_op = pb::ConditionalOperation::new(predicate, operations);
 
         let display_str = cond_op.to_string();
-        assert_eq!(display_str, "if:(key == seq(1)) then:[Put(Put key=key0),Put(Put key=key1),Put(Put key=key2),Put(Put key=key3),Put(Put key=key4)]");
+        assert_eq!(
+            display_str,
+            "if:(key == seq(1)) then:[Put(Put key=key0),Put(Put key=key1),Put(Put key=key2),Put(Put key=key3),Put(Put key=key4)]"
+        );
     }
 
     #[test]

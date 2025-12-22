@@ -38,16 +38,16 @@ impl<T> VecExt<T> for Vec<T> {
     #[inline]
     unsafe fn push_unchecked(&mut self, value: T) {
         debug_assert!(self.capacity() > self.len());
-        let end = self.as_mut_ptr().add(self.len());
-        std::ptr::write(end, value);
-        self.set_len(self.len() + 1);
+        let end = unsafe { self.as_mut_ptr().add(self.len()) };
+        unsafe { std::ptr::write(end, value) };
+        unsafe { self.set_len(self.len() + 1) };
     }
 
     unsafe fn extend_from_slice_unchecked(&mut self, val: &[T]) {
         debug_assert!(self.capacity() >= self.len() + val.len());
-        let end = self.as_mut_ptr().add(self.len());
-        std::ptr::copy_nonoverlapping(val.as_ptr(), end, val.len());
-        self.set_len(self.len() + val.len());
+        let end = unsafe { self.as_mut_ptr().add(self.len()) };
+        unsafe { std::ptr::copy_nonoverlapping(val.as_ptr(), end, val.len()) };
+        unsafe { self.set_len(self.len() + val.len()) };
     }
 }
 
@@ -60,8 +60,14 @@ pub trait VecU8Ext {
 impl VecU8Ext for Vec<u8> {
     unsafe fn store_value_uncheckd<T>(&mut self, val: &T) {
         debug_assert!(self.capacity() >= self.len() + std::mem::size_of::<T>());
-        let end = self.as_mut_ptr().add(self.len());
-        std::ptr::copy_nonoverlapping(val as *const T as *const u8, end, std::mem::size_of::<T>());
-        self.set_len(self.len() + std::mem::size_of::<T>());
+        let end = unsafe { self.as_mut_ptr().add(self.len()) };
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                val as *const T as *const u8,
+                end,
+                std::mem::size_of::<T>(),
+            )
+        };
+        unsafe { self.set_len(self.len() + std::mem::size_of::<T>()) };
     }
 }

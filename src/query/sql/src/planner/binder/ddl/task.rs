@@ -25,12 +25,13 @@ use databend_common_ast::ast::ExecuteTaskStmt;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowTasksStmt;
 use databend_common_ast::ast::TaskSql;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::Binder;
 use crate::plans::AlterTaskPlan;
 use crate::plans::CreateTaskPlan;
 use crate::plans::DescribeTaskPlan;
@@ -38,7 +39,6 @@ use crate::plans::DropTaskPlan;
 use crate::plans::ExecuteTaskPlan;
 use crate::plans::Plan;
 use crate::plans::ShowTasksPlan;
-use crate::Binder;
 
 fn verify_single_statement(sql: &String) -> Result<()> {
     let tokens = tokenize_sql(sql.as_str()).map_err(|e| {

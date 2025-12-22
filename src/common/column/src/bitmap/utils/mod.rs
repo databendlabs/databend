@@ -23,11 +23,11 @@ mod zip_validity;
 
 use std::convert::TryInto;
 
-pub(crate) use chunk_iterator::merge_reversed;
 pub use chunk_iterator::BitChunk;
 pub use chunk_iterator::BitChunkIterExact;
 pub use chunk_iterator::BitChunks;
 pub use chunk_iterator::BitChunksExact;
+pub(crate) use chunk_iterator::merge_reversed;
 pub use chunks_exact_mut::BitChunksExactMut;
 pub use fmt::fmt;
 pub use iterator::BitmapIter;
@@ -76,8 +76,10 @@ pub fn set_bit(data: &mut [u8], i: usize, value: bool) {
 /// caller must ensure that `i / 8 < data.len()`
 #[inline]
 pub unsafe fn set_bit_unchecked(data: &mut [u8], i: usize, value: bool) {
-    let byte = data.get_unchecked_mut(i / 8);
-    *byte = set(*byte, i % 8, value);
+    unsafe {
+        let byte = data.get_unchecked_mut(i / 8);
+        *byte = set(*byte, i % 8, value);
+    }
 }
 
 /// Returns whether bit at position `i` in `data` is set
@@ -94,7 +96,7 @@ pub fn get_bit(bytes: &[u8], i: usize) -> bool {
 /// `i / 8 >= data.len()` results in undefined behavior
 #[inline]
 pub unsafe fn get_bit_unchecked(data: &[u8], i: usize) -> bool {
-    (*data.as_ptr().add(i >> 3) & BIT_MASK[i & 7]) != 0
+    unsafe { (*data.as_ptr().add(i >> 3) & BIT_MASK[i & 7]) != 0 }
 }
 
 /// Returns the number of bytes required to hold `bits` bits.
@@ -132,7 +134,7 @@ pub fn count_zeros(slice: &[u8], offset: usize, len: usize) -> usize {
         set_count += (slice[0] >> offset).count_ones() as usize;
         slice = &slice[1..];
     }
-    if (offset + len) % 8 != 0 {
+    if !(offset + len).is_multiple_of(8) {
         let end_offset = (offset + len) % 8; // i.e. 3 + 4 = 7
         let last_index = slice.len() - 1;
         // count all ignoring the last `offset` bits

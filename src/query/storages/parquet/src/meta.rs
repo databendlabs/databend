@@ -15,8 +15,8 @@
 use std::intrinsics::unlikely;
 use std::sync::Arc;
 
-use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::FullParquetMeta;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

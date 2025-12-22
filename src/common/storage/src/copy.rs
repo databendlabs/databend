@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use dashmap::mapref::entry::Entry;
 use databend_common_ast::ast::OnErrorMode;
 use databend_common_exception::ErrorCode;
 use serde::Deserialize;

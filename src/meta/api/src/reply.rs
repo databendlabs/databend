@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnReply;
+use databend_common_meta_types::protobuf::RaftReply;
 use serde::de::DeserializeOwned;
 
 pub fn reply_to_api_result<T>(msg: RaftReply) -> Result<T, MetaAPIError>
@@ -45,9 +45,9 @@ mod tests {
         i: i32,
     }
 
-    use databend_common_meta_types::protobuf::RaftReply;
     use databend_common_meta_types::MetaAPIError;
     use databend_common_meta_types::MetaNetworkError;
+    use databend_common_meta_types::protobuf::RaftReply;
 
     use crate::reply::reply_to_api_result;
 
@@ -62,9 +62,11 @@ mod tests {
         let res: Result<Foo, MetaAPIError> = reply_to_api_result(msg);
         match res {
             Err(MetaAPIError::NetworkError(MetaNetworkError::InvalidReply(inv_reply))) => {
-                assert!(inv_reply
-                    .to_string()
-                    .starts_with("InvalidReply: can not decode RaftReply.data"));
+                assert!(
+                    inv_reply
+                        .to_string()
+                        .starts_with("InvalidReply: can not decode RaftReply.data")
+                );
             }
             _ => {
                 unreachable!("expect InvalidReply")
@@ -80,9 +82,11 @@ mod tests {
         let res: Result<Foo, MetaAPIError> = reply_to_api_result(msg);
         match res {
             Err(MetaAPIError::NetworkError(MetaNetworkError::InvalidReply(inv_reply))) => {
-                assert!(inv_reply
-                    .to_string()
-                    .starts_with("InvalidReply: can not decode RaftReply.error"));
+                assert!(
+                    inv_reply
+                        .to_string()
+                        .starts_with("InvalidReply: can not decode RaftReply.error")
+                );
             }
             _ => {
                 unreachable!("expect InvalidReply")

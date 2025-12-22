@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_expression as ce;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::TableDataType;
+use databend_common_expression::types::NumberDataType;
 use fastrace::func_name;
 
 use crate::common;

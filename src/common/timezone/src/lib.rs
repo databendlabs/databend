@@ -16,12 +16,12 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::RwLock;
 
-use jiff::civil::date;
+use jiff::SignedDuration;
 use jiff::civil::Date;
 use jiff::civil::Time;
 use jiff::civil::Weekday;
+use jiff::civil::date;
 use jiff::tz::TimeZone;
-use jiff::SignedDuration;
 
 const LUT_MIN_YEAR: i32 = 1900;
 const LUT_MAX_YEAR: i32 = 2299;
@@ -132,18 +132,17 @@ impl DayEntry {
         let mut offset = self.offset_at_start;
         if let (Some(trans), Some(transition_elapsed)) =
             (self.transition_utc, self.transition_elapsed)
+            && seconds >= trans
         {
-            if seconds >= trans {
-                if transition_elapsed == 0 {
-                    if self.offset_change > 0 {
-                        // Gap at the top of the day: skip the missing span but retain
-                        // the post-transition offset that `offset_at_start` already has.
-                        local_seconds += self.offset_change as i64;
-                    }
-                } else {
+            if transition_elapsed == 0 {
+                if self.offset_change > 0 {
+                    // Gap at the top of the day: skip the missing span but retain
+                    // the post-transition offset that `offset_at_start` already has.
                     local_seconds += self.offset_change as i64;
-                    offset += self.offset_change;
                 }
+            } else {
+                local_seconds += self.offset_change as i64;
+                offset += self.offset_change;
             }
         }
         debug_assert!(local_seconds >= 0);

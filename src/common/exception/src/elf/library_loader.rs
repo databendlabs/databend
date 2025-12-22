@@ -31,9 +31,9 @@ use object::Object;
 use object::ObjectSymbol;
 use object::ObjectSymbolTable;
 
+use crate::elf::ElfFile;
 use crate::elf::library_manager::Library;
 use crate::elf::library_symbol::Symbol;
-use crate::elf::ElfFile;
 
 #[derive(Debug)]
 pub struct LibraryLoader {
@@ -96,14 +96,16 @@ impl LibraryLoader {
         let name = format!("{}", library_path.display());
         let file = std::fs::File::open(library_path)?;
         let file_len = file.metadata()?.len();
-        let ptr = libc::mmap(
-            ptr::null_mut(),
-            file_len as libc::size_t,
-            libc::PROT_READ,
-            libc::MAP_PRIVATE,
-            file.as_raw_fd(),
-            0,
-        );
+        let ptr = unsafe {
+            libc::mmap(
+                ptr::null_mut(),
+                file_len as libc::size_t,
+                libc::PROT_READ,
+                libc::MAP_PRIVATE,
+                file.as_raw_fd(),
+                0,
+            )
+        };
 
         match std::ptr::eq(ptr, libc::MAP_FAILED) {
             true => Err(std::io::Error::other("Cannot mmap")),
@@ -112,13 +114,13 @@ impl LibraryLoader {
     }
 
     unsafe fn load_library(&mut self, info: &dl_phdr_info) -> std::io::Result<Library> {
-        let library_name = match info.dlpi_name.is_null() || *info.dlpi_name == 0 {
+        let library_name = match info.dlpi_name.is_null() || unsafe { *info.dlpi_name } == 0 {
             true => match self.libraries.is_empty() {
                 true => OsString::from("/proc/self/exe"),
                 false => OsString::new(),
             },
             false => {
-                let bytes = CStr::from_ptr(info.dlpi_name).to_bytes();
+                let bytes = unsafe { CStr::from_ptr(info.dlpi_name) }.to_bytes();
                 OsStr::from_bytes(bytes).to_owned()
             }
         };
@@ -128,9 +130,9 @@ impl LibraryLoader {
         }
 
         let binary_path = std::fs::canonicalize(library_name)?.to_path_buf();
-        let mut binary_library = self.mmap_library(binary_path.clone())?;
+        let mut binary_library = unsafe { self.mmap_library(binary_path.clone())? };
 
-        let Some(binary_build_id) = binary_library.build_id() else {
+        let Some(binary_build_id) = (unsafe { binary_library.build_id() }) else {
             let binary_data = binary_library.data();
             binary_library.address_begin = info.dlpi_addr as usize;
             binary_library.address_end = info.dlpi_addr as usize + binary_data.len();
@@ -142,8 +144,8 @@ impl LibraryLoader {
         binary_debug_path.set_extension("debug");
 
         if std::fs::exists(&binary_debug_path)? {
-            let mut library = self.mmap_library(binary_debug_path)?;
-            if matches!(library.build_id(), Some(v) if v == binary_build_id) {
+            let mut library = unsafe { self.mmap_library(binary_debug_path)? };
+            if matches!(unsafe { library.build_id() }, Some(v) if v == binary_build_id) {
                 let library_data = library.data();
                 library.address_begin = info.dlpi_addr as usize;
                 library.address_end = info.dlpi_addr as usize + library_data.len();
@@ -162,8 +164,8 @@ impl LibraryLoader {
         system_named_debug_path.set_extension("debug");
 
         if std::fs::exists(&system_named_debug_path)? {
-            let mut library = self.mmap_library(system_named_debug_path)?;
-            if matches!(library.build_id(), Some(v) if v == binary_build_id) {
+            let mut library = unsafe { self.mmap_library(system_named_debug_path)? };
+            if matches!(unsafe { library.build_id() }, Some(v) if v == binary_build_id) {
                 let library_data = library.data();
                 library.address_begin = info.dlpi_addr as usize;
                 library.address_end = info.dlpi_addr as usize + library_data.len();
@@ -187,9 +189,9 @@ impl LibraryLoader {
             system_id_debug_path.set_extension("debug");
 
             if std::fs::exists(&system_id_debug_path)? {
-                let mut library = self.mmap_library(system_id_debug_path)?;
+                let mut library = unsafe { self.mmap_library(system_id_debug_path)? };
 
-                if matches!(library.build_id(), Some(v) if v == binary_build_id) {
+                if matches!(unsafe { library.build_id() }, Some(v) if v == binary_build_id) {
                     let library_data = library.data();
                     library.address_begin = info.dlpi_addr as usize;
                     library.address_end = info.dlpi_addr as usize + library_data.len();
@@ -205,8 +207,8 @@ impl LibraryLoader {
     }
 
     pub unsafe fn load_libraries(&mut self, info: &dl_phdr_info) {
-        if let Ok(mut library) = self.load_library(info) {
-            self.load_symbols(&mut library);
+        if let Ok(mut library) = unsafe { self.load_library(info) } {
+            unsafe { self.load_symbols(&mut library) };
             self.libraries.push(library);
         }
     }
@@ -233,7 +235,9 @@ impl LibraryLoader {
 }
 
 unsafe extern "C" fn callback(info: *mut dl_phdr_info, _size: size_t, v: *mut c_void) -> c_int {
-    let loader = &mut *v.cast::<LibraryLoader>();
-    loader.load_libraries(&*info);
+    let loader = unsafe { &mut *v.cast::<LibraryLoader>() };
+    unsafe {
+        loader.load_libraries(&*info);
+    }
     0
 }

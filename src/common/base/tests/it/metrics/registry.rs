@@ -15,20 +15,20 @@
 use std::collections::HashMap;
 
 use databend_common_base::base::GlobalUniqName;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::metrics::BUCKET_MILLISECONDS;
+use databend_common_base::runtime::metrics::BUCKET_SECONDS;
+use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
+use databend_common_base::runtime::metrics::HistogramCount;
+use databend_common_base::runtime::metrics::MAX_HISTOGRAM_BOUND;
+use databend_common_base::runtime::metrics::MetricSample;
+use databend_common_base::runtime::metrics::MetricValue;
+use databend_common_base::runtime::metrics::ScopedRegistry;
 use databend_common_base::runtime::metrics::register_counter;
 use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::register_gauge;
 use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 use databend_common_base::runtime::metrics::register_histogram_in_seconds;
-use databend_common_base::runtime::metrics::HistogramCount;
-use databend_common_base::runtime::metrics::MetricSample;
-use databend_common_base::runtime::metrics::MetricValue;
-use databend_common_base::runtime::metrics::ScopedRegistry;
-use databend_common_base::runtime::metrics::BUCKET_MILLISECONDS;
-use databend_common_base::runtime::metrics::BUCKET_SECONDS;
-use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
-use databend_common_base::runtime::metrics::MAX_HISTOGRAM_BOUND;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
 
 fn assert_contain_metric(samples: Vec<MetricSample>, expected: MetricSample) {

@@ -148,9 +148,9 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::raft_types::new_log_id;
-    use crate::raft_types::Membership;
     use crate::Endpoint;
+    use crate::raft_types::Membership;
+    use crate::raft_types::new_log_id;
 
     /// Fields with default value should not be serialized.
     #[test]

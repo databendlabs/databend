@@ -18,36 +18,36 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
-use databend_common_catalog::plan::block_id_from_location;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamTablePart;
+use databend_common_catalog::plan::block_id_from_location;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::Decimal128Type;
+use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
+use databend_common_expression::types::decimal::Decimal128Type;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
-use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
+use databend_storages_common_table_meta::table::StreamMode;
 use log::info;
 
+use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::io::SnapshotsIO;
 use crate::pruning::FusePruner;
-use crate::FuseTable;
 
 #[derive(Clone)]
 pub struct ChangesDesc {

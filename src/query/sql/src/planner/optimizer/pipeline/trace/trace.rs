@@ -19,8 +19,8 @@ use databend_common_exception::Result;
 use log::info;
 use parking_lot::Mutex;
 
-use crate::optimizer::ir::SExpr;
 use crate::Metadata;
+use crate::optimizer::ir::SExpr;
 
 /// Represents a trace entry for a rule execution
 #[derive(Clone)]

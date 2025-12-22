@@ -25,9 +25,9 @@ use databend_common_pipeline_transforms::columns::TransformAddComputedColumns;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::DefaultExprBinder;
 
+use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::processors::transforms::TransformResortAddOn;
-use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 
 /// This file implements append to table pipeline builder.

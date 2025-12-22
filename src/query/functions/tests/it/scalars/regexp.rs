@@ -14,9 +14,9 @@
 
 use std::io::Write;
 
-use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::StringType;
 use databend_common_expression::FromData;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::number::Int64Type;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -714,8 +714,16 @@ fn test_regexp_extract(file: &mut impl Write) {
         ),
     ]);
 
-    run_ast(file, "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])", &[]);
-    run_ast(file, "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])", &[]);
+    run_ast(
+        file,
+        "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])",
+        &[],
+    );
+    run_ast(
+        file,
+        "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])",
+        &[],
+    );
     run_ast(
         file,
         "regexp_extract('name: John, age: 30', NULL, ['name', 'age'])",
@@ -726,7 +734,11 @@ fn test_regexp_extract(file: &mut impl Write) {
         "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', [])",
         &[],
     );
-    run_ast(file, "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])", &[]);
+    run_ast(
+        file,
+        "regexp_extract('name: John, age: 30', 'name: ([A-Za-z]+), age: ([0-9]+)', ['name', 'age'])",
+        &[],
+    );
 
     run_ast(
         file,
@@ -750,7 +762,11 @@ fn test_regexp_extract(file: &mut impl Write) {
     run_ast(file, "regexp_extract_all('abc def ghi', NULL)", &[]);
     run_ast(file, "regexp_extract_all('', '[a-z]+')", &[]);
     run_ast(file, "regexp_extract_all('123 456', '[a-z]+')", &[]);
-    run_ast(file, "regexp_extract_all('name: John, age: 30; name: Jane, age: 25', 'name: ([A-Za-z]+), age: ([0-9]+)')", &[]);
+    run_ast(
+        file,
+        "regexp_extract_all('name: John, age: 30; name: Jane, age: 25', 'name: ([A-Za-z]+), age: ([0-9]+)')",
+        &[],
+    );
 
     run_ast(
         file,

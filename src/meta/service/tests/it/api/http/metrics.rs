@@ -21,11 +21,11 @@ use http::StatusCode;
 use http::Uri;
 use log::info;
 use maplit::btreeset;
-use poem::get;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
+use poem::get;
 use pretty_assertions::assert_eq;
 use test_harness::test;
 

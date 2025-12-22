@@ -16,23 +16,19 @@ use std::marker::PhantomData;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::*;
-use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
-use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::*;
+use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_number_mapped_type;
 use num_traits::AsPrimitive;
 
-use super::assert_params;
-use super::assert_unary_arguments;
-use super::batch_merge2;
-use super::batch_serialize2;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
@@ -40,6 +36,10 @@ use super::AggregateUnaryFunction;
 use super::SerializeInfo;
 use super::StateSerde;
 use super::UnaryState;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::batch_merge2;
+use super::batch_serialize2;
 
 struct NumberAvgState<T, TSum>
 where TSum: ValueType

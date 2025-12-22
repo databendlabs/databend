@@ -15,9 +15,9 @@
 
 use feistel_permutation_rs::DefaultBuildHasher;
 use feistel_permutation_rs::Permutation;
-use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
+use rand::rngs::SmallRng;
 
 pub const QUANTILE_SAMPLE_SIZE: usize = 100_000;
 
@@ -49,7 +49,7 @@ pub(crate) fn find_quantile_interval<'a>(
 
     let slice_size = std::cmp::min(count, QUANTILE_SAMPLE_SIZE);
     let mut rng = SmallRng::from_entropy();
-    let seed: u64 = rng.gen();
+    let seed: u64 = rng.r#gen();
     let permutor = Permutation::new(count as u64, seed, DefaultBuildHasher::new());
     let mut selected_vectors: Vec<usize> = permutor
         .iter()

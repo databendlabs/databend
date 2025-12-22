@@ -83,9 +83,9 @@ where Self: Sized
 #[cfg(test)]
 mod tests {
 
-    use crate::kvapi::testing::FooKey;
     use crate::kvapi::DirName;
     use crate::kvapi::Key;
+    use crate::kvapi::testing::FooKey;
 
     #[test]
     fn test_with_key_space() {

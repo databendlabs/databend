@@ -15,8 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_catalog::merge_into_join::MergeIntoJoinType;
-use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::plan::InternalColumnMeta;
+use databend_common_catalog::plan::gen_mutation_stream_meta;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
@@ -24,8 +24,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use roaring::RoaringTreemap;
 
-use crate::operations::BlockMetaIndex;
 use crate::FuseBlockPartInfo;
+use crate::operations::BlockMetaIndex;
 
 pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> (bool, bool) {
     let merge_into_join = ctx.get_merge_into_join();

@@ -25,10 +25,10 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
 use super::dictionary_name_ident::DictionaryNameIdent;
+use crate::KeyWithTenant;
 use crate::schema::DictionaryIdentity;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
-use crate::KeyWithTenant;
 
 /// Represents the metadata of a dictionary within the system.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]

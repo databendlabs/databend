@@ -22,9 +22,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_sql::ColumnBinding;
 use databend_common_sql::plans::CopyIntoTableMode;
 use databend_common_sql::plans::ValidationMode;
-use databend_common_sql::ColumnBinding;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::CopyIntoTableFormatter;

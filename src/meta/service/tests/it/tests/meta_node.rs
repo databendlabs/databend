@@ -19,9 +19,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_meta_sled_store::openraft::ServerState;
+use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::NodeId;
-use databend_common_meta_types::AppliedState;
 use databend_common_version::BUILD_INFO;
 use databend_meta::meta_service::MetaNode;
 use log::info;

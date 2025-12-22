@@ -24,15 +24,15 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::types::Index;
 use databend_common_expression::types::Buffer;
 
+use super::Compression;
 use super::basic::CommonCompression;
 use super::integer::Dict;
 use super::integer::Freq;
 use super::integer::OneValue;
-use super::Compression;
 use crate::error::Error;
 use crate::error::Result;
-use crate::read::read_basic::read_compress_header;
 use crate::read::NativeReadBuf;
+use crate::read::read_basic::read_compress_header;
 use crate::write::WriteOptions;
 
 pub fn compress_binary(

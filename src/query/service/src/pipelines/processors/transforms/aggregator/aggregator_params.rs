@@ -15,13 +15,13 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_functions::aggregates::get_states_layout;
+use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionRef;
 use databend_common_functions::aggregates::StatesLayout;
+use databend_common_functions::aggregates::get_states_layout;
 use databend_common_sql::IndexType;
 use itertools::Itertools;
 

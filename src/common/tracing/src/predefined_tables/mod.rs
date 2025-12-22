@@ -14,7 +14,7 @@
 
 mod history_tables;
 
+pub use history_tables::HistoryTable;
 pub use history_tables::get_all_history_table_names;
 pub use history_tables::init_history_tables;
 pub use history_tables::table_to_target;
-pub use history_tables::HistoryTable;

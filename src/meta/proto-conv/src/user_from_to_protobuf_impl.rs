@@ -25,11 +25,11 @@ use databend_common_protos::pb;
 use enumflags2::BitFlags;
 use num::FromPrimitive;
 
-use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
+use crate::reader_check_msg;
 
 impl FromToProto for mt::principal::AuthInfo {
     type PB = pb::AuthInfo;
@@ -160,7 +160,10 @@ impl FromToProto for mt::principal::GrantObject {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let Some(object) = p.object else {
-            return Err(Incompatible::new(format!("Incompatible GrantObject type: Data contains an unrecognized variant for {} version", p.ver)));
+            return Err(Incompatible::new(format!(
+                "Incompatible GrantObject type: Data contains an unrecognized variant for {} version",
+                p.ver
+            )));
         };
 
         match object {

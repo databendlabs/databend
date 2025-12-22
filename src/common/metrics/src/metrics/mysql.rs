@@ -15,8 +15,8 @@
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 use databend_common_base::runtime::metrics::Histogram;
+use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 
 pub static MYSQL_PROCESSOR_REQUEST_DURATION: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("mysql_process_request_duration_ms"));

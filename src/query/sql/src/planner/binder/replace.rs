@@ -21,6 +21,7 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::BindContext;
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
@@ -28,7 +29,6 @@ use crate::plans::InsertInputSource;
 use crate::plans::InsertValue;
 use crate::plans::Plan;
 use crate::plans::Replace;
-use crate::BindContext;
 impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_replace(

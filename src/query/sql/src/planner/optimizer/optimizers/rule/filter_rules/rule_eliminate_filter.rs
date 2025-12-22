@@ -19,20 +19,20 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use itertools::Itertools;
 
+use crate::MetadataRef;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::optimizers::rule::constant::is_falsy;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::optimizer::optimizers::rule::constant::is_falsy;
 use crate::plans::ConstantTableScan;
 use crate::plans::Filter;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
-use crate::MetadataRef;
 
 pub struct RuleEliminateFilter {
     id: RuleID,

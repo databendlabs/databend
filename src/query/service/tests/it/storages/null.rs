@@ -14,10 +14,10 @@
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;

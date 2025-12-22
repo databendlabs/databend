@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::set_backtrace;
 use databend_common_exception::Result;
+use databend_common_exception::set_backtrace;
 use databend_common_sql::plans::SystemAction;
 use databend_common_sql::plans::SystemPlan;
 use databend_common_users::RoleCacheManager;

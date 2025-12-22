@@ -17,12 +17,6 @@ use std::hint::unlikely;
 use std::ops::*;
 use std::sync::Arc;
 
-use databend_common_expression::types::compute_view::ComputeView;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::*;
-use databend_common_expression::vectorize_cmp_2_arg;
-use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
@@ -33,6 +27,12 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
+use databend_common_expression::types::compute_view::ComputeView;
+use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::i256;
+use databend_common_expression::types::*;
+use databend_common_expression::vectorize_cmp_2_arg;
+use databend_common_expression::with_decimal_mapped_type;
 
 #[inline]
 fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u8, u8) {

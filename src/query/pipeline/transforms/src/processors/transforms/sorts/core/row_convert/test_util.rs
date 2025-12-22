@@ -16,11 +16,11 @@ use arrow_array::ArrayRef;
 use arrow_ord::sort::LexicographicalComparator;
 use arrow_ord::sort::SortColumn;
 use arrow_schema::SortOptions;
-use databend_common_expression::types::*;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::SortField;
+use databend_common_expression::types::*;
 use proptest::prelude::*;
 
 pub fn print_row(entries: &[BlockEntry], row: usize) -> String {

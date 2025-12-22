@@ -16,9 +16,9 @@ use databend_common_ast::ast::CallStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::BindContext;
 use crate::binder::Binder;
 use crate::plans::Plan;
-use crate::BindContext;
 
 impl Binder {
     /// Rewrite call stmt to table functions

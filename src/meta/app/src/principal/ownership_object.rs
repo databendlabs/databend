@@ -94,13 +94,13 @@ impl fmt::Display for OwnershipObject {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
         match self {
             OwnershipObject::Database {
-                ref catalog_name,
-                ref db_id,
+                catalog_name,
+                db_id,
             } => write!(f, "'{}'.'{}'.*", catalog_name, db_id),
             OwnershipObject::Table {
-                ref catalog_name,
-                ref db_id,
-                ref table_id,
+                catalog_name,
+                db_id,
+                table_id,
             } => {
                 write!(f, "'{}'.'{}'.'{}'", catalog_name, db_id, table_id)
             }

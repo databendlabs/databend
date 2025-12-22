@@ -17,9 +17,9 @@ use std::collections::HashMap;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use http::StatusCode;
+use poem::IntoResponse;
 use poem::web::Json;
 use poem::web::Path;
-use poem::IntoResponse;
 
 use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterHelper;
@@ -41,7 +41,7 @@ pub async fn running_query_dump(Path(query_id): Path<String>) -> poem::Result<im
             return Err(poem::Error::from_string(
                 format!("Failed to fetch executor dump. cause: {cause}"),
                 StatusCode::INTERNAL_SERVER_ERROR,
-            ))
+            ));
         }
     };
 

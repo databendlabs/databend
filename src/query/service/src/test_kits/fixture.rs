@@ -24,14 +24,6 @@ use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
-use databend_common_expression::infer_table_schema;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::number::Int32Type;
-use databend_common_expression::types::number::Int64Type;
-use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
 use databend_common_expression::Column;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
@@ -44,6 +36,14 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::number::Int32Type;
+use databend_common_expression::types::number::Int64Type;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
 use databend_common_meta_app::principal::AuthInfo;
@@ -72,6 +72,7 @@ use jsonb::Value as JsonbValue;
 use log::info;
 use uuid::Uuid;
 
+use crate::GlobalServices;
 use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterHelper;
 use crate::interpreters::CreateTableInterpreter;
@@ -86,10 +87,9 @@ use crate::sessions::SessionManager;
 use crate::sessions::TableContext;
 use crate::sql::Planner;
 use crate::storages::Table;
-use crate::test_kits::execute_pipeline;
 use crate::test_kits::ClusterDescriptor;
 use crate::test_kits::ConfigBuilder;
-use crate::GlobalServices;
+use crate::test_kits::execute_pipeline;
 
 pub struct TestFixture {
     pub(crate) default_ctx: Arc<QueryContext>,
@@ -264,7 +264,7 @@ impl TestFixture {
     async fn init_global_with_config(config: &InnerConfig) -> Result<()> {
         let version = &BUILD_INFO;
         set_panic_hook(version.commit_detail.clone());
-        std::env::set_var("UNIT_TEST", "TRUE");
+        unsafe { std::env::set_var("UNIT_TEST", "TRUE") };
 
         #[cfg(debug_assertions)]
         {

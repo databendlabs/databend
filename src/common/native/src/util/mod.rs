@@ -38,9 +38,9 @@ macro_rules! with_match_integer_double_type {
                 $body_primitive
             };
         }
-        use databend_common_expression::types::NumberDataType::*;
         use databend_common_expression::types::F32;
         use databend_common_expression::types::F64;
+        use databend_common_expression::types::NumberDataType::*;
 
         match $key_type {
             Int8 => __with_ty__! { i8 },

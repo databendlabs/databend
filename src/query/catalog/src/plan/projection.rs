@@ -18,10 +18,10 @@ use std::fmt::Formatter;
 use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableSchema;
-use databend_common_storage::parquet::build_parquet_schema_tree;
-use databend_common_storage::parquet::traverse_parquet_schema_tree;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
+use databend_common_storage::parquet::build_parquet_schema_tree;
+use databend_common_storage::parquet::traverse_parquet_schema_tree;
 use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescriptor;
 

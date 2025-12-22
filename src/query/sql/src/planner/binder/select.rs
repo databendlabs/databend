@@ -16,31 +16,35 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
-use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
-use databend_common_expression::ROW_ID_COLUMN_ID;
-use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use super::sort::OrderItem;
 use super::Finder;
-use crate::binder::bind_table_reference::JoinConditions;
-use crate::binder::scalar_common::split_conjunctions;
+use super::sort::OrderItem;
+use crate::ColumnEntry;
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
+use crate::binder::bind_table_reference::JoinConditions;
+use crate::binder::scalar_common::split_conjunctions;
 use crate::optimizer::ir::SExpr;
-use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
+use crate::planner::binder::scalar::ScalarBinder;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::Filter;
@@ -49,10 +53,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::plans::Visitor as _;
-use crate::ColumnEntry;
-use crate::ColumnSet;
-use crate::IndexType;
-use crate::Visibility;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -161,15 +161,15 @@ impl Binder {
             SetOperator::Intersect if !all => {
                 // Transfer Intersect to Semi join
                 self.bind_intersect(
-                    (left.span(),left_expr,left_bind_context),
-                    (right.span(),right_expr,right_bind_context),
+                    (left.span(), left_expr, left_bind_context),
+                    (right.span(), right_expr, right_bind_context),
                 )
             }
             SetOperator::Except if !all => {
                 // Transfer Except to Anti join
                 self.bind_except(
-                    (left.span(),left_expr,left_bind_context),
-                    (right.span(),right_expr,right_bind_context),
+                    (left.span(), left_expr, left_bind_context),
+                    (right.span(), right_expr, right_bind_context),
                 )
             }
             SetOperator::Union => self.bind_union(

@@ -63,7 +63,7 @@ impl<'a> ProjectedBlock<'a> {
         }
     }
 
-    pub fn iter(&self) -> EntriesIter {
+    pub fn iter(&self) -> EntriesIter<'_> {
         match &self.map {
             Some(map) => EntriesIter {
                 iter: 0..map.len(),
@@ -154,9 +154,9 @@ impl<'a> From<&'a Vec<BlockEntry>> for ProjectedBlock<'a> {
 #[cfg(test)]
 mod tests {
     use super::ProjectedBlock;
-    use crate::types::*;
     use crate::DataBlock;
     use crate::FromData;
+    use crate::types::*;
 
     #[test]
     fn test_input_columns() {

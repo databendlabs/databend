@@ -25,16 +25,16 @@ use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::StringType;
 use databend_common_settings::Settings;
 use databend_common_sql::Planner;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -47,8 +47,8 @@ use log::LevelFilter;
 use super::InterpreterFactory;
 use super::ShowCreateQuerySettings;
 use super::ShowCreateTableInterpreter;
-use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::interpreters::Interpreter;
+use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
@@ -387,7 +387,9 @@ impl ReportContext {
                     let mut table_info = table.table().get_table_info().clone();
 
                     if table_info.engine() == VIEW_ENGINE || table_info.engine() == STREAM_ENGINE {
-                        return Err(ErrorCode::Unimplemented("Reports in SQL must not contain tables that use view or stream engines."));
+                        return Err(ErrorCode::Unimplemented(
+                            "Reports in SQL must not contain tables that use view or stream engines.",
+                        ));
                     }
 
                     table_info.meta.comment = String::new();

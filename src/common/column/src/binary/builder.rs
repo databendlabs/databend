@@ -178,11 +178,13 @@ impl BinaryColumnBuilder {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, row: usize) -> &[u8] {
-        debug_assert!(row + 1 < self.offsets.len());
+        unsafe {
+            debug_assert!(row + 1 < self.offsets.len());
 
-        let start = *self.offsets.get_unchecked(row) as usize;
-        let end = *self.offsets.get_unchecked(row + 1) as usize;
-        self.data.get_unchecked(start..end)
+            let start = *self.offsets.get_unchecked(row) as usize;
+            let end = *self.offsets.get_unchecked(row + 1) as usize;
+            self.data.get_unchecked(start..end)
+        }
     }
 
     pub fn push_repeat(&mut self, item: &[u8], n: usize) {

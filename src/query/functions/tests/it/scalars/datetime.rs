@@ -15,16 +15,16 @@
 use std::io::Write;
 use std::str::FromStr;
 
-use databend_common_expression::types::*;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::types::*;
 use goldenfile::Mint;
-use jiff::tz::TimeZone;
 use jiff::Timestamp;
+use jiff::tz::TimeZone;
 
+use super::TestContext;
 use super::run_ast;
 use super::run_ast_with_context;
-use super::TestContext;
 
 #[test]
 fn test_datetime() {

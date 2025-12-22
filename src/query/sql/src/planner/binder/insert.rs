@@ -32,8 +32,10 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_storage::StageFilesInfo;
 
 use super::util::TableIdentifier;
-use crate::binder::resolve_stage_location;
+use crate::BindContext;
+use crate::DefaultExprBinder;
 use crate::binder::Binder;
+use crate::binder::resolve_stage_location;
 use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
@@ -41,8 +43,6 @@ use crate::plans::InsertInputSource;
 use crate::plans::InsertValue;
 use crate::plans::Plan;
 use crate::plans::StreamingLoadPlan;
-use crate::BindContext;
-use crate::DefaultExprBinder;
 
 pub const STAGE_PLACEHOLDER: &str = "_databend_load";
 impl Binder {
@@ -194,7 +194,9 @@ impl Binder {
                 match location.as_str() {
                     STAGE_PLACEHOLDER => {
                         if self.ctx.get_session_type() != SessionType::HTTPStreamingLoad {
-                            return Err(ErrorCode::BadArguments("placeholder @_databend_upload in query handler: should be used in streaming_load handler or replaced in client."));
+                            return Err(ErrorCode::BadArguments(
+                                "placeholder @_databend_upload in query handler: should be used in streaming_load handler or replaced in client.",
+                            ));
                         }
                         let (required_source_schema, values_consts) = if let Some(value) = value {
                             self.prepared_values(value, &schema, settings).await?

@@ -12,24 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::Column;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::Column;
-use databend_common_expression::TableDataType;
 
-use super::array::*;
 use super::NativeReadBuf;
+use super::array::*;
+use crate::PageMeta;
 use crate::error::Result;
+use crate::nested::InitNested;
+use crate::nested::NestedState;
 use crate::nested::create_fixed_list;
 use crate::nested::create_list;
 use crate::nested::create_map;
 use crate::nested::create_struct;
-use crate::nested::InitNested;
-use crate::nested::NestedState;
 use crate::util::n_columns;
-use crate::PageMeta;
 
 fn read_nested_column<R: NativeReadBuf>(
     mut readers: Vec<R>,

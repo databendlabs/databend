@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-pub use databend_common_expression::hash_util::hash_by_method;
-pub use databend_common_expression::hash_util::hash_by_method_for_bloom;
-use databend_common_expression::type_check;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+pub use databend_common_expression::hash_util::hash_by_method;
+pub use databend_common_expression::hash_util::hash_by_method_for_bloom;
+use databend_common_expression::type_check;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 pub(crate) fn build_schema_wrap_nullable(build_schema: &DataSchemaRef) -> DataSchemaRef {

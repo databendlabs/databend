@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::LazyLock;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,6 +26,7 @@ use parking_lot::RwLock;
 use prometheus_client::registry::Metric as PMetrics;
 use prometheus_client::registry::Registry;
 
+use crate::runtime::ThreadTracker;
 use crate::runtime::metrics::counter::Counter;
 use crate::runtime::metrics::family::Family;
 use crate::runtime::metrics::family::FamilyCounterCreator as InnerFamilyCounterCreator;
@@ -36,13 +37,12 @@ use crate::runtime::metrics::family_metrics::FamilyCounter as InnerFamilyCounter
 use crate::runtime::metrics::family_metrics::FamilyGauge as InnerFamilyGauge;
 use crate::runtime::metrics::family_metrics::FamilyHistogram as InnerFamilyHistogram;
 use crate::runtime::metrics::gauge::Gauge;
-use crate::runtime::metrics::histogram::Histogram;
 use crate::runtime::metrics::histogram::BUCKET_MILLISECONDS;
 use crate::runtime::metrics::histogram::BUCKET_ROWS;
 use crate::runtime::metrics::histogram::BUCKET_SECONDS;
+use crate::runtime::metrics::histogram::Histogram;
 use crate::runtime::metrics::process_collector::ProcessCollector;
 use crate::runtime::metrics::sample::MetricSample;
-use crate::runtime::ThreadTracker;
 
 pub const MIN_HISTOGRAM_BOUND: f64 = f64::MIN;
 pub const MAX_HISTOGRAM_BOUND: f64 = f64::MAX;
@@ -114,7 +114,10 @@ impl GlobalRegistry {
         self.inner.lock().registry.register_collector(collector);
     }
 
-    pub(crate) fn new_scoped_metric(&self, index: usize) -> impl Iterator<Item = ScopedMetric> {
+    pub(crate) fn new_scoped_metric(
+        &self,
+        index: usize,
+    ) -> impl Iterator<Item = ScopedMetric> + use<> {
         let global_registry = self.inner.lock();
         let mut scoped_metrics = Vec::with_capacity(global_registry.metrics.len() - index);
 

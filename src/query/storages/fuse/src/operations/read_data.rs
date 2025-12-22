@@ -28,15 +28,15 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
 
+use crate::FuseLazyPartInfo;
+use crate::FuseStorageFormat;
+use crate::FuseTable;
+use crate::SegmentLocation;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
-use crate::FuseLazyPartInfo;
-use crate::FuseStorageFormat;
-use crate::FuseTable;
-use crate::SegmentLocation;
 
 impl FuseTable {
     pub fn create_block_reader(

@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use std::cell::RefCell;
-use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::sync::atomic::Ordering;
+use std::collections::btree_map::Entry;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::metrics::MetricSample;

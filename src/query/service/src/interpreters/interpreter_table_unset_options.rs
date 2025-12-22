@@ -23,8 +23,8 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::UnsetOptionsPlan;
 use databend_common_storages_fuse::TableContext;
 
-use crate::interpreters::common::table_option_validation::UNSET_TABLE_OPTIONS_WHITE_LIST;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::table_option_validation::UNSET_TABLE_OPTIONS_WHITE_LIST;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 

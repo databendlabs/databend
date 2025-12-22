@@ -19,10 +19,10 @@ use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::Index;
 
-use crate::types::array::ArrayColumnBuilder;
-use crate::types::binary::BinaryColumnBuilder;
-use crate::types::nullable::NullableColumnBuilder;
-use crate::types::string::StringColumnBuilder;
+use crate::BlockEntry;
+use crate::Column;
+use crate::ColumnBuilder;
+use crate::DataBlock;
 use crate::types::AnyType;
 use crate::types::ArrayColumn;
 use crate::types::BinaryColumn;
@@ -36,12 +36,12 @@ use crate::types::OpaqueColumnBuilder;
 use crate::types::StringColumn;
 use crate::types::VectorColumn;
 use crate::types::VectorColumnBuilder;
+use crate::types::array::ArrayColumnBuilder;
+use crate::types::binary::BinaryColumnBuilder;
+use crate::types::nullable::NullableColumnBuilder;
+use crate::types::string::StringColumnBuilder;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
-use crate::BlockEntry;
-use crate::Column;
-use crate::ColumnBuilder;
-use crate::DataBlock;
 
 struct PartitionBlockBuilder {
     num_rows: usize,
@@ -264,7 +264,8 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
                     _ => unreachable!(
                         "ColumnBuilder::with_capacity for Array type should return ColumnBuilder::Array, \
                      but got different variant. data_type: {}, capacity: {}",
-                        from.data_type(), capacity
+                        from.data_type(),
+                        capacity
                     ),
                 }
             }
@@ -298,9 +299,12 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
                         copy_nullable(&mut builder, column, indices);
                         *to = ColumnBuilder::Nullable(builder);
                     }
-                    _ => unreachable!("ColumnBuilder::with_capacity for Nullable type should return ColumnBuilder::Nullable, \
+                    _ => unreachable!(
+                        "ColumnBuilder::with_capacity for Nullable type should return ColumnBuilder::Nullable, \
                      but got different variant. data_type: {}, capacity: {}",
-                                      from.data_type(), capacity),
+                        from.data_type(),
+                        capacity
+                    ),
                 }
             }
             _ => unreachable!(
@@ -330,9 +334,12 @@ pub fn copy_column<I: Index>(indices: &[I], from: &Column, to: &mut ColumnBuilde
                         copy_array(&mut builder, column, indices);
                         *to = ColumnBuilder::Map(builder);
                     }
-                    _ => unreachable!("ColumnBuilder::with_capacity for Map type should return ColumnBuilder::Map, \
+                    _ => unreachable!(
+                        "ColumnBuilder::with_capacity for Map type should return ColumnBuilder::Map, \
                      but got different variant. data_type: {}, capacity: {}",
-                                      from.data_type(), capacity),
+                        from.data_type(),
+                        capacity
+                    ),
                 }
             }
             _ => unreachable!(

@@ -14,10 +14,10 @@
 
 use std::sync::LazyLock;
 
-use databend_common_base::runtime::metrics::register_counter_family;
-use databend_common_base::runtime::metrics::register_gauge_family;
 use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::metrics::FamilyGauge;
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::register_gauge_family;
 
 static CLUSTER_CLUSTER_HEARTBEAT_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("cluster_heartbeat_count"));

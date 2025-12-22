@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::AggregateCountFunction;
+use super::AggregateFunctionFactory;
+use super::AggregateIfCombinator;
+use super::AggregateStateCombinator;
 use super::adaptors::*;
 use super::aggregate_approx_count_distinct::aggregate_approx_count_distinct_function_desc;
 use super::aggregate_arg_min_max::aggregate_arg_max_function_desc;
@@ -58,10 +62,6 @@ use super::aggregate_string_agg::aggregate_string_agg_function_desc;
 use super::aggregate_sum::aggregate_sum_function_desc;
 use super::aggregate_sum_zero::AggregateSumZeroFunction;
 use super::aggregate_window_funnel::aggregate_window_funnel_function_desc;
-use super::AggregateCountFunction;
-use super::AggregateFunctionFactory;
-use super::AggregateIfCombinator;
-use super::AggregateStateCombinator;
 
 pub struct Aggregators;
 

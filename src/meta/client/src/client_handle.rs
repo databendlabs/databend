@@ -15,9 +15,9 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 use anyerror::AnyError;
 use databend_common_base::base::tokio::sync::mpsc::UnboundedSender;
@@ -27,17 +27,17 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
+use databend_common_meta_types::ConnectionError;
+use databend_common_meta_types::MetaClientError;
+use databend_common_meta_types::MetaError;
+use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::protobuf::ClientInfo;
 use databend_common_meta_types::protobuf::ClusterStatus;
 use databend_common_meta_types::protobuf::MemberListReply;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_meta_types::ConnectionError;
-use databend_common_meta_types::MetaClientError;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::UpsertKV;
 use databend_common_metrics::count::Count;
 use fastrace::Span;
 use log::debug;
@@ -45,14 +45,14 @@ use log::error;
 use log::info;
 use tonic::codegen::BoxStream;
 
-use crate::established_client::EstablishedClient;
-use crate::grpc_metrics;
-use crate::message;
-use crate::message::Response;
 use crate::ClientWorkerRequest;
 use crate::InitFlag;
 use crate::RequestFor;
 use crate::Streamed;
+use crate::established_client::EstablishedClient;
+use crate::grpc_metrics;
+use crate::message;
+use crate::message::Response;
 
 /// A handle to access meta-client worker.
 /// The worker will be actually running in a dedicated runtime: `MetaGrpcClient.rt`.

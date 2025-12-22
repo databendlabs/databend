@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use arrow_array::RecordBatch;
-use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableDataType;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::variant::cast_scalar_to_variant;
 use jiff::tz::TimeZone;
 
 pub fn read_record_batch_to_variant_column(

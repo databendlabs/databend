@@ -20,11 +20,11 @@ use databend_common_protos::pb;
 use databend_common_protos::pb::task_message::DeleteTask;
 use databend_common_protos::pb::task_message::Message;
 
-use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
+use crate::reader_check_msg;
 
 impl FromToProto for mt::Task {
     type PB = pb::Task;

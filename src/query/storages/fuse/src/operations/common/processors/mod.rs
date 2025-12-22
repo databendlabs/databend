@@ -29,5 +29,5 @@ pub use transform_constraint_verify::TransformConstraintVerify;
 pub use transform_merge_commit_meta::TransformMergeCommitMeta;
 pub use transform_mutation_aggregator::TableMutationAggregator;
 pub use transform_serialize_block::TransformSerializeBlock;
-pub use transform_serialize_segment::new_serialize_segment_processor;
 pub use transform_serialize_segment::TransformSerializeSegment;
+pub use transform_serialize_segment::new_serialize_segment_processor;

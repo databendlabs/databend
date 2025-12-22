@@ -30,9 +30,9 @@ use borsh::BorshSerialize;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
 use databend_common_base::base::OrderedFloat;
+use jiff::Timestamp;
 use jiff::fmt::strtime;
 use jiff::tz;
-use jiff::Timestamp;
 use log::error;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -86,7 +86,7 @@ pub trait NativeType:
 }
 
 macro_rules! native_type {
-    ($type:ty, $primitive_type:expr) => {
+    ($type:ty, $primitive_type:expr_2021) => {
         impl NativeType for $type {
             const PRIMITIVE: PrimitiveType = $primitive_type;
 

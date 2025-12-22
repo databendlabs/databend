@@ -17,14 +17,14 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
+use crate::IndexType;
+use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::expr::PatternExtractor;
 use crate::optimizer::ir::group::Group;
-use crate::optimizer::ir::Memo;
 use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RulePtr;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::RelOperator;
-use crate::IndexType;
 
 /// `MExpr` is abbreviation of multiple expression, which is the representation of relational
 /// expressions inside `Memo`.

@@ -21,22 +21,22 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use databend_common_base::base::tokio::time::timeout;
 use databend_common_base::base::BuildInfoRef;
+use databend_common_base::base::tokio::time::timeout;
 use databend_common_grpc::RpcClientConf;
-use databend_common_meta_client::errors::CreationError;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_client::errors::CreationError;
+use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::errors::AcquireError;
-use databend_common_meta_semaphore::Semaphore;
-use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::protobuf::WatchResponse;
 pub use local::LocalMetaService;
 use log::info;
 use log::warn;
-use tokio::time::error::Elapsed;
 use tokio::time::Instant;
+use tokio::time::error::Elapsed;
 use tokio_stream::Stream;
 
 pub type WatchStream =

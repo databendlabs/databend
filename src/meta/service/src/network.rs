@@ -29,13 +29,17 @@ use databend_common_base::runtime;
 use databend_common_base::runtime::spawn_named;
 use databend_common_meta_raft_store::leveled_store::persisted_codec::PersistedCodec;
 use databend_common_meta_sled_store::openraft;
+use databend_common_meta_sled_store::openraft::MessageSummary;
+use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
 use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
 use databend_common_meta_sled_store::openraft::error::ReplicationClosed;
 use databend_common_meta_sled_store::openraft::error::Unreachable;
-use databend_common_meta_sled_store::openraft::network::v2::RaftNetworkV2;
 use databend_common_meta_sled_store::openraft::network::RPCOption;
-use databend_common_meta_sled_store::openraft::MessageSummary;
-use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
+use databend_common_meta_sled_store::openraft::network::v2::RaftNetworkV2;
+use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::GrpcConfig;
+use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::InstallEntryV004;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -57,10 +61,6 @@ use databend_common_meta_types::raft_types::TypeConfig;
 use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::raft_types::VoteRequest;
 use databend_common_meta_types::raft_types::VoteResponse;
-use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::GrpcConfig;
-use databend_common_meta_types::GrpcHelper;
-use databend_common_meta_types::MetaNetworkError;
 use databend_common_metrics::count::Count;
 use fastrace::func_name;
 use futures::FutureExt;
@@ -73,8 +73,8 @@ use log::warn;
 use seq_marked::SeqData;
 use seq_marked::SeqV;
 use state_machine_api::MetaValue;
-use tokio::sync::oneshot;
 use tokio::sync::Mutex;
+use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::metrics::raft_metrics;
@@ -328,7 +328,7 @@ impl Network {
         }
     }
 
-    pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> {
+    pub(crate) fn back_off(&self) -> impl Iterator<Item = Duration> + use<> {
         let policy = ExponentialBuilder::default()
             .with_factor(self.backoff.back_off_ratio)
             .with_min_delay(self.backoff.back_off_min_delay)
@@ -351,7 +351,7 @@ impl Network {
         E: std::error::Error,
     {
         // Return status error
-        let resp = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+        let resp = grpc_res.map_err(|e| RPCError::Unreachable(self.status_to_unreachable(e)))?;
 
         // Parse serialized response into `Result<RaftReply.data, RaftReply.error>`
         let raft_res = GrpcHelper::parse_raft_reply::<R, E>(resp).map_err(|serde_err| {
@@ -645,7 +645,8 @@ impl Network {
                     }
                 }
             }
-            let grpc_response = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+            let grpc_response =
+                grpc_res.map_err(|e| StreamingError::Unreachable(self.status_to_unreachable(e)))?;
             let snapshot_response = grpc_response.into_inner();
 
             // Convert protobuf Vote back to internal Vote
@@ -727,9 +728,12 @@ impl Network {
                 }
             }
 
-            let grpc_response = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+            let grpc_response =
+                grpc_res.map_err(|e| StreamingError::Unreachable(self.status_to_unreachable(e)))?;
             let snapshot_response = grpc_response.into_inner();
-            let vote = snapshot_response.to_vote()?;
+            let vote = snapshot_response
+                .to_vote()
+                .map_err(|e| StreamingError::Network(e))?;
 
             SnapshotResponse { vote }
         };
@@ -956,7 +960,7 @@ impl RaftNetworkV2<TypeConfig> for Network {
             }
         }
 
-        grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+        grpc_res.map_err(|e| RPCError::Unreachable(self.status_to_unreachable(e)))?;
         Ok(())
     }
 

@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
-use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
+use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
 use databend_common_meta_sled_store::openraft::OptionalSend;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
+use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
+use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::Snapshot;
@@ -25,7 +26,6 @@ use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::raft_types::TypeConfig;
 use databend_common_meta_types::snapshot_db::DB;
-use databend_common_meta_types::AppliedState;
 use log::debug;
 use log::error;
 use log::info;
@@ -75,7 +75,9 @@ impl RaftStateMachine<TypeConfig> for MetaRaftStateMachine {
     // This method is not used
     #[fastrace::trace]
     async fn begin_receiving_snapshot(&mut self) -> Result<DB, StorageError> {
-        unreachable!("begin_receiving_snapshot is only required when using OpenRaft Chunked snapshot transmit");
+        unreachable!(
+            "begin_receiving_snapshot is only required when using OpenRaft Chunked snapshot transmit"
+        );
     }
 
     #[fastrace::trace]

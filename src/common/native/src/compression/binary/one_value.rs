@@ -20,11 +20,10 @@ use databend_common_column::binary::BinaryColumn;
 
 use super::BinaryCompression;
 use super::BinaryStats;
-use crate::compression::integer::OneValue;
 use crate::compression::Compression;
+use crate::compression::integer::OneValue;
 use crate::error::Error;
 use crate::error::Result;
-use crate::general_err;
 use crate::write::WriteOptions;
 
 impl BinaryCompression for OneValue {

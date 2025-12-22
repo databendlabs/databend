@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
+
 pub(super) fn should_enable_runtime_filter(
     desc: &RuntimeFilterDesc,
     build_num_rows: usize,

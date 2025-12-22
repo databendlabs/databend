@@ -20,6 +20,8 @@ use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use memchr::memchr;
 
+use crate::LimitType;
+use crate::SortColumnDescription;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::NullableColumn;
@@ -27,8 +29,6 @@ use crate::types::Number;
 use crate::types::StringColumn;
 use crate::types::ValueType;
 use crate::visitor::ValueVisitor;
-use crate::LimitType;
-use crate::SortColumnDescription;
 
 pub struct SortCompare {
     rows: usize,

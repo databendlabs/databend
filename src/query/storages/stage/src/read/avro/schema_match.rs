@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use apache_avro::Schema;
 use apache_avro::schema::RecordSchema;
 use apache_avro::schema::UnionSchema;
-use apache_avro::Schema;
-use databend_common_expression::types::i256;
+use databend_common_expression::TableDataType;
 use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::TableDataType;
+use databend_common_expression::types::i256;
 
 type MatchResult<T> = Result<T, String>;
 
@@ -153,7 +153,9 @@ impl SchemaMatcher {
                 num_matched += 1;
             } else {
                 if !self.allow_missing_field {
-                    return Err(format!("missing field {name}. Consider add avro file format option `MISSING_FIELD_AS = FIELD_DEFAULT`"));
+                    return Err(format!(
+                        "missing field {name}. Consider add avro file format option `MISSING_FIELD_AS = FIELD_DEFAULT`"
+                    ));
                 }
                 matched_fields[c] = if level == 0 {
                     MatchedField::FieldDefault

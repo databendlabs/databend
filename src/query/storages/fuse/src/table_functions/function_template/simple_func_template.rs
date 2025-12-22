@@ -34,10 +34,10 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 
+use crate::Table;
 use crate::sessions::TableContext;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
-use crate::Table;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 struct PlaceHolder;

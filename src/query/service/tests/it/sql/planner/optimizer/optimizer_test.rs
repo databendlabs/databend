@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::replace_box)]
+
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
@@ -20,32 +22,32 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalUniqName;
-use databend_common_catalog::cluster_info::Cluster;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
+use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_column::binview::ViewType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
+use databend_common_expression::types::F64;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::F64;
-use databend_common_expression::Scalar;
 use databend_common_meta_types::NodeInfo;
-use databend_common_sql::optimize;
-use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::ir::SExprVisitor;
-use databend_common_sql::optimizer::ir::VisitAction;
-use databend_common_sql::optimizer::OptimizerContext;
-use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::RelOperator;
-use databend_common_sql::plans::Statistics;
 use databend_common_sql::BaseTableColumn;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::optimize;
+use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::ir::SExpr;
+use databend_common_sql::optimizer::ir::SExprVisitor;
+use databend_common_sql::optimizer::ir::VisitAction;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::Statistics;
 use databend_common_storage::Datum;
 use databend_query::clusters::ClusterHelper;
 use databend_query::physical_plans::PhysicalPlanBuilder;

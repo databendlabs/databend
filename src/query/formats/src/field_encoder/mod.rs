@@ -17,8 +17,8 @@ pub mod helpers;
 mod json;
 mod values;
 
-pub use csv::write_csv_string;
 pub use csv::FieldEncoderCSV;
+pub use csv::write_csv_string;
 pub use helpers::write_tsv_escaped_string;
 pub use json::FieldEncoderJSON;
 pub use values::FieldEncoderValues;

@@ -15,11 +15,11 @@
 #![feature(box_patterns)]
 #![feature(try_blocks)]
 
+use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::Column;
-use databend_common_expression::DataBlock;
 
 extern crate core;
 

@@ -20,9 +20,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
-use databend_common_storages_fuse::operations::do_refresh_table_index;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_common_storages_fuse::operations::do_refresh_table_index;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

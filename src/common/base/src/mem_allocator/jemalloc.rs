@@ -111,7 +111,7 @@ pub mod linux {
                 debug_assert_eq!(ptr.as_ptr() as usize, layout.align());
             } else {
                 let flags = layout_to_flags(layout.align(), layout.size());
-                ffi::sdallocx(ptr.as_ptr() as *mut _, layout.size(), flags);
+                unsafe { ffi::sdallocx(ptr.as_ptr() as *mut _, layout.size(), flags) };
             }
         }
 
@@ -125,14 +125,18 @@ pub mod linux {
             debug_assert!(old_layout.size() <= new_layout.size());
 
             let data_address = if new_layout.size() == 0 {
-                NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
+                unsafe { NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked() }
             } else if old_layout.size() == 0 {
                 let flags = layout_to_flags(new_layout.align(), new_layout.size());
-                NonNull::new(ffi::mallocx(new_layout.size(), flags) as *mut ()).ok_or(AllocError)?
+                NonNull::new(unsafe { ffi::mallocx(new_layout.size(), flags) } as *mut ())
+                    .ok_or(AllocError)?
             } else {
                 let flags = layout_to_flags(new_layout.align(), new_layout.size());
-                NonNull::new(ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut ())
-                    .unwrap()
+                NonNull::new(
+                    unsafe { ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) }
+                        as *mut (),
+                )
+                .unwrap()
             };
 
             Ok(NonNull::<[u8]>::from_raw_parts(
@@ -151,22 +155,26 @@ pub mod linux {
             debug_assert!(old_layout.size() <= new_layout.size());
 
             let data_address = if new_layout.size() == 0 {
-                NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked()
+                unsafe { NonNull::new(new_layout.align() as *mut ()).unwrap_unchecked() }
             } else if old_layout.size() == 0 {
                 let flags =
                     layout_to_flags(new_layout.align(), new_layout.size()) | ffi::MALLOCX_ZERO;
-                NonNull::new(ffi::mallocx(new_layout.size(), flags) as *mut ()).ok_or(AllocError)?
+                NonNull::new(unsafe { ffi::mallocx(new_layout.size(), flags) } as *mut ())
+                    .ok_or(AllocError)?
             } else {
                 let flags = layout_to_flags(new_layout.align(), new_layout.size());
                 // Jemalloc doesn't support `grow_zeroed`, so it might be better to use
                 // mmap allocator for large frequent memory allocation and take jemalloc
                 // as fallback.
-                let raw = ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut u8;
+                let raw = unsafe { ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) }
+                    as *mut u8;
                 if raw.is_null() {
                     return Err(AllocError);
                 } else {
-                    raw.add(old_layout.size())
-                        .write_bytes(0, new_layout.size() - old_layout.size());
+                    unsafe {
+                        raw.add(old_layout.size())
+                            .write_bytes(0, new_layout.size() - old_layout.size())
+                    };
                     NonNull::new(raw as *mut ()).unwrap()
                 }
             };
@@ -188,24 +196,26 @@ pub mod linux {
 
             if old_layout.size() == 0 {
                 debug_assert_eq!(ptr.as_ptr() as usize, old_layout.align());
-                let slice = std::slice::from_raw_parts_mut(ptr.as_ptr(), 0);
-                let ptr = NonNull::new(slice).unwrap_unchecked();
+                let slice = unsafe { std::slice::from_raw_parts_mut(ptr.as_ptr(), 0) };
+                let ptr = unsafe { NonNull::new(slice).unwrap_unchecked() };
                 return Ok(ptr);
             }
 
             let flags = layout_to_flags(new_layout.align(), new_layout.size());
             let new_ptr = if new_layout.size() == 0 {
-                ffi::sdallocx(ptr.as_ptr() as *mut c_void, new_layout.size(), flags);
-                let slice = std::slice::from_raw_parts_mut(new_layout.align() as *mut u8, 0);
-                NonNull::new(slice).unwrap_unchecked()
+                unsafe { ffi::sdallocx(ptr.as_ptr() as *mut c_void, new_layout.size(), flags) };
+                let slice =
+                    unsafe { std::slice::from_raw_parts_mut(new_layout.align() as *mut u8, 0) };
+                unsafe { NonNull::new(slice).unwrap_unchecked() }
             } else {
                 let data_address =
-                    ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut u8;
+                    unsafe { ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) }
+                        as *mut u8;
                 if data_address.is_null() {
                     return Err(AllocError);
                 } else {
                     let metadata = new_layout.size();
-                    let slice = std::slice::from_raw_parts_mut(data_address, metadata);
+                    let slice = unsafe { std::slice::from_raw_parts_mut(data_address, metadata) };
                     NonNull::new(slice).ok_or(AllocError)?
                 }
             };

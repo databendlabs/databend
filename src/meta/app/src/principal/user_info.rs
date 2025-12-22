@@ -20,16 +20,16 @@ use chrono::Utc;
 use databend_common_ast::ast::UserOptionItem;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use enumflags2::bitflags;
 use enumflags2::BitFlags;
+use enumflags2::bitflags;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::principal::AuthInfo;
+use crate::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use crate::principal::UserGrantSet;
 use crate::principal::UserIdentity;
 use crate::principal::UserQuota;
-use crate::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]

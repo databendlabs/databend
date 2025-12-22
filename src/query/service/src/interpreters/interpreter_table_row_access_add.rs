@@ -113,9 +113,10 @@ impl Interpreter for AddTableRowAccessPolicyInterpreter {
 
         if columns.len() != policy_data_types.len() {
             return Err(ErrorCode::UnmatchColumnDataType(format!(
-                         "Number of columns ({}) does not match the number of row access policy arguments ({})",
-                         columns.len(), policy_data_types.len()
-                 )));
+                "Number of columns ({}) does not match the number of row access policy arguments ({})",
+                columns.len(),
+                policy_data_types.len()
+            )));
         }
 
         for (column, policy_data_type) in columns.iter().zip(policy_data_types.into_iter()) {

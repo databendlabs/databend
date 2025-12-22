@@ -258,10 +258,10 @@ mod tests {
     use num_traits::ConstZero;
     use num_traits::PrimInt;
     use num_traits::Unsigned;
-    use rand::distributions::uniform::SampleUniform;
-    use rand::rngs::StdRng;
     use rand::Rng as _;
     use rand::SeedableRng as _;
+    use rand::distributions::uniform::SampleUniform;
+    use rand::rngs::StdRng;
 
     use super::*;
 

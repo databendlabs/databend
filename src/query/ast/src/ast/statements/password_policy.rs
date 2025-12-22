@@ -18,8 +18,8 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::quote::QuotedString;
 use crate::ast::CreateOption;
+use crate::ast::quote::QuotedString;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreatePasswordPolicyStmt {

@@ -15,17 +15,17 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::types::DataType;
 
+use crate::ColumnSet;
+use crate::ScalarExpr;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::ColumnSet;
-use crate::ScalarExpr;
 
 // Constant table is a table with constant values.
 #[derive(Clone, Debug, PartialEq, Eq)]

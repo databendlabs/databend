@@ -23,14 +23,14 @@ use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use unicase::Ascii;
 
+use crate::Binder;
+use crate::NameResolutionContext;
+use crate::TypeChecker;
 use crate::normalize_identifier;
 use crate::plans::CreateRowAccessPolicyPlan;
 use crate::plans::DescRowAccessPolicyPlan;
 use crate::plans::DropRowAccessPolicyPlan;
 use crate::plans::Plan;
-use crate::Binder;
-use crate::NameResolutionContext;
-use crate::TypeChecker;
 
 impl Binder {
     #[async_backtrace::framed]

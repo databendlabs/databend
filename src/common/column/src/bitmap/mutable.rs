@@ -21,15 +21,15 @@ use std::sync::Arc;
 
 use databend_common_base::vec_ext::VecExt;
 
+use super::Bitmap;
+use super::utils::BitChunk;
+use super::utils::BitChunksExactMut;
+use super::utils::BitmapIter;
 use super::utils::count_zeros;
 use super::utils::fmt;
 use super::utils::get_bit;
 use super::utils::set;
 use super::utils::set_bit;
-use super::utils::BitChunk;
-use super::utils::BitChunksExactMut;
-use super::utils::BitmapIter;
-use super::Bitmap;
 use crate::bitmap::utils::merge_reversed;
 use crate::bitmap::utils::set_bit_unchecked;
 use crate::error::Error;
@@ -137,7 +137,7 @@ impl MutableBitmap {
     /// Pushes a new bit to the [`MutableBitmap`], re-sizing it if necessary.
     #[inline]
     pub fn push(&mut self, value: bool) {
-        if self.length % 8 == 0 {
+        if self.length.is_multiple_of(8) {
             self.buffer.push(0);
         }
         let byte = self.buffer.as_mut_slice().last_mut().unwrap();
@@ -155,7 +155,7 @@ impl MutableBitmap {
 
         self.length -= 1;
         let value = self.get(self.length);
-        if self.length % 8 == 0 {
+        if self.length.is_multiple_of(8) {
             self.buffer.pop();
         }
         Some(value)
@@ -178,7 +178,7 @@ impl MutableBitmap {
     }
 
     /// constructs a new iterator over the bits of [`MutableBitmap`].
-    pub fn iter(&self) -> BitmapIter {
+    pub fn iter(&self) -> BitmapIter<'_> {
         BitmapIter::new(&self.buffer, 0, self.length)
     }
 
@@ -267,12 +267,14 @@ impl MutableBitmap {
     /// The caller must ensure that the [`MutableBitmap`] has sufficient capacity.
     #[inline]
     pub unsafe fn push_unchecked(&mut self, value: bool) {
-        if self.length % 8 == 0 {
-            self.buffer.push_unchecked(0);
+        unsafe {
+            if self.length.is_multiple_of(8) {
+                self.buffer.push_unchecked(0);
+            }
+            let byte = self.buffer.as_mut_slice().last_mut().unwrap();
+            *byte = set(*byte, self.length % 8, value);
+            self.length += 1;
         }
-        let byte = self.buffer.as_mut_slice().last_mut().unwrap();
-        *byte = set(*byte, self.length % 8, value);
-        self.length += 1;
     }
 
     /// Returns the number of unset bits on this [`MutableBitmap`].
@@ -296,8 +298,10 @@ impl MutableBitmap {
     /// The caller must ensure that the [`MutableBitmap`] was properly initialized up to `len`.
     #[inline]
     pub(crate) unsafe fn set_len(&mut self, len: usize) {
-        self.buffer.set_len(len.saturating_add(7) / 8);
-        self.length = len;
+        unsafe {
+            self.buffer.set_len(len.saturating_add(7) / 8);
+            self.length = len;
+        }
     }
 
     fn extend_set(&mut self, mut additional: usize) {
@@ -354,7 +358,7 @@ impl MutableBitmap {
     /// Caller must ensure that `index < self.len()`
     #[inline]
     pub unsafe fn set_unchecked(&mut self, index: usize, value: bool) {
-        set_bit_unchecked(self.buffer.as_mut_slice(), index, value)
+        unsafe { set_bit_unchecked(self.buffer.as_mut_slice(), index, value) }
     }
 
     /// Shrinks the capacity of the [`MutableBitmap`] to fit its current length.
@@ -363,7 +367,7 @@ impl MutableBitmap {
     }
 
     /// Returns an iterator over mutable slices, [`BitChunksExactMut`]
-    pub(crate) fn bitchunks_exact_mut<T: BitChunk>(&mut self) -> BitChunksExactMut<T> {
+    pub(crate) fn bitchunks_exact_mut<T: BitChunk>(&mut self) -> BitChunksExactMut<'_, T> {
         BitChunksExactMut::new(&mut self.buffer, self.length)
     }
 
@@ -505,37 +509,39 @@ unsafe fn extend_aligned_trusted_iter_unchecked(
     buffer: &mut Vec<u8>,
     mut iterator: impl Iterator<Item = bool>,
 ) -> usize {
-    let additional_bits = iterator.size_hint().1.unwrap();
-    let chunks = additional_bits / 64;
-    let remainder = additional_bits % 64;
+    unsafe {
+        let additional_bits = iterator.size_hint().1.unwrap();
+        let chunks = additional_bits / 64;
+        let remainder = additional_bits % 64;
 
-    let additional = additional_bits.div_ceil(8);
-    debug_assert_eq!(
-        additional,
-        // a hint of how the following calculation will be done
-        chunks * 8 + remainder / 8 + (remainder % 8 > 0) as usize
-    );
-    buffer.reserve(additional);
+        let additional = additional_bits.div_ceil(8);
+        debug_assert_eq!(
+            additional,
+            // a hint of how the following calculation will be done
+            chunks * 8 + remainder / 8 + !remainder.is_multiple_of(8) as usize
+        );
+        buffer.reserve(additional);
 
-    // chunks of 64 bits
-    for _ in 0..chunks {
-        let chunk = get_chunk_unchecked(&mut iterator);
-        buffer.extend_from_slice_unchecked(&chunk.to_le_bytes());
+        // chunks of 64 bits
+        for _ in 0..chunks {
+            let chunk = get_chunk_unchecked(&mut iterator);
+            buffer.extend_from_slice_unchecked(&chunk.to_le_bytes());
+        }
+
+        // remaining complete bytes
+        for _ in 0..(remainder / 8) {
+            let byte = get_byte_unchecked(8, &mut iterator);
+            buffer.push_unchecked(byte)
+        }
+
+        // remaining bits
+        let remainder = remainder % 8;
+        if remainder > 0 {
+            let byte = get_byte_unchecked(remainder, &mut iterator);
+            buffer.push_unchecked(byte)
+        }
+        additional_bits
     }
-
-    // remaining complete bytes
-    for _ in 0..(remainder / 8) {
-        let byte = unsafe { get_byte_unchecked(8, &mut iterator) };
-        buffer.push_unchecked(byte)
-    }
-
-    // remaining bits
-    let remainder = remainder % 8;
-    if remainder > 0 {
-        let byte = unsafe { get_byte_unchecked(remainder, &mut iterator) };
-        buffer.push_unchecked(byte)
-    }
-    additional_bits
 }
 
 impl MutableBitmap {
@@ -604,11 +610,13 @@ impl MutableBitmap {
     #[inline]
     pub unsafe fn from_trusted_len_iter_unchecked<I>(iterator: I) -> Self
     where I: Iterator<Item = bool> {
-        let mut buffer = Vec::<u8>::new();
+        unsafe {
+            let mut buffer = Vec::<u8>::new();
 
-        let length = extend_aligned_trusted_iter_unchecked(&mut buffer, iterator);
+            let length = extend_aligned_trusted_iter_unchecked(&mut buffer, iterator);
 
-        Self { buffer, length }
+            Self { buffer, length }
+        }
     }
 
     /// Creates a new [`MutableBitmap`] from an iterator of booleans.
@@ -684,8 +692,8 @@ impl MutableBitmap {
         if length == 0 {
             return;
         };
-        let is_aligned = self.length % 8 == 0;
-        let other_is_aligned = offset % 8 == 0;
+        let is_aligned = self.length.is_multiple_of(8);
+        let other_is_aligned = offset.is_multiple_of(8);
         match (is_aligned, other_is_aligned) {
             (true, true) => self.extend_aligned(slice, offset, length),
             (false, true) => self.extend_unaligned(slice, offset, length),

@@ -14,9 +14,9 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use tonic::Request;
 use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataValue;
-use tonic::Request;
 
 pub struct RequestBuilder<T> {
     request: Request<T>,

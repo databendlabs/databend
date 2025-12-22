@@ -20,8 +20,8 @@ use std::num::NonZeroU64;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
-use ethnum::i256;
 use ethnum::U256;
+use ethnum::i256;
 
 use crate::RowPtr;
 
@@ -165,7 +165,7 @@ unsafe impl UnsizedKeyable for str {
     }
 
     unsafe fn from_bytes(bytes: &[u8]) -> &Self {
-        std::str::from_utf8_unchecked(bytes)
+        unsafe { std::str::from_utf8_unchecked(bytes) }
     }
 }
 

@@ -29,8 +29,8 @@ use test_harness::test;
 use tokio::time::sleep;
 
 use crate::testing::meta_service_test_harness;
-use crate::tests::service::start_metasrv_cluster;
 use crate::tests::service::MetaSrvTestContext;
+use crate::tests::service::start_metasrv_cluster;
 use crate::tests::start_metasrv_with_context;
 
 /// - Start a cluster of 3.

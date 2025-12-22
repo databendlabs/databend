@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_base::base::Progress;
+use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 

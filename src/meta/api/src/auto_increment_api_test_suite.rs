@@ -15,13 +15,12 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::principal::AutoIncrementKey;
-use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateOption;
@@ -32,6 +31,7 @@ use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
@@ -40,7 +40,6 @@ use databend_common_meta_types::MetaError;
 use fastrace::func_name;
 use log::info;
 
-use crate::kv_pb_api::KVPbApi;
 use crate::AutoIncrementApi;
 use crate::DatabaseApi;
 use crate::DatamaskApi;
@@ -48,6 +47,7 @@ use crate::GarbageCollectionApi;
 use crate::RowAccessPolicyApi;
 use crate::SchemaApi;
 use crate::TableApi;
+use crate::kv_pb_api::KVPbApi;
 
 /// Test suite of `AutoIncrementApi`.
 ///
@@ -88,16 +88,15 @@ impl AutoIncrementApiTestSuite {
         util.create_db().await?;
 
         let schema = || {
-            Arc::new(TableSchema::new(vec![TableField::new(
-                "number",
-                TableDataType::Number(NumberDataType::UInt64),
-            )
-            .with_auto_increment_expr(Some(AutoIncrementExpr {
-                column_id: 0,
-                start: 0,
-                step: 1,
-                is_ordered: true,
-            }))]))
+            Arc::new(TableSchema::new(vec![
+                TableField::new("number", TableDataType::Number(NumberDataType::UInt64))
+                    .with_auto_increment_expr(Some(AutoIncrementExpr {
+                        column_id: 0,
+                        start: 0,
+                        step: 1,
+                        is_ordered: true,
+                    })),
+            ]))
         };
         let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 

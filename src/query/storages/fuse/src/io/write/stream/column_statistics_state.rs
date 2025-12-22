@@ -15,19 +15,19 @@
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
+use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 
-use crate::io::write::stream::create_column_ndv_estimator;
-use crate::io::write::stream::create_column_stats_builder;
 use crate::io::write::stream::ColumnNDVEstimator;
 use crate::io::write::stream::ColumnNDVEstimatorOps;
 use crate::io::write::stream::ColumnStatisticsBuilder;
 use crate::io::write::stream::ColumnStatsOps;
+use crate::io::write::stream::create_column_ndv_estimator;
+use crate::io::write::stream::create_column_stats_builder;
 use crate::statistics::traverse_values_dfs;
 
 pub struct ColumnStatisticsState {
@@ -124,16 +124,16 @@ impl ColumnStatisticsState {
 mod tests {
     use std::sync::Arc;
 
-    use databend_common_expression::types::BinaryType;
-    use databend_common_expression::types::Int64Type;
-    use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::types::StringType;
-    use databend_common_expression::types::UInt64Type;
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchema;
+    use databend_common_expression::types::BinaryType;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::types::UInt64Type;
     use databend_storages_common_index::Index;
     use databend_storages_common_index::RangeIndex;
 

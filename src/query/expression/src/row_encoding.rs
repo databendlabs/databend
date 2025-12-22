@@ -15,9 +15,9 @@
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 
-use crate::types::i256;
 use crate::types::F32;
 use crate::types::F64;
+use crate::types::i256;
 
 pub trait FixedLengthEncoding: Copy {
     // 1 for null byte

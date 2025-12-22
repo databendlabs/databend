@@ -18,21 +18,21 @@ use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 use databend_common_column::binview::Utf8ViewColumn;
 use databend_common_column::binview::View;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::Buffer;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 
+use crate::CommonCompression;
+use crate::PageMeta;
 use crate::compression::integer::decompress_integer;
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;
-use crate::read::read_basic::*;
 use crate::read::BufReader;
 use crate::read::NativeReadBuf;
 use crate::read::PageIterator;
-use crate::CommonCompression;
-use crate::PageMeta;
+use crate::read::read_basic::*;
 
 #[derive(Debug)]
 pub struct ViewColNestedIter<I>

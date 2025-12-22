@@ -16,14 +16,14 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
 use super::SelectionBuffers;
-use crate::types::string::StringColumn;
-use crate::types::AccessType;
-use crate::types::AnyType;
-use crate::with_mapped_cmp_method;
 use crate::LikePattern;
 use crate::SelectOp;
 use crate::Selector;
 use crate::Value;
+use crate::types::AccessType;
+use crate::types::AnyType;
+use crate::types::string::StringColumn;
+use crate::with_mapped_cmp_method;
 
 mod select_column;
 mod select_column_scalar;

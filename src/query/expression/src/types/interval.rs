@@ -19,16 +19,16 @@ use databend_common_column::buffer::Buffer;
 use databend_common_column::types::months_days_micros;
 use databend_common_io::Interval;
 
-use super::number::SimpleDomain;
 use super::ArgType;
 use super::DataType;
 use super::SimpleType;
 use super::SimpleValueType;
+use super::number::SimpleDomain;
+use crate::ColumnBuilder;
+use crate::ScalarRef;
 use crate::property::Domain;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
-use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreInterval;

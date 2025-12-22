@@ -31,10 +31,10 @@ pub use transform_spill_reader::*;
 pub mod exchange_defines {
     use arrow_ipc::writer::IpcWriteOptions;
     use arrow_schema::Schema;
-    use databend_common_expression::types::DataType;
-    use databend_common_expression::types::NumberDataType;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchema;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
 
     pub fn spilled_schema() -> DataSchema {
         DataSchema::new(vec![

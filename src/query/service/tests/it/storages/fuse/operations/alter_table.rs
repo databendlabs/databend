@@ -14,13 +14,9 @@
 
 use std::collections::HashSet;
 
-use databend_common_base::base::tokio;
 use databend_common_base::base::OrderedFloat;
+use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_expression::types::Float64Type;
-use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -28,13 +24,17 @@ use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_sql::Planner;
 use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
 use databend_common_sql::plans::DropTableColumnPlan;
-use databend_common_sql::Planner;
-use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_common_storages_fuse::io::MetaReaders;
 use databend_query::interpreters::AddTableColumnInterpreter;
 use databend_query::interpreters::DropTableColumnInterpreter;
 use databend_query::interpreters::Interpreter;

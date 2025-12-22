@@ -22,8 +22,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 
-use crate::operations::SnapshotHintWriter;
 use crate::FuseTable;
+use crate::operations::SnapshotHintWriter;
 
 impl FuseTable {
     #[async_backtrace::framed]

@@ -26,9 +26,9 @@ use log::error;
 use log::info;
 use serde_json;
 
-use crate::sessions::convert_query_log_timestamp;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::convert_query_log_timestamp;
 
 pub struct InterpreterQueryLog;
 

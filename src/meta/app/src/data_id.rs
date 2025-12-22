@@ -143,11 +143,11 @@ impl<R> KeyCodec for DataId<R> {
 /// so that the upper level code can be simplified to using just one trait `prost::Message` to access meta-service data.
 mod prost_message_impl {
 
+    use prost::DecodeError;
     use prost::bytes::Buf;
     use prost::bytes::BufMut;
     use prost::encoding::DecodeContext;
     use prost::encoding::WireType;
-    use prost::DecodeError;
 
     use crate::data_id::DataId;
     use crate::tenant_key::resource::TenantResource;

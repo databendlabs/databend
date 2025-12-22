@@ -23,12 +23,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::compute_view::NumberConvertView;
-use databend_common_expression::types::number::*;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::*;
-use databend_common_expression::with_decimal_mapped_type;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::BlockEntry;
@@ -37,12 +31,14 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::compute_view::NumberConvertView;
+use databend_common_expression::types::number::*;
+use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
+use databend_common_expression::with_number_mapped_type;
 use itertools::Itertools;
 
-use super::assert_params;
-use super::assert_unary_arguments;
-use super::borsh_partial_deserialize;
-use super::get_levels;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -50,6 +46,10 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
+use super::assert_params;
+use super::assert_unary_arguments;
+use super::borsh_partial_deserialize;
+use super::get_levels;
 
 pub(crate) const MEDIAN: u8 = 0;
 pub(crate) const QUANTILE: u8 = 1;
@@ -432,7 +432,7 @@ where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 
     unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<QuantileTDigestState>();
-        std::ptr::drop_in_place(state);
+        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 

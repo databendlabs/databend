@@ -14,16 +14,16 @@
 
 //! This mod wraps openraft types that have generics parameter with concrete types.
 
-use openraft::error::Infallible;
-use openraft::impls::OneshotResponder;
-pub use openraft::vote::leader_id_adv::CommittedLeaderId;
-use openraft::vote::RaftLeaderId;
 use openraft::RaftTypeConfig;
 use openraft::TokioRuntime;
+use openraft::error::Infallible;
+use openraft::impls::OneshotResponder;
+use openraft::vote::RaftLeaderId;
+pub use openraft::vote::leader_id_adv::CommittedLeaderId;
 
-use crate::snapshot_db::DB;
 use crate::AppliedState;
 use crate::LogEntry;
+use crate::snapshot_db::DB;
 pub type NodeId = u64;
 pub type MembershipNode = openraft::EmptyNode;
 pub type LogIndex = u64;

@@ -25,12 +25,12 @@ use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
-use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::FromToProtoEnum;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
+use crate::reader_check_msg;
 
 impl FromToProtoEnum for mt::principal::StageFileFormatType {
     type PBEnum = pb::StageFileFormatType;

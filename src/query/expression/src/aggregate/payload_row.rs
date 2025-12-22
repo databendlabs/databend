@@ -21,9 +21,11 @@ use databend_common_io::prelude::bincode_serialize_into_buf;
 use super::RowID;
 use super::RowLayout;
 use super::RowPtr;
-use crate::types::decimal::Decimal;
-use crate::types::decimal::DecimalColumn;
-use crate::types::i256;
+use crate::BATCH_SIZE;
+use crate::BlockEntry;
+use crate::Column;
+use crate::ProjectedBlock;
+use crate::Scalar;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::BinaryType;
@@ -37,13 +39,11 @@ use crate::types::NumberColumn;
 use crate::types::NumberScalar;
 use crate::types::NumberType;
 use crate::types::TimestampType;
+use crate::types::decimal::Decimal;
+use crate::types::decimal::DecimalColumn;
+use crate::types::i256;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
-use crate::BlockEntry;
-use crate::Column;
-use crate::ProjectedBlock;
-use crate::Scalar;
-use crate::BATCH_SIZE;
 
 pub(super) fn rowformat_size(data_type: &DataType) -> usize {
     match data_type {
@@ -116,49 +116,63 @@ pub(super) unsafe fn serialize_column_to_rowformat(
                 let val: u8 = if v.null_count() == 0 { 1 } else { 0 };
                 // faster path
                 for row in select_vector {
-                    address[*row].write_u8(offset, val);
+                    unsafe {
+                        address[*row].write_u8(offset, val);
+                    }
                 }
             } else {
                 for row in select_vector {
-                    address[*row].write_u8(offset, v.get_bit(row.to_usize()) as u8);
+                    unsafe {
+                        address[*row].write_u8(offset, v.get_bit(row.to_usize()) as u8);
+                    }
                 }
             }
         }
         Column::Binary(v) | Column::Bitmap(v) | Column::Variant(v) | Column::Geometry(v) => {
             for row in select_vector {
-                let data = arena.alloc_slice_copy(v.index_unchecked(row.to_usize()));
-                address[*row].write_bytes(offset, data);
+                let data = arena.alloc_slice_copy(unsafe { v.index_unchecked(row.to_usize()) });
+                unsafe {
+                    address[*row].write_bytes(offset, data);
+                }
             }
         }
         Column::String(v) => {
             for row in select_vector {
-                let data = arena.alloc_str(v.index_unchecked(row.to_usize()));
-                address[*row].write_bytes(offset, data.as_bytes());
+                let data = arena.alloc_str(unsafe { v.index_unchecked(row.to_usize()) });
+                unsafe {
+                    address[*row].write_bytes(offset, data.as_bytes());
+                }
             }
         }
         Column::Timestamp(buffer) => {
             for row in select_vector {
-                address[*row].write(offset, &buffer[*row]);
+                unsafe {
+                    address[*row].write(offset, &buffer[*row]);
+                }
             }
         }
         Column::Date(buffer) => {
             for row in select_vector {
-                address[*row].write(offset, &buffer[*row]);
+                unsafe {
+                    address[*row].write(offset, &buffer[*row]);
+                }
             }
         }
-        Column::Nullable(c) => {
+        Column::Nullable(c) => unsafe {
             serialize_column_to_rowformat(arena, &c.column, select_vector, address, offset, scratch)
-        }
+        },
 
         // for complex column
         other => {
             for row in select_vector {
-                let s = other.index_unchecked(row.to_usize()).to_owned();
+                let s = unsafe { other.index_unchecked(row.to_usize()) }.to_owned();
                 scratch.clear();
                 bincode_serialize_into_buf(scratch, &s).unwrap();
 
                 let data = arena.alloc_slice_copy(scratch);
-                address[*row].write_bytes(offset, data);
+                unsafe {
+                    address[*row].write_bytes(offset, data);
+                }
             }
         }
     }
@@ -173,82 +187,86 @@ pub(super) unsafe fn serialize_const_column_to_rowformat(
     offset: usize,
     scratch: &mut Vec<u8>,
 ) {
-    match scalar {
-        Scalar::Null => {
-            if let Some(box data_type) = data_type.as_nullable() {
-                serialize_const_column_to_rowformat(
-                    arena,
-                    &Scalar::default_value(data_type),
-                    data_type,
-                    select_vector,
-                    address,
-                    offset,
-                    scratch,
-                )
+    unsafe {
+        match scalar {
+            Scalar::Null => {
+                if let Some(box data_type) = data_type.as_nullable() {
+                    serialize_const_column_to_rowformat(
+                        arena,
+                        &Scalar::default_value(data_type),
+                        data_type,
+                        select_vector,
+                        address,
+                        offset,
+                        scratch,
+                    )
+                }
             }
-        }
-        Scalar::EmptyArray | Scalar::EmptyMap => (),
-        Scalar::Number(number_scalar) => with_number_mapped_type!(|NUM_TYPE| match number_scalar {
-            NumberScalar::NUM_TYPE(value) => {
+            Scalar::EmptyArray | Scalar::EmptyMap => (),
+            Scalar::Number(number_scalar) => {
+                with_number_mapped_type!(|NUM_TYPE| match number_scalar {
+                    NumberScalar::NUM_TYPE(value) => {
+                        for row in select_vector {
+                            address[*row].write(offset, value);
+                        }
+                    }
+                })
+            }
+            Scalar::Decimal(decimal_scalar) => {
+                let size = decimal_scalar.size();
+                with_decimal_mapped_type!(|T| match size.data_kind() {
+                    DecimalDataKind::T => {
+                        let value: T = decimal_scalar.as_decimal();
+                        for row in select_vector {
+                            address[*row].write(offset, &value);
+                        }
+                    }
+                })
+            }
+            Scalar::Boolean(value) => {
+                let value = if *value { 1 } else { 0 };
+                for row in select_vector {
+                    address[*row].write_u8(offset, value);
+                }
+            }
+            Scalar::Timestamp(value) => {
                 for row in select_vector {
                     address[*row].write(offset, value);
                 }
             }
-        }),
-        Scalar::Decimal(decimal_scalar) => {
-            let size = decimal_scalar.size();
-            with_decimal_mapped_type!(|T| match size.data_kind() {
-                DecimalDataKind::T => {
-                    let value: T = decimal_scalar.as_decimal();
-                    for row in select_vector {
-                        address[*row].write(offset, &value);
-                    }
+            Scalar::Date(value) => {
+                for row in select_vector {
+                    address[*row].write(offset, value);
                 }
-            })
-        }
-        Scalar::Boolean(value) => {
-            let value = if *value { 1 } else { 0 };
-            for row in select_vector {
-                address[*row].write_u8(offset, value);
             }
-        }
-        Scalar::Timestamp(value) => {
-            for row in select_vector {
-                address[*row].write(offset, value);
+            Scalar::Interval(value) => {
+                for row in select_vector {
+                    address[*row].write(offset, value);
+                }
             }
-        }
-        Scalar::Date(value) => {
-            for row in select_vector {
-                address[*row].write(offset, value);
+            Scalar::String(value) => {
+                let data = arena.alloc_str(value);
+                let bytes = data.as_bytes();
+                for row in select_vector {
+                    address[*row].write_bytes(offset, bytes);
+                }
             }
-        }
-        Scalar::Interval(value) => {
-            for row in select_vector {
-                address[*row].write(offset, value);
+            Scalar::Binary(value)
+            | Scalar::Bitmap(value)
+            | Scalar::Variant(value)
+            | Scalar::Geometry(value) => {
+                let data = arena.alloc_slice_copy(value);
+                for row in select_vector {
+                    address[*row].write_bytes(offset, data);
+                }
             }
-        }
-        Scalar::String(value) => {
-            let data = arena.alloc_str(value);
-            let bytes = data.as_bytes();
-            for row in select_vector {
-                address[*row].write_bytes(offset, bytes);
-            }
-        }
-        Scalar::Binary(value)
-        | Scalar::Bitmap(value)
-        | Scalar::Variant(value)
-        | Scalar::Geometry(value) => {
-            let data = arena.alloc_slice_copy(value);
-            for row in select_vector {
-                address[*row].write_bytes(offset, data);
-            }
-        }
-        other => {
-            scratch.clear();
-            bincode_serialize_into_buf(scratch, other).unwrap();
-            let data = arena.alloc_slice_copy(scratch);
-            for row in select_vector {
-                address[*row].write_bytes(offset, data);
+            other => {
+                scratch.clear();
+                bincode_serialize_into_buf(scratch, other).unwrap();
+                let data = arena.alloc_slice_copy(scratch);
+                for row in select_vector {
+                    address[*row].write_bytes(offset, data);
+                }
             }
         }
     }
@@ -262,9 +280,11 @@ unsafe fn serialize_fixed_size_column_to_rowformat<T>(
 ) where
     T: AccessType<Scalar: Copy>,
 {
-    for row in select_vector {
-        let val = T::index_column_unchecked_scalar(column, row.to_usize());
-        address[*row].write(offset, &val);
+    unsafe {
+        for row in select_vector {
+            let val = T::index_column_unchecked_scalar(column, row.to_usize());
+            address[*row].write(offset, &val);
+        }
     }
 }
 

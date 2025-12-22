@@ -21,8 +21,8 @@ use log::Record;
 use logforth::Append;
 use logforth::Diagnostic;
 
-use crate::loggers::format_timestamp;
 use crate::loggers::KvWriter;
+use crate::loggers::format_timestamp;
 
 #[derive(Debug)]
 pub struct QueryLogCollector {}

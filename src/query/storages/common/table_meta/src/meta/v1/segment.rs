@@ -19,14 +19,14 @@ use databend_common_expression::ColumnId;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::v0::statistics::ClusterStatistics;
-use crate::meta::v0::statistics::ColumnStatistics;
-use crate::meta::v0::statistics::Statistics;
-use crate::meta::v0::ColumnMeta;
 use crate::meta::Compression;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::Versioned;
+use crate::meta::v0::ColumnMeta;
+use crate::meta::v0::statistics::ClusterStatistics;
+use crate::meta::v0::statistics::ColumnStatistics;
+use crate::meta::v0::statistics::Statistics;
 
 /// A segment comprises one or more blocks
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]

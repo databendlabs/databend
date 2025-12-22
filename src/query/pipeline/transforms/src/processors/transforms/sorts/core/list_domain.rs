@@ -503,9 +503,9 @@ impl From<std::ops::RangeInclusive<usize>> for EndDomain {
 mod tests {
     use std::iter::repeat_with;
 
-    use rand::rngs::StdRng;
     use rand::Rng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     use super::*;
 

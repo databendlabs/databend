@@ -19,15 +19,15 @@ use databend_common_column::bitmap::MutableBitmap;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
+use crate::PageMeta;
 use crate::compression::boolean::decompress_boolean;
 use crate::error::Result;
 use crate::nested::InitNested;
 use crate::nested::NestedState;
-use crate::read::read_basic::*;
 use crate::read::BufReader;
 use crate::read::NativeReadBuf;
 use crate::read::PageIterator;
-use crate::PageMeta;
+use crate::read::read_basic::*;
 
 #[derive(Debug)]
 pub struct BooleanNestedIter<I>

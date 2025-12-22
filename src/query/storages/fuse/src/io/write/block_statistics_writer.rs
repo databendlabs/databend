@@ -23,9 +23,9 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_storages_common_table_meta::meta::BlockHLL;
 
-use crate::io::write::stream::create_column_ndv_estimator;
 use crate::io::write::stream::ColumnNDVEstimator;
 use crate::io::write::stream::ColumnNDVEstimatorOps;
+use crate::io::write::stream::create_column_ndv_estimator;
 
 pub fn build_column_hlls(
     block: &DataBlock,

@@ -34,11 +34,11 @@ use dyn_clone::DynClone;
 use serde::Deserializer;
 use serde::Serializer;
 
+use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::MutationSource;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::physical_plans::format::SimplePhysicalFormat;
-use crate::physical_plans::ExchangeSink;
-use crate::physical_plans::MutationSource;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

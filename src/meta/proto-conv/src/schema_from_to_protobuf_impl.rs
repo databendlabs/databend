@@ -16,21 +16,21 @@
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
 use databend_common_expression as ex;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::VariantDataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_protos::pb;
 use databend_common_protos::pb::data_type::Dt;
 use databend_common_protos::pb::data_type::Dt24;
 use databend_common_protos::pb::number::Num;
 use databend_common_protos::pb::variant_data_type;
 
-use crate::reader_check_msg;
 use crate::FromToProto;
 use crate::FromToProtoEnum;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
+use crate::reader_check_msg;
 
 impl FromToProto for ex::TableSchema {
     type PB = pb::DataSchema;

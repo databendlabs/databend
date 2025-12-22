@@ -54,8 +54,8 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::data_mask::mask_policy_policy_table_id_ident::MaskPolicyTableIdIdent;
     use crate::data_mask::MaskPolicyTableId;
+    use crate::data_mask::mask_policy_policy_table_id_ident::MaskPolicyTableIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;

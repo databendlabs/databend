@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #![allow(clippy::useless_transmute)]
+#![allow(clippy::derivable_impls)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::manual_is_multiple_of)]
 
 #[macro_use]
 mod error;

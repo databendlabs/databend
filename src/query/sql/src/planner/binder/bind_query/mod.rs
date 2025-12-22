@@ -19,5 +19,5 @@ mod bind_set_expr;
 mod bind_value;
 
 pub use bind_select::MaxColumnPosition;
-pub use bind_value::bind_values;
 pub use bind_value::ExpressionScanContext;
+pub use bind_value::bind_values;

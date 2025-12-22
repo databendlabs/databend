@@ -16,12 +16,14 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::MetadataRef;
+use crate::ScalarExpr;
 use crate::binder::split_conjunctions;
+use crate::optimizer::Optimizer;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::operator::InferFilterOptimizer;
 use crate::optimizer::optimizers::operator::NormalizeDisjunctiveFilterOptimizer;
-use crate::optimizer::Optimizer;
-use crate::optimizer::OptimizerContext;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -30,8 +32,6 @@ use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::WindowFuncType;
-use crate::MetadataRef;
-use crate::ScalarExpr;
 
 // The PullUpFilterOptimizer will pull up filters to the top of the plan tree and infer new filters.
 pub struct PullUpFilterOptimizer {

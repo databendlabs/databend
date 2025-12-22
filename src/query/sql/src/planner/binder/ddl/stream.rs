@@ -22,14 +22,14 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use log::debug;
 
+use crate::BindContext;
+use crate::SelectBuilder;
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::CreateStreamPlan;
 use crate::plans::DropStreamPlan;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
-use crate::BindContext;
-use crate::SelectBuilder;
 
 impl Binder {
     #[async_backtrace::framed]

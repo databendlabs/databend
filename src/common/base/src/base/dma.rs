@@ -129,7 +129,7 @@ unsafe impl Allocator for DmaAllocator {
     }
 
     unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: Layout) {
-        Global {}.deallocate(ptr, self.real_layout(layout))
+        unsafe { Global {}.deallocate(ptr, self.real_layout(layout)) }
     }
 
     unsafe fn grow(
@@ -138,11 +138,13 @@ unsafe impl Allocator for DmaAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        Global {}.grow(
-            ptr,
-            self.real_layout(old_layout),
-            self.real_layout(new_layout),
-        )
+        unsafe {
+            Global {}.grow(
+                ptr,
+                self.real_layout(old_layout),
+                self.real_layout(new_layout),
+            )
+        }
     }
 
     unsafe fn grow_zeroed(
@@ -151,11 +153,13 @@ unsafe impl Allocator for DmaAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        Global {}.grow_zeroed(
-            ptr,
-            self.real_layout(old_layout),
-            self.real_layout(new_layout),
-        )
+        unsafe {
+            Global {}.grow_zeroed(
+                ptr,
+                self.real_layout(old_layout),
+                self.real_layout(new_layout),
+            )
+        }
     }
 
     unsafe fn shrink(
@@ -164,11 +168,13 @@ unsafe impl Allocator for DmaAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        Global {}.shrink(
-            ptr,
-            self.real_layout(old_layout),
-            self.real_layout(new_layout),
-        )
+        unsafe {
+            Global {}.shrink(
+                ptr,
+                self.real_layout(old_layout),
+                self.real_layout(new_layout),
+            )
+        }
     }
 }
 
@@ -371,20 +377,22 @@ impl AsyncDmaFile {
 
         let fd = self.fd.as_raw_fd();
         let alignment = self.alignment;
-        let buf = asyncify(move || loop {
-            let remain = buf.capacity() - buf.len();
-            let mut file = DmaFile {
-                fd: unsafe { BorrowedFd::borrow_raw(fd) },
-                alignment,
-                offset: 0,
-            };
-            let offset = align_start + buf.len();
-            let n = file.pread_direct(&mut buf, remain, offset as _)?;
-            if align_start + buf.len() >= range.end as usize {
-                return Ok(buf);
-            }
-            if n == 0 {
-                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, ""));
+        let buf = asyncify(move || {
+            loop {
+                let remain = buf.capacity() - buf.len();
+                let mut file = DmaFile {
+                    fd: unsafe { BorrowedFd::borrow_raw(fd) },
+                    alignment,
+                    offset: 0,
+                };
+                let offset = align_start + buf.len();
+                let n = file.pread_direct(&mut buf, remain, offset as _)?;
+                if align_start + buf.len() >= range.end as usize {
+                    return Ok(buf);
+                }
+                if n == 0 {
+                    return Err(io::Error::new(io::ErrorKind::UnexpectedEof, ""));
+                }
             }
         })
         .await?;
@@ -396,11 +404,7 @@ impl AsyncDmaFile {
 
 #[cfg(target_os = "linux")]
 fn flags_direct_or_empty(dio: bool) -> OFlags {
-    if dio {
-        OFlags::DIRECT
-    } else {
-        OFlags::empty()
-    }
+    if dio { OFlags::DIRECT } else { OFlags::empty() }
 }
 
 #[cfg(not(target_os = "linux"))]

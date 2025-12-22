@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use arrow_array::builder::StringBuilder;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
+use arrow_array::builder::StringBuilder;
 use arrow_flight::utils::batches_to_flight_data;
 use arrow_schema::DataType;
 use arrow_schema::Field;

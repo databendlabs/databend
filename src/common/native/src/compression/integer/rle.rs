@@ -20,14 +20,14 @@ use byteorder::ReadBytesExt;
 use databend_common_column::buffer::Buffer;
 use databend_common_expression::types::Bitmap;
 
-use super::compress_sample_ratio;
 use super::IntegerCompression;
 use super::IntegerStats;
 use super::IntegerType;
-use crate::compression::is_valid;
+use super::compress_sample_ratio;
 use crate::compression::Compression;
 use crate::compression::SAMPLE_COUNT;
 use crate::compression::SAMPLE_SIZE;
+use crate::compression::is_valid;
 use crate::error::Result;
 use crate::write::WriteOptions;
 

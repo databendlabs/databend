@@ -94,7 +94,7 @@ impl Semaphore {
     ///
     /// This function is semantically equivalent to an `acquire` followed by a
     /// `release` when the guard returned is dropped.
-    pub fn access(&self) -> SemaphoreGuard {
+    pub fn access(&self) -> SemaphoreGuard<'_> {
         self.acquire();
         SemaphoreGuard { sem: self }
     }

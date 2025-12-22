@@ -23,10 +23,10 @@ use databend_storages_common_stage::CopyIntoLocationInfo;
 use log::debug;
 use log::info;
 
-use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::dml_build_update_stream_req;
 use crate::physical_plans::CopyIntoLocation;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanMeta;

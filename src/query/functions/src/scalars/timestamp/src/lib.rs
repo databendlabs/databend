@@ -17,6 +17,8 @@
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::type_complexity)]
 #![allow(internal_features)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::unnecessary_unwrap)]
 #![feature(core_intrinsics)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]

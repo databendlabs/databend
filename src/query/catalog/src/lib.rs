@@ -13,8 +13,12 @@
 // limitations under the License.
 
 #![feature(portable_simd)]
-#![allow(clippy::uninlined_format_args)]
-#![allow(clippy::large_enum_variant)]
+#![allow(
+    clippy::collapsible_if,
+    clippy::large_enum_variant,
+    clippy::unnecessary_unwrap,
+    clippy::uninlined_format_args
+)]
 
 pub mod catalog;
 pub mod catalog_kind;

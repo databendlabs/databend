@@ -18,9 +18,12 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
-use crate::optimizer::ir::SExpr;
+use crate::ColumnBindingBuilder;
+use crate::MetadataRef;
+use crate::Visibility;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -32,9 +35,6 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
-use crate::ColumnBindingBuilder;
-use crate::MetadataRef;
-use crate::Visibility;
 
 // Replace aggregate function with scalar from table's accurate stats function
 pub struct RuleStatsAggregateOptimizer {

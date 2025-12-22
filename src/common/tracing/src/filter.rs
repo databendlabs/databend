@@ -20,10 +20,10 @@ pub struct ThreadTrackerFilter;
 
 impl logforth::Filter for ThreadTrackerFilter {
     fn enabled(&self, metadata: &log::Metadata) -> FilterResult {
-        if let Some(settings) = ThreadTracker::capture_log_settings() {
-            if metadata.level() > settings.level {
-                return FilterResult::Reject;
-            }
+        if let Some(settings) = ThreadTracker::capture_log_settings()
+            && metadata.level() > settings.level
+        {
+            return FilterResult::Reject;
         }
 
         FilterResult::Neutral

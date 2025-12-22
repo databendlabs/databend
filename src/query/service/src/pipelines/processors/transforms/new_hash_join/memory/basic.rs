@@ -30,7 +30,7 @@ use databend_common_hashtable::HashJoinHashMap;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
 
-use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
+use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
@@ -39,7 +39,7 @@ use crate::pipelines::processors::transforms::SingleBinaryHashJoinHashTable;
 use crate::pipelines::processors::transforms::SkipDuplicatesFixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::SkipDuplicatesSerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::SkipDuplicatesSingleBinaryHashJoinHashTable;
-use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::transforms::new_hash_join::common::SquashBlocks;
 use crate::sessions::QueryContext;
 
 pub struct BasicHashJoin {

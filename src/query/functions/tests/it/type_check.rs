@@ -13,15 +13,15 @@
 // limitations under the License.
 
 use databend_common_column::types::timestamp_tz;
+use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::type_check;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
 use databend_common_expression::types::*;
-use databend_common_expression::FromData;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
-use databend_common_functions::test_utils;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::test_utils;
 use goldenfile::Mint;
 use jsonb::OwnedJsonb;
 
@@ -184,13 +184,7 @@ fn test_find_leveled_eq_filters() {
             ],
             vec![],
         ),
-
-         (
-            "database = 'a' or c like 'xxb'",
-            vec![],
-            vec![],
-            vec![],
-        ),
+        ("database = 'a' or c like 'xxb'", vec![], vec![], vec![]),
         (
             "catalog = 'x' and database = 'a' and table = 'b' and c like '%xxxx%'",
             vec![Scalar::String("x".to_string())],
@@ -206,39 +200,25 @@ fn test_find_leveled_eq_filters() {
             ],
             vec![Scalar::String("b".to_string())],
         ),
-
         (
             "catalog = 'x' and (database = 'a' or database = 'b' or table = 'b') and c like '%xxxx%'",
             vec![Scalar::String("x".to_string())],
-            vec![
-            ],
+            vec![],
             vec![],
         ),
-
         (
             "catalog = 'x' and (database = 'a' or database = 'b' or table = 'b') and c like '%xxxx%'",
             vec![Scalar::String("x".to_string())],
-            vec![
-            ],
+            vec![],
             vec![],
         ),
-         (
+        (
             "catalog = 'x' and (database = 'a' or database = 'b') and database = 'c' and c like '%xxxx%'",
             vec![Scalar::String("x".to_string())],
-            vec![
-             Scalar::String("c".to_string())
-            ],
+            vec![Scalar::String("c".to_string())],
             vec![],
         ),
-
-        (
-            "not (database = 'default')",
-            vec![],
-            vec![],
-            vec![],
-        ),
-
-
+        ("not (database = 'default')", vec![], vec![], vec![]),
         (
             "not (database = 'default' or database = 'abcd')",
             vec![],

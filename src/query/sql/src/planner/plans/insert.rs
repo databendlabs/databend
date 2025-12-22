@@ -17,9 +17,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -29,6 +26,9 @@ use databend_common_expression::FromData;
 use databend_common_expression::RemoteDefaultExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::schema::TableInfo;
 use enum_as_inner::EnumAsInner;
@@ -37,10 +37,10 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::Plan;
+use crate::INSERT_NAME;
 use crate::planner::format::FormatOptions;
 use crate::planner::format::MetadataIdHumanizer;
 use crate::plans::CopyIntoTablePlan;
-use crate::INSERT_NAME;
 
 #[derive(Clone, Debug, EnumAsInner)]
 pub enum InsertInputSource {

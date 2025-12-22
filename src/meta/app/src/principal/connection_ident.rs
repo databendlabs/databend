@@ -24,8 +24,8 @@ mod kvapi_impl {
     use databend_common_exception::ErrorCode;
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::principal::connection_ident::ConnectionIdent;
     use crate::principal::UserDefinedConnection;
+    use crate::principal::connection_ident::ConnectionIdent;
     use crate::tenant_key::errors::ExistError;
     use crate::tenant_key::errors::UnknownError;
     use crate::tenant_key::resource::TenantResource;

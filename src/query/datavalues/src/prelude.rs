@@ -14,11 +14,11 @@
 
 //! Everything you need to get started with this crate.
 
-pub use crate::data_value::*;
-pub use crate::types::*;
 // common structs
 pub use crate::DataField;
 pub use crate::DataSchema;
 pub use crate::DataSchemaRef;
 pub use crate::DataSchemaRefExt;
 pub use crate::DataValue;
+pub use crate::data_value::*;
+pub use crate::types::*;

@@ -16,8 +16,8 @@ use std::mem::size_of_val;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use sled::IVec;
 use state_machine_api::ExpireKey;
 

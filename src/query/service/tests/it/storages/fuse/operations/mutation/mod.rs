@@ -18,5 +18,5 @@ mod recluster_mutator;
 mod segments_compact_mutator;
 
 pub use block_compact_mutator::verify_compact_tasks;
-pub use segments_compact_mutator::compact_segment;
 pub use segments_compact_mutator::CompactSegmentTestFixture;
+pub use segments_compact_mutator::compact_segment;

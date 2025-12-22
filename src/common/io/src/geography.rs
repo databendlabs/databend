@@ -33,13 +33,13 @@ pub fn geography_from_ewkt_bytes(ewkt: &[u8]) -> Result<Vec<u8>> {
 pub fn geography_from_ewkt(input: &str) -> Result<Vec<u8>> {
     let input = input.trim();
     let (geo, parsed_srid) = ewkt_str_to_geo(input)?;
-    if let Some(parsed_srid) = parsed_srid {
-        if parsed_srid != 4326 {
-            return Err(ErrorCode::GeometryError(format!(
-                "SRIDs other than 4326 are not supported. Got SRID: {}",
-                parsed_srid
-            )));
-        }
+    if let Some(parsed_srid) = parsed_srid
+        && parsed_srid != 4326
+    {
+        return Err(ErrorCode::GeometryError(format!(
+            "SRIDs other than 4326 are not supported. Got SRID: {}",
+            parsed_srid
+        )));
     }
     geo.coords_iter().try_for_each(|c| check_point(c.x, c.y))?;
     geo.to_ewkb(geozero::CoordDimensions::xy(), parsed_srid)

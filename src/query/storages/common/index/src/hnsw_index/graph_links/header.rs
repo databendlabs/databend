@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use zerocopy::little_endian::U64 as LittleU64;
 use zerocopy::FromBytes;
 use zerocopy::Immutable;
 use zerocopy::IntoBytes;
 use zerocopy::KnownLayout;
+use zerocopy::little_endian::U64 as LittleU64;
 
 use crate::hnsw_index::common::bitpacking_ordered;
 

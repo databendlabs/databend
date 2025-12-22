@@ -4,7 +4,7 @@ description = "databend backup and restore tools"
 version = "0.1.0"
 authors = { workspace = true }
 license = "Elastic-2.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 databend-common-base = { workspace = true }

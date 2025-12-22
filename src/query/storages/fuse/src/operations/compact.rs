@@ -22,12 +22,12 @@ use databend_common_expression::FieldIndex;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
-use crate::operations::mutation::BlockCompactMutator;
-use crate::operations::mutation::SegmentCompactMutator;
+use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
-use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::operations::mutation::BlockCompactMutator;
+use crate::operations::mutation::SegmentCompactMutator;
 
 #[derive(Clone)]
 pub struct CompactOptions {

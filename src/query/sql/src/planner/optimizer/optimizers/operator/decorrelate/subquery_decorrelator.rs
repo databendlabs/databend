@@ -19,18 +19,21 @@ use std::vec;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::Scalar;
 use databend_common_functions::aggregates::AggregateCountFunction;
 
-use crate::binder::wrap_cast;
+use crate::Binder;
+use crate::IndexType;
+use crate::MetadataRef;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::ir::SExpr;
+use crate::binder::wrap_cast;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -54,9 +57,6 @@ use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::WindowFuncType;
-use crate::Binder;
-use crate::IndexType;
-use crate::MetadataRef;
 
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug)]

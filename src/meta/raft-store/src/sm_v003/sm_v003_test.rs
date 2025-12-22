@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
+use databend_common_meta_types::normalize_meta::NormalizeMeta;
 use futures_util::TryStreamExt;
 use map_api::mvcc::ScopedRange;
 use pretty_assertions::assert_eq;

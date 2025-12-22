@@ -14,11 +14,11 @@
 
 #![allow(non_snake_case)]
 
-use crate::exception_backtrace::capture;
 use crate::ErrorCode;
+use crate::exception_backtrace::capture;
 
 macro_rules! build_exceptions {
-    ($($(#[$meta:meta])* $body:ident($code:expr)),*$(,)*) => {
+    ($($(#[$meta:meta])* $body:ident($code:expr_2021)),*$(,)*) => {
         impl ErrorCode {
             $(
 
@@ -746,17 +746,17 @@ mod tests {
 
         for line in text.lines() {
             let trimmed = line.trim();
-            if let Some(idx1) = trimmed.find('(') {
-                if let Some(idx2) = trimmed[idx1..].find(')') {
-                    let name = trimmed[..idx1].trim();
-                    let code_str = &trimmed[idx1 + 1..idx1 + idx2].trim();
-                    if !name.is_empty()
-                        && !code_str.is_empty()
-                        && code_str.chars().all(|c| c.is_ascii_digit())
-                    {
-                        let code: u32 = code_str.parse().unwrap();
-                        map.entry(code).or_default().push(name.to_string());
-                    }
+            if let Some(idx1) = trimmed.find('(')
+                && let Some(idx2) = trimmed[idx1..].find(')')
+            {
+                let name = trimmed[..idx1].trim();
+                let code_str = &trimmed[idx1 + 1..idx1 + idx2].trim();
+                if !name.is_empty()
+                    && !code_str.is_empty()
+                    && code_str.chars().all(|c| c.is_ascii_digit())
+                {
+                    let code: u32 = code_str.parse().unwrap();
+                    map.entry(code).or_default().push(name.to_string());
                 }
             }
         }

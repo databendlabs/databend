@@ -16,19 +16,18 @@ use byteorder::LittleEndian;
 use byteorder::ReadBytesExt;
 use databend_common_column::buffer::Buffer;
 
-use super::traits::DoubleType;
 use super::DoubleCompression;
 use super::DoubleStats;
+use super::traits::DoubleType;
+use crate::compression::Compression;
 use crate::compression::get_bits_needed;
-use crate::compression::integer::compress_integer;
-use crate::compression::integer::decompress_integer;
 use crate::compression::integer::Dict;
 use crate::compression::integer::DictEncoder;
 use crate::compression::integer::RawNative;
-use crate::compression::Compression;
+use crate::compression::integer::compress_integer;
+use crate::compression::integer::decompress_integer;
 use crate::error::Error;
 use crate::error::Result;
-use crate::general_err;
 use crate::write::WriteOptions;
 
 impl<T: DoubleType> DoubleCompression<T> for Dict {

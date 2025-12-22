@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::hash_map::Entry;
 use std::ops::DerefMut;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Instant;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
-use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -36,14 +36,14 @@ use opendal::Buffer;
 use opendal::Operator;
 use parquet::file::metadata::RowGroupMetaDataPtr;
 
+use super::Location;
+use super::SpillsBufferPool;
 use super::async_buffer::SpillTarget;
 use super::block_reader::BlocksReader;
 use super::block_writer::BlocksWriter;
 use super::inner::*;
 use super::row_group_encoder::*;
 use super::serialize::*;
-use super::Location;
-use super::SpillsBufferPool;
 use crate::sessions::QueryContext;
 
 #[derive(Clone)]
@@ -297,7 +297,7 @@ impl Spiller {
 
         let data = match location {
             Location::Local(path) => match &self.local_operator {
-                Some(ref local) => {
+                Some(local) => {
                     local
                         .read_with(path.file_name().unwrap().to_str().unwrap())
                         .range(data_range)

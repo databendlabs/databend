@@ -14,8 +14,8 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,14 +25,14 @@ use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
-use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::plans::JoinType;
 
-use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
+use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::transforms::HashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
 
 enum FinalScanType {
     HashJoin,

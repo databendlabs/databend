@@ -16,24 +16,23 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::SelectionBuffers;
+use crate::Selector;
+use crate::Value;
 use crate::arrow::and_validities;
 use crate::filter::SelectOp;
-use crate::types::nullable::NullableColumn;
-use crate::types::number::*;
-use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::AnyType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
-use crate::types::Decimal128As256Type;
-use crate::types::Decimal128As64Type;
-use crate::types::Decimal128Type;
-use crate::types::Decimal256As128Type;
-use crate::types::Decimal256As64Type;
-use crate::types::Decimal256Type;
 use crate::types::Decimal64As128Type;
 use crate::types::Decimal64As256Type;
 use crate::types::Decimal64Type;
+use crate::types::Decimal128As64Type;
+use crate::types::Decimal128As256Type;
+use crate::types::Decimal128Type;
+use crate::types::Decimal256As64Type;
+use crate::types::Decimal256As128Type;
+use crate::types::Decimal256Type;
 use crate::types::DecimalDataKind;
 use crate::types::DecimalDataType;
 use crate::types::EmptyArrayType;
@@ -42,9 +41,10 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::VariantType;
+use crate::types::nullable::NullableColumn;
+use crate::types::number::*;
+use crate::types::timestamp_tz::TimestampTzType;
 use crate::with_number_mapped_type;
-use crate::Selector;
-use crate::Value;
 
 impl Selector<'_> {
     // Select indices by comparing two `Value`.

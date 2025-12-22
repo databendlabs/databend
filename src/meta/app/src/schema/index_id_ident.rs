@@ -27,8 +27,8 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::schema::index_id_ident::IndexIdIdent;
     use crate::schema::IndexMeta;
+    use crate::schema::index_id_ident::IndexIdIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct IndexIdResource;

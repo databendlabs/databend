@@ -18,10 +18,10 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 
 use crate::catalog::CATALOG_DEFAULT;
-use crate::plan::datasource::datasource_info::orc::OrcTableInfo;
 use crate::plan::ParquetTableInfo;
 use crate::plan::ResultScanTableInfo;
 use crate::plan::StageTableInfo;
+use crate::plan::datasource::datasource_info::orc::OrcTableInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum DataSourceInfo {

@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
+use crate::ScalarExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::ScalarExpr;
 
 pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
     let mut filter: Filter = s_expr.plan().clone().try_into()?;

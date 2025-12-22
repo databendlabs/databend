@@ -29,12 +29,12 @@ fn main() {
 //       ╰─ 102400  1.82 s        │ 1.82 s        │ 1.82 s        │ 1.82 s        │ 1       │ 1
 #[divan::bench_group(max_time = 0.5)]
 mod dummy {
-    use databend_common_expression::type_check;
     use databend_common_expression::DataBlock;
     use databend_common_expression::Evaluator;
     use databend_common_expression::FunctionContext;
-    use databend_common_functions::test_utils as parser;
+    use databend_common_expression::type_check;
     use databend_common_functions::BUILTIN_FUNCTIONS;
+    use databend_common_functions::test_utils as parser;
 
     #[divan::bench(args = [10240, 102400])]
     fn parse(bencher: divan::Bencher, n: usize) {
@@ -71,14 +71,14 @@ mod dummy {
 
 #[divan::bench_group(max_time = 0.5)]
 mod bitmap {
-    use databend_common_expression::types::number::UInt64Type;
-    use databend_common_expression::types::BitmapType;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
+    use databend_common_expression::types::BitmapType;
+    use databend_common_expression::types::number::UInt64Type;
     use databend_common_functions::aggregates::eval_aggr;
-    use databend_common_io::deserialize_bitmap;
     use databend_common_io::HybridBitmap;
+    use databend_common_io::deserialize_bitmap;
 
     fn expected_xor_values(rows: usize) -> Vec<u64> {
         const PERIOD: usize = 15;
@@ -326,26 +326,26 @@ mod bitmap {
 mod datetime_fast_path {
     use std::sync::LazyLock;
 
-    use databend_common_expression::date_helper::DateConverter;
-    use databend_common_expression::type_check;
-    use databend_common_expression::types::string::StringColumn;
-    use databend_common_expression::types::string::StringColumnBuilder;
-    use databend_common_expression::types::timestamp::microseconds_to_days;
-    use databend_common_expression::types::timestamp::timestamp_to_string;
-    use databend_common_expression::types::DataType;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::DataBlock;
     use databend_common_expression::Evaluator;
     use databend_common_expression::Expr;
     use databend_common_expression::FunctionContext;
-    use databend_common_functions::test_utils as parser;
+    use databend_common_expression::date_helper::DateConverter;
+    use databend_common_expression::type_check;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::string::StringColumn;
+    use databend_common_expression::types::string::StringColumnBuilder;
+    use databend_common_expression::types::timestamp::microseconds_to_days;
+    use databend_common_expression::types::timestamp::timestamp_to_string;
     use databend_common_functions::BUILTIN_FUNCTIONS;
+    use databend_common_functions::test_utils as parser;
     use jiff::civil::date;
     use jiff::tz::TimeZone;
-    use rand::rngs::StdRng;
     use rand::Rng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     const ROWS: usize = 100_000;
     const SPECIAL_EVERY: usize = 20_000;

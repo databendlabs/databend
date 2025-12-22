@@ -26,9 +26,9 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_tracing::SignalListener;
 use databend_common_tracing::pipe_file;
 use databend_common_tracing::set_crash_hook;
-use databend_common_tracing::SignalListener;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use entry::MainError;
 

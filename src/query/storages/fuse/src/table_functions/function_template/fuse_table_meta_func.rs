@@ -26,13 +26,13 @@ use databend_common_expression::TableSchemaRef;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 
+use crate::FuseTable;
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
-use crate::table_functions::parse_db_tb_opt_args;
-use crate::table_functions::string_literal;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
-use crate::FuseTable;
+use crate::table_functions::parse_db_tb_opt_args;
+use crate::table_functions::string_literal;
 
 pub struct TableMetaFuncCommonArgs {
     pub database_name: String,

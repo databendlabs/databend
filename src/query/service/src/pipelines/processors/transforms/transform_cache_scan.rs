@@ -24,8 +24,8 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 
-use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::HashJoinState;
+use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::sessions::QueryContext;
 
 #[derive(Clone)]

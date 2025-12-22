@@ -18,11 +18,11 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::TypeName;
+use crate::ast::write_comma_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ExecuteImmediateStmt {

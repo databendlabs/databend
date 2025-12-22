@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::collapsible_if, clippy::uninlined_format_args)]
 #![allow(clippy::useless_asref)]
 #![feature(type_alias_impl_trait)]
 #![feature(impl_trait_in_assoc_type)]
@@ -101,8 +101,8 @@ pub use malloc_stats_table::MallocStatsTable;
 pub use malloc_stats_totals_table::MallocStatsTotalsTable;
 pub use metrics_table::MetricsTable;
 pub use notification_history_table::NotificationHistoryTable;
-pub use notifications_table::parse_notifications_to_datablock;
 pub use notifications_table::NotificationsTable;
+pub use notifications_table::parse_notifications_to_datablock;
 pub use one_table::OneTable;
 pub use password_policies_table::PasswordPoliciesTable;
 pub use private_task_history_table::PrivateTaskHistoryTable;
@@ -129,10 +129,10 @@ pub use tables_table::TablesTableWithHistory;
 pub use tables_table::TablesTableWithoutHistory;
 pub use tables_table::ViewsTableWithHistory;
 pub use tables_table::ViewsTableWithoutHistory;
-pub use task_history_table::parse_task_runs_to_datablock;
 pub use task_history_table::TaskHistoryTable;
-pub use tasks_table::parse_tasks_to_datablock;
+pub use task_history_table::parse_task_runs_to_datablock;
 pub use tasks_table::TasksTable;
+pub use tasks_table::parse_tasks_to_datablock;
 pub use temp_files_table::TempFilesTable;
 pub use user_functions_table::UserFunctionsTable;
 pub use users_table::UsersTable;

@@ -20,9 +20,9 @@ use databend_storages_common_io::ReadSettings;
 use log::debug;
 
 use super::AggIndexReader;
-use crate::io::read::utils::build_columns_meta;
 use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
+use crate::io::read::utils::build_columns_meta;
 
 impl AggIndexReader {
     pub async fn read_parquet_data_by_merge_io(

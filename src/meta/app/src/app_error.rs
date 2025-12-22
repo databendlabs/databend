@@ -20,14 +20,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_meta_types::MatchSeq;
 
 use crate::data_mask::data_mask_name_ident;
-use crate::principal::procedure_name_ident;
 use crate::principal::ProcedureIdentity;
+use crate::principal::procedure_name_ident;
 use crate::row_access_policy::row_access_policy_name_ident;
+use crate::schema::DictionaryIdentity;
+use crate::schema::SequenceRsc;
 use crate::schema::catalog_name_ident;
 use crate::schema::dictionary_name_ident;
 use crate::schema::index_name_ident;
-use crate::schema::DictionaryIdentity;
-use crate::schema::SequenceRsc;
 use crate::tenant_key::errors::ExistError;
 use crate::tenant_key::errors::UnknownError;
 use crate::tenant_key::ident::TIdent;
@@ -264,7 +264,9 @@ impl UndropTableHasNoHistory {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("Cannot undrop table '{table_name}': table was dropped at {drop_time} before vacuum started at {retention}. Data may have been cleaned up.")]
+#[error(
+    "Cannot undrop table '{table_name}': table was dropped at {drop_time} before vacuum started at {retention}. Data may have been cleaned up."
+)]
 pub struct UndropTableRetentionGuard {
     table_name: String,
     drop_time: DateTime<Utc>,
@@ -583,7 +585,9 @@ impl UnknownTableId {
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("VirtualColumnIdOutBound: the virtual column id `{column_id}` is outside the range `{lower}` to `{upper}`")]
+#[error(
+    "VirtualColumnIdOutBound: the virtual column id `{column_id}` is outside the range `{lower}` to `{upper}`"
+)]
 pub struct VirtualColumnIdOutBound {
     column_id: u32,
     lower: u32,
@@ -1316,8 +1320,8 @@ impl AppErrorMessage for DuplicatedUpsertFiles {}
 impl AppErrorMessage for CommitTableMetaError {
     fn message(&self) -> String {
         format!(
-            "Create table '{}' failed, possibly because a table with the same name already exists",
-            self.table_name
+            "Create table '{}' failed, possibly because a table with the same name already exists. Context: {}",
+            self.table_name, self.context
         )
     }
 }

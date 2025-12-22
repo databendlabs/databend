@@ -17,12 +17,12 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::ThreadTracker;
+use databend_query::spillers::SpillTarget;
 use databend_query::spillers::record_read_profile;
 use databend_query::spillers::record_write_profile;
-use databend_query::spillers::SpillTarget;
 
 fn create_test_profile() -> Arc<Profile> {
     Arc::new(Profile::create(

@@ -17,10 +17,10 @@
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::Scalar;
 
 pub fn str_to_scalar(value: &str, data_type: &DataType) -> Result<Scalar> {
     if value.is_empty() {

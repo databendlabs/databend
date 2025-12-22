@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::cloned_ref_to_slice_refs)]
+#![allow(clippy::useless_vec)]
+
 use std::collections::BTreeMap;
 
 use databend_common_exception::Result;
-use databend_common_expression::create_test_complex_schema;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::create_test_complex_schema;
+use databend_common_expression::types::NumberDataType;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -642,9 +645,9 @@ fn test_leaf_columns_of() -> Result<()> {
 
 #[test]
 fn test_geography_as_arrow() {
+    use databend_common_expression::Column;
     use databend_common_expression::types::binary::BinaryColumnBuilder;
     use databend_common_expression::types::geography::GeographyColumn;
-    use databend_common_expression::Column;
     use databend_common_io::wkb::make_point;
 
     let mut builder = BinaryColumnBuilder::with_capacity(3, 0);
