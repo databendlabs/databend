@@ -528,23 +528,15 @@ fn is_true_constant_predicate(constant: &ConstantExpr) -> bool {
 
 fn evaluate_equal(column_stat: &ColumnStat, not_eq: bool, constant: &ConstantExpr) -> f64 {
     match &constant.value {
-        Scalar::Null => return 0.0,
-        Scalar::Number(_) | Scalar::Boolean(_) | Scalar::Binary(_) | Scalar::String(_) => {
-            let constant_datum = Datum::from_scalar(constant.value.clone());
-            let col_min = &column_stat.min;
-            let col_max = &column_stat.max;
-            if let Some(constant_datum) = &constant_datum {
-                if col_min.type_comparable(constant_datum) {
-                    // Safe to unwrap, because type is comparable.
-                    if constant_datum.compare(col_min).unwrap() == Ordering::Less
-                        || constant_datum.compare(col_max).unwrap() == Ordering::Greater
-                    {
-                        return 0.0;
-                    }
-                }
+        Scalar::Null => return if not_eq { 1.0 } else { 0.0 },
+        _ => {
+            if let Some(constant) = Datum::from_scalar(constant.value.clone())
+                && (matches!(constant.compare(&column_stat.min), Ok(Ordering::Less))
+                    || matches!(constant.compare(&column_stat.max), Ok(Ordering::Greater)))
+            {
+                return if not_eq { 1.0 } else { 0.0 };
             }
         }
-        _ => {}
     }
 
     column_stat.ndv.equal_selectivity(not_eq)
