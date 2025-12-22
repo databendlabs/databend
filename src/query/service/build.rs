@@ -123,7 +123,7 @@ fn parse_impl_line(
         .unwrap_or(type_part)
         .to_string();
 
-    if type_name == "PhysicalPlanSerde" {
+    if type_name == "PhysicalPlanDeserialize" {
         return None;
     }
 
@@ -190,7 +190,7 @@ fn write_dispatch(out_path: &Path, entries: &[(Option<String>, String, String)])
             out.push_str(meta);
             out.push('\n');
         }
-        out.push_str("            PhysicalPlanSerde::");
+        out.push_str("            PhysicalPlanDeserialize::");
         out.push_str(variant);
         out.push_str("($plan) => $body,\n");
     }
@@ -207,7 +207,7 @@ fn write_dispatch(out_path: &Path, entries: &[(Option<String>, String, String)])
             out.push_str(meta);
             out.push('\n');
         }
-        out.push_str("            PhysicalPlanSerde::");
+        out.push_str("            PhysicalPlanDeserialize::");
         out.push_str(variant);
         out.push_str("($plan) => $body,\n");
     }

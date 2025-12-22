@@ -32,7 +32,6 @@ use dyn_clone::DynClone;
 use serde::Deserializer;
 use serde::Serializer;
 use serde::de::Error as DeError;
-use serde::ser::Error as SerError;
 use serde_json::Value as JsonValue;
 
 use crate::physical_plans::ExchangeSink;
@@ -71,7 +70,23 @@ pub trait DeriveHandle: Send + Sync + 'static {
     ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>>;
 }
 
-pub(crate) trait IPhysicalPlan: DynClone + Debug + Send + Sync + 'static {
+pub(crate) trait PhysicalPlanSerdeSerialization {
+    fn to_physical_plan_serde_serialize(&self) -> PhysicalPlanSerdeSerialize<'_>;
+}
+
+pub(crate) trait PhysicalPlanSerdeDeserialization {
+    fn from_physical_plan_deserialize(v: PhysicalPlanDeserialize) -> Self;
+}
+
+pub(crate) trait IPhysicalPlan:
+    PhysicalPlanSerdeSerialization
+    + PhysicalPlanSerdeSerialization
+    + DynClone
+    + Debug
+    + Send
+    + Sync
+    + 'static
+{
     fn as_any(&self) -> &dyn Any;
 
     fn get_meta(&self) -> &PhysicalPlanMeta;
@@ -271,15 +286,32 @@ impl<T: IPhysicalPlan> PhysicalPlanCast for T {
 
 macro_rules! define_physical_plan_serde {
     ( $( $(#[$meta:meta])? $variant:ident => $path:path ),+ $(,)? ) => {
-        #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-        /// static dispatch replacement for typetag-based dynamic dispatch, performance improvement via reduced stack depth
-        pub(crate) enum PhysicalPlanSerde {
+        #[derive(Clone, Debug, serde::Deserialize)]
+        /// owned enum for deserialization; serialization uses PhysicalPlanSerdeRef to avoid cloning
+        pub(crate) enum PhysicalPlanDeserialize {
             $( $(#[$meta])? $variant($path), )+
         }
 
-        $( $(#[$meta])? impl From<$path> for PhysicalPlanSerde {
+        #[derive(Debug, serde::Serialize)]
+        pub(crate) enum PhysicalPlanSerdeSerialize<'a> {
+            $( $(#[$meta])? $variant(&'a $path), )+
+        }
+
+        $( $(#[$meta])? impl From<$path> for PhysicalPlanDeserialize {
             fn from(v: $path) -> Self {
-                PhysicalPlanSerde::$variant(v)
+                PhysicalPlanDeserialize::$variant(v)
+            }
+        })+
+
+        $( $(#[$meta])? impl<'a> From<&'a $path> for PhysicalPlanSerdeSerialize<'a> {
+            fn from(v: &'a $path) -> Self {
+                PhysicalPlanSerdeSerialize::$variant(v)
+            }
+        })+
+
+        $( $(#[$meta])? impl PhysicalPlanSerdeSerialization for $path {
+            fn to_physical_plan_serde_serialize(&self) -> PhysicalPlanSerdeSerialize<'_> {
+                PhysicalPlanSerdeSerialize::from(self)
             }
         })+
     };
@@ -289,7 +321,19 @@ include!(concat!(env!("OUT_DIR"), "/physical_plan_impls.rs"));
 
 include!(concat!(env!("OUT_DIR"), "/physical_plan_dispatch.rs"));
 
-impl IPhysicalPlan for PhysicalPlanSerde {
+impl PhysicalPlanSerdeSerialization for PhysicalPlanDeserialize {
+    fn to_physical_plan_serde_serialize(&self) -> PhysicalPlanSerdeSerialize<'_> {
+        dispatch_plan_ref!(self, v => PhysicalPlanSerdeSerialize::from(v))
+    }
+}
+
+impl PhysicalPlanSerdeDeserialization for PhysicalPlan {
+    fn from_physical_plan_deserialize(v: PhysicalPlanDeserialize) -> Self {
+        PhysicalPlan { inner: Box::new(v) }
+    }
+}
+
+impl IPhysicalPlan for PhysicalPlanDeserialize {
     fn as_any(&self) -> &dyn Any {
         dispatch_plan_ref!(self, v => v.as_any())
     }
@@ -404,13 +448,9 @@ impl Debug for PhysicalPlan {
 impl serde::Serialize for PhysicalPlan {
     #[recursive::recursive]
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        if let Some(v) = self.inner.as_any().downcast_ref::<PhysicalPlanSerde>() {
-            v.serialize(serializer)
-        } else {
-            Err(S::Error::custom(
-                "serialize PhysicalPlan: unexpected plan type",
-            ))
-        }
+        self.inner
+            .to_physical_plan_serde_serialize()
+            .serialize(serializer)
     }
 }
 
@@ -419,20 +459,19 @@ impl<'de> serde::Deserialize<'de> for PhysicalPlan {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         // Deserialize to JSON first to avoid backtracking failures in streaming deserializers.
         let value = JsonValue::deserialize(deserializer)?;
-        let inner: PhysicalPlanSerde = serde_json::from_value(value).map_err(DeError::custom)?;
+        let inner: PhysicalPlanDeserialize =
+            serde_json::from_value(value).map_err(DeError::custom)?;
 
-        Ok(PhysicalPlan {
-            inner: Box::new(inner),
-        })
+        Ok(PhysicalPlan::from_physical_plan_deserialize(inner))
     }
 }
 
 impl PhysicalPlan {
     #[allow(private_bounds)]
     pub fn new<T>(inner: T) -> PhysicalPlan
-    where PhysicalPlanSerde: From<T> {
+    where PhysicalPlanDeserialize: From<T> {
         PhysicalPlan {
-            inner: Box::<PhysicalPlanSerde>::new(inner.into()),
+            inner: Box::<PhysicalPlanDeserialize>::new(inner.into()),
         }
     }
 
