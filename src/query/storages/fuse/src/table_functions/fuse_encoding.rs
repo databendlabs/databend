@@ -429,10 +429,8 @@ impl<'a> FuseEncodingImpl<'a> {
                             continue;
                         };
                         let Some(column_chunk) = columns.get(*column_idx) else {
-                            return Err(ErrorCode::ParquetFileInvalid(format!(
-                                "invalid parquet file {}, column index {} is missing",
-                                block.location.0, column_idx
-                            )));
+                            // Missing column caused by schema evolutions
+                            continue;
                         };
                         let chunk_meta = column_chunk.meta_data.as_ref().ok_or_else(|| {
                             ErrorCode::ParquetFileInvalid(format!(
