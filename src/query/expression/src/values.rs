@@ -35,6 +35,7 @@ use databend_common_exception::Result;
 use databend_common_frozen_api::FrozenAPI;
 use databend_common_frozen_api::frozen_api;
 use databend_common_io::HybridBitmap;
+use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
 use geo::Geometry;
