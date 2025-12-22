@@ -41,7 +41,6 @@ runs:
       shell: bash
       run: |
         echo "JEMALLOC_SYS_WITH_LG_PAGE=16" >> $GITHUB_ENV
-        echo "CARGO_PROFILE_RELEASE_OPT_LEVEL=3" >> $GITHUB_ENV
 
     - name: Set Build Flags
       shell: bash
