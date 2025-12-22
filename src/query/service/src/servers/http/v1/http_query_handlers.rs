@@ -37,6 +37,7 @@ use headers::HeaderMapExt;
 use http::HeaderMap;
 use http::HeaderValue;
 use http::StatusCode;
+use itertools::Itertools;
 use log::error;
 use log::info;
 use log::warn;
@@ -714,6 +715,11 @@ pub async fn heartbeat_handler(
     Json(body): Json<HeartBeatRequest>,
 ) -> poem::error::Result<impl IntoResponse> {
     let local_id = GlobalConfig::instance().query.node_id.clone();
+    let queries = &body.node_to_queries.values().flatten().join(",");
+    info!(
+        "Received heartbeat, session={:?}, queries={}",
+        ctx.client_session_id, queries
+    );
     let mut queries_to_remove = vec![];
     let mut nodes_to_forwards = vec![];
     for (node_id, queries) in body.node_to_queries {
