@@ -963,10 +963,21 @@ fn evaluate_by_ndv(
     right_cardinality: f64,
     new_ndv: &mut Option<f64>,
 ) -> f64 {
-    // Update column ndv
-    *new_ndv = Some(left_stat.ndv.value().min(right_stat.ndv.value()));
-
-    let max_ndv = f64::max(left_stat.ndv.value(), right_stat.ndv.value());
+    let max_ndv = match (left_stat.ndv, right_stat.ndv) {
+        (Ndv::Stat(a), Ndv::Stat(b)) => {
+            *new_ndv = Some(f64::min(a, b));
+            f64::max(a, b)
+        }
+        (Ndv::Stat(stat), Ndv::Max(max)) | (Ndv::Max(max), Ndv::Stat(stat)) => {
+            *new_ndv = Some(f64::min(stat, max));
+            stat
+        }
+        (Ndv::Max(0.0), Ndv::Max(0.0)) => {
+            *new_ndv = Some(0.0);
+            0.0
+        }
+        _ => left_cardinality * right_cardinality,
+    };
     if max_ndv == 0.0 {
         0.0
     } else {

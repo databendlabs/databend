@@ -296,21 +296,21 @@ impl Operator for Scan {
                     && histogram.is_some()
                 {
                     histogram.clone()
-                } else if let Some(num_rows) = num_rows {
-                    let num_rows = num_rows.saturating_sub(col_stat.null_count);
-                    if num_rows == 0 {
-                        None
-                    } else {
+                } else {
+                    num_rows.and_then(|num_rows| {
+                        let num_rows = num_rows.saturating_sub(col_stat.null_count);
+                        if num_rows == 0 {
+                            return None;
+                        }
+                        let Ndv::Stat(ndv) = ndv else { return None };
                         HistogramBuilder::from_ndv(
-                            ndv.value() as _,
+                            ndv as _,
                             num_rows,
                             Some((min.clone(), max.clone())),
                             DEFAULT_HISTOGRAM_BUCKETS,
                         )
                         .ok()
-                    }
-                } else {
-                    None
+                    })
                 };
                 column_stats.insert(*k, ColumnStat {
                     min,
