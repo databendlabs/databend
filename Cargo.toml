@@ -590,12 +590,6 @@ codegen-units = 1       ## better performance see below comment
 ## select sum(number) from numbers_mt(10000000000); ~ 3x performance
 ## select max(number) from numbers_mt(10000000000); ~ 3x performance
 
-## Use `cargo build --profile release-aarch64 --target aarch64-unknown-linux-gnu` for
-## best performance on ARM64 builds.
-[profile.release-aarch64]
-inherits = "release"
-opt-level = 3
-
 [profile.ci]
 inherits = "release"
 overflow-checks = true
