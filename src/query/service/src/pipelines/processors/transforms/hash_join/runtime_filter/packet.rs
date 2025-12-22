@@ -30,7 +30,6 @@ use databend_common_expression::types::ArrayColumn;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::array::ArrayColumnBuilder;
-use typetag::serde;
 
 use crate::pipelines::processors::transforms::RuntimeFilterDesc;
 

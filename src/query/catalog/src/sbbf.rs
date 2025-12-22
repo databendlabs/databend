@@ -323,7 +323,7 @@ impl Sbbf {
 
     /// Deserialize a bloom filter from bytes produced by `to_bytes`.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
-        if bytes.len() % size_of::<Block>() != 0 {
+        if !bytes.len().is_multiple_of(size_of::<Block>()) {
             return Err(format!(
                 "Invalid bloom filter bytes length {}, expected multiple of {}",
                 bytes.len(),

@@ -38,7 +38,6 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use super::builder::should_enable_runtime_filter;
 use super::packet::BloomPayload;
 use super::packet::JoinRuntimeFilterPacket;
-use super::packet::SerializableBloomFilter;
 use super::packet::SerializableDomain;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::util::min_max_filter;
@@ -125,9 +124,9 @@ pub async fn build_runtime_filter_infos(
 /// This is mainly used in distributed hash shuffle joins before global merging,
 /// so that only compact bloom filters are transmitted between nodes.
 pub fn convert_packet_bloom_hashes_to_filter(
-    packet: &mut JoinRuntimeFilterPacket,
-    runtime_filter_descs: &HashMap<usize, &RuntimeFilterDesc>,
-    max_threads: usize,
+    _packet: &mut JoinRuntimeFilterPacket,
+    _runtime_filter_descs: &HashMap<usize, &RuntimeFilterDesc>,
+    _max_threads: usize,
 ) -> Result<()> {
     // let Some(ref mut map) = packet.packets else {
     //     return Ok(());
