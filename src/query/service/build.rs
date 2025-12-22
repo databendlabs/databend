@@ -123,6 +123,10 @@ fn parse_impl_line(
         .unwrap_or(type_part)
         .to_string();
 
+    if type_name == "PhysicalPlanSerde" {
+        return None;
+    }
+
     let mut module_path = module_path_from_file(src_root, path);
     let mut meta = None;
 
@@ -152,7 +156,7 @@ fn module_path_from_file(src_root: &Path, path: &Path) -> String {
 
 fn write_impls(out_path: &Path, entries: &[(Option<String>, String, String)]) {
     let mut out = String::new();
-    out.push_str("define_physical_plan_impl!(\n");
+    out.push_str("define_physical_plan_serde!(\n");
 
     for (meta, variant, path) in entries {
         if let Some(meta) = meta {
@@ -179,7 +183,7 @@ fn write_dispatch(out_path: &Path, entries: &[(Option<String>, String, String)])
 
     out.push_str("macro_rules! dispatch_plan_ref {\n");
     out.push_str("    ($s:expr, $plan:ident => $body:expr) => {\n");
-    out.push_str("        match $s.inner.as_ref() {\n");
+    out.push_str("        match $s {\n");
     for (meta, variant, _) in entries {
         if let Some(meta) = meta {
             out.push_str("            ");
@@ -196,7 +200,7 @@ fn write_dispatch(out_path: &Path, entries: &[(Option<String>, String, String)])
 
     out.push_str("macro_rules! dispatch_plan_mut {\n");
     out.push_str("    ($s:expr, $plan:ident => $body:expr) => {\n");
-    out.push_str("        match $s.inner.as_mut() {\n");
+    out.push_str("        match $s {\n");
     for (meta, variant, _) in entries {
         if let Some(meta) = meta {
             out.push_str("            ");

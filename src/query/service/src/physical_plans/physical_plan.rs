@@ -16,6 +16,8 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
@@ -29,9 +31,10 @@ use databend_common_pipeline::core::PlanProfile;
 use databend_common_pipeline::core::PlanScope;
 use databend_common_sql::Metadata;
 use dyn_clone::DynClone;
+use serde::de::Error as DeError;
+use serde::ser::Error as SerError;
 use serde::Deserializer;
 use serde::Serializer;
-use serde::de::Error as DeError;
 use serde_json::Value as JsonValue;
 
 use crate::physical_plans::ExchangeSink;
@@ -268,7 +271,7 @@ impl<T: IPhysicalPlan> PhysicalPlanCast for T {
     }
 }
 
-macro_rules! define_physical_plan_impl {
+macro_rules! define_physical_plan_serde {
     ( $( $(#[$meta:meta])? $variant:ident => $path:path ),+ $(,)? ) => {
         #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
         /// static dispatch replacement for typetag-based dynamic dispatch, performance improvement via reduced stack depth
@@ -288,8 +291,98 @@ include!(concat!(env!("OUT_DIR"), "/physical_plan_impls.rs"));
 
 include!(concat!(env!("OUT_DIR"), "/physical_plan_dispatch.rs"));
 
+impl IPhysicalPlan for PhysicalPlanSerde {
+    fn as_any(&self) -> &dyn Any {
+        dispatch_plan_ref!(self, v => v.as_any())
+    }
+
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        dispatch_plan_ref!(self, v => v.get_meta())
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        dispatch_plan_mut!(self, v => v.get_meta_mut())
+    }
+
+    fn get_id(&self) -> u32 {
+        dispatch_plan_ref!(self, v => v.get_id())
+    }
+
+    fn get_name(&self) -> String {
+        dispatch_plan_ref!(self, v => v.get_name())
+    }
+
+    fn adjust_plan_id(&mut self, next_id: &mut u32) {
+        dispatch_plan_mut!(self, v => v.adjust_plan_id(next_id))
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        dispatch_plan_ref!(self, v => v.output_schema())
+    }
+
+    fn children(&self) -> Box<dyn Iterator<Item = &'_ PhysicalPlan> + '_> {
+        dispatch_plan_ref!(self, v => v.children())
+    }
+
+    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut PhysicalPlan> + '_> {
+        dispatch_plan_mut!(self, v => v.children_mut())
+    }
+
+    fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
+        dispatch_plan_ref!(self, v => v.formatter())
+    }
+
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        dispatch_plan_ref!(self, v => v.try_find_single_data_source())
+    }
+
+    fn try_find_mutation_source(&self) -> Option<MutationSource> {
+        dispatch_plan_ref!(self, v => v.try_find_mutation_source())
+    }
+
+    fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
+        dispatch_plan_ref!(self, v => v.get_all_data_source(sources))
+    }
+
+    fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
+        dispatch_plan_mut!(self, v => v.set_pruning_stats(stats))
+    }
+
+    fn is_distributed_plan(&self) -> bool {
+        dispatch_plan_ref!(self, v => v.is_distributed_plan())
+    }
+
+    fn is_warehouse_distributed_plan(&self) -> bool {
+        dispatch_plan_ref!(self, v => v.is_warehouse_distributed_plan())
+    }
+
+    fn display_in_profile(&self) -> bool {
+        dispatch_plan_ref!(self, v => v.display_in_profile())
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        dispatch_plan_ref!(self, v => v.get_desc())
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        dispatch_plan_ref!(self, v => v.get_labels())
+    }
+
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
+        dispatch_plan_ref!(self, v => v.derive(children))
+    }
+
+    fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        dispatch_plan_ref!(self, v => v.build_pipeline(builder))
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        dispatch_plan_ref!(self, v => v.build_pipeline2(builder))
+    }
+}
+
 pub struct PhysicalPlan {
-    inner: Box<PhysicalPlanSerde>,
+    inner: Box<dyn IPhysicalPlan + 'static>,
 }
 
 dyn_clone::clone_trait_object!(IPhysicalPlan);
@@ -310,10 +403,30 @@ impl Debug for PhysicalPlan {
     }
 }
 
+impl Deref for PhysicalPlan {
+    type Target = dyn IPhysicalPlan;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref()
+    }
+}
+
+impl DerefMut for PhysicalPlan {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.as_mut()
+    }
+}
+
 impl serde::Serialize for PhysicalPlan {
     #[recursive::recursive]
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        self.inner.serialize(serializer)
+        if let Some(v) = self.inner.as_any().downcast_ref::<PhysicalPlanSerde>() {
+            v.serialize(serializer)
+        } else {
+            Err(S::Error::custom(
+                "serialize PhysicalPlan: unexpected plan type",
+            ))
+        }
     }
 }
 
@@ -340,91 +453,91 @@ impl PhysicalPlan {
     }
 
     pub fn as_any(&self) -> &dyn Any {
-        dispatch_plan_ref!(self, v => v.as_any())
+        self.inner.as_any()
     }
 
     pub fn get_meta(&self) -> &PhysicalPlanMeta {
-        dispatch_plan_ref!(self, v => v.get_meta())
+        self.inner.get_meta()
     }
 
     pub fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
-        dispatch_plan_mut!(self, v => v.get_meta_mut())
+        self.inner.get_meta_mut()
     }
 
     pub fn get_id(&self) -> u32 {
-        dispatch_plan_ref!(self, v => v.get_id())
+        self.inner.get_id()
     }
 
     pub fn get_name(&self) -> String {
-        dispatch_plan_ref!(self, v => v.get_name())
+        self.inner.get_name()
     }
 
     pub fn adjust_plan_id(&mut self, next_id: &mut u32) {
-        dispatch_plan_mut!(self, v => v.adjust_plan_id(next_id))
+        self.inner.adjust_plan_id(next_id)
     }
 
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        dispatch_plan_ref!(self, v => v.output_schema())
+        self.inner.output_schema()
     }
 
     pub fn children(&self) -> Box<dyn Iterator<Item = &'_ PhysicalPlan> + '_> {
-        dispatch_plan_ref!(self, v => v.children())
+        self.inner.children()
     }
 
     pub fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut PhysicalPlan> + '_> {
-        dispatch_plan_mut!(self, v => v.children_mut())
+        self.inner.children_mut()
     }
 
     pub fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
-        dispatch_plan_ref!(self, v => v.formatter())
+        self.inner.formatter()
     }
 
     pub fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
-        dispatch_plan_ref!(self, v => v.try_find_single_data_source())
+        self.inner.try_find_single_data_source()
     }
 
     pub fn try_find_mutation_source(&self) -> Option<MutationSource> {
-        dispatch_plan_ref!(self, v => v.try_find_mutation_source())
+        self.inner.try_find_mutation_source()
     }
 
     pub fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
-        dispatch_plan_ref!(self, v => v.get_all_data_source(sources))
+        self.inner.get_all_data_source(sources)
     }
 
     pub fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
-        dispatch_plan_mut!(self, v => v.set_pruning_stats(stats))
+        self.inner.set_pruning_stats(stats)
     }
 
     pub fn is_distributed_plan(&self) -> bool {
-        dispatch_plan_ref!(self, v => v.is_distributed_plan())
+        self.inner.is_distributed_plan()
     }
 
     pub fn is_warehouse_distributed_plan(&self) -> bool {
-        dispatch_plan_ref!(self, v => v.is_warehouse_distributed_plan())
+        self.inner.is_warehouse_distributed_plan()
     }
 
     pub fn display_in_profile(&self) -> bool {
-        dispatch_plan_ref!(self, v => v.display_in_profile())
+        self.inner.display_in_profile()
     }
 
     pub fn get_desc(&self) -> Result<String> {
-        dispatch_plan_ref!(self, v => v.get_desc())
+        self.inner.get_desc()
     }
 
     pub fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
-        dispatch_plan_ref!(self, v => v.get_labels())
+        self.inner.get_labels()
     }
 
     pub fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
-        dispatch_plan_ref!(self, v => v.derive(children))
+        self.inner.derive(children)
     }
 
     pub fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        dispatch_plan_ref!(self, v => v.build_pipeline(builder))
+        self.inner.build_pipeline(builder)
     }
 
     pub fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        dispatch_plan_ref!(self, v => v.build_pipeline2(builder))
+        self.inner.build_pipeline2(builder)
     }
 
     #[recursive::recursive]
