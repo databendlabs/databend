@@ -590,6 +590,9 @@ codegen-units = 1       ## better performance see below comment
 ## select sum(number) from numbers_mt(10000000000); ~ 3x performance
 ## select max(number) from numbers_mt(10000000000); ~ 3x performance
 
+[profile.release.target.'cfg(target_arch = "aarch64")']
+opt-level = 3
+
 [profile.ci]
 inherits = "release"
 overflow-checks = true
