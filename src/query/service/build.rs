@@ -50,4 +50,3 @@ fn main() {
     let features = features.join(",");
     println!("cargo:rustc-env=DATABEND_QUERY_CARGO_FEATURES={features}");
 }
-
